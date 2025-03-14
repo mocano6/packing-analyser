@@ -1,0 +1,137 @@
+.statsContainer {
+  padding: 24px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.playerName {
+  font-size: 24px;
+  color: #1a1a1a;
+  margin: 0 0 20px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+/* Główna organizacja w sekcje */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+/* Dla mobilnych ekranów */
+@media (max-width: 992px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 576px) {
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.statItem {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.statItem:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.statLabel {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.statValue {
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Kolorowanie różnych typów statystyk */
+.basicStat .statValue {
+  color: #3498db;
+}
+
+.senderStat .statValue {
+  color: #e74c3c;
+}
+
+.receiverStat .statValue {
+  color: #2ecc71;
+}
+
+.p3Stat .statValue {
+  color: #9b59b6;
+}
+
+.xtStat .statValue {
+  color: #f39c12;
+}
+
+/* Tabela połączeń */
+.connectionsTitle {
+  font-size: 20px;
+  margin: 24px 0 16px;
+  color: #1a1a1a;
+}
+
+.connectionsTable {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.connectionsTable th {
+  background: #f2f2f2;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+}
+
+.connectionsTable td {
+  padding: 12px 16px;
+  border-top: 1px solid #eee;
+}
+
+.connectionsTable tr:hover {
+  background-color: #f9f9f9;
+}
+
+.connectionsTable th:not(:first-child),
+.connectionsTable td:not(:first-child) {
+  text-align: center;
+}
+
+.noConnections {
+  padding: 16px;
+  text-align: center;
+  background: #f8f8f8;
+  border-radius: 8px;
+  color: #666;
+}
+/* Dodaj do pliku PlayerStats.module.css */
+.sortableHeader {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+.sortableHeader:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}

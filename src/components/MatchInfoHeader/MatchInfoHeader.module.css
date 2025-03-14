@@ -1,0 +1,48 @@
+/* Style dla nagłówka z informacjami o meczu */
+.matchInfoHeader {
+  background-color: white;
+  color: #333;
+  padding: 12px 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #eaeaea;
+}
+
+.matchInfoHeader h2 {
+  margin: 0 0 6px 0;
+  font-size: 1.4rem;
+  color: #2d2d2d;
+}
+
+.matchInfoHeader p {
+  margin: 0 0 10px 0;
+  font-size: 0.95rem;
+  color: #666;
+}
+
+.noMatchInfo {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.addMatchButton,
+.changeMatchButton {
+  padding: 6px 12px;
+  background-color: white;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: normal;
+  transition: all 0.2s;
+}
+
+.addMatchButton:hover,
+.changeMatchButton:hover {
+  background-color: #f5f5f5;
+  color: #333;
+  border-color: #ccc;
+}

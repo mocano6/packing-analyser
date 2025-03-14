@@ -1,0 +1,29 @@
+/* src/components/ActionTypeToggle/ActionTypeToggle.module.css */
+.toggleContainer {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.toggleButton {
+  padding: 8px 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggleButton:hover {
+  background: #f0f0f0;
+}
+
+.active {
+  background: #007bff;
+  color: white;
+  border-color: #0056b3;
+}
+
+.active:hover {
+  background: #0056b3;
+}
