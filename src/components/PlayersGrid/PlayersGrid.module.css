@@ -2,7 +2,7 @@
 .playersGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 16px;
+  gap: 5px;
   margin-bottom: 16px;
 }
 
@@ -195,7 +195,7 @@
 }
 
 .addPlayerTile {
-  height: 120px;
+  height: 85px;
   display: flex;
   align-items: center;
   justify-content: center;

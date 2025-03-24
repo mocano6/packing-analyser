@@ -1,7 +1,7 @@
 /* components/PlayerStats/PlayerStats.tsx */
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import styles from "./PlayerStats.module.css";
 import { PlayerStats as Stats, PlayerStatsProps } from "@/types";
 
@@ -74,22 +74,26 @@ const PlayerStats: React.FC<PlayerStatsProps> = ({ player, actions }) => {
     return config.direction === "ascending" ? "▲" : "▼";
   };
 
-  // Obliczanie statystyk
+  // Obliczanie statystyk - przebudowane, aby uniknąć zależności od stats
   useEffect(() => {
-    const newStats = { ...stats };
-    newStats.totalActions = 0;
-    newStats.totalPoints = 0;
-    newStats.totalXT = 0;
-    newStats.packingAsSender = 0;
-    newStats.packingAsReceiver = 0;
-    newStats.xtAsSender = 0;
-    newStats.xtAsReceiver = 0;
-    newStats.totalP3 = 0;
-    newStats.totalShots = 0;
-    newStats.totalGoals = 0;
-    newStats.connections = {};
-    newStats.connectionsAsSender = {};
-    newStats.connectionsAsReceiver = {};
+    // Tworzymy nowy obiekt statystyk zamiast modyfikować istniejący
+    const newStats: Stats = {
+      totalActions: 0,
+      totalPoints: 0,
+      totalXT: 0,
+      packingAsSender: 0,
+      packingAsReceiver: 0,
+      xtAsSender: 0,
+      xtAsReceiver: 0,
+      averagePoints: 0,
+      averageXT: 0,
+      totalP3: 0,
+      totalShots: 0,
+      totalGoals: 0,
+      connections: {},
+      connectionsAsSender: {},
+      connectionsAsReceiver: {},
+    };
 
     actions.forEach((action) => {
       // Aktualizacja podstawowych statystyk
@@ -179,7 +183,7 @@ const PlayerStats: React.FC<PlayerStatsProps> = ({ player, actions }) => {
     }
 
     setStats(newStats);
-  }, [player, actions]); // Usunięto stats z zależności, aby uniknąć nieskończonej pętli
+  }, [player, actions]); // Nie potrzebujemy stats jako zależności
 
   // Funkcja sortująca
   const requestSort = (key: SortKey, type: ConnectionType) => {
@@ -195,30 +199,33 @@ const PlayerStats: React.FC<PlayerStatsProps> = ({ player, actions }) => {
     }));
   };
 
-  // Przygotowanie danych do tabel
-  const prepareTableData = (
-    connections: Record<string, Connection>,
-    configType: ConnectionType
-  ): ConnectionWithId[] => {
-    const config = sortConfig[configType];
-    return Object.entries(connections)
-      .map(([id, data]) => ({ id, ...data }))
-      .sort((a, b) => {
-        if (config.key === "playerName") {
-          return config.direction === "ascending"
-            ? a.playerName.localeCompare(b.playerName)
-            : b.playerName.localeCompare(a.playerName);
-        }
+  // Przygotowanie danych do tabel - przeniesione do useCallback
+  const prepareTableData = useCallback(
+    (
+      connections: Record<string, Connection>,
+      configType: ConnectionType
+    ): ConnectionWithId[] => {
+      const config = sortConfig[configType];
+      return Object.entries(connections)
+        .map(([id, data]) => ({ id, ...data }))
+        .sort((a, b) => {
+          if (config.key === "playerName") {
+            return config.direction === "ascending"
+              ? a.playerName.localeCompare(b.playerName)
+              : b.playerName.localeCompare(a.playerName);
+          }
 
-        const aVal = a[config.key];
-        const bVal = b[config.key];
+          const aVal = a[config.key];
+          const bVal = b[config.key];
 
-        if (typeof aVal === "number" && typeof bVal === "number") {
-          return config.direction === "ascending" ? aVal - bVal : bVal - aVal;
-        }
-        return 0;
-      });
-  };
+          if (typeof aVal === "number" && typeof bVal === "number") {
+            return config.direction === "ascending" ? aVal - bVal : bVal - aVal;
+          }
+          return 0;
+        });
+    },
+    [sortConfig]
+  );
 
   // Przygotowanie posortowanych danych
   const senderConnections = prepareTableData(

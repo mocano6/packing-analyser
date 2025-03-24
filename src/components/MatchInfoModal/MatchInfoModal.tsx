@@ -1,9 +1,17 @@
 // src/components/MatchInfoModal/MatchInfoModal.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+
 import { TeamInfo } from "@/types";
 import styles from "./MatchInfoModal.module.css";
+
+// Definiujemy typ dla opcji drużyn
+interface TeamOption {
+  id: number;
+  value: string;
+  label: string;
+}
 
 interface MatchInfoModalProps {
   isOpen: boolean;
@@ -18,21 +26,48 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   onSave,
   currentInfo,
 }) => {
-  const teamOptions = ["Rezerwy", "U19", "U17", "U16", "U15"];
+  const teamOptions = useMemo(
+    (): TeamOption[] => [
+      { id: 1, value: "Rezerwy", label: "Rezerwy" },
+      { id: 2, value: "U19", label: "U19" },
+      { id: 3, value: "U17", label: "U17" },
+      { id: 4, value: "U16", label: "U16" },
+      { id: 5, value: "U15", label: "U15" },
+    ],
+    []
+  );
 
   const [matchId, setMatchId] = useState("");
-  const [team, setTeam] = useState(teamOptions[0]);
+  const [team, setTeam] = useState<TeamOption>(teamOptions[0]);
   const [opponent, setOpponent] = useState("");
   const [isHome, setIsHome] = useState(true);
   const [competition, setCompetition] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [time, setTime] = useState("12:00");
 
+  // Funkcja pomocnicza do pobrania odpowiedniej opcji zespołu
+  const getTeamOption = (
+    teamValue: string | TeamOption | undefined
+  ): TeamOption => {
+    if (!teamValue) return teamOptions[0];
+
+    // Jeśli team jest stringiem, znajdź odpowiednią opcję
+    if (typeof teamValue === "string") {
+      const foundOption = teamOptions.find(
+        (option) => option.value === teamValue
+      );
+      return foundOption || teamOptions[0];
+    }
+
+    // Jeśli jest już obiektem TeamOption
+    return teamValue as TeamOption;
+  };
+
   // Resetowanie formularza gdy komponent jest otwierany/zamykany
   useEffect(() => {
     if (isOpen) {
       setMatchId(currentInfo?.matchId || "");
-      setTeam(currentInfo?.team || teamOptions[0]);
+      setTeam(getTeamOption(currentInfo?.team));
       setOpponent(currentInfo?.opponent || "");
       setIsHome(currentInfo?.isHome ?? true);
       setCompetition(currentInfo?.competition || "");
@@ -59,13 +94,22 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
 
     onSave({
       matchId: newMatchId,
-      team,
+      team: team.value, // Przekazujemy tylko wartość (string), a nie cały obiekt TeamOption
       opponent,
       isHome,
       competition,
       date,
       time,
     });
+  };
+
+  // Obsługa zmiany drużyny
+  const handleTeamChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedValue = e.target.value;
+    const selectedTeam =
+      teamOptions.find((option) => option.value === selectedValue) ||
+      teamOptions[0];
+    setTeam(selectedTeam);
   };
 
   return (
@@ -82,13 +126,13 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
             <label htmlFor="team">Zespół:</label>
             <select
               id="team"
-              value={team}
-              onChange={(e) => setTeam(e.target.value)}
+              value={team.value}
+              onChange={handleTeamChange}
               required
             >
               {teamOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>

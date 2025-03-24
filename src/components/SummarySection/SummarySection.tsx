@@ -1,7 +1,7 @@
 // src/components/SummarySection/SummarySection.tsx
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback, memo } from "react";
 import { SummarySectionProps } from "@/types";
 import PlayerStats from "@/components/PlayerStats/PlayerStats";
 import styles from "./SummarySection.module.css";
@@ -77,49 +77,158 @@ const getPacking = (action: any): number =>
     1
   );
 
-// Komponent nagłówka tabeli
-const TableHeader = ({
-  sortBy,
-  sortDirection,
-  onSort,
-}: {
-  sortBy: string;
-  sortDirection: "asc" | "desc";
-  onSort: (column: any) => void;
-}) => {
-  const SortIcon = ({ column }: { column: string }) =>
-    sortBy === column ? (sortDirection === "asc" ? " ↑" : " ↓") : "";
+// Memoizowany komponent ikony sortowania
+const SortIcon = memo(
+  ({
+    column,
+    sortBy,
+    sortDirection,
+  }: {
+    column: string;
+    sortBy: string;
+    sortDirection: "asc" | "desc";
+  }) => (sortBy === column ? (sortDirection === "asc" ? " ↑" : " ↓") : "")
+);
 
-  return (
-    <thead>
-      <tr>
-        <th onClick={() => onSort("player.number")}>
-          # <SortIcon column="player.number" />
-        </th>
-        <th onClick={() => onSort("player.name")}>
-          Zawodnik <SortIcon column="player.name" />
-        </th>
-        <th onClick={() => onSort("actionsAsSenderCount")}>Podający</th>
-        <th onClick={() => onSort("actionsAsReceiverCount")}>Odbierający</th>
-        <th onClick={() => onSort("xtAsSender")}>
-          xT podający <SortIcon column="xtAsSender" />
-        </th>
-        <th onClick={() => onSort("xtAsReceiver")}>
-          xT przyjmujący <SortIcon column="xtAsReceiver" />
-        </th>
-        <th onClick={() => onSort("xtPerActionAsSender")}>
-          xT/akcję podający <SortIcon column="xtPerActionAsSender" />
-        </th>
-        <th onClick={() => onSort("xtPerActionAsReceiver")}>
-          xT/akcję przyjmujący <SortIcon column="xtPerActionAsReceiver" />
-        </th>
-        <th onClick={() => onSort("pxtValue")}>
-          PxT <SortIcon column="pxtValue" />
-        </th>
-      </tr>
-    </thead>
-  );
-};
+SortIcon.displayName = "SortIcon";
+
+// Memoizowany komponent nagłówka tabeli
+const TableHeader = memo(
+  ({
+    sortBy,
+    sortDirection,
+    onSort,
+  }: {
+    sortBy: string;
+    sortDirection: "asc" | "desc";
+    onSort: (column: any) => void;
+  }) => {
+    // Funkcja mapująca nasz wewnętrzny format sortowania na format ARIA
+    const getAriaSortValue = (
+      column: string
+    ): "ascending" | "descending" | undefined => {
+      if (sortBy !== column) return undefined;
+      return sortDirection === "asc" ? "ascending" : "descending";
+    };
+
+    return (
+      <thead>
+        <tr>
+          <th
+            onClick={() => onSort("player.number")}
+            role="columnheader"
+            aria-sort={getAriaSortValue("player.number")}
+          >
+            #{" "}
+            <SortIcon
+              column="player.number"
+              sortBy={sortBy}
+              sortDirection={sortDirection}
+            />
+          </th>
+          <th
+            onClick={() => onSort("player.name")}
+            role="columnheader"
+            aria-sort={getAriaSortValue("player.name")}
+          >
+            Zawodnik{" "}
+            <SortIcon
+              column="player.name"
+              sortBy={sortBy}
+              sortDirection={sortDirection}
+            />
+          </th>
+          <th
+            onClick={() => onSort("actionsAsSenderCount")}
+            role="columnheader"
+            aria-sort={getAriaSortValue("actionsAsSenderCount")}
+          >
+            Podający{" "}
+            <SortIcon
+              column="actionsAsSenderCount"
+              sortBy={sortBy}
+              sortDirection={sortDirection}
+            />
+          </th>
+          <th
+            onClick={() => onSort("actionsAsReceiverCount")}
+            role="columnheader"
+            aria-sort={getAriaSortValue("actionsAsReceiverCount")}
+          >
+            Odbierający{" "}
+            <SortIcon
+              column="actionsAsReceiverCount"
+              sortBy={sortBy}
+              sortDirection={sortDirection}
+            />
+          </th>
+          <th
+            onClick={() => onSort("xtAsSender")}
+            role="columnheader"
+            aria-sort={getAriaSortValue("xtAsSender")}
+          >
+            xT podający{" "}
+            <SortIcon
+              column="xtAsSender"
+              sortBy={sortBy}
+              sortDirection={sortDirection}
+            />
+          </th>
+          <th
+            onClick={() => onSort("xtAsReceiver")}
+            role="columnheader"
+            aria-sort={getAriaSortValue("xtAsReceiver")}
+          >
+            xT przyjmujący{" "}
+            <SortIcon
+              column="xtAsReceiver"
+              sortBy={sortBy}
+              sortDirection={sortDirection}
+            />
+          </th>
+          <th
+            onClick={() => onSort("xtPerActionAsSender")}
+            role="columnheader"
+            aria-sort={getAriaSortValue("xtPerActionAsSender")}
+          >
+            xT/akcję podający{" "}
+            <SortIcon
+              column="xtPerActionAsSender"
+              sortBy={sortBy}
+              sortDirection={sortDirection}
+            />
+          </th>
+          <th
+            onClick={() => onSort("xtPerActionAsReceiver")}
+            role="columnheader"
+            aria-sort={getAriaSortValue("xtPerActionAsReceiver")}
+          >
+            xT/akcję przyjmujący{" "}
+            <SortIcon
+              column="xtPerActionAsReceiver"
+              sortBy={sortBy}
+              sortDirection={sortDirection}
+            />
+          </th>
+          <th
+            onClick={() => onSort("pxtValue")}
+            role="columnheader"
+            aria-sort={getAriaSortValue("pxtValue")}
+          >
+            PxT{" "}
+            <SortIcon
+              column="pxtValue"
+              sortBy={sortBy}
+              sortDirection={sortDirection}
+            />
+          </th>
+        </tr>
+      </thead>
+    );
+  }
+);
+
+TableHeader.displayName = "TableHeader";
 
 const SummarySection: React.FC<SummarySectionProps> = ({
   selectedPlayerId,
@@ -131,6 +240,14 @@ const SummarySection: React.FC<SummarySectionProps> = ({
     keyof PlayerSummary | "player.name" | "player.number"
   >("xtAsSender");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  // Obsługa wyszukiwania - zoptymalizowana z useCallback
+  const handleSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setSearchTerm(e.target.value);
+    },
+    []
+  );
 
   // Wyświetl surowe dane przykładowej akcji
   const sampleAction = actions.length > 0 ? actions[0] : null;
@@ -180,6 +297,15 @@ const SummarySection: React.FC<SummarySectionProps> = ({
     [players, actions]
   );
 
+  // Funkcja pomocnicza do pobierania wartości - zoptymalizowana z useCallback
+  const getCompareValue = useCallback((obj: any, path: string) => {
+    if (path.includes(".")) {
+      const [first, second] = path.split(".");
+      return obj[first][second];
+    }
+    return obj[path];
+  }, []);
+
   // Filtrowanie i sortowanie
   const filteredAndSortedStats = useMemo(() => {
     const filtered = playerStats.filter((stat) =>
@@ -187,14 +313,6 @@ const SummarySection: React.FC<SummarySectionProps> = ({
     );
 
     return [...filtered].sort((a, b) => {
-      const getCompareValue = (obj: any, path: string) => {
-        if (path.includes(".")) {
-          const [first, second] = path.split(".");
-          return obj[first][second];
-        }
-        return obj[path];
-      };
-
       const valueA = getCompareValue(a, sortBy);
       const valueB = getCompareValue(b, sortBy);
 
@@ -208,26 +326,38 @@ const SummarySection: React.FC<SummarySectionProps> = ({
         ? (valueA as number) - (valueB as number)
         : (valueB as number) - (valueA as number);
     });
-  }, [playerStats, searchTerm, sortBy, sortDirection]);
+  }, [playerStats, searchTerm, sortBy, sortDirection, getCompareValue]);
 
-  // Obsługa kliknięcia nagłówka kolumny
-  const handleSort = (
-    column: keyof PlayerSummary | "player.name" | "player.number"
-  ) => {
-    setSortDirection(
-      sortBy === column ? (sortDirection === "asc" ? "desc" : "asc") : "desc"
-    );
-    setSortBy(column);
-  };
+  // Obsługa kliknięcia nagłówka kolumny - zoptymalizowana z useCallback
+  const handleSort = useCallback(
+    (column: keyof PlayerSummary | "player.name" | "player.number") => {
+      setSortDirection(
+        sortBy === column ? (sortDirection === "asc" ? "desc" : "asc") : "desc"
+      );
+      setSortBy(column);
+    },
+    [sortBy, sortDirection]
+  );
 
-  // Obsługa wyboru zawodnika - bezpieczna dla SSR
-  const handlePlayerSelect = (playerId: string) => {
+  // Obsługa wyboru zawodnika - zoptymalizowana z useCallback
+  const handlePlayerSelect = useCallback((playerId: string) => {
     if (typeof window !== "undefined") {
       window.dispatchEvent(
         new CustomEvent("selectPlayer", { detail: playerId })
       );
     }
-  };
+  }, []);
+
+  // Obsługa naciśnięcia klawisza dla wiersza tabeli
+  const handleRowKeyDown = useCallback(
+    (e: React.KeyboardEvent, playerId: string) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handlePlayerSelect(playerId);
+      }
+    },
+    [handlePlayerSelect]
+  );
 
   return (
     <div className={styles.summaryContainer}>
@@ -236,8 +366,9 @@ const SummarySection: React.FC<SummarySectionProps> = ({
           type="text"
           placeholder="Szukaj zawodnika..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={handleSearchChange}
           className={styles.searchInput}
+          aria-label="Szukaj zawodnika"
         />
       </div>
 
@@ -254,7 +385,7 @@ const SummarySection: React.FC<SummarySectionProps> = ({
       </div>
 
       <div className={styles.statsTableContainer}>
-        <table className={styles.statsTable}>
+        <table className={styles.statsTable} role="grid">
           <TableHeader
             sortBy={sortBy}
             sortDirection={sortDirection}
@@ -268,16 +399,20 @@ const SummarySection: React.FC<SummarySectionProps> = ({
                   selectedPlayerId === player.id ? styles.selectedRow : ""
                 }
                 onClick={() => handlePlayerSelect(player.id)}
+                onKeyDown={(e) => handleRowKeyDown(e, player.id)}
+                tabIndex={0}
+                role="row"
+                aria-selected={selectedPlayerId === player.id}
               >
-                <td>{player.number || "-"}</td>
-                <td>{player.name}</td>
-                <td>{stats.actionsAsSenderCount}</td>
-                <td>{stats.actionsAsReceiverCount}</td>
-                <td>{stats.xtAsSender.toFixed(2)}</td>
-                <td>{stats.xtAsReceiver.toFixed(2)}</td>
-                <td>{stats.xtPerActionAsSender.toFixed(3)}</td>
-                <td>{stats.xtPerActionAsReceiver.toFixed(3)}</td>
-                <td>{stats.pxtValue.toFixed(2)}</td>
+                <td role="cell">{player.number || "-"}</td>
+                <td role="cell">{player.name}</td>
+                <td role="cell">{stats.actionsAsSenderCount}</td>
+                <td role="cell">{stats.actionsAsReceiverCount}</td>
+                <td role="cell">{stats.xtAsSender.toFixed(2)}</td>
+                <td role="cell">{stats.xtAsReceiver.toFixed(2)}</td>
+                <td role="cell">{stats.xtPerActionAsSender.toFixed(3)}</td>
+                <td role="cell">{stats.xtPerActionAsReceiver.toFixed(3)}</td>
+                <td role="cell">{stats.pxtValue.toFixed(2)}</td>
               </tr>
             ))}
           </tbody>

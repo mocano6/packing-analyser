@@ -1,7 +1,7 @@
 // src/components/PlayerModal/PlayerModal.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react"; // Dodano import useMemo
 import { Player } from "@/types";
 import styles from "./PlayerModal.module.css";
 
@@ -18,13 +18,17 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
   onSave,
   editingPlayer,
 }) => {
-  const initialFormData = {
-    name: "",
-    number: "",
-    position: "",
-    birthYear: "",
-    imageUrl: "",
-  };
+  // Użycie useMemo do utrzymania stałego odniesienia do initialFormData
+  const initialFormData = useMemo(
+    () => ({
+      name: "",
+      number: "",
+      position: "",
+      birthYear: "",
+      imageUrl: "",
+    }),
+    []
+  ); // Pusta tablica zależności - obiekt zostanie utworzony tylko raz
 
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState({ ...initialFormData });
@@ -115,10 +119,12 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
     }
   };
 
+  // Poprawiona funkcja handleChange - bez nieużywanego parametru 'e'
   const handleChange =
     (field: keyof typeof formData) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       setFormData({ ...formData, [field]: e.target.value });
+    };
 
   if (!isOpen) return null;
 

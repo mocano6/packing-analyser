@@ -66,7 +66,7 @@ const SelectionContainer = memo(function SelectionContainer({
           value={actionMinute}
           onChange={handleMinuteChange}
           min="0"
-          max="90"
+          max="125"
           className={styles.input}
           aria-label="Minuta akcji"
         />

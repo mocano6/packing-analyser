@@ -1,7 +1,7 @@
 // src/components/PlayersGrid/PlayersGrid.tsx
 "use client";
 
-import React, { memo } from "react";
+import React, { memo, useState, useEffect } from "react";
 import styles from "./PlayersGrid.module.css";
 import { PlayersGridProps } from "./PlayersGrid.types";
 import PlayerTile from "./PlayerTile";
@@ -15,6 +15,24 @@ const PlayersGrid = memo(function PlayersGrid({
   onEditPlayer,
   onDeletePlayer,
 }: PlayersGridProps) {
+  // Stan do śledzenia czy komponent został zamontowany na kliencie
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Po pierwszym renderze na kliencie, oznaczamy komponent jako zamontowany
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Podczas SSR i pierwszego renderowania na kliencie pokazujemy uproszczony placeholder
+  if (!isMounted) {
+    return (
+      <div className={styles.playersGridPlaceholder}>
+        Ładowanie zawodników...
+      </div>
+    );
+  }
+
+  // Po hydratacji renderujemy pełną wersję komponentu
   return (
     <div className={styles.playersGrid}>
       {players.map((player) => (
@@ -30,6 +48,12 @@ const PlayersGrid = memo(function PlayersGrid({
       <div
         className={`${styles.playerTile} ${styles.addPlayerTile}`}
         onClick={onAddPlayer}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onAddPlayer();
+          }
+        }}
         role="button"
         tabIndex={0}
         aria-label="Dodaj nowego zawodnika"

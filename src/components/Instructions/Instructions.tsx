@@ -60,6 +60,12 @@ export default function Instructions() {
             <ul>
               <li>Dodaj wszystkich zawodników przed rozpoczęciem analizy</li>
               <li>
+                Nie liczymy podań, które nie są w przód, i tych, które nie
+                mijają zadnego zawodnika
+              </li>
+              <li>Liczymy packing i xT na wysokości PK, tez w poprzek (w kierunku bramki).</li>
+              <li>Nie liczymy SFG</li>
+              <li>
                 Po zapisaniu akcji minuta pozostaje niezmieniona, co ułatwia
                 wprowadzanie serii podań
               </li>

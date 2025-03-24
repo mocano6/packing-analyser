@@ -1,7 +1,13 @@
 // src/components/PlayersGrid/PlayerTile.tsx
 "use client";
 
-import React, { memo } from "react";
+import React, {
+  memo,
+  useCallback,
+  KeyboardEvent,
+  useState,
+  useEffect,
+} from "react";
 import { PlayerTileProps } from "./PlayersGrid.types";
 import styles from "./PlayersGrid.module.css";
 
@@ -12,19 +18,91 @@ const PlayerTile = memo(function PlayerTile({
   onEdit,
   onDelete,
 }: PlayerTileProps) {
+  // Stan śledzący czy komponent jest już wyrenderowany na kliencie
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Ustawienie flagi mounted po wyrenderowaniu na kliencie
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const hasImage = !!player.imageUrl;
 
-  // Obsługa błędu ładowania obrazka
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    e.currentTarget.style.display = "none";
-  };
+  // Obsługa błędu ładowania obrazka - zoptymalizowana z useCallback
+  const handleImageError = useCallback(
+    (e: React.SyntheticEvent<HTMLImageElement>) => {
+      e.currentTarget.style.display = "none";
+    },
+    []
+  );
 
+  // Obsługa naciśnięcia klawisza dla lepszej dostępności
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onSelect(player.id);
+      }
+    },
+    [player.id, onSelect]
+  );
+
+  // Obsługa edycji z klawiaturą
+  const handleEditKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLButtonElement>) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        e.stopPropagation();
+        onEdit(player.id);
+      }
+    },
+    [player.id, onEdit]
+  );
+
+  // Obsługa usuwania z klawiaturą
+  const handleDeleteKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLButtonElement>) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        e.stopPropagation();
+        onDelete(player.id);
+      }
+    },
+    [player.id, onDelete]
+  );
+
+  // Obsługa kliknięcia - dodajemy dodatkowe zabezpieczenie
+  const handleClick = useCallback(() => {
+    if (isMounted) {
+      onSelect(player.id);
+    }
+  }, [isMounted, player.id, onSelect]);
+
+  // Renderujemy prosty placeholder dla pierwszego renderowania
+  if (!isMounted) {
+    return (
+      <div
+        className={`${styles.playerTile} ${hasImage ? styles.withImage : ""}`}
+        aria-label="Ładowanie zawodnika..."
+      >
+        <div className={styles.playerContent}>
+          <div className={styles.number}>{player.number}</div>
+          <div className={styles.playerInfo}>
+            <div className={styles.name}>{player.name}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Dla klienta renderujemy pełną funkcjonalność
   return (
     <div
       className={`${styles.playerTile} ${isSelected ? styles.selected : ""} ${
         hasImage ? styles.withImage : ""
       }`}
-      onClick={() => onSelect(player.id)}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
       aria-pressed={isSelected}
@@ -32,7 +110,6 @@ const PlayerTile = memo(function PlayerTile({
     >
       {hasImage && (
         <>
-          {/* Użycie zwykłego img zamiast next/image, ponieważ nie znamy wymiarów z góry */}
           <img
             src={player.imageUrl}
             alt=""
@@ -52,6 +129,7 @@ const PlayerTile = memo(function PlayerTile({
             e.stopPropagation();
             onEdit(player.id);
           }}
+          onKeyDown={handleEditKeyDown}
           title="Edytuj"
           aria-label={`Edytuj gracza: ${player.name}`}
         >
@@ -63,6 +141,7 @@ const PlayerTile = memo(function PlayerTile({
             e.stopPropagation();
             onDelete(player.id);
           }}
+          onKeyDown={handleDeleteKeyDown}
           title="Usuń"
           aria-label={`Usuń gracza: ${player.name}`}
         >
