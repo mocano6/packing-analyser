@@ -1,24 +1,25 @@
 // src/components/MatchInfoModal/MatchInfoModal.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-
+import React, { useState, useEffect } from "react";
 import { TeamInfo } from "@/types";
 import styles from "./MatchInfoModal.module.css";
-
-// Definiujemy typ dla opcji drużyn
-interface TeamOption {
-  id: number;
-  value: string;
-  label: string;
-}
 
 interface MatchInfoModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (info: TeamInfo) => void;
+  onSave: (matchInfo: TeamInfo) => void;
   currentInfo: TeamInfo | null;
 }
+
+const defaultMatchInfo: TeamInfo = {
+  matchId: "", // Zostanie wygenerowane przy zapisie
+  team: "Rezerwy",
+  opponent: "",
+  competition: "",
+  date: new Date().toISOString().split("T")[0],
+  isHome: true,
+};
 
 const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   isOpen,
@@ -26,198 +27,130 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   onSave,
   currentInfo,
 }) => {
-  const teamOptions = useMemo(
-    (): TeamOption[] => [
-      { id: 1, value: "Rezerwy", label: "Rezerwy" },
-      { id: 2, value: "U19", label: "U19" },
-      { id: 3, value: "U17", label: "U17" },
-      { id: 4, value: "U16", label: "U16" },
-      { id: 5, value: "U15", label: "U15" },
-    ],
-    []
+  const [formData, setFormData] = useState<TeamInfo>(
+    currentInfo || defaultMatchInfo
   );
 
-  const [matchId, setMatchId] = useState("");
-  const [team, setTeam] = useState<TeamOption>(teamOptions[0]);
-  const [opponent, setOpponent] = useState("");
-  const [isHome, setIsHome] = useState(true);
-  const [competition, setCompetition] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [time, setTime] = useState("12:00");
-
-  // Funkcja pomocnicza do pobrania odpowiedniej opcji zespołu
-  const getTeamOption = (
-    teamValue: string | TeamOption | undefined
-  ): TeamOption => {
-    if (!teamValue) return teamOptions[0];
-
-    // Jeśli team jest stringiem, znajdź odpowiednią opcję
-    if (typeof teamValue === "string") {
-      const foundOption = teamOptions.find(
-        (option) => option.value === teamValue
-      );
-      return foundOption || teamOptions[0];
-    }
-
-    // Jeśli jest już obiektem TeamOption
-    return teamValue as TeamOption;
-  };
-
-  // Resetowanie formularza gdy komponent jest otwierany/zamykany
+  // Reset formularza przy otwarciu modalu
   useEffect(() => {
-    if (isOpen) {
-      setMatchId(currentInfo?.matchId || "");
-      setTeam(getTeamOption(currentInfo?.team));
-      setOpponent(currentInfo?.opponent || "");
-      setIsHome(currentInfo?.isHome ?? true);
-      setCompetition(currentInfo?.competition || "");
-      setDate(currentInfo?.date || new Date().toISOString().split("T")[0]);
-      setTime(currentInfo?.time || "12:00");
-    }
-  }, [isOpen, currentInfo, teamOptions]);
+    setFormData(currentInfo || defaultMatchInfo);
+  }, [currentInfo, isOpen]);
 
-  if (!isOpen) return null;
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value, type } = e.target;
+    
+    if (type === "checkbox") {
+      const target = e.target as HTMLInputElement;
+      setFormData((prev) => ({
+        ...prev,
+        [name]: target.checked,
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!opponent.trim()) {
-      alert("Podaj nazwę przeciwnika");
-      return;
+    
+    // Kopiujemy obiekt, aby uniknąć modyfikacji oryginalnego obiektu
+    const infoToSave = { ...formData };
+    
+    // Jeśli to nowy mecz, usuwamy puste ID
+    if (!infoToSave.matchId) {
+      delete infoToSave.matchId; // ID zostanie wygenerowane w useMatchInfo
     }
-    if (!competition.trim()) {
-      alert("Podaj nazwę rozgrywek");
-      return;
-    }
-
-    // Generujemy nowe ID, jeśli nie istnieje (tylko dla nowych meczów)
-    const newMatchId = matchId || crypto.randomUUID();
-
-    onSave({
-      matchId: newMatchId,
-      team: team.value, // Przekazujemy tylko wartość (string), a nie cały obiekt TeamOption
-      opponent,
-      isHome,
-      competition,
-      date,
-      time,
-    });
+    
+    onSave(infoToSave);
   };
 
-  // Obsługa zmiany drużyny
-  const handleTeamChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedValue = e.target.value;
-    const selectedTeam =
-      teamOptions.find((option) => option.value === selectedValue) ||
-      teamOptions[0];
-    setTeam(selectedTeam);
-  };
+  if (!isOpen) return null;
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modal}>
-        <h2>
-          {currentInfo
-            ? "Edytuj informacje o meczu"
-            : "Dodaj informacje o meczu"}
-        </h2>
-
+    <div className={styles.modal}>
+      <div className={styles.modalContent}>
+        <h2>{currentInfo ? "Edit Match" : "Add New Match"}</h2>
         <form onSubmit={handleSubmit}>
           <div className={styles.formGroup}>
-            <label htmlFor="team">Zespół:</label>
+            <label htmlFor="team">Team:</label>
             <select
               id="team"
-              value={team.value}
-              onChange={handleTeamChange}
+              name="team"
+              value={formData.team}
+              onChange={handleChange}
               required
             >
-              {teamOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
+              <option value="Rezerwy">Rezerwy</option>
+              <option value="U19">U19</option>
+              <option value="U17">U17</option>
+              <option value="U16">U16</option>
+              <option value="U15">U15</option>
             </select>
           </div>
 
           <div className={styles.formGroup}>
-            <label htmlFor="opponent">Przeciwnik:</label>
+            <label htmlFor="opponent">Opponent:</label>
             <input
-              type="text"
               id="opponent"
-              value={opponent}
-              onChange={(e) => setOpponent(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className={styles.formGroup}>
-            <label>Lokalizacja:</label>
-            <div className={styles.locationToggle}>
-              <button
-                type="button"
-                className={`${styles.locationButton} ${
-                  isHome ? styles.locationActive : ""
-                }`}
-                onClick={() => setIsHome(true)}
-              >
-                Dom
-              </button>
-              <button
-                type="button"
-                className={`${styles.locationButton} ${
-                  !isHome ? styles.locationActive : ""
-                }`}
-                onClick={() => setIsHome(false)}
-              >
-                Wyjazd
-              </button>
-            </div>
-          </div>
-
-          <div className={styles.formGroup}>
-            <label htmlFor="competition">Rozgrywki:</label>
-            <input
+              name="opponent"
               type="text"
-              id="competition"
-              value={competition}
-              onChange={(e) => setCompetition(e.target.value)}
+              value={formData.opponent}
+              onChange={handleChange}
               required
             />
           </div>
 
-          <div className={styles.formRow}>
-            <div className={styles.formGroup}>
-              <label htmlFor="date">Data:</label>
-              <input
-                type="date"
-                id="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className={styles.formGroup}>
-              <label htmlFor="time">Godzina:</label>
-              <input
-                type="time"
-                id="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                required
-              />
-            </div>
+          <div className={styles.formGroup}>
+            <label htmlFor="competition">Competition:</label>
+            <input
+              id="competition"
+              name="competition"
+              type="text"
+              value={formData.competition}
+              onChange={handleChange}
+              required
+            />
           </div>
 
-          <div className={styles.modalButtons}>
+          <div className={styles.formGroup}>
+            <label htmlFor="date">Date:</label>
+            <input
+              id="date"
+              name="date"
+              type="date"
+              value={formData.date}
+              onChange={handleChange}
+              required
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.checkboxLabel}>
+              <input
+                type="checkbox"
+                name="isHome"
+                checked={formData.isHome}
+                onChange={handleChange}
+              />
+              Home Match
+            </label>
+          </div>
+
+          <div className={styles.buttonGroup}>
             <button type="submit" className={styles.saveButton}>
-              {currentInfo ? "Zapisz zmiany" : "Dodaj mecz"}
+              Save
             </button>
             <button
               type="button"
               className={styles.cancelButton}
               onClick={onClose}
             >
-              Anuluj
+              Cancel
             </button>
           </div>
         </form>

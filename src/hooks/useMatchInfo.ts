@@ -2,55 +2,97 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { TeamInfo } from "@/types"; // Zaktualizowana ścieżka importu
+import { TeamInfo } from "@/types";
+
+// Funkcja do generowania unikalnych ID
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
+}
 
 export function useMatchInfo() {
-  // Inicjalizacja stanu z localStorage z zabezpieczeniem przed SSR
-  const [matchInfo, setMatchInfo] = useState<TeamInfo | null>(() => {
-    if (typeof window !== "undefined") {
-      const savedMatchInfo = localStorage.getItem("matchInfo");
-      if (savedMatchInfo) {
-        const parsedInfo = JSON.parse(savedMatchInfo);
-        // Upewnij się, że istnieje ID meczu
-        if (!parsedInfo.matchId) {
-          // Bezpieczne generowanie UUID kompatybilne z SSR
-          parsedInfo.matchId =
-            typeof crypto !== "undefined" && crypto.randomUUID
-              ? crypto.randomUUID()
-              : "id-" +
-                Date.now() +
-                "-" +
-                Math.random().toString(36).substring(2);
-        }
-        return parsedInfo;
-      }
-    }
-    return null;
-  });
-
+  const [matchInfo, setMatchInfo] = useState<TeamInfo | null>(null);
+  const [allMatches, setAllMatches] = useState<TeamInfo[]>([]);
   const [isMatchModalOpen, setIsMatchModalOpen] = useState(false);
 
-  // Zapisz dane meczu do localStorage z zabezpieczeniem przed SSR
+  // Ładowanie meczów z localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      if (matchInfo) {
-        localStorage.setItem("matchInfo", JSON.stringify(matchInfo));
-      } else {
-        localStorage.removeItem("matchInfo");
+    try {
+      const savedMatches = localStorage.getItem("matches");
+      if (savedMatches) {
+        const parsedMatches = JSON.parse(savedMatches);
+        setAllMatches(parsedMatches);
+        
+        const lastSelectedMatchId = localStorage.getItem("selectedMatchId");
+        if (lastSelectedMatchId) {
+          const selectedMatch = parsedMatches.find(
+            (m: TeamInfo) => m.matchId === lastSelectedMatchId
+          );
+          if (selectedMatch) {
+            setMatchInfo(selectedMatch);
+          }
+        }
       }
+    } catch (error) {
+      console.error("Błąd podczas ładowania meczów:", error);
+    }
+  }, []);
+
+  // Zapisywanie meczów do localStorage
+  useEffect(() => {
+    if (allMatches.length > 0) {
+      localStorage.setItem("matches", JSON.stringify(allMatches));
+    }
+  }, [allMatches]);
+
+  // Zapisywanie ID wybranego meczu
+  useEffect(() => {
+    if (matchInfo) {
+      localStorage.setItem("selectedMatchId", matchInfo.matchId);
+    } else {
+      localStorage.removeItem("selectedMatchId");
     }
   }, [matchInfo]);
 
+  // Funkcja do zapisywania informacji o meczu
   const handleSaveMatchInfo = (info: TeamInfo) => {
-    setMatchInfo(info);
+    const infoToSave = { ...info };
+    
+    if (!infoToSave.matchId) {
+      // Nowy mecz - generujemy ID
+      infoToSave.matchId = generateId();
+      setAllMatches(prev => [...prev, infoToSave]);
+    } else {
+      // Aktualizacja istniejącego meczu
+      setAllMatches(prev => 
+        prev.map(match => 
+          match.matchId === infoToSave.matchId ? infoToSave : match
+        )
+      );
+    }
+    
+    setMatchInfo(infoToSave);
     setIsMatchModalOpen(false);
+  };
+
+  const handleSelectMatch = (match: TeamInfo | null) => {
+    setMatchInfo(match);
+  };
+
+  const handleDeleteMatch = (matchId: string) => {
+    setAllMatches(prev => prev.filter(match => match.matchId !== matchId));
+    
+    if (matchInfo?.matchId === matchId) {
+      setMatchInfo(null);
+    }
   };
 
   return {
     matchInfo,
-    setMatchInfo,
+    allMatches,
     isMatchModalOpen,
     setIsMatchModalOpen,
     handleSaveMatchInfo,
+    handleSelectMatch,
+    handleDeleteMatch
   };
 }

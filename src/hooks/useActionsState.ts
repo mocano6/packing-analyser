@@ -114,7 +114,6 @@ export function useActionsState(players: Player[]) {
 
     const newAction: Action = {
       id: generateUUID(),
-      timestamp: new Date().toISOString(),
       minute: actionMinute,
       senderId: selectedPlayerId,
       senderName: sender.name,
@@ -135,7 +134,6 @@ export function useActionsState(players: Player[]) {
       isP3: isP3Active,
       isShot: isShot,
       isGoal: isGoal,
-      matchInfo: matchInfo,
     };
 
     setActions((prev) => [...prev, newAction]);

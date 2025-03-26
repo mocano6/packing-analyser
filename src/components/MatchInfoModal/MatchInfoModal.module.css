@@ -1,10 +1,10 @@
-/* Style dla modalu i formularza informacji o meczu */
-.modalOverlay {
+/* src/components/MatchInfoModal/MatchInfoModal.module.css */
+.modal {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
+  width: 100%;
+  height: 100%;
   background-color: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
@@ -12,121 +12,64 @@
   z-index: 1000;
 }
 
-.modal {
+.modalContent {
   background-color: white;
-  padding: 24px;
-  border-radius: 8px;
+  padding: 20px;
+  border-radius: 5px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   width: 90%;
   max-width: 500px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-}
-
-.modal h2 {
-  margin: 0 0 20px 0;
-  color: #333;
-  font-size: 1.5rem;
 }
 
 .formGroup {
-  margin-bottom: 20px;
-}
-
-.formGroup:last-of-type {
-  margin-bottom: 24px;
+  margin-bottom: 15px;
 }
 
 .formGroup label {
   display: block;
-  margin-bottom: 8px;
-  font-weight: 600;
-  color: #555;
-  font-size: 0.95rem;
+  margin-bottom: 5px;
+  font-weight: bold;
 }
 
 .formGroup input,
 .formGroup select {
   width: 100%;
-  padding: 10px 12px;
+  padding: 8px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  font-size: 1rem;
-  box-sizing: border-box;
 }
 
-.formGroup input:focus,
-.formGroup select:focus {
-  outline: none;
-  border-color: #2196f3;
-  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
-}
-
-.formRow {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-/* Styl dla przycisków lokalizacji */
-.locationToggle {
+.checkboxLabel {
   display: flex;
-  width: 100%;
-  border-radius: 4px;
-  overflow: hidden;
-  border: 1px solid #ddd;
-}
-
-.locationButton {
-  flex: 1;
-  padding: 10px 15px;
-  border: none;
-  background-color: #f5f5f5;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: all 0.2s ease;
-}
-
-.locationButton:first-child {
-  border-right: 1px solid #ddd;
-}
-
-.locationActive {
-  background-color: #2196f3;
-  color: white;
+  align-items: center;
+  gap: 10px;
   font-weight: bold;
 }
 
-.modalButtons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 10px;
+.checkboxLabel input {
+  width: auto;
 }
 
-.saveButton,
-.cancelButton {
-  padding: 10px 18px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.95rem;
-  font-weight: 600;
-  transition: background-color 0.2s;
+.buttonGroup {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
 }
 
 .saveButton {
-  background-color: #4caf50;
+  padding: 8px 16px;
+  background-color: #4a90e2;
   color: white;
-}
-
-.saveButton:hover {
-  background-color: #3d9140;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 .cancelButton {
-  background-color: #f44336;
-  color: white;
-}
-
-.cancelButton:hover {
-  background-color: #d32f2f;
+  padding: 8px 16px;
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
 }

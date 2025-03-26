@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import React, { useEffect } from "react";
+import React from "react";
 import dynamic from "next/dynamic";
 import { Tab } from "@/types";
 import Instructions from "@/components/Instructions/Instructions";
@@ -70,9 +70,12 @@ export default function Page() {
 
   const {
     matchInfo,
+    allMatches,
     isMatchModalOpen,
     setIsMatchModalOpen,
     handleSaveMatchInfo,
+    handleSelectMatch,
+    handleDeleteMatch
   } = useMatchInfo();
 
   const {
@@ -101,11 +104,7 @@ export default function Page() {
     resetActionState,
   } = useActionsState(players);
 
-  useEffect(() => {
-    if (!matchInfo && activeTab === "packing") {
-      setIsMatchModalOpen(true);
-    }
-  }, [activeTab, matchInfo, setIsMatchModalOpen]);
+  // Usuwamy efekt, który automatycznie otwiera modal meczu
 
   const onDeletePlayer = (playerId: string) => {
     const wasDeleted = handleDeletePlayer(playerId);
@@ -132,13 +131,16 @@ export default function Page() {
 
   return (
     <div className={styles.container}>
+        <Instructions />
       <MatchInfoHeader
         matchInfo={matchInfo}
         onChangeMatch={() => setIsMatchModalOpen(true)}
+        allMatches={allMatches}
+        onSelectMatch={handleSelectMatch}
+        onDeleteMatch={handleDeleteMatch}
       />
 
       <main className={styles.content}>
-        <Instructions />
         <PlayersGrid
           players={players}
           selectedPlayerId={selectedPlayerId}

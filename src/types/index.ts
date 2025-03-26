@@ -1,10 +1,10 @@
 // src/types/index.ts
-// Cała zawartość pliku typów, dokładnie jak przekazałeś
 export type Tab = "packing" | "summary";
 
 export interface Player {
   id: string;
-  name: string;
+  firstName: string;
+  secondName: string;
   number: number;
   position: string;
   birthYear?: number;
@@ -45,7 +45,6 @@ export interface PlayerConnection {
 
 export interface Action {
   id: string;
-  timestamp: string;
   minute: number;
   senderId: string;
   senderName: string;
@@ -65,7 +64,6 @@ export interface Action {
   isP3: boolean;
   isShot: boolean;
   isGoal: boolean;
-  matchInfo?: TeamInfo;
 }
 
 export interface ActionSectionProps {

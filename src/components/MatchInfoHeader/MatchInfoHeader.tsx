@@ -1,58 +1,206 @@
 // src/components/MatchInfoHeader/MatchInfoHeader.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, KeyboardEvent } from "react";
 import { TeamInfo } from "@/types";
 import styles from "./MatchInfoHeader.module.css";
 
 interface MatchInfoHeaderProps {
   matchInfo: TeamInfo | null;
   onChangeMatch: () => void;
+  allMatches: TeamInfo[];
+  onSelectMatch: (match: TeamInfo | null) => void;
+  onDeleteMatch: (matchId: string) => void;
 }
 
 const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   matchInfo,
   onChangeMatch,
+  allMatches,
+  onSelectMatch,
+  onDeleteMatch,
 }) => {
-  // Stan do śledzenia, czy jesteśmy na kliencie
-  const [mounted, setMounted] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<string>("Rezerwy");
+  const [sortKey, setSortKey] = useState<keyof TeamInfo>("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  
+  // Filtrowanie meczów wybranego zespołu
+  const teamMatches = allMatches
+    .filter(match => match.team === selectedTeam)
+    .sort((a, b) => {
+      if (a[sortKey] < b[sortKey]) return sortDirection === "asc" ? -1 : 1;
+      if (a[sortKey] > b[sortKey]) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
 
-  // Po wyrenderowaniu na kliencie, ustawiamy mounted na true
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Funkcja do dodania nowego meczu
+  const handleAddMatch = () => {
+    onSelectMatch(null); // Resetowanie wybranego meczu
+    onChangeMatch(); // Otwieranie modalu
+  };
 
-  // Zawartość, która będzie spójna przy pierwszym renderze na serwerze i kliencie
-  const initialContent = (
-    <div className={styles.noMatchInfo}>
-      <button className={styles.addMatchButton} onClick={onChangeMatch}>
-        Dodaj informacje o meczu
-      </button>
-    </div>
-  );
+  // Obsługa klawiszy dla przycisków edycji i usunięcia
+  const handleEditKeyDown = (e: KeyboardEvent, match: TeamInfo) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onSelectMatch(match);
+      onChangeMatch();
+    }
+  };
 
-  // Zwracamy początkową zawartość dla pierwszego renderowania (na serwerze i przed hydratacją)
-  if (!mounted) {
-    return initialContent;
-  }
+  const handleDeleteKeyDown = (e: KeyboardEvent, matchId: string) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      if (window.confirm("Czy na pewno chcesz usunąć ten mecz?")) {
+        onDeleteMatch(matchId);
+      }
+    }
+  };
 
-  // Po hydratacji możemy bezpiecznie renderować właściwą zawartość w zależności od matchInfo
-  if (!matchInfo) {
-    return initialContent;
-  }
+  // Funkcja zmiany sortowania
+  const handleSort = (key: keyof TeamInfo) => {
+    if (sortKey === key) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDirection("asc");
+    }
+  };
 
   return (
-    <div className={styles.matchInfoHeader}>
-      <h2>
-        {matchInfo.team} {matchInfo.isHome ? "vs" : "@"} {matchInfo.opponent}
-      </h2>
-      <p>
-        {matchInfo.competition} | {matchInfo.date} {matchInfo.time} |
-        {matchInfo.isHome ? " dom" : " wyjazd"}
-      </p>
-      <button className={styles.changeMatchButton} onClick={onChangeMatch}>
-        Zmień mecz
-      </button>
+    <div className={styles.matchInfoContainer}>
+      <div className={styles.headerControls}>
+        <div className={styles.teamSelector}>
+          <select 
+            value={selectedTeam} 
+            onChange={(e) => setSelectedTeam(e.target.value)}
+            className={styles.teamDropdown}
+          >
+            <option value="Rezerwy">Rezerwy</option>
+            <option value="U19">U19</option>
+            <option value="U17">U17</option>
+            <option value="U16">U16</option>
+            <option value="U15">U15</option>
+          </select>
+        </div>
+        
+        <button 
+          className={styles.addButton}
+          onClick={handleAddMatch}
+        >
+          + Dodaj mecz
+        </button>
+      </div>
+
+      <div className={styles.matchesTable}>
+        <div className={styles.tableHeader}>
+          <div 
+            className={styles.headerCell} 
+            onClick={() => handleSort("date")}
+          >
+            Data {sortKey === "date" && (sortDirection === "asc" ? "↑" : "↓")}
+          </div>
+          <div 
+            className={styles.headerCell} 
+            onClick={() => handleSort("team")}
+          >
+            Zespół {sortKey === "team" && (sortDirection === "asc" ? "↑" : "↓")}
+          </div>
+          <div 
+            className={styles.headerCell} 
+            onClick={() => handleSort("opponent")}
+          >
+            Przeciwnik {sortKey === "opponent" && (sortDirection === "asc" ? "↑" : "↓")}
+          </div>
+          <div 
+            className={styles.headerCell} 
+            onClick={() => handleSort("competition")}
+          >
+            Rozgrywki {sortKey === "competition" && (sortDirection === "asc" ? "↑" : "↓")}
+          </div>
+          <div 
+            className={styles.headerCell} 
+            onClick={() => handleSort("isHome")}
+          >
+            Lokalizacja {sortKey === "isHome" && (sortDirection === "asc" ? "↑" : "↓")}
+          </div>
+          <div className={styles.headerCell}>Akcje</div>
+        </div>
+
+        <div className={styles.tableBody}>
+          {teamMatches.length > 0 ? (
+            teamMatches.map((match) => {
+              const isSelected = matchInfo?.matchId === match.matchId;
+              
+              return (
+                <div 
+                  key={match.matchId}
+                  className={`${styles.matchRow} ${isSelected ? styles.selected : ""}`}
+                  onClick={() => onSelectMatch(match)}
+                >
+                  <div className={styles.cell}>{match.date}</div>
+                  <div className={styles.cell}>{match.team}</div>
+                  <div className={styles.cell}>{match.opponent}</div>
+                  <div className={styles.cell}>
+                    <span className={styles.competition}>{match.competition}</span>
+                  </div>
+                  <div className={styles.cell}>{match.isHome ? "Dom" : "Wyjazd"}</div>
+                  <div className={styles.cellActions}>
+                    {isSelected && (
+                      <button 
+                        className={styles.editSelectedBtn}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onChangeMatch();
+                        }}
+                      >
+                        Edytuj
+                      </button>
+                    )}
+                    {!isSelected && (
+                      <>
+                        <button
+                          className={styles.editBtn}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectMatch(match);
+                            onChangeMatch();
+                          }}
+                          onKeyDown={(e) => handleEditKeyDown(e, match)}
+                          title="Edytuj"
+                          aria-label={`Edytuj mecz: ${match.team} vs ${match.opponent}`}
+                        >
+                          ✎
+                        </button>
+                        <button
+                          className={styles.deleteBtn}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm("Czy na pewno chcesz usunąć ten mecz?")) {
+                              onDeleteMatch(match.matchId);
+                            }
+                          }}
+                          onKeyDown={(e) => handleDeleteKeyDown(e, match.matchId)}
+                          title="Usuń"
+                          aria-label={`Usuń mecz: ${match.team} vs ${match.opponent}`}
+                        >
+                          ✕
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className={styles.noMatches}>
+              Brak zapisanych meczów dla tego zespołu
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Usunąłem osobny element z aktualnie wybranym meczem */}
     </div>
   );
 };

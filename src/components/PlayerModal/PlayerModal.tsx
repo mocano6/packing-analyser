@@ -1,7 +1,8 @@
 // src/components/PlayerModal/PlayerModal.tsx
 "use client";
+"use client";
 
-import React, { useState, useEffect, useMemo } from "react"; // Dodano import useMemo
+import React, { useState, useEffect, useMemo } from "react";
 import { Player } from "@/types";
 import styles from "./PlayerModal.module.css";
 
@@ -18,17 +19,18 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
   onSave,
   editingPlayer,
 }) => {
-  // Użycie useMemo do utrzymania stałego odniesienia do initialFormData
+  // Zmodyfikowane initialFormData z osobnymi polami firstName i lastName
   const initialFormData = useMemo(
     () => ({
-      name: "",
+      firstName: "",
+      lastName: "",
       number: "",
       position: "",
       birthYear: "",
       imageUrl: "",
     }),
     []
-  ); // Pusta tablica zależności - obiekt zostanie utworzony tylko raz
+  );
 
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState({ ...initialFormData });
@@ -44,25 +46,38 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
   ];
 
   useEffect(() => {
-    setFormData(
-      editingPlayer
-        ? {
-            name: editingPlayer.name,
-            number: editingPlayer.number.toString(),
-            position: editingPlayer.position,
-            birthYear: editingPlayer.birthYear?.toString() || "",
-            imageUrl: editingPlayer.imageUrl || "",
-          }
-        : initialFormData
-    );
+    if (editingPlayer) {
+      // Rozdzielenie imienia i nazwiska z pola name, gdy edytujemy gracza
+      const nameParts = editingPlayer.name.split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
+      setFormData({
+        firstName,
+        lastName,
+        number: editingPlayer.number.toString(),
+        position: editingPlayer.position,
+        birthYear: editingPlayer.birthYear?.toString() || "",
+        imageUrl: editingPlayer.imageUrl || "",
+      });
+    } else {
+      setFormData(initialFormData);
+    }
   }, [editingPlayer, isOpen, initialFormData]);
 
   const validateForm = () => {
     const newErrors = { ...initialFormData };
     let isValid = true;
 
-    if (!formData.name.trim()) {
-      newErrors.name = "Imię jest wymagane";
+    // Walidacja dla firstName
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = "Imię jest wymagane";
+      isValid = false;
+    }
+
+    // Walidacja dla lastName
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = "Nazwisko jest wymagane";
       isValid = false;
     }
 
@@ -108,7 +123,8 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
     e.preventDefault();
     if (validateForm()) {
       onSave({
-        name: formData.name.trim(),
+        // Łączenie firstName i lastName w pole name
+        name: `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim(),
         number: parseInt(formData.number),
         position: formData.position,
         birthYear: formData.birthYear
@@ -119,7 +135,6 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
     }
   };
 
-  // Poprawiona funkcja handleChange - bez nieużywanego parametru 'e'
   const handleChange =
     (field: keyof typeof formData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -136,18 +151,35 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
         </h2>
 
         <form className={styles.form} onSubmit={handleSubmit}>
+          {/* Pole dla imienia */}
           <div className={styles.formGroup}>
-            <label className={styles.label} htmlFor="name">
-              Imię i nazwisko:
+            <label className={styles.label} htmlFor="firstName">
+              Imię:
             </label>
             <input
-              id="name"
-              value={formData.name}
-              onChange={handleChange("name")}
-              className={`${styles.input} ${errors.name ? styles.error : ""}`}
+              id="firstName"
+              value={formData.firstName}
+              onChange={handleChange("firstName")}
+              className={`${styles.input} ${errors.firstName ? styles.error : ""}`}
             />
-            {errors.name && (
-              <span className={styles.errorMessage}>{errors.name}</span>
+            {errors.firstName && (
+              <span className={styles.errorMessage}>{errors.firstName}</span>
+            )}
+          </div>
+
+          {/* Pole dla nazwiska */}
+          <div className={styles.formGroup}>
+            <label className={styles.label} htmlFor="lastName">
+              Nazwisko:
+            </label>
+            <input
+              id="lastName"
+              value={formData.lastName}
+              onChange={handleChange("lastName")}
+              className={`${styles.input} ${errors.lastName ? styles.error : ""}`}
+            />
+            {errors.lastName && (
+              <span className={styles.errorMessage}>{errors.lastName}</span>
             )}
           </div>
 

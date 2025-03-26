@@ -1,48 +1,212 @@
-/* Style dla nagłówka z informacjami o meczu */
-.matchInfoHeader {
-  background-color: white;
-  color: #333;
-  padding: 12px 15px;
-  border-radius: 8px;
+/* src/components/MatchInfoHeader/MatchInfoHeader.module.css */
+.matchInfoContainer {
   margin-bottom: 20px;
-  text-align: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.headerControls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.teamSelector {
+  margin-right: 15px;
+}
+
+.teamDropdown {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+  font-size: 14px;
+  min-width: 150px;
+  background-color: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232196f3'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+  padding-right: 30px;
+}
+
+.teamDropdown:focus {
+  outline: none;
+  border-color: #2196f3;
+}
+
+.addButton {
+  padding: 8px 16px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.addButton:hover {
+  background-color: #1976d2;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.matchesTable {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   border: 1px solid #eaeaea;
 }
 
-.matchInfoHeader h2 {
-  margin: 0 0 6px 0;
-  font-size: 1.4rem;
-  color: #2d2d2d;
+.tableHeader {
+  display: grid;
+  grid-template-columns: 1fr 0.8fr 1fr 1fr 0.8fr 120px;
+  background-color: #fafafa;
+  font-weight: 600;
+  border-bottom: 1px solid #eaeaea;
+  color: #444;
 }
 
-.matchInfoHeader p {
-  margin: 0 0 10px 0;
-  font-size: 0.95rem;
-  color: #666;
+.headerCell {
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
 }
 
-.noMatchInfo {
+.headerCell:hover {
+  background-color: #f0f0f0;
+}
+
+.tableBody {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.matchRow {
+  display: grid;
+  grid-template-columns: 1fr 0.8fr 1fr 1fr 0.8fr 120px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.matchRow:last-child {
+  border-bottom: none;
+}
+
+.matchRow:hover {
+  background-color: #f5f9ff;
+}
+
+.matchRow.selected {
+  background-color: #e3f2fd;
+  border-left: 4px solid #2196f3;
+  box-shadow: inset 0 0 0 1px #2196f3;
+}
+
+.cell {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #333;
+}
+
+.matchRow.selected .cell {
+  font-weight: 500;
+}
+
+.competition {
+  background-color: rgba(33, 150, 243, 0.15);
+  color: #2196f3;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-block;
+}
+
+.cellActions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+}
+
+.editBtn,
+.deleteBtn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  z-index: 3;
+}
+
+.matchRow:hover .editBtn,
+.matchRow:hover .deleteBtn {
+  opacity: 1;
+}
+
+.editBtn {
+  color: #2196f3;
+}
+
+.editBtn:hover {
+  background-color: #e3f2fd;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.deleteBtn {
+  color: #f44336;
+}
+
+.deleteBtn:hover {
+  background-color: #ffebee;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.noMatches {
+  padding: 24px;
   text-align: center;
-  margin-bottom: 20px;
+  color: #757575;
+  font-size: 14px;
 }
 
-.addMatchButton,
-.changeMatchButton {
-  padding: 6px 12px;
-  background-color: white;
-  color: #666;
-  border: 1px solid #ddd;
+.editSelectedBtn {
+  padding: 6px 14px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: normal;
-  transition: all 0.2s;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
-.addMatchButton:hover,
-.changeMatchButton:hover {
-  background-color: #f5f5f5;
-  color: #333;
-  border-color: #ccc;
+.editSelectedBtn:hover {
+  background-color: #1976d2;
 }
