@@ -1,6 +1,8 @@
 // src/types/index.ts
 export type Tab = "packing" | "summary";
 
+export type Zone = number;
+
 export interface Player {
   id: string;
   name: string;
@@ -54,7 +56,7 @@ export interface Action {
   receiverName: string;
   receiverNumber: number;
   receiverClickValue: number;
-  zone: number;
+  zone: Zone;
   basePoints: number;
   multiplier: number;
   totalPoints: number;
@@ -64,12 +66,14 @@ export interface Action {
   isP3: boolean;
   isShot: boolean;
   isGoal: boolean;
+  isPenaltyAreaEntry?: boolean;
+  matchId?: string; // ID meczu, do którego przypisana jest akcja
 }
 
 export interface ActionSectionProps {
-  selectedZone: number | null;
+  selectedZone: Zone | null;
   handleZoneSelect: (
-    zone: number | null,
+    zone: Zone | null,
     xT?: number,
     value1?: number,
     value2?: number

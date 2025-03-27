@@ -1,7 +1,7 @@
 /* src/components/FootballPitch/FootballPitch.module.css */
 
 .pitchContainer {
-  width: 100%;
+  width: 95%;
   margin: 0 auto;
   aspect-ratio: 12/8;
   position: relative;

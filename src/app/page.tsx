@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import React, { useMemo, useEffect } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Tab, Player, TeamInfo, PlayerMinutes } from "@/types";
 import Instructions from "@/components/Instructions/Instructions";
@@ -100,6 +100,7 @@ export default function Page() {
     isP3Active,
     isShot,
     isGoal,
+    isPenaltyAreaEntry,
     setSelectedPlayerId,
     setSelectedReceiverId,
     setCurrentPoints,
@@ -108,12 +109,13 @@ export default function Page() {
     setIsP3Active,
     setIsShot,
     setIsGoal,
+    setIsPenaltyAreaEntry,
     handleZoneSelect,
     handleSaveAction,
     handleDeleteAction,
     handleDeleteAllActions,
     resetActionState,
-  } = useActionsState(players);
+  } = useActionsState(players, matchInfo);
 
   const filteredPlayers = useMemo(() => {
     // Filtruj graczy na podstawie wybranego zespołu
@@ -217,6 +219,7 @@ export default function Page() {
               handleZoneSelect={handleZoneSelect}
               players={filteredPlayers}
               selectedPlayerId={selectedPlayerId}
+              setSelectedPlayerId={setSelectedPlayerId}
               selectedReceiverId={selectedReceiverId}
               setSelectedReceiverId={setSelectedReceiverId}
               actionMinute={actionMinute}
@@ -231,6 +234,8 @@ export default function Page() {
               setIsShot={setIsShot}
               isGoal={isGoal}
               setIsGoal={setIsGoal}
+              isPenaltyAreaEntry={isPenaltyAreaEntry}
+              setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
               handleSaveAction={onSaveAction}
               resetActionState={resetActionState}
             />

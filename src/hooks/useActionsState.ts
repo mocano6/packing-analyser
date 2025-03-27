@@ -1,10 +1,10 @@
 // src/hooks/useActionsState.ts
 "use client";
 
-import { useState, useEffect } from "react";
-import { Action, Player, TeamInfo } from "@/types"; // Zaktualizowana ścieżka importu
+import { useState, useEffect, useMemo } from "react";
+import { Action, Player, TeamInfo, Zone } from "@/types"; // Zaktualizowana ścieżka importu
 
-export function useActionsState(players: Player[]) {
+export function useActionsState(players: Player[], currentMatch: any) {
   // Inicjalizacja stanu z localStorage z zabezpieczeniem przed SSR
   const [actions, setActions] = useState<Action[]>(() => {
     if (typeof window !== "undefined") {
@@ -14,19 +14,44 @@ export function useActionsState(players: Player[]) {
     return [];
   });
 
+  const [currentMatchId, setCurrentMatchId] = useState<string | undefined>(undefined);
+  const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
+  const [currentPoints, setCurrentPoints] = useState(0);
+  const [actionMinute, setActionMinute] = useState<number>(0);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedReceiverId, setSelectedReceiverId] = useState<string | null>(
     null
   );
-  const [selectedZone, setSelectedZone] = useState<number | null>(null);
-  const [currentPoints, setCurrentPoints] = useState(0);
-  const [actionMinute, setActionMinute] = useState<number>(0);
   const [actionType, setActionType] = useState<"pass" | "dribble">("pass");
   const [isP3Active, setIsP3Active] = useState(false);
   const [isShot, setIsShot] = useState(false);
   const [isGoal, setIsGoal] = useState(false);
+  const [isPenaltyAreaEntry, setIsPenaltyAreaEntry] = useState(false);
   const [clickValue1, setClickValue1] = useState<number | null>(null);
   const [clickValue2, setClickValue2] = useState<number | null>(null);
+
+  // Monitoruj zmiany meczu i aktualizuj currentMatchId
+  useEffect(() => {
+    if (currentMatch && currentMatch.matchId) {
+      setCurrentMatchId(currentMatch.matchId);
+    } else {
+      setCurrentMatchId(undefined);
+    }
+  }, [currentMatch]);
+
+  // Nasłuchuj zmian w localStorage dla selectedMatchId
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "selectedMatchId") {
+        setCurrentMatchId(e.newValue);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
 
   // Zapisz dane akcji do localStorage z zabezpieczeniem przed SSR
   useEffect(() => {
@@ -35,15 +60,26 @@ export function useActionsState(players: Player[]) {
     }
   }, [actions]);
 
+  // Filtrowanie akcji na podstawie wybranego meczu
+  const filteredActions = useMemo(() => {
+    if (!currentMatchId) return actions;
+    return actions.filter(action => 
+      !action.matchId || action.matchId === currentMatchId
+    );
+  }, [actions, currentMatchId]);
+
   const handleZoneSelect = (
-    zone: number | null,
+    zone: Zone | null,
     xT?: number,
     value1?: number,
     value2?: number
   ) => {
     setSelectedZone(zone);
-    if (value1 !== undefined) setClickValue1(value1);
-    if (value2 !== undefined) setClickValue2(value2);
+    if (zone !== null && value1 !== undefined && value2 !== undefined) {
+      setCurrentPoints(Math.round(value1 + value2));
+    } else {
+      setCurrentPoints(0);
+    }
   };
 
   const resetActionState = () => {
@@ -56,6 +92,7 @@ export function useActionsState(players: Player[]) {
     setIsP3Active(false);
     setIsShot(false);
     setIsGoal(false);
+    setIsPenaltyAreaEntry(false);
   };
 
   const handleDeleteAction = (actionId: string) => {
@@ -65,15 +102,13 @@ export function useActionsState(players: Player[]) {
   };
 
   const handleDeleteAllActions = () => {
-    if (
-      window.confirm(
-        "Czy na pewno chcesz usunąć wszystkie akcje? Tej operacji nie można cofnąć."
-      )
-    ) {
-      setActions([]);
-      return true; // Jeśli akcje zostały usunięte
+    if (currentMatchId) {
+      // Usuń tylko akcje dla bieżącego meczu
+      setActions(prev => prev.filter(action => action.matchId !== currentMatchId));
+    } else {
+      // Usuń wszystkie akcje bez przypisanego meczu
+      setActions(prev => prev.filter(action => action.matchId));
     }
-    return false;
   };
 
   const handleSaveAction = (matchInfo: TeamInfo | null) => {
@@ -101,7 +136,9 @@ export function useActionsState(players: Player[]) {
         ? players.find((p) => p.id === selectedReceiverId)!
         : sender;
 
-    const multiplier = (clickValue2 ?? 0) - (clickValue1 ?? 0);
+    const basePoints = currentPoints;
+    const multiplier = isP3Active ? 3 : 1;
+    const totalPoints = basePoints * multiplier;
 
     // Użyj bezpiecznej implementacji UUID z zabezpieczeniem przed środowiskiem SSR
     const generateUUID = () => {
@@ -125,15 +162,17 @@ export function useActionsState(players: Player[]) {
       receiverNumber: receiver.number,
       receiverClickValue: clickValue2 ?? 0,
       zone: selectedZone,
-      basePoints: currentPoints,
-      multiplier: multiplier,
-      totalPoints: currentPoints * multiplier,
+      basePoints,
+      multiplier,
+      totalPoints,
       actionType: actionType,
-      packingPoints: currentPoints,
-      xTValue: currentPoints * multiplier,
+      packingPoints: totalPoints,
+      xTValue: totalPoints,
       isP3: isP3Active,
       isShot: isShot,
       isGoal: isGoal,
+      isPenaltyAreaEntry: isPenaltyAreaEntry,
+      matchId: currentMatchId,
     };
 
     setActions((prev) => [...prev, newAction]);
@@ -142,7 +181,8 @@ export function useActionsState(players: Player[]) {
   };
 
   return {
-    actions,
+    actions: filteredActions, // Zwracaj przefiltrowane akcje
+    allActions: actions, // Dodajemy dostęp do wszystkich akcji w razie potrzeby
     selectedPlayerId,
     selectedReceiverId,
     selectedZone,
@@ -152,6 +192,7 @@ export function useActionsState(players: Player[]) {
     isP3Active,
     isShot,
     isGoal,
+    isPenaltyAreaEntry,
     setSelectedPlayerId,
     setSelectedReceiverId,
     setSelectedZone,
@@ -161,6 +202,7 @@ export function useActionsState(players: Player[]) {
     setIsP3Active,
     setIsShot,
     setIsGoal,
+    setIsPenaltyAreaEntry,
     handleZoneSelect,
     handleSaveAction,
     handleDeleteAction,

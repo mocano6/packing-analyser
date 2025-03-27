@@ -5,6 +5,8 @@ import React, { useState, useCallback, memo } from "react";
 import styles from "./FootballPitch.module.css";
 import { XT_VALUES } from "./constants";
 import ZoneCell from "./ZoneCell";
+import ActionModal from "../ActionModal/ActionModal";
+import { Player } from "@/types";
 
 export interface FootballPitchProps {
   selectedZone: number | null;
@@ -14,15 +16,97 @@ export interface FootballPitchProps {
     value1?: number,
     value2?: number
   ) => void;
+  players: Player[];
+  selectedPlayerId: string | null;
+  setSelectedPlayerId: (id: string | null) => void;
+  selectedReceiverId: string | null;
+  setSelectedReceiverId: (id: string | null) => void;
+  actionMinute: number;
+  setActionMinute: (minute: number) => void;
+  actionType: "pass" | "dribble";
+  setActionType: (type: "pass" | "dribble") => void;
+  currentPoints: number;
+  setCurrentPoints: React.Dispatch<React.SetStateAction<number>>;
+  isP3Active: boolean;
+  setIsP3Active: React.Dispatch<React.SetStateAction<boolean>>;
+  isShot: boolean;
+  setIsShot: React.Dispatch<React.SetStateAction<boolean>>;
+  isGoal: boolean;
+  setIsGoal: React.Dispatch<React.SetStateAction<boolean>>;
+  isPenaltyAreaEntry: boolean;
+  setIsPenaltyAreaEntry: React.Dispatch<React.SetStateAction<boolean>>;
+  handleSaveAction: () => void;
+  resetActionState: () => void;
 }
 
 const FootballPitch = memo(function FootballPitch({
   selectedZone,
   onZoneSelect,
+  players,
+  selectedPlayerId,
+  setSelectedPlayerId,
+  selectedReceiverId,
+  setSelectedReceiverId,
+  actionMinute,
+  setActionMinute,
+  actionType,
+  setActionType,
+  currentPoints,
+  setCurrentPoints,
+  isP3Active,
+  setIsP3Active,
+  isShot,
+  setIsShot,
+  isGoal,
+  setIsGoal,
+  isPenaltyAreaEntry,
+  setIsPenaltyAreaEntry,
+  handleSaveAction,
+  resetActionState,
 }: FootballPitchProps) {
   const [firstClickZone, setFirstClickZone] = useState<number | null>(null);
   const [secondClickZone, setSecondClickZone] = useState<number | null>(null);
   const [firstClickValue, setFirstClickValue] = useState<number | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Callback do obsługi dodawania punktów
+  const handleAddPoints = useCallback(
+    (points: number) => {
+      setCurrentPoints((prev) => prev + points);
+    },
+    [setCurrentPoints]
+  );
+
+  // Callback do przełączania P3
+  const handleP3Toggle = useCallback(() => {
+    setIsP3Active((prev) => !prev);
+  }, [setIsP3Active]);
+
+  // Callback do przełączania strzału
+  const handleShotToggle = useCallback(
+    (checked: boolean) => {
+      setIsShot(checked);
+      if (!checked) setIsGoal(false); // Jeśli odznaczamy strzał, odznaczamy też bramkę
+    },
+    [setIsShot, setIsGoal]
+  );
+
+  // Callback do przełączania bramki
+  const handleGoalToggle = useCallback(
+    (checked: boolean) => {
+      setIsGoal(checked);
+      if (checked) setIsShot(true); // Jeśli zaznaczamy bramkę, zaznaczamy też strzał
+    },
+    [setIsGoal, setIsShot]
+  );
+
+  // Callback do przełączania wejścia w pole karne
+  const handlePenaltyAreaEntryToggle = useCallback(
+    (checked: boolean) => {
+      setIsPenaltyAreaEntry(checked);
+    },
+    [setIsPenaltyAreaEntry]
+  );
 
   const handleZoneClick = useCallback(
     (zoneIndex: number) => {
@@ -31,24 +115,38 @@ const FootballPitch = memo(function FootballPitch({
       const clickedValue = XT_VALUES[row][col];
 
       if (!firstClickZone) {
+        // Pierwszy klik - podanie
         setFirstClickZone(zoneIndex);
         setFirstClickValue(clickedValue);
+        setActionType("pass"); // Ustawiamy typ akcji na podanie
         onZoneSelect(zoneIndex, undefined, clickedValue, undefined);
       } else if (!secondClickZone && zoneIndex !== firstClickZone) {
+        // Drugi klik - przyjęcie
         setSecondClickZone(zoneIndex);
         if (firstClickValue !== null) {
           const xt = clickedValue - firstClickValue;
           onZoneSelect(zoneIndex, xt, firstClickValue, clickedValue);
+          setIsModalOpen(true); // Otwieramy modal po drugim kliknięciu
         }
       } else {
+        // Reset i nowy pierwszy klik
         setSecondClickZone(null);
         setFirstClickZone(zoneIndex);
         setFirstClickValue(clickedValue);
+        setActionType("pass"); // Ustawiamy typ akcji na podanie
         onZoneSelect(zoneIndex, undefined, clickedValue, undefined);
       }
     },
-    [firstClickZone, secondClickZone, firstClickValue, onZoneSelect]
+    [firstClickZone, secondClickZone, firstClickValue, onZoneSelect, setActionType]
   );
+
+  // Funkcja zamykająca modal i resetująca stan
+  const handleCloseModal = useCallback(() => {
+    setIsModalOpen(false);
+    setFirstClickZone(null);
+    setSecondClickZone(null);
+    setFirstClickValue(null);
+  }, []);
 
   // Memoizujemy tablicę komórek, aby uniknąć zbędnego renderowania
   const cells = React.useMemo(
@@ -74,23 +172,51 @@ const FootballPitch = memo(function FootballPitch({
   );
 
   return (
-    <div className={styles.pitchContainer}>
-      <div
-        className={styles.pitch}
-        role="grid"
-        aria-label="Boisko piłkarskie podzielone na strefy"
-      >
-        <div className={styles.grid}>{cells}</div>
-        <div className={styles.pitchLines} aria-hidden="true">
-          <div className={styles.centerLine} />
-          <div className={styles.centerCircle} />
-          <div className={styles.penaltyAreaLeft} />
-          <div className={styles.goalAreaLeft} />
-          <div className={styles.penaltyAreaRight} />
-          <div className={styles.goalAreaRight} />
+    <>
+      <div className={styles.pitchContainer}>
+        <div
+          className={styles.pitch}
+          role="grid"
+          aria-label="Boisko piłkarskie podzielone na strefy"
+        >
+          <div className={styles.grid}>{cells}</div>
+          <div className={styles.pitchLines} aria-hidden="true">
+            <div className={styles.centerLine} />
+            <div className={styles.centerCircle} />
+            <div className={styles.penaltyAreaLeft} />
+            <div className={styles.goalAreaLeft} />
+            <div className={styles.penaltyAreaRight} />
+            <div className={styles.goalAreaRight} />
+          </div>
         </div>
       </div>
-    </div>
+
+      <ActionModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        players={players}
+        selectedPlayerId={selectedPlayerId}
+        selectedReceiverId={selectedReceiverId}
+        onSenderSelect={setSelectedPlayerId}
+        onReceiverSelect={setSelectedReceiverId}
+        actionMinute={actionMinute}
+        onMinuteChange={setActionMinute}
+        actionType={actionType}
+        onActionTypeChange={setActionType}
+        currentPoints={currentPoints}
+        onAddPoints={handleAddPoints}
+        isP3Active={isP3Active}
+        onP3Toggle={handleP3Toggle}
+        isShot={isShot}
+        onShotToggle={handleShotToggle}
+        isGoal={isGoal}
+        onGoalToggle={handleGoalToggle}
+        isPenaltyAreaEntry={isPenaltyAreaEntry}
+        onPenaltyAreaEntryToggle={handlePenaltyAreaEntryToggle}
+        onSaveAction={handleSaveAction}
+        onReset={resetActionState}
+      />
+    </>
   );
 });
 

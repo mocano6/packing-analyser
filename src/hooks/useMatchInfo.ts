@@ -29,7 +29,15 @@ export function useMatchInfo() {
           );
           if (selectedMatch) {
             setMatchInfo(selectedMatch);
+          } else if (parsedMatches.length > 0) {
+            // Jeśli poprzednio wybrany mecz nie istnieje, wybierz pierwszy z listy
+            setMatchInfo(parsedMatches[0]);
+            localStorage.setItem("selectedMatchId", parsedMatches[0].matchId || "");
           }
+        } else if (parsedMatches.length > 0) {
+          // Jeśli nie ma poprzednio wybranego meczu, wybierz pierwszy z listy
+          setMatchInfo(parsedMatches[0]);
+          localStorage.setItem("selectedMatchId", parsedMatches[0].matchId || "");
         }
       }
     } catch (error) {
@@ -41,8 +49,14 @@ export function useMatchInfo() {
   useEffect(() => {
     if (allMatches.length > 0) {
       localStorage.setItem("matches", JSON.stringify(allMatches));
+      
+      // Jeśli nie ma wybranego meczu, a mamy mecze w liście, wybierz pierwszy
+      if (!matchInfo && allMatches.length > 0) {
+        setMatchInfo(allMatches[0]);
+        localStorage.setItem("selectedMatchId", allMatches[0].matchId || "");
+      }
     }
-  }, [allMatches]);
+  }, [allMatches, matchInfo]);
 
   // Zapisywanie ID wybranego meczu
   useEffect(() => {
@@ -99,11 +113,23 @@ export function useMatchInfo() {
   };
 
   const handleDeleteMatch = (matchId: string) => {
-    setAllMatches(prev => prev.filter(match => match.matchId !== matchId));
-    
-    if (matchInfo?.matchId === matchId) {
-      setMatchInfo(null);
-    }
+    setAllMatches(prev => {
+      const updatedMatches = prev.filter(match => match.matchId !== matchId);
+      
+      // Jeśli usunęliśmy aktualnie wybrany mecz
+      if (matchInfo?.matchId === matchId) {
+        // Jeśli zostały jeszcze jakieś mecze, wybierz pierwszy
+        if (updatedMatches.length > 0) {
+          setMatchInfo(updatedMatches[0]);
+          localStorage.setItem("selectedMatchId", updatedMatches[0].matchId || "");
+        } else {
+          setMatchInfo(null);
+          localStorage.removeItem("selectedMatchId");
+        }
+      }
+      
+      return updatedMatches;
+    });
   };
 
   return {

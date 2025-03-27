@@ -378,7 +378,7 @@ const PlayerStats: React.FC<PlayerStatsProps> = ({ player, actions }) => {
 
       <ConnectionsTable
         data={receiverConnections}
-        title="Połączenia, jako odbierający"
+        title="Połączenia, jako przyjmujący"
         type="receiver"
         emptyMessage="Brak podań od innych zawodników"
       />

@@ -57,38 +57,49 @@
 
 .buttonGroup {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
+  gap: 10px;
   margin-top: 1.5rem;
 }
 
 .saveButton, .cancelButton {
-  padding: 0.75rem 1.5rem;
+  padding: 8px 16px;
   border: none;
-  border-radius: 4px;
-  font-size: 1rem;
+  border-radius: 6px;
   cursor: pointer;
-  font-weight: 600;
-  transition: background-color 0.2s, transform 0.1s;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  min-width: 120px;
+  justify-content: center;
 }
 
 .saveButton {
-  background-color: #007bff;
+  background-color: #2196f3;
   color: white;
 }
 
 .saveButton:hover {
-  background-color: #0069d9;
-  transform: translateY(-2px);
+  background-color: #1976d2;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 .cancelButton {
-  background-color: #f8f9fa;
-  color: #212529;
+  background-color: #f8f8f8;
+  color: #444;
+  border: 1px solid #ddd;
+  font-weight: 500;
+  transition: all 0.2s ease;
 }
 
 .cancelButton:hover {
-  background-color: #e2e6ea;
-  transform: translateY(-2px);
+  background-color: #e8e8e8;
+  color: #222;
+  border-color: #aaa;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 /* Style dla przycisków zespołów */
@@ -116,13 +127,9 @@
 }
 
 .teamButton.active {
-  background: #007bff;
+  background: #2196f3;
   color: white;
-  border-color: #0056b3;
-}
-
-.teamButton.active:hover {
-  background: #0056b3;
+  border-color: #1976d2;
 }
 
 /* Style dla checkboxów zespołów */

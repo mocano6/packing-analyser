@@ -155,7 +155,7 @@ const TableHeader = memo(
             role="columnheader"
             aria-sort={getAriaSortValue("actionsAsReceiverCount")}
           >
-            Odbierający{" "}
+            Przyjmujący{" "}
             <SortIcon
               column="actionsAsReceiverCount"
               sortBy={sortBy}

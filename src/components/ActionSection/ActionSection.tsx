@@ -1,12 +1,10 @@
 // components/ActionSection/ActionSection.tsx
 "use client";
 
-import React, { useCallback, memo } from "react";
+import React, { memo } from "react";
 import FootballPitch from "../FootballPitch/FootballPitch";
-import SelectionContainer from "../SelectionContainer/SelectionContainer";
-import PointsButtons from "../PointsButtons/PointsButtons";
 import styles from "./ActionSection.module.css";
-import { Player } from "@/types"; // Zaktualizowana ścieżka dla Next.js
+import { Player } from "@/types";
 
 export interface ActionSectionProps {
   selectedZone: number | null;
@@ -18,6 +16,7 @@ export interface ActionSectionProps {
   ) => void;
   players: Player[];
   selectedPlayerId: string | null;
+  setSelectedPlayerId: (id: string | null) => void;
   selectedReceiverId: string | null;
   setSelectedReceiverId: (id: string | null) => void;
   actionMinute: number;
@@ -32,6 +31,8 @@ export interface ActionSectionProps {
   setIsShot: React.Dispatch<React.SetStateAction<boolean>>;
   isGoal: boolean;
   setIsGoal: React.Dispatch<React.SetStateAction<boolean>>;
+  isPenaltyAreaEntry: boolean;
+  setIsPenaltyAreaEntry: React.Dispatch<React.SetStateAction<boolean>>;
   handleSaveAction: () => void;
   resetActionState: () => void;
 }
@@ -41,6 +42,7 @@ const ActionSection = memo(function ActionSection({
   handleZoneSelect,
   players,
   selectedPlayerId,
+  setSelectedPlayerId,
   selectedReceiverId,
   setSelectedReceiverId,
   actionMinute,
@@ -55,69 +57,38 @@ const ActionSection = memo(function ActionSection({
   setIsShot,
   isGoal,
   setIsGoal,
+  isPenaltyAreaEntry,
+  setIsPenaltyAreaEntry,
   handleSaveAction,
   resetActionState,
 }: ActionSectionProps) {
-  // Memoizowane funkcje pomocnicze do obsługi interakcji użytkownika
-  const handleAddPoints = useCallback(
-    (points: number) => {
-      setCurrentPoints((prev) => prev + points);
-    },
-    [setCurrentPoints]
-  );
-
-  const handleP3Toggle = useCallback(() => {
-    setIsP3Active((prev) => !prev);
-  }, [setIsP3Active]);
-
-  const handleShotToggle = useCallback(
-    (checked: boolean) => {
-      setIsShot(checked);
-      if (!checked) setIsGoal(false); // Jeśli odznaczamy strzał, odznaczamy też bramkę
-    },
-    [setIsShot, setIsGoal]
-  );
-
-  const handleGoalToggle = useCallback(
-    (checked: boolean) => {
-      setIsGoal(checked);
-      if (checked) setIsShot(true); // Jeśli zaznaczamy bramkę, zaznaczamy też strzał
-    },
-    [setIsGoal, setIsShot]
-  );
-
   return (
     <section className={styles.actionContainer}>
-      <div className={styles.pitchContainer}>
-        <FootballPitch
-          selectedZone={selectedZone}
-          onZoneSelect={handleZoneSelect}
-        />
-      </div>
-      <div className={styles.rightContainer}>
-        <SelectionContainer
-          players={players}
-          selectedPlayerId={selectedPlayerId}
-          selectedReceiverId={selectedReceiverId}
-          onReceiverSelect={setSelectedReceiverId}
-          actionMinute={actionMinute}
-          onMinuteChange={setActionMinute}
-          actionType={actionType}
-          onActionTypeChange={setActionType}
-        />
-        <PointsButtons
-          currentPoints={currentPoints}
-          onAddPoints={handleAddPoints}
-          isP3Active={isP3Active}
-          onP3Toggle={handleP3Toggle}
-          isShot={isShot}
-          onShotToggle={handleShotToggle}
-          isGoal={isGoal}
-          onGoalToggle={handleGoalToggle}
-          onSaveAction={handleSaveAction}
-          onReset={resetActionState}
-        />
-      </div>
+      <FootballPitch
+        selectedZone={selectedZone}
+        onZoneSelect={handleZoneSelect}
+        players={players}
+        selectedPlayerId={selectedPlayerId}
+        setSelectedPlayerId={setSelectedPlayerId}
+        selectedReceiverId={selectedReceiverId}
+        setSelectedReceiverId={setSelectedReceiverId}
+        actionMinute={actionMinute}
+        setActionMinute={setActionMinute}
+        actionType={actionType}
+        setActionType={setActionType}
+        currentPoints={currentPoints}
+        setCurrentPoints={setCurrentPoints}
+        isP3Active={isP3Active}
+        setIsP3Active={setIsP3Active}
+        isShot={isShot}
+        setIsShot={setIsShot}
+        isGoal={isGoal}
+        setIsGoal={setIsGoal}
+        isPenaltyAreaEntry={isPenaltyAreaEntry}
+        setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
+        handleSaveAction={handleSaveAction}
+        resetActionState={resetActionState}
+      />
     </section>
   );
 });

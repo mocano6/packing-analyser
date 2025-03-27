@@ -166,15 +166,15 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
           </div>
           
           <div className={styles.buttonGroup}>
-            <button type="submit" className={styles.saveButton}>
-              Zapisz
-            </button>
             <button
               type="button"
               className={styles.cancelButton}
               onClick={onClose}
             >
               Anuluj
+            </button>
+            <button type="submit" className={styles.saveButton}>
+              Zapisz
             </button>
           </div>
         </form>

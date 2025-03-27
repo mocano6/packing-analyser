@@ -1,0 +1,66 @@
+"use client";
+
+import React, { memo } from "react";
+import { Player } from "@/types";
+import styles from "./ActionModal.module.css";
+
+interface PlayerCardProps {
+  player: Player;
+  isSender: boolean;
+  isReceiver: boolean;
+  isDribbler?: boolean;
+  onSelect: (playerId: string) => void;
+}
+
+const PlayerCard: React.FC<PlayerCardProps> = memo(function PlayerCard({
+  player,
+  isSender,
+  isReceiver,
+  isDribbler = false,
+  onSelect,
+}) {
+  const hasImage = !!player.imageUrl;
+  
+  return (
+    <div
+      className={`${styles.playerTile} 
+        ${isSender ? styles.playerSenderTile : ''} 
+        ${isReceiver ? styles.playerReceiverTile : ''} 
+        ${isDribbler ? styles.playerDribblerTile : ''}
+        ${hasImage ? styles.withImage : ''}`}
+      onClick={() => onSelect(player.id)}
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSender || isReceiver || isDribbler}
+    >
+      {hasImage && (
+        <>
+          <img
+            src={player.imageUrl}
+            alt=""
+            className={styles.playerTileImage}
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+          <div className={styles.playerTileOverlay}></div>
+        </>
+      )}
+
+      <div className={styles.playerContent}>
+        <div className={styles.number}>{player.number}</div>
+
+        <div className={styles.playerInfo}>
+          <div className={styles.name}>{player.name}</div>
+          <div className={styles.details}>
+            {player.position && (
+              <span className={styles.position}>{player.position}</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+export default PlayerCard; 

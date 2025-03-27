@@ -181,7 +181,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
               onSort={handleSort}
             />
             <SortableHeader
-              label="Odbierający"
+              label="Przyjmujący"
               sortKey="receiver"
               currentSortKey={sortConfig.key}
               sortDirection={sortConfig.direction}
@@ -197,13 +197,6 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             <SortableHeader
               label="Typ"
               sortKey="type"
-              currentSortKey={sortConfig.key}
-              sortDirection={sortConfig.direction}
-              onSort={handleSort}
-            />
-            <SortableHeader
-              label="xT"
-              sortKey="xt"
               currentSortKey={sortConfig.key}
               sortDirection={sortConfig.direction}
               onSort={handleSort}

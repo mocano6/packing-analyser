@@ -120,27 +120,27 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
           </div>
 
           <div className={styles.formGroup}>
-            <label className={styles.checkboxLabel}>
+            <label className={`${styles.checkboxLabel} ${formData.isHome ? styles.active : ''}`}>
               <input
                 type="checkbox"
                 name="isHome"
                 checked={formData.isHome}
-                onChange={handleChange}
+                onChange={() => setFormData({ ...formData, isHome: !formData.isHome })}
               />
-              Mecz u siebie
+              <span>Mecz u siebie</span>
             </label>
           </div>
 
           <div className={styles.buttonGroup}>
-            <button type="submit" className={styles.saveButton}>
-              Zapisz
-            </button>
             <button
               type="button"
               className={styles.cancelButton}
               onClick={onClose}
             >
               Anuluj
+            </button>
+            <button type="submit" className={styles.saveButton}>
+              Zapisz
             </button>
           </div>
         </form>
