@@ -154,14 +154,18 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                   <div className={styles.cellActions}>
                     {isSelected && (
                       <>
-                        <button 
-                          className={styles.editSelectedBtn}
+                        <button
+                          className={styles.editBtn}
                           onClick={(e) => {
                             e.stopPropagation();
+                            onSelectMatch(match);
                             onChangeMatch();
                           }}
+                          onKeyDown={(e) => handleEditKeyDown(e, match)}
+                          title="Edytuj"
+                          aria-label={`Edytuj mecz: ${match.team} vs ${match.opponent}`}
                         >
-                          Edytuj
+                          ✎
                         </button>
                         <button
                           className={`${styles.editBtn} ${styles.minutesBtn}`}
@@ -173,6 +177,22 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           aria-label={`Zarządzaj minutami zawodników w meczu: ${match.team} vs ${match.opponent}`}
                         >
                           ⌚
+                        </button>
+                        <button
+                          className={styles.deleteBtn}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm("Czy na pewno chcesz usunąć ten mecz?")) {
+                              if (match.matchId) {
+                                onDeleteMatch(match.matchId);
+                              }
+                            }
+                          }}
+                          onKeyDown={(e) => match.matchId ? handleDeleteKeyDown(e, match.matchId) : undefined}
+                          title="Usuń"
+                          aria-label={`Usuń mecz: ${match.team} vs ${match.opponent}`}
+                        >
+                          ✕
                         </button>
                       </>
                     )}
@@ -192,6 +212,17 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           ✎
                         </button>
                         <button
+                          className={`${styles.editBtn} ${styles.minutesBtn}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onManagePlayerMinutes(match);
+                          }}
+                          title="Minuty zawodników"
+                          aria-label={`Zarządzaj minutami zawodników w meczu: ${match.team} vs ${match.opponent}`}
+                        >
+                          ⌚
+                        </button>
+                        <button
                           className={styles.deleteBtn}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -206,17 +237,6 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           aria-label={`Usuń mecz: ${match.team} vs ${match.opponent}`}
                         >
                           ✕
-                        </button>
-                        <button
-                          className={`${styles.editBtn} ${styles.minutesBtn}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onManagePlayerMinutes(match);
-                          }}
-                          title="Minuty zawodników"
-                          aria-label={`Zarządzaj minutami zawodników w meczu: ${match.team} vs ${match.opponent}`}
-                        >
-                          ⌚
                         </button>
                       </>
                     )}
