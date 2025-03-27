@@ -75,8 +75,14 @@ export function useActionsState(players: Player[], currentMatch: any) {
     value2?: number
   ) => {
     setSelectedZone(zone);
-    if (zone !== null && value1 !== undefined && value2 !== undefined) {
-      setCurrentPoints(Math.round(value1 + value2));
+    if (value1 !== undefined) {
+      setClickValue1(value1);
+    }
+    if (value2 !== undefined) {
+      setClickValue2(value2);
+    }
+    if (zone !== null && xT !== undefined) {
+      setCurrentPoints(Math.round(xT * 1000)); // Używamy wartości xT do obliczeń punktów
     } else {
       setCurrentPoints(0);
     }

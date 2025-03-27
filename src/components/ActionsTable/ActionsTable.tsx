@@ -12,9 +12,8 @@ type SortKey =
   | "receiver"
   | "receiverXT"
   | "type"
-  | "xt"
   | "packing"
-  | "p3";
+  | "events";
 
 type SortDirection = "asc" | "desc";
 
@@ -51,28 +50,42 @@ const ActionRow = ({
 }: {
   action: ActionsTableProps["actions"][0];
   onDelete: (id: string) => void;
-}) => (
-  <tr>
-    <td>{action.minute}&apos;</td>
-    <td>
-      {action.senderNumber}-{action.senderName}
-    </td>
-    <td>{action.senderClickValue.toFixed(4)}</td>
-    <td>
-      {action.receiverNumber}-{action.receiverName}
-    </td>
-    <td>{action.receiverClickValue.toFixed(4)}</td>
-    <td>{action.actionType === "pass" ? "Podanie" : "Drybling"}</td>
-    <td>{action.totalPoints.toFixed(4)}</td>
-    <td>{action.packingPoints ? Math.round(action.packingPoints) : "-"}</td>
-    <td>{action.isP3 ? "✅" : "-"}</td>
-    <td className={styles.actionCell}>
-      <div onClick={() => onDelete(action.id)} className={styles.x}>
-        &times;
-      </div>
-    </td>
-  </tr>
-);
+}) => {
+  const getEvents = () => {
+    const events = [];
+    if (action.isP3) events.push("P3");
+    if (action.isPenaltyAreaEntry) events.push("PK");
+    if (action.isShot) {
+      events.push(action.isGoal ? "S+G" : "S");
+    } else if (action.isGoal) {
+      events.push("G");
+    }
+    
+    return events.length > 0 ? events.join(", ") : "-";
+  };
+
+  return (
+    <tr>
+      <td>{action.minute}&apos;</td>
+      <td>
+        {action.senderNumber}-{action.senderName}
+      </td>
+      <td>{action.senderClickValue.toFixed(3)}</td>
+      <td>
+        {action.receiverNumber}-{action.receiverName}
+      </td>
+      <td>{action.receiverClickValue.toFixed(3)}</td>
+      <td>{action.actionType === "pass" ? "Podanie" : "Drybling"}</td>
+      <td>{action.packingPoints ? Math.round(action.packingPoints) : "-"}</td>
+      <td>{getEvents()}</td>
+      <td className={styles.actionCell}>
+        <div onClick={() => onDelete(action.id)} className={styles.x}>
+          &times;
+        </div>
+      </td>
+    </tr>
+  );
+};
 
 // Komponent główny
 const ActionsTable: React.FC<ActionsTableProps> = ({
@@ -128,15 +141,22 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         case "type":
           comparison = a.actionType.localeCompare(b.actionType);
           break;
-        case "xt":
-          comparison = a.totalPoints - b.totalPoints;
-          break;
         case "packing":
           comparison = (a.packingPoints || 0) - (b.packingPoints || 0);
           break;
-        case "p3":
-          comparison = (a.isP3 ? 1 : 0) - (b.isP3 ? 1 : 0);
+        case "events": {
+          // Sortowanie według ważności zdarzeń: Goal > Shot > PK > P3
+          const getEventPriority = (action: any) => {
+            let priority = 0;
+            if (action.isGoal) priority += 8;
+            if (action.isShot) priority += 4;
+            if (action.isPenaltyAreaEntry) priority += 2;
+            if (action.isP3) priority += 1;
+            return priority;
+          };
+          comparison = getEventPriority(a) - getEventPriority(b);
           break;
+        }
       }
 
       return comparison * multiplier;
@@ -152,7 +172,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           onClick={onDeleteAllActions}
           disabled={actions.length === 0}
         >
-          <span>🗑️</span> Usuń wszystkie akcje
+          <span>✕</span> Usuń wszystkie akcje
         </button>
       </div>
 
@@ -209,8 +229,8 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
               onSort={handleSort}
             />
             <SortableHeader
-              label="P3"
-              sortKey="p3"
+              label="Wydarzenia"
+              sortKey="events"
               currentSortKey={sortConfig.key}
               sortDirection={sortConfig.direction}
               onSort={handleSort}
@@ -229,7 +249,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             ))
           ) : (
             <tr>
-              <td colSpan={10} style={{ textAlign: "center", padding: "20px" }}>
+              <td colSpan={9} style={{ textAlign: "center", padding: "20px" }}>
                 Brak akcji do wyświetlenia
               </td>
             </tr>

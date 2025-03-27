@@ -138,72 +138,69 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 12px;
-  margin-top: 1rem;
+  margin-top: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.controlButton {
+  min-width: 100px;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clearButton {
+  background-color: #f44336;
+  color: white;
+  box-shadow: 0 2px 4px rgba(244, 67, 54, 0.3);
+}
+
+.clearButton:hover {
+  background-color: #e53935;
+  box-shadow: 0 3px 6px rgba(244, 67, 54, 0.4);
+  transform: translateY(-1px);
+}
+
+.clearButton:active {
+  background-color: #d32f2f;
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(244, 67, 54, 0.2);
+}
+
+.resetButton {
+  background-color: #f8f9fa;
+  color: #343a40;
+  border: 1px solid #ced4da;
+}
+
+.resetButton:hover {
+  background-color: #e9ecef;
+}
+
+.saveButton {
+  background-color: #007bff;
+  color: white;
+}
+
+.saveButton:hover {
+  background-color: #0069d9;
 }
 
 .minuteInput {
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin: 0 0 0 12px;
-}
-
-.minuteInput label {
-  font-weight: 600;
-  color: #666;
-  white-space: nowrap;
+  gap: 8px;
 }
 
 .minuteInput input {
   width: 60px;
-  padding: 8px;
-  border: 1px solid #ddd;
+  padding: 6px;
+  border: 1px solid #ced4da;
   border-radius: 4px;
-  text-align: center;
-  font-size: 14px;
-}
-
-.controlButton {
-  padding: 8px 16px;
-  background-color: #2196f3;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-  min-width: 120px;
-  justify-content: center;
-}
-
-.resetButton {
-  background-color: #f8f8f8;
-  color: #444;
-  border: 1px solid #ddd;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.resetButton:hover {
-  background-color: #e8e8e8;
-  color: #222;
-  border-color: #aaa;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-}
-
-.saveButton {
-  background-color: #2196f3;
-  color: white;
-}
-
-.saveButton:hover {
-  background-color: #1976d2;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 @media (max-width: 600px) {

@@ -149,6 +149,10 @@ const ActionModal: React.FC<ActionModalProps> = ({
     onClose();
   };
 
+  const handleReset = () => {
+    onReset();
+  };
+
   return (
     <div className={styles.modalOverlay} onClick={handleCancel}>
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -283,6 +287,14 @@ const ActionModal: React.FC<ActionModalProps> = ({
               type="button"
             >
               Anuluj
+            </button>
+            
+            <button
+              className={`${styles.controlButton} ${styles.clearButton}`}
+              onClick={handleReset}
+              type="button"
+            >
+              ⌫ Resetuj
             </button>
             
             <div className={styles.minuteInput}>
