@@ -3,7 +3,7 @@
 
 import React, { useMemo, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { Tab, Player, TeamInfo, PlayerMinutes } from "@/types";
+import { Tab, Player, TeamInfo, PlayerMinutes, Action } from "@/types";
 import Instructions from "@/components/Instructions/Instructions";
 import PlayersGrid from "@/components/PlayersGrid/PlayersGrid";
 import Tabs from "@/components/Tabs/Tabs";
@@ -16,12 +16,6 @@ import styles from "./page.module.css";
 // Dynamiczny import komponentów używanych warunkowo dla lepszej wydajności
 const ActionSection = dynamic(
   () => import("@/components/ActionSection/ActionSection"),
-  {
-    ssr: false,
-  }
-);
-const SummarySection = dynamic(
-  () => import("@/components/SummarySection/SummarySection"),
   {
     ssr: false,
   }
@@ -65,6 +59,10 @@ export default function Page() {
   const [selectedTeam, setSelectedTeam] = React.useState<string>("Rezerwy");
   const [isPlayerMinutesModalOpen, setIsPlayerMinutesModalOpen] = React.useState(false);
   const [editingMatch, setEditingMatch] = React.useState<TeamInfo | null>(null);
+  const [isActionModalOpen, setIsActionModalOpen] = React.useState(false);
+  const [senderZone, setSenderZone] = React.useState<number | null>(null);
+  const [receiverZone, setReceiverZone] = React.useState<number | null>(null);
+  const [isNewMatchModalOpen, setIsNewMatchModalOpen] = React.useState(false);
 
   // Custom hooks
   const {
@@ -157,18 +155,26 @@ export default function Page() {
   };
 
   const onSaveAction = () => {
-    const canSave = handleSaveAction(matchInfo);
-
-    if (!canSave && !matchInfo) {
-      setIsMatchModalOpen(true);
+    // Sprawdzamy czy matchInfo istnieje przed wywołaniem handleSaveAction
+    if (!matchInfo) {
+      setIsMatchModalOpen(true, false);
+      return;
     }
+    
+    const success = handleSaveAction(matchInfo);
+    if (!success) {
+      return;
+    }
+    
+    setReceiverZone(null);
+    setSenderZone(null);
+    setIsActionModalOpen(false);
   };
 
   const onDeleteAllActions = () => {
-    const wasDeleted = handleDeleteAllActions();
-    if (wasDeleted) {
-      setIsMatchModalOpen(true);
-    }
+    handleDeleteAllActions();
+    setEditingMatch(null);
+    setSelectedTeam(TEAMS[0].id);
   };
 
   // Obsługa otwarcia modalu minut zawodników
@@ -186,6 +192,11 @@ export default function Page() {
     setEditingMatch(null);
   };
 
+  // Funkcja do otwierania modalu nowego meczu
+  const openNewMatchModal = () => {
+    setIsNewMatchModalOpen(true);
+  };
+
   return (
     <div className={styles.container}>
         <Instructions />
@@ -198,6 +209,7 @@ export default function Page() {
         selectedTeam={selectedTeam}
         onChangeTeam={setSelectedTeam}
         onManagePlayerMinutes={handleOpenPlayerMinutesModal}
+        onAddNewMatch={openNewMatchModal}
       />
 
       <main className={styles.content}>
@@ -212,46 +224,36 @@ export default function Page() {
 
         <Tabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-        {activeTab === "packing" ? (
-          <>
-            <ActionSection
-              selectedZone={selectedZone}
-              handleZoneSelect={handleZoneSelect}
-              players={filteredPlayers}
-              selectedPlayerId={selectedPlayerId}
-              setSelectedPlayerId={setSelectedPlayerId}
-              selectedReceiverId={selectedReceiverId}
-              setSelectedReceiverId={setSelectedReceiverId}
-              actionMinute={actionMinute}
-              setActionMinute={setActionMinute}
-              actionType={actionType}
-              setActionType={setActionType}
-              currentPoints={currentPoints}
-              setCurrentPoints={setCurrentPoints}
-              isP3Active={isP3Active}
-              setIsP3Active={setIsP3Active}
-              isShot={isShot}
-              setIsShot={setIsShot}
-              isGoal={isGoal}
-              setIsGoal={setIsGoal}
-              isPenaltyAreaEntry={isPenaltyAreaEntry}
-              setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
-              handleSaveAction={onSaveAction}
-              resetActionState={resetActionState}
-            />
-            <ActionsTable
-              actions={actions}
-              onDeleteAction={handleDeleteAction}
-              onDeleteAllActions={onDeleteAllActions}
-            />
-          </>
-        ) : (
-          <SummarySection
-            selectedPlayerId={selectedPlayerId}
-            players={filteredPlayers}
-            actions={actions}
-          />
-        )}
+        <ActionSection
+          selectedZone={selectedZone}
+          handleZoneSelect={handleZoneSelect}
+          players={filteredPlayers}
+          selectedPlayerId={selectedPlayerId}
+          setSelectedPlayerId={setSelectedPlayerId}
+          selectedReceiverId={selectedReceiverId}
+          setSelectedReceiverId={setSelectedReceiverId}
+          actionMinute={actionMinute}
+          setActionMinute={setActionMinute}
+          actionType={actionType}
+          setActionType={setActionType}
+          currentPoints={currentPoints}
+          setCurrentPoints={setCurrentPoints}
+          isP3Active={isP3Active}
+          setIsP3Active={setIsP3Active}
+          isShot={isShot}
+          setIsShot={setIsShot}
+          isGoal={isGoal}
+          setIsGoal={setIsGoal}
+          isPenaltyAreaEntry={isPenaltyAreaEntry}
+          setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
+          handleSaveAction={onSaveAction}
+          resetActionState={resetActionState}
+        />
+        <ActionsTable
+          actions={actions}
+          onDeleteAction={handleDeleteAction}
+          onDeleteAllActions={onDeleteAllActions}
+        />
 
         <PlayerModal
           isOpen={isModalOpen}
@@ -273,6 +275,17 @@ export default function Page() {
           currentInfo={matchInfo}
         />
 
+        {/* Modal dla nowego meczu */}
+        <MatchInfoModal
+          isOpen={isNewMatchModalOpen}
+          onClose={() => setIsNewMatchModalOpen(false)}
+          onSave={(matchInfo) => {
+            handleSaveMatchInfo(matchInfo);
+            setIsNewMatchModalOpen(false);
+          }}
+          currentInfo={null}
+        />
+
         {/* Modal minut zawodników */}
         {editingMatch && (
           <PlayerMinutesModal
@@ -282,9 +295,10 @@ export default function Page() {
               setEditingMatch(null);
             }}
             onSave={handleSaveMinutes}
-            match={editingMatch}
-            players={players}
-            currentPlayerMinutes={editingMatch.playerMinutes}
+            match={editingMatch as TeamInfo}
+            players={players.filter(
+              (player) => player.teams && player.teams.includes(editingMatch.team)
+            )}
           />
         )}
 

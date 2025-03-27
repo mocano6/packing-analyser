@@ -81,11 +81,9 @@ export function useActionsState(players: Player[], currentMatch: any) {
     if (value2 !== undefined) {
       setClickValue2(value2);
     }
-    if (zone !== null && xT !== undefined) {
-      setCurrentPoints(Math.round(xT * 1000)); // Używamy wartości xT do obliczeń punktów
-    } else {
-      setCurrentPoints(0);
-    }
+    
+    // Zawsze ustawiamy punkty na 0 - punkty za miniętych przeciwników będą dodawane ręcznie przez użytkownika
+    setCurrentPoints(0);
   };
 
   const resetActionState = () => {

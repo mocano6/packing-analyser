@@ -119,13 +119,13 @@ const FootballPitch = memo(function FootballPitch({
         setFirstClickZone(zoneIndex);
         setFirstClickValue(clickedValue);
         setActionType("pass"); // Ustawiamy typ akcji na podanie
-        onZoneSelect(zoneIndex, undefined, clickedValue, undefined);
+        onZoneSelect(zoneIndex, 0, clickedValue, undefined); // Punkty zawsze zaczynają od 0
       } else if (!secondClickZone && zoneIndex !== firstClickZone) {
         // Drugi klik - przyjęcie
         setSecondClickZone(zoneIndex);
         if (firstClickValue !== null) {
-          const xt = clickedValue - firstClickValue;
-          onZoneSelect(zoneIndex, xt, firstClickValue, clickedValue);
+          // Nie obliczamy różnicy - punkty zostają na 0
+          onZoneSelect(zoneIndex, 0, firstClickValue, clickedValue); // Punkty zawsze zaczynają od 0
           setIsModalOpen(true); // Otwieramy modal po drugim kliknięciu
         }
       } else {
@@ -134,7 +134,7 @@ const FootballPitch = memo(function FootballPitch({
         setFirstClickZone(zoneIndex);
         setFirstClickValue(clickedValue);
         setActionType("pass"); // Ustawiamy typ akcji na podanie
-        onZoneSelect(zoneIndex, undefined, clickedValue, undefined);
+        onZoneSelect(zoneIndex, 0, clickedValue, undefined); // Punkty zawsze zaczynają od 0
       }
     },
     [firstClickZone, secondClickZone, firstClickValue, onZoneSelect, setActionType]
@@ -147,6 +147,36 @@ const FootballPitch = memo(function FootballPitch({
     setSecondClickZone(null);
     setFirstClickValue(null);
   }, []);
+
+  // Funkcja obsługująca zapisanie akcji
+  const handleSaveActionAndClose = useCallback(() => {
+    handleSaveAction();
+    setIsModalOpen(false);
+    setFirstClickZone(null);
+    setSecondClickZone(null);
+    setFirstClickValue(null);
+  }, [handleSaveAction]);
+
+  // Rozszerzony resetActionState, który czyści również stany kliknięć
+  const handleResetState = useCallback(() => {
+    // Resetujemy stany kliknięć
+    setFirstClickZone(null);
+    setSecondClickZone(null);
+    setFirstClickValue(null);
+    
+    // Wywołujemy oryginalną funkcję resetującą
+    resetActionState();
+  }, [resetActionState]);
+
+  // Resetowanie stanu tylko w modalu - zachowujemy wartości kliknięć
+  const handleModalReset = useCallback(() => {
+    // Resetujemy tylko częściowo, zachowując wartości kliknięć
+    setCurrentPoints(0);
+    setIsP3Active(false);
+    setIsShot(false);
+    setIsGoal(false);
+    setIsPenaltyAreaEntry(false);
+  }, [setCurrentPoints, setIsP3Active, setIsShot, setIsGoal, setIsPenaltyAreaEntry]);
 
   // Memoizujemy tablicę komórek, aby uniknąć zbędnego renderowania
   const cells = React.useMemo(
@@ -213,8 +243,8 @@ const FootballPitch = memo(function FootballPitch({
         onGoalToggle={handleGoalToggle}
         isPenaltyAreaEntry={isPenaltyAreaEntry}
         onPenaltyAreaEntryToggle={handlePenaltyAreaEntryToggle}
-        onSaveAction={handleSaveAction}
-        onReset={resetActionState}
+        onSaveAction={handleSaveActionAndClose}
+        onReset={handleModalReset}
       />
     </>
   );

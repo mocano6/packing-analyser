@@ -150,7 +150,14 @@ const ActionModal: React.FC<ActionModalProps> = ({
   };
 
   const handleReset = () => {
+    // Zapisz aktualną wartość minuty
+    const currentMinute = actionMinute;
+    
+    // Zresetuj tylko częściowo - selektor punktów, przełączniki P3, strzał, bramka, wejście w PK
     onReset();
+    
+    // Przywróć zapisaną wartość minuty
+    onMinuteChange(currentMinute);
   };
 
   return (

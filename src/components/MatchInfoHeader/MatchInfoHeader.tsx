@@ -16,6 +16,7 @@ interface MatchInfoHeaderProps {
   selectedTeam: string;
   onChangeTeam: (team: string) => void;
   onManagePlayerMinutes: (match: TeamInfo) => void;
+  onAddNewMatch: () => void;
 }
 
 const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
@@ -27,6 +28,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   selectedTeam,
   onChangeTeam,
   onManagePlayerMinutes,
+  onAddNewMatch,
 }) => {
   const [sortKey, setSortKey] = useState<keyof TeamInfo>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -47,8 +49,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
 
   // Funkcja do dodania nowego meczu
   const handleAddMatch = () => {
-    onSelectMatch(null); // Resetowanie wybranego meczu
-    onChangeMatch(); // Otwieranie modalu
+    onAddNewMatch();
   };
 
   // Obsługa klawiszy dla przycisków edycji i usunięcia

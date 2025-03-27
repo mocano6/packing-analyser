@@ -28,12 +28,16 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   onSave,
   currentInfo,
 }) => {
+  // Dodaję konsolę logującą dla debugowania
+  console.log("MatchInfoModal otwarty, currentInfo:", currentInfo);
+
   const [formData, setFormData] = useState<TeamInfo>(
     currentInfo || defaultMatchInfo
   );
 
   // Reset formularza przy otwarciu modalu
   useEffect(() => {
+    console.log("MatchInfoModal useEffect, currentInfo:", currentInfo);
     setFormData(currentInfo || defaultMatchInfo);
   }, [currentInfo, isOpen]);
 

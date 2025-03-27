@@ -13,6 +13,21 @@ export function useMatchInfo() {
   const [matchInfo, setMatchInfo] = useState<TeamInfo | null>(null);
   const [allMatches, setAllMatches] = useState<TeamInfo[]>([]);
   const [isMatchModalOpen, setIsMatchModalOpen] = useState(false);
+  const [isAddingNewMatch, setIsAddingNewMatch] = useState(false);
+
+  // Rozszerzona funkcja otwierania/zamykania modalu
+  const toggleMatchModal = (isOpen: boolean, isNewMatch: boolean = false) => {
+    // Najpierw aktualizujemy stan modalu
+    setIsMatchModalOpen(isOpen);
+    
+    // Jeśli otwieramy modal dla nowego meczu, resetujemy dane meczu
+    if (isOpen && isNewMatch) {
+      // Opóźnienie jest potrzebne, aby zmiany stanu nastąpiły w odpowiedniej kolejności
+      setTimeout(() => {
+        setMatchInfo(null);
+      }, 0);
+    }
+  };
 
   // Ładowanie meczów z localStorage
   useEffect(() => {
@@ -136,7 +151,8 @@ export function useMatchInfo() {
     matchInfo,
     allMatches,
     isMatchModalOpen,
-    setIsMatchModalOpen,
+    isAddingNewMatch,
+    setIsMatchModalOpen: toggleMatchModal,
     handleSaveMatchInfo,
     handleSelectMatch,
     handleDeleteMatch,

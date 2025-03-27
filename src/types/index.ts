@@ -1,5 +1,5 @@
 // src/types/index.ts
-export type Tab = "packing" | "summary";
+export type Tab = "packing";
 
 export type Zone = number;
 
@@ -98,12 +98,6 @@ export interface ActionSectionProps {
   resetActionState: () => void;
 }
 
-export interface SummarySectionProps {
-  selectedPlayerId: string | null;
-  players: Player[];
-  actions: Action[];
-}
-
 export interface PlayerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -111,11 +105,6 @@ export interface PlayerModalProps {
   editingPlayer?: Player;
   currentTeam?: string;
   allTeams: { id: string, name: string }[]; // Lista wszystkich dostępnych zespołów
-}
-
-export interface PlayerStatsProps {
-  player: Player;
-  actions: Action[];
 }
 
 export interface TeamInfo {
