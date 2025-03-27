@@ -3,7 +3,7 @@
 
 import React, { useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { Tab, Player } from "@/types";
+import { Tab, Player, TeamInfo, PlayerMinutes } from "@/types";
 import Instructions from "@/components/Instructions/Instructions";
 import PlayersGrid from "@/components/PlayersGrid/PlayersGrid";
 import Tabs from "@/components/Tabs/Tabs";
@@ -53,10 +53,18 @@ const ExportButton = dynamic(
 const MatchInfoHeader = dynamic(
   () => import("@/components/MatchInfoHeader/MatchInfoHeader")
 );
+const PlayerMinutesModal = dynamic(
+  () => import("@/components/PlayerMinutesModal/PlayerMinutesModal"),
+  {
+    ssr: false,
+  }
+);
 
 export default function Page() {
   const [activeTab, setActiveTab] = React.useState<Tab>("packing");
   const [selectedTeam, setSelectedTeam] = React.useState<string>("Rezerwy");
+  const [isPlayerMinutesModalOpen, setIsPlayerMinutesModalOpen] = React.useState(false);
+  const [editingMatch, setEditingMatch] = React.useState<TeamInfo | null>(null);
 
   // Custom hooks
   const {
@@ -77,7 +85,8 @@ export default function Page() {
     setIsMatchModalOpen,
     handleSaveMatchInfo,
     handleSelectMatch,
-    handleDeleteMatch
+    handleDeleteMatch,
+    handleSavePlayerMinutes
   } = useMatchInfo();
 
   const {
@@ -160,6 +169,21 @@ export default function Page() {
     }
   };
 
+  // Obsługa otwarcia modalu minut zawodników
+  const handleOpenPlayerMinutesModal = (match: TeamInfo) => {
+    setEditingMatch(match);
+    setIsPlayerMinutesModalOpen(true);
+  };
+
+  // Obsługa zapisywania minut zawodników
+  const handleSaveMinutes = (playerMinutes: PlayerMinutes[]) => {
+    if (editingMatch) {
+      handleSavePlayerMinutes(editingMatch, playerMinutes);
+    }
+    setIsPlayerMinutesModalOpen(false);
+    setEditingMatch(null);
+  };
+
   return (
     <div className={styles.container}>
         <Instructions />
@@ -171,6 +195,7 @@ export default function Page() {
         onDeleteMatch={handleDeleteMatch}
         selectedTeam={selectedTeam}
         onChangeTeam={setSelectedTeam}
+        onManagePlayerMinutes={handleOpenPlayerMinutesModal}
       />
 
       <main className={styles.content}>
@@ -242,6 +267,21 @@ export default function Page() {
           onSave={handleSaveMatchInfo}
           currentInfo={matchInfo}
         />
+
+        {/* Modal minut zawodników */}
+        {editingMatch && (
+          <PlayerMinutesModal
+            isOpen={isPlayerMinutesModalOpen}
+            onClose={() => {
+              setIsPlayerMinutesModalOpen(false);
+              setEditingMatch(null);
+            }}
+            onSave={handleSaveMinutes}
+            match={editingMatch}
+            players={players}
+            currentPlayerMinutes={editingMatch.playerMinutes}
+          />
+        )}
 
         <ExportButton
           players={players}

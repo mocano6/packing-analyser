@@ -1,0 +1,162 @@
+/* src/components/PlayerMinutesModal/PlayerMinutesModal.module.css */
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.modalContent {
+  background-color: white;
+  border-radius: 8px;
+  padding: 24px;
+  width: 600px;
+  max-width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.modalTitle {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+}
+
+.modalSubtitle {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: #666;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 10px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.headerCell {
+  padding: 6px;
+  color: #444;
+}
+
+.playersList {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+
+.playerRow {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 10px;
+  padding: 12px 10px;
+  border-bottom: 1px solid #eee;
+  align-items: center;
+}
+
+.playerName {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+}
+
+.playerNumber {
+  background-color: #2196f3;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  margin-right: 10px;
+  font-weight: 600;
+}
+
+.timeInput {
+  display: flex;
+  align-items: center;
+}
+
+.numberInput {
+  width: 60px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.numberInput:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+.playTime {
+  font-weight: 600;
+  color: #4caf50;
+}
+
+.noPlayers {
+  padding: 20px;
+  text-align: center;
+  color: #888;
+  font-style: italic;
+}
+
+.buttonGroup {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.saveButton {
+  padding: 10px 20px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.saveButton:hover {
+  background-color: #1976d2;
+}
+
+.cancelButton {
+  padding: 10px 20px;
+  background-color: #f5f5f5;
+  color: #333;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.cancelButton:hover {
+  background-color: #e0e0e0;
+} 

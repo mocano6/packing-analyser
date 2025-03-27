@@ -122,4 +122,20 @@ export interface TeamInfo {
   competition: string;
   date: string;
   time?: string;
+  playerMinutes?: PlayerMinutes[];
+}
+
+export interface PlayerMinutes {
+  playerId: string;
+  startMinute: number;
+  endMinute: number;
+}
+
+export interface PlayerMinutesModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (playerMinutes: PlayerMinutes[]) => void;
+  match: TeamInfo;
+  players: Player[];
+  currentPlayerMinutes?: PlayerMinutes[];
 }

@@ -210,3 +210,14 @@
 .editSelectedBtn:hover {
   background-color: #1976d2;
 }
+
+.minutesBtn {
+  color: #4caf50;
+  margin-left: 8px;
+}
+
+.minutesBtn:hover {
+  background-color: #e8f5e9;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}

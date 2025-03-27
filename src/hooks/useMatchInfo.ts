@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { TeamInfo } from "@/types";
+import { TeamInfo, PlayerMinutes } from "@/types";
 
 // Funkcja do generowania unikalnych ID
 function generateId() {
@@ -46,7 +46,7 @@ export function useMatchInfo() {
 
   // Zapisywanie ID wybranego meczu
   useEffect(() => {
-    if (matchInfo) {
+    if (matchInfo && matchInfo.matchId) {
       localStorage.setItem("selectedMatchId", matchInfo.matchId);
     } else {
       localStorage.removeItem("selectedMatchId");
@@ -74,6 +74,26 @@ export function useMatchInfo() {
     setIsMatchModalOpen(false);
   };
 
+  // Funkcja do zapisywania minut zawodników w meczu
+  const handleSavePlayerMinutes = (match: TeamInfo, playerMinutes: PlayerMinutes[]) => {
+    const updatedMatch = {
+      ...match,
+      playerMinutes: playerMinutes
+    };
+
+    // Aktualizuj listę wszystkich meczów
+    setAllMatches(prev => 
+      prev.map(m => 
+        m.matchId === match.matchId ? updatedMatch : m
+      )
+    );
+
+    // Jeśli to aktualnie wybrany mecz, zaktualizuj też matchInfo
+    if (matchInfo?.matchId === match.matchId) {
+      setMatchInfo(updatedMatch);
+    }
+  };
+
   const handleSelectMatch = (match: TeamInfo | null) => {
     setMatchInfo(match);
   };
@@ -93,6 +113,7 @@ export function useMatchInfo() {
     setIsMatchModalOpen,
     handleSaveMatchInfo,
     handleSelectMatch,
-    handleDeleteMatch
+    handleDeleteMatch,
+    handleSavePlayerMinutes
   };
 }
