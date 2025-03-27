@@ -3,6 +3,8 @@
 
 import React, { useState, KeyboardEvent } from "react";
 import { TeamInfo } from "@/types";
+import { TEAMS } from "@/constants/teams";
+import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import styles from "./MatchInfoHeader.module.css";
 
 interface MatchInfoHeaderProps {
@@ -11,6 +13,8 @@ interface MatchInfoHeaderProps {
   allMatches: TeamInfo[];
   onSelectMatch: (match: TeamInfo | null) => void;
   onDeleteMatch: (matchId: string) => void;
+  selectedTeam: string;
+  onChangeTeam: (team: string) => void;
 }
 
 const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
@@ -19,8 +23,9 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   allMatches,
   onSelectMatch,
   onDeleteMatch,
+  selectedTeam,
+  onChangeTeam,
 }) => {
-  const [selectedTeam, setSelectedTeam] = useState<string>("Rezerwy");
   const [sortKey, setSortKey] = useState<keyof TeamInfo>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   
@@ -28,8 +33,13 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   const teamMatches = allMatches
     .filter(match => match.team === selectedTeam)
     .sort((a, b) => {
-      if (a[sortKey] < b[sortKey]) return sortDirection === "asc" ? -1 : 1;
-      if (a[sortKey] > b[sortKey]) return sortDirection === "asc" ? 1 : -1;
+      const aValue = a[sortKey];
+      const bValue = b[sortKey];
+      
+      if (aValue !== undefined && bValue !== undefined) {
+        if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+        if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+      }
       return 0;
     });
 
@@ -71,17 +81,11 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
     <div className={styles.matchInfoContainer}>
       <div className={styles.headerControls}>
         <div className={styles.teamSelector}>
-          <select 
-            value={selectedTeam} 
-            onChange={(e) => setSelectedTeam(e.target.value)}
+          <TeamsSelector
+            selectedTeam={selectedTeam}
+            onChange={onChangeTeam}
             className={styles.teamDropdown}
-          >
-            <option value="Rezerwy">Rezerwy</option>
-            <option value="U19">U19</option>
-            <option value="U17">U17</option>
-            <option value="U16">U16</option>
-            <option value="U15">U15</option>
-          </select>
+          />
         </div>
         
         <button 
@@ -177,10 +181,12 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           onClick={(e) => {
                             e.stopPropagation();
                             if (window.confirm("Czy na pewno chcesz usunąć ten mecz?")) {
-                              onDeleteMatch(match.matchId);
+                              if (match.matchId) {
+                                onDeleteMatch(match.matchId);
+                              }
                             }
                           }}
-                          onKeyDown={(e) => handleDeleteKeyDown(e, match.matchId)}
+                          onKeyDown={(e) => match.matchId ? handleDeleteKeyDown(e, match.matchId) : undefined}
                           title="Usuń"
                           aria-label={`Usuń mecz: ${match.team} vs ${match.opponent}`}
                         >

@@ -54,8 +54,8 @@ export function useMatchInfo() {
   }, [matchInfo]);
 
   // Funkcja do zapisywania informacji o meczu
-  const handleSaveMatchInfo = (info: TeamInfo) => {
-    const infoToSave = { ...info };
+  const handleSaveMatchInfo = (info: Omit<TeamInfo, "matchId"> & { matchId?: string }) => {
+    const infoToSave = { ...info } as TeamInfo;
     
     if (!infoToSave.matchId) {
       // Nowy mecz - generujemy ID

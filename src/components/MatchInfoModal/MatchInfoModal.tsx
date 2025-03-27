@@ -3,6 +3,8 @@
 
 import React, { useState, useEffect } from "react";
 import { TeamInfo } from "@/types";
+import { TEAMS } from "@/constants/teams";
+import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import styles from "./MatchInfoModal.module.css";
 
 interface MatchInfoModalProps {
@@ -13,7 +15,6 @@ interface MatchInfoModalProps {
 }
 
 const defaultMatchInfo: TeamInfo = {
-  matchId: "", // Zostanie wygenerowane przy zapisie
   team: "Rezerwy",
   opponent: "",
   competition: "",
@@ -61,11 +62,7 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
     // Kopiujemy obiekt, aby uniknąć modyfikacji oryginalnego obiektu
     const infoToSave = { ...formData };
     
-    // Jeśli to nowy mecz, usuwamy puste ID
-    if (!infoToSave.matchId) {
-      delete infoToSave.matchId; // ID zostanie wygenerowane w useMatchInfo
-    }
-    
+    // Zamiast usuwać pole, przekazujemy wszystkie dane
     onSave(infoToSave);
   };
 
@@ -74,27 +71,20 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   return (
     <div className={styles.modal}>
       <div className={styles.modalContent}>
-        <h2>{currentInfo ? "Edit Match" : "Add New Match"}</h2>
+        <h2>{currentInfo ? "Edytuj mecz" : "Dodaj nowy mecz"}</h2>
         <form onSubmit={handleSubmit}>
           <div className={styles.formGroup}>
-            <label htmlFor="team">Team:</label>
-            <select
-              id="team"
-              name="team"
-              value={formData.team}
-              onChange={handleChange}
-              required
-            >
-              <option value="Rezerwy">Rezerwy</option>
-              <option value="U19">U19</option>
-              <option value="U17">U17</option>
-              <option value="U16">U16</option>
-              <option value="U15">U15</option>
-            </select>
+            <label htmlFor="team">Zespół:</label>
+            <TeamsSelector
+              selectedTeam={formData.team}
+              onChange={(teamId) => 
+                setFormData(prev => ({ ...prev, team: teamId }))
+              }
+            />
           </div>
 
           <div className={styles.formGroup}>
-            <label htmlFor="opponent">Opponent:</label>
+            <label htmlFor="opponent">Przeciwnik:</label>
             <input
               id="opponent"
               name="opponent"
@@ -106,7 +96,7 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
           </div>
 
           <div className={styles.formGroup}>
-            <label htmlFor="competition">Competition:</label>
+            <label htmlFor="competition">Rozgrywki:</label>
             <input
               id="competition"
               name="competition"
@@ -118,7 +108,7 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
           </div>
 
           <div className={styles.formGroup}>
-            <label htmlFor="date">Date:</label>
+            <label htmlFor="date">Data:</label>
             <input
               id="date"
               name="date"
@@ -137,20 +127,20 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
                 checked={formData.isHome}
                 onChange={handleChange}
               />
-              Home Match
+              Mecz u siebie
             </label>
           </div>
 
           <div className={styles.buttonGroup}>
             <button type="submit" className={styles.saveButton}>
-              Save
+              Zapisz
             </button>
             <button
               type="button"
               className={styles.cancelButton}
               onClick={onClose}
             >
-              Cancel
+              Anuluj
             </button>
           </div>
         </form>

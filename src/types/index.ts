@@ -3,12 +3,12 @@ export type Tab = "packing" | "summary";
 
 export interface Player {
   id: string;
-  firstName: string;
-  secondName: string;
+  name: string;
   number: number;
   position: string;
   birthYear?: number;
   imageUrl?: string;
+  teams: string[]; // Tablica identyfikatorów zespołów, do których należy zawodnik
 }
 
 export interface ConnectionStats {
@@ -105,6 +105,8 @@ export interface PlayerModalProps {
   onClose: () => void;
   onSave: (player: Omit<Player, "id">) => void;
   editingPlayer?: Player;
+  currentTeam?: string;
+  allTeams: { id: string, name: string }[]; // Lista wszystkich dostępnych zespołów
 }
 
 export interface PlayerStatsProps {
@@ -113,11 +115,11 @@ export interface PlayerStatsProps {
 }
 
 export interface TeamInfo {
-  matchId: string;
+  matchId?: string;
   team: string;
   opponent: string;
   isHome: boolean;
   competition: string;
   date: string;
-  time: string;
+  time?: string;
 }

@@ -1,15 +1,16 @@
 // src/app/page.tsx
 "use client";
 
-import React from "react";
+import React, { useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { Tab } from "@/types";
+import { Tab, Player } from "@/types";
 import Instructions from "@/components/Instructions/Instructions";
 import PlayersGrid from "@/components/PlayersGrid/PlayersGrid";
 import Tabs from "@/components/Tabs/Tabs";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useActionsState } from "@/hooks/useActionsState";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
+import { TEAMS } from "@/constants/teams";
 import styles from "./page.module.css";
 
 // Dynamiczny import komponentów używanych warunkowo dla lepszej wydajności
@@ -55,6 +56,7 @@ const MatchInfoHeader = dynamic(
 
 export default function Page() {
   const [activeTab, setActiveTab] = React.useState<Tab>("packing");
+  const [selectedTeam, setSelectedTeam] = React.useState<string>("Rezerwy");
 
   // Custom hooks
   const {
@@ -104,7 +106,36 @@ export default function Page() {
     resetActionState,
   } = useActionsState(players);
 
-  // Usuwamy efekt, który automatycznie otwiera modal meczu
+  const filteredPlayers = useMemo(() => {
+    // Filtruj graczy na podstawie wybranego zespołu
+    return players.filter(player => {
+      return player.teams && player.teams.includes(selectedTeam);
+    });
+  }, [players, selectedTeam]);
+
+  // Funkcja do zapisywania zawodnika
+  const handleSavePlayerWithTeams = (playerData: Omit<Player, "id">) => {
+    // Upewnij się, że teams jest tablicą (dla wstecznej kompatybilności)
+    let teams = playerData.teams || [];
+    
+    // Jeśli edytujemy istniejącego zawodnika
+    if (editingPlayerId) {
+      const existingPlayer = players.find(p => p.id === editingPlayerId);
+      
+      // Dla wstecznej kompatybilności: jeśli zawodnik miał pojedynczy team zamiast tablicy teams
+      if (existingPlayer && !existingPlayer.teams && 'team' in existingPlayer) {
+        const oldTeam = (existingPlayer as any).team;
+        if (oldTeam && !teams.includes(oldTeam)) {
+          teams = [...teams, oldTeam];
+        }
+      }
+    }
+    
+    handleSavePlayer({
+      ...playerData,
+      teams: teams,
+    });
+  };
 
   const onDeletePlayer = (playerId: string) => {
     const wasDeleted = handleDeletePlayer(playerId);
@@ -138,11 +169,13 @@ export default function Page() {
         allMatches={allMatches}
         onSelectMatch={handleSelectMatch}
         onDeleteMatch={handleDeleteMatch}
+        selectedTeam={selectedTeam}
+        onChangeTeam={setSelectedTeam}
       />
 
       <main className={styles.content}>
         <PlayersGrid
-          players={players}
+          players={filteredPlayers}
           selectedPlayerId={selectedPlayerId}
           onPlayerSelect={setSelectedPlayerId}
           onAddPlayer={() => setIsModalOpen(true)}
@@ -157,7 +190,7 @@ export default function Page() {
             <ActionSection
               selectedZone={selectedZone}
               handleZoneSelect={handleZoneSelect}
-              players={players}
+              players={filteredPlayers}
               selectedPlayerId={selectedPlayerId}
               selectedReceiverId={selectedReceiverId}
               setSelectedReceiverId={setSelectedReceiverId}
@@ -185,7 +218,7 @@ export default function Page() {
         ) : (
           <SummarySection
             selectedPlayerId={selectedPlayerId}
-            players={players}
+            players={filteredPlayers}
             actions={actions}
           />
         )}
@@ -193,12 +226,14 @@ export default function Page() {
         <PlayerModal
           isOpen={isModalOpen}
           onClose={closeModal}
-          onSave={handleSavePlayer}
+          onSave={handleSavePlayerWithTeams}
           editingPlayer={
             editingPlayerId
               ? players.find((p) => p.id === editingPlayerId)
               : undefined
           }
+          currentTeam={selectedTeam}
+          allTeams={TEAMS}
         />
 
         <MatchInfoModal
