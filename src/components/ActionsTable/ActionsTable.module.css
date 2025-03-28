@@ -242,3 +242,34 @@
   box-shadow: none;
   transform: none;
 }
+
+.sortable {
+  cursor: pointer;
+  position: relative;
+  padding-right: 24px;
+}
+
+.sortable:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sortIconNeutral {
+  opacity: 0.3;
+  font-size: 0.8em;
+  margin-left: 5px;
+}
+
+.sortIconAsc, .sortIconDesc {
+  color: #2196f3;
+  font-size: 0.8em;
+  margin-left: 5px;
+  font-weight: bold;
+}
+
+.sortIconAsc {
+  transform: translateY(-1px);
+}
+
+.sortIconDesc {
+  transform: translateY(1px);
+}

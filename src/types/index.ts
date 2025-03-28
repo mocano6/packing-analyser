@@ -16,13 +16,13 @@ export interface Player {
 export interface ConnectionStats {
   playerName: string;
   count: number;
-  totalPoints: number;
+  packingPoints: number;
   totalXT: number;
 }
 
 export interface PlayerStats {
   totalActions: number;
-  totalPoints: number;
+  packingPoints: number;
   totalXT: number;
   packingAsSender: number;
   packingAsReceiver: number;
@@ -41,11 +41,11 @@ export interface PlayerStats {
 export interface PlayerConnection {
   playerName: string;
   count: number;
-  totalPoints: number;
+  packingPoints: number;
   totalXT: number;
 }
 
-export interface Action {
+export interface ActionsPacking {
   id: string;
   minute: number;
   senderId: string;
@@ -56,12 +56,10 @@ export interface Action {
   receiverName: string;
   receiverNumber: number;
   receiverClickValue: number;
-  zone: Zone;
-  basePoints: number;
-  multiplier: number;
-  totalPoints: number;
-  actionType: "pass" | "dribble";
+  senderZone?: string;         // Wartość XT_VALUES dla strefy podania
+  receiverZone?: string | null | ""; // Wartość XT_VALUES dla strefy przyjęcia, dla dryblingów używamy pustego ciągu znaków
   packingPoints: number;
+  actionType: "pass" | "dribble";
   xTValue: number;
   isP3: boolean;
   isShot: boolean;
@@ -69,6 +67,9 @@ export interface Action {
   isPenaltyAreaEntry?: boolean;
   matchId?: string; // ID meczu, do którego przypisana jest akcja
 }
+
+// Dla zachowania kompatybilności
+export type Action = ActionsPacking;
 
 export interface ActionSectionProps {
   selectedZone: Zone | null;

@@ -8,33 +8,54 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const matchId = searchParams.get('matchId');
 
+    // Definiujemy select z właściwymi polami
+    const selectFields = {
+      id: true,
+      minute: true,
+      senderId: true,
+      sender: true,
+      senderName: true,
+      senderNumber: true,
+      senderClickValue: true,
+      receiverId: true,
+      receiver: true,
+      receiverName: true,
+      receiverNumber: true,
+      receiverClickValue: true,
+      senderZone: true,
+      receiverZone: true,
+      packingPoints: true,
+      actionType: true,
+      xTValue: true,
+      isP3: true,
+      isShot: true,
+      isGoal: true,
+      isPenaltyAreaEntry: true,
+      matchId: true,
+      match: true,
+      createdAt: true,
+      updatedAt: true
+    };
+
     let actions;
     if (matchId) {
       // Pobierz akcje dla określonego meczu
-      actions = await prisma.action.findMany({
+      actions = await prisma.actionsPacking.findMany({
         where: {
           matchId: matchId
         },
         orderBy: {
           minute: 'asc'
         },
-        include: {
-          sender: true,
-          receiver: true,
-          match: true
-        }
+        select: selectFields
       });
     } else {
       // Pobierz wszystkie akcje
-      actions = await prisma.action.findMany({
+      actions = await prisma.actionsPacking.findMany({
         orderBy: {
           minute: 'asc'
         },
-        include: {
-          sender: true,
-          receiver: true,
-          match: true
-        }
+        select: selectFields
       });
     }
 
@@ -53,10 +74,18 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
+    // Logujemy dane akcji do konsoli
+    console.log("POST /api/actions - Dane akcji:", {
+      id: body.id,
+      actionType: body.actionType,
+      senderZone: body.senderZone,
+      receiverZone: body.receiverZone
+    });
+    
     // Sprawdź, czy podano podstawowe dane akcji
-    if (!body.senderId || !body.receiverId || body.zone === undefined || !body.matchId) {
+    if (!body.senderId || !body.receiverId || !body.matchId) {
       return NextResponse.json(
-        { error: "Brak wymaganych danych akcji (senderId, receiverId, zone, matchId)" },
+        { error: "Brak wymaganych danych akcji (senderId, receiverId, matchId)" },
         { status: 400 }
       );
     }
@@ -90,22 +119,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Utwórz akcję używając standardowej operacji Prisma
-    const action = await prisma.action.create({
+    const action = await prisma.actionsPacking.create({
       data: {
         id: body.id || crypto.randomUUID(),
         minute: body.minute,
-        senderId: body.senderId,
+        sender: { connect: { id: body.senderId } },
         senderName: body.senderName,
         senderNumber: body.senderNumber,
         senderClickValue: body.senderClickValue,
-        receiverId: body.receiverId,
+        receiver: { connect: { id: body.receiverId } },
         receiverName: body.receiverName,
         receiverNumber: body.receiverNumber,
         receiverClickValue: body.receiverClickValue,
-        zone: body.zone,
-        basePoints: body.basePoints,
-        multiplier: body.multiplier,
-        totalPoints: body.totalPoints,
+        // @ts-ignore - Te pola istnieją w schemacie bazy danych, ale nie zostały poprawnie wygenerowane w typach
+        senderZone: body.senderZone,
+        // @ts-ignore - Te pola istnieją w schemacie bazy danych, ale nie zostały poprawnie wygenerowane w typach
+        // Dla dryblingu receiverZone jest taka sama jak senderZone
+        receiverZone: body.receiverZone,
         actionType: body.actionType,
         packingPoints: body.packingPoints,
         xTValue: body.xTValue,
@@ -113,7 +143,7 @@ export async function POST(request: NextRequest) {
         isShot: body.isShot,
         isGoal: body.isGoal,
         isPenaltyAreaEntry: body.isPenaltyAreaEntry || false,
-        matchId: body.matchId,
+        match: { connect: { id: body.matchId } },
       }
     });
 
@@ -141,7 +171,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Usuń akcję używając standardowej operacji Prisma
-    await prisma.action.delete({
+    await prisma.actionsPacking.delete({
       where: {
         id: actionId
       }

@@ -3,7 +3,7 @@
 
 import React, { useState, useCallback, memo } from "react";
 import styles from "./FootballPitch.module.css";
-import { XT_VALUES } from "./constants";
+import { getXTValueFromMatrix } from "@/constants/xtValues";
 import ZoneCell from "./ZoneCell";
 import ActionModal from "../ActionModal/ActionModal";
 import { Player } from "@/types";
@@ -112,30 +112,66 @@ const FootballPitch = memo(function FootballPitch({
     (zoneIndex: number) => {
       const row = Math.floor(zoneIndex / 12);
       const col = zoneIndex % 12;
-      const clickedValue = XT_VALUES[row][col];
+      const clickedValue = getXTValueFromMatrix(row, col);
 
-      if (!firstClickZone) {
-        // Pierwszy klik - podanie
+      console.log('Kliknięcie w strefę:', zoneIndex, 'Stan przed:', { 
+        firstClickZone, 
+        secondClickZone, 
+        actionType 
+      });
+
+      // Sprawdź aktualny stan stref
+      if (firstClickZone === null) {
+        // Pierwsze kliknięcie - zawsze PASS (nadawca)
+        console.log('PIERWSZE KLIKNIĘCIE - PASS');
         setFirstClickZone(zoneIndex);
         setFirstClickValue(clickedValue);
-        setActionType("pass"); // Ustawiamy typ akcji na podanie
-        onZoneSelect(zoneIndex, 0, clickedValue, undefined); // Punkty zawsze zaczynają od 0
-      } else if (!secondClickZone && zoneIndex !== firstClickZone) {
-        // Drugi klik - przyjęcie
-        setSecondClickZone(zoneIndex);
-        if (firstClickValue !== null) {
-          // Nie obliczamy różnicy - punkty zostają na 0
-          onZoneSelect(zoneIndex, 0, firstClickValue, clickedValue); // Punkty zawsze zaczynają od 0
-          setIsModalOpen(true); // Otwieramy modal po drugim kliknięciu
-        }
-      } else {
-        // Reset i nowy pierwszy klik
-        setSecondClickZone(null);
-        setFirstClickZone(zoneIndex);
-        setFirstClickValue(clickedValue);
-        setActionType("pass"); // Ustawiamy typ akcji na podanie
-        onZoneSelect(zoneIndex, 0, clickedValue, undefined); // Punkty zawsze zaczynają od 0
+        setActionType("pass");
+        onZoneSelect(zoneIndex, 0, clickedValue, undefined);
+      } 
+      else if (zoneIndex === firstClickZone) {
+        // Kliknięcie w tę samą strefę co pierwsze = DRYBLING
+        console.log('DRYBLING - TO SAMO MIEJSCE');
+        setActionType("dribble");
+        setSecondClickZone(zoneIndex); // Ustawiamy drugą strefę na tę samą dla wizualnej informacji
+        
+        // Dla dryblingu używamy tej samej wartości dla strefy nadawcy i odbiorcy
+        onZoneSelect(zoneIndex, 0, clickedValue, clickedValue);
+        
+        // Otwieramy modal dla dryblingu
+        setIsModalOpen(true);
+        
+        console.log('Ustawiono DRYBLING, actionType =', "dribble");
       }
+      else if (secondClickZone === null && zoneIndex !== firstClickZone) {
+        // Drugie kliknięcie - zawsze RECEIVE (odbiorca), tylko jeśli to inna strefa
+        console.log('DRUGIE KLIKNIĘCIE - RECEIVE');
+        setSecondClickZone(zoneIndex);
+        setActionType("pass"); // Upewniamy się, że to podanie
+        if (firstClickValue !== null) {
+          onZoneSelect(zoneIndex, 0, firstClickValue, clickedValue);
+        }
+        setIsModalOpen(true); // Otwieramy okno modalne po ustaleniu odbiorcy
+      }
+      else {
+        // Reset i nowy cykl jeśli już mamy obie strefy
+        // albo jeśli klikamy w strefę, która nie jest ani pierwsza ani druga
+        console.log('RESET I NOWY CYKL');
+        setFirstClickZone(zoneIndex);
+        setSecondClickZone(null);
+        setFirstClickValue(clickedValue);
+        setActionType("pass");
+        onZoneSelect(zoneIndex, 0, clickedValue, undefined);
+      }
+
+      // Dodajemy opóźnioną rejestrację stanu po zmianie
+      setTimeout(() => {
+        console.log('Stan po kliknięciu:', { 
+          firstClickZone: zoneIndex === firstClickZone ? 'DRYBLING' : firstClickZone, 
+          secondClickZone: secondClickZone, 
+          actionType: actionType 
+        });
+      }, 0);
     },
     [firstClickZone, secondClickZone, firstClickValue, onZoneSelect, setActionType]
   );
@@ -143,19 +179,39 @@ const FootballPitch = memo(function FootballPitch({
   // Funkcja zamykająca modal i resetująca stan
   const handleCloseModal = useCallback(() => {
     setIsModalOpen(false);
+    // Całkowity reset stanu kliknięć
     setFirstClickZone(null);
     setSecondClickZone(null);
     setFirstClickValue(null);
-  }, []);
+    // Opcjonalnie możemy też zresetować stan akcji
+    setCurrentPoints(0);
+    setIsP3Active(false);
+    setIsShot(false);
+    setIsGoal(false);
+    setIsPenaltyAreaEntry(false);
+  }, [setCurrentPoints, setIsP3Active, setIsShot, setIsGoal, setIsPenaltyAreaEntry]);
 
   // Funkcja obsługująca zapisanie akcji
   const handleSaveActionAndClose = useCallback(() => {
+    console.log("Zapisywanie akcji typu:", actionType, "firstClickZone:", firstClickZone, "secondClickZone:", secondClickZone);
+    
+    // Dodatkowe zabezpieczenie - upewniamy się, że dla dryblingu mamy ustawiony odpowiedni typ
+    if (firstClickZone === secondClickZone && firstClickZone !== null) {
+      console.log("Wykryto drybling przy zapisywaniu - upewniam się, że typ akcji jest poprawny");
+      setActionType("dribble");
+    }
+    
+    // Wywołanie funkcji zapisującej akcję
     handleSaveAction();
+    
+    // Zamknięcie okna modalnego
     setIsModalOpen(false);
+    
+    // Całkowity reset po zapisaniu akcji
     setFirstClickZone(null);
     setSecondClickZone(null);
     setFirstClickValue(null);
-  }, [handleSaveAction]);
+  }, [handleSaveAction, actionType, firstClickZone, secondClickZone, setActionType]);
 
   // Rozszerzony resetActionState, który czyści również stany kliknięć
   const handleResetState = useCallback(() => {
@@ -184,7 +240,7 @@ const FootballPitch = memo(function FootballPitch({
       Array.from({ length: 96 }, (_, index) => {
         const row = Math.floor(index / 12);
         const col = index % 12;
-        const xTValue = XT_VALUES[row][col];
+        const xTValue = getXTValueFromMatrix(row, col);
 
         return (
           <ZoneCell

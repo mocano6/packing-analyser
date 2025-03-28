@@ -51,6 +51,34 @@ CREATE TABLE "PlayerMinutes" (
 );
 
 -- CreateTable
+CREATE TABLE "ActionsPacking" (
+    "id" TEXT NOT NULL,
+    "minute" INTEGER NOT NULL,
+    "senderId" TEXT NOT NULL,
+    "senderName" TEXT NOT NULL,
+    "senderNumber" INTEGER NOT NULL,
+    "senderClickValue" DOUBLE PRECISION NOT NULL,
+    "receiverId" TEXT NOT NULL,
+    "receiverName" TEXT NOT NULL,
+    "receiverNumber" INTEGER NOT NULL,
+    "receiverClickValue" DOUBLE PRECISION NOT NULL,
+    "packingPoints" INTEGER NOT NULL,
+    "actionType" TEXT NOT NULL,
+    "xTValue" DOUBLE PRECISION NOT NULL,
+    "isP3" BOOLEAN NOT NULL,
+    "isShot" BOOLEAN NOT NULL,
+    "isGoal" BOOLEAN NOT NULL,
+    "isPenaltyAreaEntry" BOOLEAN,
+    "matchId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "senderZone" TEXT,
+    "receiverZone" TEXT,
+
+    CONSTRAINT "ActionsPacking_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_PlayerToTeam" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL,
@@ -71,6 +99,15 @@ CREATE INDEX "PlayerMinutes_matchId_idx" ON "PlayerMinutes"("matchId");
 CREATE INDEX "PlayerMinutes_playerId_idx" ON "PlayerMinutes"("playerId");
 
 -- CreateIndex
+CREATE INDEX "ActionsPacking_matchId_idx" ON "ActionsPacking"("matchId");
+
+-- CreateIndex
+CREATE INDEX "ActionsPacking_senderId_idx" ON "ActionsPacking"("senderId");
+
+-- CreateIndex
+CREATE INDEX "ActionsPacking_receiverId_idx" ON "ActionsPacking"("receiverId");
+
+-- CreateIndex
 CREATE INDEX "_PlayerToTeam_B_index" ON "_PlayerToTeam"("B");
 
 -- AddForeignKey
@@ -81,6 +118,15 @@ ALTER TABLE "PlayerMinutes" ADD CONSTRAINT "PlayerMinutes_matchId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "PlayerMinutes" ADD CONSTRAINT "PlayerMinutes_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "Player"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ActionsPacking" ADD CONSTRAINT "ActionsPacking_matchId_fkey" FOREIGN KEY ("matchId") REFERENCES "Match"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ActionsPacking" ADD CONSTRAINT "ActionsPacking_receiverId_fkey" FOREIGN KEY ("receiverId") REFERENCES "Player"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ActionsPacking" ADD CONSTRAINT "ActionsPacking_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "Player"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_PlayerToTeam" ADD CONSTRAINT "_PlayerToTeam_A_fkey" FOREIGN KEY ("A") REFERENCES "Player"("id") ON DELETE CASCADE ON UPDATE CASCADE;

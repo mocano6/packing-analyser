@@ -3,6 +3,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Action, Player, TeamInfo, Zone } from "@/types"; // Zaktualizowana ścieżka importu
+import { getXTValueForZone } from "@/constants/xtValues"; // Importujemy funkcję do pobrania wartości XT
+import { XT_VALUES } from "@/constants/xtValues"; // Importujemy XT_VALUES
 
 export function useActionsState(players: Player[], currentMatch: any) {
   // Inicjalizacja stanu z localStorage z zabezpieczeniem przed SSR
@@ -16,6 +18,7 @@ export function useActionsState(players: Player[], currentMatch: any) {
 
   const [currentMatchId, setCurrentMatchId] = useState<string | undefined>(undefined);
   const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
+  const [receiverZoneValue, setReceiverZoneValue] = useState<Zone | null>(null);
   const [currentPoints, setCurrentPoints] = useState(0);
   const [actionMinute, setActionMinute] = useState<number>(0);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -106,12 +109,59 @@ export function useActionsState(players: Player[], currentMatch: any) {
     value1?: number,
     value2?: number
   ) => {
-    setSelectedZone(zone);
-    if (value1 !== undefined) {
-      setClickValue1(value1);
+    // Jeśli zone jest null, nie kontynuujemy
+    if (zone === null) {
+      return;
     }
-    if (value2 !== undefined) {
-      setClickValue2(value2);
+
+    // Jeśli value2 jest określone, oznacza to drugi klik (strefa odbiorcy) lub drybling (gdy value1 == value2)
+    const isDribble = value1 !== undefined && value2 !== undefined && value1 === value2;
+    
+    if (isDribble) {
+      console.log("handleZoneSelect: Wykryto DRYBLING (obie wartości identyczne)");
+      // W przypadku dryblingu ustawiamy strefę nadawcy
+      setSelectedZone(zone);
+      // Dla dryblingu USTAWIAMY receiverZoneValue na inną strefę niż selectedZone
+      // Tymczasowo używamy strefy przesuniętej o 1 w prawo
+      // Zwiększamy indeks o 1, aby przesunąć się o jedną strefę w prawo (następna kolumna)
+      const newZone = Math.min(zone + 1, 95); // Upewniamy się, że nie wyjdziemy poza zakres 96 stref
+      console.log("Drybling - ustawiam receiverZoneValue na:", newZone, "(przesunięcie w prawo od", zone, ")");
+      setReceiverZoneValue(newZone);
+      setActionType("dribble");
+    } else if (value2 !== undefined) {
+      console.log("handleZoneSelect: Wykryto PODANIE z odbiorcą (druga wartość)");
+      // Zapisujemy strefę odbiorcy dla podania
+      setReceiverZoneValue(zone);
+    } else {
+      console.log("handleZoneSelect: Wykryto PODANIE początkowe (tylko pierwsza wartość)");
+      // Zapisujemy strefę nadawcy 
+      setSelectedZone(zone);
+    }
+    
+    // Ustawiamy wartości clickValue na podstawie strefy 
+    if (zone !== null) {
+      // Obliczamy wartość XT na podstawie naszego schematu
+      const xtValue = getXTValueForZone(zone);
+      
+      // Ustawiamy wartości clickValue dla nadawcy
+      if (value1 !== undefined) {
+        setClickValue1(value1);
+      } else {
+        setClickValue1(xtValue);
+      }
+      
+      // Ustawiamy wartości clickValue dla odbiorcy
+      if (value2 !== undefined) {
+        setClickValue2(value2);
+      } else if (isDribble) {
+        // Dla dryblingu wartość odbiorcy jest taka sama jak nadawcy
+        setClickValue2(value1 !== undefined ? value1 : xtValue);
+      } else {
+        setClickValue2(null);
+      }
+    } else {
+      setClickValue1(null);
+      setClickValue2(null);
     }
     
     // Zawsze ustawiamy punkty na 0 - punkty za miniętych przeciwników będą dodawane ręcznie przez użytkownika
@@ -121,6 +171,7 @@ export function useActionsState(players: Player[], currentMatch: any) {
   const resetActionState = () => {
     setSelectedReceiverId(null);
     setSelectedZone(null);
+    setReceiverZoneValue(null);
     setCurrentPoints(0);
     setClickValue1(null);
     setClickValue2(null);
@@ -218,10 +269,9 @@ export function useActionsState(players: Player[], currentMatch: any) {
       actionType === "pass"
         ? players.find((p) => p.id === selectedReceiverId)!
         : sender;
-
-    const basePoints = currentPoints;
-    const multiplier = isP3Active ? 3 : 1;
-    const totalPoints = basePoints * multiplier;
+    
+    // Obliczamy wartość XT na podstawie strefy
+    const xtValue = getXTValueForZone(selectedZone);
 
     // Użyj bezpiecznej implementacji UUID z zabezpieczeniem przed środowiskiem SSR
     const generateUUID = () => {
@@ -232,35 +282,99 @@ export function useActionsState(players: Player[], currentMatch: any) {
       return "id-" + Date.now() + "-" + Math.random().toString(36).substring(2);
     };
 
+    // Znajdź kluczową wartość ze strefy (name z XT_VALUES)
+    const getZoneName = (zone: number): string => {
+      // Obliczanie wiersza i kolumny na podstawie zone
+      const row = Math.floor(zone / 12);
+      const col = zone % 12;
+      
+      // Mapujemy indeksy wierszy na litery
+      const rowLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+      
+      // Sprawdzamy czy indeksy są w zakresie
+      if (row >= 0 && row < 8 && col >= 0 && col < 12) {
+        const rowLetter = rowLetters[row];
+        const colNumber = col + 1;
+        
+        // Tworzymy klucz w formacie a1, b2, c3 itd.
+        const key = `${rowLetter}${colNumber}` as keyof typeof XT_VALUES;
+        
+        // Zwracamy wartość name dla danej pozycji (np. "A1", "B2", "C3" itp.)
+        return XT_VALUES[key]?.name || `zone${zone}`;
+      }
+      
+      return `zone${zone}`;
+    };
+
+    // Określamy wartość dla pola senderZone - zawsze jest to strefa nadawcy
+    const senderZoneName = getZoneName(selectedZone);
+    
+    // Logowanie stanu przed utworzeniem akcji
+    console.log("Przygotowanie do zapisania akcji:", {
+      actionType,
+      selectedZone,
+      receiverZoneValue,
+      isDrybling: actionType === "dribble"
+    });
+    
+    // Określamy wartość dla pola receiverZone
+    let receiverZoneName: string | null = null;
+    
+    if (receiverZoneValue !== null) {
+      // Używamy receiverZoneValue niezależnie od typu akcji
+      // Dla dryblingu będzie to strefa przesunięta w prawo
+      // Dla podania będzie to strefa drugiego kliknięcia
+      receiverZoneName = getZoneName(receiverZoneValue);
+    }
+    
+    // Logowanie obliczonych wartości dla stref
+    console.log("Obliczone wartości stref:", {
+      senderZoneName,
+      receiverZoneName,
+      isDrybling: actionType === "dribble"
+    });
+
     const newAction: Action = {
       id: generateUUID(),
       minute: actionMinute,
-      senderId: selectedPlayerId,
+      senderId: sender.id,
       senderName: sender.name,
       senderNumber: sender.number,
-      senderClickValue: clickValue1 ?? 0,
-      receiverId:
-        actionType === "pass" ? selectedReceiverId! : selectedPlayerId,
+      senderClickValue: clickValue1 || 0,
+      receiverId: receiver.id,
       receiverName: receiver.name,
       receiverNumber: receiver.number,
-      receiverClickValue: clickValue2 ?? 0,
-      zone: selectedZone,
-      basePoints,
-      multiplier,
-      totalPoints,
-      actionType: actionType,
-      packingPoints: totalPoints,
-      xTValue: totalPoints,
+      receiverClickValue: clickValue2 || 0,
+      // Używamy wcześniej obliczonych wartości
+      senderZone: senderZoneName, // Strefa początkowa (start)
+      receiverZone: receiverZoneName, // Strefa końcowa (end) - null dla dryblingu
+      packingPoints: currentPoints,
+      actionType,
+      xTValue: xtValue,
       isP3: isP3Active,
-      isShot: isShot,
-      isGoal: isGoal,
-      isPenaltyAreaEntry: isPenaltyAreaEntry,
+      isShot,
+      isGoal,
+      isPenaltyAreaEntry,
       matchId: matchInfo.matchId,
     };
+
+    console.log("Zapisuję akcję:", { 
+      actionType,
+      senderZone: newAction.senderZone, 
+      receiverZone: newAction.receiverZone,
+      isDrybling: actionType === "dribble"
+    });
 
     try {
       setIsLoading(true);
       setError(null);
+      
+      // Logowanie bezpośrednio przed wysłaniem danych do API
+      console.log("Wysyłanie do API:", {
+        actionType: newAction.actionType,
+        senderZone: newAction.senderZone,
+        receiverZone: newAction.receiverZone
+      });
       
       // Wyślij akcję na serwer
       const response = await fetch('/api/actions', {
@@ -294,6 +408,7 @@ export function useActionsState(players: Player[], currentMatch: any) {
     selectedPlayerId,
     selectedReceiverId,
     selectedZone,
+    receiverZoneValue,
     currentPoints,
     actionMinute,
     actionType,
@@ -305,6 +420,7 @@ export function useActionsState(players: Player[], currentMatch: any) {
     error,
     setSelectedPlayerId,
     setSelectedReceiverId,
+    setReceiverZoneValue,
     handleZoneSelect,
     setActionMinute,
     setActionType,

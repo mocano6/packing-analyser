@@ -32,8 +32,10 @@ const SortableHeader = ({
   onSort: (key: SortKey) => void;
 }) => {
   const getSortIcon = () => {
-    if (currentSortKey !== sortKey) return "↕️";
-    return sortDirection === "asc" ? "↑" : "↓";
+    if (currentSortKey !== sortKey) return <span className={styles.sortIconNeutral}>▴▾</span>;
+    return sortDirection === "asc" 
+      ? <span className={styles.sortIconAsc}>▴</span> 
+      : <span className={styles.sortIconDesc}>▾</span>;
   };
 
   return (

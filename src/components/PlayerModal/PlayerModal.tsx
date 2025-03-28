@@ -218,7 +218,7 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
           <div className={styles.formTeams}>
             <label>Zespoły:</label>
             <div className={styles.teamsButtonContainer}>
-              {Object.values(TEAMS).map((team) => (
+              {allTeams.map((team) => (
                 <button
                   key={team.id}
                   type="button"

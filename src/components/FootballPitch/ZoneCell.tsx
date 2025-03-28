@@ -34,6 +34,17 @@ const ZoneCell = memo(function ZoneCell({
     onSelect(zoneIndex);
   };
 
+  // Debugowanie (opcjonalne) - usuń w wersji produkcyjnej
+  React.useEffect(() => {
+    if (isFirstSelection || isSecondSelection) {
+      console.log(`ZoneCell ${zoneIndex}: `, { 
+        isFirstSelection, 
+        isSecondSelection,
+        label: isFirstSelection ? "PASS" : isSecondSelection ? "RECEIVE" : "NONE" 
+      });
+    }
+  }, [zoneIndex, isFirstSelection, isSecondSelection]);
+
   return (
     <div
       className={`${styles.zoneCell} ${getSelectionClass()}`}
@@ -46,6 +57,7 @@ const ZoneCell = memo(function ZoneCell({
       tabIndex={0}
       data-zone-index={zoneIndex}
       data-xt-value={xTValue.toFixed(3)}
+      data-selection-type={isFirstSelection ? "pass" : isSecondSelection ? "receive" : "none"}
     >
       {!isFirstSelection && !isSecondSelection && (
         <span className={styles.xTValue}>{xTValue.toFixed(3)}</span>
