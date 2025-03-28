@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Team {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  matches   Match[]
+  players   Player[] @relation("PlayerToTeam")
+}
+
+model Player {
+  id            String          @id @default(uuid())
+  name          String
+  number        Int
+  position      String?
+  birthYear     Int?
+  imageUrl      String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  playerMinutes PlayerMinutes[]
+  teams         Team[]          @relation("PlayerToTeam")
+  actionsAsSender    Action[] @relation("ActionSender")
+  actionsAsReceiver  Action[] @relation("ActionReceiver")
+}
+
+model Match {
+  id            String          @id @default(uuid())
+  teamId        String
+  opponent      String
+  isHome        Boolean
+  competition   String
+  date          DateTime
+  time          String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  team          Team            @relation(fields: [teamId], references: [id])
+  playerMinutes PlayerMinutes[]
+  actions       Action[]
+
+  @@index([teamId])
+}
+
+model PlayerMinutes {
+  id          String   @id @default(uuid())
+  matchId     String
+  playerId    String
+  startMinute Int
+  endMinute   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  match       Match    @relation(fields: [matchId], references: [id])
+  player      Player   @relation(fields: [playerId], references: [id])
+
+  @@index([matchId])
+  @@index([playerId])
+}
+
+model Action {
+  id                 String    @id @default(uuid())
+  minute             Int
+  senderId           String
+  sender             Player    @relation("ActionSender", fields: [senderId], references: [id])
+  senderName         String
+  senderNumber       Int
+  senderClickValue   Float
+  receiverId         String
+  receiver           Player    @relation("ActionReceiver", fields: [receiverId], references: [id])
+  receiverName       String
+  receiverNumber     Int
+  receiverClickValue Float
+  zone               Int
+  basePoints         Int
+  multiplier         Int
+  totalPoints        Int
+  actionType         String
+  packingPoints      Int
+  xTValue            Float
+  isP3               Boolean
+  isShot             Boolean
+  isGoal             Boolean
+  isPenaltyAreaEntry Boolean?
+  matchId            String
+  match              Match     @relation(fields: [matchId], references: [id])
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([matchId])
+  @@index([senderId])
+  @@index([receiverId])
+}

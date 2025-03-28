@@ -56,7 +56,7 @@ const PlayerMinutesModal = dynamic(
 
 export default function Page() {
   const [activeTab, setActiveTab] = React.useState<Tab>("packing");
-  const [selectedTeam, setSelectedTeam] = React.useState<string>("Rezerwy");
+  const [selectedTeam, setSelectedTeam] = React.useState<string>(TEAMS.REZERWY.id);
   const [isPlayerMinutesModalOpen, setIsPlayerMinutesModalOpen] = React.useState(false);
   const [editingMatch, setEditingMatch] = React.useState<TeamInfo | null>(null);
   const [isActionModalOpen, setIsActionModalOpen] = React.useState(false);
@@ -174,7 +174,7 @@ export default function Page() {
   const onDeleteAllActions = () => {
     handleDeleteAllActions();
     setEditingMatch(null);
-    setSelectedTeam(TEAMS[0].id);
+    setSelectedTeam(TEAMS.REZERWY.id);
   };
 
   // Obsługa otwarcia modalu minut zawodników
@@ -265,7 +265,7 @@ export default function Page() {
               : undefined
           }
           currentTeam={selectedTeam}
-          allTeams={TEAMS}
+          allTeams={Object.values(TEAMS)}
         />
 
         <MatchInfoModal

@@ -15,7 +15,7 @@ interface MatchInfoModalProps {
 }
 
 const defaultMatchInfo: TeamInfo = {
-  team: "Rezerwy",
+  team: TEAMS.REZERWY.id,
   opponent: "",
   competition: "",
   date: new Date().toISOString().split("T")[0],

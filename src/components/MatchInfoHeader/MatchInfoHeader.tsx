@@ -33,6 +33,13 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   const [sortKey, setSortKey] = useState<keyof TeamInfo>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   
+  // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
+  const getTeamName = (teamId: string) => {
+    // Znajdź zespół w obiekcie TEAMS
+    const team = Object.values(TEAMS).find(team => team.id === teamId);
+    return team ? team.name : teamId; // Jeśli nie znaleziono, zwróć ID jako fallback
+  };
+  
   // Filtrowanie meczów wybranego zespołu
   const teamMatches = allMatches
     .filter(match => match.team === selectedTeam)
@@ -146,7 +153,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                   onClick={() => onSelectMatch(match)}
                 >
                   <div className={styles.cell}>{match.date}</div>
-                  <div className={styles.cell}>{match.team}</div>
+                  <div className={styles.cell}>{getTeamName(match.team)}</div>
                   <div className={styles.cell}>{match.opponent}</div>
                   <div className={styles.cell}>
                     <span className={styles.competition}>{match.competition}</span>
@@ -164,7 +171,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           }}
                           onKeyDown={(e) => handleEditKeyDown(e, match)}
                           title="Edytuj"
-                          aria-label={`Edytuj mecz: ${match.team} vs ${match.opponent}`}
+                          aria-label={`Edytuj mecz: ${getTeamName(match.team)} vs ${match.opponent}`}
                         >
                           ✎
                         </button>
@@ -175,7 +182,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                             onManagePlayerMinutes(match);
                           }}
                           title="Minuty zawodników"
-                          aria-label={`Zarządzaj minutami zawodników w meczu: ${match.team} vs ${match.opponent}`}
+                          aria-label={`Zarządzaj minutami zawodników w meczu: ${getTeamName(match.team)} vs ${match.opponent}`}
                         >
                           ⌚
                         </button>
@@ -191,7 +198,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           }}
                           onKeyDown={(e) => match.matchId ? handleDeleteKeyDown(e, match.matchId) : undefined}
                           title="Usuń"
-                          aria-label={`Usuń mecz: ${match.team} vs ${match.opponent}`}
+                          aria-label={`Usuń mecz: ${getTeamName(match.team)} vs ${match.opponent}`}
                         >
                           ✕
                         </button>
@@ -208,7 +215,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           }}
                           onKeyDown={(e) => handleEditKeyDown(e, match)}
                           title="Edytuj"
-                          aria-label={`Edytuj mecz: ${match.team} vs ${match.opponent}`}
+                          aria-label={`Edytuj mecz: ${getTeamName(match.team)} vs ${match.opponent}`}
                         >
                           ✎
                         </button>
@@ -219,7 +226,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                             onManagePlayerMinutes(match);
                           }}
                           title="Minuty zawodników"
-                          aria-label={`Zarządzaj minutami zawodników w meczu: ${match.team} vs ${match.opponent}`}
+                          aria-label={`Zarządzaj minutami zawodników w meczu: ${getTeamName(match.team)} vs ${match.opponent}`}
                         >
                           ⌚
                         </button>
@@ -235,7 +242,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           }}
                           onKeyDown={(e) => match.matchId ? handleDeleteKeyDown(e, match.matchId) : undefined}
                           title="Usuń"
-                          aria-label={`Usuń mecz: ${match.team} vs ${match.opponent}`}
+                          aria-label={`Usuń mecz: ${getTeamName(match.team)} vs ${match.opponent}`}
                         >
                           ✕
                         </button>

@@ -5,6 +5,7 @@
 import React, { useState, useEffect } from "react";
 import { Player, PlayerModalProps } from "@/types";
 import styles from "./PlayerModal.module.css";
+import { TEAMS } from "@/constants/teams";
 
 const PlayerModal: React.FC<PlayerModalProps> = ({
   isOpen,
@@ -36,7 +37,6 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
   ];
 
   useEffect(() => {
-    // Ustaw formularz z danymi edytowanego zawodnika lub wyczyść formularz
     if (editingPlayer) {
       // Rozbicie imienia i nazwiska
       const nameParts = editingPlayer.name.split(" ");
@@ -54,21 +54,18 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
         teams: editingPlayer.teams || [],
       });
     } else {
-      // Dla nowego zawodnika, automatycznie dodaj aktualnie wybrany zespół
-      const initialTeams = currentTeam ? [currentTeam] : [];
-      
       setFormData({
         name: "",
         firstName: "",
         lastName: "",
         number: 0,
-        position: "",
-        birthYear: undefined,
+        position: positions[0].value,
+        birthYear: new Date().getFullYear() - 16,
         imageUrl: "",
-        teams: initialTeams,
+        teams: currentTeam ? [currentTeam] : [],
       });
     }
-  }, [editingPlayer, isOpen, currentTeam]);
+  }, [editingPlayer, currentTeam]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -120,6 +117,19 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
     // Przekazujemy dane bez pól firstName i lastName
     const { firstName, lastName, ...playerData } = formData;
     onSave(playerData);
+    
+    // Reset formularza
+    setFormData({
+      name: "",
+      firstName: "",
+      lastName: "",
+      number: 0,
+      position: positions[0].value,
+      birthYear: new Date().getFullYear() - 16,
+      imageUrl: "",
+      teams: currentTeam ? [currentTeam] : [],
+    });
+    
     onClose();
   };
 
@@ -205,14 +215,16 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
             />
           </div>
 
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Zespoły</label>
-            <div className={styles.teamsButtons}>
-              {allTeams.map((team) => (
+          <div className={styles.formTeams}>
+            <label>Zespoły:</label>
+            <div className={styles.teamsButtonContainer}>
+              {Object.values(TEAMS).map((team) => (
                 <button
                   key={team.id}
                   type="button"
-                  className={`${styles.teamButton} ${formData.teams.includes(team.id) ? styles.active : ''}`}
+                  className={`${styles.teamButton} ${
+                    formData.teams.includes(team.id) ? styles.activeTeam : ""
+                  }`}
                   onClick={() => handleTeamToggle(team.id)}
                 >
                   {team.name}

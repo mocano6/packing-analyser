@@ -160,3 +160,35 @@
   margin-right: 8px;
   cursor: pointer;
 }
+
+/* Dodaję style dla przycisków zespołów, jeśli nie istnieją */
+
+.formTeams {
+  margin-bottom: 1rem;
+}
+
+.teamsButtonContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.teamButton {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ccc;
+  background-color: #f8f8f8;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.teamButton:hover {
+  background-color: #e8e8e8;
+}
+
+.activeTeam {
+  background-color: #4a8cff;
+  color: white;
+  border-color: #3a7ae8;
+}

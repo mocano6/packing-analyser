@@ -13,7 +13,8 @@ export function useMatchInfo() {
   const [matchInfo, setMatchInfo] = useState<TeamInfo | null>(null);
   const [allMatches, setAllMatches] = useState<TeamInfo[]>([]);
   const [isMatchModalOpen, setIsMatchModalOpen] = useState(false);
-  const [isAddingNewMatch, setIsAddingNewMatch] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Rozszerzona funkcja otwierania/zamykania modalu
   const toggleMatchModal = (isOpen: boolean, isNewMatch: boolean = false) => {
@@ -29,97 +30,149 @@ export function useMatchInfo() {
     }
   };
 
-  // Ładowanie meczów z localStorage
-  useEffect(() => {
+  // Funkcja do pobierania meczów z API
+  const fetchMatches = async (teamId?: string) => {
     try {
-      const savedMatches = localStorage.getItem("matches");
-      if (savedMatches) {
-        const parsedMatches = JSON.parse(savedMatches);
-        setAllMatches(parsedMatches);
-        
-        const lastSelectedMatchId = localStorage.getItem("selectedMatchId");
-        if (lastSelectedMatchId) {
-          const selectedMatch = parsedMatches.find(
-            (m: TeamInfo) => m.matchId === lastSelectedMatchId
-          );
-          if (selectedMatch) {
-            setMatchInfo(selectedMatch);
-          } else if (parsedMatches.length > 0) {
-            // Jeśli poprzednio wybrany mecz nie istnieje, wybierz pierwszy z listy
-            setMatchInfo(parsedMatches[0]);
-            localStorage.setItem("selectedMatchId", parsedMatches[0].matchId || "");
-          }
-        } else if (parsedMatches.length > 0) {
-          // Jeśli nie ma poprzednio wybranego meczu, wybierz pierwszy z listy
-          setMatchInfo(parsedMatches[0]);
-          localStorage.setItem("selectedMatchId", parsedMatches[0].matchId || "");
-        }
+      setIsLoading(true);
+      setError(null);
+      
+      const url = teamId ? `/api/match?teamId=${teamId}` : '/api/match';
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    } catch (error) {
-      console.error("Błąd podczas ładowania meczów:", error);
+      
+      const matchesData = await response.json();
+      
+      setAllMatches(matchesData);
+      
+      // Jeśli mamy już wybrany mecz, znajdź go w nowo pobranych danych
+      if (matchInfo?.matchId) {
+        const selectedMatch = matchesData.find((m: TeamInfo) => m.matchId === matchInfo.matchId);
+        if (selectedMatch) {
+          setMatchInfo(selectedMatch);
+        } else if (matchesData.length > 0) {
+          // Jeśli nie znaleziono wybranego meczu, wybierz pierwszy z listy
+          setMatchInfo(matchesData[0]);
+        } else {
+          setMatchInfo(null);
+        }
+      } else if (matchesData.length > 0) {
+        // Jeśli nie ma wybranego meczu, wybierz pierwszy z listy
+        setMatchInfo(matchesData[0]);
+      }
+      
+      return matchesData;
+    } catch (err) {
+      console.error("Błąd podczas pobierania meczów:", err);
+      setError(`Błąd podczas pobierania meczów: ${err instanceof Error ? err.message : String(err)}`);
+      return [];
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  // Ładowanie meczów przy montowaniu komponentu
+  useEffect(() => {
+    fetchMatches();
   }, []);
 
-  // Zapisywanie meczów do localStorage
-  useEffect(() => {
-    if (allMatches.length > 0) {
-      localStorage.setItem("matches", JSON.stringify(allMatches));
-      
-      // Jeśli nie ma wybranego meczu, a mamy mecze w liście, wybierz pierwszy
-      if (!matchInfo && allMatches.length > 0) {
-        setMatchInfo(allMatches[0]);
-        localStorage.setItem("selectedMatchId", allMatches[0].matchId || "");
-      }
-    }
-  }, [allMatches, matchInfo]);
-
-  // Zapisywanie ID wybranego meczu
-  useEffect(() => {
-    if (matchInfo && matchInfo.matchId) {
-      localStorage.setItem("selectedMatchId", matchInfo.matchId);
-    } else {
-      localStorage.removeItem("selectedMatchId");
-    }
-  }, [matchInfo]);
-
   // Funkcja do zapisywania informacji o meczu
-  const handleSaveMatchInfo = (info: Omit<TeamInfo, "matchId"> & { matchId?: string }) => {
-    const infoToSave = { ...info } as TeamInfo;
-    
-    if (!infoToSave.matchId) {
-      // Nowy mecz - generujemy ID
-      infoToSave.matchId = generateId();
-      setAllMatches(prev => [...prev, infoToSave]);
-    } else {
-      // Aktualizacja istniejącego meczu
-      setAllMatches(prev => 
-        prev.map(match => 
-          match.matchId === infoToSave.matchId ? infoToSave : match
-        )
-      );
+  const handleSaveMatchInfo = async (info: Omit<TeamInfo, "matchId"> & { matchId?: string }) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const url = '/api/match';
+      // Zawsze używamy metody POST
+      const method = 'POST';
+      
+      console.log('Dane wysyłane do serwera:', JSON.stringify(info, null, 2));
+      console.log('URL:', url);
+      console.log('Metoda:', method);
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(info),
+      });
+      
+      console.log('Status odpowiedzi:', response.status);
+      console.log('OK:', response.ok);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Treść błędu:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const savedMatch = await response.json();
+      console.log('Odpowiedź z serwera:', JSON.stringify(savedMatch, null, 2));
+      
+      if (info.matchId) {
+        // Aktualizacja istniejącego meczu
+        setAllMatches(prev => 
+          prev.map(match => 
+            match.matchId === info.matchId ? savedMatch : match
+          )
+        );
+      } else {
+        // Dodanie nowego meczu
+        setAllMatches(prev => [...prev, savedMatch]);
+      }
+      
+      setMatchInfo(savedMatch);
+      setIsMatchModalOpen(false);
+    } catch (err) {
+      console.error("Błąd podczas zapisywania informacji o meczu:", err);
+      setError(`Błąd podczas zapisywania informacji o meczu: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsLoading(false);
     }
-    
-    setMatchInfo(infoToSave);
-    setIsMatchModalOpen(false);
   };
 
   // Funkcja do zapisywania minut zawodników w meczu
-  const handleSavePlayerMinutes = (match: TeamInfo, playerMinutes: PlayerMinutes[]) => {
-    const updatedMatch = {
-      ...match,
-      playerMinutes: playerMinutes
-    };
+  const handleSavePlayerMinutes = async (match: TeamInfo, playerMinutes: PlayerMinutes[]) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const response = await fetch('/api/player-minutes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          matchId: match.matchId,
+          playerMinutes
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const updatedMatch = await response.json();
+      
+      // Aktualizuj listę wszystkich meczów
+      setAllMatches(prev => 
+        prev.map(m => 
+          m.matchId === match.matchId ? updatedMatch : m
+        )
+      );
 
-    // Aktualizuj listę wszystkich meczów
-    setAllMatches(prev => 
-      prev.map(m => 
-        m.matchId === match.matchId ? updatedMatch : m
-      )
-    );
-
-    // Jeśli to aktualnie wybrany mecz, zaktualizuj też matchInfo
-    if (matchInfo?.matchId === match.matchId) {
-      setMatchInfo(updatedMatch);
+      // Jeśli to aktualnie wybrany mecz, zaktualizuj też matchInfo
+      if (matchInfo?.matchId === match.matchId) {
+        setMatchInfo(updatedMatch);
+      }
+    } catch (err) {
+      console.error("Błąd podczas zapisywania minut zawodników:", err);
+      setError(`Błąd podczas zapisywania minut zawodników: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -127,35 +180,55 @@ export function useMatchInfo() {
     setMatchInfo(match);
   };
 
-  const handleDeleteMatch = (matchId: string) => {
-    setAllMatches(prev => {
-      const updatedMatches = prev.filter(match => match.matchId !== matchId);
-      
-      // Jeśli usunęliśmy aktualnie wybrany mecz
-      if (matchInfo?.matchId === matchId) {
-        // Jeśli zostały jeszcze jakieś mecze, wybierz pierwszy
-        if (updatedMatches.length > 0) {
-          setMatchInfo(updatedMatches[0]);
-          localStorage.setItem("selectedMatchId", updatedMatches[0].matchId || "");
-        } else {
-          setMatchInfo(null);
-          localStorage.removeItem("selectedMatchId");
+  const handleDeleteMatch = async (matchId: string) => {
+    if (window.confirm("Czy na pewno chcesz usunąć ten mecz?")) {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const response = await fetch(`/api/match?id=${matchId}`, {
+          method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
+        setAllMatches(prev => {
+          const updatedMatches = prev.filter(match => match.matchId !== matchId);
+          
+          // Jeśli usunęliśmy aktualnie wybrany mecz
+          if (matchInfo?.matchId === matchId) {
+            // Jeśli zostały jeszcze jakieś mecze, wybierz pierwszy
+            if (updatedMatches.length > 0) {
+              setMatchInfo(updatedMatches[0]);
+            } else {
+              setMatchInfo(null);
+            }
+          }
+          
+          return updatedMatches;
+        });
+      } catch (err) {
+        console.error("Błąd podczas usuwania meczu:", err);
+        setError(`Błąd podczas usuwania meczu: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setIsLoading(false);
       }
-      
-      return updatedMatches;
-    });
+    }
   };
 
   return {
     matchInfo,
     allMatches,
     isMatchModalOpen,
-    isAddingNewMatch,
+    isLoading,
+    error,
     setIsMatchModalOpen: toggleMatchModal,
     handleSaveMatchInfo,
     handleSelectMatch,
     handleDeleteMatch,
-    handleSavePlayerMinutes
+    handleSavePlayerMinutes,
+    fetchMatches
   };
 }

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { PlayerMinutesModalProps, PlayerMinutes } from "@/types";
 import styles from "./PlayerMinutesModal.module.css";
+import { TEAMS } from "@/constants/teams";
 
 const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
   isOpen,
@@ -14,6 +15,13 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
 }) => {
   const [playerMinutes, setPlayerMinutes] = useState<PlayerMinutes[]>([]);
   const initialMinutesRef = useRef<PlayerMinutes[]>([]);
+
+  // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
+  const getTeamName = (teamId: string) => {
+    // Znajdź zespół w obiekcie TEAMS
+    const team = Object.values(TEAMS).find(team => team.id === teamId);
+    return team ? team.name : teamId; // Jeśli nie znaleziono, zwróć ID jako fallback
+  };
 
   // Inicjalizacja stanu przy otwarciu modalu
   useEffect(() => {
@@ -92,7 +100,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
     <div className={styles.modalOverlay}>
       <div className={styles.modalContent}>
         <h2 className={styles.modalTitle}>
-          Minuty zawodników: {match.team} vs {match.opponent}
+          Minuty zawodników: {getTeamName(match.team)} vs {match.opponent}
         </h2>
         <p className={styles.modalSubtitle}>
           Wpisz przedziały minut, w których zawodnicy grali w meczu.
@@ -160,7 +168,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
 
             {teamPlayers.length === 0 && (
               <div className={styles.noPlayers}>
-                Brak zawodników przypisanych do zespołu {match.team}
+                Brak zawodników przypisanych do zespołu {getTeamName(match.team)}
               </div>
             )}
           </div>

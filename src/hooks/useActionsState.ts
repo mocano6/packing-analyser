@@ -29,11 +29,16 @@ export function useActionsState(players: Player[], currentMatch: any) {
   const [isPenaltyAreaEntry, setIsPenaltyAreaEntry] = useState(false);
   const [clickValue1, setClickValue1] = useState<number | null>(null);
   const [clickValue2, setClickValue2] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Monitoruj zmiany meczu i aktualizuj currentMatchId
   useEffect(() => {
     if (currentMatch && currentMatch.matchId) {
       setCurrentMatchId(currentMatch.matchId);
+
+      // Pobierz akcje dla bieżącego meczu z serwera
+      fetchActionsForMatch(currentMatch.matchId);
     } else {
       setCurrentMatchId(undefined);
     }
@@ -43,7 +48,11 @@ export function useActionsState(players: Player[], currentMatch: any) {
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "selectedMatchId") {
-        setCurrentMatchId(e.newValue);
+        // Bezpieczne ustawienie currentMatchId - przekształć null na undefined
+        setCurrentMatchId(e.newValue || undefined);
+        if (e.newValue) {
+          fetchActionsForMatch(e.newValue);
+        }
       }
     };
 
@@ -59,6 +68,29 @@ export function useActionsState(players: Player[], currentMatch: any) {
       localStorage.setItem("actions", JSON.stringify(actions));
     }
   }, [actions]);
+
+  // Funkcja do pobierania akcji z serwera
+  const fetchActionsForMatch = async (matchId: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const response = await fetch(`/api/actions?matchId=${matchId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const actionsData = await response.json();
+      
+      setActions(actionsData);
+    } catch (err) {
+      console.error("Błąd podczas pobierania akcji:", err);
+      setError(`Błąd podczas pobierania akcji: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Filtrowanie akcji na podstawie wybranego meczu
   const filteredActions = useMemo(() => {
@@ -99,23 +131,69 @@ export function useActionsState(players: Player[], currentMatch: any) {
     setIsPenaltyAreaEntry(false);
   };
 
-  const handleDeleteAction = (actionId: string) => {
+  const handleDeleteAction = async (actionId: string) => {
     if (window.confirm("Czy na pewno chcesz usunąć tę akcję?")) {
-      setActions((prev) => prev.filter((action) => action.id !== actionId));
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        // Usuń akcję z serwera
+        const response = await fetch(`/api/actions?id=${actionId}`, {
+          method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        // Usuń akcję ze stanu lokalnego
+        setActions((prev) => prev.filter((action) => action.id !== actionId));
+      } catch (err) {
+        console.error("Błąd podczas usuwania akcji:", err);
+        setError(`Błąd podczas usuwania akcji: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
-  const handleDeleteAllActions = () => {
+  const handleDeleteAllActions = async () => {
     if (currentMatchId) {
-      // Usuń tylko akcje dla bieżącego meczu
-      setActions(prev => prev.filter(action => action.matchId !== currentMatchId));
+      if (window.confirm(`Czy na pewno chcesz usunąć wszystkie akcje dla bieżącego meczu?`)) {
+        try {
+          setIsLoading(true);
+          setError(null);
+          
+          // Pobierz wszystkie akcje dla bieżącego meczu
+          const actionsToDelete = actions.filter(action => action.matchId === currentMatchId);
+          
+          // Usuń każdą akcję z serwera
+          for (const action of actionsToDelete) {
+            const response = await fetch(`/api/actions?id=${action.id}`, {
+              method: 'DELETE',
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+          }
+          
+          // Usuń akcje ze stanu lokalnego
+          setActions(prev => prev.filter(action => action.matchId !== currentMatchId));
+        } catch (err) {
+          console.error("Błąd podczas usuwania wszystkich akcji:", err);
+          setError(`Błąd podczas usuwania wszystkich akcji: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+          setIsLoading(false);
+        }
+      }
     } else {
       // Usuń wszystkie akcje bez przypisanego meczu
       setActions(prev => prev.filter(action => action.matchId));
     }
   };
 
-  const handleSaveAction = (matchInfo: TeamInfo | null) => {
+  const handleSaveAction = async (matchInfo: TeamInfo | null) => {
     if (
       !selectedPlayerId ||
       selectedZone === null ||
@@ -131,6 +209,7 @@ export function useActionsState(players: Player[], currentMatch: any) {
 
     // Wymagaj informacji o meczu
     if (!matchInfo) {
+      alert("Wybierz mecz przed dodaniem akcji!");
       return false;
     }
 
@@ -176,12 +255,37 @@ export function useActionsState(players: Player[], currentMatch: any) {
       isShot: isShot,
       isGoal: isGoal,
       isPenaltyAreaEntry: isPenaltyAreaEntry,
-      matchId: currentMatchId,
+      matchId: matchInfo.matchId,
     };
 
-    setActions((prev) => [...prev, newAction]);
-    resetActionState();
-    return true;
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Wyślij akcję na serwer
+      const response = await fetch('/api/actions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newAction),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      // Dodaj akcję do stanu lokalnego
+      setActions((prev) => [...prev, newAction]);
+      resetActionState();
+      return true;
+    } catch (err) {
+      console.error("Błąd podczas zapisywania akcji:", err);
+      setError(`Błąd podczas zapisywania akcji: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return {
@@ -197,17 +301,18 @@ export function useActionsState(players: Player[], currentMatch: any) {
     isShot,
     isGoal,
     isPenaltyAreaEntry,
+    isLoading,
+    error,
     setSelectedPlayerId,
     setSelectedReceiverId,
-    setSelectedZone,
-    setCurrentPoints,
+    handleZoneSelect,
     setActionMinute,
     setActionType,
+    setCurrentPoints,
     setIsP3Active,
     setIsShot,
     setIsGoal,
     setIsPenaltyAreaEntry,
-    handleZoneSelect,
     handleSaveAction,
     handleDeleteAction,
     handleDeleteAllActions,

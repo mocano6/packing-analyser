@@ -21,7 +21,7 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
       onChange={(e) => onChange(e.target.value)}
       className={`${styles.teamsSelector} ${className}`}
     >
-      {TEAMS.map(team => (
+      {Object.values(TEAMS).map(team => (
         <option key={team.id} value={team.id}>
           {team.name}
         </option>
