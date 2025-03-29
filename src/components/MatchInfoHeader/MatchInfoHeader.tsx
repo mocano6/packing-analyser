@@ -145,11 +145,12 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
           {teamMatches.length > 0 ? (
             teamMatches.map((match) => {
               const isSelected = matchInfo?.matchId === match.matchId;
+              const isHomeMatch = match.isHome === true;
               
               return (
                 <div 
                   key={match.matchId}
-                  className={`${styles.matchRow} ${isSelected ? styles.selected : ""}`}
+                  className={`${styles.matchRow} ${isSelected ? styles.selected : ""} ${isHomeMatch ? styles.homeRow : styles.awayRow}`}
                   onClick={() => onSelectMatch(match)}
                 >
                   <div className={styles.cell}>{match.date}</div>
@@ -158,7 +159,11 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                   <div className={styles.cell}>
                     <span className={styles.competition}>{match.competition}</span>
                   </div>
-                  <div className={styles.cell}>{match.isHome ? "Dom" : "Wyjazd"}</div>
+                  <div className={styles.cell}>
+                    <span className={isHomeMatch ? styles.home : styles.away}>
+                      {isHomeMatch ? "Dom" : "Wyjazd"}
+                    </span>
+                  </div>
                   <div className={styles.cellActions}>
                     {isSelected && (
                       <>
@@ -259,8 +264,6 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
           )}
         </div>
       </div>
-      
-      {/* Usunąłem osobny element z aktualnie wybranym meczem */}
     </div>
   );
 };

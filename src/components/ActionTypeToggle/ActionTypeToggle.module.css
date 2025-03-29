@@ -1,29 +1,47 @@
 /* src/components/ActionTypeToggle/ActionTypeToggle.module.css */
 .toggleContainer {
   display: flex;
-  gap: 8px;
-  margin: 10px 0;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #eaeaea;
 }
 
 .toggleButton {
-  padding: 8px 16px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: white;
+  padding: 6px 12px;
+  border: none;
+  background-color: #fafafa;
+  color: #888;
+  font-weight: 400;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+}
+
+.toggleButton:first-child {
+  border-right: 1px solid #eaeaea;
 }
 
 .toggleButton:hover {
-  background: #f0f0f0;
+  background-color: #f2f2f2;
+  color: #666;
 }
 
-.active {
-  background: #007bff;
-  color: white;
-  border-color: #0056b3;
+/* Styl dla przycisku "Podanie" */
+.toggleButton.active:first-child {
+  background-color: #dcfce7;
+  color: #166534;
+  font-weight: 500;
+  box-shadow: none;
+  border-bottom: 2px solid #16a34a;
 }
 
-.active:hover {
-  background: #0056b3;
+/* Styl dla przycisku "Drybling" */
+.toggleButton.active:last-child {
+  background-color: #f3e8ff;
+  color: #7e22ce;
+  font-weight: 500;
+  box-shadow: none;
+  border-bottom: 2px solid #7e22ce;
 }

@@ -12,7 +12,7 @@ export const ACTION_BUTTONS: ActionButton[] = [
   {
     points: 1,
     label: "Minięty przeciwnik",
-    description: "+1 punkt",
+    description: "Dodaj punkt za minięcie obrońcy",
     type: "points",
   },
   {

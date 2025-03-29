@@ -1,7 +1,7 @@
-/* src/components/ExportButton/ExportButton.module.css */
-.exportButton {
+/* src/components/ImportButton/ImportButton.module.css */
+.importButton {
   padding: 10px 15px;
-  background-color: #3182ce;
+  background-color: #805ad5;
   color: white;
   border: none;
   border-radius: 5px;
@@ -18,26 +18,24 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.exportButton:hover {
-  background-color: #2c5282;
+.importButton:hover {
+  background-color: #6b46c1;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-.exportButton:active {
+.importButton:active {
   transform: translateY(0);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.icon {
-  font-size: 16px;
+.importButton:disabled {
+  background-color: #a0a0a0;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
-/* Styl dla kontenera przycisków */
-.buttonsContainer {
-  display: flex;
-  gap: 12px;
-  margin-top: 20px;
-  justify-content: flex-start;
-  align-items: center;
-}
+.icon {
+  font-size: 16px;
+} 

@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import React, { useMemo, useEffect, useState } from "react";
+import React, { useMemo, useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { Tab, Player, TeamInfo, PlayerMinutes, Action } from "@/types";
 import Instructions from "@/components/Instructions/Instructions";
@@ -11,7 +11,9 @@ import { usePlayersState } from "@/hooks/usePlayersState";
 import { useActionsState } from "@/hooks/useActionsState";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { TEAMS } from "@/constants/teams";
+import { getXTValueFromMatrix } from "@/constants/xtValues";
 import styles from "./page.module.css";
+import OfflineStatus from '@/components/OfflineStatus/OfflineStatus';
 
 // Dynamiczny import komponentów używanych warunkowo dla lepszej wydajności
 const ActionSection = dynamic(
@@ -53,6 +55,10 @@ const PlayerMinutesModal = dynamic(
     ssr: false,
   }
 );
+const ImportButton = dynamic(
+  () => import("@/components/ImportButton/ImportButton"),
+  { ssr: false }
+);
 
 export default function Page() {
   const [activeTab, setActiveTab] = React.useState<Tab>("packing");
@@ -60,9 +66,12 @@ export default function Page() {
   const [isPlayerMinutesModalOpen, setIsPlayerMinutesModalOpen] = React.useState(false);
   const [editingMatch, setEditingMatch] = React.useState<TeamInfo | null>(null);
   const [isActionModalOpen, setIsActionModalOpen] = React.useState(false);
-  const [senderZone, setSenderZone] = React.useState<number | null>(null);
-  const [receiverZone, setReceiverZone] = React.useState<number | null>(null);
+  const [startZone, setStartZone] = React.useState<number | null>(null);
+  const [endZone, setEndZone] = React.useState<number | null>(null);
   const [isNewMatchModalOpen, setIsNewMatchModalOpen] = React.useState(false);
+  const [isSecondHalf, setIsSecondHalf] = React.useState(false);
+
+  const useActionsStateRef = useRef<any>(null);
 
   // Custom hooks
   const {
@@ -112,7 +121,7 @@ export default function Page() {
     handleSaveAction,
     handleDeleteAction,
     handleDeleteAllActions,
-    resetActionState,
+    resetActionState: hookResetActionState,
   } = useActionsState(players, matchInfo);
 
   const filteredPlayers = useMemo(() => {
@@ -121,6 +130,16 @@ export default function Page() {
       return player.teams && player.teams.includes(selectedTeam);
     });
   }, [players, selectedTeam]);
+
+  React.useEffect(() => {
+    // Sprawdzamy, czy w localStorage jest zapisana wartość połowy
+    const savedHalf = localStorage.getItem('currentHalf');
+    if (savedHalf) {
+      const isP2 = savedHalf === 'P2';
+      console.log(`page.tsx: Wczytano wartość połowy z localStorage: ${savedHalf}`);
+      setIsSecondHalf(isP2);
+    }
+  }, []);
 
   // Funkcja do zapisywania zawodnika
   const handleSavePlayerWithTeams = (playerData: Omit<Player, "id">) => {
@@ -146,29 +165,140 @@ export default function Page() {
     });
   };
 
-  const onDeletePlayer = (playerId: string) => {
-    const wasDeleted = handleDeletePlayer(playerId);
+  const onDeletePlayer = async (playerId: string) => {
+    const wasDeleted = await handleDeletePlayer(playerId);
     if (wasDeleted && selectedPlayerId === playerId) {
       setSelectedPlayerId(null);
       resetActionState();
     }
   };
 
-  const onSaveAction = () => {
+  // Funkcja przygotowująca strefy do zapisu akcji
+  const prepareZonesForAction = () => {
+    console.log("prepareZonesForAction - wartości wejściowe:", { startZone, endZone });
+    
+    if (!startZone || !endZone) {
+      console.error("Brak wartości startZone lub endZone!");
+      return false;
+    }
+    
+    try {
+      // Pobierz wartości xT dla stref
+      const row1 = Math.floor(startZone / 12);
+      const col1 = startZone % 12;
+      const startXT = getXTValueFromMatrix(row1, col1);
+      
+      const row2 = Math.floor(endZone / 12);
+      const col2 = endZone % 12;
+      const endXT = getXTValueFromMatrix(row2, col2);
+      
+      // Zapisz wartości stref przed wywołaniem handleZoneSelect
+      const isDrybling = startZone === endZone;
+      
+      if (isDrybling) {
+        // To jest drybling - dla dryblingu potrzebujemy przekazać te same wartości dla value1 i value2
+        setActionType("dribble");
+        console.log("Ustawiamy drybling:", { startZone, startXT });
+        
+        // Najpierw czyścimy poprzednie wartości
+        handleZoneSelect(null); // reset
+        
+        // Teraz ustawiamy strefy z odpowiednimi wartościami
+        handleZoneSelect(startZone, startXT, startXT, startXT);
+      } else {
+        // To jest podanie
+        setActionType("pass");
+        console.log("Ustawiamy podanie:", { startZone, endZone, startXT, endXT });
+        
+        // Najpierw czyścimy poprzednie wartości
+        handleZoneSelect(null); // reset
+        
+        // Teraz ustawiamy strefę początkową
+        handleZoneSelect(startZone, startXT);
+        
+        // Potem ustawiamy strefę końcową z wartościami startXT i endXT
+        handleZoneSelect(endZone, endXT, startXT, endXT);
+      }
+      
+      // Upewnij się, że strefy zostały prawidłowo ustawione
+      console.log("Po ustawieniu stref:", { 
+        isDrybling,
+        actionType
+      });
+      
+      // Nie mamy bezpośredniego dostępu do selectedZone i receiverZoneValue w tej funkcji,
+      // ale wiemy, że jeśli doszliśmy do tego miejsca, to strefy zostały ustawione
+      return true;
+    } catch (error) {
+      console.error("Błąd podczas przygotowywania stref:", error);
+      return false;
+    }
+  };
+
+  const onSaveAction = async () => {
     // Sprawdzamy czy matchInfo istnieje przed wywołaniem handleSaveAction
     if (!matchInfo) {
-      setIsMatchModalOpen(true, false);
+      setIsMatchModalOpen(true);
       return;
     }
     
-    const success = handleSaveAction(matchInfo);
-    if (!success) {
+    // Sprawdzamy, czy wszystkie wymagane dane są ustawione
+    if (!selectedPlayerId) {
+      alert("Wybierz zawodnika rozpoczynającego akcję!");
       return;
     }
     
-    setReceiverZone(null);
-    setSenderZone(null);
-    setIsActionModalOpen(false);
+    // W przypadku podania sprawdzamy, czy wybrany jest odbiorca
+    if (actionType === "pass" && !selectedReceiverId) {
+      alert("Wybierz zawodnika kończącego podanie!");
+      return;
+    }
+    
+    // Sprawdzamy czy strefy są wybrane
+    if (!startZone || !endZone) {
+      console.log("Brak wybranych stref - nie można zapisać akcji");
+      return;
+    }
+    
+    // Przygotujemy wartości xT dla stref
+    const row1 = Math.floor(startZone / 12);
+    const col1 = startZone % 12;
+    const startXT = getXTValueFromMatrix(row1, col1);
+    
+    const row2 = Math.floor(endZone / 12);
+    const col2 = endZone % 12;
+    const endXT = getXTValueFromMatrix(row2, col2);
+    
+    // Ustawimy odpowiedni typ akcji
+    const isDrybling = startZone === endZone;
+    if (isDrybling) {
+      setActionType("dribble");
+    }
+    
+    // Logujemy stan przed wywołaniem handleSaveAction
+    console.log("Stan przed zapisem:", {
+      selectedPlayerId,
+      selectedReceiverId,
+      actionType: isDrybling ? "dribble" : "pass",
+      startZone,
+      endZone,
+      startXT,
+      endXT
+    });
+    
+    // Wywołujemy handleSaveAction z matchInfo i wartościami stref
+    try {
+      const success = await handleSaveAction(matchInfo, startZone, endZone);
+      if (success) {
+        // Resetujemy stan tylko jeśli zapis się powiódł
+        setEndZone(null);
+        setStartZone(null);
+        setIsActionModalOpen(false);
+      }
+    } catch (error) {
+      console.error("Błąd podczas zapisywania akcji:", error);
+      alert("Wystąpił błąd podczas zapisywania akcji: " + (error instanceof Error ? error.message : String(error)));
+    }
   };
 
   const onDeleteAllActions = () => {
@@ -196,6 +326,99 @@ export default function Page() {
   const openNewMatchModal = () => {
     setIsNewMatchModalOpen(true);
   };
+
+  // Dodaj funkcję obsługi sukcesu importu
+  const handleImportSuccess = (data: { players: Player[], actions: Action[], matchInfo: any }) => {
+    // Aktualizuj graczy
+    const newPlayers = data.players.filter(
+      importedPlayer => !players.some(p => p.id === importedPlayer.id)
+    );
+    if (newPlayers.length > 0) {
+      // Używamy handleSavePlayerWithTeams dla każdego nowego gracza
+      newPlayers.forEach(player => {
+        // Tworzymy kopię bez pola id, aby funkcja mogła wygenerować nowe id
+        const { id, ...playerData } = player;
+        handleSavePlayerWithTeams(playerData as Omit<Player, "id">);
+      });
+    }
+    
+    // Aktualizuj akcje
+    const newActions = data.actions.filter(
+      importedAction => !actions.some(a => a.id === importedAction.id)
+    );
+    if (newActions.length > 0) {
+      // Dodajemy nowe akcje do lokalnego stanu - będą pobrane przez hook useActionsState
+      console.log(`Dodano ${newActions.length} nowych akcji`);
+    }
+    
+    // Aktualizuj informacje o meczu, jeśli to nowy mecz
+    if (data.matchInfo && !allMatches.some(m => m.matchId === data.matchInfo.matchId)) {
+      setActiveTab("packing");
+      setEditingMatch(data.matchInfo);
+      setIsMatchModalOpen(true);
+    }
+    
+    alert(`Import zakończony sukcesem! Zaimportowano ${newPlayers.length} graczy i ${newActions.length} akcji.`);
+  };
+
+  // Dodaj funkcję obsługi błędu importu
+  const handleImportError = (error: string) => {
+    alert(`Błąd importu: ${error}`);
+  };
+
+  // Nowa funkcja do obsługi wyboru strefy
+  const handleZoneSelection = (zoneId: number, xT?: number) => {
+    // Jeśli nie mamy startZone, to ustawiamy ją
+    if (startZone === null) {
+      setStartZone(zoneId);
+      return;
+    }
+    
+    // Jeśli mamy startZone, ale nie mamy endZone, to ustawiamy ją
+    if (endZone === null) {
+      setEndZone(zoneId);
+      
+      // Resetujemy wybór zawodnika i otwieramy ActionModal
+      setSelectedPlayerId(null);
+      setSelectedReceiverId(null);
+      setIsActionModalOpen(true);
+      return;
+    }
+    
+    // Jeśli mamy obie strefy, resetujemy je i zaczynamy od nowa
+    setStartZone(zoneId);
+    setEndZone(null);
+    setSelectedPlayerId(null);
+    setSelectedReceiverId(null);
+  };
+
+  // Niestandardowa funkcja resetująca stan akcji zachowująca wybrane wartości
+  const resetActionState = () => {
+    // Wykonujemy tylko resetowanie stanu z hooka, która już została zmodyfikowana
+    // aby zachowywać potrzebne wartości (strefy, zawodników, isSecondHalf, xT)
+    hookResetActionState();
+    
+    console.log("Wykonano resetowanie stanu akcji przy zachowaniu stref i zawodników");
+  };
+
+  // Modyfikujemy funkcję obsługi przełącznika half
+  const handleSecondHalfToggle = React.useCallback((value: React.SetStateAction<boolean>) => {
+    // Określamy nową wartość niezależnie od typu value (funkcja lub wartość bezpośrednia)
+    const newValue = typeof value === 'function' ? value(isSecondHalf) : value;
+    
+    console.log("page.tsx - zmiana połowy na:", newValue ? "P2" : "P1", "obecna wartość:", isSecondHalf);
+    
+    // Zapisujemy wartość w stanie lokalnym
+    setIsSecondHalf(newValue);
+    
+    // Zapisujemy wartość w localStorage
+    localStorage.setItem('currentHalf', newValue ? 'P2' : 'P1');
+    
+    // Przekazujemy wartość do hooka useActionsState
+    if (useActionsStateRef.current?.setIsSecondHalf) {
+      useActionsStateRef.current.setIsSecondHalf(newValue);
+    }
+  }, [isSecondHalf]);
 
   return (
     <div className={styles.container}>
@@ -226,7 +449,7 @@ export default function Page() {
 
         <ActionSection
           selectedZone={selectedZone}
-          handleZoneSelect={handleZoneSelect}
+          handleZoneSelect={handleZoneSelection}
           players={filteredPlayers}
           selectedPlayerId={selectedPlayerId}
           setSelectedPlayerId={setSelectedPlayerId}
@@ -246,8 +469,14 @@ export default function Page() {
           setIsGoal={setIsGoal}
           isPenaltyAreaEntry={isPenaltyAreaEntry}
           setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
+          isSecondHalf={isSecondHalf}
+          setIsSecondHalf={handleSecondHalfToggle}
           handleSaveAction={onSaveAction}
           resetActionState={resetActionState}
+          startZone={startZone}
+          endZone={endZone}
+          isActionModalOpen={isActionModalOpen}
+          setIsActionModalOpen={setIsActionModalOpen}
         />
         <ActionsTable
           actions={actions}
@@ -302,11 +531,20 @@ export default function Page() {
           />
         )}
 
-        <ExportButton
-          players={players}
-          actions={actions}
-          matchInfo={matchInfo}
-        />
+        {/* Przyciski eksportu i importu */}
+        <div className={styles.buttonsContainer}>
+          <ExportButton
+            players={players}
+            actions={actions}
+            matchInfo={matchInfo}
+          />
+          <ImportButton 
+            onImportSuccess={handleImportSuccess}
+            onImportError={handleImportError}
+          />
+        </div>
+
+        <OfflineStatus />
       </main>
     </div>
   );

@@ -29,6 +29,8 @@ interface ActionModalProps {
   onGoalToggle: (checked: boolean) => void;
   isPenaltyAreaEntry: boolean;
   onPenaltyAreaEntryToggle: (checked: boolean) => void;
+  isSecondHalf: boolean;
+  onSecondHalfToggle: (checked: boolean) => void;
   onSaveAction: () => void;
   onReset: () => void;
 }
@@ -55,6 +57,8 @@ const ActionModal: React.FC<ActionModalProps> = ({
   onGoalToggle,
   isPenaltyAreaEntry,
   onPenaltyAreaEntryToggle,
+  isSecondHalf,
+  onSecondHalfToggle,
   onSaveAction,
   onReset,
 }) => {
@@ -139,9 +143,45 @@ const ActionModal: React.FC<ActionModalProps> = ({
     onPenaltyAreaEntryToggle(!isPenaltyAreaEntry);
   };
 
-  const handleSave = () => {
+  const handleSecondHalfToggle = (value: boolean) => {
+    console.log("ActionModal - KLIKNIĘTO przycisk połowy:", value ? "P2" : "P1", "aktualna wartość:", isSecondHalf);
+    
+    // Zapisujemy wartość bezpośrednio w localStorage dla natychmiastowego efektu
+    localStorage.setItem('currentHalf', value ? 'P2' : 'P1');
+    
+    console.log(`ActionModal - po kliknięciu, zapisano w localStorage: ${value ? 'P2' : 'P1'}`);
+    
+    // Sprawdzamy, czy faktycznie wartość się zmienia
+    if (value !== isSecondHalf) {
+      console.log("Aktualizuję stan isSecondHalf na:", value ? "P2 (true)" : "P1 (false)");
+      onSecondHalfToggle(value);
+      
+      // Dodatkowe sprawdzenie po zmienne aby zobaczyć, czy wartość stanu została zaktualizowana
+      setTimeout(() => {
+        const currentSavedValue = localStorage.getItem('currentHalf');
+        console.log("Po aktualizacji - localStorage:", currentSavedValue, "stan isSecondHalf:", isSecondHalf ? "P2 (true)" : "P1 (false)");
+      }, 100);
+    } else {
+      console.log("Wartość isSecondHalf nie zmieniła się");
+    }
+  };
+
+  const handleSave = async () => {
+    // Najpierw sprawdźmy czy wszystkie wymagane pola są wypełnione
+    if (!selectedPlayerId) {
+      alert("Wybierz zawodnika rozpoczynającego akcję!");
+      return;
+    }
+    
+    // W przypadku podania sprawdzamy, czy wybrany jest odbiorca
+    if (actionType === "pass" && !selectedReceiverId) {
+      alert("Wybierz zawodnika kończącego podanie!");
+      return;
+    }
+
+    // Wywołaj funkcję zapisującą akcję, ale nie zamykaj modalu od razu
+    // Komponent nadrzędny sam zadecyduje czy i kiedy zamknąć modal
     onSaveAction();
-    onClose();
   };
 
   const handleCancel = () => {
@@ -150,14 +190,23 @@ const ActionModal: React.FC<ActionModalProps> = ({
   };
 
   const handleReset = () => {
-    // Zapisz aktualną wartość minuty
+    // Zapisz aktualną wartość minuty oraz zachowaj informację o połowie meczu
     const currentMinute = actionMinute;
+    const currentHalf = isSecondHalf;
     
-    // Zresetuj tylko częściowo - selektor punktów, przełączniki P3, strzał, bramka, wejście w PK
+    // Zresetuj tylko dane z formularza: 
+    // - punkty, 
+    // - przełączniki P3, strzał, bramka, wejście w PK
+    // - NIE resetujemy wyboru zawodników ani stref (startZone, endZone)
+    
+    // Wywołaj funkcję resetowania stanu z komponentu nadrzędnego
     onReset();
     
-    // Przywróć zapisaną wartość minuty
+    // Przywróć zapisane wartości minuty i połowy meczu
     onMinuteChange(currentMinute);
+    onSecondHalfToggle(currentHalf);
+    
+    console.log("Reset formularza akcji - zachowano wartości stref i zaznaczonych zawodników");
   };
 
   return (
@@ -167,11 +216,32 @@ const ActionModal: React.FC<ActionModalProps> = ({
         <div className={styles.form}>
           {/* Typ akcji */}
           <div className={styles.formGroup}>
-            <label>Typ akcji:</label>
-            <ActionTypeToggle
-              actionType={actionType}
-              onActionTypeChange={handleActionTypeChange}
-            />
+            <div className={styles.togglesRow}>
+              <div className={styles.toggleGroup}>
+                <label>Typ akcji:</label>
+                <ActionTypeToggle
+                  actionType={actionType}
+                  onActionTypeChange={handleActionTypeChange}
+                />
+              </div>
+              <div className={styles.toggleGroup}>
+                <label>Połowa:</label>
+                <div className={styles.halfToggle}>
+                  <button
+                    className={`${styles.halfButton} ${!isSecondHalf ? styles.activeHalf : ''}`}
+                    onClick={() => handleSecondHalfToggle(false)}
+                  >
+                    P1
+                  </button>
+                  <button
+                    className={`${styles.halfButton} ${isSecondHalf ? styles.activeHalf : ''}`}
+                    onClick={() => handleSecondHalfToggle(true)}
+                  >
+                    P2
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Lista zawodników */}
@@ -179,6 +249,13 @@ const ActionModal: React.FC<ActionModalProps> = ({
             <label className={styles.playerTitle}>
               {actionType === "dribble" ? "Wybierz zawodnika dryblującego:" : "Wybierz zawodników:"}
             </label>
+            <div className={styles.playerSelectionInfo}>
+              {actionType === "pass" ? (
+                <p>Kliknij, aby wybrać zawodnika rozpoczynającego, a następnie kliknij na innego zawodnika, aby wybrać kończącego.</p>
+              ) : (
+                <p>Kliknij, aby wybrać zawodnika wykonującego drybling.</p>
+              )}
+            </div>
             <div className={styles.playersGrid}>
               {players.map((player) => (
                 <PlayerCard
@@ -191,12 +268,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 />
               ))}
             </div>
-          </div>
-
-          {/* Wyświetlanie punktów */}
-          <div className={styles.pointsDisplay}>
-            <span className={styles.pointsLabel}>Punkty:</span>
-            <span className={styles.pointsValue}>{currentPoints}</span>
           </div>
 
           {/* Przyciski punktów */}
@@ -226,7 +297,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                   title={button.description}
                   type="button"
                 >
-                  <span className={styles.buttonLabel}>{button.label}</span>
+                  <span className={styles.buttonLabel}>{button.label}: <b>{currentPoints}</b></span>
                   <span className={styles.buttonDescription}>
                     {button.description}
                   </span>
@@ -311,7 +382,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 type="number"
                 value={actionMinute}
                 onChange={handleMinuteChange}
-                min="0"
+                min="1"
                 max="130"
               />
             </div>

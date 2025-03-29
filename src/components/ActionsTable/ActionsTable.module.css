@@ -1,13 +1,231 @@
 /* src/components/ActionsTable/ActionsTable.module.css */
 
 .tableContainer {
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  padding: 20px;
   margin-bottom: 20px;
 }
 
+.headerControls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.deleteAllButton {
+  padding: 8px 16px;
+  background-color: #fee2e2;
+  color: #dc2626;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.deleteAllButton:hover {
+  background-color: #fecaca;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.deleteAllButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.deleteAllButton span {
+  margin-right: 0.625rem;
+  font-weight: 700;
+}
+
+.matchesTable {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #eaeaea;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 120px;
+  background-color: #fafafa;
+  font-weight: 600;
+  border-bottom: 1px solid #eaeaea;
+  color: #444;
+}
+
+.headerCell {
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  font-family: Arial, sans-serif;
+  font-style: normal;
+  font-weight: 600;
+  color: rgb(68, 68, 68);
+}
+
+.headerCell:hover {
+  background-color: #f0f0f0;
+}
+
+.tableBody {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.actionRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 120px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.actionRow:last-child {
+  border-bottom: none;
+}
+
+.actionRow:hover {
+  background-color: #f5f9ff;
+}
+
+/* Style dla wierszy połów */
+.firstHalfRow {
+  position: relative;
+  box-shadow: inset 6px 0 0 0 #16a34a;
+}
+
+.secondHalfRow {
+  position: relative;
+  box-shadow: inset 6px 0 0 0 #ea580c;
+}
+
+.cell {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #333;
+  font-family: Arial, sans-serif;
+}
+
+.cellActions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+  padding: 14px 16px;
+}
+
+.deleteBtn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  color: #f44336;
+  opacity: 0;
+}
+
+.actionRow:hover .deleteBtn {
+  opacity: 1;
+}
+
+.deleteBtn:hover {
+  background-color: #ffebee;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+/* Style dla oznaczeń połów */
+.firstHalf {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #dcfce7;
+  color: #166534;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.secondHalf {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #ffedd5;
+  color: #9a3412;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Style dla typów akcji */
+.pass {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #dcfce7; /* Zielony kolor dla podania */
+  color: #166534;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.dribble {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #f3e8ff; /* Fioletowy kolor dla dryblingu */
+  color: #7e22ce;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.noMatches {
+  padding: 24px;
+  text-align: center;
+  color: #757575;
+  font-size: 14px;
+}
+
+@media (max-width: 600px) {
+  .headerControls {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  
+  .deleteAllButton {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .tableHeader, .actionRow {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+  
+  .headerCell, .cell, .cellActions {
+    padding: 10px;
+  }
+}
+
+/* Nowe style, spójne z MatchInfoHeader */
 .tableTitle {
   margin: 0 0 20px 0;
   color: #333;
@@ -17,12 +235,6 @@
 .tableWrapper {
   overflow-x: auto;
   margin-bottom: 20px;
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 800px;
 }
 
 .table th,
@@ -69,29 +281,6 @@
   color: #2196f3;
   font-size: 14px;
   opacity: 0.8;
-}
-
-.table tbody tr:hover {
-  background-color: #f8f8f8;
-}
-
-.x {
-  color: #ff0000;
-  cursor: pointer;
-  font-weight: bold;
-  font-size: 20px;
-  width: 25px;
-  height: 25px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 50%;
-  margin: 0 auto;
-}
-
-.actionCell {
-  text-align: center;
-  padding: 5px;
 }
 
 .noData {
@@ -200,76 +389,4 @@
   .rightContainer {
     flex-direction: column;
   }
-}
-.tableHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-.deleteAllButton {
-  background-color: #f44336;
-  color: white;
-  border: none;
-  padding: 10px 15px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(244, 67, 54, 0.3);
-}
-
-.deleteAllButton:hover {
-  background-color: #e53935;
-  box-shadow: 0 3px 6px rgba(244, 67, 54, 0.4);
-  transform: translateY(-1px);
-}
-
-.deleteAllButton:active {
-  background-color: #d32f2f;
-  transform: translateY(0);
-  box-shadow: 0 1px 2px rgba(244, 67, 54, 0.2);
-}
-
-.deleteAllButton:disabled {
-  background-color: #e0e0e0;
-  color: #9e9e9e;
-  cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
-}
-
-.sortable {
-  cursor: pointer;
-  position: relative;
-  padding-right: 24px;
-}
-
-.sortable:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
-.sortIconNeutral {
-  opacity: 0.3;
-  font-size: 0.8em;
-  margin-left: 5px;
-}
-
-.sortIconAsc, .sortIconDesc {
-  color: #2196f3;
-  font-size: 0.8em;
-  margin-left: 5px;
-  font-weight: bold;
-}
-
-.sortIconAsc {
-  transform: translateY(-1px);
-}
-
-.sortIconDesc {
-  transform: translateY(1px);
 }

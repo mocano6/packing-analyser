@@ -12,44 +12,111 @@ export default function Instructions() {
   const sections = useMemo(
     () => ({
       basic: {
-        title: "Podstawowe informacje",
+        title: "Podstawy analizy",
         content: (
           <>
-            <ol>
-              <li>Wybierz zawodnika rozpoczynającego akcję (nadawcę)</li>
-              <li>Kliknij na boisko, aby zaznaczyć strefę początkową (X)</li>
-              <li>Kliknij ponownie, aby zaznaczyć strefę końcową (O)</li>
-              <li>Wybierz zawodnika kończącego akcję (odbiorcę)</li>
-              <li>Wprowadź minutę meczu (0-90+)</li>
-              <li>Użyj opcji P3, jeśli podanie trafia za linię oborony</li>
-              <li>
-                Kliknij &quot;Zapisz akcję&quot; aby dodać podanie do bazy
-              </li>
-            </ol>
+            <div className={styles.instructionStep}>
+              <div className={styles.stepNumber}>1</div>
+              <div className={styles.stepContent}>
+                <h4>Przygotowanie meczu</h4>
+                <p>Wybierz drużynę i stwórz nowy mecz, wprowadzając przeciwnika i inne dane.</p>
+              </div>
+            </div>
+            
+            <div className={styles.instructionStep}>
+              <div className={styles.stepNumber}>2</div>
+              <div className={styles.stepContent}>
+                <h4>Rejestrowanie akcji</h4>
+                <ul>
+                  <li>Kliknij na <strong>strefę początkową</strong> na boisku (skąd zaczyna się akcja)</li>
+                  <li>Następnie kliknij na <strong>strefę końcową</strong> na boisku (gdzie kończy się akcja)</li>
+                  <li>W otwartym oknie <strong>wybierz zawodnika rozpoczynającego</strong> akcję</li>
+                  <li>Wybierz <strong>zawodnika kończącego</strong> akcję (przy podaniu) lub zaznacz zawodnika dryblującego</li>
+                  <li>Ustaw <strong>minutę meczu</strong> (0-90+)</li>
+                  <li>Dodaj punkty packing i opcjonalne dodatkowe parametry akcji</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div className={styles.instructionStep}>
+              <div className={styles.stepNumber}>3</div>
+              <div className={styles.stepContent}>
+                <h4>Dodatkowe opcje</h4>
+                <ul>
+                  <li><strong>P3</strong> - podanie za linię obrony</li>
+                  <li><strong>Strzał</strong> - zaznacz, jeśli akcja kończy się strzałem</li>
+                  <li><strong>Gol</strong> - zaznacz, jeśli akcja kończy się golem</li>
+                  <li><strong>Wejście w pole karne</strong> - podanie lub drybling w pole karne</li>
+                </ul>
+              </div>
+            </div>
           </>
         ),
       },
       scoring: {
-        title: "Punktacja i analiza",
+        title: "System punktacji",
         content: (
           <>
-            <p>
-              <strong>
-                Punkty Packing są przyznawane automatycznie na podstawie:
-              </strong>
-            </p>
-            <ul>
-              <li>Liczby ominętych zawodników</li>
-              <li>Pozycji na boisku (strefy)</li>
-              <li>Jakości wykonania podania</li>
-            </ul>
-            <p>
-              <strong>Expected Threat (xT):</strong> Przyznawany dodatkowo jako
-              mnożnik wartości podań w strefach o wyższym potencjale bramkowym.
-            </p>
-            <p>
-              <strong>Podania P3:</strong> Podania za linię obrony.
-            </p>
+            <div className={styles.cardInfo}>
+              <h4>Punkty Packing</h4>
+              <p>Punkty są przyznawane automatycznie w oparciu o:</p>
+              <ul>
+                <li>Liczbę ominętych zawodników</li>
+                <li>Pozycję na boisku (strefy)</li>
+                <li>Jakość wykonania podania</li>
+              </ul>
+            </div>
+            
+            <div className={styles.cardInfo}>
+              <h4>Expected Threat (xT)</h4>
+              <p>Wartość odzwierciedlająca potencjał bramkowy danej strefy boiska.</p>
+              <ul>
+                <li>Wyższe wartości xT bliżej bramki przeciwnika</li>
+                <li>Służy jako mnożnik wartości punktów packing</li>
+                <li>Pomaga ocenić efektywność akcji w kontekście strategicznym</li>
+              </ul>
+            </div>
+            
+            <div className={styles.cardInfo}>
+              <h4>Dodatkowe metryki</h4>
+              <ul>
+                <li><strong>Podania P3:</strong> Podania za linię obrony (wyższy współczynnik)</li>
+                <li><strong>Wejścia w pole karne:</strong> Akcje kończące się w polu karnym</li>
+                <li><strong>Strzały i gole:</strong> Finalizacja akcji</li>
+              </ul>
+            </div>
+          </>
+        ),
+      },
+      data: {
+        title: "Zarządzanie danymi",
+        content: (
+          <>
+            <div className={styles.dataSection}>
+              <h4>Eksport danych <span className={styles.iconSmall}>📤</span></h4>
+              <p>Regularnie eksportuj dane meczu, aby zabezpieczyć swoją pracę:</p>
+              <ol>
+                <li>Kliknij przycisk <strong>Eksportuj dane</strong> na dole strony</li>
+                <li>Plik JSON zostanie pobrany na twoje urządzenie</li>
+                <li>Zawiera wszystkie dane meczu, zawodników i akcji</li>
+                <li>Plik nazwany jest automatycznie według wzoru: <code>packing_[drużyna]_vs_[przeciwnik]_[data].json</code></li>
+              </ol>
+            </div>
+            
+            <div className={styles.dataSection}>
+              <h4>Import danych <span className={styles.iconSmall}>📥</span></h4>
+              <p>Przywracaj dane z wcześniej zapisanych plików:</p>
+              <ol>
+                <li>Kliknij przycisk <strong>Importuj dane</strong> na dole strony</li>
+                <li>Wybierz plik JSON z eksportowanymi wcześniej danymi</li>
+                <li>Dane zostaną zaimportowane do aplikacji</li>
+                <li>Istniejące dane nie zostaną nadpisane, tylko uzupełnione</li>
+              </ol>
+            </div>
+            
+            <div className={styles.dataNote}>
+              <p><strong>Uwaga:</strong> Zalecamy regularne eksportowanie danych po każdym meczu lub nawet w trakcie dłuższych meczów, aby zabezpieczyć się przed utratą danych.</p>
+            </div>
           </>
         ),
       },
@@ -57,22 +124,31 @@ export default function Instructions() {
         title: "Wskazówki",
         content: (
           <>
-            <ul>
-              <li>Dodaj wszystkich zawodników przed rozpoczęciem analizy</li>
-              <li>
-                Nie liczymy podań, które nie są w przód, i tych, które nie
-                mijają zadnego zawodnika
-              </li>
-              <li>Liczymy packing i xT na wysokości PK, tez w poprzek (w kierunku bramki).</li>
-              <li>Nie liczymy SFG</li>
-              <li>
-                Po zapisaniu akcji minuta pozostaje niezmieniona, co ułatwia
-                wprowadzanie serii podań
-              </li>
-              <li>Regularnie eksportuj dane, aby uniknąć ich utraty</li>
-              <li>Analizuj połączenia między zawodnikami w sekcji statystyk</li>
-              <li>Konsekwentnie oznaczaj podania P3 dla spójnej analizy</li>
-            </ul>
+            <div className={styles.tipsGrid}>
+              <div className={styles.tipCard}>
+                <span className={styles.tipIcon}>🎯</span>
+                <h4>Dokładność analizy</h4>
+                <p>Nie liczymy podań, które nie są w przód, i tych, które nie mijają żadnego zawodnika. Liczymy packing i xT na wysokości pola karnego, także w poprzek (w kierunku bramki).</p>
+              </div>
+              
+              <div className={styles.tipCard}>
+                <span className={styles.tipIcon}>⏱️</span>
+                <h4>Zarządzanie czasem</h4>
+                <p>Po zapisaniu akcji minuta pozostaje niezmieniona, co ułatwia wprowadzanie serii podań z tego samego momentu meczu.</p>
+              </div>
+              
+              <div className={styles.tipCard}>
+                <span className={styles.tipIcon}>🔄</span>
+                <h4>Regularne kopie zapasowe</h4>
+                <p>Eksportuj dane po każdym meczu lub w jego trakcie. Import pozwala przywrócić dane w przypadku problemów.</p>
+              </div>
+              
+              <div className={styles.tipCard}>
+                <span className={styles.tipIcon}>📊</span>
+                <h4>Analiza połączeń</h4>
+                <p>Zwracaj uwagę na połączenia między zawodnikami w sekcji statystyk, aby identyfikować najskuteczniejsze schematy podań.</p>
+              </div>
+            </div>
           </>
         ),
       },
@@ -106,6 +182,7 @@ export default function Instructions() {
           onClick={() => setIsExpanded(true)}
           aria-expanded="false"
         >
+          <span className={styles.toggleIcon}>📖</span>
           Pokaż instrukcję
           <span className={`${styles.arrow} ${styles.down}`}>▼</span>
         </button>
@@ -120,6 +197,7 @@ export default function Instructions() {
         onClick={() => setIsExpanded(false)}
         aria-expanded="true"
       >
+        <span className={styles.toggleIcon}>📖</span>
         Ukryj instrukcję
         <span className={`${styles.arrow} ${styles.up}`}>▼</span>
       </button>

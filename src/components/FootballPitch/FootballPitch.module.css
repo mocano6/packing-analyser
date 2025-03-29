@@ -155,7 +155,6 @@
   background-color: rgba(33, 150, 243, 0.4) !important;
   border: 2px solid rgba(33, 150, 243, 0.9) !important;
   box-shadow: 0 0 10px rgba(33, 150, 243, 0.6);
-  transform: scale(1.05);
   z-index: 10;
   transition: all 0.2s ease-in-out;
 }
@@ -164,13 +163,12 @@
   background-color: rgba(244, 67, 54, 0.4) !important;
   border: 2px solid rgba(244, 67, 54, 0.9) !important;
   box-shadow: 0 0 10px rgba(244, 67, 54, 0.6);
-  transform: scale(1.05);
   z-index: 10;
   transition: all 0.2s ease-in-out;
 }
 
 .actionText {
-  font-size: 1.2vw;
+  font-size: 0.9vw;
   color: white;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
   font-weight: 700;
@@ -179,7 +177,6 @@
   padding: 3px 6px;
   border-radius: 4px;
   pointer-events: none;
-  animation: pulseText 1.5s infinite alternate;
 }
 
 @keyframes pulseText {

@@ -26,8 +26,8 @@ export async function GET(request: NextRequest) {
       matchId: true,
       createdAt: true,
       updatedAt: true,
-      senderZone: true,
-      receiverZone: true
+      startZone: true,
+      endZone: true
     };
 
     // Wykonaj zapytanie z poprawnymi polami

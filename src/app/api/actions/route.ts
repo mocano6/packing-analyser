@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
       receiverName: true,
       receiverNumber: true,
       receiverClickValue: true,
-      senderZone: true,
-      receiverZone: true,
+      startZone: true,
+      endZone: true,
       packingPoints: true,
       actionType: true,
       xTValue: true,
@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
       isShot: true,
       isGoal: true,
       isPenaltyAreaEntry: true,
+      isSecondHalf: true,
       matchId: true,
       match: true,
       createdAt: true,
@@ -74,13 +75,31 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    // Logujemy dane akcji do konsoli
+    // Sprawdzamy wartość isSecondHalf, w tym jej typ
     console.log("POST /api/actions - Dane akcji:", {
       id: body.id,
       actionType: body.actionType,
-      senderZone: body.senderZone,
-      receiverZone: body.receiverZone
+      startZone: body.startZone,
+      endZone: body.endZone,
+      senderClickValue: body.senderClickValue,
+      receiverClickValue: body.receiverClickValue,
+      isSecondHalf: body.isSecondHalf,
+      isSecondHalfType: typeof body.isSecondHalf
     });
+    
+    // Upewniamy się, że isSecondHalf jest wartością boolean
+    let isSecondHalfValue = false;
+    if (body.isSecondHalf === true || body.isSecondHalf === "true" || body.isSecondHalf === 1) {
+      isSecondHalfValue = true;
+    } else if (body.isSecondHalf === false || body.isSecondHalf === "false" || body.isSecondHalf === 0) {
+      isSecondHalfValue = false;
+    } else {
+      // Sprawdzamy localStorage, jeśli dostępne (choć to backend, więc raczej nie będzie)
+      console.log("isSecondHalf ma niestandardową wartość:", body.isSecondHalf);
+      isSecondHalfValue = false;
+    }
+    
+    console.log("Znormalizowana wartość isSecondHalf:", isSecondHalfValue);
     
     // Sprawdź, czy podano podstawowe dane akcji
     if (!body.senderId || !body.receiverId || !body.matchId) {
@@ -132,10 +151,10 @@ export async function POST(request: NextRequest) {
         receiverNumber: body.receiverNumber,
         receiverClickValue: body.receiverClickValue,
         // @ts-ignore - Te pola istnieją w schemacie bazy danych, ale nie zostały poprawnie wygenerowane w typach
-        senderZone: body.senderZone,
+        startZone: body.startZone,
         // @ts-ignore - Te pola istnieją w schemacie bazy danych, ale nie zostały poprawnie wygenerowane w typach
-        // Dla dryblingu receiverZone jest taka sama jak senderZone
-        receiverZone: body.receiverZone,
+        // Dla dryblingu endZone jest taka sama jak startZone
+        endZone: body.endZone,
         actionType: body.actionType,
         packingPoints: body.packingPoints,
         xTValue: body.xTValue,
@@ -143,10 +162,13 @@ export async function POST(request: NextRequest) {
         isShot: body.isShot,
         isGoal: body.isGoal,
         isPenaltyAreaEntry: body.isPenaltyAreaEntry || false,
+        isSecondHalf: isSecondHalfValue, // Używamy znormalizowanej wartości
         match: { connect: { id: body.matchId } },
       }
     });
 
+    console.log("Utworzono akcję z isSecondHalf =", action.isSecondHalf);
+    
     return NextResponse.json(action, { status: 201 });
   } catch (error) {
     console.error("Error creating action:", error);

@@ -6,13 +6,13 @@ import { Player, Action } from "@/types";
 import styles from "./ExportButton.module.css";
 
 interface TeamInfo {
-  matchId: string;
+  matchId?: string;
   team: string;
   opponent: string;
   isHome: boolean;
   competition: string;
   date: string;
-  time: string;
+  time?: string;
 }
 
 interface ExportButtonProps {
@@ -35,6 +35,12 @@ const ExportButton: React.FC<ExportButtonProps> = ({
 
     const data = {
       exportDate: new Date().toISOString(),
+      formatVersion: "2.0",
+      exportType: "match_data",
+      appInfo: {
+        name: "Packing Analyzer",
+        version: "1.0.0",
+      },
       matchInfo: matchData,
       players,
       actions,
@@ -45,7 +51,7 @@ const ExportButton: React.FC<ExportButtonProps> = ({
       "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
 
     const exportFileDefaultName = matchInfo
-      ? `packing_${matchInfo.team}_vs_${matchInfo.opponent}_${matchInfo.date}.json`
+      ? `packing_${matchInfo.team}_vs_${matchInfo.opponent}_${matchInfo.date.replace(/\//g, "-")}.json`
       : "packing_data.json";
 
     const linkElement = document.createElement("a");
@@ -55,8 +61,9 @@ const ExportButton: React.FC<ExportButtonProps> = ({
   };
 
   return (
-    <button className={styles.exportButton} onClick={handleExport}>
-      Eksportuj dane do JSON
+    <button className={styles.exportButton} onClick={handleExport} title="Eksportuj dane do pliku JSON">
+      <span className={styles.icon}>📤</span>
+      Eksportuj dane
     </button>
   );
 };

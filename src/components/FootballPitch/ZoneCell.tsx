@@ -1,7 +1,7 @@
 // components/FootballPitch/ZoneCell.tsx
 "use client";
 
-import React, { memo } from "react";
+import React, { memo, useEffect } from "react";
 import styles from "./FootballPitch.module.css";
 import { getXTColor } from "./utils";
 
@@ -31,19 +31,21 @@ const ZoneCell = memo(function ZoneCell({
   };
 
   const handleClick = () => {
+    console.log(`Kliknięto strefę ${zoneIndex} z wartością xT: ${xTValue.toFixed(3)}`);
     onSelect(zoneIndex);
   };
 
   // Debugowanie (opcjonalne) - usuń w wersji produkcyjnej
-  React.useEffect(() => {
+  useEffect(() => {
     if (isFirstSelection || isSecondSelection) {
       console.log(`ZoneCell ${zoneIndex}: `, { 
         isFirstSelection, 
         isSecondSelection,
+        xTValue: xTValue.toFixed(3),
         label: isFirstSelection ? "PASS" : isSecondSelection ? "RECEIVE" : "NONE" 
       });
     }
-  }, [zoneIndex, isFirstSelection, isSecondSelection]);
+  }, [zoneIndex, isFirstSelection, isSecondSelection, xTValue]);
 
   return (
     <div

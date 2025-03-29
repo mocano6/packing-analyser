@@ -56,8 +56,8 @@ export interface ActionsPacking {
   receiverName: string;
   receiverNumber: number;
   receiverClickValue: number;
-  senderZone?: string;         // Wartość XT_VALUES dla strefy podania
-  receiverZone?: string | null | ""; // Wartość XT_VALUES dla strefy przyjęcia, dla dryblingów używamy pustego ciągu znaków
+  startZone?: string;         // Wartość XT_VALUES dla strefy początkowej akcji
+  endZone?: string | null;    // Wartość XT_VALUES dla strefy końcowej akcji, może być null dla dryblingów
   packingPoints: number;
   actionType: "pass" | "dribble";
   xTValue: number;
@@ -65,6 +65,7 @@ export interface ActionsPacking {
   isShot: boolean;
   isGoal: boolean;
   isPenaltyAreaEntry?: boolean;
+  isSecondHalf?: boolean;     // Określa połowę meczu: false = P1, true = P2
   matchId?: string; // ID meczu, do którego przypisana jest akcja
 }
 

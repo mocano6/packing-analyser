@@ -11,37 +11,38 @@ type SortKey =
   | "senderXT"
   | "receiver"
   | "receiverXT"
+  | "startZone"
+  | "endZone"
   | "type"
   | "packing"
   | "events";
 
 type SortDirection = "asc" | "desc";
 
-// Komponent nagłówka kolumny z sortowaniem
-const SortableHeader = ({
-  label,
-  sortKey,
-  currentSortKey,
-  sortDirection,
-  onSort,
-}: {
+interface SortableHeaderProps {
   label: string;
   sortKey: SortKey;
   currentSortKey: SortKey;
   sortDirection: SortDirection;
   onSort: (key: SortKey) => void;
-}) => {
-  const getSortIcon = () => {
-    if (currentSortKey !== sortKey) return <span className={styles.sortIconNeutral}>▴▾</span>;
-    return sortDirection === "asc" 
-      ? <span className={styles.sortIconAsc}>▴</span> 
-      : <span className={styles.sortIconDesc}>▾</span>;
-  };
+}
 
+// Komponent HeaderCell 
+const HeaderCell: React.FC<SortableHeaderProps> = ({
+  label,
+  sortKey,
+  currentSortKey,
+  sortDirection,
+  onSort,
+}) => {
+  const isActive = sortKey === currentSortKey;
   return (
-    <th onClick={() => onSort(sortKey)} className={styles.sortable}>
-      {label} {getSortIcon()}
-    </th>
+    <div 
+      className={styles.headerCell} 
+      onClick={() => onSort(sortKey)}
+    >
+      {label} {isActive && (sortDirection === "asc" ? "↑" : "↓")}
+    </div>
   );
 };
 
@@ -53,6 +54,15 @@ const ActionRow = ({
   action: ActionsTableProps["actions"][0];
   onDelete: (id: string) => void;
 }) => {
+  // Dodane logowanie dla diagnozy
+  console.log("Dane akcji:", {
+    id: action.id,
+    isSecondHalf: action.isSecondHalf,
+    minute: action.minute,
+    senderClickValue: action.senderClickValue,
+    receiverClickValue: action.receiverClickValue
+  });
+
   const getEvents = () => {
     const events = [];
     if (action.isP3) events.push("P3");
@@ -65,27 +75,39 @@ const ActionRow = ({
     
     return events.length > 0 ? events.join(", ") : "-";
   };
+  
+  // Określamy, czy akcja jest w drugiej połowie - jeśli isSecondHalf jest undefined, uznajemy za false
+  const isSecondHalf = action.isSecondHalf === true;
 
   return (
-    <tr>
-      <td>{action.minute}&apos;</td>
-      <td>
+    <div className={`${styles.actionRow} ${isSecondHalf ? styles.secondHalfRow : styles.firstHalfRow}`}>
+      <div className={styles.cell}>
+        <span className={isSecondHalf ? styles.secondHalf : styles.firstHalf}>
+          {isSecondHalf ? 'P2' : 'P1'}
+        </span>
+        &nbsp;{action.minute}'
+      </div>
+      <div className={styles.cell}>
         {action.senderNumber}-{action.senderName}
-      </td>
-      <td>{action.senderClickValue.toFixed(3)}</td>
-      <td>
+      </div>
+      <div className={styles.cell}>{typeof action.senderClickValue === 'number' ? action.senderClickValue.toFixed(3) : '0.000'}</div>
+      <div className={styles.cell}>
         {action.receiverNumber}-{action.receiverName}
-      </td>
-      <td>{action.receiverClickValue.toFixed(3)}</td>
-      <td>{action.actionType === "pass" ? "Podanie" : "Drybling"}</td>
-      <td>{action.packingPoints ? Math.round(action.packingPoints) : "-"}</td>
-      <td>{getEvents()}</td>
-      <td className={styles.actionCell}>
-        <div onClick={() => onDelete(action.id)} className={styles.x}>
-          &times;
-        </div>
-      </td>
-    </tr>
+      </div>
+      <div className={styles.cell}>{typeof action.receiverClickValue === 'number' ? action.receiverClickValue.toFixed(3) : '0.000'}</div>
+      <div className={styles.cell}>
+        <span className={action.actionType === "pass" ? styles.pass : styles.dribble}>
+          {action.actionType === "pass" ? "Podanie" : "Drybling"}
+        </span>
+      </div>
+      <div className={styles.cell}>{action.packingPoints ? Math.round(action.packingPoints) : "-"}</div>
+      <div className={styles.cell}>{getEvents()}</div>
+      <div className={styles.cellActions}>
+        <button onClick={() => onDelete(action.id)} className={styles.deleteBtn} title="Usuń akcję">
+          ✕
+        </button>
+      </div>
+    </div>
   );
 };
 
@@ -114,6 +136,16 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   // Posortowane akcje z wykorzystaniem useMemo dla optymalizacji wydajności
   const sortedActions = useMemo(() => {
     const result = [...actions];
+    
+    // Wyświetlamy informacje debugowe
+    console.log("Wszystkie akcje przed sortowaniem:", result.map(a => ({
+      id: a.id,
+      isSecondHalf: a.isSecondHalf,
+      minute: a.minute,
+      senderClickValue: a.senderClickValue,
+      receiverClickValue: a.receiverClickValue
+    })));
+    
     const { key, direction } = sortConfig;
     const multiplier = direction === "asc" ? 1 : -1;
 
@@ -122,6 +154,10 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
 
       switch (key) {
         case "minute":
+          // Najpierw sortujemy po połowie, a potem po minucie
+          if ((a.isSecondHalf === true) !== (b.isSecondHalf === true)) {
+            return (a.isSecondHalf === true ? 1 : -1) * (direction === "asc" ? 1 : -1);
+          }
           comparison = a.minute - b.minute;
           break;
         case "sender":
@@ -132,6 +168,9 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         case "senderXT":
           comparison = a.senderClickValue - b.senderClickValue;
           break;
+        case "startZone":
+          comparison = (a.startZone || "").localeCompare(b.startZone || "");
+          break;
         case "receiver":
           comparison = `${a.receiverNumber}-${a.receiverName}`.localeCompare(
             `${b.receiverNumber}-${b.receiverName}`
@@ -139,6 +178,9 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           break;
         case "receiverXT":
           comparison = a.receiverClickValue - b.receiverClickValue;
+          break;
+        case "endZone":
+          comparison = (a.endZone || "").localeCompare(b.endZone || "");
           break;
         case "type":
           comparison = a.actionType.localeCompare(b.actionType);
@@ -167,80 +209,73 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
 
   return (
     <div className={styles.tableContainer}>
-      <div className={styles.tableHeader}>
+      <div className={styles.headerControls}>
         <h3>Lista akcji ({actions.length})</h3>
         <button
           className={styles.deleteAllButton}
           onClick={onDeleteAllActions}
           disabled={actions.length === 0}
         >
-          <span>✕</span> Usuń wszystkie akcje
+          <span>✕</span> Usuń wszystko
         </button>
       </div>
 
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <SortableHeader
-              label="Minuta"
-              sortKey="minute"
-              currentSortKey={sortConfig.key}
-              sortDirection={sortConfig.direction}
-              onSort={handleSort}
-            />
-            <SortableHeader
-              label="Podający"
-              sortKey="sender"
-              currentSortKey={sortConfig.key}
-              sortDirection={sortConfig.direction}
-              onSort={handleSort}
-            />
-            <SortableHeader
-              label="xT Podanie"
-              sortKey="senderXT"
-              currentSortKey={sortConfig.key}
-              sortDirection={sortConfig.direction}
-              onSort={handleSort}
-            />
-            <SortableHeader
-              label="Przyjmujący"
-              sortKey="receiver"
-              currentSortKey={sortConfig.key}
-              sortDirection={sortConfig.direction}
-              onSort={handleSort}
-            />
-            <SortableHeader
-              label="xT Przyjęcie"
-              sortKey="receiverXT"
-              currentSortKey={sortConfig.key}
-              sortDirection={sortConfig.direction}
-              onSort={handleSort}
-            />
-            <SortableHeader
-              label="Typ"
-              sortKey="type"
-              currentSortKey={sortConfig.key}
-              sortDirection={sortConfig.direction}
-              onSort={handleSort}
-            />
-            <SortableHeader
-              label="Packing"
-              sortKey="packing"
-              currentSortKey={sortConfig.key}
-              sortDirection={sortConfig.direction}
-              onSort={handleSort}
-            />
-            <SortableHeader
-              label="Wydarzenia"
-              sortKey="events"
-              currentSortKey={sortConfig.key}
-              sortDirection={sortConfig.direction}
-              onSort={handleSort}
-            />
-            <th>Usuń</th>
-          </tr>
-        </thead>
-        <tbody>
+      <div className={styles.matchesTable}>
+        <div className={styles.tableHeader}>
+          <HeaderCell
+            label="Połowa / Min"
+            sortKey="minute"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <HeaderCell
+            label="Zawodnik start"
+            sortKey="sender"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <HeaderCell
+            label="xT start"
+            sortKey="senderXT"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <HeaderCell
+            label="Zawodnik koniec"
+            sortKey="receiver"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <HeaderCell
+            label="xT koniec"
+            sortKey="receiverXT"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <HeaderCell
+            label="Typ"
+            sortKey="type"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <HeaderCell
+            label="Packing"
+            sortKey="packing"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <div className={styles.headerCell}>Wydarzenia</div>
+          <div className={styles.headerCell}>Usuń</div>
+        </div>
+
+        <div className={styles.tableBody}>
           {sortedActions.length > 0 ? (
             sortedActions.map((action) => (
               <ActionRow
@@ -250,14 +285,12 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
               />
             ))
           ) : (
-            <tr>
-              <td colSpan={9} style={{ textAlign: "center", padding: "20px" }}>
-                Brak akcji do wyświetlenia
-              </td>
-            </tr>
+            <div className={styles.noMatches}>
+              Brak akcji do wyświetlenia
+            </div>
           )}
-        </tbody>
-      </table>
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,9 +1,10 @@
 // src/hooks/useActionsState.ts
 "use client";
 
+import React from 'react';
 import { useState, useEffect, useMemo } from "react";
 import { Action, Player, TeamInfo, Zone } from "@/types"; // Zaktualizowana ścieżka importu
-import { getXTValueForZone } from "@/constants/xtValues"; // Importujemy funkcję do pobrania wartości XT
+import { getXTValueForZone, getZoneData } from "@/constants/xtValues"; // Importujemy funkcję do pobrania wartości XT
 import { XT_VALUES } from "@/constants/xtValues"; // Importujemy XT_VALUES
 
 export function useActionsState(players: Player[], currentMatch: any) {
@@ -20,7 +21,7 @@ export function useActionsState(players: Player[], currentMatch: any) {
   const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
   const [receiverZoneValue, setReceiverZoneValue] = useState<Zone | null>(null);
   const [currentPoints, setCurrentPoints] = useState(0);
-  const [actionMinute, setActionMinute] = useState<number>(0);
+  const [actionMinute, setActionMinute] = useState<number>(1);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedReceiverId, setSelectedReceiverId] = useState<string | null>(
     null
@@ -30,6 +31,7 @@ export function useActionsState(players: Player[], currentMatch: any) {
   const [isShot, setIsShot] = useState(false);
   const [isGoal, setIsGoal] = useState(false);
   const [isPenaltyAreaEntry, setIsPenaltyAreaEntry] = useState(false);
+  const [isSecondHalf, setIsSecondHalf] = useState(false); // false = P1 (pierwsza połowa), true = P2 (druga połowa)
   const [clickValue1, setClickValue1] = useState<number | null>(null);
   const [clickValue2, setClickValue2] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -114,6 +116,22 @@ export function useActionsState(players: Player[], currentMatch: any) {
       return;
     }
 
+    // Wyświetl dodatkowy log dla diagnostyki
+    console.log("handleZoneSelect - przekazane wartości:", {
+      zone,
+      xT,
+      value1,
+      value2,
+      isDribble: value1 !== undefined && value2 !== undefined && value1 === value2
+    });
+
+    // Obliczamy wartość XT na podstawie strefy
+    const row = Math.floor(zone / 12);
+    const col = zone % 12;
+    const calculatedXT = getXTValueForZone(zone);
+
+    console.log("Obliczona wartość xT dla strefy", zone, ":", calculatedXT);
+
     // Jeśli value2 jest określone, oznacza to drugi klik (strefa odbiorcy) lub drybling (gdy value1 == value2)
     const isDribble = value1 !== undefined && value2 !== undefined && value1 === value2;
     
@@ -138,28 +156,35 @@ export function useActionsState(players: Player[], currentMatch: any) {
       setSelectedZone(zone);
     }
     
-    // Ustawiamy wartości clickValue na podstawie strefy 
+    // Ustawiamy wartości clickValue na podstawie strefy
     if (zone !== null) {
-      // Obliczamy wartość XT na podstawie naszego schematu
-      const xtValue = getXTValueForZone(zone);
+      // Używamy przekazanej wartości xT (preferowana) lub obliczonej wartości
+      const xtValue = xT !== undefined ? xT : calculatedXT;
+      console.log("Ustawiam wartości clickValue - xtValue:", xtValue);
       
       // Ustawiamy wartości clickValue dla nadawcy
       if (value1 !== undefined) {
+        console.log("Ustawiam clickValue1 z przekazanej wartości:", value1);
         setClickValue1(value1);
       } else {
+        console.log("Ustawiam clickValue1 z obliczonej wartości XT:", xtValue);
         setClickValue1(xtValue);
       }
       
       // Ustawiamy wartości clickValue dla odbiorcy
       if (value2 !== undefined) {
+        console.log("Ustawiam clickValue2 z przekazanej wartości:", value2);
         setClickValue2(value2);
-      } else if (isDribble) {
+      } else if (isDribble && value1 !== undefined) {
         // Dla dryblingu wartość odbiorcy jest taka sama jak nadawcy
-        setClickValue2(value1 !== undefined ? value1 : xtValue);
+        console.log("Ustawiam clickValue2 dla dryblingu:", value1);
+        setClickValue2(value1);
       } else {
+        console.log("Nie ustawiam clickValue2 na tym etapie");
         setClickValue2(null);
       }
     } else {
+      console.log("Zone jest null - resetuję wartości clickValue");
       setClickValue1(null);
       setClickValue2(null);
     }
@@ -169,17 +194,25 @@ export function useActionsState(players: Player[], currentMatch: any) {
   };
 
   const resetActionState = () => {
-    setSelectedReceiverId(null);
-    setSelectedZone(null);
-    setReceiverZoneValue(null);
+    // Resetujemy tylko wartości formularza, nie resetujemy:
+    // - selectedPlayerId
+    // - selectedReceiverId
+    // - selectedZone
+    // - receiverZoneValue
+    // - isSecondHalf
+    // - clickValue1
+    // - clickValue2
+    
+    // Resetujemy:
     setCurrentPoints(0);
-    setClickValue1(null);
-    setClickValue2(null);
     setActionType("pass");
     setIsP3Active(false);
     setIsShot(false);
     setIsGoal(false);
     setIsPenaltyAreaEntry(false);
+    
+    // Nie resetujemy minuty, żeby nie utrudniać wprowadzania wielu akcji z tego samego momentu
+    console.log("Zresetowano formularz akcji - zachowano wybrane strefy, zawodników i wartości xT");
   };
 
   const handleDeleteAction = async (actionId: string) => {
@@ -244,16 +277,68 @@ export function useActionsState(players: Player[], currentMatch: any) {
     }
   };
 
-  const handleSaveAction = async (matchInfo: TeamInfo | null) => {
+  // Sprawdza aktualną wartość połowy z różnych źródeł dla maksymalnej niezawodności
+  const getCurrentHalfValue = (): boolean => {
+    // Najpierw sprawdzamy localStorage jako najbardziej aktualne źródło
+    if (typeof window !== 'undefined') {
+      const savedHalf = localStorage.getItem('currentHalf');
+      if (savedHalf) {
+        const isP2 = savedHalf === 'P2';
+        console.log(`getCurrentHalfValue - z localStorage: ${savedHalf} (${isP2})`);
+        return isP2;
+      }
+    }
+    
+    // Jeżeli brak wartości w localStorage, używamy stanu
+    console.log(`getCurrentHalfValue - ze stanu aplikacji: ${isSecondHalf ? 'P2' : 'P1'} (${isSecondHalf})`);
+    return isSecondHalf;
+  };
+
+  const handleSaveAction = async (matchInfo: TeamInfo | null, customStartZone?: number | null, customEndZone?: number | null) => {
+    // Pobierz aktualną wartość połowy używając naszej funkcji pomocniczej
+    const currentHalfValue = getCurrentHalfValue();
+    
+    console.log("handleSaveAction - Aktualna połowa:", currentHalfValue ? "P2" : "P1", "(", currentHalfValue, ")");
+    
+    // Dodatkowe logowanie dla diagnozowania problemu
+    console.log("Dane z formularza przed zapisem:", {
+      selectedPlayerId,
+      selectedReceiverId,
+      selectedZone,
+      receiverZoneValue,
+      customStartZone,
+      customEndZone,
+      actionType,
+      actionMinute,
+      currentPoints,
+      isP3Active,
+      isShot,
+      isGoal,
+      isPenaltyAreaEntry,
+      isSecondHalf: currentHalfValue,
+      clickValue1,
+      clickValue2,
+    });
+    
+    console.log("handleSaveAction - wartości:", { 
+      selectedPlayerId,
+      selectedReceiverId,
+      selectedZone,
+      receiverZoneValue,
+      customStartZone,
+      customEndZone,
+      actionType,
+      currentHalfValue
+    });
+     
     if (
       !selectedPlayerId ||
-      selectedZone === null ||
       (actionType === "pass" && !selectedReceiverId)
     ) {
       alert(
         actionType === "pass"
-          ? "Wybierz nadawcę, odbiorcę i strefę boiska!"
-          : "Wybierz zawodnika i strefę boiska!"
+          ? "Wybierz nadawcę i odbiorcę podania!"
+          : "Wybierz zawodnika dryblującego!"
       );
       return false;
     }
@@ -269,9 +354,55 @@ export function useActionsState(players: Player[], currentMatch: any) {
       actionType === "pass"
         ? players.find((p) => p.id === selectedReceiverId)!
         : sender;
+
+    // Używamy dostarczonych wartości stref, jeśli są dostępne
+    const startZoneToUse = customStartZone !== undefined ? customStartZone : selectedZone;
+    const endZoneToUse = customEndZone !== undefined ? customEndZone : receiverZoneValue;
     
-    // Obliczamy wartość XT na podstawie strefy
-    const xtValue = getXTValueForZone(selectedZone);
+    // Dodatkowy log
+    console.log("Wartości stref i xT:", {
+      startZoneToUse,
+      endZoneToUse,
+      clickValue1,
+      clickValue2,
+      isSecondHalf: currentHalfValue
+    });
+
+    // Obliczamy wartości XT z stref, jeśli nie zostały wcześniej ustawione
+    let senderClickValue = clickValue1;
+    let receiverClickValue = clickValue2;
+    
+    // Jeśli startZoneToUse nie jest null i nie mamy wartości clickValue1, obliczamy ją
+    if (startZoneToUse !== null && senderClickValue === null) {
+      senderClickValue = getXTValueForZone(startZoneToUse);
+      console.log(`Obliczono senderClickValue z strefy ${startZoneToUse}: ${senderClickValue}`);
+    }
+    
+    // Podobnie dla endZoneToUse i clickValue2
+    if (endZoneToUse !== null && receiverClickValue === null) {
+      receiverClickValue = getXTValueForZone(endZoneToUse);
+      console.log(`Obliczono receiverClickValue z strefy ${endZoneToUse}: ${receiverClickValue}`);
+    }
+    
+    // Dla dryblingu, jeśli mamy tylko jeden clickValue, używamy go dla obu
+    if (actionType === "dribble" && senderClickValue !== null && receiverClickValue === null) {
+      receiverClickValue = senderClickValue;
+      console.log(`Ustawiono receiverClickValue takie samo jak senderClickValue dla dryblingu: ${receiverClickValue}`);
+    }
+    
+    // Jeśli wciąż nie mamy wartości, ustawiamy na 0 - ale to tylko zabezpieczenie, nie powinno się zdarzać
+    if (senderClickValue === null) {
+      console.warn("Nie udało się obliczyć senderClickValue - ustawiam na 0");
+      senderClickValue = 0;
+    }
+    
+    if (receiverClickValue === null) {
+      console.warn("Nie udało się obliczyć receiverClickValue - ustawiam na 0");
+      receiverClickValue = 0;
+    }
+
+    // Obliczamy wartość XT na podstawie strefy (dla xTValue w bazie danych)
+    const xtValue = startZoneToUse !== null ? getXTValueForZone(startZoneToUse) : 0;
 
     // Użyj bezpiecznej implementacji UUID z zabezpieczeniem przed środowiskiem SSR
     const generateUUID = () => {
@@ -283,56 +414,57 @@ export function useActionsState(players: Player[], currentMatch: any) {
     };
 
     // Znajdź kluczową wartość ze strefy (name z XT_VALUES)
-    const getZoneName = (zone: number): string => {
-      // Obliczanie wiersza i kolumny na podstawie zone
-      const row = Math.floor(zone / 12);
-      const col = zone % 12;
+    const getZoneName = (zone: number | null): string => {
+      // Zabezpieczenie przed null
+      if (zone === null) {
+        console.error("getZoneName otrzymało null zamiast numeru strefy!");
+        return "unknown";
+      }
       
-      // Mapujemy indeksy wierszy na litery
-      const rowLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+      // Używamy funkcji z xtValues.ts do pobrania nazwy strefy
+      const zoneName = getZoneData(zone)?.name;
       
-      // Sprawdzamy czy indeksy są w zakresie
-      if (row >= 0 && row < 8 && col >= 0 && col < 12) {
-        const rowLetter = rowLetters[row];
-        const colNumber = col + 1;
-        
-        // Tworzymy klucz w formacie a1, b2, c3 itd.
-        const key = `${rowLetter}${colNumber}` as keyof typeof XT_VALUES;
-        
-        // Zwracamy wartość name dla danej pozycji (np. "A1", "B2", "C3" itp.)
-        return XT_VALUES[key]?.name || `zone${zone}`;
+      if (zoneName) {
+        // Konwertujemy tablicę [litera, numer] na format JSON do zapisania w bazie danych
+        return JSON.stringify(zoneName);
       }
       
       return `zone${zone}`;
     };
 
-    // Określamy wartość dla pola senderZone - zawsze jest to strefa nadawcy
-    const senderZoneName = getZoneName(selectedZone);
+    // Określamy wartość dla pola startZone - zawsze jest to strefa początkowa akcji
+    const startZoneName = getZoneName(startZoneToUse);
     
     // Logowanie stanu przed utworzeniem akcji
     console.log("Przygotowanie do zapisania akcji:", {
       actionType,
-      selectedZone,
-      receiverZoneValue,
+      startZoneToUse,
+      endZoneToUse,
       isDrybling: actionType === "dribble"
     });
     
-    // Określamy wartość dla pola receiverZone
-    let receiverZoneName: string | null = null;
+    // Określamy wartość dla pola endZone
+    let endZoneName: string | null = null;
     
-    if (receiverZoneValue !== null) {
+    if (endZoneToUse !== null) {
       // Używamy receiverZoneValue niezależnie od typu akcji
       // Dla dryblingu będzie to strefa przesunięta w prawo
       // Dla podania będzie to strefa drugiego kliknięcia
-      receiverZoneName = getZoneName(receiverZoneValue);
+      endZoneName = getZoneName(endZoneToUse);
     }
     
     // Logowanie obliczonych wartości dla stref
     console.log("Obliczone wartości stref:", {
-      senderZoneName,
-      receiverZoneName,
+      startZoneName,
+      endZoneName,
       isDrybling: actionType === "dribble"
     });
+
+    // Przed utworzeniem akcji, ponownie sprawdzamy aktualną wartość połowy
+    // aby być absolutnie pewnym, że używamy aktualnej wartości
+    const finalHalfValue = getCurrentHalfValue();
+    
+    console.log("Finalna wartość połowy przed utworzeniem akcji:", finalHalfValue ? "P2" : "P1");
 
     const newAction: Action = {
       id: generateUUID(),
@@ -340,14 +472,14 @@ export function useActionsState(players: Player[], currentMatch: any) {
       senderId: sender.id,
       senderName: sender.name,
       senderNumber: sender.number,
-      senderClickValue: clickValue1 || 0,
+      senderClickValue: senderClickValue,
       receiverId: receiver.id,
       receiverName: receiver.name,
       receiverNumber: receiver.number,
-      receiverClickValue: clickValue2 || 0,
+      receiverClickValue: receiverClickValue,
       // Używamy wcześniej obliczonych wartości
-      senderZone: senderZoneName, // Strefa początkowa (start)
-      receiverZone: receiverZoneName, // Strefa końcowa (end) - null dla dryblingu
+      startZone: startZoneName,
+      endZone: endZoneName,
       packingPoints: currentPoints,
       actionType,
       xTValue: xtValue,
@@ -355,14 +487,33 @@ export function useActionsState(players: Player[], currentMatch: any) {
       isShot,
       isGoal,
       isPenaltyAreaEntry,
+      isSecondHalf: finalHalfValue, // Używamy ostatecznej wartości
       matchId: matchInfo.matchId,
     };
 
     console.log("Zapisuję akcję:", { 
       actionType,
-      senderZone: newAction.senderZone, 
-      receiverZone: newAction.receiverZone,
-      isDrybling: actionType === "dribble"
+      startZone: newAction.startZone, 
+      endZone: newAction.endZone,
+      isDrybling: actionType === "dribble",
+      xTValues: {
+        senderClickValue: newAction.senderClickValue,
+        receiverClickValue: newAction.receiverClickValue,
+      },
+      isSecondHalf: newAction.isSecondHalf,
+    });
+
+    // Logujemy dane akcji do konsoli
+    console.log("Finalne dane zapisywanej akcji:", {
+      id: newAction.id,
+      senderId: newAction.senderId,
+      receiverId: newAction.receiverId,
+      actionType: newAction.actionType,
+      isSecondHalf: newAction.isSecondHalf,
+      senderClickValue: newAction.senderClickValue,
+      receiverClickValue: newAction.receiverClickValue,
+      minute: newAction.minute,
+      packingPoints: newAction.packingPoints
     });
 
     try {
@@ -372,8 +523,8 @@ export function useActionsState(players: Player[], currentMatch: any) {
       // Logowanie bezpośrednio przed wysłaniem danych do API
       console.log("Wysyłanie do API:", {
         actionType: newAction.actionType,
-        senderZone: newAction.senderZone,
-        receiverZone: newAction.receiverZone
+        startZone: newAction.startZone,
+        endZone: newAction.endZone
       });
       
       // Wyślij akcję na serwer
@@ -402,6 +553,44 @@ export function useActionsState(players: Player[], currentMatch: any) {
     }
   };
 
+  // Wrapper dla setIsSecondHalf z dodatkowym logowaniem
+  const handleSetIsSecondHalf = (value: boolean | ((prevState: boolean) => boolean)) => {
+    const newValue = typeof value === 'function' ? value(isSecondHalf) : value;
+    
+    console.log("useActionsState - ustawiam połowę na:", 
+      newValue ? "P2" : "P1", 
+      "obecna wartość:", isSecondHalf);
+    
+    // Najpierw zaktualizujmy stan lokalny
+    setIsSecondHalf(newValue);
+    
+    // Dodajemy dodatkowe debugowanie
+    console.log(`Wartość isSecondHalf po aktualizacji będzie: ${newValue ? 'P2 (true)' : 'P1 (false)'}`);
+    
+    // Sprawdzamy, czy localStorage jest dostępne
+    if (typeof window !== 'undefined') {
+      // Zapisujemy wartość w localStorage dla dodatkowego zabezpieczenia
+      try {
+        localStorage.setItem('currentHalf', newValue ? 'P2' : 'P1');
+        console.log(`Zapisano wartość połowy w localStorage: ${newValue ? 'P2' : 'P1'}`);
+      } catch (err) {
+        console.error('Nie można zapisać wartości połowy w localStorage:', err);
+      }
+    }
+  };
+
+  // Przy inicjalizacji komponentu, sprawdzamy, czy jest zapisana wartość w localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedHalf = localStorage.getItem('currentHalf');
+      if (savedHalf) {
+        const isP2 = savedHalf === 'P2';
+        console.log(`Wczytano wartość połowy z localStorage: ${savedHalf}`);
+        setIsSecondHalf(isP2);
+      }
+    }
+  }, []);
+
   return {
     actions: filteredActions, // Zwracaj przefiltrowane akcje
     allActions: actions, // Dodajemy dostęp do wszystkich akcji w razie potrzeby
@@ -416,6 +605,7 @@ export function useActionsState(players: Player[], currentMatch: any) {
     isShot,
     isGoal,
     isPenaltyAreaEntry,
+    isSecondHalf,
     isLoading,
     error,
     setSelectedPlayerId,
@@ -429,6 +619,7 @@ export function useActionsState(players: Player[], currentMatch: any) {
     setIsShot,
     setIsGoal,
     setIsPenaltyAreaEntry,
+    setIsSecondHalf: handleSetIsSecondHalf,
     handleSaveAction,
     handleDeleteAction,
     handleDeleteAllActions,

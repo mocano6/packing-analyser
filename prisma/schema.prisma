@@ -81,11 +81,12 @@ model ActionsPacking {
   isShot             Boolean
   isGoal             Boolean
   isPenaltyAreaEntry Boolean?
+  isSecondHalf       Boolean? @default(false)
   matchId            String
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
-  senderZone         String?
-  receiverZone       String?
+  startZone          String?
+  endZone            String?
   match              Match    @relation(fields: [matchId], references: [id])
   receiver           Player   @relation("ActionReceiver", fields: [receiverId], references: [id])
   sender             Player   @relation("ActionSender", fields: [senderId], references: [id])
