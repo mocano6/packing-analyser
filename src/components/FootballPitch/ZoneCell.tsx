@@ -1,7 +1,7 @@
 // components/FootballPitch/ZoneCell.tsx
 "use client";
 
-import React, { memo, useEffect } from "react";
+import React, { memo, useEffect, useMemo } from "react";
 import styles from "./FootballPitch.module.css";
 import { getXTColor } from "./utils";
 
@@ -30,6 +30,14 @@ const ZoneCell = memo(function ZoneCell({
     return "";
   };
 
+  // Określamy kategorię wartości xT
+  const xtValueCategory = useMemo(() => {
+    if (xTValue >= 0.1) return "extreme";
+    if (xTValue >= 0.04) return "veryhigh";
+    if (xTValue >= 0.02) return "high";
+    return "";
+  }, [xTValue]);
+
   const handleClick = () => {
     console.log(`Kliknięto strefę ${zoneIndex} z wartością xT: ${xTValue.toFixed(3)}`);
     onSelect(zoneIndex);
@@ -47,9 +55,11 @@ const ZoneCell = memo(function ZoneCell({
     }
   }, [zoneIndex, isFirstSelection, isSecondSelection, xTValue]);
 
+  const cellClassName = `${styles.zoneCell} ${getSelectionClass()}`;
+
   return (
     <div
-      className={`${styles.zoneCell} ${getSelectionClass()}`}
+      className={cellClassName}
       onClick={handleClick}
       style={{
         backgroundColor: getXTColor(xTValue),
@@ -58,7 +68,7 @@ const ZoneCell = memo(function ZoneCell({
       aria-selected={isSelected || isFirstSelection || isSecondSelection}
       tabIndex={0}
       data-zone-index={zoneIndex}
-      data-xt-value={xTValue.toFixed(3)}
+      data-xt-value={xtValueCategory}
       data-selection-type={isFirstSelection ? "pass" : isSecondSelection ? "receive" : "none"}
     >
       {!isFirstSelection && !isSecondSelection && (

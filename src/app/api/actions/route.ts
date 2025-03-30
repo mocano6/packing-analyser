@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
       packingPoints: true,
       actionType: true,
       xTValue: true,
+      PxT: true,
       isP3: true,
       isShot: true,
       isGoal: true,
@@ -158,6 +159,8 @@ export async function POST(request: NextRequest) {
         actionType: body.actionType,
         packingPoints: body.packingPoints,
         xTValue: body.xTValue,
+        // @ts-ignore - To pole istnieje w schemacie bazy danych, ale typy TS nie zostały jeszcze zaktualizowane
+        PxT: body.PxT,
         isP3: body.isP3,
         isShot: body.isShot,
         isGoal: body.isGoal,

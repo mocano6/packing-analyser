@@ -144,26 +144,18 @@ const ActionModal: React.FC<ActionModalProps> = ({
   };
 
   const handleSecondHalfToggle = (value: boolean) => {
-    console.log("ActionModal - KLIKNIĘTO przycisk połowy:", value ? "P2" : "P1", "aktualna wartość:", isSecondHalf);
+    onSecondHalfToggle(value);
     
-    // Zapisujemy wartość bezpośrednio w localStorage dla natychmiastowego efektu
-    localStorage.setItem('currentHalf', value ? 'P2' : 'P1');
-    
-    console.log(`ActionModal - po kliknięciu, zapisano w localStorage: ${value ? 'P2' : 'P1'}`);
-    
-    // Sprawdzamy, czy faktycznie wartość się zmienia
-    if (value !== isSecondHalf) {
-      console.log("Aktualizuję stan isSecondHalf na:", value ? "P2 (true)" : "P1 (false)");
-      onSecondHalfToggle(value);
-      
-      // Dodatkowe sprawdzenie po zmienne aby zobaczyć, czy wartość stanu została zaktualizowana
-      setTimeout(() => {
-        const currentSavedValue = localStorage.getItem('currentHalf');
-        console.log("Po aktualizacji - localStorage:", currentSavedValue, "stan isSecondHalf:", isSecondHalf ? "P2 (true)" : "P1 (false)");
-      }, 100);
-    } else {
-      console.log("Wartość isSecondHalf nie zmieniła się");
+    // Jeśli włączamy drugą połowę, a minuta jest mniejsza niż 46, ustawiamy na 46
+    if (value && actionMinute < 46) {
+      onMinuteChange(46);
     }
+    // Jeśli włączamy pierwszą połowę, a minuta jest większa niż 65, ustawiamy na 45
+    else if (!value && actionMinute > 65) {
+      onMinuteChange(45);
+    }
+    
+    console.log(`Zmieniono połowę na: ${value ? 'P2' : 'P1'}`);
   };
 
   const handleSave = async () => {
@@ -382,8 +374,8 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 type="number"
                 value={actionMinute}
                 onChange={handleMinuteChange}
-                min="1"
-                max="130"
+                min={isSecondHalf ? 46 : 1}
+                max={isSecondHalf ? 130 : 65}
               />
             </div>
             

@@ -77,6 +77,7 @@ model ActionsPacking {
   packingPoints      Int
   actionType         String
   xTValue            Float
+  PxT                Float?
   isP3               Boolean
   isShot             Boolean
   isGoal             Boolean
@@ -85,8 +86,8 @@ model ActionsPacking {
   matchId            String
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
-  startZone          String?
-  endZone            String?
+  startZone          String?  @map("startZone")
+  endZone            String?  @map("endZone")
   match              Match    @relation(fields: [matchId], references: [id])
   receiver           Player   @relation("ActionReceiver", fields: [receiverId], references: [id])
   sender             Player   @relation("ActionSender", fields: [senderId], references: [id])

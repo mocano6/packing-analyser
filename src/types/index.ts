@@ -61,6 +61,7 @@ export interface ActionsPacking {
   packingPoints: number;
   actionType: "pass" | "dribble";
   xTValue: number;
+  PxT?: number;               // Wartość mnożenia packingPoints i xTValue
   isP3: boolean;
   isShot: boolean;
   isGoal: boolean;

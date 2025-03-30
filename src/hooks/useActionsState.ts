@@ -401,8 +401,13 @@ export function useActionsState(players: Player[], currentMatch: any) {
       receiverClickValue = 0;
     }
 
-    // Obliczamy wartość XT na podstawie strefy (dla xTValue w bazie danych)
-    const xtValue = startZoneToUse !== null ? getXTValueForZone(startZoneToUse) : 0;
+    // Obliczamy wartość XT jako różnicę między receiverClickValue i senderClickValue
+    const xtValue = parseFloat((receiverClickValue - senderClickValue).toFixed(3));
+    console.log(`Obliczono xTValue jako różnicę: ${receiverClickValue} - ${senderClickValue} = ${xtValue}`);
+
+    // Obliczanie PxT jako iloczyn packingPoints i xTValue
+    const PxT = parseFloat((currentPoints * xtValue).toFixed(3));
+    console.log(`Obliczono PxT jako iloczyn: ${currentPoints} * ${xtValue} = ${PxT}`);
 
     // Użyj bezpiecznej implementacji UUID z zabezpieczeniem przed środowiskiem SSR
     const generateUUID = () => {
@@ -483,6 +488,7 @@ export function useActionsState(players: Player[], currentMatch: any) {
       packingPoints: currentPoints,
       actionType,
       xTValue: xtValue,
+      PxT: PxT,
       isP3: isP3Active,
       isShot,
       isGoal,

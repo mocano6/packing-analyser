@@ -10,11 +10,11 @@
 .pitch {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #2e7d32 0%, #388e3c 100%);
+  background: #328396;
   border-radius: 12px;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
 }
 
 .grid {
@@ -28,7 +28,7 @@
 }
 
 .zoneCell {
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -36,16 +36,17 @@
   transition: all 0.2s ease-out;
   position: relative;
 }
+
 .zoneCell.firstSelection {
-  border: 2px solid #2196f3; /* niebieski dla pierwszego wyboru */
-  background-color: rgba(33, 150, 243, 0.3) !important;
-  box-shadow: inset 0 0 8px rgba(33, 150, 243, 0.2);
+  border: 2px solid #2196F3; /* niebieski dla pierwszego wyboru */
+  background-color: rgba(33, 150, 243, 0.25) !important;
+  box-shadow: inset 0 0 6px rgba(33, 150, 243, 0.15);
 }
 
 .zoneCell.secondSelection {
-  border: 2px solid #f44336; /* czerwony dla drugiego wyboru */
-  background-color: rgba(244, 67, 54, 0.3) !important;
-  box-shadow: inset 0 0 8px rgba(244, 67, 54, 0.2);
+  border: 2px solid #FF5252; /* czerwony dla drugiego wyboru */
+  background-color: rgba(255, 82, 82, 0.25) !important;
+  box-shadow: inset 0 0 6px rgba(255, 82, 82, 0.15);
 }
 
 .zoneCell:hover {
@@ -56,13 +57,13 @@
 .zoneCell.selected {
   border: 2px solid rgba(255, 255, 255, 0.9);
   background-color: rgba(255, 255, 255, 0.3) !important;
-  box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 0 6px rgba(255, 255, 255, 0.2);
 }
 
 .xTValue {
   font-size: 0.8vw;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 1);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
   opacity: 0;
   transition: opacity 0.2s ease-in-out;
   font-weight: 500;
@@ -88,9 +89,9 @@
   top: 0;
   width: 2px;
   height: 100%;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 1);
   transform: translateX(-50%);
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
 }
 
 .centerCircle {
@@ -99,10 +100,10 @@
   top: 50%;
   width: 20%;
   height: 30%;
-  border: 2px solid rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(255, 255, 255, 1);
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
 }
 
 /* Lewa strona */
@@ -112,9 +113,9 @@
   top: 20%;
   width: 16.6%;
   height: 60%;
-  border: 2px solid rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(255, 255, 255, 1);
   border-left: none;
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
 }
 
 .goalAreaLeft {
@@ -123,9 +124,9 @@
   top: 35%;
   width: 5.5%;
   height: 30%;
-  border: 2px solid rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(255, 255, 255, 1);
   border-left: none;
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
 }
 
 /* Prawa strona */
@@ -135,9 +136,9 @@
   top: 20%;
   width: 16.6%;
   height: 60%;
-  border: 2px solid rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(255, 255, 255, 1);
   border-right: none;
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
 }
 
 .goalAreaRight {
@@ -146,23 +147,23 @@
   top: 35%;
   width: 5.5%;
   height: 30%;
-  border: 2px solid rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(255, 255, 255, 1);
   border-right: none;
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
 }
 
 .firstSelection {
-  background-color: rgba(33, 150, 243, 0.4) !important;
+  background-color: rgba(33, 150, 243, 0.35) !important;
   border: 2px solid rgba(33, 150, 243, 0.9) !important;
-  box-shadow: 0 0 10px rgba(33, 150, 243, 0.6);
+  box-shadow: 0 0 8px rgba(33, 150, 243, 0.5);
   z-index: 10;
   transition: all 0.2s ease-in-out;
 }
 
 .secondSelection {
-  background-color: rgba(244, 67, 54, 0.4) !important;
-  border: 2px solid rgba(244, 67, 54, 0.9) !important;
-  box-shadow: 0 0 10px rgba(244, 67, 54, 0.6);
+  background-color: rgba(255, 82, 82, 0.35) !important;
+  border: 2px solid rgba(255, 82, 82, 0.9) !important;
+  box-shadow: 0 0 8px rgba(255, 82, 82, 0.5);
   z-index: 10;
   transition: all 0.2s ease-in-out;
 }
@@ -170,10 +171,10 @@
 .actionText {
   font-size: 0.9vw;
   color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
-  font-weight: 700;
-  letter-spacing: 1px;
-  background-color: rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  background-color: rgba(0, 0, 0, 0.35);
   padding: 3px 6px;
   border-radius: 4px;
   pointer-events: none;
@@ -182,11 +183,11 @@
 @keyframes pulseText {
   from {
     opacity: 0.8;
-    transform: scale(0.95);
+    transform: scale(0.97);
   }
   to {
     opacity: 1;
-    transform: scale(1.05);
+    transform: scale(1.03);
   }
 }
 
