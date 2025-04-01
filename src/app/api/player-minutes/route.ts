@@ -2,6 +2,9 @@ import { prisma } from "@/app/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { PlayerMinutes } from "@/types";
 
+// Wymagane dla trybu "export"
+export const dynamic = "force-dynamic";
+
 // POST - Zapisywanie/aktualizacja minut gry zawodników w meczu
 export async function POST(request: NextRequest) {
   try {

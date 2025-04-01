@@ -1,6 +1,9 @@
 import { prisma } from "@/app/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
+// Wymagane dla trybu "export"
+export const dynamic = "force-dynamic";
+
 // POST - Tworzenie nowego meczu lub aktualizacja istniejącego
 export async function POST(request: NextRequest) {
   try {

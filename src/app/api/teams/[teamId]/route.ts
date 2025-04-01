@@ -1,6 +1,9 @@
 import { prisma } from "@/app/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
+// Wymagane dla trybu "export"
+export const dynamic = "force-dynamic";
+
 // GET - Pobieranie konkretnej drużyny z zawodnikami
 export async function GET(
   request: NextRequest,

@@ -2,6 +2,9 @@ import { prisma } from "@/app/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { Action } from "@/types";
 
+// Wymagane dla trybu "export"
+export const dynamic = "force-dynamic";
+
 // GET - Pobieranie akcji dla określonego meczu
 export async function GET(request: NextRequest) {
   try {
