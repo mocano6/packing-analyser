@@ -179,8 +179,8 @@
 .pass {
   display: inline-block;
   padding: 4px 8px;
-  background-color: #dcfce7; /* Zielony kolor dla podania */
-  color: #166534;
+  background-color: #2196f340;
+  color: #110b55;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;

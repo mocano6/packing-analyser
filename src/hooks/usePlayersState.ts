@@ -35,12 +35,30 @@ export function usePlayersState() {
   useEffect(() => {
     const fetchPlayers = async () => {
       try {
-        const response = await fetch('/api/players');
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+        const username = process.env.NEXT_PUBLIC_AUTH_USERNAME || "rakow";
+        const password = process.env.NEXT_PUBLIC_AUTH_PASSWORD || "napakowaniRakow";
+        const credentials = btoa(`${username}:${password}`);
+        
+        const response = await fetch(`${API_URL}/api/players`, {
+          method: 'GET',
+          mode: 'cors',
+          credentials: 'include',
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        });
+        
         if (response.ok) {
           const data = await response.json();
+          console.log('Pobrani zawodnicy:', data);
           setPlayers(data);
         } else {
-          console.error('Failed to fetch players from API');
+          const errorText = await response.text();
+          console.error('Failed to fetch players from API:', response.status, errorText);
+          throw new Error(`HTTP error: ${response.status}`);
         }
       } catch (error) {
         console.error('Error fetching players:', error);
@@ -70,9 +88,21 @@ export function usePlayersState() {
       window.confirm("Czy na pewno chcesz usunąć tego zawodnika?")
     ) {
       try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+        const username = process.env.NEXT_PUBLIC_AUTH_USERNAME || "rakow";
+        const password = process.env.NEXT_PUBLIC_AUTH_PASSWORD || "napakowaniRakow";
+        const credentials = btoa(`${username}:${password}`);
+        
         // Usuń zawodnika przez API
-        const response = await fetch(`/api/players/${playerId}`, {
+        const response = await fetch(`${API_URL}/api/players/${playerId}`, {
           method: 'DELETE',
+          mode: 'cors',
+          credentials: 'include',
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
         });
 
         if (response.ok) {
@@ -80,7 +110,8 @@ export function usePlayersState() {
           setPlayers((prev) => prev.filter((p) => p.id !== playerId));
           return true;
         } else {
-          console.error('Failed to delete player via API');
+          const errorText = await response.text();
+          console.error('Failed to delete player via API:', response.status, errorText);
           alert('Wystąpił błąd podczas usuwania zawodnika. Spróbuj ponownie.');
           return false;
         }
@@ -96,25 +127,38 @@ export function usePlayersState() {
   const handleSavePlayer = useCallback(
     async (playerData: Omit<Player, "id">) => {
       try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+        const username = process.env.NEXT_PUBLIC_AUTH_USERNAME || "rakow";
+        const password = process.env.NEXT_PUBLIC_AUTH_PASSWORD || "napakowaniRakow";
+        const credentials = btoa(`${username}:${password}`);
+        
         if (editingPlayerId) {
           // Aktualizuj istniejącego zawodnika
-          const response = await fetch(`/api/players/${editingPlayerId}`, {
+          const response = await fetch(`${API_URL}/api/players/${editingPlayerId}`, {
             method: 'PUT',
+            mode: 'cors',
+            credentials: 'include',
             headers: {
+              'Authorization': `Basic ${credentials}`,
               'Content-Type': 'application/json',
+              'Accept': 'application/json'
             },
             body: JSON.stringify(playerData),
           });
 
           if (response.ok) {
             const updatedPlayer = await response.json();
+            console.log('Zaktualizowany zawodnik:', updatedPlayer);
             setPlayers((prev) =>
               prev.map((player) =>
                 player.id === editingPlayerId ? updatedPlayer : player
               )
             );
           } else {
-            console.error('Failed to update player via API');
+            const errorText = await response.text();
+            console.error('Failed to update player via API:', response.status, errorText);
+            alert(`Błąd podczas aktualizacji zawodnika: ${response.status}`);
+            
             // Lokalnie aktualizuj jako fallback
             setPlayers((prev) =>
               prev.map((player) =>
@@ -126,21 +170,36 @@ export function usePlayersState() {
           }
         } else {
           // Utwórz nowego zawodnika
-          const response = await fetch('/api/players', {
+          const response = await fetch(`${API_URL}/api/players`, {
             method: 'POST',
+            mode: 'cors',
+            credentials: 'include',
             headers: {
+              'Authorization': `Basic ${credentials}`,
               'Content-Type': 'application/json',
+              'Accept': 'application/json'
             },
             body: JSON.stringify(playerData),
           });
 
           if (response.ok) {
             const newPlayer = await response.json();
+            console.log('Nowy zawodnik:', newPlayer);
             setPlayers((prev) => [...prev, newPlayer]);
           } else {
-            const errorData = await response.json();
-            console.error('Failed to create player via API:', errorData.error);
-            alert(`Błąd podczas tworzenia zawodnika: ${errorData.error}`);
+            const errorText = await response.text();
+            let errorMessage = `Błąd HTTP: ${response.status}`;
+            
+            try {
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.error || errorMessage;
+            } catch (e) {
+              // Jeśli nie możemy sparsować JSON, używamy tekstu błędu
+              errorMessage = errorText || errorMessage;
+            }
+            
+            console.error('Failed to create player via API:', errorMessage);
+            alert(`Błąd podczas tworzenia zawodnika: ${errorMessage}`);
             
             // Lokalnie dodaj jako fallback tylko jeśli API nie zwróciło błędu
             if (response.status >= 500) {

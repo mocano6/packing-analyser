@@ -36,14 +36,31 @@ export function useMatchInfo() {
       setIsLoading(true);
       setError(null);
       
-      const url = teamId ? `/api/match?teamId=${teamId}` : '/api/match';
-      const response = await fetch(url);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+      const username = process.env.NEXT_PUBLIC_AUTH_USERNAME || "rakow";
+      const password = process.env.NEXT_PUBLIC_AUTH_PASSWORD || "napakowaniRakow";
+      const credentials = btoa(`${username}:${password}`);
+      
+      const url = teamId ? `${API_URL}/api/matches?teamId=${teamId}` : `${API_URL}/api/matches`;
+      const response = await fetch(url, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'include',
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Error fetching matches: ${response.status}`, errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const matchesData = await response.json();
+      console.log('Pobrane mecze:', matchesData);
       
       setAllMatches(matchesData);
       
@@ -84,7 +101,12 @@ export function useMatchInfo() {
       setIsLoading(true);
       setError(null);
       
-      const url = '/api/match';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+      const username = process.env.NEXT_PUBLIC_AUTH_USERNAME || "rakow";
+      const password = process.env.NEXT_PUBLIC_AUTH_PASSWORD || "napakowaniRakow";
+      const credentials = btoa(`${username}:${password}`);
+      
+      const url = `${API_URL}/api/matches`;
       // Zawsze używamy metody POST
       const method = 'POST';
       
@@ -94,8 +116,12 @@ export function useMatchInfo() {
       
       const response = await fetch(url, {
         method,
+        mode: 'cors',
+        credentials: 'include',
         headers: {
+          'Authorization': `Basic ${credentials}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify(info),
       });
@@ -140,10 +166,19 @@ export function useMatchInfo() {
       setIsLoading(true);
       setError(null);
       
-      const response = await fetch('/api/player-minutes', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+      const username = process.env.NEXT_PUBLIC_AUTH_USERNAME || "rakow";
+      const password = process.env.NEXT_PUBLIC_AUTH_PASSWORD || "napakowaniRakow";
+      const credentials = btoa(`${username}:${password}`);
+      
+      const response = await fetch(`${API_URL}/api/player-minutes`, {
         method: 'POST',
+        mode: 'cors',
+        credentials: 'include',
         headers: {
+          'Authorization': `Basic ${credentials}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
           matchId: match.matchId,
@@ -152,6 +187,8 @@ export function useMatchInfo() {
       });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error saving player minutes:', response.status, errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
@@ -186,11 +223,25 @@ export function useMatchInfo() {
         setIsLoading(true);
         setError(null);
         
-        const response = await fetch(`/api/match?id=${matchId}`, {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+        const username = process.env.NEXT_PUBLIC_AUTH_USERNAME || "rakow";
+        const password = process.env.NEXT_PUBLIC_AUTH_PASSWORD || "napakowaniRakow";
+        const credentials = btoa(`${username}:${password}`);
+        
+        const response = await fetch(`${API_URL}/api/matches?id=${matchId}`, {
           method: 'DELETE',
+          mode: 'cors',
+          credentials: 'include',
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
         });
         
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error deleting match:', response.status, errorText);
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         

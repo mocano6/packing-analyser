@@ -10,7 +10,7 @@
 .pitch {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
+  background: #bcbcbc;
   border-radius: 12px;
   position: relative;
   overflow: hidden;
@@ -178,6 +178,7 @@
   padding: 3px 6px;
   border-radius: 4px;
   pointer-events: none;
+  position: absolute;
 }
 
 @keyframes pulseText {
