@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma } from "@/app/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
 // GET - Pobieranie wszystkich meczów lub meczów dla określonego zespołu
