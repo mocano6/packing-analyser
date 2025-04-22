@@ -15,9 +15,24 @@
 /* Styl dla kontenera przycisków */
 .buttonsContainer {
   display: flex;
-  gap: 12px;
-  margin-top: 10px;
+  gap: 10px;
+  margin-top: 20px;
   margin-bottom: 20px;
-  justify-content: flex-start;
-  align-items: center;
+}
+
+.logoutButton {
+  padding: 10px 16px;
+  background-color: #fee2e2;
+  color: #dc2626;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logoutButton:hover {
+  background-color: #fecaca;
+  transform: translateY(-1px);
 }

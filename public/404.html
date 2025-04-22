@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Przekierowywanie...</title>
+  <script>
+    // Przekierowanie do strony głównej z zachowaniem ścieżki
+    var pathSegmentsToKeep = 1; // Zachowaj tylko nazwę repozytorium w URL
+    var l = window.location;
+    l.replace(
+      l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+      l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?p=/' +
+      l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+      (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+      l.hash
+    );
+  </script>
+</head>
+<body>
+  <h1>Przekierowywanie...</h1>
+  <p>Jeśli nie zostałeś automatycznie przekierowany, kliknij <a href="/">tutaj</a>.</p>
+</body>
+</html> 

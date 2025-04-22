@@ -18,6 +18,7 @@ import OfflineStatus from '@/components/OfflineStatus/OfflineStatus';
 import ExportButton from "@/components/ExportButton/ExportButton";
 import ImportButton from "@/components/ImportButton/ImportButton";
 import { initializeTeams, checkTeamsCollection } from "@/utils/initializeTeams";
+import { useAuth } from "@/hooks/useAuth";
 
 // Rozszerzenie interfejsu Window
 declare global {
@@ -130,6 +131,8 @@ export default function Page() {
     handleDeleteAllActions,
     resetActionState,
   } = packingActions;
+
+  const { logout } = useAuth();
 
   // Gdy hookSelectedZone się zmienia, aktualizujemy lokalny selectedZone
   useEffect(() => {
@@ -886,6 +889,14 @@ export default function Page() {
     setupTeamsCollection();
   }, []); // Wykonaj tylko raz przy montowaniu komponentu
 
+  // Funkcja obsługująca wylogowanie
+  const handleLogout = () => {
+    if (window.confirm("Czy na pewno chcesz się wylogować?")) {
+      logout();
+      // Router przekieruje do strony logowania automatycznie przez AuthGuard
+    }
+  };
+
   return (
     <div className={styles.container}>
         <Instructions />
@@ -950,7 +961,6 @@ export default function Page() {
           actions={actions}
           players={filteredPlayers}
           onDeleteAction={handleDeleteAction}
-          onDeleteAllActions={onDeleteAllActions}
         />
 
         <PlayerModal
@@ -1009,6 +1019,13 @@ export default function Page() {
             onImportSuccess={handleImportSuccess}
             onImportError={handleImportError}
           />
+          <button 
+            onClick={handleLogout}
+            className={styles.logoutButton}
+            title="Wyloguj się z aplikacji"
+          >
+            Wyloguj
+          </button>
         </div>
 
         <OfflineStatus />
