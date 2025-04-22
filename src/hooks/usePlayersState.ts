@@ -3,6 +3,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Player } from "../types";
+import { db } from "../lib/firebase";
+import { 
+  collection, getDocs, addDoc, updateDoc, 
+  deleteDoc, doc, query, where, writeBatch 
+} from "firebase/firestore";
 
 // Helper do generowania ID (alternatywa dla crypto.randomUUID())
 const generateId = () => {
@@ -13,214 +18,152 @@ const generateId = () => {
 };
 
 export function usePlayersState() {
-  // Inicjalizacja z localStorage z obsługą SSR
-  const [players, setPlayers] = useState<Player[]>(() => {
-    // Wykonujemy to tylko po stronie klienta
-    if (typeof window !== "undefined") {
-      try {
-        const savedPlayers = localStorage.getItem("players");
-        return savedPlayers ? JSON.parse(savedPlayers) : [];
-      } catch (error) {
-        console.error("Failed to parse players from localStorage:", error);
-        return [];
-      }
-    }
-    return [];
-  });
-
+  // Inicjalizacja stanu
+  const [players, setPlayers] = useState<Player[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Pobierz zawodników z API podczas inicjalizacji
+  // Pobierz zawodników z Firebase podczas inicjalizacji
   useEffect(() => {
     const fetchPlayers = async () => {
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
-        const username = process.env.NEXT_PUBLIC_AUTH_USERNAME || "rakow";
-        const password = process.env.NEXT_PUBLIC_AUTH_PASSWORD || "napakowaniRakow";
-        const credentials = btoa(`${username}:${password}`);
+        setIsLoading(true);
+        const playersCollection = collection(db, "players");
+        const playersSnapshot = await getDocs(playersCollection);
         
-        const response = await fetch(`${API_URL}/api/players`, {
-          method: 'GET',
-          mode: 'cors',
-          credentials: 'include',
-          headers: {
-            'Authorization': `Basic ${credentials}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Pobrani zawodnicy:', data);
-          setPlayers(data);
+        if (!playersSnapshot.empty) {
+          const playersList = playersSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as Player[];
+          
+          console.log('Zawodnicy pobrani z Firebase:', playersList);
+          setPlayers(playersList);
         } else {
-          const errorText = await response.text();
-          console.error('Failed to fetch players from API:', response.status, errorText);
-          throw new Error(`HTTP error: ${response.status}`);
+          console.log('Brak zawodników w Firebase - sprawdzam localStorage');
+          
+          // Sprawdź dane w localStorage jako fallback
+          if (typeof window !== "undefined") {
+            try {
+              const savedPlayers = localStorage.getItem("players");
+              if (savedPlayers) {
+                const localPlayers = JSON.parse(savedPlayers) as Player[];
+                setPlayers(localPlayers);
+                
+                // Możesz opcjonalnie dodać zapisanie tych danych do Firebase
+                console.log('Zapisuję zawodników z localStorage do Firebase...');
+                const batch = writeBatch(db);
+                
+                localPlayers.forEach(player => {
+                  const playerRef = doc(collection(db, "players"));
+                  batch.set(playerRef, {
+                    name: player.name,
+                    number: player.number,
+                    position: player.position || "",
+                    birthYear: player.birthYear,
+                    imageUrl: player.imageUrl,
+                    teams: player.teams || []
+                  });
+                });
+                
+                await batch.commit();
+                console.log('Zawodnicy z localStorage zapisani do Firebase');
+              }
+            } catch (error) {
+              console.error("Błąd odczytu z localStorage:", error);
+            }
+          }
         }
       } catch (error) {
-        console.error('Error fetching players:', error);
+        console.error('Błąd pobierania zawodników z Firebase:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchPlayers();
   }, []);
 
-  // Zapisz dane graczy do localStorage
+  // Backup do localStorage
   useEffect(() => {
-    // Wykonujemy to tylko po stronie klienta
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && players.length > 0) {
       try {
         localStorage.setItem("players", JSON.stringify(players));
       } catch (error) {
-        console.error("Failed to save players to localStorage:", error);
+        console.error("Błąd zapisu do localStorage:", error);
       }
     }
   }, [players]);
 
-  // Używamy useCallback dla funkcji które są przekazywane do komponentów
+  // Usuwanie zawodnika
   const handleDeletePlayer = useCallback(async (playerId: string) => {
-    // window.confirm jest dostępny tylko po stronie klienta
     if (
       typeof window !== "undefined" &&
       window.confirm("Czy na pewno chcesz usunąć tego zawodnika?")
     ) {
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
-        const username = process.env.NEXT_PUBLIC_AUTH_USERNAME || "rakow";
-        const password = process.env.NEXT_PUBLIC_AUTH_PASSWORD || "napakowaniRakow";
-        const credentials = btoa(`${username}:${password}`);
+        setIsLoading(true);
         
-        // Usuń zawodnika przez API
-        const response = await fetch(`${API_URL}/api/players/${playerId}`, {
-          method: 'DELETE',
-          mode: 'cors',
-          credentials: 'include',
-          headers: {
-            'Authorization': `Basic ${credentials}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
-        });
-
-        if (response.ok) {
-          // Usuń zawodnika z lokalnego stanu
-          setPlayers((prev) => prev.filter((p) => p.id !== playerId));
-          return true;
-        } else {
-          const errorText = await response.text();
-          console.error('Failed to delete player via API:', response.status, errorText);
-          alert('Wystąpił błąd podczas usuwania zawodnika. Spróbuj ponownie.');
-          return false;
-        }
+        // Usuwanie z Firebase
+        await deleteDoc(doc(db, "players", playerId));
+        
+        // Aktualizacja lokalnego stanu
+        setPlayers((prev) => prev.filter((p) => p.id !== playerId));
+        console.log('Zawodnik usunięty z Firebase');
+        return true;
       } catch (error) {
-        console.error('Error deleting player:', error);
+        console.error('Błąd usuwania zawodnika:', error);
         alert('Wystąpił błąd podczas usuwania zawodnika. Spróbuj ponownie.');
         return false;
+      } finally {
+        setIsLoading(false);
       }
     }
     return false;
   }, []);
 
+  // Dodawanie/edycja zawodnika
   const handleSavePlayer = useCallback(
     async (playerData: Omit<Player, "id">) => {
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
-        const username = process.env.NEXT_PUBLIC_AUTH_USERNAME || "rakow";
-        const password = process.env.NEXT_PUBLIC_AUTH_PASSWORD || "napakowaniRakow";
-        const credentials = btoa(`${username}:${password}`);
+        setIsLoading(true);
         
         if (editingPlayerId) {
-          // Aktualizuj istniejącego zawodnika
-          const response = await fetch(`${API_URL}/api/players/${editingPlayerId}`, {
-            method: 'PUT',
-            mode: 'cors',
-            credentials: 'include',
-            headers: {
-              'Authorization': `Basic ${credentials}`,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify(playerData),
-          });
-
-          if (response.ok) {
-            const updatedPlayer = await response.json();
-            console.log('Zaktualizowany zawodnik:', updatedPlayer);
-            setPlayers((prev) =>
-              prev.map((player) =>
-                player.id === editingPlayerId ? updatedPlayer : player
-              )
-            );
-          } else {
-            const errorText = await response.text();
-            console.error('Failed to update player via API:', response.status, errorText);
-            alert(`Błąd podczas aktualizacji zawodnika: ${response.status}`);
-            
-            // Lokalnie aktualizuj jako fallback
-            setPlayers((prev) =>
-              prev.map((player) =>
-                player.id === editingPlayerId
-                  ? { ...player, ...playerData }
-                  : player
-              )
-            );
-          }
+          // Aktualizacja istniejącego zawodnika
+          const playerRef = doc(db, "players", editingPlayerId);
+          await updateDoc(playerRef, playerData);
+          
+          // Aktualizacja lokalnego stanu
+          setPlayers((prev) =>
+            prev.map((player) =>
+              player.id === editingPlayerId
+                ? { ...player, ...playerData, id: editingPlayerId }
+                : player
+            )
+          );
+          console.log('Zawodnik zaktualizowany w Firebase');
         } else {
-          // Utwórz nowego zawodnika
-          const response = await fetch(`${API_URL}/api/players`, {
-            method: 'POST',
-            mode: 'cors',
-            credentials: 'include',
-            headers: {
-              'Authorization': `Basic ${credentials}`,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify(playerData),
-          });
-
-          if (response.ok) {
-            const newPlayer = await response.json();
-            console.log('Nowy zawodnik:', newPlayer);
-            setPlayers((prev) => [...prev, newPlayer]);
-          } else {
-            const errorText = await response.text();
-            let errorMessage = `Błąd HTTP: ${response.status}`;
-            
-            try {
-              const errorData = JSON.parse(errorText);
-              errorMessage = errorData.error || errorMessage;
-            } catch (e) {
-              // Jeśli nie możemy sparsować JSON, używamy tekstu błędu
-              errorMessage = errorText || errorMessage;
-            }
-            
-            console.error('Failed to create player via API:', errorMessage);
-            alert(`Błąd podczas tworzenia zawodnika: ${errorMessage}`);
-            
-            // Lokalnie dodaj jako fallback tylko jeśli API nie zwróciło błędu
-            if (response.status >= 500) {
-              const newPlayer: Player = {
-                id: crypto.randomUUID ? crypto.randomUUID() : generateId(),
-                ...playerData,
-              };
-              setPlayers((prev) => [...prev, newPlayer]);
-            } else {
-              // Nie zamykaj modalu jeśli wystąpił błąd walidacji
-              return;
-            }
-          }
+          // Dodawanie nowego zawodnika
+          const newPlayerRef = await addDoc(collection(db, "players"), playerData);
+          
+          // Aktualizacja lokalnego stanu
+          const newPlayer: Player = {
+            id: newPlayerRef.id,
+            ...playerData,
+          };
+          setPlayers((prev) => [...prev, newPlayer]);
+          console.log('Nowy zawodnik dodany do Firebase');
         }
         
-        // Zamknij modal i resetuj stan edycji tylko jeśli operacja się powiodła
+        // Zamknij modal i resetuj stan edycji
         setIsModalOpen(false);
         setEditingPlayerId(null);
       } catch (error) {
-        console.error('Error saving player:', error);
+        console.error('Błąd zapisywania zawodnika:', error);
         alert('Wystąpił błąd podczas zapisywania zawodnika. Spróbuj ponownie.');
+      } finally {
+        setIsLoading(false);
       }
     },
     [editingPlayerId]
@@ -247,6 +190,7 @@ export function usePlayersState() {
     isModalOpen,
     editingPlayerId,
     editingPlayer: getEditingPlayer(),
+    isLoading,
     setIsModalOpen,
     handleDeletePlayer,
     handleSavePlayer,

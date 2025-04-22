@@ -45,33 +45,37 @@ export interface PlayerConnection {
   totalXT: number;
 }
 
-export interface ActionsPacking {
+// Aktualizacja interfejsu Action dla Firebase
+export interface Action {
   id: string;
+  matchId: string;
+  teamId: string;
   minute: number;
+  fromZone: string;
+  toZone: string;
+  actionType: string;
+  // Dodatkowe pola z ActionsPacking
   senderId: string;
-  senderName: string;
-  senderNumber: number;
-  senderClickValue: number;
-  receiverId: string;
-  receiverName: string;
-  receiverNumber: number;
-  receiverClickValue: number;
-  startZone?: string;         // Wartość XT_VALUES dla strefy początkowej akcji
-  endZone?: string | null;    // Wartość XT_VALUES dla strefy końcowej akcji, może być null dla dryblingów
-  packingPoints: number;
-  actionType: "pass" | "dribble";
-  xTValue: number;
-  PxT?: number;               // Wartość mnożenia packingPoints i xTValue
-  isP3: boolean;
-  isShot: boolean;
-  isGoal: boolean;
+  senderName?: string;
+  senderNumber?: number;
+  receiverId?: string;
+  receiverName?: string;
+  receiverNumber?: number;
+  startZone?: string;
+  endZone?: string | null;
+  packingPoints?: number;
+  xTValueStart?: number;
+  xTValueEnd?: number;
+  PxT?: number;
+  isP3?: boolean;
+  isShot?: boolean;
+  isGoal?: boolean;
   isPenaltyAreaEntry?: boolean;
-  isSecondHalf?: boolean;     // Określa połowę meczu: false = P1, true = P2
-  matchId?: string; // ID meczu, do którego przypisana jest akcja
+  isSecondHalf: boolean;
 }
 
 // Dla zachowania kompatybilności
-export type Action = ActionsPacking;
+export type ActionsPacking = Action;
 
 export interface ActionSectionProps {
   selectedZone: Zone | null;
@@ -117,8 +121,8 @@ export interface TeamInfo {
   isHome: boolean;
   competition: string;
   date: string;
-  time?: string;
   playerMinutes?: PlayerMinutes[];
+  actions_packing?: Action[]; // Tablica akcji packing związanych z tym meczem
 }
 
 export interface PlayerMinutes {

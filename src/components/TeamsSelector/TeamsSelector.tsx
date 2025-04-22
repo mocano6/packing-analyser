@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { TEAMS } from "@/constants/teams";
+import { fetchTeams, Team } from "@/constants/teamsLoader";
 import styles from "./TeamsSelector.module.css";
 
 interface TeamsSelectorProps {
@@ -15,13 +16,34 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
   onChange,
   className = ""
 }) => {
+  const [teams, setTeams] = useState<Record<string, Team>>(TEAMS);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Pobieranie zespołów z Firebase
+  useEffect(() => {
+    const loadTeams = async () => {
+      setIsLoading(true);
+      try {
+        const fetchedTeams = await fetchTeams();
+        setTeams(fetchedTeams);
+      } catch (error) {
+        console.error("Błąd podczas ładowania zespołów:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTeams();
+  }, []);
+
   return (
     <select 
       value={selectedTeam} 
       onChange={(e) => onChange(e.target.value)}
-      className={`${styles.teamsSelector} ${className}`}
+      className={`${styles.teamsSelector} ${className} ${isLoading ? styles.loading : ''}`}
+      disabled={isLoading}
     >
-      {Object.values(TEAMS).map(team => (
+      {Object.values(teams).map(team => (
         <option key={team.id} value={team.id}>
           {team.name}
         </option>

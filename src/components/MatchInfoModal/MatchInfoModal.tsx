@@ -66,8 +66,58 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
     // Kopiujemy obiekt, aby uniknąć modyfikacji oryginalnego obiektu
     const infoToSave = { ...formData };
     
-    // Zamiast usuwać pole, przekazujemy wszystkie dane
-    onSave(infoToSave);
+    // Zachowujemy ID meczu jeśli istnieje
+    if (currentInfo?.matchId) {
+      infoToSave.matchId = currentInfo.matchId;
+    }
+    
+    // Dodajemy logi
+    console.log("MatchInfoModal handleSubmit - rozpoczęcie zapisu");
+    console.log("MatchInfoModal handleSubmit - dane formularza przed zapisem:", formData);
+    console.log("MatchInfoModal handleSubmit - wybrany zespół:", formData.team);
+    
+    // Usuwamy pole time z danych przed zapisaniem
+    if ('time' in infoToSave) {
+      delete infoToSave.time;
+    }
+    
+    console.log("MatchInfoModal handleSubmit - dane do zapisania:", infoToSave);
+    
+    // Zapamiętaj ID zespołu przed zapisem
+    const teamId = infoToSave.team;
+    
+    // Wywołujemy funkcję zapisu
+    try {
+      // Blokuj przycisk zapisu i pokaż wskaźnik ładowania
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement)?.setAttribute('disabled', 'true');
+      
+      // Dodaj klasę wskazującą na trwający zapis
+      const modalContent = document.querySelector(`.${styles.modalContent}`) as HTMLElement;
+      if (modalContent) {
+        modalContent.classList.add(styles.savingInProgress);
+      }
+      
+      // Wywołaj funkcję zapisu
+      onSave(infoToSave);
+      
+      // Dodajemy dodatkowy komunikat potwierdzający zapis
+      console.log("MatchInfoModal - wysłano dane do zapisu, zamykam modal...");
+      
+      // Zamykamy modal
+      onClose();
+      
+      // Lepsze rozwiązanie: Użyj hash URL do wymuszenia odświeżenia listy meczów
+      // To pozwala na odświeżenie listy bez pełnego przeładowania strony
+      console.log("🔄 Ustawiam hash URL dla zespołu:", teamId);
+      window.location.hash = `refresh=${teamId}`;
+      
+    } catch (error) {
+      console.error("Błąd podczas zapisywania meczu:", error);
+      alert("Wystąpił błąd podczas zapisywania meczu. Spróbuj ponownie.");
+      
+      // Odblokuj przycisk zapisu w przypadku błędu
+      (document.querySelector('button[type="submit"]') as HTMLButtonElement)?.removeAttribute('disabled');
+    }
   };
 
   if (!isOpen) return null;

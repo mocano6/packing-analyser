@@ -1,7 +1,7 @@
 // src/components/MatchInfoHeader/MatchInfoHeader.tsx
 "use client";
 
-import React, { useState, KeyboardEvent } from "react";
+import React, { useState, KeyboardEvent, useEffect } from "react";
 import { TeamInfo } from "@/types";
 import { TEAMS } from "@/constants/teams";
 import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
@@ -17,6 +17,8 @@ interface MatchInfoHeaderProps {
   onChangeTeam: (team: string) => void;
   onManagePlayerMinutes: (match: TeamInfo) => void;
   onAddNewMatch: () => void;
+  refreshCounter?: number;
+  isOfflineMode?: boolean;
 }
 
 const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
@@ -29,9 +31,19 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   onChangeTeam,
   onManagePlayerMinutes,
   onAddNewMatch,
+  refreshCounter = 0,
+  isOfflineMode = false,
 }) => {
   const [sortKey, setSortKey] = useState<keyof TeamInfo>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  
+  // Dodajemy zależność refreshCounter do useEffect dla lepszego debugowania
+  useEffect(() => {
+    console.log('🔄 MatchInfoHeader - refreshCounter zmieniony na:', refreshCounter);
+    console.log('📋 MatchInfoHeader - allMatches:', allMatches.length, 'elementów');
+    console.log('👥 MatchInfoHeader - selectedTeam:', selectedTeam);
+  }, [allMatches, selectedTeam, refreshCounter]);
   
   // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
   const getTeamName = (teamId: string) => {
@@ -40,10 +52,18 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
     return team ? team.name : teamId; // Jeśli nie znaleziono, zwróć ID jako fallback
   };
   
-  // Filtrowanie meczów wybranego zespołu
-  const teamMatches = allMatches
-    .filter(match => match.team === selectedTeam)
-    .sort((a, b) => {
+  // Filtrowanie meczów wybranego zespołu - używamy useMemo dla optymalizacji
+  const teamMatches = React.useMemo(() => {
+    console.log(`🔍 Filtruję mecze dla zespołu ${selectedTeam}, dostępnych meczów: ${allMatches.length}`);
+    console.log('🔢 Aktualna wartość refreshCounter:', refreshCounter);
+    
+    // Dodajemy dodatkowe debugowanie
+    console.log('🧾 Szczegóły meczów:', allMatches.map(m => `${m.matchId}: ${m.team} vs ${m.opponent}`));
+    
+    const filtered = allMatches.filter(match => match.team === selectedTeam);
+    console.log(`📊 Po filtrowaniu: ${filtered.length} meczów dla zespołu ${selectedTeam}`);
+    
+    return filtered.sort((a, b) => {
       const aValue = a[sortKey];
       const bValue = b[sortKey];
       
@@ -53,6 +73,12 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
       }
       return 0;
     });
+  }, [allMatches, selectedTeam, sortKey, sortDirection, refreshCounter]);
+    
+  // Dodajemy debugowanie wyników filtrowania
+  useEffect(() => {
+    console.log('📊 MatchInfoHeader - teamMatches po filtrowaniu:', teamMatches.length, 'elementów');
+  }, [teamMatches]);
 
   // Funkcja do dodania nowego meczu
   const handleAddMatch = () => {
@@ -98,12 +124,19 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
           />
         </div>
         
-        <button 
-          className={styles.addButton}
-          onClick={handleAddMatch}
-        >
-          + Dodaj mecz
-        </button>
+        <div className={styles.controlsContainer}>
+          {isOfflineMode && (
+            <div className={styles.offlineBadge || 'offlineBadge'}>
+              Tryb offline 📴
+            </div>
+          )}
+          <button 
+            className={styles.addButton}
+            onClick={handleAddMatch}
+          >
+            + Dodaj mecz
+          </button>
+        </div>
       </div>
 
       <div className={styles.matchesTable}>
@@ -146,11 +179,12 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
             teamMatches.map((match) => {
               const isSelected = matchInfo?.matchId === match.matchId;
               const isHomeMatch = match.isHome === true;
+              const isBeingDeleted = isDeleting === match.matchId;
               
               return (
                 <div 
                   key={match.matchId}
-                  className={`${styles.matchRow} ${isSelected ? styles.selected : ""} ${isHomeMatch ? styles.homeRow : styles.awayRow}`}
+                  className={`${styles.matchRow} ${isSelected ? styles.selected : ""} ${isHomeMatch ? styles.homeRow : styles.awayRow} ${isBeingDeleted ? styles.deleteInProgress : ""}`}
                   onClick={() => onSelectMatch(match)}
                 >
                   <div className={styles.cell}>{match.date}</div>
@@ -177,6 +211,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           onKeyDown={(e) => handleEditKeyDown(e, match)}
                           title="Edytuj"
                           aria-label={`Edytuj mecz: ${getTeamName(match.team)} vs ${match.opponent}`}
+                          disabled={isBeingDeleted}
                         >
                           ✎
                         </button>
@@ -188,6 +223,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           }}
                           title="Minuty zawodników"
                           aria-label={`Zarządzaj minutami zawodników w meczu: ${getTeamName(match.team)} vs ${match.opponent}`}
+                          disabled={isBeingDeleted}
                         >
                           ⌚
                         </button>
@@ -195,17 +231,23 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           className={styles.deleteBtn}
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (window.confirm("Czy na pewno chcesz usunąć ten mecz?")) {
-                              if (match.matchId) {
+                            // Zabezpieczenie przed wielokrotnym kliknięciem
+                            if (match.matchId && !isBeingDeleted) {
+                              if (window.confirm("Czy na pewno chcesz usunąć ten mecz?")) {
+                                // Ustawienie flagi usuwania
+                                setIsDeleting(match.matchId);
+                                // Wywołujemy funkcję usuwania, a funkcja ta zajmie się także odświeżeniem listy
                                 onDeleteMatch(match.matchId);
+                                console.log("Usuwanie i odświeżanie obsługiwane przez hook useMatchInfo");
                               }
                             }
                           }}
-                          onKeyDown={(e) => match.matchId ? handleDeleteKeyDown(e, match.matchId) : undefined}
+                          onKeyDown={(e) => match.matchId && !isBeingDeleted ? handleDeleteKeyDown(e, match.matchId) : undefined}
                           title="Usuń"
                           aria-label={`Usuń mecz: ${getTeamName(match.team)} vs ${match.opponent}`}
+                          disabled={isBeingDeleted}
                         >
-                          ✕
+                          {isBeingDeleted ? "⌛" : "✕"}
                         </button>
                       </>
                     )}
@@ -221,6 +263,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           onKeyDown={(e) => handleEditKeyDown(e, match)}
                           title="Edytuj"
                           aria-label={`Edytuj mecz: ${getTeamName(match.team)} vs ${match.opponent}`}
+                          disabled={isBeingDeleted}
                         >
                           ✎
                         </button>
@@ -232,6 +275,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           }}
                           title="Minuty zawodników"
                           aria-label={`Zarządzaj minutami zawodników w meczu: ${getTeamName(match.team)} vs ${match.opponent}`}
+                          disabled={isBeingDeleted}
                         >
                           ⌚
                         </button>
@@ -239,17 +283,23 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           className={styles.deleteBtn}
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (window.confirm("Czy na pewno chcesz usunąć ten mecz?")) {
-                              if (match.matchId) {
+                            // Zabezpieczenie przed wielokrotnym kliknięciem
+                            if (match.matchId && !isBeingDeleted) {
+                              if (window.confirm("Czy na pewno chcesz usunąć ten mecz?")) {
+                                // Ustawienie flagi usuwania
+                                setIsDeleting(match.matchId);
+                                // Wywołujemy funkcję usuwania, a funkcja ta zajmie się także odświeżeniem listy
                                 onDeleteMatch(match.matchId);
+                                console.log("Usuwanie i odświeżanie obsługiwane przez hook useMatchInfo");
                               }
                             }
                           }}
-                          onKeyDown={(e) => match.matchId ? handleDeleteKeyDown(e, match.matchId) : undefined}
+                          onKeyDown={(e) => match.matchId && !isBeingDeleted ? handleDeleteKeyDown(e, match.matchId) : undefined}
                           title="Usuń"
                           aria-label={`Usuń mecz: ${getTeamName(match.team)} vs ${match.opponent}`}
+                          disabled={isBeingDeleted}
                         >
-                          ✕
+                          {isBeingDeleted ? "⌛" : "✕"}
                         </button>
                       </>
                     )}

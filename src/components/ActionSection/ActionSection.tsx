@@ -1,14 +1,14 @@
 // components/ActionSection/ActionSection.tsx
 "use client";
 
-import React, { memo } from "react";
+import React, { memo, useEffect } from "react";
 import FootballPitch from "../FootballPitch/FootballPitch";
 import ActionModal from "../ActionModal/ActionModal";
 import styles from "./ActionSection.module.css";
 import { Player } from "@/types";
 
 export interface ActionSectionProps {
-  selectedZone: number | null;
+  selectedZone: string | number | null;
   handleZoneSelect: (
     zone: number,
     xT?: number,
@@ -75,6 +75,13 @@ const ActionSection = memo(function ActionSection({
   isActionModalOpen,
   setIsActionModalOpen,
 }: ActionSectionProps) {
+  // Dodajemy efekt, który będzie monitorował wartości stref
+  useEffect(() => {
+    if (isActionModalOpen) {
+      console.log("ActionSection: Modal otwarty, aktualne strefy:", { startZone, endZone });
+    }
+  }, [isActionModalOpen, startZone, endZone]);
+
   const handleAddPoints = (points: number) => {
     setCurrentPoints((prev) => prev + points);
   };
@@ -99,9 +106,46 @@ const ActionSection = memo(function ActionSection({
     }, 50);
   };
 
+  // Modyfikujemy funkcję obsługującą zapisywanie akcji
+  const handleSaveActionWrapper = () => {
+    console.log("ActionSection: handleSaveActionWrapper wywołane, wartości stref:", { startZone, endZone });
+    
+    // Dodatkowe sprawdzenie stref przed zapisem
+    if (startZone === null || startZone === undefined) {
+      console.error("ActionSection: Brak strefy początkowej - nie można zapisać akcji");
+      alert("Wybierz strefę początkową akcji!");
+      return;
+    }
+
+    if (endZone === null || endZone === undefined) {
+      console.error("ActionSection: Brak strefy końcowej - nie można zapisać akcji");
+      alert("Wybierz strefę końcową akcji!");
+      return;
+    }
+    
+    // Jeśli obie strefy są zdefiniowane, wywołaj funkcję zapisu
+    handleSaveAction();
+  };
+
   const handlePitchZoneSelect = (zone: number | null, xT?: number, value1?: number, value2?: number) => {
     if (zone !== null) {
-      handleZoneSelect(zone, xT, value1, value2);
+      console.log("ActionSection: handlePitchZoneSelect wywołane z:", { zone, xT });
+      
+      // Wywołujemy funkcję handleZoneSelect w komponencie nadrzędnym
+      const result = handleZoneSelect(zone, xT, value1, value2);
+      
+      // Po zaktualizowaniu stref, sprawdzamy czy ActionModal powinien zostać otwarty
+      // Jest to dodatkowe zabezpieczenie, gdyby w handleZoneSelect nie działało otwieranie modalu
+      setTimeout(() => {
+        if (startZone !== null && endZone !== null && !isActionModalOpen) {
+          console.log("ActionSection: Wykryto obie strefy ustawione, można otworzyć ActionModal", {
+            startZone,
+            endZone
+          });
+        }
+      }, 100);
+      
+      return result;
     }
   };
 
@@ -117,6 +161,7 @@ const ActionSection = memo(function ActionSection({
       <ActionModal
         isOpen={isActionModalOpen}
         onClose={() => {
+          console.log("ActionSection: Zamykanie modalu akcji");
           setIsActionModalOpen(false);
           resetActionState();
         }}
@@ -141,7 +186,7 @@ const ActionSection = memo(function ActionSection({
         onPenaltyAreaEntryToggle={setIsPenaltyAreaEntry}
         isSecondHalf={isSecondHalf}
         onSecondHalfToggle={handleSecondHalfToggle}
-        onSaveAction={handleSaveAction}
+        onSaveAction={handleSaveActionWrapper}
         onReset={resetActionState}
       />
     </section>

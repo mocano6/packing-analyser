@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import React, { useMemo, useEffect, useState, useRef } from "react";
+import React, { useMemo, useEffect, useState, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { Tab, Player, TeamInfo, PlayerMinutes, Action } from "@/types";
 import Instructions from "@/components/Instructions/Instructions";
@@ -9,11 +9,22 @@ import PlayersGrid from "@/components/PlayersGrid/PlayersGrid";
 import Tabs from "@/components/Tabs/Tabs";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useActionsState } from "@/hooks/useActionsState";
+import { usePackingActions } from "@/hooks/usePackingActions";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
-import { TEAMS } from "@/constants/teams";
+import { TEAMS, fetchTeams } from "@/constants/teamsLoader";
 import { getXTValueFromMatrix } from "@/constants/xtValues";
 import styles from "./page.module.css";
 import OfflineStatus from '@/components/OfflineStatus/OfflineStatus';
+import ExportButton from "@/components/ExportButton/ExportButton";
+import ImportButton from "@/components/ImportButton/ImportButton";
+import { initializeTeams, checkTeamsCollection } from "@/utils/initializeTeams";
+
+// Rozszerzenie interfejsu Window
+declare global {
+  interface Window {
+    _isRefreshingMatches?: boolean;
+  }
+}
 
 // Dynamiczny import komponentów używanych warunkowo dla lepszej wydajności
 const ActionSection = dynamic(
@@ -40,12 +51,6 @@ const MatchInfoModal = dynamic(
     ssr: false,
   }
 );
-const ExportButton = dynamic(
-  () => import("@/components/ExportButton/ExportButton"),
-  {
-    ssr: false,
-  }
-);
 const MatchInfoHeader = dynamic(
   () => import("@/components/MatchInfoHeader/MatchInfoHeader")
 );
@@ -54,10 +59,6 @@ const PlayerMinutesModal = dynamic(
   {
     ssr: false,
   }
-);
-const ImportButton = dynamic(
-  () => import("@/components/ImportButton/ImportButton"),
-  { ssr: false }
 );
 
 export default function Page() {
@@ -70,6 +71,8 @@ export default function Page() {
   const [endZone, setEndZone] = React.useState<number | null>(null);
   const [isNewMatchModalOpen, setIsNewMatchModalOpen] = React.useState(false);
   const [isSecondHalf, setIsSecondHalf] = React.useState(false);
+  const [matchesListRefreshCounter, setMatchesListRefreshCounter] = useState(0);
+  const [selectedZone, setSelectedZone] = React.useState<string | number | null>(null);
 
   const useActionsStateRef = useRef<any>(null);
 
@@ -89,18 +92,22 @@ export default function Page() {
     matchInfo,
     allMatches,
     isMatchModalOpen,
-    setIsMatchModalOpen,
+    toggleMatchModal,
     handleSaveMatchInfo,
     handleSelectMatch,
     handleDeleteMatch,
-    handleSavePlayerMinutes
+    handleSavePlayerMinutes,
+    fetchMatches,
+    isOfflineMode
   } = useMatchInfo();
 
+  const packingActions = usePackingActions(players, matchInfo);
+  
   const {
     actions,
     selectedPlayerId,
     selectedReceiverId,
-    selectedZone,
+    selectedZone: hookSelectedZone,
     currentPoints,
     actionMinute,
     actionType,
@@ -121,8 +128,13 @@ export default function Page() {
     handleSaveAction,
     handleDeleteAction,
     handleDeleteAllActions,
-    resetActionState: hookResetActionState,
-  } = useActionsState(players, matchInfo);
+    resetActionState,
+  } = packingActions;
+
+  // Gdy hookSelectedZone się zmienia, aktualizujemy lokalny selectedZone
+  useEffect(() => {
+    setSelectedZone(hookSelectedZone);
+  }, [hookSelectedZone]);
 
   const filteredPlayers = useMemo(() => {
     // Filtruj graczy na podstawie wybranego zespołu
@@ -140,6 +152,195 @@ export default function Page() {
       setIsSecondHalf(isP2);
     }
   }, []);
+
+  // Dodajemy useCallback dla fetchMatches, aby można było bezpiecznie używać go w efektach
+  const refreshMatchesList = useCallback(async (teamId?: string) => {
+    console.log("⚡ Wymuszam odświeżenie listy meczów dla zespołu:", teamId || selectedTeam);
+    
+    try {
+      // Używamy blokady, aby zapobiec wielokrotnym wywołaniom
+      if (window._isRefreshingMatches) {
+        console.log("🚫 Odświeżanie listy meczów już trwa, pomijam");
+        return;
+      }
+      
+      window._isRefreshingMatches = true;
+      
+      const matches = await fetchMatches(teamId || selectedTeam);
+      console.log("📋 Lista meczów pobrana pomyślnie, elementów:", matches?.length || 0);
+      
+      // Używamy funkcji aktualizującej, aby uniknąć uzależnienia od bieżącej wartości
+      if (matches) {
+        // Opóźniamy aktualizację licznika, aby uniknąć pętli renderowania
+        setTimeout(() => {
+          setMatchesListRefreshCounter(prev => {
+            console.log("🔄 Zwiększam licznik odświeżeń:", prev, "->", prev + 1);
+            return prev + 1;
+          });
+        }, 50);
+      }
+    } catch (error) {
+      console.error("❌ Błąd podczas odświeżania listy meczów:", error);
+    } finally {
+      // Resetujemy blokadę po zakończeniu
+      setTimeout(() => {
+        window._isRefreshingMatches = false;
+      }, 500);
+    }
+  }, [fetchMatches, selectedTeam]);
+  
+  // Dodajemy useRef, aby śledzić, czy efekt już został wykonany
+  const initEffectExecutedRef = useRef(false);
+  
+  // Dodajemy efekt inicjalizujący, który odświeży listę meczów przy pierwszym renderowaniu
+  React.useEffect(() => {
+    if (initEffectExecutedRef.current) return;
+    initEffectExecutedRef.current = true;
+    
+    console.log("🔄 Inicjalizacja aplikacji - odświeżanie listy meczów");
+    
+    // Używamy setTimeout, aby zapewnić, że Firebase jest w pełni zainicjalizowany
+    const timer = setTimeout(async () => {
+      try {
+        await fetchMatches(selectedTeam);
+        // Nie aktualizujemy licznika tutaj - to tylko inicjalne pobranie danych
+      } catch (error) {
+        console.error("❌ Błąd podczas inicjalizacji listy meczów:", error);
+      }
+    }, 300);
+    
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [fetchMatches, selectedTeam]);
+
+  // Nasłuchuj na zmiany w hashu URL, aby ewentualnie obsłużyć odświeżenie strony
+  React.useEffect(() => {
+    // Używamy zmiennej do śledzenia, czy komponent jest zamontowany
+    let isMounted = true;
+    
+    const handleHashChange = () => {
+      if (!isMounted) return;
+      
+      const hash = window.location.hash;
+      console.log("Zmiana hash URL:", hash);
+      
+      // Jeśli hash zawiera informację o odświeżeniu dla konkretnego zespołu
+      if (hash.startsWith('#refresh=')) {
+        const teamId = hash.replace('#refresh=', '');
+        console.log("Wykryto żądanie odświeżenia dla zespołu:", teamId);
+        
+        // Wyczyść hash
+        window.location.hash = '';
+        
+        // Odśwież listę meczów dla tego zespołu
+        if (teamId && isMounted) {
+          // Zamiast wywoływać refreshMatchesList, bezpośrednio wywołujemy fetchMatches
+          // i aktualizujemy selectedTeam jeśli potrzeba
+          if (teamId !== selectedTeam) {
+            setSelectedTeam(teamId);
+          }
+          
+          // Używamy setTimeout, aby oddzielić zmianę stanu od renderowania i uniknąć niepotrzebnych wywołań
+          setTimeout(async () => {
+            if (!isMounted) return;
+            
+            // Unikamy nakładających się operacji
+            if (window._isRefreshingMatches) {
+              console.log("🚫 Pominięto odświeżanie - już trwa inna operacja");
+              return;
+            }
+            
+            window._isRefreshingMatches = true;
+            
+            try {
+              const matches = await fetchMatches(teamId);
+              if (isMounted && matches) {
+                setTimeout(() => {
+                  if (isMounted) {
+                    setMatchesListRefreshCounter(prev => prev + 1);
+                  }
+                  window._isRefreshingMatches = false;
+                }, 100);
+              } else {
+                window._isRefreshingMatches = false;
+              }
+            } catch (error) {
+              console.error("❌ Błąd podczas pobierania meczów z URL hash:", error);
+              window._isRefreshingMatches = false;
+            }
+          }, 500);
+        }
+      }
+    };
+    
+    // Wywołaj raz przy montowaniu, aby obsłużyć sytuację po odświeżeniu
+    handleHashChange();
+    
+    // Nasłuchuj na zmiany
+    window.addEventListener('hashchange', handleHashChange);
+    
+    return () => {
+      isMounted = false;
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, [fetchMatches, selectedTeam]);
+
+  // Modyfikujemy efekt nasłuchujący na zdarzenie odświeżenia listy meczów
+  useEffect(() => {
+    // Używamy zmiennej do śledzenia, czy komponent jest zamontowany
+    let isMounted = true;
+    // Używamy zmiennej do śledzenia ostatniego timestampu, aby ignorować zdublowane zdarzenia
+    let lastEventTimestamp = 0;
+    
+    const handleRefreshMatchesList = (event: Event) => {
+      if (!isMounted) return;
+      
+      const customEvent = event as CustomEvent<{teamId?: string, timestamp?: number}>;
+      const teamId = customEvent.detail?.teamId;
+      const timestamp = customEvent.detail?.timestamp || 0;
+      
+      // Ignoruj zdarzenia starsze niż ostatnie przetworzone lub gdy trwa już odświeżanie
+      if (timestamp <= lastEventTimestamp || window._isRefreshingMatches) {
+        console.log(`🚫 Ignoruję zdarzenie matchesListRefresh o czasie ${timestamp}`);
+        return;
+      }
+      
+      lastEventTimestamp = timestamp;
+      console.log(`🔔 Złapano zdarzenie matchesListRefresh o czasie ${timestamp} dla zespołu:`, teamId);
+      
+      // Ustawiamy zespół, jeśli został przekazany i różni się od obecnego
+      if (teamId && teamId !== selectedTeam) {
+        console.log("🔄 Zmieniam wybrany zespół na:", teamId);
+        setSelectedTeam(teamId);
+        // Nie wykonujemy żadnych dodatkowych akcji - zmiana selectedTeam
+        // spowoduje ponowne pobranie danych przez efekt zależny od selectedTeam
+      } else if (isMounted) {
+        // Odświeżamy listę tylko jeśli teamId jest taki sam jak obecny lub nie został podany
+        console.log("🔄 Odświeżam listę meczów bez zmiany zespołu");
+        // Zamiast wywoływać refreshMatchesList, tylko zwiększamy licznik
+        window._isRefreshingMatches = true;
+        
+        setTimeout(() => {
+          if (isMounted) {
+            setMatchesListRefreshCounter(prev => prev + 1);
+          }
+          window._isRefreshingMatches = false;
+        }, 100);
+      }
+    };
+    
+    // Dodajemy nasłuchiwanie na zdarzenie odświeżenia listy
+    console.log("🎧 Dodaję nasłuchiwanie na zdarzenie matchesListRefresh");
+    document.addEventListener('matchesListRefresh', handleRefreshMatchesList);
+    
+    // Usuwamy nasłuchiwanie przy odmontowaniu komponentu
+    return () => {
+      isMounted = false;
+      console.log("🛑 Usuwam nasłuchiwanie na zdarzenie matchesListRefresh");
+      document.removeEventListener('matchesListRefresh', handleRefreshMatchesList);
+    };
+  }, [selectedTeam]); // Usuwamy wszelkie zależności od funkcji, które mogą powodować pętlę
 
   // Funkcja do zapisywania zawodnika
   const handleSavePlayerWithTeams = (playerData: Omit<Player, "id">) => {
@@ -203,8 +404,11 @@ export default function Page() {
         // Najpierw czyścimy poprzednie wartości
         handleZoneSelect(null); // reset
         
-        // Teraz ustawiamy strefy z odpowiednimi wartościami
-        handleZoneSelect(startZone, startXT, startXT, startXT);
+        // Teraz ustawiamy strefę dla dryblingu
+        if (startZone !== null) {
+          // Przekazujemy startZone jako number, co jest teraz zgodne z typem funkcji
+          handleZoneSelect(startZone, startXT);
+        }
       } else {
         // To jest podanie
         setActionType("pass");
@@ -214,20 +418,18 @@ export default function Page() {
         handleZoneSelect(null); // reset
         
         // Teraz ustawiamy strefę początkową
-        handleZoneSelect(startZone, startXT);
+        if (startZone !== null) {
+          // Przekazujemy startZone jako number, co jest teraz zgodne z typem funkcji
+          handleZoneSelect(startZone, startXT);
+        }
         
-        // Potem ustawiamy strefę końcową z wartościami startXT i endXT
-        handleZoneSelect(endZone, endXT, startXT, endXT);
+        // Potem ustawiamy strefę końcową
+        if (endZone !== null) {
+          // Przekazujemy endZone jako number, co jest teraz zgodne z typem funkcji
+          handleZoneSelect(endZone, endXT);
+        }
       }
       
-      // Upewnij się, że strefy zostały prawidłowo ustawione
-      console.log("Po ustawieniu stref:", { 
-        isDrybling,
-        actionType
-      });
-      
-      // Nie mamy bezpośredniego dostępu do selectedZone i receiverZoneValue w tej funkcji,
-      // ale wiemy, że jeśli doszliśmy do tego miejsca, to strefy zostały ustawione
       return true;
     } catch (error) {
       console.error("Błąd podczas przygotowywania stref:", error);
@@ -236,68 +438,153 @@ export default function Page() {
   };
 
   const onSaveAction = async () => {
+    console.log("onSaveAction wywołana z wartościami stref:", { startZone, endZone });
+    
     // Sprawdzamy czy matchInfo istnieje przed wywołaniem handleSaveAction
     if (!matchInfo) {
-      setIsMatchModalOpen(true);
+      console.error("Brak informacji o meczu - nie można zapisać akcji");
+      toggleMatchModal(true);
       return;
     }
     
     // Sprawdzamy, czy wszystkie wymagane dane są ustawione
     if (!selectedPlayerId) {
+      console.error("Brak wybranego zawodnika - nie można zapisać akcji");
       alert("Wybierz zawodnika rozpoczynającego akcję!");
       return;
     }
     
     // W przypadku podania sprawdzamy, czy wybrany jest odbiorca
     if (actionType === "pass" && !selectedReceiverId) {
+      console.error("Brak wybranego odbiorcy dla podania - nie można zapisać akcji");
       alert("Wybierz zawodnika kończącego podanie!");
       return;
     }
     
-    // Sprawdzamy czy strefy są wybrane
-    if (!startZone || !endZone) {
-      console.log("Brak wybranych stref - nie można zapisać akcji");
+    // Pobieramy wartości stref z localStorage, jeśli są tam zapisane
+    let finalStartZone = startZone;
+    let finalEndZone = endZone;
+    
+    // Jeśli startZone jest null, próbujemy pobrać z localStorage
+    if (finalStartZone === null || finalStartZone === undefined) {
+      const savedStartZone = localStorage.getItem('tempStartZone');
+      if (savedStartZone) {
+        finalStartZone = Number(savedStartZone);
+        console.log("Pobrano startZone z localStorage:", finalStartZone);
+      }
+    }
+    
+    // Jeśli endZone jest null, próbujemy pobrać z localStorage
+    if (finalEndZone === null || finalEndZone === undefined) {
+      const savedEndZone = localStorage.getItem('tempEndZone');
+      if (savedEndZone) {
+        finalEndZone = Number(savedEndZone);
+        console.log("Pobrano endZone z localStorage:", finalEndZone);
+      }
+    }
+    
+    // Sprawdzamy szczegółowo strefy
+    console.log("Sprawdzanie stref przed zapisem:", {
+      startZone: finalStartZone,
+      endZone: finalEndZone,
+      startZoneType: typeof finalStartZone,
+      endZoneType: typeof finalEndZone,
+      startZoneValue: finalStartZone === 0 ? "zero" : finalStartZone,
+      endZoneValue: finalEndZone === 0 ? "zero" : finalEndZone,
+      localStorage: {
+        tempStartZone: localStorage.getItem('tempStartZone'),
+        tempEndZone: localStorage.getItem('tempEndZone')
+      }
+    });
+    
+    // Sprawdzamy czy startZone jest zdefiniowane (nawet jeśli jest zerem)
+    if (finalStartZone === null || finalStartZone === undefined) {
+      console.error("Brak strefy początkowej - nie można zapisać akcji");
+      alert("Wybierz strefę początkową akcji!");
+      return;
+    }
+
+    // Sprawdzamy czy endZone jest zdefiniowane (nawet jeśli jest zerem)
+    if (finalEndZone === null || finalEndZone === undefined) {
+      console.error("Brak strefy końcowej - nie można zapisać akcji");
+      alert("Wybierz strefę końcową akcji!");
       return;
     }
     
     // Przygotujemy wartości xT dla stref
-    const row1 = Math.floor(startZone / 12);
-    const col1 = startZone % 12;
-    const startXT = getXTValueFromMatrix(row1, col1);
-    
-    const row2 = Math.floor(endZone / 12);
-    const col2 = endZone % 12;
-    const endXT = getXTValueFromMatrix(row2, col2);
-    
-    // Ustawimy odpowiedni typ akcji
-    const isDrybling = startZone === endZone;
-    if (isDrybling) {
-      setActionType("dribble");
-    }
-    
-    // Logujemy stan przed wywołaniem handleSaveAction
-    console.log("Stan przed zapisem:", {
-      selectedPlayerId,
-      selectedReceiverId,
-      actionType: isDrybling ? "dribble" : "pass",
-      startZone,
-      endZone,
-      startXT,
-      endXT
-    });
-    
-    // Wywołujemy handleSaveAction z matchInfo i wartościami stref
     try {
-      const success = await handleSaveAction(matchInfo, startZone, endZone);
-      if (success) {
-        // Resetujemy stan tylko jeśli zapis się powiódł
-        setEndZone(null);
-        setStartZone(null);
-        setIsActionModalOpen(false);
+      const row1 = Math.floor(finalStartZone / 12);
+      const col1 = finalStartZone % 12;
+      const startXT = getXTValueFromMatrix(row1, col1);
+      
+      const row2 = Math.floor(finalEndZone / 12);
+      const col2 = finalEndZone % 12;
+      const endXT = getXTValueFromMatrix(row2, col2);
+      
+      // Ustawimy odpowiedni typ akcji
+      const isDrybling = finalStartZone === finalEndZone;
+      if (isDrybling) {
+        setActionType("dribble");
+      }
+      
+      // Logujemy stan przed wywołaniem handleSaveAction
+      console.log("Stan przed zapisem akcji:", {
+        selectedPlayerId,
+        selectedReceiverId,
+        actionType: isDrybling ? "dribble" : "pass",
+        startZone: finalStartZone,
+        endZone: finalEndZone,
+        startXT,
+        endXT,
+        currentPoints
+      });
+      
+      // Wywołujemy handleSaveAction z matchInfo, wartościami stref i wartościami xT
+      try {
+        console.log("Wywołuję handleSaveAction z parametrami:", {
+          matchInfo: { matchId: matchInfo.matchId, team: matchInfo.team },
+          startZone: finalStartZone,
+          endZone: finalEndZone,
+          startXT,
+          endXT,
+          currentPoints,
+          isSecondHalf
+        });
+        
+        const success = await handleSaveAction(
+          matchInfo, 
+          finalStartZone, 
+          finalEndZone,   
+          startXT,   
+          endXT,     
+          currentPoints,
+          isSecondHalf
+        );
+        
+        console.log("Wynik handleSaveAction:", success);
+        
+        if (success) {
+          // Resetujemy stan tylko jeśli zapis się powiódł
+          console.log("Akcja zapisana pomyślnie - resetuję stany stref");
+          
+          // Usuwamy wartości stref z localStorage
+          localStorage.removeItem('tempStartZone');
+          localStorage.removeItem('tempEndZone');
+          
+          // Resetujemy stan komponentu
+          setEndZone(null);
+          setStartZone(null);
+          setIsActionModalOpen(false);
+        } else {
+          console.error("Zapis akcji nie powiódł się - zachowuję wybrane strefy");
+        }
+      } catch (error) {
+        console.error("Błąd podczas zapisywania akcji:", error);
+        alert("Wystąpił błąd podczas zapisywania akcji: " + (error instanceof Error ? error.message : String(error)));
       }
     } catch (error) {
-      console.error("Błąd podczas zapisywania akcji:", error);
-      alert("Wystąpił błąd podczas zapisywania akcji: " + (error instanceof Error ? error.message : String(error)));
+      console.error("Błąd podczas przygotowywania danych stref:", error);
+      alert("Wystąpił błąd podczas przygotowywania danych: " + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -324,7 +611,68 @@ export default function Page() {
 
   // Funkcja do otwierania modalu nowego meczu
   const openNewMatchModal = () => {
+    console.log("Otwieranie modalu dla nowego meczu");
     setIsNewMatchModalOpen(true);
+  };
+
+  // Funkcja do zamykania modalu nowego meczu
+  const closeNewMatchModal = () => {
+    console.log("Zamykanie modalu dla nowego meczu");
+    setIsNewMatchModalOpen(false);
+    
+    // Hook useMatchInfo sam zajmuje się odświeżeniem listy meczów
+    console.log("Modal nowego meczu zamknięty - lista meczów zostanie odświeżona automatycznie");
+  };
+  
+  // Funkcja do otwierania modalu edycji meczu
+  const openEditMatchModal = () => {
+    console.log("Otwieranie modalu dla edycji meczu");
+    toggleMatchModal(true);
+  };
+
+  // Funkcja do zamykania modalu edycji meczu
+  const closeEditMatchModal = () => {
+    console.log("Zamykanie modalu dla edycji meczu");
+    toggleMatchModal(false);
+    
+    // Hook useMatchInfo sam zajmuje się odświeżeniem listy meczów
+    console.log("Modal edycji meczu zamknięty - lista meczów zostanie odświeżona automatycznie");
+  };
+
+  // Modyfikujemy funkcje obsługi zapisywania, aby odświeżały listę meczów po zapisie
+  const handleSaveNewMatch = async (matchInfo: TeamInfo) => {
+    console.log("💾 Zapisywanie nowego meczu:", matchInfo);
+    try {
+      // Zapisujemy mecz
+      const savedMatch = await handleSaveMatchInfo(matchInfo);
+      console.log("✅ Nowy mecz zapisany:", savedMatch);
+      
+      // Hook useMatchInfo sam zajmuje się odświeżeniem listy meczów
+      
+      return savedMatch;
+    } catch (error) {
+      console.error("❌ Błąd przy zapisywaniu nowego meczu:", error);
+      alert("Wystąpił błąd przy zapisywaniu meczu. Spróbuj ponownie.");
+      return null;
+    }
+  };
+
+  // Obsługa zapisywania edytowanego meczu
+  const handleSaveEditedMatch = async (matchInfo: TeamInfo) => {
+    console.log("💾 Zapisywanie edytowanego meczu:", matchInfo);
+    try {
+      // Zapisujemy mecz
+      const savedMatch = await handleSaveMatchInfo(matchInfo);
+      console.log("✅ Edytowany mecz zapisany:", savedMatch);
+      
+      // Hook useMatchInfo sam zajmuje się odświeżeniem listy meczów
+      
+      return savedMatch;
+    } catch (error) {
+      console.error("❌ Błąd przy zapisywaniu edytowanego meczu:", error);
+      alert("Wystąpił błąd przy zapisywaniu meczu. Spróbuj ponownie.");
+      return null;
+    }
   };
 
   // Dodaj funkcję obsługi sukcesu importu
@@ -355,7 +703,7 @@ export default function Page() {
     if (data.matchInfo && !allMatches.some(m => m.matchId === data.matchInfo.matchId)) {
       setActiveTab("packing");
       setEditingMatch(data.matchInfo);
-      setIsMatchModalOpen(true);
+      toggleMatchModal(true);
     }
     
     alert(`Import zakończony sukcesem! Zaimportowano ${newPlayers.length} graczy i ${newActions.length} akcji.`);
@@ -368,35 +716,79 @@ export default function Page() {
 
   // Nowa funkcja do obsługi wyboru strefy
   const handleZoneSelection = (zoneId: number, xT?: number) => {
+    if (zoneId === null || zoneId === undefined) {
+      console.error("handleZoneSelection: Otrzymano pustą strefę!");
+      return;
+    }
+    
+    console.log("handleZoneSelection wywołane z:", { 
+      zoneId, 
+      xT, 
+      isNumber: typeof zoneId === 'number',
+      startZone, 
+      endZone 
+    });
+    
     // Jeśli nie mamy startZone, to ustawiamy ją
     if (startZone === null) {
+      console.log("Ustawiam startZone:", zoneId);
       setStartZone(zoneId);
+      
+      // Zapisujemy strefę początkową w localStorage 
+      localStorage.setItem('tempStartZone', String(zoneId));
+      
+      // Dodatkowe sprawdzenie po ustawieniu
+      setTimeout(() => {
+        console.log("Sprawdzenie po ustawieniu startZone:", { startZone });
+      }, 50);
       return;
     }
     
     // Jeśli mamy startZone, ale nie mamy endZone, to ustawiamy ją
     if (endZone === null) {
+      console.log("Ustawiam endZone:", zoneId);
       setEndZone(zoneId);
       
-      // Resetujemy wybór zawodnika i otwieramy ActionModal
-      setSelectedPlayerId(null);
-      setSelectedReceiverId(null);
-      setIsActionModalOpen(true);
+      // Zapisujemy strefę końcową w localStorage
+      localStorage.setItem('tempEndZone', String(zoneId));
+      
+      // Dodatkowe sprawdzenie po ustawieniu
+      setTimeout(() => {
+        console.log("Sprawdzenie po ustawieniu endZone:", { endZone });
+        
+        // Odczekaj jeszcze chwilę przed otwarciem modalu, aby stan się zaktualizował
+        setTimeout(() => {
+          // Otwieramy ActionModal bez resetowania wyboru zawodnika
+          console.log("Otwieram ActionModal z wartościami stref:", { startZone, endZone });
+          setIsActionModalOpen(true);
+        }, 50);
+      }, 50);
+      
       return;
     }
     
     // Jeśli mamy obie strefy, resetujemy je i zaczynamy od nowa
-    setStartZone(zoneId);
+    console.log("Resetuję strefy i ustawiam nową startZone:", zoneId);
+    
+    // Najpierw resetujemy strefy
     setEndZone(null);
-    setSelectedPlayerId(null);
-    setSelectedReceiverId(null);
+    localStorage.removeItem('tempEndZone');
+    
+    // Dajemy czas na zaktualizowanie stanu
+    setTimeout(() => {
+      // Ustawiamy nową strefę początkową
+      setStartZone(zoneId);
+      localStorage.setItem('tempStartZone', String(zoneId));
+      
+      console.log("Strefy po resecie:", { startZone: zoneId, endZone: null });
+    }, 50);
   };
 
+  // Modyfikujemy funkcję resetActionState, aby nie odwoływała się do hookResetActionState
   // Niestandardowa funkcja resetująca stan akcji zachowująca wybrane wartości
-  const resetActionState = () => {
-    // Wykonujemy tylko resetowanie stanu z hooka, która już została zmodyfikowana
-    // aby zachowywać potrzebne wartości (strefy, zawodników, isSecondHalf, xT)
-    hookResetActionState();
+  const resetCustomActionState = () => {
+    // Używamy funkcji z nowego hooka
+    resetActionState();
     
     console.log("Wykonano resetowanie stanu akcji przy zachowaniu stref i zawodników");
   };
@@ -411,6 +803,11 @@ export default function Page() {
     // Zapisujemy wartość w stanie lokalnym
     setIsSecondHalf(newValue);
     
+    // Ustawiamy isSecondHalf w hooku usePackingActions
+    if (typeof packingActions.setIsSecondHalf === 'function') {
+      packingActions.setIsSecondHalf(newValue);
+    }
+    
     // Zapisujemy wartość w localStorage
     localStorage.setItem('currentHalf', newValue ? 'P2' : 'P1');
     
@@ -418,21 +815,92 @@ export default function Page() {
     if (useActionsStateRef.current?.setIsSecondHalf) {
       useActionsStateRef.current.setIsSecondHalf(newValue);
     }
-  }, [isSecondHalf]);
+  }, [isSecondHalf, packingActions]);
+
+  // Modyfikacja funkcji usuwania meczu
+  const handleMatchDelete = async (matchId: string) => {
+    console.log("🗑️ Usuwanie meczu o ID:", matchId);
+    
+    try {
+      await handleDeleteMatch(matchId);
+      console.log("✅ Mecz usunięty pomyślnie");
+      
+      // Hook useMatchInfo sam zajmuje się odświeżeniem listy meczów
+      // Nie ma potrzeby dodatkowego wywoływania refreshMatchesList
+    } catch (error) {
+      console.error("❌ Błąd podczas usuwania meczu:", error);
+      alert("Wystąpił błąd podczas usuwania meczu. Spróbuj ponownie.");
+    }
+  };
+
+  // Dodajemy efekt, który sprawdzi wartości stref w localStorage przy renderowaniu
+  useEffect(() => {
+    // Sprawdzamy, czy w localStorage są zapisane tymczasowe strefy
+    const savedStartZone = localStorage.getItem('tempStartZone');
+    const savedEndZone = localStorage.getItem('tempEndZone');
+    
+    console.log("Sprawdzenie zapisanych stref w localStorage:", { savedStartZone, savedEndZone });
+    
+    // Jeśli są strefy w localStorage, a stan jest pusty, wczytujemy je
+    if (savedStartZone && startZone === null) {
+      console.log("Wczytuję startZone z localStorage:", savedStartZone);
+      setStartZone(Number(savedStartZone));
+    }
+    
+    if (savedEndZone && endZone === null) {
+      console.log("Wczytuję endZone z localStorage:", savedEndZone);
+      setEndZone(Number(savedEndZone));
+      
+      // Jeśli mamy obie strefy, otwieramy ActionModal
+      if (savedStartZone && !isActionModalOpen) {
+        console.log("Obie strefy wczytane z localStorage, otwieram ActionModal");
+        setTimeout(() => setIsActionModalOpen(true), 100);
+      }
+    }
+  }, []);  // Wykonaj tylko raz przy montowaniu komponentu
+
+  // Dodajemy efekt, który sprawdzi i zainicjalizuje kolekcję teams
+  useEffect(() => {
+    const setupTeamsCollection = async () => {
+      try {
+        const teamsExist = await checkTeamsCollection();
+        if (!teamsExist) {
+          console.log("Kolekcja teams nie istnieje, rozpoczynam inicjalizację...");
+          const initialized = await initializeTeams();
+          if (initialized) {
+            console.log("Pomyślnie utworzono kolekcję teams w Firebase");
+            // Po inicjalizacji pobierz zespoły, aby zaktualizować pamięć podręczną
+            await fetchTeams();
+          }
+        } else {
+          console.log("Kolekcja teams już istnieje w Firebase");
+          // Pobierz zespoły do pamięci podręcznej
+          await fetchTeams();
+        }
+      } catch (error) {
+        console.error("Błąd podczas sprawdzania/inicjalizacji kolekcji teams:", error);
+      }
+    };
+
+    // Wywołanie funkcji inicjalizującej
+    setupTeamsCollection();
+  }, []); // Wykonaj tylko raz przy montowaniu komponentu
 
   return (
     <div className={styles.container}>
         <Instructions />
       <MatchInfoHeader
         matchInfo={matchInfo}
-        onChangeMatch={() => setIsMatchModalOpen(true)}
+        onChangeMatch={openEditMatchModal}
         allMatches={allMatches}
         onSelectMatch={handleSelectMatch}
-        onDeleteMatch={handleDeleteMatch}
+        onDeleteMatch={handleMatchDelete}
         selectedTeam={selectedTeam}
         onChangeTeam={setSelectedTeam}
         onManagePlayerMinutes={handleOpenPlayerMinutesModal}
         onAddNewMatch={openNewMatchModal}
+        refreshCounter={matchesListRefreshCounter}
+        isOfflineMode={isOfflineMode}
       />
 
       <main className={styles.content}>
@@ -472,7 +940,7 @@ export default function Page() {
           isSecondHalf={isSecondHalf}
           setIsSecondHalf={handleSecondHalfToggle}
           handleSaveAction={onSaveAction}
-          resetActionState={resetActionState}
+          resetActionState={resetCustomActionState}
           startZone={startZone}
           endZone={endZone}
           isActionModalOpen={isActionModalOpen}
@@ -480,6 +948,7 @@ export default function Page() {
         />
         <ActionsTable
           actions={actions}
+          players={filteredPlayers}
           onDeleteAction={handleDeleteAction}
           onDeleteAllActions={onDeleteAllActions}
         />
@@ -497,22 +966,20 @@ export default function Page() {
           allTeams={Object.values(TEAMS)}
         />
 
-        <MatchInfoModal
-          isOpen={isMatchModalOpen}
-          onClose={() => setIsMatchModalOpen(false)}
-          onSave={handleSaveMatchInfo}
-          currentInfo={matchInfo}
-        />
-
         {/* Modal dla nowego meczu */}
         <MatchInfoModal
           isOpen={isNewMatchModalOpen}
-          onClose={() => setIsNewMatchModalOpen(false)}
-          onSave={(matchInfo) => {
-            handleSaveMatchInfo(matchInfo);
-            setIsNewMatchModalOpen(false);
-          }}
+          onClose={closeNewMatchModal}
+          onSave={handleSaveNewMatch}
           currentInfo={null}
+        />
+
+        {/* Modal dla edycji meczu */}
+        <MatchInfoModal
+          isOpen={isMatchModalOpen}
+          onClose={closeEditMatchModal}
+          onSave={handleSaveEditedMatch}
+          currentInfo={matchInfo}
         />
 
         {/* Modal minut zawodników */}

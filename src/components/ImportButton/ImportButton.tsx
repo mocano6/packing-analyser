@@ -3,6 +3,11 @@
 import React, { useState, useRef } from "react";
 import { Player, Action } from "@/types";
 import styles from "./ImportButton.module.css";
+import { db } from "@/lib/firebase";
+import { 
+  collection, addDoc, getDocs, query, where, 
+  doc, writeBatch
+} from "firebase/firestore";
 
 interface ImportButtonProps {
   onImportSuccess: (data: { players: Player[], actions: Action[], matchInfo: any }) => void;
@@ -36,7 +41,7 @@ const ImportButton: React.FC<ImportButtonProps> = ({
         throw new Error("Nieprawidłowy format pliku. Brak wymaganych danych.");
       }
 
-      // Zapisz dane do bazy
+      // Zapisz dane do Firebase
       await importDataToDatabase(importedData);
       
       // Powiadom o sukcesie
@@ -79,6 +84,11 @@ const ImportButton: React.FC<ImportButtonProps> = ({
     if (!matchData.matchId) {
       matchData.matchId = crypto.randomUUID();
     }
+    
+    // Upewnij się, że matchData ma wszystkie wymagane pola
+    if (!matchData.time) {
+      matchData.time = "";
+    }
 
     // Importuj graczy i akcje
     await Promise.all([
@@ -89,51 +99,72 @@ const ImportButton: React.FC<ImportButtonProps> = ({
 
   const importPlayers = async (players: Player[], matchInfo: any) => {
     // Sprawdź, którzy gracze już istnieją
-    const checkPlayers = await Promise.all(
-      players.map(player => 
-        fetch(`/api/players?id=${player.id}`).then(res => res.json())
-      )
-    );
+    const existingPlayers = new Map<string, Player>();
+    
+    for (const player of players) {
+      const playerQuery = query(
+        collection(db, "players"), 
+        where("id", "==", player.id)
+      );
+      
+      const playerSnapshot = await getDocs(playerQuery);
+      
+      if (!playerSnapshot.empty) {
+        const existingPlayer = {
+          id: playerSnapshot.docs[0].id,
+          ...playerSnapshot.docs[0].data()
+        } as Player;
+        
+        existingPlayers.set(player.id, existingPlayer);
+      }
+    }
 
-    // Importuj tylko nowych graczy lub aktualizuj istniejących
-    for (let i = 0; i < players.length; i++) {
-      const player = players[i];
-      const existingPlayer = checkPlayers[i]?.length > 0 ? checkPlayers[i][0] : null;
-
-      if (!existingPlayer) {
-        // Dodaj nowego gracza
-        await fetch('/api/players', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...player,
-            teams: [matchInfo.team]
-          })
+    // Importuj tylko nowych graczy
+    const batch = writeBatch(db);
+    
+    for (const player of players) {
+      if (!existingPlayers.has(player.id)) {
+        const playerRef = doc(collection(db, "players"));
+        batch.set(playerRef, {
+          ...player,
+          teams: [matchInfo.team]
         });
       }
     }
+    
+    await batch.commit();
+    console.log('Gracze zaimportowani do Firebase');
   };
 
   const importActions = async (actions: Action[], matchInfo: any) => {
     // Sprawdź, które akcje już istnieją
-    const existingActions = await fetch(`/api/actions?matchId=${matchInfo.matchId}`).then(res => res.json());
-    const existingIds = new Set(existingActions.map((a: Action) => a.id));
+    const actionsQuery = query(
+      collection(db, "actions_packing"), 
+      where("matchId", "==", matchInfo.matchId)
+    );
+    
+    const actionsSnapshot = await getDocs(actionsQuery);
+    const existingIds = new Set(
+      actionsSnapshot.docs.map(doc => doc.data().id)
+    );
 
     // Zaimportuj tylko nowe akcje
     const newActions = actions.filter(action => !existingIds.has(action.id));
-
-    // Dodaj akcje do bazy danych
+    
+    // Użyj batch do importowania wielu akcji naraz
+    const batch = writeBatch(db);
+    
     for (const action of newActions) {
-      await fetch('/api/actions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...action,
-          matchId: matchInfo.matchId
-        })
+      const actionRef = doc(collection(db, "actions_packing"));
+      batch.set(actionRef, {
+        ...action,
+        matchId: matchInfo.matchId
       });
     }
-
+    
+    await batch.commit();
+    console.log(`Zaimportowano ${newActions.length} nowych akcji do Firebase`);
+    
     return newActions.length;
   };
 

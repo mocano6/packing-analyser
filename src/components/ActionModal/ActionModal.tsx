@@ -171,6 +171,40 @@ const ActionModal: React.FC<ActionModalProps> = ({
       return;
     }
 
+    // Sprawdzamy czy strefy są zapisane w localStorage
+    const tempStartZone = localStorage.getItem('tempStartZone');
+    const tempEndZone = localStorage.getItem('tempEndZone');
+    
+    // Logujemy informacje o strefach z localStorage
+    console.log("ActionModal: Wartości stref z localStorage:", {
+      tempStartZone,
+      tempEndZone
+    });
+    
+    // Jeśli brakuje stref w localStorage, wyświetlamy alert
+    if (!tempStartZone || !tempEndZone) {
+      console.error("ActionModal: Brak informacji o strefach w localStorage!");
+      alert("Błąd: Brak informacji o wybranych strefach. Proszę wybrać strefy początkową i końcową na boisku.");
+      return;
+    }
+
+    // Dodajemy log przed zapisaniem, aby sprawdzić stan w konsoli
+    console.log("ActionModal: Zapisuję akcję, stan przed zapisem:", {
+      selectedPlayerId,
+      selectedReceiverId,
+      actionType,
+      actionMinute,
+      currentPoints,
+      isP3Active,
+      isShot,
+      isGoal,
+      isPenaltyAreaEntry,
+      strefy: {
+        startZone: tempStartZone ? Number(tempStartZone) : null,
+        endZone: tempEndZone ? Number(tempEndZone) : null
+      }
+    });
+
     // Wywołaj funkcję zapisującą akcję, ale nie zamykaj modalu od razu
     // Komponent nadrzędny sam zadecyduje czy i kiedy zamknąć modal
     onSaveAction();

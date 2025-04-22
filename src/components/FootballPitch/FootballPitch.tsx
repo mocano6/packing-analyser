@@ -7,7 +7,7 @@ import { getXTValueFromMatrix } from "@/constants/xtValues";
 import ZoneCell from "./ZoneCell";
 
 export interface FootballPitchProps {
-  selectedZone: number | null;
+  selectedZone: string | number | null;
   onZoneSelect: (
     zone: number | null,
     xT?: number,
@@ -57,12 +57,15 @@ const FootballPitch = memo(function FootballPitch({
         const col = index % 12;
         const xTValue = getXTValueFromMatrix(row, col);
 
+        // Sprawdzamy, czy selectedZone jako string lub number odpowiada indeksowi
+        const isSelected = selectedZone === index || selectedZone === index.toString();
+
         return (
           <ZoneCell
             key={index}
             zoneIndex={index}
             xTValue={xTValue}
-            isSelected={selectedZone === index}
+            isSelected={isSelected}
             isFirstSelection={startZone === index}
             isSecondSelection={endZone === index}
             onSelect={handleZoneClick}
