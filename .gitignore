@@ -19,6 +19,11 @@
 
 # production
 /build
+/dist/
+
+# compiled output that might contain secrets
+*.chunk.js
+*.bundle.js
 
 # misc
 .DS_Store

@@ -18,7 +18,7 @@ const AuthGuard = dynamic(() => import('@/components/AuthGuard/AuthGuard'), {
 });
 
 // Ścieżki, które nie wymagają uwierzytelnienia
-const publicPaths = ['/login', '/api/auth/check-initial'];
+const publicPaths = ['/login'];
 
 const inter = Inter({ subsets: ['latin'] });
 

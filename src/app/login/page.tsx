@@ -27,27 +27,11 @@ export default function LoginPage() {
   // Funkcja do sprawdzania, czy to pierwsze logowanie
   const checkIfInitialSetup = async () => {
     try {
-      // W statycznym wdrożeniu zamiast używać API Route, sprawdzamy bezpośrednio Firestore
-      try {
-        // Sprawdź, czy hasło jest już ustawione w ustawieniach
-        const settingsRef = doc(db, "settings", "password");
-        const settingsDoc = await getDoc(settingsRef);
-        
-        setIsInitialPassword(!settingsDoc.exists());
-      } catch (error) {
-        console.error("Błąd podczas sprawdzania statusu hasła z Firebase:", error);
-        
-        // Alternatywne podejście przez API Route, jeśli dostępne
-        const response = await fetch("/api/auth/check-initial", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-        
-        const data = await response.json();
-        setIsInitialPassword(data.isInitial);
-      }
+      // Sprawdzamy bezpośrednio w Firestore czy hasło istnieje
+      const settingsRef = doc(db, "settings", "password");
+      const settingsDoc = await getDoc(settingsRef);
+      
+      setIsInitialPassword(!settingsDoc.exists());
     } catch (error) {
       console.error("Błąd podczas sprawdzania statusu hasła:", error);
       // W przypadku błędu zakładamy, że to nie jest pierwsze logowanie
