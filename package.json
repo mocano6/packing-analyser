@@ -2,6 +2,7 @@
   "name": "packing-analyzer",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://USERNAME.github.io/packing-analyzer",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
