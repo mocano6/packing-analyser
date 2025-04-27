@@ -19,6 +19,8 @@ import ExportButton from "@/components/ExportButton/ExportButton";
 import ImportButton from "@/components/ImportButton/ImportButton";
 import { initializeTeams, checkTeamsCollection } from "@/utils/initializeTeams";
 import { useAuth } from "@/hooks/useAuth";
+import { toast } from "react-hot-toast";
+import OfflineStatusBanner from "@/components/OfflineStatusBanner/OfflineStatusBanner";
 
 // Rozszerzenie interfejsu Window
 declare global {
@@ -133,6 +135,12 @@ export default function Page() {
   } = packingActions;
 
   const { logout } = useAuth();
+
+  // Automatycznie aktywuj tryb deweloperski (obejście uwierzytelniania)
+  useEffect(() => {
+    console.log('🔓 Aktywacja trybu deweloperskiego - obejście uwierzytelniania');
+    localStorage.setItem('packing_app_bypass_auth', 'true');
+  }, []);
 
   // Gdy hookSelectedZone się zmienia, aktualizujemy lokalny selectedZone
   useEffect(() => {
@@ -866,6 +874,13 @@ export default function Page() {
   useEffect(() => {
     const setupTeamsCollection = async () => {
       try {
+        // Najpierw sprawdzamy, czy aplikacja jest już w trybie offline
+        const isOfflineMode = typeof window !== 'undefined' && localStorage.getItem('firestore_offline_mode') === 'true';
+        if (isOfflineMode) {
+          console.log("📴 Aplikacja w trybie offline - pomijam inicjalizację kolekcji teams");
+          return;
+        }
+        
         const teamsExist = await checkTeamsCollection();
         if (!teamsExist) {
           console.log("Kolekcja teams nie istnieje, rozpoczynam inicjalizację...");
@@ -882,6 +897,15 @@ export default function Page() {
         }
       } catch (error) {
         console.error("Błąd podczas sprawdzania/inicjalizacji kolekcji teams:", error);
+        
+        // Sprawdzamy, czy to błąd uprawnień
+        if (error instanceof Error && error.message.includes("Missing or insufficient permissions")) {
+          console.log("🔒 Wykryto brak uprawnień do kolekcji teams, przełączam na tryb offline");
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('firestore_offline_mode', 'true');
+            toast.error("Brak uprawnień do kolekcji teams. Aplikacja działa w trybie offline.");
+          }
+        }
       }
     };
 
@@ -899,6 +923,7 @@ export default function Page() {
 
   return (
     <div className={styles.container}>
+        <OfflineStatusBanner />
         <Instructions />
       <MatchInfoHeader
         matchInfo={matchInfo}
@@ -961,6 +986,7 @@ export default function Page() {
           actions={actions}
           players={filteredPlayers}
           onDeleteAction={handleDeleteAction}
+          onDeleteAllActions={onDeleteAllActions}
         />
 
         <PlayerModal

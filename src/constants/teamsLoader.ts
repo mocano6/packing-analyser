@@ -1,5 +1,6 @@
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { toast } from "react-hot-toast";
 
 // Struktura zespołu w Firebase
 export interface Team {
@@ -49,6 +50,13 @@ export async function fetchTeams(): Promise<Record<string, Team>> {
     return cachedTeams;
   }
 
+  // Sprawdź, czy aplikacja jest w trybie offline
+  const isOfflineMode = typeof window !== 'undefined' && localStorage.getItem('firestore_offline_mode') === 'true';
+  if (isOfflineMode) {
+    console.log("📴 Aplikacja w trybie offline - używam domyślnych zespołów");
+    return DEFAULT_TEAMS;
+  }
+
   try {
     console.log("Pobieranie zespołów z Firebase...");
     const teamsCollection = collection(db, "teams");
@@ -82,6 +90,21 @@ export async function fetchTeams(): Promise<Record<string, Team>> {
     return teams;
   } catch (error) {
     console.error("Błąd podczas pobierania zespołów z Firebase:", error);
+    
+    // Sprawdzamy, czy to błąd uprawnień
+    if (error instanceof Error) {
+      if (error.message.includes("Missing or insufficient permissions") || 
+          error.message.includes("client is offline") ||
+          error.message.includes("Failed to get document because the client is offline")) {
+        console.log("🔒 Wykryto brak uprawnień lub tryb offline, przełączam na tryb offline");
+        
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('firestore_offline_mode', 'true');
+          toast.error("Brak uprawnień do kolekcji teams. Aplikacja działa w trybie offline z domyślnymi zespołami.");
+        }
+      }
+    }
+    
     console.warn("Używam domyślnych danych o zespołach");
     return DEFAULT_TEAMS;
   }

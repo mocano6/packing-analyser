@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { TeamInfo, PlayerMinutes } from "@/types";
+import { PlayerMinutes } from "@/types";
 import { db } from "@/lib/firebase";
 import { 
   collection, getDocs, addDoc, updateDoc, deleteDoc, 
@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 import { handleFirestoreError, resetFirestoreConnection } from "@/utils/firestoreErrorHandler";
 import { v4 as uuidv4 } from 'uuid';
+import toast from 'react-hot-toast';
 
 // Rozszerzenie interfejsu Window
 declare global {
@@ -100,6 +101,18 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, delay =
   }
   
   throw lastError;
+}
+
+// Aktualizacja interfejsu TeamInfo, aby zawierał pole lastUpdated
+export interface TeamInfo {
+  matchId?: string;
+  team: string;
+  opponent: string;
+  isHome: boolean;
+  competition: string;
+  date: string;
+  playerMinutes?: PlayerMinutes[];
+  lastUpdated?: string; // Dodajemy pole lastUpdated
 }
 
 export function useMatchInfo() {
@@ -307,8 +320,31 @@ export function useMatchInfo() {
             }
           } catch (err) {
             console.error("⚠️ Błąd przy pobieraniu meczów z Firebase:", err);
+            
+            // Rozszerzona obsługa błędów offline
+            if (String(err).includes("client is offline") || String(err).includes("Failed to get document because the client is offline")) {
+              console.warn("📴 Wykryto tryb offline. Przełączam aplikację na tryb lokalnego cache.");
+              setIsOfflineMode(true);
+              
+              // Zapisz status offline do localStorage
+              if (typeof window !== "undefined") {
+                localStorage.setItem('firestore_offline_mode', 'true');
+              }
+              
+              notifyUser("Aplikacja działa w trybie offline z lokalnym cache.", "info");
+              
+              // Zwracamy dane z cache zamiast rzucać wyjątek
+              const cachedMatches = localCacheRef.current.data;
+              const filteredMatches = teamId 
+                ? cachedMatches.filter(match => match.team === teamId)
+                : cachedMatches;
+                
+              console.log('🚑 Używam cache z powodu trybu offline, elementów:', filteredMatches.length);
+              
+              return filteredMatches;
+            }
             // W przypadku błędu uprawnień, przełączamy się na tryb offline
-            if (String(err).includes("permission") || String(err).includes("Missing or insufficient permissions")) {
+            else if (String(err).includes("permission") || String(err).includes("Missing or insufficient permissions")) {
               console.warn("🔒 Problem z uprawnieniami Firebase, przełączam na tryb offline");
               setIsOfflineMode(true);
               setError("Brak uprawnień do synchronizacji danych z bazą. Działamy w trybie offline.");
@@ -338,6 +374,19 @@ export function useMatchInfo() {
     } catch (err) {
       console.error("❌ Błąd podczas pobierania meczów z Firebase:", err);
       
+      // Sprawdzenie czy to błąd offline
+      if (String(err).includes("client is offline") || String(err).includes("Failed to get document because the client is offline")) {
+        console.warn("📴 Wykryto tryb offline. Przełączam aplikację na tryb lokalnego cache.");
+        setIsOfflineMode(true);
+        
+        // Zapisz status offline do localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem('firestore_offline_mode', 'true');
+        }
+        
+        notifyUser("Aplikacja działa w trybie offline z lokalnym cache.", "info");
+      }
+      
       // W przypadku błędu, używamy danych z cache
       const cachedMatches = localCacheRef.current.data;
       const filteredMatches = teamId 
@@ -354,6 +403,21 @@ export function useMatchInfo() {
       await new Promise(res => setTimeout(res, 300));
     }
   };
+
+  // Funkcja do powiadamiania użytkownika o błędach
+  const notifyUser = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    console.log(`Powiadomienie [${type}]: ${message}`);
+    switch (type) {
+      case 'success':
+        toast.success(message);
+        break;
+      case 'error':
+        toast.error(message);
+        break;
+      default:
+        toast(message);
+    }
+  }, []);
 
   // Funkcja do pobierania meczów (z cache'u, próbuje z Firebase w tle jeśli online)
   const fetchMatches = useCallback(async (teamId?: string) => {
@@ -395,84 +459,206 @@ export function useMatchInfo() {
       
       // 5. W tle odświeżamy dane z Firebase tylko jeśli jesteśmy online
       if (!isOfflineMode) {
-        fetchFromFirebase(teamId).then(firebaseMatches => {
-          if (teamId) {
-            const teamMatches = firebaseMatches.filter(match => match.team === teamId);
-            console.log(`🔄 Odświeżono dane z Firebase: ${teamMatches.length} meczów dla zespołu ${teamId}`);
-            
-            if (teamMatches.length !== filteredMatches.length) {
-              console.log('📊 Wykryto różnicę między cache a Firebase, aktualizuję stan');
-              setAllMatches(teamMatches);
-              
-              // Aktualizacja wybranego meczu
-              if (matchInfo?.matchId) {
-                const selectedMatch = teamMatches.find(m => m.matchId === matchInfo.matchId);
-                if (selectedMatch) {
-                  setMatchInfo(selectedMatch);
-                } else if (teamMatches.length > 0) {
-                  setMatchInfo(teamMatches[0]);
-                } else {
-                  setMatchInfo(null);
+        // Dodatkowe sprawdzenie statusu online przed próbą dostępu do Firebase
+        const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+        
+        // Sprawdzamy, czy tryb offline nie jest wymuszony w localStorage
+        const isOfflineForced = typeof window !== 'undefined' && 
+                               localStorage.getItem('firestore_offline_mode') === 'true';
+        
+        if (!isOnline || isOfflineForced) {
+          console.log("📴 Wykryto tryb offline - pomijam synchronizację z Firebase");
+          setIsOfflineMode(true);
+          return filteredMatches;
+        }
+        
+        // Przed próbą pobrania danych, sprawdzamy, czy mamy dostęp do Firebase
+        try {
+          // Użycie try/catch zamiast await dla operacji sprawdzenia uprawnień,
+          // aby natychmiast obsłużyć błąd offline
+          const testPermissions = async () => {
+            try {
+              // Sprawdzenie, czy możemy uzyskać dostęp do kolekcji "matches"
+              const testDoc = doc(db, "matches", "test_permissions");
+              return await getDoc(testDoc);
+            } catch (error) {
+              // Rozszerzona obsługa błędów offline
+              if (String(error).includes("client is offline") || String(error).includes("Failed to get document because the client is offline")) {
+                console.log("📴 Klient jest offline - pomijam synchronizację z Firebase");
+                setIsOfflineMode(true);
+                
+                // Zapisz informację o trybie offline do localStorage
+        if (typeof window !== "undefined") {
+                  localStorage.setItem('firestore_offline_mode', 'true');
                 }
-              } else if (teamMatches.length > 0) {
-                setMatchInfo(teamMatches[0]);
-              } else {
-                setMatchInfo(null);
+                
+                notifyUser("Wykryto tryb offline. Aplikacja działa z lokalnym cache.", "info");
+                
+                return null;
+              }
+              throw error; // Przekazujemy inne błędy dalej
+            }
+          };
+          
+          // Wykonaj test uprawnień z timeout - jeśli trwa zbyt długo, zakładamy problemy z połączeniem
+          const timeoutPromise = new Promise((_resolve, reject) => {
+            setTimeout(() => reject(new Error("Timeout przy próbie połączenia z Firebase")), 5000);
+          });
+          
+          const testResult = await Promise.race([testPermissions(), timeoutPromise])
+            .catch(error => {
+              if (String(error).includes("Timeout")) {
+                console.warn("⏱️ Przekroczono czas oczekiwania na Firebase, przełączam na tryb offline");
+                setIsOfflineMode(true);
+                return null;
+              }
+              throw error;
+            });
+          
+          // Jeśli test zwrócił null lub undefined, oznacza to że jesteśmy offline lub wystąpił timeout
+          if (!testResult) {
+            return filteredMatches;
+          }
+        
+          // Jeśli nie wystąpił błąd uprawnień, kontynuujemy pobieranie danych
+          try {
+            const firebaseMatches = await fetchFromFirebase(teamId);
+            
+            if (teamId) {
+              const teamMatches = firebaseMatches.filter(match => match.team === teamId);
+              console.log(`🔄 Odświeżono dane z Firebase: ${teamMatches.length} meczów dla zespołu ${teamId}`);
+              
+              if (teamMatches.length !== filteredMatches.length) {
+                console.log('📊 Wykryto różnicę między cache a Firebase, aktualizuję stan');
+                setAllMatches(teamMatches);
+                
+                // Aktualizacja wybranego meczu
+                if (matchInfo?.matchId) {
+                  const selectedMatch = teamMatches.find(m => m.matchId === matchInfo.matchId);
+                  if (selectedMatch) {
+                    setMatchInfo(selectedMatch);
+                  }
+                }
+              }
+            } else {
+              console.log(`🔄 Odświeżono dane z Firebase: ${firebaseMatches.length} meczów łącznie`);
+              if (firebaseMatches.length !== filteredMatches.length) {
+                console.log('📊 Wykryto różnicę między cache a Firebase, aktualizuję stan');
+                setAllMatches(firebaseMatches);
               }
             }
+          } catch (error) {
+            console.error("❌ Błąd podczas synchronizacji z Firebase w tle:", error);
+            
+            // Dodajemy rozszerzoną obsługę błędów
+            if (String(error).includes("client is offline") || String(error).includes("Failed to get document because the client is offline")) {
+              console.warn("📴 Wykryto tryb offline. Przełączam aplikację na tryb lokalnego cache.");
+              notifyUser("Aplikacja działa w trybie offline z lokalnym cache.", "info");
+              setIsOfflineMode(true);
+              
+              // Zapisz status offline do localStorage
+              if (typeof window !== "undefined") {
+                localStorage.setItem('firestore_offline_mode', 'true');
+              }
+            } 
+            else if (String(error).includes("FirebaseError: [code=unavailable]")) {
+              notifyUser("Serwer Firebase jest niedostępny. Działamy w trybie offline z lokalnym cache.", "info");
+              setIsOfflineMode(true);
+            } else if (String(error).includes("permission") || String(error).includes("auth/") || String(error).includes("Missing or insufficient permissions")) {
+              notifyUser("Problem z autoryzacją lub uprawnieniami Firebase. Działamy w trybie offline.", "info");
+              setIsOfflineMode(true);
+              
+              // Dodatkowe logowanie diagnostyczne
+              console.warn("🔒 Szczegóły błędu uprawnień:", error);
+              
+              // Zapisz informację o trybie offline do localStorage
+              if (typeof window !== "undefined") {
+                localStorage.setItem('firestore_offline_mode', 'true');
+              }
+            } else if (String(error).includes("Failed to fetch") || String(error).includes("NetworkError")) {
+              notifyUser("Problem z połączeniem sieciowym. Działamy w trybie offline z lokalnym cache.", "info");
+              setIsOfflineMode(true);
+            } else {
+              setError(`Błąd podczas synchronizacji: ${String(error).slice(0, 100)}...`);
+            }
           }
-        }).catch(err => {
-          console.warn("Błąd synchronizacji w tle:", err);
-          // Ignorujemy błędy synchronizacji w tle
+        } catch (permissionError) {
+          // Obsługa błędu uprawnień podczas testu
+          console.error("🔒 Błąd podczas testowania uprawnień Firebase:", permissionError);
           
-          // Sprawdzenie czy to błąd wewnętrznego stanu Firestore
-          const isInternalAssertionFailure = 
-            err && 
-            typeof err.message === 'string' && 
-            err.message.includes("INTERNAL ASSERTION FAILED");
+          if (String(permissionError).includes("client is offline") || String(permissionError).includes("Failed to get document because the client is offline")) {
+            console.log("📴 Klient jest offline - pomijam synchronizację z Firebase");
+            notifyUser("Wykryto tryb offline. Działamy z lokalną pamięcią podręczną.", "info");
+            setIsOfflineMode(true);
             
-          if (isInternalAssertionFailure) {
-            console.warn("🚨 Wykryto błąd wewnętrznego stanu Firestore podczas synchronizacji w tle");
-            
-            // Obsługa błędu wewnętrznego stanu
-            handleFirestoreError(err, db).catch(e => {
-              console.error("Problem podczas obsługi błędu Firestore:", e);
-            });
-            setError("Wystąpił problem z połączeniem do bazy danych. Odśwież stronę, aby rozwiązać problem.");
+            // Zapisz informację o trybie offline do localStorage
+            if (typeof window !== "undefined") {
+              localStorage.setItem('firestore_offline_mode', 'true');
+            }
           }
-        });
+          else if (String(permissionError).includes("permission") || 
+              String(permissionError).includes("auth/") || 
+              String(permissionError).includes("Missing or insufficient permissions")) {
+            notifyUser("Wykryto problem z uprawnieniami do bazy danych. Przełączam na tryb offline.", "info");
+            setIsOfflineMode(true);
+            
+            // Zapisz informację o trybie offline do localStorage
+            if (typeof window !== "undefined") {
+              localStorage.setItem('firestore_offline_mode', 'true');
+            }
+          }
+        }
       }
       
       return filteredMatches;
-    } catch (error) {
-      console.error("Błąd podczas pobierania meczów:", error);
+    } catch (err) {
+      console.error("❌ Błąd krytyczny w fetchMatches:", err);
+      setError(`Wystąpił błąd podczas pobierania danych: ${String(err).slice(0, 100)}...`);
       
-      // Obsługa błędu wewnętrznego stanu Firestore
-      await handleFirestoreError(error, db);
-      
-      // Używamy danych z cache jako zapasowego źródła
-      const cachedMatches = localCacheRef.current.data;
-      const filteredMatches = teamId 
-        ? cachedMatches.filter(match => match.team === teamId)
-        : cachedMatches;
+      // Sprawdzamy, czy to błąd związany z trybem offline
+      if (String(err).includes("client is offline") || String(err).includes("Failed to get document because the client is offline")) {
+        console.log("📴 Klient jest offline - przełączam na tryb offline");
+        notifyUser("Wykryto tryb offline. Działamy z lokalnym cache.", "info");
+        setIsOfflineMode(true);
         
-      console.log("🚑 Używam danych z cache po błędzie:", filteredMatches.length, "meczów");
-      setAllMatches(filteredMatches);
+        // Zapisz informację o trybie offline do localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem('firestore_offline_mode', 'true');
+        }
+      }
       
-      // Ustawiamy komunikat o błędzie
-      setError(`Wystąpił problem przy pobieraniu danych: ${error instanceof Error ? error.message : String(error)}`);
+      // Sprawdzamy, czy to błąd uprawnień
+      else if (String(err).includes("permission") || 
+          String(err).includes("auth/") || 
+          String(err).includes("Missing or insufficient permissions")) {
+        notifyUser("Krytyczny błąd uprawnień. Działamy w trybie offline.", "error");
+        setIsOfflineMode(true);
+        
+        // Zapisz informację o trybie offline do localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem('firestore_offline_mode', 'true');
+        }
+      }
       
-      return filteredMatches;
+      // Zawsze zwracamy dane z cache w przypadku błędu
+      return localCacheRef.current.data.filter(match => !teamId || match.team === teamId);
     } finally {
       setIsLoading(false);
     }
-  }, [matchInfo, isOfflineMode]);
+  }, [matchInfo, isOfflineMode, notifyUser]);
 
   // Funkcja do pełnego odświeżenia danych z Firebase (ignoruje cache)
   const forceRefreshFromFirebase = async (teamId?: string) => {
     try {
       console.log("🔄 Wymuszam pełne odświeżenie danych z Firebase");
       setIsLoading(true);
+      
+      // Sprawdzamy, czy jesteśmy w trybie offline przed próbą odświeżenia
+      if (isOfflineMode) {
+        console.warn("📴 Próba odświeżenia danych w trybie offline");
+        notifyUser("Aplikacja jest w trybie offline. Odświeżenie danych z serwera jest niemożliwe.", "info");
+        return localCacheRef.current.data.filter(m => !teamId || m.team === teamId);
+      }
       
       // Wyczyść cache dla danego zespołu
       if (teamId) {
@@ -512,6 +698,22 @@ export function useMatchInfo() {
       return filteredData;
     } catch (error) {
       console.error("❌ Błąd podczas wymuszania odświeżenia:", error);
+      
+      // Sprawdzamy, czy to błąd związany z trybem offline
+      if (String(error).includes("client is offline") || String(error).includes("Failed to get document because the client is offline")) {
+        console.warn("📴 Wykryto tryb offline podczas próby odświeżenia danych");
+        notifyUser("Wykryto tryb offline. Odświeżenie danych z serwera jest niemożliwe.", "info");
+        setIsOfflineMode(true);
+        
+        // Zapisz informację o trybie offline do localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem('firestore_offline_mode', 'true');
+        }
+        
+        // Zwracamy dane z lokalnego cache
+        return localCacheRef.current.data.filter(m => !teamId || m.team === teamId);
+      }
+      
       setError(`Błąd podczas odświeżania danych: ${error instanceof Error ? error.message : String(error)}`);
       return [];
     } finally {
@@ -527,196 +729,206 @@ export function useMatchInfo() {
       
       // Dodajemy informacje debugujące
       console.log('💾 handleSaveMatchInfo - rozpoczęcie zapisu meczu');
-      console.log('📋 handleSaveMatchInfo - przekazane info:', info);
       
-      // Przygotuj dane meczu do zapisania
-      const matchData = {
-        team: info.team,
-        opponent: info.opponent,
-        isHome: info.isHome,
-        competition: info.competition,
-        date: info.date,
-        playerMinutes: info.playerMinutes || []
+      // Sprawdzamy tryb offline
+      if (isOfflineMode && info.matchId && info.matchId !== 'local') {
+        console.warn("❌ Próba zapisu meczu do Firebase w trybie offline");
+        notifyUser("Zmiany zostaną zapisane lokalnie. Synchronizacja z bazą danych nastąpi po przywróceniu połączenia.", "info");
+      }
+      
+      // Przygotowujemy ID meczu (używamy istniejącego lub generujemy nowy)
+      const matchId = info.matchId && info.matchId !== 'local' ? info.matchId : uuidv4();
+      
+      // Przygotowujemy obiekt meczu
+      const matchData: TeamInfo = {
+        ...info,
+        matchId,
+        lastUpdated: new Date().toISOString(),
       };
       
-      console.log('🧾 handleSaveMatchInfo - dane meczu do zapisania:', matchData);
+      console.log('📋 Dane do zapisania:', matchData);
       
-      let savedMatch: TeamInfo;
-      let isNewMatch = !info.matchId;
-      let localId = isNewMatch ? generateId() : info.matchId!;
+      // Najpierw aktualizujemy cache lokalnie
+      const updatedCacheData = [...localCacheRef.current.data];
+      const existingMatchIndex = updatedCacheData.findIndex(match => match.matchId === matchId);
       
-      // 1. Najpierw aktualizujemy lokalny cache
-      if (info.matchId) {
-        // Update istniejącego meczu
-        savedMatch = {
-          matchId: info.matchId,
-          ...matchData
-        };
-        
-        // Aktualizacja cache'u
-        const updatedMatches = localCacheRef.current.data.map(match => 
-          match.matchId === info.matchId ? savedMatch : match
-        );
-        updateLocalCache(updatedMatches, info.team);
-        
-        // Aktualizacja stanu
-        setAllMatches(prev => prev.map(match => 
-          match.matchId === info.matchId ? savedMatch : match
-        ));
+      if (existingMatchIndex !== -1) {
+        updatedCacheData[existingMatchIndex] = matchData;
       } else {
-        // Dodanie nowego meczu
-        savedMatch = {
-          matchId: localId,
-          ...matchData
-        };
-        
-        // Aktualizacja cache'u
-        const updatedMatches = [...localCacheRef.current.data, savedMatch];
-        updateLocalCache(updatedMatches, info.team);
-        
-        // Aktualizacja stanu
-        setAllMatches(prev => [...prev, savedMatch]);
+        updatedCacheData.push(matchData);
       }
       
-      // Aktualizacja wybranego meczu
-      setMatchInfo(savedMatch);
+      // Aktualizacja cache
+      localCacheRef.current = {
+        ...localCacheRef.current,
+        data: updatedCacheData,
+        timestamp: new Date().getTime()
+      };
       
-      // 2. Asynchronicznie próbujemy zaktualizować Firebase, jeśli jesteśmy online
+      // Zapisujemy cache do localStorage
+      saveLocalCache();
+      
+      // Aktualizacja stanu UI
+      const newAllMatches = [...allMatches];
+      const existingMatchIndexInState = newAllMatches.findIndex(match => match.matchId === matchId);
+      
+      if (existingMatchIndexInState !== -1) {
+        newAllMatches[existingMatchIndexInState] = matchData;
+      } else {
+        newAllMatches.push(matchData);
+      }
+      
+      setAllMatches(newAllMatches);
+      setMatchInfo(matchData);
+      
+      // Zapisujemy w Firebase w tle, tylko jeśli nie jesteśmy w trybie offline
       if (!isOfflineMode) {
-        setTimeout(async () => {
-          try {
-            // Używamy kolejki operacji Firebase i mechanizmu ponownych prób
-            if (info.matchId) {
-              // Aktualizacja istniejącego meczu w Firebase
-              console.log('✏️ Próba aktualizacji meczu w Firebase:', info.matchId);
-              
-              await firebaseQueue.add(async () => {
-                return withRetry(async () => {
-                  try {
-                    const matchRef = doc(db, "matches", info.matchId!);
-                    await updateDoc(matchRef, matchData);
-                    return true;
-                  } catch (err) {
-                    // W przypadku błędu uprawnień, przełączamy się na tryb offline
-                    if (String(err).includes("permission") || String(err).includes("Missing or insufficient permissions")) {
-                      console.warn("⚠️ Przełączam na tryb offline z powodu błędów uprawnień");
-                      setIsOfflineMode(true);
-                    }
-                    console.error("⚠️ Błąd przy aktualizacji meczu:", err);
-                    throw err;
-                  }
-                }, 2);
-              }).then(() => {
-                console.log('✅ Mecz zaktualizowany w Firebase:', info.matchId);
-                
-                // Po udanym zapisie odświeżamy dane z Firebase
-                setTimeout(async () => {
-                  console.log("♻️ Odświeżam dane po edycji meczu");
-                  await forceRefreshFromFirebase(info.team);
-                }, 500);
-              }).catch(err => {
-                console.error('❌ Nie udało się zaktualizować meczu w Firebase:', err);
-              });
-            } else {
-              // Dodanie nowego meczu do Firebase
-              console.log('➕ Próba dodania meczu do Firebase');
-              
-              firebaseQueue.add(async () => {
-                return withRetry(async () => {
-                  try {
-                    const matchRef = await addDoc(collection(db, "matches"), matchData);
-                    return matchRef.id;
-                  } catch (err) {
-                    // W przypadku błędu uprawnień, przełączamy się na tryb offline
-                    if (String(err).includes("permission") || String(err).includes("Missing or insufficient permissions")) {
-                      console.warn("⚠️ Przełączam na tryb offline z powodu błędów uprawnień");
-                      setIsOfflineMode(true);
-                    }
-                    console.error("⚠️ Błąd przy dodawaniu meczu:", err);
-                    throw err;
-                  }
-                }, 2);
-              }).then((newId) => {
-                console.log('✅ Nowy mecz dodany do Firebase, ID:', newId);
-                
-                // Aktualizacja ID w cache'u
-                savedMatch.matchId = newId as string;
-                const updatedMatches = localCacheRef.current.data.map(match => 
-                  match.matchId === localId ? savedMatch : match
-                );
-                updateLocalCache(updatedMatches, info.team);
-                
-                // Aktualizacja stanu
-                setAllMatches(prev => prev.map(match => 
-                  match.matchId === localId ? savedMatch : match
-                ));
-                setMatchInfo(savedMatch);
-                
-                // Po udanym zapisie odświeżamy dane z Firebase
-                setTimeout(async () => {
-                  console.log("♻️ Odświeżam dane po dodaniu nowego meczu");
-                  await forceRefreshFromFirebase(info.team);
-                }, 500);
-              }).catch(err => {
-                console.error('❌ Nie udało się dodać meczu do Firebase:', err);
-              });
+        try {
+          const docRef = doc(db, "matches", matchId);
+          await setDoc(docRef, matchData);
+          console.log('✅ Zapisano mecz w Firebase:', matchId);
+          notifyUser("Mecz został zapisany", "success");
+        } catch (firebaseError) {
+          console.error('❌ Błąd zapisu do Firebase:', firebaseError);
+          
+          // Sprawdzamy, czy błąd dotyczy trybu offline
+          if (String(firebaseError).includes("client is offline") || String(firebaseError).includes("Failed to get document because the client is offline")) {
+            console.warn("📴 Wykryto tryb offline podczas zapisu. Dane zostały zapisane tylko lokalnie.");
+            notifyUser("Mecz zapisany lokalnie. Synchronizacja nastąpi po przywróceniu połączenia.", "info");
+            setIsOfflineMode(true);
+            
+            // Zapisz informację o trybie offline do localStorage
+            if (typeof window !== "undefined") {
+              localStorage.setItem('firestore_offline_mode', 'true');
             }
             
-            // Wysyłamy zdarzenie odświeżenia listy
-            setTimeout(() => {
-              if (typeof document !== "undefined") {
-                const eventId = `${info.team}_${Date.now()}`;
-                if (!window._lastRefreshEventId || window._lastRefreshEventId !== eventId) {
-                  window._lastRefreshEventId = eventId;
-                  
-                  setTimeout(() => {
-                    if (window._lastRefreshEventId === eventId) {
-                      const refreshEvent = new CustomEvent('matchesListRefresh', { 
-                        detail: { 
-                          teamId: info.team,
-                          timestamp: Date.now()
-                        } 
-                      });
-                      window._lastRefreshEventId = "";
-                      document.dispatchEvent(refreshEvent);
-                    }
-                  }, 300);
-                }
-              }
-            }, 800);
-          } catch (error) {
-            console.error('❌ Błąd podczas synchronizacji z Firebase:', error);
+            // Dane są zapisane lokalnie, więc zwracamy matchId
+            return matchId;
           }
-        }, 1500);
+          
+          // Obsługa błędu Firebase
+          await handleFirestoreError(firebaseError, db);
+          
+          const errorMessage = `Zmiany zapisane lokalnie, ale wystąpił błąd synchronizacji z bazą danych: ${firebaseError instanceof Error ? firebaseError.message : String(firebaseError)}`;
+          setError(errorMessage);
+          notifyUser(errorMessage, "error");
+          
+          // Mimo błędu Firebase, dane są zapisane lokalnie, więc zwracamy matchId
+        }
       } else {
-        // W trybie offline wysyłamy tylko zdarzenie odświeżenia lokalnej listy
-        setTimeout(() => {
-          if (typeof document !== "undefined") {
-            const refreshEvent = new CustomEvent('matchesListRefresh', { 
-              detail: { 
-                teamId: info.team,
-                timestamp: Date.now()
-              } 
-            });
-            document.dispatchEvent(refreshEvent);
-          }
-        }, 800);
+        // W trybie offline potwierdzamy tylko lokalny zapis
+        notifyUser("Mecz zapisany lokalnie", "success");
       }
       
-      console.log('✅ handleSaveMatchInfo - zakończenie zapisu meczu, zwracam:', savedMatch);
+      console.log('📋 handleSaveMatchInfo - zakończono operację zapisu');
+      return matchId;
       
-      return savedMatch;
     } catch (error) {
-      console.error("Błąd podczas zapisywania informacji o meczu:", error);
+      console.error('❌ Błąd podczas zapisywania meczu:', error);
       
-      // Obsługa błędu wewnętrznego stanu Firestore
-      await handleFirestoreError(error, db);
+      // Sprawdzamy, czy błąd dotyczy trybu offline
+      if (String(error).includes("client is offline") || String(error).includes("Failed to get document because the client is offline")) {
+        console.warn("📴 Wykryto tryb offline podczas operacji. Przełączam na tryb lokalny.");
+        notifyUser("Aplikacja działa w trybie offline. Dane zostały zapisane lokalnie.", "info");
+        setIsOfflineMode(true);
+        
+        // Zapisz informację o trybie offline do localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem('firestore_offline_mode', 'true');
+        }
+      }
+      
+      const errorMessage = `Nie udało się zapisać meczu: ${error instanceof Error ? error.message : String(error)}`;
+      setError(errorMessage);
+      notifyUser(errorMessage, "error");
       
       return null;
     } finally {
       setIsLoading(false);
     }
-  }, [fetchMatches]);
+  }, [allMatches, isOfflineMode, notifyUser]);
+
+  // Funkcja do usuwania meczu
+  const handleDeleteMatch = useCallback(async (matchId: string) => {
+    try {
+      console.log('🗑️ handleDeleteMatch - rozpoczęcie usuwania meczu:', matchId);
+      
+      if (isOfflineMode) {
+        console.warn("❌ Próba usunięcia meczu z Firebase w trybie offline");
+        notifyUser("Mecz zostanie usunięty lokalnie. Synchronizacja z bazą danych nastąpi po przywróceniu połączenia.", "info");
+      }
+      
+      setIsLoading(true);
+      setError(null);
+      
+      // Najpierw usuwamy z lokalnego cache
+      const updatedCacheData = localCacheRef.current.data.filter(match => match.matchId !== matchId);
+      localCacheRef.current = {
+        ...localCacheRef.current,
+        data: updatedCacheData,
+        timestamp: new Date().getTime()
+      };
+      
+      // Zapisujemy zaktualizowany cache
+      saveLocalCache();
+      
+      // Aktualizujemy stan UI
+      const updatedMatches = allMatches.filter(match => match.matchId !== matchId);
+      setAllMatches(updatedMatches);
+      
+      // Jeśli usuwany mecz był aktualnie wybrany, wybieramy pierwszy dostępny lub null
+      if (matchInfo && matchInfo.matchId === matchId) {
+        if (updatedMatches.length > 0) {
+          setMatchInfo(updatedMatches[0]);
+        } else {
+          setMatchInfo(null);
+        }
+      }
+      
+      // Usuwamy z Firebase w tle, jeśli nie jesteśmy w trybie offline
+      if (!isOfflineMode) {
+        try {
+          const docRef = doc(db, "matches", matchId);
+          await deleteDoc(docRef);
+          console.log('✅ Usunięto mecz z Firebase:', matchId);
+          notifyUser("Mecz został usunięty", "success");
+        } catch (firebaseError) {
+          console.error('❌ Błąd podczas usuwania meczu z Firebase:', firebaseError);
+          
+          // Obsługa błędu Firebase
+          await handleFirestoreError(firebaseError, db);
+          
+          const errorMessage = `Mecz usunięty lokalnie, ale wystąpił błąd synchronizacji z bazą danych: ${firebaseError instanceof Error ? firebaseError.message : String(firebaseError)}`;
+          setError(errorMessage);
+          notifyUser(errorMessage, "error");
+          
+          // Mimo błędu Firebase, dane są usunięte lokalnie
+        }
+      } else {
+        // W trybie offline potwierdzamy tylko lokalną operację
+        notifyUser("Mecz usunięty lokalnie", "success");
+      }
+      
+      console.log('🗑️ handleDeleteMatch - zakończono operację usuwania');
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Błąd podczas usuwania meczu:', error);
+      
+      const errorMessage = `Nie udało się usunąć meczu: ${error instanceof Error ? error.message : String(error)}`;
+      setError(errorMessage);
+      notifyUser(errorMessage, "error");
+      
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [allMatches, isOfflineMode, matchInfo, notifyUser]);
+
+  // Funkcja do wyboru meczu
+  const handleSelectMatch = useCallback((match: TeamInfo | null) => {
+    setMatchInfo(match);
+  }, []);
 
   // Funkcja do zapisywania minut zawodników w meczu
   const handleSavePlayerMinutes = useCallback(async (match: TeamInfo, playerMinutes: PlayerMinutes[]) => {
@@ -728,19 +940,32 @@ export function useMatchInfo() {
         throw new Error("Brak ID meczu");
       }
       
-      // 1. Aktualizacja lokalnego cache'u
+      console.log("📝 handleSavePlayerMinutes - zapisywanie minut dla meczu:", match.matchId);
+      
+      if (isOfflineMode) {
+        console.warn("❌ Próba aktualizacji minut zawodników w trybie offline");
+        notifyUser("Zmiany zostaną zapisane lokalnie. Synchronizacja z bazą danych nastąpi po przywróceniu połączenia.", "info");
+      }
+      
+      // Aktualizacja lokalnego cache
       const updatedMatch = {
         ...match,
-        playerMinutes
+        playerMinutes,
+        lastUpdated: new Date().toISOString()
       };
       
-      // Aktualizacja cache'u
-      const updatedMatches = localCacheRef.current.data.map(m => 
+      // Aktualizacja cache
+      const updatedCacheData = localCacheRef.current.data.map(m => 
         m.matchId === match.matchId ? updatedMatch : m
       );
-      updateLocalCache(updatedMatches, match.team);
+      localCacheRef.current = {
+        ...localCacheRef.current, 
+        data: updatedCacheData,
+        timestamp: new Date().getTime()
+      };
+      saveLocalCache();
       
-      // Aktualizacja stanu
+      // Aktualizacja stanu UI
       setAllMatches(prev => 
         prev.map(m => 
           m.matchId === match.matchId ? updatedMatch : m
@@ -752,171 +977,46 @@ export function useMatchInfo() {
         setMatchInfo(updatedMatch);
       }
       
-      // 2. Asynchronicznie aktualizujemy Firebase jeśli online
+      // Asynchronicznie aktualizujemy Firebase jeśli online
       if (!isOfflineMode) {
-        setTimeout(async () => {
-          try {
-            // Aktualizuj dane w Firebase
-            const matchRef = doc(db, "matches", match.matchId!);
-            await updateDoc(matchRef, {
-              playerMinutes: playerMinutes
-            });
-            
-            console.log('✅ Minuty zawodników zaktualizowane w Firebase');
-            
-            // Po udanym zapisie odświeżamy dane z Firebase
-            setTimeout(async () => {
-              console.log("♻️ Odświeżam dane po zmianie minut zawodników");
-              await forceRefreshFromFirebase(match.team);
-            }, 500);
-          } catch (error) {
-            console.error('❌ Błąd podczas synchronizacji minut zawodników z Firebase:', error);
-            
-            // W przypadku błędu uprawnień, przełączamy się na tryb offline
-            if (String(error).includes("permission") || String(error).includes("Missing or insufficient permissions")) {
-              console.warn("⚠️ Przełączam na tryb offline z powodu błędów uprawnień");
-              setIsOfflineMode(true);
-            }
-          }
-        }, 500);
+        try {
+          // Aktualizuj dane w Firebase
+          const matchRef = doc(db, "matches", match.matchId);
+          await updateDoc(matchRef, {
+            playerMinutes: playerMinutes,
+            lastUpdated: new Date().toISOString()
+          });
+          
+          console.log('✅ Minuty zawodników zaktualizowane w Firebase');
+          notifyUser("Minuty zawodników zostały zapisane", "success");
+        } catch (firebaseError) {
+          console.error('❌ Błąd podczas synchronizacji minut zawodników z Firebase:', firebaseError);
+          
+          // Obsługa błędu Firebase
+          await handleFirestoreError(firebaseError, db);
+          
+          const errorMessage = `Minuty zawodników zapisane lokalnie, ale wystąpił błąd synchronizacji z bazą danych: ${firebaseError instanceof Error ? firebaseError.message : String(firebaseError)}`;
+          setError(errorMessage);
+          notifyUser(errorMessage, "error");
+        }
+      } else {
+        // W trybie offline potwierdzamy tylko lokalny zapis
+        notifyUser("Minuty zawodników zapisane lokalnie", "success");
       }
+      
+      return true;
     } catch (error) {
       console.error("Błąd podczas zapisywania minut zawodników:", error);
       
-      // Obsługa błędu wewnętrznego stanu Firestore
-      await handleFirestoreError(error, db);
+      const errorMessage = `Nie udało się zapisać minut zawodników: ${error instanceof Error ? error.message : String(error)}`;
+      setError(errorMessage);
+      notifyUser(errorMessage, "error");
       
       return false;
     } finally {
       setIsLoading(false);
     }
-  }, [fetchMatches]);
-
-  const handleSelectMatch = (match: TeamInfo | null) => {
-    setMatchInfo(match);
-  };
-
-  // Modyfikujemy funkcję usuwania, aby również działała offline
-  const handleDeleteMatch = useCallback(async (matchId: string) => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-      console.log("🗑️ Rozpoczynam usuwanie meczu:", matchId);
-      
-      // Dodajemy opóźnienie przed rozpoczęciem operacji
-      await new Promise(res => setTimeout(res, 300));
-      
-      // Znajdź mecz w cache'u
-      const matchToDelete = localCacheRef.current.data.find(match => match.matchId === matchId);
-      if (!matchToDelete) {
-        console.error('❌ Nie znaleziono meczu do usunięcia w cache:', matchId);
-        return false;
-      }
-      
-      const deletedMatchTeamId = matchToDelete.team;
-      console.log(`🏆 Usuwany mecz należy do zespołu: ${deletedMatchTeamId || 'nieznany'}`);
-      
-      // 1. Najpierw aktualizujemy lokalny cache
-      const updatedMatches = localCacheRef.current.data.filter(match => match.matchId !== matchId);
-      updateLocalCache(updatedMatches, deletedMatchTeamId);
-      
-      // Aktualizacja stanu
-      setAllMatches(prev => {
-        const updated = prev.filter(match => match.matchId !== matchId);
-        console.log(`📊 Po usunięciu pozostało ${updated.length} meczów`);
-          
-          // Jeśli usunięto aktualnie wybrany mecz, wybierz inny
-          if (matchInfo?.matchId === matchId) {
-          if (updated.length > 0) {
-            console.log(`🔄 Wybrany mecz został usunięty, wybieramy nowy z ${updated.length} dostępnych`);
-            // Jeśli to możliwe, wybierz mecz tego samego zespołu
-            const sameTeamMatches = updated.filter(match => match.team === deletedMatchTeamId);
-            if (sameTeamMatches.length > 0) {
-              setMatchInfo(sameTeamMatches[0]);
-            } else {
-              setMatchInfo(updated[0]);
-            }
-          } else {
-            console.log(`❗ Brak meczów po usunięciu, resetujemy wybrany mecz`);
-            setMatchInfo(null);
-          }
-        }
-        
-        return updated;
-      });
-      
-      // 2. Asynchronicznie próbujemy zaktualizować Firebase, jeśli jesteśmy online
-      if (!isOfflineMode) {
-        setTimeout(async () => {
-          try {
-            // Używamy kolejki operacji Firebase
-            await firebaseQueue.add(async () => {
-              return withRetry(async () => {
-                try {
-                  // Próbujemy usunąć sam mecz - nie usuwamy już akcji, bo to może powodować problemy z uprawnieniami
-                  await deleteDoc(doc(db, "matches", matchId));
-                  return true;
-                } catch (err) {
-                  // W przypadku błędu uprawnień, przełączamy się na tryb offline
-                  if (String(err).includes("permission") || String(err).includes("Missing or insufficient permissions")) {
-                    console.warn("⚠️ Przełączam na tryb offline z powodu błędów uprawnień");
-                    setIsOfflineMode(true);
-                  }
-                  console.error("⚠️ Błąd przy usuwaniu meczu z Firebase:", err);
-                  throw err;
-                }
-              }, 2);
-            });
-            
-            console.log(`✅ Usunięto mecz ${matchId} z Firebase`);
-            
-            // Po udanym usunięciu odświeżamy dane z Firebase
-            setTimeout(async () => {
-              console.log("♻️ Odświeżam dane po usunięciu meczu");
-              await forceRefreshFromFirebase(deletedMatchTeamId);
-            }, 500);
-          } catch (error) {
-            console.error('❌ Błąd podczas synchronizacji usunięcia meczu z Firebase:', error);
-          }
-        }, 1000);
-      }
-      
-      // Wysyłamy zdarzenie odświeżenia listy po usunięciu (niezależnie od trybu)
-      setTimeout(() => {
-        if (typeof document !== "undefined") {
-          const eventId = `${deletedMatchTeamId}_${Date.now()}`;
-          if (!window._lastRefreshEventId || window._lastRefreshEventId !== eventId) {
-            window._lastRefreshEventId = eventId;
-            
-            setTimeout(() => {
-              if (window._lastRefreshEventId === eventId) {
-                const refreshEvent = new CustomEvent('matchesListRefresh', { 
-                  detail: { 
-                    teamId: deletedMatchTeamId,
-                    timestamp: Date.now()
-                  } 
-                });
-                window._lastRefreshEventId = "";
-                document.dispatchEvent(refreshEvent);
-              }
-            }, 400);
-          }
-        }
-      }, 1000);
-      
-      return true;
-    } catch (error) {
-      console.error("Błąd podczas usuwania meczu:", error);
-      
-      // Obsługa błędu wewnętrznego stanu Firestore
-      await handleFirestoreError(error, db);
-      
-      return false;
-      } finally {
-        setIsLoading(false);
-      }
-  }, [fetchMatches]);
+  }, [isOfflineMode, matchInfo, notifyUser]);
 
   return {
     matchInfo,

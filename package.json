@@ -12,16 +12,23 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "db:seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+    "db:seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts",
+    "db:init": "node src/scripts/initializeDatabase.js",
+    "db:create-index": "node src/scripts/createFirestoreIndex.js",
+    "backup": "node src/scripts/backupData.js",
+    "restore": "node src/scripts/restoreData.js",
+    "reset-password": "node src/scripts/resetPassword.js"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
     "@types/uuid": "^10.0.0",
+    "dotenv": "^16.5.0",
     "firebase": "^11.6.0",
     "next": "15.2.2",
     "node-fetch": "^3.3.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-hot-toast": "^2.5.2",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
@@ -31,6 +38,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.2.2",
+    "firebase-tools": "^14.2.0",
     "gh-pages": "^6.3.0",
     "prisma": "^6.5.0",
     "ts-node": "^10.9.2",

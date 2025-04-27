@@ -3,8 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import styles from './OfflineStatus.module.css';
 import { getFirestore, enableNetwork, disableNetwork } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, forceOfflineMode, enableOnlineMode } from '@/lib/firebase';
 import { resetFirestoreConnection } from '@/utils/firestoreErrorHandler';
+import { testFirebaseConnection, testAllCollections } from '@/utils/testFirebaseConnection';
+import { toast } from 'react-hot-toast';
 
 interface OfflineStatusProps {
   className?: string;
@@ -17,186 +19,176 @@ const OfflineStatus: React.FC<OfflineStatusProps> = ({ className }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [initialCheckDone, setInitialCheckDone] = useState<boolean>(false);
   const [isResetting, setIsResetting] = useState<boolean>(false);
+  const [isTesting, setIsTesting] = useState<boolean>(false);
+  const [isOfflineForced, setIsOfflineForced] = useState<boolean>(false);
 
+  // Sprawdzenie czy komponenty renderują się po stronie SSR
+  const isServer = typeof window === 'undefined';
+  
+  // Sprawdzamy stan połączenia i ustawienie offline mode przy montowaniu komponentu
   useEffect(() => {
-    // Dajemy czas na inicjalizację Firebase z lib/firebase.ts
+    // Nie wykonuj tego kodu na serwerze
+    if (isServer) return;
+    
+    let isMounted = true;
+    
+    // Sprawdź, czy tryb offline jest już wymuszony
+    if (typeof window !== 'undefined') {
+      const offlineMode = localStorage.getItem('firestore_offline_mode') === 'true';
+      setIsOfflineForced(offlineMode);
+      if (offlineMode) {
+        setIsPersistenceEnabled(false);
+      }
+    }
+    
+    // Dajemy czas na inicjalizację Firebase
     const initTimer = setTimeout(() => {
+      if (!isMounted) return;
+      
       // Inicjalizacja stanu na podstawie aktualnego statusu połączenia
       setIsOnline(navigator.onLine);
       console.log('Status połączenia:', navigator.onLine ? 'online' : 'offline');
       
-      // Inicjalne sprawdzenie dostępności Firebase
-      if (navigator.onLine) {
-        checkFirebaseConnection();
-      }
-      
       setInitialCheckDone(true);
-    }, 3000); // Dajemy 3 sekundy na inicjalizację Firebase
+    }, 1000);
     
     // Nasłuchiwanie zmian stanu połączenia
     const handleOnline = () => {
       console.log('Aplikacja przeszła w tryb online');
       setIsOnline(true);
-      // Nie resetujemy errorMessage od razu, dopiero po udanym połączeniu
-      
-      // Po przywróceniu połączenia automatycznie włączamy sieć w Firebase
-      // ale tylko gdy już wykonaliśmy inicjalny check
-      if (initialCheckDone) {
-        enableFirebaseNetwork();
-      }
     };
 
     const handleOffline = () => {
       console.log('Aplikacja przeszła w tryb offline');
       setIsOnline(false);
-      // Po utracie połączenia wyłączamy sieć w Firebase
-      if (initialCheckDone) {
-        disableFirebaseNetwork();
-      }
-    };
-
-    // Nasłuchuj na błędy Firestore
-    const handleFirestoreError = (event: ErrorEvent) => {
-      if (event.error && 
-          typeof event.error.message === 'string' && 
-          event.error.message.includes('Firestore') &&
-          (event.error.message.includes('INTERNAL ASSERTION FAILED') || 
-           event.error.message.includes('invalid-argument'))) {
-        setErrorMessage('Wykryto problem z połączeniem do bazy danych.');
-        setIsPersistenceEnabled(false);
-      }
     };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    window.addEventListener('error', handleFirestoreError);
 
     return () => {
+      isMounted = false;
       clearTimeout(initTimer);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('error', handleFirestoreError);
     };
-  }, [initialCheckDone]);
+  }, [isServer]);
 
-  // Sprawdzenie połączenia z Firebase
-  const checkFirebaseConnection = async () => {
-    try {
-      // Zaznaczamy, że sprawdzamy stan sieci
-      setSyncing(true);
-      
-      // Próba włączenia sieci Firebase
-      await enableNetwork(db);
-      console.log('Połączenie z Firestore działa poprawnie');
-      setErrorMessage(null);
-      setIsPersistenceEnabled(true);
-    } catch (error) {
-      console.error('Błąd podczas sprawdzania połączenia z Firestore:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Nieznany błąd';
-      setErrorMessage(`Problem z połączeniem do Firebase: ${errorMsg}`);
-      setIsPersistenceEnabled(false);
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  // Włączanie sieci w Firebase
-  const enableFirebaseNetwork = async () => {
-    setSyncing(true);
-    try {
-      await enableNetwork(db);
-      console.log('Sieć Firebase włączona pomyślnie');
-      setIsPersistenceEnabled(true);
-      setErrorMessage(null);
-    } catch (error) {
-      console.error('Błąd podczas włączania sieci Firebase:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Nieznany błąd';
-      setErrorMessage(`Nie można włączyć synchronizacji: ${errorMsg}`);
-      setIsPersistenceEnabled(false);
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  // Wyłączanie sieci w Firebase
-  const disableFirebaseNetwork = async () => {
-    try {
-      await disableNetwork(db);
-      console.log('Sieć Firebase wyłączona pomyślnie');
-      setIsPersistenceEnabled(false);
-    } catch (error) {
-      console.error('Błąd podczas wyłączania sieci Firebase:', error);
-    }
-  };
-
-  // Obsługa ręcznej synchronizacji
-  const handleSync = async () => {
-    if (!isOnline || syncing) return;
+  // Funkcja testująca połączenie z Firestore
+  const handleTestConnection = async () => {
+    if (isServer) return;
     
-    await enableFirebaseNetwork();
-  };
+    setIsTesting(true);
+    toast.loading('Testowanie połączenia z bazą danych...');
 
-  // Obsługa ponownego uruchomienia aplikacji przy problemach z połączeniem
-  const handleReload = () => {
-    if (typeof window !== 'undefined') {
-      window.location.reload();
-    }
-  };
-
-  const handleResetFirestore = async () => {
-    setIsResetting(true);
-    
     try {
-      const success = await resetFirestoreConnection(db);
+      // Testowanie połączenia
+      const connectionResult = await testFirebaseConnection();
       
-      if (success) {
-        setErrorMessage(null);
-        setIsPersistenceEnabled(true);
+      if (connectionResult) {
+        toast.success('Test połączenia z bazą danych zakończony pomyślnie!');
         
-        // Wyświetl komunikat o pomyślnym resecie
-        alert('Pomyślnie zresetowano połączenie z bazą danych. Zalecane jest odświeżenie strony.');
+        // Testowanie dostępu do kolekcji
+        const collectionsResults = await testAllCollections();
         
-        // Zapytaj o odświeżenie strony
-        if (window.confirm('Czy chcesz odświeżyć stronę, aby zastosować zmiany?')) {
-          window.location.reload();
+        // Sprawdzamy, czy wszystkie kolekcje mają dostęp
+        const allAccessible = Object.values(collectionsResults).every(result => result);
+        
+        if (allAccessible) {
+          toast.success('Masz dostęp do wszystkich kolekcji!');
+        } else {
+          // Filtrujemy kolekcje bez dostępu
+          const noAccessCollections = Object.entries(collectionsResults)
+            .filter(([_, hasAccess]) => !hasAccess)
+            .map(([collection]) => collection);
+            
+          toast.error(`Brak dostępu do kolekcji: ${noAccessCollections.join(', ')}`);
         }
       } else {
-        alert('Nie udało się zresetować połączenia. Spróbuj odświeżyć stronę.');
+        toast.error('Test połączenia z bazą danych nie powiódł się');
       }
     } catch (error) {
-      console.error('Błąd podczas resetowania połączenia:', error);
-      alert('Wystąpił błąd podczas resetowania połączenia.');
+      toast.error(`Błąd podczas testowania: ${error instanceof Error ? error.message : 'Nieznany błąd'}`);
+      console.error('Błąd podczas testowania połączenia:', error);
     } finally {
-      setIsResetting(false);
+      setIsTesting(false);
     }
   };
 
-  // Jeśli jesteśmy online, persistence jest włączone i nie ma błędów lub jeśli nie zakończyliśmy inicjalizacji - nie wyświetlamy komponentu
-  if (!initialCheckDone || (isOnline && isPersistenceEnabled && !errorMessage)) {
-    return null;
-  }
+  // Funkcja wymuszająca tryb offline
+  const handleForceOffline = async () => {
+    if (isServer) return;
+    
+    try {
+      const success = await forceOfflineMode();
+      if (success) {
+        setIsOfflineForced(true);
+        setIsPersistenceEnabled(false);
+        toast.success('Wymuszono tryb offline. Odśwież stronę, aby zastosować zmiany.');
+        // Zapisz informację o trybie offline do localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem('firestore_offline_mode', 'true');
+        }
+      } else {
+        toast.error('Nie udało się wymusić trybu offline.');
+      }
+    } catch (error) {
+      console.error('Błąd przy wymuszaniu trybu offline:', error);
+      toast.error('Wystąpił błąd przy wymuszaniu trybu offline.');
+    }
+  };
+
+  // Funkcja przywracająca tryb online
+  const handleEnableOnline = async () => {
+    if (isServer) return;
+    
+    try {
+      const success = await enableOnlineMode();
+      if (success) {
+        setIsOfflineForced(false);
+        setIsPersistenceEnabled(true);
+        toast.success('Przywrócono tryb online. Odśwież stronę, aby zastosować zmiany.');
+        // Usuń informację o trybie offline z localStorage
+        if (typeof window !== "undefined") {
+          localStorage.removeItem('firestore_offline_mode');
+        }
+      } else {
+        toast.error('Nie udało się przywrócić trybu online.');
+      }
+    } catch (error) {
+      console.error('Błąd przy przywracaniu trybu online:', error);
+      toast.error('Wystąpił błąd przy przywracaniu trybu online.');
+    }
+  };
+
+  // Obsługa odświeżania strony
+  const handleReload = () => {
+    if (isServer) return;
+    window.location.reload();
+  };
+
+  // Na serwerze nie renderujemy nic
+  if (isServer) return null;
+
+  // Sprawdzenie czy powinniśmy wyświetlić komponent
+  // Zawsze pokazujemy komponent jeśli tryb offline jest wymuszony
+  const shouldShow = initialCheckDone && (isOfflineForced || (!isOnline) || (!isPersistenceEnabled) || errorMessage);
+  
+  if (!shouldShow) return null;
 
   return (
     <div className={`${styles.offlineStatus} ${className || ''} ${errorMessage ? styles.hasError : ''}`}>
+      {isOfflineForced && (
+        <div className={styles.forcedOfflineIndicator}>
+          <span className={styles.icon}>📴</span>
+          <span>Tryb offline wymuszony. Dane są przechowywane lokalnie.</span>
+        </div>
+      )}
+      
       {!isOnline && (
         <div className={styles.offlineIndicator}>
           <span className={styles.icon}>⚠️</span>
           <span>Brak połączenia z internetem. Tryb offline aktywny.</span>
-        </div>
-      )}
-      
-      {!isPersistenceEnabled && isOnline && (
-        <div className={styles.pendingRequests}>
-          <span>
-            Tryb offline aktywny. Dane nie są synchronizowane z Firebase.
-          </span>
-          <button 
-            className={styles.syncButton} 
-            onClick={handleSync}
-            disabled={syncing}
-          >
-            {syncing ? 'Synchronizacja...' : 'Włącz synchronizację'}
-          </button>
         </div>
       )}
 
@@ -206,15 +198,51 @@ const OfflineStatus: React.FC<OfflineStatusProps> = ({ className }) => {
             <span className={styles.icon}>⚠️</span> 
             {errorMessage}
           </p>
-          <button 
-            className={styles.resetButton}
-            onClick={handleResetFirestore}
-            disabled={isResetting}
-          >
-            {isResetting ? 'Resetowanie...' : 'Resetuj połączenie'}
-          </button>
         </div>
       )}
+
+      <div className={styles.statusContainer}>
+        <div 
+          className={`${styles.statusIndicator} ${isOfflineForced ? styles.forcedOffline : isOnline ? styles.online : styles.offline}`} 
+          title={isOfflineForced ? 'Tryb offline wymuszony' : isOnline ? 'Połączono z internetem' : 'Brak połączenia z internetem'}
+        />
+        <span className={styles.statusText}>
+          {isOfflineForced ? 'Offline (wymuszony)' : isOnline ? 'Online' : 'Offline'}
+        </span>
+      </div>
+      
+      <div className={styles.actions}>
+        <button 
+          className={styles.testButton} 
+          onClick={handleTestConnection}
+          disabled={isTesting}
+        >
+          {isTesting ? 'Testowanie...' : 'Test połączenia'}
+        </button>
+        
+        <button 
+          className={styles.reloadButton}
+          onClick={handleReload}
+        >
+          Odśwież stronę
+        </button>
+        
+        {isOfflineForced ? (
+          <button 
+            className={styles.onlineButton} 
+            onClick={handleEnableOnline}
+          >
+            Przywróć online
+          </button>
+        ) : (
+          <button 
+            className={styles.offlineButton} 
+            onClick={handleForceOffline}
+          >
+            Wymuś offline
+          </button>
+        )}
+      </div>
     </div>
   );
 };

@@ -59,8 +59,8 @@ const ActionRow = ({
     id: action.id,
     isSecondHalf: action.isSecondHalf,
     minute: action.minute,
-    senderClickValue: action.senderClickValue,
-    receiverClickValue: action.receiverClickValue
+    xTValueStart: action.xTValueStart,
+    xTValueEnd: action.xTValueEnd
   });
 
   const getEvents = () => {
@@ -90,11 +90,11 @@ const ActionRow = ({
       <div className={styles.cell}>
         {action.senderNumber}-{action.senderName}
       </div>
-      <div className={styles.cell}>{typeof action.senderClickValue === 'number' ? action.senderClickValue.toFixed(3) : '0.000'}</div>
+      <div className={styles.cell}>{typeof action.xTValueStart === 'number' ? action.xTValueStart.toFixed(3) : '0.000'}</div>
       <div className={styles.cell}>
         {action.receiverNumber}-{action.receiverName}
       </div>
-      <div className={styles.cell}>{typeof action.receiverClickValue === 'number' ? action.receiverClickValue.toFixed(3) : '0.000'}</div>
+      <div className={styles.cell}>{typeof action.xTValueEnd === 'number' ? action.xTValueEnd.toFixed(3) : '0.000'}</div>
       <div className={styles.cell}>
         <span className={action.actionType === "pass" ? styles.pass : styles.dribble}>
           {action.actionType === "pass" ? "Podanie" : "Drybling"}
@@ -142,8 +142,8 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
       id: a.id,
       isSecondHalf: a.isSecondHalf,
       minute: a.minute,
-      senderClickValue: a.senderClickValue,
-      receiverClickValue: a.receiverClickValue
+      xTValueStart: a.xTValueStart,
+      xTValueEnd: a.xTValueEnd
     })));
     
     const { key, direction } = sortConfig;
@@ -166,7 +166,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           );
           break;
         case "senderXT":
-          comparison = a.senderClickValue - b.senderClickValue;
+          comparison = (a.xTValueStart || 0) - (b.xTValueStart || 0);
           break;
         case "startZone":
           comparison = (a.startZone || "").localeCompare(b.startZone || "");
@@ -177,7 +177,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           );
           break;
         case "receiverXT":
-          comparison = a.receiverClickValue - b.receiverClickValue;
+          comparison = (a.xTValueEnd || 0) - (b.xTValueEnd || 0);
           break;
         case "endZone":
           comparison = (a.endZone || "").localeCompare(b.endZone || "");
@@ -258,7 +258,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             onSort={handleSort}
           />
           <HeaderCell
-            label="Typ"
+            label="Rodzaj"
             sortKey="type"
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}
@@ -271,12 +271,19 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             sortDirection={sortConfig.direction}
             onSort={handleSort}
           />
-          <div className={styles.headerCell}>Wydarzenia</div>
-          <div className={styles.headerCell}>Usuń</div>
+          <HeaderCell
+            label="Wydarzenia"
+            sortKey="events"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <div className={styles.headerCell}>Akcje</div>
         </div>
-
         <div className={styles.tableBody}>
-          {sortedActions.length > 0 ? (
+          {sortedActions.length === 0 ? (
+            <div className={styles.noActions}>Brak akcji</div>
+          ) : (
             sortedActions.map((action) => (
               <ActionRow
                 key={action.id}
@@ -284,10 +291,6 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
                 onDelete={onDeleteAction || (() => {})}
               />
             ))
-          ) : (
-            <div className={styles.noMatches}>
-              Brak akcji do wyświetlenia
-            </div>
           )}
         </div>
       </div>

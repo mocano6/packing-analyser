@@ -21,7 +21,7 @@ export const checkFirestoreWritePermission = async (): Promise<{canWrite: boolea
     console.log(`✅ Dodanie dokumentu powiodło się: ${testDoc.id}`);
     
     // Test 2: Próba usunięcia dokumentu
-    await deleteDoc(testDoc);
+    await deleteDoc(doc(db, testCollectionName, testDoc.id));
     console.log(`✅ Usunięcie dokumentu powiodło się`);
     
     return { canWrite: true };
@@ -34,7 +34,7 @@ export const checkFirestoreWritePermission = async (): Promise<{canWrite: boolea
       errorMessage = error.message;
       
       // Sprawdź kod błędu jeśli to błąd Firebase
-      if ('code' in error) {
+      if (typeof error === 'object' && error !== null && 'code' in error) {
         const firebaseError = error as { code: string, message: string };
         
         if (firebaseError.code === 'permission-denied') {
@@ -43,6 +43,10 @@ export const checkFirestoreWritePermission = async (): Promise<{canWrite: boolea
           errorMessage = "Użytkownik niezalogowany. Zaloguj się, aby uzyskać uprawnienia.";
         } else if (firebaseError.code === 'unavailable') {
           errorMessage = "Usługa Firebase jest niedostępna. Sprawdź połączenie z internetem.";
+        } else if (firebaseError.code === 'resource-exhausted') {
+          errorMessage = "Przekroczono limit zapytań do Firebase. Spróbuj ponownie później.";
+        } else if (firebaseError.code === 'deadline-exceeded') {
+          errorMessage = "Przekroczono limit czasu operacji. Sprawdź połączenie z internetem.";
         }
       }
     }
