@@ -11,6 +11,15 @@ export interface Player {
   birthYear?: number;
   imageUrl?: string;
   teams: string[]; // Tablica identyfikatorów zespołów, do których należy zawodnik
+  actionsSent?: { [matchId: string]: Action[] }; // Akcje z zawodnikiem jako podającym, pogrupowane wg meczu
+  actionsReceived?: { [matchId: string]: Action[] }; // Akcje z zawodnikiem jako odbierającym, pogrupowane wg meczu
+  matchesInfo?: { 
+    [matchId: string]: { 
+      startMinute: number, 
+      endMinute: number, 
+      position: string 
+    } 
+  }; // Informacje o minutach i pozycji zawodnika w danym meczu
 }
 
 export interface ConnectionStats {
@@ -129,6 +138,7 @@ export interface PlayerMinutes {
   playerId: string;
   startMinute: number;
   endMinute: number;
+  position?: string;
 }
 
 export interface PlayerMinutesModalProps {

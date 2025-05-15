@@ -1,9 +1,20 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { PlayerMinutesModalProps, PlayerMinutes } from "@/types";
 import styles from "./PlayerMinutesModal.module.css";
 import { TEAMS } from "@/constants/teams";
+
+// Lista pozycji do wyboru - taka sama jak w PlayerModal
+const POSITIONS = [
+  { value: "GK", label: "Bramkarz (GK)" },
+  { value: "CB", label: "Środkowy obrońca (CB)" },
+  { value: "DM", label: "Defensywny pomocnik (DM)" },
+  { value: "AM", label: "Ofensywny pomocnik (AM)" },
+  { value: "RS", label: "Prawy skrzydłowy (RW)" },
+  { value: "LS", label: "Lewy skrzydłowy (LW)" },
+  { value: "ST", label: "Napastnik (ST)" },
+];
 
 const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
   isOpen,
@@ -14,7 +25,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
   currentPlayerMinutes = [],
 }) => {
   const [playerMinutes, setPlayerMinutes] = useState<PlayerMinutes[]>([]);
-  const initialMinutesRef = useRef<PlayerMinutes[]>([]);
+  const [initialized, setInitialized] = useState(false);
 
   // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
   const getTeamName = (teamId: string) => {
@@ -26,34 +37,38 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
   // Inicjalizacja stanu przy otwarciu modalu
   useEffect(() => {
     if (!isOpen) {
-      setPlayerMinutes([]);
+      setInitialized(false);
       return;
     }
 
-    // Inicjalizuj tylko raz przy pierwszym otwarciu
-    if (initialMinutesRef.current.length === 0) {
+    if (!initialized) {
       const teamPlayers = players.filter(player => 
         player.teams && player.teams.includes(match.team)
       );
       
-      initialMinutesRef.current = currentPlayerMinutes.length > 0 
-        ? currentPlayerMinutes 
+      const initialPlayerMinutes = currentPlayerMinutes.length > 0 
+        ? currentPlayerMinutes.map(pm => {
+            // Jeśli brakuje pozycji w istniejących danych, dodaj domyślną z danych zawodnika
+            if (!pm.position) {
+              const player = players.find(p => p.id === pm.playerId);
+              return {
+                ...pm,
+                position: player?.position || "CB" // Domyślna pozycja, jeśli nie znaleziono zawodnika
+              };
+            }
+            return pm;
+          })
         : teamPlayers.map(player => ({
             playerId: player.id,
-            startMinute: 0,
-            endMinute: 130
+            startMinute: 1,
+            endMinute: 130,
+            position: player.position || "CB" // Domyślna pozycja z danych zawodnika
           }));
+      
+      setPlayerMinutes(initialPlayerMinutes);
+      setInitialized(true);
     }
-
-    setPlayerMinutes(initialMinutesRef.current);
-  }, [isOpen]);
-
-  // Reset przy zamknięciu modalu
-  useEffect(() => {
-    if (!isOpen) {
-      initialMinutesRef.current = [];
-    }
-  }, [isOpen]);
+  }, [isOpen, players, currentPlayerMinutes, match.team, initialized]);
 
   // Aktualizacja minut konkretnego zawodnika
   const handleMinuteChange = (
@@ -61,7 +76,9 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
     field: 'startMinute' | 'endMinute', 
     value: number
   ) => {
-    const newValue = Math.max(0, Math.min(130, value));
+    const minValue = field === 'startMinute' ? 1 : 1;
+    const newValue = Math.max(minValue, Math.min(130, value));
+    
     setPlayerMinutes(prev => 
       prev.map(pm => 
         pm.playerId === playerId 
@@ -71,16 +88,30 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
     );
   };
 
+  // Aktualizacja pozycji konkretnego zawodnika
+  const handlePositionChange = (
+    playerId: string,
+    position: string
+  ) => {
+    setPlayerMinutes(prev => 
+      prev.map(pm => 
+        pm.playerId === playerId 
+          ? { ...pm, position } 
+          : pm
+      )
+    );
+  };
+
   // Obliczenie czasu gry zawodnika na podstawie przedziału minut
   const calculatePlayTime = (startMinute: number, endMinute: number) => {
-    return Math.max(0, endMinute - startMinute);
+    return Math.max(0, endMinute - startMinute + 1);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Sprawdź, czy wartości są poprawne
     const validPlayerMinutes = playerMinutes.filter(pm => 
-      pm.startMinute >= 0 && 
+      pm.startMinute >= 1 &&
       pm.endMinute >= pm.startMinute && 
       pm.endMinute <= 130 // Zwiększamy maksymalny czas do 130 minut
     );
@@ -111,6 +142,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
             <div className={styles.headerCell}>Zawodnik</div>
             <div className={styles.headerCell}>Od (min)</div>
             <div className={styles.headerCell}>Do (min)</div>
+            <div className={styles.headerCell}>Pozycja</div>
             <div className={styles.headerCell}>Czas gry</div>
           </div>
 
@@ -119,8 +151,9 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
               // Znajdź zapisane minuty dla tego zawodnika
               const minutes = playerMinutes.find(pm => pm.playerId === player.id) || {
                 playerId: player.id,
-                startMinute: 0,
-                endMinute: 130
+                startMinute: 1,
+                endMinute: 130,
+                position: player.position || "CB" // Domyślna pozycja z danych zawodnika
               };
               
               const playTime = calculatePlayTime(minutes.startMinute, minutes.endMinute);
@@ -134,13 +167,13 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
                   <div className={styles.timeInput}>
                     <input
                       type="number"
-                      min="0"
+                      min="1"
                       max="130"
                       value={minutes.startMinute}
                       onChange={(e) => handleMinuteChange(
                         player.id, 
                         'startMinute', 
-                        parseInt(e.target.value) || 0
+                        parseInt(e.target.value) || 1
                       )}
                       className={styles.numberInput}
                     />
@@ -148,16 +181,32 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
                   <div className={styles.timeInput}>
                     <input
                       type="number"
-                      min="0"
+                      min="1"
                       max="130"
                       value={minutes.endMinute}
                       onChange={(e) => handleMinuteChange(
                         player.id, 
                         'endMinute', 
-                        parseInt(e.target.value) || 0
+                        parseInt(e.target.value) || 1
                       )}
                       className={styles.numberInput}
                     />
+                  </div>
+                  <div className={styles.positionInput}>
+                    <select
+                      value={minutes.position || "CB"}
+                      onChange={(e) => handlePositionChange(
+                        player.id,
+                        e.target.value
+                      )}
+                      className={styles.positionSelect}
+                    >
+                      {POSITIONS.map(pos => (
+                        <option key={pos.value} value={pos.value}>
+                          {pos.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className={styles.playTime}>
                     {playTime} min

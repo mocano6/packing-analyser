@@ -389,3 +389,35 @@
     flex-direction: column;
   }
 }
+
+.headerButtons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.refreshButton {
+  padding: 8px 16px;
+  background-color: #e3f2fd;
+  color: #0d47a1;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.refreshButton:hover {
+  background-color: #bbdefb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.refreshButton span {
+  margin-right: 0.625rem;
+  font-weight: 700;
+}

@@ -312,3 +312,84 @@
     opacity: 0.7;
   }
 }
+
+/* Dodajemy style dla komponentu CurrentMatchInfo */
+.currentMatchInfo {
+  margin-bottom: 20px;
+  background-color: #f5f9ff;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.matchTitle h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+  color: #2c3e50;
+}
+
+.matchMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.matchDate {
+  font-size: 14px;
+  color: #555;
+  font-weight: 500;
+}
+
+.matchCompetitionInfo {
+  display: flex;
+  gap: 8px;
+}
+
+.playerMinutesInfo {
+  margin-top: 15px;
+  border-top: 1px solid #e0e0e0;
+  padding-top: 12px;
+}
+
+.playerMinutesInfo h4 {
+  font-size: 15px;
+  margin: 0 0 8px 0;
+  color: #444;
+}
+
+.playerMinutesList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.playerMinuteItem {
+  display: inline-flex;
+  align-items: center;
+  background-color: #fff;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.playerName {
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.playerPosition {
+  background-color: #e3f2fd;
+  color: #1565c0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  margin: 0 6px;
+}
+
+.playerMinutes {
+  color: #666;
+}

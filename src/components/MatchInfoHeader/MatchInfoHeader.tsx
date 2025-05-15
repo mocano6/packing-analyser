@@ -2,10 +2,80 @@
 "use client";
 
 import React, { useState, KeyboardEvent, useEffect } from "react";
-import { TeamInfo } from "@/types";
+import { TeamInfo, Player } from "@/types";
 import { TEAMS } from "@/constants/teams";
 import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import styles from "./MatchInfoHeader.module.css";
+
+// Nowy komponent do wyświetlania informacji o bieżącym meczu
+interface CurrentMatchInfoProps {
+  matchInfo: TeamInfo | null;
+  players: Player[];
+}
+
+const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players }) => {
+  if (!matchInfo || !matchInfo.matchId) {
+    return null;
+  }
+
+  // Pobierz informacje o pozycji i minutach dla aktualnie zalogowanego zawodnika
+  const renderPlayerMinutes = () => {
+    if (!matchInfo.playerMinutes || matchInfo.playerMinutes.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className={styles.playerMinutesInfo}>
+        <h4>Czas gry zawodników:</h4>
+        <div className={styles.playerMinutesList}>
+          {matchInfo.playerMinutes.map((playerMinute) => {
+            const player = players.find(p => p.id === playerMinute.playerId);
+            if (!player) return null;
+
+            return (
+              <div key={playerMinute.playerId} className={styles.playerMinuteItem}>
+                <span className={styles.playerName}>{player.name}</span>
+                <span className={styles.playerPosition}>{playerMinute.position || player.position}</span>
+                <span className={styles.playerMinutes}>
+                  {playerMinute.startMinute} - {playerMinute.endMinute === 90 ? "koniec" : playerMinute.endMinute} min
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
+  const getTeamName = (teamId: string) => {
+    // Znajdź zespół w obiekcie TEAMS
+    const team = Object.values(TEAMS).find(team => team.id === teamId);
+    return team ? team.name : teamId; // Jeśli nie znaleziono, zwróć ID jako fallback
+  };
+
+  return (
+    <div className={styles.currentMatchInfo}>
+      <div className={styles.matchTitle}>
+        <h3>
+          {matchInfo.isHome 
+            ? `${getTeamName(matchInfo.team)} vs ${matchInfo.opponent}` 
+            : `${matchInfo.opponent} vs ${getTeamName(matchInfo.team)}`}
+        </h3>
+        <div className={styles.matchMeta}>
+          <span className={styles.matchDate}>{matchInfo.date}</span>
+          <span className={styles.matchCompetitionInfo}>
+            <span className={styles.competition}>{matchInfo.competition}</span>
+            <span className={matchInfo.isHome ? styles.home : styles.away}>
+              {matchInfo.isHome ? "Dom" : "Wyjazd"}
+            </span>
+          </span>
+        </div>
+      </div>
+      {renderPlayerMinutes()}
+    </div>
+  );
+};
 
 interface MatchInfoHeaderProps {
   matchInfo: TeamInfo | null;
@@ -19,6 +89,7 @@ interface MatchInfoHeaderProps {
   onAddNewMatch: () => void;
   refreshCounter?: number;
   isOfflineMode?: boolean;
+  players?: Player[]; // Dodajemy players jako nową właściwość
 }
 
 const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
@@ -33,6 +104,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   onAddNewMatch,
   refreshCounter = 0,
   isOfflineMode = false,
+  players = [], // Domyślna wartość to pusta tablica
 }) => {
   const [sortKey, setSortKey] = useState<keyof TeamInfo>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -57,7 +129,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
     const team = Object.values(TEAMS).find(team => team.id === teamId);
     return team ? team.name : teamId; // Jeśli nie znaleziono, zwróć ID jako fallback
   };
-  
+
   // Filtrowanie meczów wybranego zespołu - używamy useMemo dla optymalizacji
   const teamMatches = React.useMemo(() => {
     console.log(`🔍 Filtruję mecze dla zespołu ${selectedTeam}, dostępnych meczów: ${allMatches.length}`);
@@ -121,6 +193,9 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
 
   return (
     <div className={styles.matchInfoContainer}>
+      {/* Dodajemy komponent wyświetlający szczegóły bieżącego meczu */}
+      <CurrentMatchInfo matchInfo={matchInfo} players={players} />
+      
       <div className={styles.headerControls}>
         <div className={styles.teamSelector}>
           <TeamsSelector

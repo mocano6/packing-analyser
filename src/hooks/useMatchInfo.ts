@@ -11,6 +11,7 @@ import {
 import { handleFirestoreError, resetFirestoreConnection } from "@/utils/firestoreErrorHandler";
 import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
+import { updatePlayerWithMinutes } from "@/utils/syncPlayerData";
 
 // Rozszerzenie interfejsu Window
 declare global {
@@ -988,6 +989,16 @@ export function useMatchInfo() {
           });
           
           console.log('✅ Minuty zawodników zaktualizowane w Firebase');
+          
+          // Aktualizuj dane w kolekcji players
+          try {
+            await updatePlayerWithMinutes(playerMinutes, match.matchId);
+            console.log('✅ Zaktualizowano dane zawodników o nowe minuty i pozycje');
+          } catch (playerUpdateError) {
+            console.error('❌ Błąd podczas aktualizacji danych zawodników:', playerUpdateError);
+            // Nie przerywamy wykonania - minuty zostały już zapisane w meczu
+          }
+          
           notifyUser("Minuty zawodników zostały zapisane", "success");
         } catch (firebaseError) {
           console.error('❌ Błąd podczas synchronizacji minut zawodników z Firebase:', firebaseError);

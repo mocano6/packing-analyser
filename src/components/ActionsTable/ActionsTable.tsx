@@ -1,7 +1,7 @@
 // src/components/ActionsTable/ActionsTable.tsx
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import styles from "./ActionsTable.module.css";
 import { ActionsTableProps } from "@/components/ActionsTable/ActionsTable.types";
 
@@ -54,11 +54,17 @@ const ActionRow = ({
   action: ActionsTableProps["actions"][0];
   onDelete: (id: string) => void;
 }) => {
-  // Dodane logowanie dla diagnozy
+  // Dodane rozszerzone logowanie dla diagnozy
   console.log("Dane akcji:", {
     id: action.id,
     isSecondHalf: action.isSecondHalf,
     minute: action.minute,
+    senderId: action.senderId,
+    senderName: action.senderName,
+    senderNumber: action.senderNumber,
+    receiverId: action.receiverId,
+    receiverName: action.receiverName,
+    receiverNumber: action.receiverNumber,
     xTValueStart: action.xTValueStart,
     xTValueEnd: action.xTValueEnd
   });
@@ -79,6 +85,15 @@ const ActionRow = ({
   // Określamy, czy akcja jest w drugiej połowie - jeśli isSecondHalf jest undefined, uznajemy za false
   const isSecondHalf = action.isSecondHalf === true;
 
+  // Przygotuj dane zawodników w bezpieczny sposób
+  const senderDisplay = action.senderName && action.senderNumber 
+    ? `${action.senderNumber}-${action.senderName}` 
+    : (action.senderId ? `ID: ${action.senderId.substring(0, 6)}...` : '-');
+  
+  const receiverDisplay = action.receiverName && action.receiverNumber 
+    ? `${action.receiverNumber}-${action.receiverName}` 
+    : (action.receiverId ? `ID: ${action.receiverId.substring(0, 6)}...` : '-');
+
   return (
     <div className={`${styles.actionRow} ${isSecondHalf ? styles.secondHalfRow : styles.firstHalfRow}`}>
       <div className={styles.cell}>
@@ -88,11 +103,11 @@ const ActionRow = ({
         &nbsp;{action.minute}'
       </div>
       <div className={styles.cell}>
-        {action.senderNumber}-{action.senderName}
+        {senderDisplay}
       </div>
       <div className={styles.cell}>{typeof action.xTValueStart === 'number' ? action.xTValueStart.toFixed(3) : '0.000'}</div>
       <div className={styles.cell}>
-        {action.receiverNumber}-{action.receiverName}
+        {receiverDisplay}
       </div>
       <div className={styles.cell}>{typeof action.xTValueEnd === 'number' ? action.xTValueEnd.toFixed(3) : '0.000'}</div>
       <div className={styles.cell}>
@@ -114,8 +129,10 @@ const ActionRow = ({
 // Komponent główny
 const ActionsTable: React.FC<ActionsTableProps> = ({
   actions,
+  players,
   onDeleteAction,
   onDeleteAllActions,
+  onRefreshPlayersData
 }) => {
   const [sortConfig, setSortConfig] = useState<{
     key: SortKey;
@@ -124,6 +141,22 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
     key: "minute",
     direction: "asc",
   });
+
+  // Dodajemy state do śledzenia, czy jakieś akcje mają brakujące dane graczy
+  const [hasMissingPlayerData, setHasMissingPlayerData] = useState(false);
+
+  // Sprawdzamy czy jakieś akcje mają brakujące dane graczy
+  useEffect(() => {
+    if (!actions || !actions.length) return;
+
+    const missingData = actions.some(
+      action => 
+        (!action.senderName && action.senderId) || 
+        (action.actionType === "pass" && !action.receiverName && action.receiverId)
+    );
+    
+    setHasMissingPlayerData(missingData);
+  }, [actions]);
 
   const handleSort = (key: SortKey) => {
     setSortConfig((prevSort) => ({
@@ -211,13 +244,24 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
     <div className={styles.tableContainer}>
       <div className={styles.headerControls}>
         <h3>Lista akcji ({actions.length})</h3>
-        <button
-          className={styles.deleteAllButton}
-          onClick={onDeleteAllActions}
-          disabled={actions.length === 0}
-        >
-          <span>✕</span> Usuń wszystko
-        </button>
+        <div className={styles.headerButtons}>
+          {hasMissingPlayerData && onRefreshPlayersData && (
+            <button
+              className={styles.refreshButton}
+              onClick={onRefreshPlayersData}
+              title="Odśwież dane zawodników w akcjach"
+            >
+              <span>↻</span> Uzupełnij dane
+            </button>
+          )}
+          <button
+            className={styles.deleteAllButton}
+            onClick={onDeleteAllActions}
+            disabled={actions.length === 0}
+          >
+            <span>✕</span> Usuń wszystko
+          </button>
+        </div>
       </div>
 
       <div className={styles.matchesTable}>

@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs, doc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
+import { updatePlayerWithAction } from "@/utils/syncPlayerData";
 
 // Funkcja do konwersji numeru strefy na format literowo-liczbowy
 // Zakładamy, że boisko ma 12 kolumn (a-l) i 8 wierszy (1-8)
@@ -23,27 +24,13 @@ function convertZoneNumberToString(zoneNumber: number | string): string {
   return `${colLetter}${row}`;
 }
 
-// Dodajemy funkcję pomocniczą do czyszczenia obiektu z wartości undefined
-function removeUndefinedValues(obj: Record<string, any>): Record<string, any> {
-  const result: Record<string, any> = {};
+// Funkcja pomocnicza do usuwania undefined z obiektów, zachowująca typ
+function removeUndefinedFields<T extends object>(obj: T): T {
+  const result = { ...obj };
   
-  Object.keys(obj).forEach(key => {
-    const value = obj[key];
-    
-    // Pomijamy pola z wartością undefined
-    if (value === undefined) return;
-    
-    // Jeśli wartość jest obiektem (ale nie null i nie tablica), rekurencyjnie czyścimy
-    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-      result[key] = removeUndefinedValues(value);
-    } else if (Array.isArray(value)) {
-      // Jeśli wartość jest tablicą, czyścimy każdy element tablicy
-      result[key] = value.map(item => 
-        item !== null && typeof item === 'object' ? removeUndefinedValues(item) : item
-      );
-    } else {
-      // W przeciwnym razie zachowujemy wartość
-      result[key] = value;
+  Object.keys(result).forEach(key => {
+    if (result[key as keyof T] === undefined) {
+      delete result[key as keyof T];
     }
   });
   
@@ -111,21 +98,52 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         console.log(`Załadowano ${loadedActions.length} akcji dla meczu:`, matchId);
         console.log("Przykładowe wartości isSecondHalf:", loadedActions.slice(0, 3).map(a => a.isSecondHalf));
         
-        // Upewniamy się, że wszystkie akcje mają ustawioną wartość isSecondHalf
-        // i są oczyszczone z wartości undefined
-        const validatedActions = loadedActions.map(action => {
+        // Uzupełniamy brakujące dane zawodników w akcjach
+        const enrichedActions = loadedActions.map(action => {
           // Najpierw oczyszczamy akcję z wartości undefined
-          const cleanedAction = removeUndefinedValues(action) as Action;
+          const cleanedAction = removeUndefinedFields(action) as Action;
           
-          // Następnie upewniamy się, że isSecondHalf jest wartością boolean
-          return {
+          // Upewniamy się, że isSecondHalf jest wartością boolean
+          const actionWithValidHalf = {
             ...cleanedAction,
             // Jeśli isSecondHalf jest undefined lub null, ustawiamy na false (domyślnie pierwsza połowa)
             isSecondHalf: cleanedAction.isSecondHalf === true
           } as Action;
+          
+          // Dodajemy brakujące dane nadawcy (sender)
+          if (actionWithValidHalf.senderId && (!actionWithValidHalf.senderName || !actionWithValidHalf.senderNumber)) {
+            const senderPlayer = players.find(p => p.id === actionWithValidHalf.senderId);
+            if (senderPlayer) {
+              actionWithValidHalf.senderName = senderPlayer.name;
+              actionWithValidHalf.senderNumber = senderPlayer.number;
+            }
+          }
+          
+          // Dodajemy brakujące dane odbiorcy (receiver)
+          if (actionWithValidHalf.receiverId && (!actionWithValidHalf.receiverName || !actionWithValidHalf.receiverNumber)) {
+            const receiverPlayer = players.find(p => p.id === actionWithValidHalf.receiverId);
+            if (receiverPlayer) {
+              actionWithValidHalf.receiverName = receiverPlayer.name;
+              actionWithValidHalf.receiverNumber = receiverPlayer.number;
+            }
+          }
+          
+          return actionWithValidHalf;
         });
         
-        setActions(validatedActions);
+        // Sprawdźmy, czy jakieś dane zostały uzupełnione
+        const dataWasEnriched = enrichedActions.some((action, i) => 
+          (action.senderName && !loadedActions[i].senderName) || 
+          (action.receiverName && !loadedActions[i].receiverName)
+        );
+        
+        if (dataWasEnriched) {
+          console.log("Akcje zostały wzbogacone o dane zawodników - synchronizuję z bazą danych");
+          // Synchronizujemy wzbogacone akcje z bazą Firebase
+          syncEnrichedActions(matchId, enrichedActions);
+        }
+        
+        setActions(enrichedActions);
       } else {
         console.log("Nie znaleziono meczu o ID:", matchId);
         setActions([]);
@@ -246,18 +264,40 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         isSecondHalf: isSecondHalfParam !== undefined ? isSecondHalfParam : isSecondHalf
       };
       
+      // Dodajemy dane graczy do akcji
+      if (selectedPlayerId) {
+        const senderPlayer = players.find(p => p.id === selectedPlayerId);
+        if (senderPlayer) {
+          newAction.senderName = senderPlayer.name;
+          newAction.senderNumber = senderPlayer.number;
+        }
+      }
+      
+      // Jeśli to podanie, dodajemy dane odbiorcy
+      if (actionType === "pass" && selectedReceiverId) {
+        const receiverPlayer = players.find(p => p.id === selectedReceiverId);
+        if (receiverPlayer) {
+          newAction.receiverName = receiverPlayer.name;
+          newAction.receiverNumber = receiverPlayer.number;
+        }
+      }
+      
       console.log("Utworzona akcja z wartościami xT i połową meczu:", { 
         xTValueStart: newAction.xTValueStart, 
         xTValueEnd: newAction.xTValueEnd,
-        isSecondHalf: newAction.isSecondHalf
+        isSecondHalf: newAction.isSecondHalf,
+        senderName: newAction.senderName,
+        senderNumber: newAction.senderNumber,
+        receiverName: newAction.receiverName,
+        receiverNumber: newAction.receiverNumber
       });
       
       // Usuwamy pola undefined z obiektu akcji przed zapisem
-      const cleanedAction = removeUndefinedValues(newAction);
+      const cleanedAction = removeUndefinedFields(newAction);
       console.log("Akcja po oczyszczeniu z wartości undefined:", cleanedAction);
       
       // Dodajemy akcję do lokalnego stanu
-      setActions(prevActions => [...prevActions, newAction]);
+      setActions(prevActions => [...prevActions, cleanedAction]);
       
       // Zapisujemy do Firebase
       try {
@@ -273,7 +313,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
           const currentActions = matchData.actions_packing || [];
           
           // Upewniamy się, że wszystkie akcje są oczyszczone z undefined
-          const cleanedActions = currentActions.map(action => removeUndefinedValues(action));
+          const cleanedActions = currentActions.map(action => removeUndefinedFields(action));
           
           // Dodaj nową (oczyszczoną) akcję i aktualizuj dokument
           await updateDoc(matchRef, {
@@ -281,6 +321,16 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
           });
           
           console.log("✅ Akcja została zapisana w dokumencie meczu z ID:", cleanedAction.id);
+          
+          // Po udanym zapisie zaktualizuj dane zawodników
+          try {
+            // Aktualizuj dane zawodników o nową akcję
+            await updatePlayerWithAction(cleanedAction, matchInfoArg);
+            console.log("✅ Zaktualizowano dane zawodników o nową akcję");
+          } catch (playerUpdateError) {
+            console.error("❌ Błąd podczas aktualizacji danych zawodników:", playerUpdateError);
+            // Nie przerywamy wykonania - akcja została już zapisana
+          }
           
           // Po udanym zapisie odświeżamy akcje z bazy
           loadActionsForMatch(matchInfoArg.matchId);
@@ -300,7 +350,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         }
       }
       
-      console.log("Akcja została zapisana:", newAction);
+      console.log("Akcja została zapisana:", cleanedAction);
       
       // Po zapisaniu resetujemy stan
       resetActionState();
@@ -338,7 +388,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         const updatedActions = (matchData.actions_packing || []).filter(action => action.id !== actionId);
         
         // Oczyszczamy wszystkie akcje z wartości undefined
-        const cleanedActions = updatedActions.map(action => removeUndefinedValues(action));
+        const cleanedActions = updatedActions.map(action => removeUndefinedFields(action));
         
         // Aktualizujemy dokument z oczyszczonymi akcjami
         await updateDoc(matchRef, {
@@ -416,6 +466,28 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     // bo te stany są utrzymywane między akcjami
   }, []);
 
+  // Funkcja synchronizująca wzbogacone akcje z bazą Firebase
+  const syncEnrichedActions = useCallback(async (matchId: string, enrichedActions: Action[]) => {
+    // Sprawdzamy, czy mamy jakieś akcje do synchronizacji
+    if (!matchId || !enrichedActions.length) return;
+
+    try {
+      // Pobierz aktualny dokument meczu
+      const matchRef = doc(db, "matches", matchId);
+      
+      // Aktualizuj dokument z wzbogaconymi akcjami
+      await updateDoc(matchRef, {
+        actions_packing: enrichedActions.map(action => removeUndefinedFields(action))
+      });
+      
+      console.log(`✅ Synchronizacja uzupełnionych danych graczy dla ${enrichedActions.length} akcji powiodła się`);
+    } catch (error) {
+      console.error("❌ Błąd podczas synchronizacji uzupełnionych akcji:", error);
+      // Obsługa błędu wewnętrznego stanu Firestore
+      await handleFirestoreError(error, db);
+    }
+  }, []);
+
   return {
     // Stany
     actions,
@@ -443,6 +515,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     setIsGoal,
     setIsPenaltyAreaEntry,
     setIsSecondHalf: setCurrentHalf,
+    setActions,
     
     // Funkcje
     handleZoneSelect,
@@ -451,5 +524,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     handleDeleteAllActions,
     resetActionState,
     loadActionsForMatch,
+    syncEnrichedActions
   };
 } 

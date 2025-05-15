@@ -21,6 +21,9 @@ import { initializeTeams, checkTeamsCollection } from "@/utils/initializeTeams";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "react-hot-toast";
 import OfflineStatusBanner from "@/components/OfflineStatusBanner/OfflineStatusBanner";
+import { syncPlayerData } from "@/utils/syncPlayerData";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 // Rozszerzenie interfejsu Window
 declare global {
@@ -63,6 +66,19 @@ const PlayerMinutesModal = dynamic(
     ssr: false,
   }
 );
+
+// Funkcja pomocnicza do usuwania undefined z obiektów, zachowująca typ
+function removeUndefinedFields<T extends object>(obj: T): T {
+  const result = { ...obj };
+  
+  Object.keys(result).forEach(key => {
+    if (result[key as keyof T] === undefined) {
+      delete result[key as keyof T];
+    }
+  });
+  
+  return result;
+}
 
 export default function Page() {
   const [activeTab, setActiveTab] = React.useState<Tab>("packing");
@@ -132,6 +148,7 @@ export default function Page() {
     handleDeleteAction,
     handleDeleteAllActions,
     resetActionState,
+    setActions,
   } = packingActions;
 
   const { logout } = useAuth();
@@ -921,6 +938,97 @@ export default function Page() {
     }
   };
 
+  // Przekażę informację do ActionsTable, aby można było zaktualizować dane akcji o imiona graczy
+  const handleRefreshPlayersData = () => {
+    if (!players || !matchInfo?.matchId) return;
+    
+    // Uzupełniamy dane graczy w akcjach
+    const enrichedActions = actions.map(action => {
+      const updatedAction = { ...action };
+      
+      // Dodaj dane nadawcy (sender)
+      if (action.senderId && (!action.senderName || !action.senderNumber)) {
+        const senderPlayer = players.find(p => p.id === action.senderId);
+        if (senderPlayer) {
+          updatedAction.senderName = senderPlayer.name;
+          updatedAction.senderNumber = senderPlayer.number;
+        }
+      }
+      
+      // Dodaj dane odbiorcy (receiver)
+      if (action.receiverId && (!action.receiverName || !action.receiverNumber)) {
+        const receiverPlayer = players.find(p => p.id === action.receiverId);
+        if (receiverPlayer) {
+          updatedAction.receiverName = receiverPlayer.name;
+          updatedAction.receiverNumber = receiverPlayer.number;
+        }
+      }
+      
+      return updatedAction;
+    });
+    
+    // Jeśli dokonano jakichkolwiek zmian, zapisz do Firebase
+    const hasChanges = enrichedActions.some((updatedAction, index) => 
+      updatedAction.senderName !== actions[index].senderName || 
+      updatedAction.senderNumber !== actions[index].senderNumber ||
+      updatedAction.receiverName !== actions[index].receiverName ||
+      updatedAction.receiverNumber !== actions[index].receiverNumber
+    );
+    
+    if (hasChanges) {
+      console.log("Uzupełniono dane graczy w akcjach - zapisuję do bazy danych");
+      
+      // Synchronizuj z bazą danych
+      if (syncEnrichedActions) {
+        syncEnrichedActions(matchInfo.matchId, enrichedActions);
+      }
+      
+      // Aktualizuj lokalny stan akcji
+      setActions(enrichedActions);
+    } else {
+      console.log("Wszystkie akcje mają już uzupełnione dane graczy");
+    }
+  };
+
+  // Funkcja synchronizująca dane zawodników
+  const handleSyncPlayerData = async () => {
+    try {
+      toast.loading("Synchronizacja danych zawodników...");
+      const result = await syncPlayerData();
+      toast.dismiss();
+      
+      if (result) {
+        toast.success("Dane zawodników zostały zaktualizowane");
+      } else {
+        toast.error("Wystąpił błąd podczas synchronizacji danych zawodników");
+      }
+    } catch (error) {
+      toast.dismiss();
+      toast.error(`Błąd synchronizacji: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  // Obsługa synchronizacji wzbogaconych akcji z Firebase
+  const syncEnrichedActions = async (matchId: string, updatedActions: Action[]) => {
+    try {
+      console.log("Synchronizacja wzbogaconych akcji z Firebase dla meczu:", matchId);
+      
+      // Pobierz referencję do dokumentu meczu
+      const matchRef = doc(db, "matches", matchId);
+      
+      // Aktualizuj dokument z wzbogaconymi akcjami
+      await updateDoc(matchRef, {
+        actions_packing: updatedActions.map(action => removeUndefinedFields(action))
+      });
+      
+      console.log("✅ Wzbogacone akcje zsynchronizowane z Firebase");
+      return true;
+    } catch (error) {
+      console.error("❌ Błąd podczas synchronizacji wzbogaconych akcji:", error);
+      return false;
+    }
+  };
+
   return (
     <div className={styles.container}>
         <OfflineStatusBanner />
@@ -937,6 +1045,7 @@ export default function Page() {
         onAddNewMatch={openNewMatchModal}
         refreshCounter={matchesListRefreshCounter}
         isOfflineMode={isOfflineMode}
+        players={players}
       />
 
       <main className={styles.content}>
@@ -984,9 +1093,10 @@ export default function Page() {
         />
         <ActionsTable
           actions={actions}
-          players={filteredPlayers}
+          players={players}
           onDeleteAction={handleDeleteAction}
           onDeleteAllActions={onDeleteAllActions}
+          onRefreshPlayersData={handleRefreshPlayersData}
         />
 
         <PlayerModal
@@ -1045,6 +1155,13 @@ export default function Page() {
             onImportSuccess={handleImportSuccess}
             onImportError={handleImportError}
           />
+          <button 
+            onClick={handleSyncPlayerData}
+            className={styles.actionButton}
+            title="Synchronizuj dane zawodników z akcjami i minutami"
+          >
+            Synchronizuj dane zawodników
+          </button>
           <button 
             onClick={handleLogout}
             className={styles.logoutButton}
