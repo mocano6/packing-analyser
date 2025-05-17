@@ -7,6 +7,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "build:server": "next build && node fix-paths-vh.js && npm run create-zip",
+    "build:test": "next build && node fix-paths-vh.js && npm run serve:local",
     "create-zip": "cd out && zip -r ../packing-analyzer-server.zip * && cd .. && echo '✅ Utworzono plik packing-analyzer-server.zip gotowy do wrzucenia na serwer!'",
     "start": "next start",
     "serve:local": "node local-serve.js",

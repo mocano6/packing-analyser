@@ -22,17 +22,45 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Packing Analyzer</title>
     <meta name="description" content="Football data analysis tool" />
+    <base href=".">
     <link rel="icon" href="./favicon.ico" type="image/x-icon" sizes="16x16" />
+    
+    <!-- Preload kluczowych zasobów -->
+    <link rel="preload" href="./_next/static/css/050d0908fb8e35e1.css" as="style">
+    <link rel="preload" href="./_next/static/chunks/webpack-889089d919370fd1.js" as="script">
+    <link rel="preload" href="./_next/static/chunks/main-4f729480103660ed.js" as="script">
+    
+    <!-- Style CSS -->
     <link rel="stylesheet" href="./_next/static/css/050d0908fb8e35e1.css" />
     <link rel="stylesheet" href="./_next/static/css/965c2d918ba47e9b.css" />
     <link rel="stylesheet" href="./_next/static/css/dfe52fc7d0427f30.css" />
     
     <style>
         /* Dodatkowe style do obsługi błędów i zawartości strony */
-        body {
+        html, body {
             font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
             margin: 0;
             padding: 0;
+            background-color: #f5f8fa;
+            height: 100%;
+            width: 100%;
+            color: #333;
+        }
+        
+        /* Upewniamy się, że strona zawsze ma tło */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f5f8fa;
+            z-index: -1;
+        }
+        
+        #__next {
+            min-height: 100vh;
             background-color: #f5f8fa;
         }
         
@@ -50,6 +78,8 @@ try {
             padding: 20px;
             max-width: 1200px;
             margin: 0 auto;
+            background-color: #fff;
+            min-height: 100vh;
         }
 
         /* Loader */
@@ -59,12 +89,13 @@ try {
             align-items: center;
             height: 100vh;
             width: 100%;
+            background-color: #f5f8fa;
         }
 
         .spinner {
             border: 4px solid rgba(0, 0, 0, 0.1);
-            width: 36px;
-            height: 36px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             border-left-color: #09f;
             animation: spin 1s linear infinite;
@@ -111,6 +142,20 @@ try {
         
         .fallback-btn:hover {
             background-color: #2980b9;
+        }
+        
+        /* Fix dla czarnego ekranu */
+        .page_container__aoG4z {
+            background-color: #f5f8fa !important;
+            min-height: 100vh;
+        }
+        
+        .page_content__kDoxQ {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-top: 20px;
         }
     </style>
 </head>
@@ -166,6 +211,16 @@ try {
                 document.body.appendChild(script);
             });
         }
+        
+        // Upewnij się, że strona ma białe tło
+        document.addEventListener('DOMContentLoaded', () => {
+            document.body.style.backgroundColor = '#f5f8fa';
+            const nextDiv = document.getElementById('__next');
+            if (nextDiv) nextDiv.style.backgroundColor = '#f5f8fa';
+            
+            const pageContainer = document.querySelector('.page_container__aoG4z');
+            if (pageContainer) pageContainer.style.backgroundColor = '#f5f8fa';
+        });
 
         // Ładuj skrypty w odpowiedniej kolejności
         async function loadApp() {
@@ -203,42 +258,39 @@ try {
             document.querySelector('.loader').style.display = 'flex';
             
             // Utwórz podstawową strukturę DOM dla aplikacji
-            const appRoot = document.createElement('div');
-            appRoot.id = 'app-root';
-            appRoot.innerHTML = \`
-                <div class="Instructions_instructionsContainer__pMI5g">
-                    <button class="Instructions_toggleButton__meEul" aria-expanded="false">
-                        <span class="Instructions_toggleIcon__At5I7">📖</span>
-                        Pokaż instrukcję
-                        <span class="Instructions_arrow__vQs0D">▼</span>
-                    </button>
-                </div>
-                <div class="MatchInfoHeader_matchInfoContainer__ikW30">
-                    <div class="MatchInfoHeader_headerControls__dCoAR">
-                        <div class="MatchInfoHeader_teamSelector__HG8Zx">
-                            <select class="TeamsSelector_teamsSelector__kIxmH MatchInfoHeader_teamDropdown__Z_lEg">
-                                <option value="89039437-62a7-4eda-b67d-70a4fb24e4ea" selected>Rezerwy</option>
-                                <option value="1595da8a-a9d6-463d-a49d-5e2c41ff36be">U19</option>
-                                <option value="58f3862c-75d5-4fa7-a18d-0c8e3b00402a">U17</option>
-                                <option value="06141fa4-80bc-404e-8fcb-63ef2d0a7815">U16</option>
-                                <option value="0ebf0d57-4f2c-4c12-937f-635feb2af332">U15</option>
-                            </select>
-                        </div>
-                        <div class="MatchInfoHeader_controlsContainer__GoNUz">
-                            <button class="MatchInfoHeader_addButton__YcFb5">+ Dodaj mecz</button>
+            const appContainer = document.createElement('div');
+            appContainer.className = 'app-container';
+            appContainer.innerHTML = \`
+                <div style="padding: 20px; max-width: 1200px; margin: 0 auto;">
+                    <div style="margin-bottom: 20px; padding: 15px; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                        <h2 style="margin-top: 0; color: #2c3e50;">Packing Analyzer</h2>
+                        <p>Aplikacja do analizy danych piłkarskich</p>
+                        <div style="display: flex; gap: 10px; margin-top: 15px;">
+                            <button style="background: #3498db; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">
+                                Załaduj dane
+                            </button>
+                            <button style="background: #2ecc71; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">
+                                Dodaj mecz
+                            </button>
                         </div>
                     </div>
+                    <div style="padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                        <p>Ładowanie zawodników...</p>
+                    </div>
                 </div>
-                <main class="page_content__kDoxQ">
-                    <div>Ładowanie zawodników...</div>
-                </main>
             \`;
             
-            document.querySelector('.page_container__aoG4z').appendChild(appRoot);
-            document.querySelector('.loader').style.display = 'none';
+            // Zastąp loader nowym contentem
+            const pageContainer = document.querySelector('.page_container__aoG4z');
+            if (pageContainer) {
+                pageContainer.innerHTML = '';
+                pageContainer.appendChild(appContainer);
+            }
             
             // Próbuj ponownie załadować skrypty
-            loadApp();
+            setTimeout(() => {
+                loadApp();
+            }, 1000);
         }
 
         // Uruchom ładowanie aplikacji po załadowaniu DOM
@@ -247,9 +299,10 @@ try {
         // Sprawdź po 5 sekundach, czy aplikacja działa
         setTimeout(() => {
             // Jeśli loader wciąż jest widoczny po 5 sekundach, pokaż fallback content
-            if (document.querySelector('.loader').style.display !== 'none') {
+            const loader = document.querySelector('.loader');
+            if (loader && getComputedStyle(loader).display !== 'none') {
                 document.getElementById('fallback-content').style.display = 'block';
-                document.querySelector('.loader').style.display = 'none';
+                loader.style.display = 'none';
             }
         }, 5000);
 

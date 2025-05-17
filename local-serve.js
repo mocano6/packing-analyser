@@ -1,14 +1,19 @@
 const express = require('express');
 const path = require('path');
 const compression = require('compression');
-const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
 
 // Middleware
 app.use(compression()); // Kompresja dla lepszej wydajności
-app.use(cors()); // Umożliwia cross-origin requests
+
+// Dodaj nagłówki CORS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  next();
+});
 
 // Statyczne serwowanie plików z katalogu out
 app.use(express.static(path.join(__dirname, 'out')));
@@ -16,6 +21,12 @@ app.use(express.static(path.join(__dirname, 'out')));
 // Przekierowanie wszystkich żądań na index.html dla obsługi Single-Page Application
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'out', 'index.html'));
+});
+
+// Obsługa błędów
+app.use((err, req, res, next) => {
+  console.error('Błąd serwera:', err);
+  res.status(500).send('Wystąpił błąd serwera. Sprawdź konsolę po więcej informacji.');
 });
 
 // Uruchomienie serwera

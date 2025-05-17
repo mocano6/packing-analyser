@@ -33,6 +33,7 @@ function fixPaths(filePath) {
     
     // Różne wzorce ścieżek do zastąpienia
     const replacements = [
+      // Podstawowe ścieżki
       { pattern: /href="\/_next\//g, replacement: 'href="./_next/' },
       { pattern: /src="\/_next\//g, replacement: 'src="./_next/' },
       { pattern: /"\/_next\//g, replacement: '"./_next/' },
@@ -40,16 +41,23 @@ function fixPaths(filePath) {
       { pattern: /from"\/_next\//g, replacement: 'from"./_next/' },
       { pattern: /url\(\/_next\//g, replacement: 'url(./_next/' },
       { pattern: /sourceMappingURL=\/_next\//g, replacement: 'sourceMappingURL=./_next/' },
+      
       // Poprawienie ścieżek do API
       { pattern: /\/api\//g, replacement: './api/' },
+      
       // Poprawienie innych ścieżek absolutnych
       { pattern: /="\/favicon/g, replacement: '="./favicon' },
       { pattern: /="\/assets\//g, replacement: '="./assets/' },
       { pattern: /="\/images\//g, replacement: '="./images/' },
-      // Dla pełnej kompatybilności z vh.pl, usuń podwójne ukośniki w ścieżkach URL
-      { pattern: /https:\/\//g, replacement: 'https:/' },
-      { pattern: /http:\/\//g, replacement: 'http:/' },
-      // Napraw assetPrefix
+      
+      // Naprawianie styli i problemów z czarnym ekranem
+      { pattern: /"backgroundColor":"#000"/g, replacement: '"backgroundColor":"#f5f8fa"' },
+      { pattern: /"background":"#000"/g, replacement: '"background":"#f5f8fa"' },
+      { pattern: /"background-color":"#000"/g, replacement: '"background-color":"#f5f8fa"' },
+      { pattern: /background-color:#000/g, replacement: 'background-color:#f5f8fa' },
+      { pattern: /background:#000/g, replacement: 'background:#f5f8fa' },
+      
+      // Poprawianie przedrostków ścieżek dla assetów względnych
       { pattern: /"assetPrefix":""/g, replacement: '"assetPrefix":"."' },
       { pattern: /"buildId":/g, replacement: '"assetPrefix":".","buildId":' }
     ];
@@ -72,29 +80,28 @@ function fixPaths(filePath) {
   }
 }
 
-// Naprawienie plików HTML specjalnie dla vh.pl
-function fixHtml(filePath) {
-  if (!filePath.endsWith('.html')) {
+// Naprawianie styli bezpośrednio w plikach CSS
+function fixStyles(filePath) {
+  if (!filePath.endsWith('.css')) {
     return;
   }
 
   try {
-    console.log(`Specjalna naprawa HTML: ${filePath}`);
+    console.log(`Przetwarzanie stylów CSS: ${filePath}`);
     let content = fs.readFileSync(filePath, 'utf8');
     
-    // Dodaj bazową ścieżkę potrzebną dla vh.pl
-    if (!content.includes('<base href="') && !content.includes('<base href=\'')) {
-      const headEnd = content.indexOf('</head>');
-      if (headEnd !== -1) {
-        const baseTag = '<base href=".">\n  ';
-        content = content.slice(0, headEnd) + baseTag + content.slice(headEnd);
-        console.log('✅ Dodano tag <base href=".">');
-      }
-    }
+    // Zastąp czarne tło jaśniejszym
+    let newContent = content
+      .replace(/background-color:#000/g, 'background-color:#f5f8fa')
+      .replace(/background:#000/g, 'background:#f5f8fa')
+      .replace(/color:#fff/g, 'color:#333');
     
-    fs.writeFileSync(filePath, content);
+    if (content !== newContent) {
+      fs.writeFileSync(filePath, newContent);
+      console.log(`✅ Naprawiono style w: ${filePath}`);
+    }
   } catch (error) {
-    console.error(`❌ Błąd podczas naprawy HTML ${filePath}:`, error);
+    console.error(`❌ Błąd podczas naprawiania stylów w ${filePath}:`, error);
   }
 }
 
@@ -117,6 +124,70 @@ if ($uri !== '/' && file_exists(__DIR__ . $uri)) {
   }
 }
 
+// Funkcja do tworzenia minimalnego HTML do testów
+function createTestHtml() {
+  try {
+    // Minimalna wersja HTML z podstawowymi stylami
+    const testHtmlContent = `<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Test Packing Analyzer</title>
+    <base href=".">
+    <style>
+        body { 
+            font-family: sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            background-color: #f5f8fa; 
+            color: #333; 
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
+        }
+        h1 { color: #2c3e50; }
+        p { line-height: 1.6; }
+        button { 
+            background: #3498db; 
+            color: white; 
+            border: none; 
+            padding: 8px 15px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Packing Analyzer - Strona testowa</h1>
+        <p>Ta strona służy do weryfikacji, czy podstawowe style i skrypty działają poprawnie.</p>
+        <p>Jeśli widzisz ten komunikat, to podstawowe style HTML działają.</p>
+        <p><a href="./index.html">Przejdź do głównej aplikacji</a></p>
+        <button onclick="testJs()">Testuj JavaScript</button>
+        <p id="js-test-result"></p>
+    </div>
+    
+    <script>
+        function testJs() {
+            document.getElementById('js-test-result').textContent = 'JavaScript działa poprawnie!';
+        }
+    </script>
+</body>
+</html>`;
+    
+    fs.writeFileSync(path.join(outDir, 'test.html'), testHtmlContent);
+    console.log('✅ Utworzono stronę testową test.html');
+  } catch (error) {
+    console.error('❌ Błąd podczas tworzenia strony testowej:', error);
+  }
+}
+
 // Główna funkcja
 console.log('🔍 Rozpoczęto naprawę ścieżek dla wdrożenia na vh.pl...');
 
@@ -129,11 +200,14 @@ if (!fs.existsSync(outDir)) {
 // Napraw ścieżki we wszystkich plikach
 walkDir(outDir, fixPaths);
 
-// Napraw pliki HTML dla vh.pl
-walkDir(outDir, fixHtml);
+// Napraw style CSS
+walkDir(outDir, fixStyles);
 
 // Utwórz plik index.php dla vh.pl
 createPhpIndex();
+
+// Utwórz stronę testową
+createTestHtml();
 
 // Uruchom skrypt dla ulepszonego index.html
 try {
