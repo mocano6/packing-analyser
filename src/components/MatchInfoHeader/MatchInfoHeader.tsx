@@ -37,7 +37,7 @@ const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players 
                 <span className={styles.playerName}>{player.name}</span>
                 <span className={styles.playerPosition}>{playerMinute.position || player.position}</span>
                 <span className={styles.playerMinutes}>
-                  {playerMinute.startMinute} - {playerMinute.endMinute === 90 ? "koniec" : playerMinute.endMinute} min
+                  {playerMinute.endMinute - playerMinute.startMinute + 1} min
                 </span>
               </div>
             );

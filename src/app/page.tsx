@@ -19,11 +19,14 @@ import ExportButton from "@/components/ExportButton/ExportButton";
 import ImportButton from "@/components/ImportButton/ImportButton";
 import { initializeTeams, checkTeamsCollection } from "@/utils/initializeTeams";
 import { useAuth } from "@/hooks/useAuth";
-import { toast } from "react-hot-toast";
+import toast from 'react-hot-toast';
 import OfflineStatusBanner from "@/components/OfflineStatusBanner/OfflineStatusBanner";
 import { syncPlayerData } from "@/utils/syncPlayerData";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import PlayerModal from "@/components/PlayerModal/PlayerModal";
+import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesModal";
+import MatchInfoModal from "@/components/MatchInfoModal/MatchInfoModal";
 
 // Rozszerzenie interfejsu Window
 declare global {
@@ -45,26 +48,8 @@ const ActionsTable = dynamic(
     ssr: false,
   }
 );
-const PlayerModal = dynamic(
-  () => import("@/components/PlayerModal/PlayerModal"),
-  {
-    ssr: false,
-  }
-);
-const MatchInfoModal = dynamic(
-  () => import("@/components/MatchInfoModal/MatchInfoModal"),
-  {
-    ssr: false,
-  }
-);
 const MatchInfoHeader = dynamic(
   () => import("@/components/MatchInfoHeader/MatchInfoHeader")
-);
-const PlayerMinutesModal = dynamic(
-  () => import("@/components/PlayerMinutesModal/PlayerMinutesModal"),
-  {
-    ssr: false,
-  }
 );
 
 // Funkcja pomocnicza do usuwania undefined z obiektów, zachowująca typ

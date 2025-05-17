@@ -134,7 +134,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
           Minuty zawodników: {getTeamName(match.team)} vs {match.opponent}
         </h2>
         <p className={styles.modalSubtitle}>
-          Wpisz przedziały minut, w których zawodnicy grali w meczu.
+          Wpisz czas rozpoczęcia i zakończenia gry zawodników (w minutach).
         </p>
         
         <form onSubmit={handleSubmit}>
@@ -143,7 +143,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
             <div className={styles.headerCell}>Od (min)</div>
             <div className={styles.headerCell}>Do (min)</div>
             <div className={styles.headerCell}>Pozycja</div>
-            <div className={styles.headerCell}>Czas gry</div>
+            <div className={styles.headerCell}>Łączny czas</div>
           </div>
 
           <div className={styles.playersList}>
