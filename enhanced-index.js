@@ -36,12 +36,21 @@ try {
     <link rel="stylesheet" href="./_next/static/css/dfe52fc7d0427f30.css" />
     
     <style>
+        /* Reset podstawowych stylów */
+        * {
+            box-sizing: border-box;
+        }
+        
         /* Dodatkowe style do obsługi błędów i zawartości strony */
+        html {
+            background-color: #f5f8fa !important;
+        }
+        
         html, body {
             font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #f5f8fa;
+            background-color: #f5f8fa !important;
             height: 100%;
             width: 100%;
             color: #333;
@@ -55,13 +64,13 @@ try {
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: #f5f8fa;
+            background-color: #f5f8fa !important;
             z-index: -1;
         }
         
         #__next {
             min-height: 100vh;
-            background-color: #f5f8fa;
+            background-color: #f5f8fa !important;
         }
         
         .error-container {
@@ -89,7 +98,7 @@ try {
             align-items: center;
             height: 100vh;
             width: 100%;
-            background-color: #f5f8fa;
+            background-color: #f5f8fa !important;
         }
 
         .spinner {
@@ -151,15 +160,39 @@ try {
         }
         
         .page_content__kDoxQ {
-            background-color: white;
+            background-color: white !important;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             margin-top: 20px;
         }
+        
+        /* Dodatkowe naprawianie czarnego tła */
+        body, html, [data-reactroot], #main-content, .main-container {
+            background-color: #f5f8fa !important;
+        }
+        
+        main, header, footer, .container, .wrapper {
+            background-color: #f5f8fa !important;
+        }
+        
+        /* Nakładka która zmieni czarne tło w razie potrzeby */
+        .background-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f5f8fa;
+            z-index: -100;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
+    <!-- Dodatkowa nakładka z tłem -->
+    <div class="background-overlay"></div>
+    
     <div id="__next">
         <div class="page_container__aoG4z">
             <div class="loader">
@@ -182,6 +215,27 @@ try {
     </div>
 
     <script>
+        // Funkcja do manipulacji stylami
+        function enforceStyles() {
+            document.documentElement.style.backgroundColor = '#f5f8fa';
+            document.body.style.backgroundColor = '#f5f8fa';
+            
+            const nextDiv = document.getElementById('__next');
+            if (nextDiv) nextDiv.style.backgroundColor = '#f5f8fa';
+            
+            const pageContainer = document.querySelector('.page_container__aoG4z');
+            if (pageContainer) pageContainer.style.backgroundColor = '#f5f8fa';
+            
+            // Znajdź wszystkie elementy z czarnym tłem i zmień je
+            const allElements = document.querySelectorAll('*');
+            allElements.forEach(el => {
+                const style = window.getComputedStyle(el);
+                if (style.backgroundColor === 'rgb(0, 0, 0)' || style.backgroundColor === '#000' || style.backgroundColor === 'black') {
+                    el.style.backgroundColor = '#f5f8fa';
+                }
+            });
+        }
+        
         // Funkcja do wykrywania błędów ładowania skryptów
         function handleScriptError(error) {
             console.error('Błąd ładowania skryptu:', error);
@@ -214,17 +268,19 @@ try {
         
         // Upewnij się, że strona ma białe tło
         document.addEventListener('DOMContentLoaded', () => {
-            document.body.style.backgroundColor = '#f5f8fa';
-            const nextDiv = document.getElementById('__next');
-            if (nextDiv) nextDiv.style.backgroundColor = '#f5f8fa';
-            
-            const pageContainer = document.querySelector('.page_container__aoG4z');
-            if (pageContainer) pageContainer.style.backgroundColor = '#f5f8fa';
+            enforceStyles();
+            // Powtarzaj korektę styli kilka razy, aby złapać opóźnione zmiany
+            setTimeout(enforceStyles, 100);
+            setTimeout(enforceStyles, 500);
+            setTimeout(enforceStyles, 1000);
+            setTimeout(enforceStyles, 2000);
         });
 
         // Ładuj skrypty w odpowiedniej kolejności
         async function loadApp() {
             try {
+                enforceStyles();
+                
                 // Ładuj główne skrypty aplikacji
                 await loadScript('./_next/static/chunks/polyfills-42372ed130431b0a.js');
                 await loadScript('./_next/static/chunks/webpack-889089d919370fd1.js');
@@ -246,6 +302,10 @@ try {
                 
                 // Usuń loader po załadowaniu wszystkich skryptów
                 document.querySelector('.loader').style.display = 'none';
+                
+                // Upewnij się, że tło jest poprawne po załadowaniu wszystkich skryptów
+                enforceStyles();
+                setTimeout(enforceStyles, 500);
             } catch (error) {
                 handleScriptError(error);
             }
@@ -260,6 +320,7 @@ try {
             // Utwórz podstawową strukturę DOM dla aplikacji
             const appContainer = document.createElement('div');
             appContainer.className = 'app-container';
+            appContainer.style.backgroundColor = '#f5f8fa';
             appContainer.innerHTML = \`
                 <div style="padding: 20px; max-width: 1200px; margin: 0 auto;">
                     <div style="margin-bottom: 20px; padding: 15px; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
@@ -285,10 +346,12 @@ try {
             if (pageContainer) {
                 pageContainer.innerHTML = '';
                 pageContainer.appendChild(appContainer);
+                pageContainer.style.backgroundColor = '#f5f8fa';
             }
             
             // Próbuj ponownie załadować skrypty
             setTimeout(() => {
+                enforceStyles();
                 loadApp();
             }, 1000);
         }
@@ -304,6 +367,7 @@ try {
                 document.getElementById('fallback-content').style.display = 'block';
                 loader.style.display = 'none';
             }
+            enforceStyles();
         }, 5000);
 
         // Obsługa ogólnych błędów aplikacji
@@ -312,8 +376,22 @@ try {
             document.getElementById('error-container').style.display = 'block';
             document.getElementById('error-message').textContent = 
                 'Wystąpił nieoczekiwany błąd aplikacji: ' + message;
+            enforceStyles();
             return true;
         };
+        
+        // MutationObserver do obserwowania zmian w DOM i wymuszania stylu tła
+        const observer = new MutationObserver(function(mutations) {
+            enforceStyles();
+        });
+        
+        // Obserwuj zmiany w całym dokumencie
+        observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['style', 'class']
+        });
     </script>
 </body>
 </html>`;

@@ -50,12 +50,18 @@ function fixPaths(filePath) {
       { pattern: /="\/assets\//g, replacement: '="./assets/' },
       { pattern: /="\/images\//g, replacement: '="./images/' },
       
-      // Naprawianie styli i problemów z czarnym ekranem
+      // Naprawianie styli i problemów z czarnym ekranem - jeszcze bardziej agresywne
       { pattern: /"backgroundColor":"#000"/g, replacement: '"backgroundColor":"#f5f8fa"' },
+      { pattern: /"backgroundColor":"black"/g, replacement: '"backgroundColor":"#f5f8fa"' },
+      { pattern: /"backgroundColor":"rgb\(0,0,0\)"/g, replacement: '"backgroundColor":"#f5f8fa"' },
       { pattern: /"background":"#000"/g, replacement: '"background":"#f5f8fa"' },
       { pattern: /"background-color":"#000"/g, replacement: '"background-color":"#f5f8fa"' },
       { pattern: /background-color:#000/g, replacement: 'background-color:#f5f8fa' },
       { pattern: /background:#000/g, replacement: 'background:#f5f8fa' },
+      { pattern: /background:black/g, replacement: 'background:#f5f8fa' },
+      { pattern: /background-color:black/g, replacement: 'background-color:#f5f8fa' },
+      { pattern: /background-color:rgb\(0,0,0\)/g, replacement: 'background-color:#f5f8fa' },
+      { pattern: /background:rgb\(0,0,0\)/g, replacement: 'background:#f5f8fa' },
       
       // Poprawianie przedrostków ścieżek dla assetów względnych
       { pattern: /"assetPrefix":""/g, replacement: '"assetPrefix":"."' },
@@ -90,11 +96,29 @@ function fixStyles(filePath) {
     console.log(`Przetwarzanie stylów CSS: ${filePath}`);
     let content = fs.readFileSync(filePath, 'utf8');
     
-    // Zastąp czarne tło jaśniejszym
+    // Zastąp czarne tło jaśniejszym - bardziej agresywnie
     let newContent = content
       .replace(/background-color:#000/g, 'background-color:#f5f8fa')
       .replace(/background:#000/g, 'background:#f5f8fa')
-      .replace(/color:#fff/g, 'color:#333');
+      .replace(/background:black/g, 'background:#f5f8fa')
+      .replace(/background-color:black/g, 'background-color:#f5f8fa')
+      .replace(/background-color:rgb\(0,0,0\)/g, 'background-color:#f5f8fa')
+      .replace(/background:rgb\(0,0,0\)/g, 'background:#f5f8fa')
+      .replace(/color:#fff/g, 'color:#333')
+      .replace(/color:white/g, 'color:#333')
+      .replace(/body\s*{/g, 'body{background-color:#f5f8fa!important;')
+      .replace(/html\s*{/g, 'html{background-color:#f5f8fa!important;');
+    
+    // Dodaj dodatkowe style dot. tła na końcu pliku CSS
+    newContent += `
+/* Dodatkowy styl do rozwiązania problemu z czarnym tłem */
+html, body {
+  background-color: #f5f8fa !important;
+}
+#__next, .page_container__aoG4z, [data-reactroot] {
+  background-color: #f5f8fa !important;
+}
+`;
     
     if (content !== newContent) {
       fs.writeFileSync(filePath, newContent);
@@ -102,6 +126,46 @@ function fixStyles(filePath) {
     }
   } catch (error) {
     console.error(`❌ Błąd podczas naprawiania stylów w ${filePath}:`, error);
+  }
+}
+
+// Dodatkowa funkcja do dołączania globalnych stylów do wszystkich plików HTML
+function injectGlobalStyles(filePath) {
+  if (!filePath.endsWith('.html')) {
+    return;
+  }
+
+  try {
+    console.log(`Dodawanie globalnych stylów do: ${filePath}`);
+    let content = fs.readFileSync(filePath, 'utf8');
+    
+    // Dodaj tag <base> i globalny styl do naprawy czarnego tła
+    const headEnd = content.indexOf('</head>');
+    if (headEnd !== -1) {
+      const globalStyles = `
+  <base href=".">
+  <style>
+    html, body, #__next, .page_container__aoG4z {
+      background-color: #f5f8fa !important;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #f5f8fa !important;
+      z-index: -1;
+    }
+  </style>
+`;
+      content = content.slice(0, headEnd) + globalStyles + content.slice(headEnd);
+      fs.writeFileSync(filePath, content);
+      console.log(`✅ Dodano globalne style do: ${filePath}`);
+    }
+  } catch (error) {
+    console.error(`❌ Błąd podczas dodawania globalnych stylów do ${filePath}:`, error);
   }
 }
 
@@ -202,6 +266,9 @@ walkDir(outDir, fixPaths);
 
 // Napraw style CSS
 walkDir(outDir, fixStyles);
+
+// Dodaj globalne style do wszystkich plików HTML
+walkDir(outDir, injectGlobalStyles);
 
 // Utwórz plik index.php dla vh.pl
 createPhpIndex();
