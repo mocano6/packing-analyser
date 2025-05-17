@@ -138,4 +138,62 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=twój_measurement_id
 ### Informacje dodatkowe
 1. Dokumentacja Firebase: https://firebase.google.com/docs
 2. Dokumentacja Next.js: https://nextjs.org/docs
-3. Kontakt do pomocy technicznej: [wpisz kontakt] 
+3. Kontakt do pomocy technicznej: [wpisz kontakt]
+
+# Instrukcja wdrażania aplikacji Packing Analyzer na serwer vh.pl
+
+## Przygotowanie plików do wdrożenia
+
+1. Zbuduj aplikację komendą:
+   ```
+   npm run build:server
+   ```
+
+   Ta komenda wykonuje następujące kroki:
+   - Buduje aplikację Next.js
+   - Naprawia ścieżki w plikach (zamienia ścieżki absolutne na względne)
+   - Tworzy ulepszony plik index.html z obsługą błędów
+   - Tworzy plik index.php dla lepszej integracji z serwerem
+   - Pakuje wszystko do pliku ZIP gotowego do wgrania na serwer
+
+2. Po zakończeniu procesu budowania, w głównym katalogu projektu powstanie plik `packing-analyzer-server.zip`, który jest gotowy do wgrania na serwer.
+
+## Wdrażanie na serwer vh.pl
+
+1. Zaloguj się do panelu administracyjnego vh.pl
+2. Przejdź do menedżera plików
+3. Utwórz katalog dla aplikacji (np. `packing`) jeśli jeszcze nie istnieje
+4. Wgraj plik `packing-analyzer-server.zip` do utworzonego katalogu
+5. Rozpakuj plik ZIP bezpośrednio na serwerze (można użyć opcji "Rozpakuj" w menedżerze plików)
+6. Upewnij się, że plik `.htaccess` został poprawnie wgrany i ma odpowiednie uprawnienia (644)
+
+## Rozwiązywanie problemów
+
+Jeśli po wdrożeniu aplikacja nie działa poprawnie:
+
+1. **Problem z białą stroną**:
+   - Sprawdź czy wszystkie pliki zostały poprawnie wypakowane
+   - Sprawdź w konsoli przeglądarki (F12) czy nie ma błędów ładowania plików
+   - Sprawdź czy plik `.htaccess` jest poprawny i ma odpowiednie uprawnienia
+
+2. **Problem z ładowaniem zasobów (skrypty, style)**:
+   - Sprawdź czy pliki w katalogu `_next` są dostępne
+   - Upewnij się, że serwer ma włączoną obsługę CORS i poprawnie ustawione typy MIME
+
+3. **Problem z routingiem**:
+   - Upewnij się, że moduł `mod_rewrite` jest włączony na serwerze
+   - Sprawdź czy plik `.htaccess` ma poprawną konfigurację przekierowań
+
+4. **Inne problemy**:
+   - Aplikacja posiada mechanizm awaryjnego ładowania, który powinien pojawić się po 5 sekundach w przypadku problemów
+   - Kliknięcie "Załaduj aplikację ręcznie" może pomóc w diagnostyce problemów
+
+## Uwagi dodatkowe
+
+- Aplikacja używa względnych ścieżek do zasobów, więc powinna działać niezależnie od katalogu, w którym jest zainstalowana
+- W przypadku konfiguracji subdomeny, upewnij się, że DocumentRoot wskazuje na katalog z aplikacją
+- Jeśli aplikacja działa niepoprawnie, sprawdź logi serwera w poszukiwaniu błędów
+
+## Kontakt
+
+W przypadku problemów z wdrożeniem, skontaktuj się z administratorem aplikacji. 
