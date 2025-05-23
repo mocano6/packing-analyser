@@ -16,7 +16,6 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  transpilePackages: ['@firebase/firestore', '@firebase/auth', '@firebase/storage'],
   experimental: {
     serverComponentsExternalPackages: ['@firebase/firestore', '@firebase/auth', '@firebase/storage'],
   },
