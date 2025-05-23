@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   images: {
     unoptimized: true,
     remotePatterns: [
@@ -16,6 +17,9 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   transpilePackages: ['firebase', '@firebase/auth', 'undici'],
+  experimental: {
+    serverActions: true,
+  },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
