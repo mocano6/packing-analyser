@@ -1,6 +1,6 @@
 'use client';
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { 
   getFirestore, 
   connectFirestoreEmulator,
@@ -10,10 +10,11 @@ import {
   disableNetwork,
   initializeFirestore,
   persistentLocalCache,
-  persistentMultipleTabManager
+  persistentMultipleTabManager,
+  Firestore
 } from 'firebase/firestore';
-import { getAuth, signInAnonymously } from 'firebase/auth';
-import { getStorage } from 'firebase/storage';
+import { getAuth, Auth } from 'firebase/auth';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 // Konfiguracja Firebase
 const firebaseConfig = {
@@ -25,10 +26,10 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-let app;
-let db;
-let auth;
-let storage;
+let app: FirebaseApp | undefined;
+let db: Firestore | undefined;
+let auth: Auth | undefined;
+let storage: FirebaseStorage | undefined;
 
 if (typeof window !== 'undefined') {
   // Inicjalizacja Firebase tylko po stronie klienta
@@ -48,13 +49,15 @@ if (typeof window !== 'undefined') {
   // Włączamy sieć Firestore przy inicjalizacji
   localStorage.removeItem('firestore_offline_mode');
   
-  enableNetwork(db)
-    .then(() => {
-      console.log('🌐 Sieć Firestore włączona przy inicjalizacji');
-    })
-    .catch(err => {
-      console.error('❌ Błąd przy włączaniu sieci Firestore:', err);
-    });
+  if (db) {
+    enableNetwork(db)
+      .then(() => {
+        console.log('🌐 Sieć Firestore włączona przy inicjalizacji');
+      })
+      .catch(err => {
+        console.error('❌ Błąd przy włączaniu sieci Firestore:', err);
+      });
+  }
 }
 
 // Funkcja do wymuszenia trybu offline - użyta w komponentach
