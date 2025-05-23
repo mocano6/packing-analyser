@@ -15,7 +15,8 @@
     "db:create-index": "node src/scripts/createFirestoreIndex.js",
     "backup": "node src/scripts/backupData.js",
     "restore": "node src/scripts/restoreData.js",
-    "reset-password": "node src/scripts/resetPassword.js"
+    "reset-password": "node src/scripts/resetPassword.js",
+    "vercel-build": "next build"
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",

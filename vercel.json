@@ -1,7 +1,12 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
+  "buildCommand": "next build",
+  "outputDirectory": "out",
   "framework": "nextjs",
-  "outputDirectory": "out"
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ]
 } 
