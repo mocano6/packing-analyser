@@ -7,8 +7,6 @@ import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 
 // Klucz localStorage do przechowywania tokenu autentykacji
 const AUTH_TOKEN_KEY = "packing_app_auth_token";
-// Klucz do obejścia uwierzytelniania - używany w trybie deweloperskim gdy Firebase Auth ma problemy
-const BYPASS_AUTH_KEY = "packing_app_bypass_auth";
 // Czas ważności tokenu (24 godziny)
 const TOKEN_VALIDITY_MS = 24 * 60 * 60 * 1000;
 
@@ -18,9 +16,8 @@ interface UseAuthReturnType {
   login: (password: string) => Promise<boolean>;
   logout: () => void;
   setPassword: (newPassword: string) => Promise<boolean>;
-  bypassAuth: () => void; // Funkcja do obejścia uwierzytelniania (tylko dla deweloperów)
-  resetPassword: () => Promise<boolean>; // Funkcja do resetowania hasła
-  isPasswordSet: boolean; // Flaga wskazująca czy hasło jest ustawione
+  resetPassword: () => Promise<boolean>;
+  isPasswordSet: boolean;
 }
 
 export function useAuth(): UseAuthReturnType {
@@ -28,53 +25,34 @@ export function useAuth(): UseAuthReturnType {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isPasswordSet, setIsPasswordSet] = useState<boolean>(false);
 
-  // Funkcja do obejścia uwierzytelniania
-  const bypassAuth = () => {
-    localStorage.setItem(BYPASS_AUTH_KEY, 'true');
-    setIsAuthenticated(true);
-    console.log('⚠️ Uwierzytelnianie obejścione - tryb produkcyjny aktywny');
-    toast.success("Aktywowano tryb deweloperski");
-  };
-
-  // Automatycznie aktywuj tryb obejścia dla wersji produkcyjnej
+  // Sprawdź token przy starcie
   useEffect(() => {
-    console.log('🔄 Inicjalizacja uwierzytelniania...');
-    
-    // Najpierw sprawdź, czy tryb obejścia jest już aktywny
-    const isBypassActive = localStorage.getItem(BYPASS_AUTH_KEY) === 'true';
-    if (isBypassActive) {
-      console.log('⚠️ Tryb obejścia uwierzytelniania jest już aktywny');
-      setIsAuthenticated(true);
-      setIsLoading(false);
-      return;
-    }
-    
-    // Aktywuj tryb obejścia i zakończ ładowanie
-    bypassAuth();
-    setIsLoading(false);
+    const checkAuth = async () => {
+      try {
+        const token = localStorage.getItem(AUTH_TOKEN_KEY);
+        if (token) {
+          // Sprawdź, czy token nie wygasł
+          const tokenTime = parseInt(token.split('_')[1]);
+          if (Date.now() - tokenTime < TOKEN_VALIDITY_MS) {
+            setIsAuthenticated(true);
+          } else {
+            localStorage.removeItem(AUTH_TOKEN_KEY);
+          }
+        }
+      } catch (error) {
+        console.error("Błąd podczas sprawdzania autentykacji:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuth();
   }, []);
 
   // Logowanie z użyciem hasła
   const login = async (password: string): Promise<boolean> => {
     try {
       setIsLoading(true);
-      
-      // Jeśli obejście uwierzytelniania jest aktywne, od razu zwróć true
-      if (localStorage.getItem(BYPASS_AUTH_KEY) === 'true') {
-        setIsAuthenticated(true);
-        return true;
-      }
-      
-      // Sprawdź, czy uproszczone hasło deweloperskie jest aktywne
-      if (password === 'dev123') {
-        console.log('🔓 Logowanie z użyciem uproszczonego hasła deweloperskiego');
-        // Generowanie prostego tokenu z timestampem
-        const token = `auth_${Date.now()}`;
-        localStorage.setItem(AUTH_TOKEN_KEY, token);
-        setIsAuthenticated(true);
-        toast.success("Zalogowano z hasłem deweloperskim");
-        return true;
-      }
       
       // Pobierz hasło z Firebase
       const settingsRef = doc(db, "settings", "password");
@@ -100,7 +78,7 @@ export function useAuth(): UseAuthReturnType {
       const isValid = await compareHash(password, hash, salt);
       
       if (isValid) {
-        // Generowanie prostego tokenu z timestampem
+        // Generowanie tokenu z timestampem
         const token = `auth_${Date.now()}`;
         localStorage.setItem(AUTH_TOKEN_KEY, token);
         setIsAuthenticated(true);
@@ -112,17 +90,6 @@ export function useAuth(): UseAuthReturnType {
       return false;
     } catch (error) {
       console.error("Błąd podczas logowania:", error);
-      
-      // W przypadku błędu, jeśli podane jest uproszczone hasło deweloperskie, zaloguj
-      if (password === 'dev123') {
-        console.log('🔓 Logowanie awaryjne z użyciem uproszczonego hasła deweloperskiego po błędzie');
-        const token = `auth_${Date.now()}`;
-        localStorage.setItem(AUTH_TOKEN_KEY, token);
-        setIsAuthenticated(true);
-        toast.success("Zalogowano awaryjnie z hasłem deweloperskim");
-        return true;
-      }
-      
       toast.error("Błąd podczas logowania. Spróbuj ponownie.");
       return false;
     } finally {
@@ -133,7 +100,6 @@ export function useAuth(): UseAuthReturnType {
   // Wylogowanie
   const logout = () => {
     localStorage.removeItem(AUTH_TOKEN_KEY);
-    // Nie usuwamy BYPASS_AUTH_KEY przy wylogowaniu, aby deweloper mógł nadal pracować
     setIsAuthenticated(false);
     toast.success("Wylogowano pomyślnie");
   };
@@ -142,12 +108,6 @@ export function useAuth(): UseAuthReturnType {
   const setPassword = async (newPassword: string): Promise<boolean> => {
     try {
       setIsLoading(true);
-      
-      // Jeśli obejście uwierzytelniania jest aktywne, od razu zwróć true
-      if (localStorage.getItem(BYPASS_AUTH_KEY) === 'true') {
-        setIsAuthenticated(true);
-        return true;
-      }
       
       // Haszowanie hasła
       const { hash, salt } = await hashPassword(newPassword);
@@ -169,14 +129,6 @@ export function useAuth(): UseAuthReturnType {
       return true;
     } catch (error) {
       console.error("Błąd podczas ustawiania hasła:", error);
-      
-      // W przypadku błędu podczas ustawiania hasła, aktywuj tryb deweloperski
-      if (newPassword === 'dev123') {
-        console.log('🔓 Aktywacja trybu deweloperskiego po błędzie ustawiania hasła');
-        bypassAuth();
-        return true;
-      }
-      
       return false;
     } finally {
       setIsLoading(false);
@@ -231,7 +183,6 @@ export function useAuth(): UseAuthReturnType {
     login, 
     logout, 
     setPassword, 
-    bypassAuth, 
     resetPassword,
     isPasswordSet 
   };
