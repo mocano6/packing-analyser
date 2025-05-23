@@ -39,6 +39,16 @@ const nextConfig = {
         process: false,
       };
     }
+
+    // Dodajemy obsługę modułów ESM
+    config.module.rules.push({
+      test: /\.m?js$/,
+      type: 'javascript/auto',
+      resolve: {
+        fullySpecified: false,
+      },
+    });
+
     return config;
   },
 }
