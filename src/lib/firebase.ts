@@ -1,3 +1,5 @@
+'use client';
+
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getFirestore, 
@@ -23,25 +25,29 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Inicjalizacja Firebase - sprawdzamy, czy nie jest już zainicjalizowana
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+let app;
+let db;
+let auth;
+let storage;
 
-// Nowa konfiguracja Firestore - bezpośrednio w trybie offline z lokalną pamięcią podręczną
-const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager()
-  })
-});
-
-// Inicjalizacja auth
-export const auth = getAuth(app);
-
-// Włączamy sieć Firestore przy inicjalizacji
 if (typeof window !== 'undefined') {
-  // Usuń flagę trybu offline z localStorage
+  // Inicjalizacja Firebase tylko po stronie klienta
+  app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+  
+  // Nowa konfiguracja Firestore - bezpośrednio w trybie offline z lokalną pamięcią podręczną
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
+  });
+
+  // Inicjalizacja auth i storage
+  auth = getAuth(app);
+  storage = getStorage(app);
+
+  // Włączamy sieć Firestore przy inicjalizacji
   localStorage.removeItem('firestore_offline_mode');
   
-  // Włącz sieć
   enableNetwork(db)
     .then(() => {
       console.log('🌐 Sieć Firestore włączona przy inicjalizacji');
@@ -53,7 +59,7 @@ if (typeof window !== 'undefined') {
 
 // Funkcja do wymuszenia trybu offline - użyta w komponentach
 export const forceOfflineMode = async () => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && db) {
     try {
       await disableNetwork(db);
       localStorage.setItem('firestore_offline_mode', 'true');
@@ -69,7 +75,7 @@ export const forceOfflineMode = async () => {
 
 // Funkcja do przywrócenia trybu online
 export const enableOnlineMode = async () => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && db) {
     try {
       await enableNetwork(db);
       localStorage.removeItem('firestore_offline_mode');
@@ -84,6 +90,5 @@ export const enableOnlineMode = async () => {
 };
 
 // Eksport instancji usług
-export const storage = getStorage(app);
-export { db };
+export { db, auth, storage };
 export default app; 
