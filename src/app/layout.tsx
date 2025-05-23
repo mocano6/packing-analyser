@@ -1,7 +1,6 @@
 // src/app/layout.tsx
 import './globals.css';
 import { Inter } from 'next/font/google';
-import { metadata } from './layout-metadata';
 import type { Metadata } from 'next';
 import AuthGuard from '@/components/AuthGuard/AuthGuard';
 import { Toaster } from 'react-hot-toast';

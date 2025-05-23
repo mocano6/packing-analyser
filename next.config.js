@@ -16,9 +16,9 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  transpilePackages: ['firebase', '@firebase/auth', 'undici'],
+  transpilePackages: ['@firebase/firestore', '@firebase/auth', '@firebase/storage'],
   experimental: {
-    serverActions: true,
+    serverComponentsExternalPackages: ['@firebase/firestore', '@firebase/auth', '@firebase/storage'],
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
@@ -27,19 +27,16 @@ const nextConfig = {
         fs: false,
         net: false,
         tls: false,
-        dns: false,
-        child_process: false,
-        http2: false,
-        stream: false,
-        util: false,
-        crypto: false,
-        zlib: false,
-        path: false,
-        os: false,
-        assert: false,
-        constants: false,
-        buffer: false,
-        process: false,
+        crypto: require.resolve('crypto-browserify'),
+        stream: require.resolve('stream-browserify'),
+        url: require.resolve('url'),
+        zlib: require.resolve('browserify-zlib'),
+        http: require.resolve('stream-http'),
+        https: require.resolve('https-browserify'),
+        assert: require.resolve('assert'),
+        os: require.resolve('os-browserify'),
+        path: require.resolve('path-browserify'),
+        'process/browser': require.resolve('process/browser'),
       };
     }
 
