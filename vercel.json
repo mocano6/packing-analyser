@@ -1,12 +1,4 @@
 {
   "version": 2,
-  "buildCommand": "next build",
-  "outputDirectory": "out",
-  "framework": "nextjs",
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
-  ]
+  "framework": "nextjs"
 } 
