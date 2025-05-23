@@ -1,8 +1,5 @@
-'use client';
-
-// Importujemy istniejący kod z src/app/page.tsx
-import { default as MainPage } from '../../app/page';
+import { redirect } from 'next/navigation';
 
 export default function AuthPage() {
-  return <MainPage />;
+  redirect('/login');
 } 
