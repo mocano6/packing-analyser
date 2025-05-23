@@ -16,9 +16,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  experimental: {
-    serverActions: true,
-  },
+  transpilePackages: ['firebase', '@firebase/auth', 'undici'],
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
