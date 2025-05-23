@@ -4,7 +4,7 @@
   "private": true,
   "homepage": "https://USERNAME.github.io/packing-analyzer",
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "build:server": "next build && node fix-paths-vh.js && npm run create-zip",
     "build:test": "next build && node fix-paths-vh.js && npm run serve:local",
@@ -24,31 +24,30 @@
     "reset-password": "node src/scripts/resetPassword.js"
   },
   "dependencies": {
-    "@prisma/client": "^6.5.0",
-    "@types/uuid": "^10.0.0",
-    "dotenv": "^16.5.0",
-    "firebase": "^11.6.0",
-    "next": "15.2.2",
+    "@prisma/client": "^5.10.0",
+    "@types/uuid": "^9.0.8",
+    "dotenv": "^16.4.5",
+    "firebase": "^10.8.0",
+    "next": "14.1.0",
     "node-fetch": "^3.3.2",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "react-hot-toast": "^2.5.2",
-    "uuid": "^11.1.0"
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "compression": "^1.8.0",
+    "@types/node": "^20.11.19",
+    "@types/react": "^18.2.57",
+    "@types/react-dom": "^18.2.19",
+    "compression": "^1.7.4",
     "cors": "^2.8.5",
-    "eslint": "^9",
-    "eslint-config-next": "15.2.2",
-    "express": "^5.1.0",
-    "firebase-tools": "^14.2.0",
-    "gh-pages": "^6.3.0",
-    "prisma": "^6.5.0",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "14.1.0",
+    "express": "^4.18.2",
+    "firebase-tools": "^13.0.2",
+    "gh-pages": "^6.1.1",
+    "prisma": "^5.10.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.2"
+    "typescript": "^5.3.3"
   }
 }
