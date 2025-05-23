@@ -17,13 +17,28 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   transpilePackages: ['firebase', '@firebase/auth', 'undici'],
-  webpack: (config) => {
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      fs: false,
-      net: false,
-      tls: false,
-    };
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        dns: false,
+        child_process: false,
+        http2: false,
+        stream: false,
+        util: false,
+        crypto: false,
+        zlib: false,
+        path: false,
+        os: false,
+        assert: false,
+        constants: false,
+        buffer: false,
+        process: false,
+      };
+    }
     return config;
   },
 }
