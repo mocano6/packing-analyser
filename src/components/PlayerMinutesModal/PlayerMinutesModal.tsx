@@ -160,8 +160,8 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
               // Znajdź zapisane minuty dla tego zawodnika
               const minutes = playerMinutes.find(pm => pm.playerId === player.id) || {
                 playerId: player.id,
-                startMinute: 1,
-                endMinute: 130,
+                startMinute: 0,
+                endMinute: 0,
                 position: player.position || "CB" // Domyślna pozycja z danych zawodnika
               };
               
