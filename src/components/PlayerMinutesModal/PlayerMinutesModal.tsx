@@ -46,34 +46,35 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
         player.teams && player.teams.includes(match.team)
       );
       
-      // Tworzymy mapę istniejących minut dla szybkiego dostępu
-      const existingMinutesMap = new Map(
-        currentPlayerMinutes.map(pm => [pm.playerId, pm])
-      );
-      
-      // Inicjalizujemy minuty dla każdego zawodnika
-      const initialPlayerMinutes = teamPlayers.map(player => {
-        // Sprawdzamy czy mamy zapisane minuty dla tego zawodnika
-        const existingMinutes = existingMinutesMap.get(player.id);
+      // Jeśli mamy zapisane minuty, używamy ich bezpośrednio
+      if (currentPlayerMinutes && currentPlayerMinutes.length > 0) {
+        // Filtrujemy tylko minuty dla zawodników z aktualnego zespołu
+        const filteredMinutes = currentPlayerMinutes.filter(pm => 
+          teamPlayers.some(player => player.id === pm.playerId)
+        );
         
-        if (existingMinutes) {
-          // Jeśli mamy zapisane minuty, używamy ich
-          return {
-            ...existingMinutes,
-            position: existingMinutes.position || player.position || "CB"
-          };
-        } else {
-          // Jeśli nie mamy zapisanych minut, ustawiamy domyślne wartości
-          return {
-            playerId: player.id,
-            startMinute: 0,
-            endMinute: 0,
-            position: player.position || "CB"
-          };
-        }
-      });
+        // Dodajemy brakujących zawodników z domyślnymi wartościami
+        const missingPlayers = teamPlayers.filter(player => 
+          !filteredMinutes.some(pm => pm.playerId === player.id)
+        ).map(player => ({
+          playerId: player.id,
+          startMinute: 0,
+          endMinute: 0,
+          position: player.position || "CB"
+        }));
+
+        setPlayerMinutes([...filteredMinutes, ...missingPlayers]);
+      } else {
+        // Jeśli nie mamy zapisanych minut, inicjalizujemy domyślne wartości
+        const initialPlayerMinutes = teamPlayers.map(player => ({
+          playerId: player.id,
+          startMinute: 0,
+          endMinute: 0,
+          position: player.position || "CB"
+        }));
+        setPlayerMinutes(initialPlayerMinutes);
+      }
       
-      setPlayerMinutes(initialPlayerMinutes);
       setInitialized(true);
     }
   }, [isOpen, players, currentPlayerMinutes, match.team, initialized]);
