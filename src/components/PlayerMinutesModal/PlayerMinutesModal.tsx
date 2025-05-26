@@ -113,6 +113,9 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
 
   // Obliczenie czasu gry zawodnika na podstawie przedziału minut
   const calculatePlayTime = (startMinute: number, endMinute: number) => {
+    if (startMinute === 0 && endMinute === 0) {
+      return 0;
+    }
     return Math.max(0, endMinute - startMinute + 1);
   };
 
