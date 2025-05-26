@@ -76,7 +76,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
     field: 'startMinute' | 'endMinute', 
     value: number
   ) => {
-    const minValue = field === 'startMinute' ? 1 : 1;
+    const minValue = 0;
     const newValue = Math.max(minValue, Math.min(130, value));
     
     setPlayerMinutes(prev => 
@@ -111,9 +111,9 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
     e.preventDefault();
     // Sprawdź, czy wartości są poprawne
     const validPlayerMinutes = playerMinutes.filter(pm => 
-      pm.startMinute >= 1 &&
+      pm.startMinute >= 0 &&
       pm.endMinute >= pm.startMinute && 
-      pm.endMinute <= 130 // Zwiększamy maksymalny czas do 130 minut
+      pm.endMinute <= 130
     );
     
     onSave(validPlayerMinutes);
@@ -167,13 +167,13 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
                   <div className={styles.timeInput}>
                     <input
                       type="number"
-                      min="1"
+                      min="0"
                       max="130"
                       value={minutes.startMinute}
                       onChange={(e) => handleMinuteChange(
                         player.id, 
                         'startMinute', 
-                        parseInt(e.target.value) || 1
+                        parseInt(e.target.value) || 0
                       )}
                       className={styles.numberInput}
                     />
@@ -181,13 +181,13 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
                   <div className={styles.timeInput}>
                     <input
                       type="number"
-                      min="1"
+                      min="0"
                       max="130"
                       value={minutes.endMinute}
                       onChange={(e) => handleMinuteChange(
                         player.id, 
                         'endMinute', 
-                        parseInt(e.target.value) || 1
+                        parseInt(e.target.value) || 0
                       )}
                       className={styles.numberInput}
                     />
