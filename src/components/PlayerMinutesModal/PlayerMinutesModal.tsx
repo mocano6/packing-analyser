@@ -46,19 +46,34 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
         player.teams && player.teams.includes(match.team)
       );
       
-      // Jeśli mamy zapisane minuty, używamy ich
-      if (currentPlayerMinutes.length > 0) {
-        setPlayerMinutes(currentPlayerMinutes);
-      } else {
-        // Jeśli nie mamy zapisanych minut, inicjalizujemy domyślne wartości
-        const initialPlayerMinutes = teamPlayers.map(player => ({
-          playerId: player.id,
-          startMinute: 0,
-          endMinute: 0,
-          position: player.position || "CB"
-        }));
-        setPlayerMinutes(initialPlayerMinutes);
-      }
+      // Tworzymy mapę istniejących minut dla szybkiego dostępu
+      const existingMinutesMap = new Map(
+        currentPlayerMinutes.map(pm => [pm.playerId, pm])
+      );
+      
+      // Inicjalizujemy minuty dla każdego zawodnika
+      const initialPlayerMinutes = teamPlayers.map(player => {
+        // Sprawdzamy czy mamy zapisane minuty dla tego zawodnika
+        const existingMinutes = existingMinutesMap.get(player.id);
+        
+        if (existingMinutes) {
+          // Jeśli mamy zapisane minuty, używamy ich
+          return {
+            ...existingMinutes,
+            position: existingMinutes.position || player.position || "CB"
+          };
+        } else {
+          // Jeśli nie mamy zapisanych minut, ustawiamy domyślne wartości
+          return {
+            playerId: player.id,
+            startMinute: 0,
+            endMinute: 0,
+            position: player.position || "CB"
+          };
+        }
+      });
+      
+      setPlayerMinutes(initialPlayerMinutes);
       setInitialized(true);
     }
   }, [isOpen, players, currentPlayerMinutes, match.team, initialized]);
