@@ -1126,6 +1126,7 @@ export default function Page() {
             players={players.filter(
               (player) => player.teams && player.teams.includes(editingMatch.team)
             )}
+            currentPlayerMinutes={editingMatch.playerMinutes || []}
           />
         )}
 
