@@ -57,7 +57,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
         const missingPlayers = teamPlayers.filter(player => 
           !filteredMinutes.some(pm => pm.playerId === player.id)
         ).map(player => ({
-          playerId: player.id,
+            playerId: player.id,
           startMinute: 0,
           endMinute: 0,
           position: player.position || "CB"
@@ -71,8 +71,8 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
           startMinute: 0,
           endMinute: 0,
           position: player.position || "CB"
-        }));
-        setPlayerMinutes(initialPlayerMinutes);
+          }));
+      setPlayerMinutes(initialPlayerMinutes);
       }
       
       setInitialized(true);
