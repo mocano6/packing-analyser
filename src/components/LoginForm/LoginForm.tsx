@@ -1,18 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { toast } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
+import styles from './LoginForm.module.css';
 
-export default function LoginForm() {
+export const LoginForm = () => {
   const [password, setPassword] = useState('');
-  const { login, isLoading, isAuthenticated } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loginSuccess, setLoginSuccess] = useState(false);
+  const { login, isAuthenticated } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (isAuthenticated) {
-      // Dodajemy małe opóźnienie, aby użytkownik zobaczył komunikat o sukcesie
+      setLoginSuccess(true);
       const timer = setTimeout(() => {
         router.push('/');
       }, 1000);
@@ -22,53 +25,87 @@ export default function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password.trim()) {
-      toast.error('Proszę wprowadzić hasło');
-      return;
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      if (!password) {
+        throw new Error('Wprowadź hasło');
+      }
+
+      await login(password);
+      setLoginSuccess(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Wystąpił błąd podczas logowania');
+    } finally {
+      setIsLoading(false);
     }
-    await login(password);
   };
 
+  if (loginSuccess) {
+    return (
+      <div className={styles.loginContainer}>
+        <div className={styles.loginCard}>
+          <h1 className={styles.loginTitle}>Zalogowano pomyślnie!</h1>
+          <p className={styles.successMessage}>
+            Za chwilę zostaniesz przekierowany do aplikacji...
+          </p>
+          <button
+            className={styles.loginButton}
+            onClick={() => router.push('/')}
+          >
+            Przejdź do aplikacji
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="w-full max-w-md p-10 space-y-8 bg-white rounded-2xl shadow-xl transform transition-all hover:scale-[1.02]">
-        <div className="text-center">
-          <h2 className="text-4xl font-bold text-gray-900 mb-2">Logowanie</h2>
-          <p className="text-lg text-gray-600">
+    <div className={styles.loginContainer}>
+      <div className={styles.loginCard}>
+        <div className={styles.header}>
+          <h1 className={styles.title}>Packing Analyzer</h1>
+          <p className={styles.subtitle}>
             Wprowadź hasło, aby uzyskać dostęp do aplikacji
           </p>
         </div>
-        <form className="mt-10 space-y-6" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+
+        <form onSubmit={handleSubmit} className={styles.form}>
+          <div className={styles.inputGroup}>
+            <label htmlFor="password" className={styles.label}>
               Hasło
             </label>
             <input
               id="password"
-              name="password"
               type="password"
-              required
-              className="relative block w-full px-4 py-3 text-gray-900 placeholder-gray-500 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 text-lg transition-all"
-              placeholder="Wprowadź hasło"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              className={styles.input}
+              placeholder="Wprowadź hasło"
+              disabled={isLoading}
             />
           </div>
-          <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="relative flex justify-center w-full px-6 py-3 text-lg font-semibold text-white bg-blue-600 border-2 border-transparent rounded-xl group hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transform transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
-              {isLoading ? (
-                <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                'Zaloguj się'
-              )}
-            </button>
-          </div>
+
+          {error && (
+            <div className={styles.error}>
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className={styles.submitButton}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <div className={styles.spinner} />
+            ) : (
+              'Zaloguj się'
+            )}
+          </button>
         </form>
       </div>
     </div>
   );
-} 
+}; 
