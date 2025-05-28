@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import styles from './LoginForm.module.css';
 
-export const LoginForm = () => {
+export default function LoginForm() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,4 +108,4 @@ export const LoginForm = () => {
       </div>
     </div>
   );
-}; 
+} 

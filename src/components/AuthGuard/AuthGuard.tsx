@@ -3,7 +3,7 @@
 import React, { useEffect } from "react";
 import { useRouter } from 'next/navigation';
 import { useAuth } from "@/hooks/useAuth";
-import LoginForm from '@/components/LoginForm/LoginForm';
+import { LoginForm } from '@/components/LoginForm/LoginForm';
 
 interface AuthGuardProps {
   children: React.ReactNode;
