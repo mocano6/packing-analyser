@@ -355,6 +355,12 @@ export default function Page() {
     };
   }, [selectedTeam]); // Usuwamy wszelkie zależności od funkcji, które mogą powodować pętlę
 
+  // Dodajemy efekt, który reaguje na zmianę selectedTeam
+  React.useEffect(() => {
+    console.log("🔄 Zmiana wybranego zespołu na:", selectedTeam);
+    refreshMatchesList(selectedTeam);
+  }, [selectedTeam, refreshMatchesList]);
+
   // Funkcja do zapisywania zawodnika
   const handleSavePlayerWithTeams = (playerData: Omit<Player, "id">) => {
     // Upewnij się, że teams jest tablicą (dla wstecznej kompatybilności)

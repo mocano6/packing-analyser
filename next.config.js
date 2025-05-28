@@ -19,7 +19,7 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['@firebase/firestore', '@firebase/auth', '@firebase/storage'],
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -47,6 +47,25 @@ const nextConfig = {
         fullySpecified: false,
       },
     });
+
+    // Konfiguracja cache
+    if (dev) {
+      config.cache = {
+        type: 'filesystem',
+        version: '1.0.0',
+        buildDependencies: {
+          config: [__filename],
+        },
+        cacheDirectory: '.next/cache',
+        maxAge: 172800000, // 2 dni
+        compression: 'gzip',
+        allowCollectingMemory: true,
+        idleTimeout: 60000,
+        idleTimeoutForInitialStore: 5000,
+        store: 'pack',
+        name: 'next-cache',
+      };
+    }
 
     return config;
   },
