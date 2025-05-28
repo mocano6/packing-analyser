@@ -77,6 +77,7 @@ export default function Page() {
   const [isSecondHalf, setIsSecondHalf] = React.useState(false);
   const [matchesListRefreshCounter, setMatchesListRefreshCounter] = useState(0);
   const [selectedZone, setSelectedZone] = React.useState<string | number | null>(null);
+  const [isMaximized, setIsMaximized] = React.useState(false);
 
   const useActionsStateRef = useRef<any>(null);
 
@@ -1020,10 +1021,15 @@ export default function Page() {
     }
   };
 
+  // Funkcja do przełączania trybu powiększenia
+  const toggleMaximize = () => {
+    setIsMaximized(prev => !prev);
+  };
+
   return (
-    <div className={styles.container}>
-        <OfflineStatusBanner />
-        <Instructions />
+    <div className={`${styles.container} ${isMaximized ? styles.maximized : ''}`}>
+      <OfflineStatusBanner />
+      <Instructions />
       <MatchInfoHeader
         matchInfo={matchInfo}
         onChangeMatch={openEditMatchModal}
@@ -1153,6 +1159,13 @@ export default function Page() {
             title="Synchronizuj dane zawodników z akcjami i minutami"
           >
             Synchronizuj dane zawodników
+          </button>
+          <button 
+            onClick={toggleMaximize}
+            className={styles.maximizeButton}
+            title={isMaximized ? "Przywróć normalny widok" : "Powiększ okno"}
+          >
+            {isMaximized ? "Przywróć widok" : "Powiększ okno"}
           </button>
           <button 
             onClick={handleLogout}

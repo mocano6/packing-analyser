@@ -32,6 +32,11 @@ export default function LoginPage() {
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
       setLoginSuccess(true);
+      // Automatyczne przekierowanie po 1 sekundzie
+      const timer = setTimeout(() => {
+        window.location.href = "/";
+      }, 1000);
+      return () => clearTimeout(timer);
     }
   }, [isAuthenticated, isLoading]);
   
@@ -195,7 +200,7 @@ export default function LoginPage() {
       <div className={styles.loginContainer}>
         <div className={styles.loginCard}>
           <h1 className={styles.loginTitle}>Zalogowano pomyślnie</h1>
-          <p style={{ marginBottom: "20px" }}>Zostałeś pomyślnie zalogowany do aplikacji.</p>
+          <p style={{ marginBottom: "20px", textAlign: "center" }}>Zostałeś pomyślnie zalogowany do aplikacji. Przekierowanie nastąpi automatycznie...</p>
           <button 
             className={styles.loginButton}
             onClick={() => window.location.href = "/"}
