@@ -1096,12 +1096,101 @@ export default function Page() {
           <div className={styles.playersPanel}>
             <h2>Zarządzanie zawodnikami</h2>
             {matchInfo ? (
-              <PackingChart
-                actions={actions}
-                players={players}
-                selectedPlayerId={selectedPlayerId}
-                onPlayerSelect={setSelectedPlayerId}
-              />
+              <>
+                <PackingChart
+                  actions={actions}
+                  players={players}
+                  selectedPlayerId={selectedPlayerId}
+                  onPlayerSelect={setSelectedPlayerId}
+                />
+                
+                {/* Tabela wszystkich zawodników */}
+                <div className={styles.playersListSection}>
+                  <h3>Lista wszystkich zawodników</h3>
+                  <div className={styles.playersTableContainer}>
+                    <table className={styles.playersTable}>
+                      <thead>
+                        <tr>
+                          <th>Numer</th>
+                          <th>Nazwisko</th>
+                          <th>Zespoły</th>
+                          <th>Liczba akcji</th>
+                          <th>Akcje</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {players
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map((player) => {
+                            const playerActionCount = actions.filter(
+                              action => action.senderId === player.id || action.receiverId === player.id
+                            ).length;
+                            
+                            return (
+                              <tr 
+                                key={player.id}
+                                className={`${styles.playerRow} ${selectedPlayerId === player.id ? styles.selectedPlayerRow : ''}`}
+                              >
+                                <td className={styles.playerNumber}>{player.number}</td>
+                                <td className={styles.playerNameCell}>{player.name}</td>
+                                <td className={styles.playerTeams}>
+                                  {player.teams ? player.teams.join(', ') : '-'}
+                                </td>
+                                <td className={styles.actionCount}>
+                                  <span className={`${styles.actionBadge} ${playerActionCount > 0 ? styles.hasActions : styles.noActions}`}>
+                                    {playerActionCount}
+                                  </span>
+                                </td>
+                                <td className={styles.playerActions}>
+                                  <button
+                                    className={styles.editButton}
+                                    onClick={() => handleEditPlayer(player.id)}
+                                    title="Edytuj zawodnika"
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button
+                                    className={styles.selectButton}
+                                    onClick={() => setSelectedPlayerId(selectedPlayerId === player.id ? null : player.id)}
+                                    title={selectedPlayerId === player.id ? "Odznacz zawodnika" : "Zaznacz zawodnika"}
+                                  >
+                                    {selectedPlayerId === player.id ? '👁️' : '👀'}
+                                  </button>
+                                  <button
+                                    className={styles.deleteButton}
+                                    onClick={() => {
+                                      if (window.confirm(`Czy na pewno chcesz usunąć zawodnika ${player.name}?`)) {
+                                        onDeletePlayer(player.id);
+                                      }
+                                    }}
+                                    title="Usuń zawodnika"
+                                  >
+                                    🗑️
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  <div className={styles.playersListFooter}>
+                    <button
+                      className={styles.addPlayerButton}
+                      onClick={() => setIsModalOpen(true)}
+                    >
+                      + Dodaj nowego zawodnika
+                    </button>
+                    <div className={styles.playersStats}>
+                      <span>Łącznie zawodników: <strong>{players.length}</strong></span>
+                      <span>Z akcjami: <strong>{players.filter(player => 
+                        actions.some(action => action.senderId === player.id || action.receiverId === player.id)
+                      ).length}</strong></span>
+                    </div>
+                  </div>
+                </div>
+              </>
             ) : (
               <p>Wybierz mecz, aby zobaczyć statystyki zawodników.</p>
             )}
