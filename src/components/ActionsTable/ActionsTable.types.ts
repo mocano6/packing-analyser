@@ -14,6 +14,5 @@ export interface ActionsTableProps {
   onActionClick?: (action: Action) => void;
   highlightedPlayerId?: string | null;
   onDeleteAction?: (actionId: string) => void;
-  onDeleteAllActions?: () => void;
   onRefreshPlayersData?: () => void;
 }

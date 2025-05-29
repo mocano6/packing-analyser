@@ -92,6 +92,19 @@ export const enableOnlineMode = async () => {
   return false;
 };
 
-// Eksport instancji usług
+// Eksport instancji usług - UWAGA: db może być undefined po stronie serwera
 export { db, auth, storage };
+
+// Helper funkcje dla łatwiejszego dostępu
+export const getDB = (): Firestore => {
+  if (!db) {
+    throw new Error('Firestore nie jest zainicjalizowane. Upewnij się, że kod działa po stronie klienta.');
+  }
+  return db;
+};
+
+export const isFirebaseReady = (): boolean => {
+  return typeof window !== 'undefined' && !!db;
+};
+
 export default app; 

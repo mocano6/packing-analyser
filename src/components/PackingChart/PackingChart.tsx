@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Player, Action } from '@/types';
+import { Player, Action, TeamInfo } from '@/types';
 import styles from './PackingChart.module.css';
 
 interface PackingChartProps {
@@ -10,6 +10,7 @@ interface PackingChartProps {
   players: Player[];
   selectedPlayerId: string | null;
   onPlayerSelect: (playerId: string | null) => void;
+  matches?: TeamInfo[];
 }
 
 const COLORS = [
@@ -34,11 +35,12 @@ type SortField = 'name' | 'totalPacking' | 'senderPacking' | 'receiverPacking' |
                 'totalXT' | 'senderXT' | 'receiverXT' |
                 'totalDribbling' | 'senderDribbling' |
                 'totalDribblingPxT' | 'senderDribblingPxT' |
-                'totalDribblingXT' | 'senderDribblingXT';
+                'totalDribblingXT' | 'senderDribblingXT' |
+                'minutesPercentage';
 
 type SortDirection = 'asc' | 'desc';
 
-export default function PackingChart({ actions, players, selectedPlayerId, onPlayerSelect }: PackingChartProps) {
+export default function PackingChart({ actions, players, selectedPlayerId, onPlayerSelect, matches }: PackingChartProps) {
   const [selectedChart, setSelectedChart] = useState<'total' | 'sender' | 'receiver'>('total');
   const [selectedMetric, setSelectedMetric] = useState<'packing' | 'pxt'>('packing');
   const [selectedActionType, setSelectedActionType] = useState<'pass' | 'dribble'>('pass');
@@ -65,7 +67,37 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       senderDribblingPxT: number;
       totalDribblingXT: number;
       senderDribblingXT: number;
+      // Minuty
+      minutesPercentage: number;
     }>();
+
+    // Oblicz % możliwych minut dla każdego zawodnika
+    const calculateMinutesPercentage = (playerId: string): number => {
+      if (!matches || matches.length === 0) return 0;
+
+      let totalPlayerMinutes = 0;
+      let totalMaxMinutes = 0;
+
+      matches.forEach(match => {
+        if (!match.playerMinutes) return;
+
+        // Znajdź maksymalną liczbę minut w tym meczu
+        const maxMinutesInMatch = Math.max(
+          ...match.playerMinutes.map(pm => pm.endMinute - pm.startMinute)
+        );
+
+        // Znajdź minuty tego zawodnika w tym meczu
+        const playerMinutesInMatch = match.playerMinutes.find(pm => pm.playerId === playerId);
+        const playerMinutesCount = playerMinutesInMatch 
+          ? playerMinutesInMatch.endMinute - playerMinutesInMatch.startMinute 
+          : 0;
+
+        totalPlayerMinutes += playerMinutesCount;
+        totalMaxMinutes += maxMinutesInMatch;
+      });
+
+      return totalMaxMinutes > 0 ? (totalPlayerMinutes / totalMaxMinutes) * 100 : 0;
+    };
 
     actions.forEach(action => {
       const packingPoints = action.packingPoints || 0;
@@ -82,7 +114,8 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           totalXT: 0, senderXT: 0, receiverXT: 0,
           totalDribbling: 0, senderDribbling: 0,
           totalDribblingPxT: 0, senderDribblingPxT: 0,
-          totalDribblingXT: 0, senderDribblingXT: 0
+          totalDribblingXT: 0, senderDribblingXT: 0,
+          minutesPercentage: calculateMinutesPercentage(action.senderId)
         };
         
         if (isDribble) {
@@ -117,7 +150,8 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           totalXT: 0, senderXT: 0, receiverXT: 0,
           totalDribbling: 0, senderDribbling: 0,
           totalDribblingPxT: 0, senderDribblingPxT: 0,
-          totalDribblingXT: 0, senderDribblingXT: 0
+          totalDribblingXT: 0, senderDribblingXT: 0,
+          minutesPercentage: calculateMinutesPercentage(action.receiverId)
         };
         playerStats.set(action.receiverId, {
           ...current,
@@ -183,7 +217,8 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
         totalDribblingPxT: data.totalDribblingPxT,
         senderDribblingPxT: data.senderDribblingPxT,
         totalDribblingXT: data.totalDribblingXT,
-        senderDribblingXT: data.senderDribblingXT
+        senderDribblingXT: data.senderDribblingXT,
+        minutesPercentage: data.minutesPercentage
       }))
       .filter(item => 
         item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01 ||
@@ -392,6 +427,9 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
                 <th colSpan={2}>Drybling - Packing</th>
                 <th colSpan={2}>Drybling - PxT</th>
                 <th colSpan={2}>Drybling - xT</th>
+                <th rowSpan={2} onClick={() => handleSort('minutesPercentage')} className={styles.sortableHeader}>
+                  % minut {getSortIcon('minutesPercentage')}
+                </th>
               </tr>
               <tr className={styles.subHeader}>
                 <th onClick={() => handleSort('totalPacking')} className={styles.sortableHeader}>
@@ -466,21 +504,12 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
                   <td>{formatValue(player.senderDribblingPxT, 2)}</td>
                   <td>{formatValue(player.totalDribblingXT, 3)}</td>
                   <td>{formatValue(player.senderDribblingXT, 3)}</td>
+                  <td>{formatValue(player.minutesPercentage, 0)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
-      
-      <div className={styles.metricInfo}>
-        <p>
-          <strong>{selectedMetric === 'packing' ? 'Packing' : 'PxT'}:</strong> {' '}
-          {selectedMetric === 'packing' 
-            ? 'Punkty przyznawane za ominięcie zawodników przeciwnika' 
-            : 'Packing × różnica Expected Threat (xT końcowe - xT początkowe)'
-          }
-        </p>
       </div>
     </div>
   );

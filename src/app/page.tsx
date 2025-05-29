@@ -21,13 +21,12 @@ import { initializeTeams, checkTeamsCollection } from "@/utils/initializeTeams";
 import { useAuth } from "@/hooks/useAuth";
 import toast from 'react-hot-toast';
 import OfflineStatusBanner from "@/components/OfflineStatusBanner/OfflineStatusBanner";
-import { syncPlayerData } from "@/utils/syncPlayerData";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesModal";
 import MatchInfoModal from "@/components/MatchInfoModal/MatchInfoModal";
-import PackingChart from '@/components/PackingChart/PackingChart';
+import Link from "next/link";
 
 // Rozszerzenie interfejsu Window
 declare global {
@@ -67,7 +66,7 @@ function removeUndefinedFields<T extends object>(obj: T): T {
 }
 
 export default function Page() {
-  const [activeTab, setActiveTab] = React.useState<Tab>("packing");
+  const [activeTab] = React.useState<"packing">("packing");
   const [selectedTeam, setSelectedTeam] = React.useState<string>(TEAMS.REZERWY.id);
   const [isPlayerMinutesModalOpen, setIsPlayerMinutesModalOpen] = React.useState(false);
   const [editingMatch, setEditingMatch] = React.useState<TeamInfo | null>(null);
@@ -78,7 +77,6 @@ export default function Page() {
   const [isSecondHalf, setIsSecondHalf] = React.useState(false);
   const [matchesListRefreshCounter, setMatchesListRefreshCounter] = useState(0);
   const [selectedZone, setSelectedZone] = React.useState<string | number | null>(null);
-  const [isMaximized, setIsMaximized] = React.useState(false);
 
   const useActionsStateRef = useRef<any>(null);
 
@@ -92,6 +90,7 @@ export default function Page() {
     handleSavePlayer,
     handleEditPlayer,
     closeModal,
+    testConnection,
   } = usePlayersState();
 
   const {
@@ -609,12 +608,6 @@ export default function Page() {
     }
   };
 
-  const onDeleteAllActions = () => {
-    handleDeleteAllActions();
-    setEditingMatch(null);
-    setSelectedTeam(TEAMS.REZERWY.id);
-  };
-
   // Obsługa otwarcia modalu minut zawodników
   const handleOpenPlayerMinutesModal = (match: TeamInfo) => {
     setEditingMatch(match);
@@ -722,7 +715,6 @@ export default function Page() {
     
     // Aktualizuj informacje o meczu, jeśli to nowy mecz
     if (data.matchInfo && !allMatches.some(m => m.matchId === data.matchInfo.matchId)) {
-      setActiveTab("packing");
       setEditingMatch(data.matchInfo);
       toggleMatchModal(true);
     }
@@ -983,28 +975,16 @@ export default function Page() {
     }
   };
 
-  // Funkcja synchronizująca dane zawodników
-  const handleSyncPlayerData = async () => {
-    try {
-      toast.loading("Synchronizacja danych zawodników...");
-      const result = await syncPlayerData();
-      toast.dismiss();
-      
-      if (result) {
-        toast.success("Dane zawodników zostały zaktualizowane");
-      } else {
-        toast.error("Wystąpił błąd podczas synchronizacji danych zawodników");
-      }
-    } catch (error) {
-      toast.dismiss();
-      toast.error(`Błąd synchronizacji: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
-
   // Obsługa synchronizacji wzbogaconych akcji z Firebase
   const syncEnrichedActions = async (matchId: string, updatedActions: Action[]) => {
     try {
       console.log("Synchronizacja wzbogaconych akcji z Firebase dla meczu:", matchId);
+      
+      // Sprawdź czy Firebase jest dostępne
+      if (!db) {
+        console.error("Firebase nie jest zainicjalizowane - nie można zsynchronizować akcji");
+        return false;
+      }
       
       // Pobierz referencję do dokumentu meczu
       const matchRef = doc(db, "matches", matchId);
@@ -1022,13 +1002,8 @@ export default function Page() {
     }
   };
 
-  // Funkcja do przełączania trybu powiększenia
-  const toggleMaximize = () => {
-    setIsMaximized(prev => !prev);
-  };
-
   return (
-    <div className={`${styles.container} ${isMaximized ? styles.maximized : ''}`}>
+    <div className={styles.container}>
       <OfflineStatusBanner />
       <Instructions />
       <MatchInfoHeader
@@ -1056,7 +1031,7 @@ export default function Page() {
           onDeletePlayer={onDeletePlayer}
         />
 
-        <Tabs activeTab={activeTab} onTabChange={setActiveTab} />
+        <Tabs activeTab={activeTab} onTabChange={() => {}} />
 
         {activeTab === "packing" && (
           <ActionSection
@@ -1092,116 +1067,10 @@ export default function Page() {
           />
         )}
 
-        {activeTab === "players" && (
-          <div className={styles.playersPanel}>
-            <h2>Zarządzanie zawodnikami</h2>
-            {matchInfo ? (
-              <>
-                <PackingChart
-                  actions={actions}
-                  players={players}
-                  selectedPlayerId={selectedPlayerId}
-                  onPlayerSelect={setSelectedPlayerId}
-                />
-                
-                {/* Tabela wszystkich zawodników */}
-                <div className={styles.playersListSection}>
-                  <h3>Lista wszystkich zawodników</h3>
-                  <div className={styles.playersTableContainer}>
-                    <table className={styles.playersTable}>
-                      <thead>
-                        <tr>
-                          <th>Numer</th>
-                          <th>Nazwisko</th>
-                          <th>Zespoły</th>
-                          <th>Liczba akcji</th>
-                          <th>Akcje</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {players
-                          .sort((a, b) => a.name.localeCompare(b.name))
-                          .map((player) => {
-                            const playerActionCount = actions.filter(
-                              action => action.senderId === player.id || action.receiverId === player.id
-                            ).length;
-                            
-                            return (
-                              <tr 
-                                key={player.id}
-                                className={`${styles.playerRow} ${selectedPlayerId === player.id ? styles.selectedPlayerRow : ''}`}
-                              >
-                                <td className={styles.playerNumber}>{player.number}</td>
-                                <td className={styles.playerNameCell}>{player.name}</td>
-                                <td className={styles.playerTeams}>
-                                  {player.teams ? player.teams.join(', ') : '-'}
-                                </td>
-                                <td className={styles.actionCount}>
-                                  <span className={`${styles.actionBadge} ${playerActionCount > 0 ? styles.hasActions : styles.noActions}`}>
-                                    {playerActionCount}
-                                  </span>
-                                </td>
-                                <td className={styles.playerActions}>
-                                  <button
-                                    className={styles.editButton}
-                                    onClick={() => handleEditPlayer(player.id)}
-                                    title="Edytuj zawodnika"
-                                  >
-                                    ✏️
-                                  </button>
-                                  <button
-                                    className={styles.selectButton}
-                                    onClick={() => setSelectedPlayerId(selectedPlayerId === player.id ? null : player.id)}
-                                    title={selectedPlayerId === player.id ? "Odznacz zawodnika" : "Zaznacz zawodnika"}
-                                  >
-                                    {selectedPlayerId === player.id ? '👁️' : '👀'}
-                                  </button>
-                                  <button
-                                    className={styles.deleteButton}
-                                    onClick={() => {
-                                      if (window.confirm(`Czy na pewno chcesz usunąć zawodnika ${player.name}?`)) {
-                                        onDeletePlayer(player.id);
-                                      }
-                                    }}
-                                    title="Usuń zawodnika"
-                                  >
-                                    🗑️
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
-                  </div>
-                  
-                  <div className={styles.playersListFooter}>
-                    <button
-                      className={styles.addPlayerButton}
-                      onClick={() => setIsModalOpen(true)}
-                    >
-                      + Dodaj nowego zawodnika
-                    </button>
-                    <div className={styles.playersStats}>
-                      <span>Łącznie zawodników: <strong>{players.length}</strong></span>
-                      <span>Z akcjami: <strong>{players.filter(player => 
-                        actions.some(action => action.senderId === player.id || action.receiverId === player.id)
-                      ).length}</strong></span>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <p>Wybierz mecz, aby zobaczyć statystyki zawodników.</p>
-            )}
-          </div>
-        )}
-
         <ActionsTable
           actions={actions}
           players={players}
           onDeleteAction={handleDeleteAction}
-          onDeleteAllActions={onDeleteAllActions}
           onRefreshPlayersData={handleRefreshPlayersData}
         />
 
@@ -1253,6 +1122,12 @@ export default function Page() {
 
         {/* Przyciski eksportu i importu */}
         <div className={styles.buttonsContainer}>
+          <Link href="/zawodnicy" className={styles.playersButton}>
+            👥 Statystyki zawodników
+          </Link>
+          <Link href="/statystyki-zespolu" className={styles.teamStatsButton}>
+            📊 Statystyki zespołu
+          </Link>
           <ExportButton
             players={players}
             actions={actions}
@@ -1262,20 +1137,6 @@ export default function Page() {
             onImportSuccess={handleImportSuccess}
             onImportError={handleImportError}
           />
-          <button 
-            onClick={handleSyncPlayerData}
-            className={styles.actionButton}
-            title="Synchronizuj dane zawodników z akcjami i minutami"
-          >
-            Synchronizuj dane zawodników
-          </button>
-          <button 
-            onClick={toggleMaximize}
-            className={styles.maximizeButton}
-            title={isMaximized ? "Przywróć normalny widok" : "Powiększ okno"}
-          >
-            {isMaximized ? "Przywróć widok" : "Powiększ okno"}
-          </button>
           <button 
             onClick={handleLogout}
             className={styles.logoutButton}

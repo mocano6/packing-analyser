@@ -131,7 +131,6 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   actions,
   players,
   onDeleteAction,
-  onDeleteAllActions,
   onRefreshPlayersData
 }) => {
   const [sortConfig, setSortConfig] = useState<{
@@ -254,13 +253,6 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
               <span>↻</span> Uzupełnij dane
             </button>
           )}
-          <button
-            className={styles.deleteAllButton}
-            onClick={onDeleteAllActions}
-            disabled={actions.length === 0}
-          >
-            <span>✕</span> Usuń wszystko
-          </button>
         </div>
       </div>
 

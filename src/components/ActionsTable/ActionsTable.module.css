@@ -11,37 +11,6 @@
   margin-bottom: 16px;
 }
 
-.deleteAllButton {
-  padding: 8px 16px;
-  background-color: #fee2e2;
-  color: #dc2626;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-}
-
-.deleteAllButton:hover {
-  background-color: #fecaca;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-}
-
-.deleteAllButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.deleteAllButton span {
-  margin-right: 0.625rem;
-  font-weight: 700;
-}
-
 .matchesTable {
   background: white;
   border-radius: 8px;
@@ -208,11 +177,6 @@
     flex-direction: column;
     gap: 12px;
     align-items: flex-start;
-  }
-  
-  .deleteAllButton {
-    width: 100%;
-    justify-content: center;
   }
   
   .tableHeader, .actionRow {

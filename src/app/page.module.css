@@ -33,7 +33,7 @@
 }
 
 .logoutButton:hover {
-  background-color: #fecaca;
+  background: #1e40af;
   transform: translateY(-1px);
 }
 
@@ -59,262 +59,40 @@
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
-/* Style dla przycisku powiększania okna */
-.maximizeButton {
-  padding: 8px 16px;
-  background-color: #2196f3;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  margin: 0 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-}
-
-.maximizeButton:hover {
-  background-color: #1976d2;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-}
-
-/* Style dla powiększonego widoku */
-.maximized {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1000;
-  background-color: white;
-  padding: 20px;
-  overflow: auto;
-}
-
-.maximized .content {
-  max-width: 1600px;
-  margin: 0 auto;
-}
-
 /* Dodaj styl dla innych przycisków jeśli potrzeba */
 
-.playersPanel {
-  padding: 20px;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin: 20px 0;
-}
-
-.playersPanel h2 {
-  margin: 0 0 16px 0;
-  color: #333;
-  font-size: 24px;
-  text-align: center;
-}
-
-.playersPanel p {
-  margin: 0;
-  color: #666;
-  font-size: 16px;
-  text-align: center;
-  padding: 20px;
-  background-color: #f5f5f5;
-  border-radius: 4px;
-}
-
-/* Lista zawodników */
-.playersListSection {
-  margin-top: 40px;
-  padding-top: 30px;
-  border-top: 2px solid #e9ecef;
-}
-
-.playersListSection h3 {
-  margin: 0 0 20px 0;
-  color: #333;
-  font-size: 20px;
-  text-align: center;
-}
-
-.playersTableContainer {
-  overflow-x: auto;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin-bottom: 20px;
-}
-
-.playersTable {
-  width: 100%;
-  border-collapse: collapse;
-  background-color: white;
-  font-size: 14px;
-}
-
-.playersTable th {
-  background-color: #f8f9fa;
-  padding: 15px 12px;
-  text-align: left;
-  font-weight: 600;
-  color: #495057;
-  border-bottom: 2px solid #dee2e6;
-  border-right: 1px solid #dee2e6;
-}
-
-.playersTable th:last-child {
-  border-right: none;
-  text-align: center;
-}
-
-.playersTable th:nth-child(4) {
-  text-align: center;
-}
-
-.playerRow {
-  transition: background-color 0.2s ease;
-}
-
-.playerRow:hover {
-  background-color: #f8f9fa;
-}
-
-.selectedPlayerRow {
+.playersButton {
+  padding: 12px 24px;
   background-color: #e3f2fd;
-  border-left: 4px solid #0088FE;
-}
-
-.playersTable td {
-  padding: 12px;
-  border-bottom: 1px solid #dee2e6;
-  border-right: 1px solid #dee2e6;
-}
-
-.playersTable td:last-child {
-  border-right: none;
-}
-
-.playerNumber {
-  font-weight: 600;
-  color: #0088FE;
-  text-align: center;
-  min-width: 60px;
-}
-
-.playerNameCell {
-  font-weight: 500;
-  color: #333;
-  min-width: 150px;
-}
-
-.playerTeams {
-  color: #666;
-  font-size: 13px;
-  max-width: 200px;
-}
-
-.actionCount {
-  text-align: center;
-  min-width: 80px;
-}
-
-.actionBadge {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  min-width: 24px;
-  text-align: center;
-}
-
-.hasActions {
-  background-color: #d4edda;
-  color: #155724;
-}
-
-.noActions {
-  background-color: #f8d7da;
-  color: #721c24;
-}
-
-.playerActions {
-  text-align: center;
-  min-width: 120px;
-}
-
-.editButton,
-.selectButton,
-.deleteButton {
-  background: none;
-  border: none;
-  font-size: 16px;
-  cursor: pointer;
-  margin: 0 4px;
-  padding: 6px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
-
-.editButton:hover {
-  background-color: #fff3cd;
-  transform: scale(1.1);
-}
-
-.selectButton:hover {
-  background-color: #d1ecf1;
-  transform: scale(1.1);
-}
-
-.deleteButton:hover {
-  background-color: #f8d7da;
-  transform: scale(1.1);
-}
-
-.playersListFooter {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  margin-top: 20px;
-}
-
-.addPlayerButton {
-  padding: 12px 20px;
-  background-color: #28a745;
-  color: white;
-  border: none;
+  color: #1976d2;
+  text-decoration: none;
   border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
+  font-weight: 500;
   transition: all 0.2s ease;
-}
-
-.addPlayerButton:hover {
-  background-color: #218838;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
-}
-
-.playersStats {
-  display: flex;
-  gap: 20px;
-  font-size: 14px;
-  color: #666;
-}
-
-.playersStats span {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
 }
 
-.playersStats strong {
-  color: #333;
+.playersButton:hover {
+  background-color: #bbdefb;
+  transform: translateY(-1px);
+}
+
+.teamStatsButton {
+  padding: 12px 24px;
+  background-color: #f3e5f5;
+  color: #7b1fa2;
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.teamStatsButton:hover {
+  background-color: #e1bee7;
+  transform: translateY(-1px);
 }
