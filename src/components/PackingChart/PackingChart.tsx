@@ -33,7 +33,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
   const [selectedChart, setSelectedChart] = useState<'total' | 'sender' | 'receiver'>('total');
   const [selectedMetric, setSelectedMetric] = useState<'packing' | 'pxt'>('packing');
 
-  const chartData = useMemo(() => {
+  const { chartData, tableData } = useMemo(() => {
     const playerStats = new Map<string, { 
       name: string; 
       totalPacking: number; 
@@ -42,6 +42,9 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       totalPxT: number;
       senderPxT: number;
       receiverPxT: number;
+      totalXT: number;
+      senderXT: number;
+      receiverXT: number;
     }>();
 
     actions.forEach(action => {
@@ -58,14 +61,19 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           receiverPacking: 0,
           totalPxT: 0,
           senderPxT: 0,
-          receiverPxT: 0
+          receiverPxT: 0,
+          totalXT: 0,
+          senderXT: 0,
+          receiverXT: 0
         };
         playerStats.set(action.senderId, {
           ...current,
           totalPacking: current.totalPacking + packingPoints,
           senderPacking: current.senderPacking + packingPoints,
           totalPxT: current.totalPxT + pxtValue,
-          senderPxT: current.senderPxT + pxtValue
+          senderPxT: current.senderPxT + pxtValue,
+          totalXT: current.totalXT + xTDifference,
+          senderXT: current.senderXT + xTDifference
         });
       }
 
@@ -78,20 +86,25 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           receiverPacking: 0,
           totalPxT: 0,
           senderPxT: 0,
-          receiverPxT: 0
+          receiverPxT: 0,
+          totalXT: 0,
+          senderXT: 0,
+          receiverXT: 0
         };
         playerStats.set(action.receiverId, {
           ...current,
           totalPacking: current.totalPacking + packingPoints,
           receiverPacking: current.receiverPacking + packingPoints,
           totalPxT: current.totalPxT + pxtValue,
-          receiverPxT: current.receiverPxT + pxtValue
+          receiverPxT: current.receiverPxT + pxtValue,
+          totalXT: current.totalXT + xTDifference,
+          receiverXT: current.receiverXT + xTDifference
         });
       }
     });
 
-    // Zwracamy dane w zależności od wybranego typu diagramu i metryki
-    return Array.from(playerStats.entries())
+    // Dane dla diagramu
+    const chartData = Array.from(playerStats.entries())
       .map(([id, data]) => {
         let value = 0;
         
@@ -111,7 +124,27 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           value: value
         };
       })
-      .filter(item => Math.abs(item.value) > 0.01); // Filtrujemy zawodników bez znaczących wartości
+      .filter(item => Math.abs(item.value) > 0.01);
+
+    // Dane dla tabeli
+    const tableData = Array.from(playerStats.entries())
+      .map(([id, data]) => ({
+        id,
+        name: data.name,
+        totalPacking: data.totalPacking,
+        senderPacking: data.senderPacking,
+        receiverPacking: data.receiverPacking,
+        totalPxT: data.totalPxT,
+        senderPxT: data.senderPxT,
+        receiverPxT: data.receiverPxT,
+        totalXT: data.totalXT,
+        senderXT: data.senderXT,
+        receiverXT: data.receiverXT
+      }))
+      .filter(item => item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01)
+      .sort((a, b) => b.totalPacking - a.totalPacking);
+
+    return { chartData, tableData };
   }, [actions, selectedChart, selectedMetric]);
 
   const handleClick = (data: any) => {
@@ -119,6 +152,14 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       onPlayerSelect(null);
     } else {
       onPlayerSelect(data.id);
+    }
+  };
+
+  const handleTableRowClick = (playerId: string) => {
+    if (selectedPlayerId === playerId) {
+      onPlayerSelect(null);
+    } else {
+      onPlayerSelect(playerId);
     }
   };
 
@@ -140,6 +181,10 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
     } else {
       return (Math.round(value * 100) / 100).toFixed(2);
     }
+  };
+
+  const formatValue = (value: number, decimals: number = 2) => {
+    return decimals === 0 ? Math.round(value).toString() : value.toFixed(decimals);
   };
 
   return (
@@ -238,6 +283,55 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           </button>
         </div>
       )}
+
+      {/* Tabela ze statystykami */}
+      <div className={styles.statsTable}>
+        <h4>Szczegółowe statystyki</h4>
+        <div className={styles.tableContainer}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Zawodnik</th>
+                <th colSpan={3}>Packing</th>
+                <th colSpan={3}>PxT</th>
+                <th colSpan={3}>xT</th>
+              </tr>
+              <tr className={styles.subHeader}>
+                <th></th>
+                <th>Łącznie</th>
+                <th>Podający</th>
+                <th>Przyjmujący</th>
+                <th>Łącznie</th>
+                <th>Podający</th>
+                <th>Przyjmujący</th>
+                <th>Łącznie</th>
+                <th>Podający</th>
+                <th>Przyjmujący</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tableData.map((player, index) => (
+                <tr 
+                  key={player.id} 
+                  className={`${styles.tableRow} ${selectedPlayerId === player.id ? styles.selectedRow : ''}`}
+                  onClick={() => handleTableRowClick(player.id)}
+                >
+                  <td className={styles.playerName}>{player.name}</td>
+                  <td>{formatValue(player.totalPacking, 0)}</td>
+                  <td>{formatValue(player.senderPacking, 0)}</td>
+                  <td>{formatValue(player.receiverPacking, 0)}</td>
+                  <td>{formatValue(player.totalPxT, 2)}</td>
+                  <td>{formatValue(player.senderPxT, 2)}</td>
+                  <td>{formatValue(player.receiverPxT, 2)}</td>
+                  <td>{formatValue(player.totalXT, 3)}</td>
+                  <td>{formatValue(player.senderXT, 3)}</td>
+                  <td>{formatValue(player.receiverXT, 3)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
       
       <div className={styles.metricInfo}>
         <p>
