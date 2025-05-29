@@ -6,6 +6,39 @@
   margin: 20px 0;
 }
 
+.metricControls {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.metricButton {
+  padding: 10px 20px;
+  border: 3px solid #ddd;
+  border-radius: 8px;
+  background-color: #fff;
+  color: #333;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  min-width: 80px;
+}
+
+.metricButton:hover {
+  border-color: #28a745;
+  color: #28a745;
+  transform: translateY(-1px);
+}
+
+.metricButton.active {
+  background-color: #28a745;
+  border-color: #28a745;
+  color: white;
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
 .chartControls {
   display: flex;
   justify-content: center;
@@ -73,6 +106,11 @@
   color: #333;
 }
 
+.playerValue {
+  font-weight: 600;
+  color: #0088FE;
+}
+
 .clearSelection {
   padding: 6px 12px;
   background-color: #dc3545;
@@ -86,6 +124,21 @@
 
 .clearSelection:hover {
   background-color: #c82333;
+}
+
+.metricInfo {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #e9ecef;
+  border-radius: 6px;
+  border-left: 4px solid #6c757d;
+}
+
+.metricInfo p {
+  margin: 0;
+  font-size: 14px;
+  color: #495057;
+  line-height: 1.5;
 }
 
 /* Style dla tooltipa */

@@ -22,7 +22,7 @@ const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className={styles.tooltip}>
-        <p>{`${payload[0].name}: ${Math.round(payload[0].value)} punktów`}</p>
+        <p>{`${payload[0].name}: ${Math.round(payload[0].value * 100) / 100}`}</p>
       </div>
     );
   }
@@ -31,30 +31,41 @@ const CustomTooltip = ({ active, payload }: any) => {
 
 export default function PackingChart({ actions, players, selectedPlayerId, onPlayerSelect }: PackingChartProps) {
   const [selectedChart, setSelectedChart] = useState<'total' | 'sender' | 'receiver'>('total');
+  const [selectedMetric, setSelectedMetric] = useState<'packing' | 'pxt'>('packing');
 
   const chartData = useMemo(() => {
     const playerStats = new Map<string, { 
       name: string; 
-      totalValue: number; 
-      senderValue: number; 
-      receiverValue: number; 
+      totalPacking: number; 
+      senderPacking: number; 
+      receiverPacking: number;
+      totalPxT: number;
+      senderPxT: number;
+      receiverPxT: number;
     }>();
 
     actions.forEach(action => {
       const packingPoints = action.packingPoints || 0;
+      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+      const pxtValue = xTDifference * packingPoints;
 
       // Dodajemy punkty dla nadawcy
       if (action.senderId) {
         const current = playerStats.get(action.senderId) || { 
           name: action.senderName || 'Nieznany zawodnik', 
-          totalValue: 0, 
-          senderValue: 0, 
-          receiverValue: 0 
+          totalPacking: 0, 
+          senderPacking: 0, 
+          receiverPacking: 0,
+          totalPxT: 0,
+          senderPxT: 0,
+          receiverPxT: 0
         };
         playerStats.set(action.senderId, {
           ...current,
-          totalValue: current.totalValue + packingPoints,
-          senderValue: current.senderValue + packingPoints
+          totalPacking: current.totalPacking + packingPoints,
+          senderPacking: current.senderPacking + packingPoints,
+          totalPxT: current.totalPxT + pxtValue,
+          senderPxT: current.senderPxT + pxtValue
         });
       }
 
@@ -62,29 +73,46 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       if (action.receiverId) {
         const current = playerStats.get(action.receiverId) || { 
           name: action.receiverName || 'Nieznany zawodnik', 
-          totalValue: 0, 
-          senderValue: 0, 
-          receiverValue: 0 
+          totalPacking: 0, 
+          senderPacking: 0, 
+          receiverPacking: 0,
+          totalPxT: 0,
+          senderPxT: 0,
+          receiverPxT: 0
         };
         playerStats.set(action.receiverId, {
           ...current,
-          totalValue: current.totalValue + packingPoints,
-          receiverValue: current.receiverValue + packingPoints
+          totalPacking: current.totalPacking + packingPoints,
+          receiverPacking: current.receiverPacking + packingPoints,
+          totalPxT: current.totalPxT + pxtValue,
+          receiverPxT: current.receiverPxT + pxtValue
         });
       }
     });
 
-    // Zwracamy dane w zależności od wybranego typu diagramu
+    // Zwracamy dane w zależności od wybranego typu diagramu i metryki
     return Array.from(playerStats.entries())
-      .map(([id, data]) => ({
-        id,
-        name: data.name,
-        value: selectedChart === 'total' ? data.totalValue : 
-               selectedChart === 'sender' ? data.senderValue : 
-               data.receiverValue
-      }))
-      .filter(item => item.value > 0); // Filtrujemy zawodników bez punktów w danej kategorii
-  }, [actions, selectedChart]);
+      .map(([id, data]) => {
+        let value = 0;
+        
+        if (selectedMetric === 'packing') {
+          value = selectedChart === 'total' ? data.totalPacking : 
+                  selectedChart === 'sender' ? data.senderPacking : 
+                  data.receiverPacking;
+        } else {
+          value = selectedChart === 'total' ? data.totalPxT : 
+                  selectedChart === 'sender' ? data.senderPxT : 
+                  data.receiverPxT;
+        }
+        
+        return {
+          id,
+          name: data.name,
+          value: value
+        };
+      })
+      .filter(item => Math.abs(item.value) > 0.01); // Filtrujemy zawodników bez znaczących wartości
+  }, [actions, selectedChart, selectedMetric]);
 
   const handleClick = (data: any) => {
     if (selectedPlayerId === data.id) {
@@ -95,18 +123,42 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
   };
 
   const getChartTitle = () => {
+    const metricName = selectedMetric === 'packing' ? 'Packing' : 'PxT';
     switch (selectedChart) {
       case 'sender':
-        return 'Packing jako podający';
+        return `${metricName} jako podający`;
       case 'receiver':
-        return 'Packing jako przyjmujący';
+        return `${metricName} jako przyjmujący`;
       default:
-        return 'Całkowity udział w packingu';
+        return `Całkowity ${metricName}`;
+    }
+  };
+
+  const getValueLabel = (value: number) => {
+    if (selectedMetric === 'packing') {
+      return Math.round(value).toString();
+    } else {
+      return (Math.round(value * 100) / 100).toFixed(2);
     }
   };
 
   return (
     <div className={styles.chartContainer}>
+      <div className={styles.metricControls}>
+        <button 
+          className={`${styles.metricButton} ${selectedMetric === 'packing' ? styles.active : ''}`}
+          onClick={() => setSelectedMetric('packing')}
+        >
+          Packing
+        </button>
+        <button 
+          className={`${styles.metricButton} ${selectedMetric === 'pxt' ? styles.active : ''}`}
+          onClick={() => setSelectedMetric('pxt')}
+        >
+          PxT
+        </button>
+      </div>
+
       <div className={styles.chartControls}>
         <button 
           className={`${styles.controlButton} ${selectedChart === 'total' ? styles.active : ''}`}
@@ -144,7 +196,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
                 fill="#8884d8"
                 onClick={handleClick}
                 label={({ name, value, percent }) => 
-                  `${name}: ${Math.round(value)} (${(percent * 100).toFixed(1)}%)`
+                  `${name}: ${getValueLabel(value)} (${(percent * 100).toFixed(1)}%)`
                 }
                 labelLine={false}
               >
@@ -172,6 +224,11 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
         <div className={styles.selectedPlayer}>
           <p>
             Wybrany zawodnik: {chartData.find(d => d.id === selectedPlayerId)?.name || 'Nieznany'}
+            {chartData.find(d => d.id === selectedPlayerId) && (
+              <span className={styles.playerValue}>
+                {' '}({getValueLabel(chartData.find(d => d.id === selectedPlayerId)!.value)} {selectedMetric === 'packing' ? 'pkt' : 'PxT'})
+              </span>
+            )}
           </p>
           <button 
             className={styles.clearSelection}
@@ -181,6 +238,16 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           </button>
         </div>
       )}
+      
+      <div className={styles.metricInfo}>
+        <p>
+          <strong>{selectedMetric === 'packing' ? 'Packing' : 'PxT'}:</strong> {' '}
+          {selectedMetric === 'packing' 
+            ? 'Punkty przyznawane za ominięcie zawodników przeciwnika' 
+            : 'Packing × różnica Expected Threat (xT końcowe - xT początkowe)'
+          }
+        </p>
+      </div>
     </div>
   );
 } 
