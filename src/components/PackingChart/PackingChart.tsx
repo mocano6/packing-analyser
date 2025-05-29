@@ -258,6 +258,12 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
     // Dane dla wykresu mecz po mecz (tylko dla wybranego zawodnika)
     const matchChartData = selectedPlayerId && matches ? matches
       .filter(match => match.matchId)
+      .sort((a, b) => {
+        // Sortujemy według daty - najstarsze pierwszy, najnowsze ostatni (po prawej)
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        return dateA.getTime() - dateB.getTime();
+      })
       .map(match => {
         // Pobierz akcje dla tego meczu i zawodnika
         const matchActions = actions.filter(action => 
@@ -444,7 +450,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           onClick={() => setShowMatchChart(true)}
           disabled={!selectedPlayerId}
         >
-          📈 Wyniki mecz po mecz
+          📈 Mecz po meczu
         </button>
       </div>
       
