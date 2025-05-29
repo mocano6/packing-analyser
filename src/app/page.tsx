@@ -27,6 +27,7 @@ import { db } from "@/lib/firebase";
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesModal";
 import MatchInfoModal from "@/components/MatchInfoModal/MatchInfoModal";
+import PackingChart from '@/components/PackingChart/PackingChart';
 
 // Rozszerzenie interfejsu Window
 declare global {
@@ -1094,7 +1095,16 @@ export default function Page() {
         {activeTab === "players" && (
           <div className={styles.playersPanel}>
             <h2>Zarządzanie zawodnikami</h2>
-            <p>Panel zarządzania zawodnikami będzie dostępny wkrótce.</p>
+            {matchInfo ? (
+              <PackingChart
+                actions={actions}
+                players={players}
+                selectedPlayerId={selectedPlayerId}
+                onPlayerSelect={setSelectedPlayerId}
+              />
+            ) : (
+              <p>Wybierz mecz, aby zobaczyć statystyki zawodników.</p>
+            )}
           </div>
         )}
 

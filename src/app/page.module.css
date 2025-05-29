@@ -114,10 +114,15 @@
   margin: 0 0 16px 0;
   color: #333;
   font-size: 24px;
+  text-align: center;
 }
 
 .playersPanel p {
   margin: 0;
   color: #666;
   font-size: 16px;
+  text-align: center;
+  padding: 20px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
 }
