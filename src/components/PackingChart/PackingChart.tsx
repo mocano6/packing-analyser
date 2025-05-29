@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   PieChart, 
   Pie, 
@@ -53,12 +53,19 @@ type SortField = 'name' | 'totalPacking' | 'senderPacking' | 'receiverPacking' |
 type SortDirection = 'asc' | 'desc';
 
 export default function PackingChart({ actions, players, selectedPlayerId, onPlayerSelect, matches }: PackingChartProps) {
-  const [selectedChart, setSelectedChart] = useState<'total' | 'sender' | 'receiver'>('total');
+  const [selectedChart, setSelectedChart] = useState<'sender' | 'receiver'>('sender');
   const [selectedMetric, setSelectedMetric] = useState<'packing' | 'pxt'>('packing');
   const [selectedActionType, setSelectedActionType] = useState<'pass' | 'dribble'>('pass');
   const [sortField, setSortField] = useState<SortField>('totalPacking');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showMatchChart, setShowMatchChart] = useState<boolean>(false);
+
+  // Automatycznie przełącz na 'sender' gdy wybieramy drybling
+  useEffect(() => {
+    if (selectedActionType === 'dribble' && selectedChart === 'receiver') {
+      setSelectedChart('sender');
+    }
+  }, [selectedActionType, selectedChart]);
 
   const { chartData, tableData, matchChartData } = useMemo(() => {
     const playerStats = new Map<string, { 
@@ -185,21 +192,17 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
         
         if (selectedActionType === 'pass') {
           if (selectedMetric === 'packing') {
-            value = selectedChart === 'total' ? data.totalPacking : 
-                    selectedChart === 'sender' ? data.senderPacking : 
+            value = selectedChart === 'sender' ? data.senderPacking : 
                     data.receiverPacking;
           } else {
-            value = selectedChart === 'total' ? data.totalPxT : 
-                    selectedChart === 'sender' ? data.senderPxT : 
+            value = selectedChart === 'sender' ? data.senderPxT : 
                     data.receiverPxT;
           }
         } else {
           if (selectedMetric === 'packing') {
-            value = selectedChart === 'total' ? data.totalDribbling : 
-                    data.senderDribbling;
+            value = data.senderDribbling; // Dla dryblingu zawsze sender
           } else {
-            value = selectedChart === 'total' ? data.totalDribblingPxT : 
-                    data.senderDribblingPxT;
+            value = data.senderDribblingPxT; // Dla dryblingu zawsze sender
           }
         }
         
@@ -279,10 +282,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           if (selectedActionType === 'dribble' && isDribble && action.senderId === selectedPlayerId) {
             shouldInclude = true;
           } else if (selectedActionType === 'pass' && !isDribble) {
-            if (selectedChart === 'total' && 
-                (action.senderId === selectedPlayerId || action.receiverId === selectedPlayerId)) {
-              shouldInclude = true;
-            } else if (selectedChart === 'sender' && action.senderId === selectedPlayerId) {
+            if (selectedChart === 'sender' && action.senderId === selectedPlayerId) {
               shouldInclude = true;
             } else if (selectedChart === 'receiver' && action.receiverId === selectedPlayerId) {
               shouldInclude = true;
@@ -349,7 +349,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       case 'receiver':
         return `${actionTypeName} - ${metricName} jako przyjmujący`;
       default:
-        return `${actionTypeName} - Całkowity ${metricName}`;
+        return `${actionTypeName} - ${metricName}`;
     }
   };
 
@@ -416,23 +416,17 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
 
       <div className={styles.chartControls}>
         <button 
-          className={`${styles.controlButton} ${selectedChart === 'total' ? styles.active : ''}`}
-          onClick={() => setSelectedChart('total')}
-        >
-          Łącznie
-        </button>
-        <button 
           className={`${styles.controlButton} ${selectedChart === 'sender' ? styles.active : ''}`}
           onClick={() => setSelectedChart('sender')}
         >
-          Jako wykonujący
+          Podający
         </button>
         {selectedActionType === 'pass' && (
           <button 
             className={`${styles.controlButton} ${selectedChart === 'receiver' ? styles.active : ''}`}
             onClick={() => setSelectedChart('receiver')}
           >
-            Jako przyjmujący
+            Przyjmujący
           </button>
         )}
       </div>
@@ -443,7 +437,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           className={`${styles.chartTypeButton} ${!showMatchChart ? styles.active : ''}`}
           onClick={() => setShowMatchChart(false)}
         >
-          📊 Rozkład zagregowany
+          📊 Statystyki ogólne
         </button>
         <button 
           className={`${styles.chartTypeButton} ${showMatchChart ? styles.active : ''}`}

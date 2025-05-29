@@ -27,16 +27,29 @@
 }
 
 .actionTypeButton:hover {
-  border-color: #fd7e14;
-  color: #fd7e14;
+  border-color: #28a745;
+  color: #28a745;
   transform: translateY(-2px);
 }
 
 .actionTypeButton.active {
-  background-color: #fd7e14;
-  border-color: #fd7e14;
+  background-color: #28a745;
+  border-color: #28a745;
   color: white;
-  box-shadow: 0 4px 8px rgba(253, 126, 20, 0.3);
+  box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+}
+
+/* Specjalne style dla dryblingu (fioletowy) */
+.actionTypeButton:last-child:hover {
+  border-color: #6610f2;
+  color: #6610f2;
+}
+
+.actionTypeButton:last-child.active {
+  background-color: #6610f2;
+  border-color: #6610f2;
+  color: white;
+  box-shadow: 0 4px 8px rgba(102, 16, 242, 0.3);
 }
 
 .metricControls {
