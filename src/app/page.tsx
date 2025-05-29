@@ -1394,15 +1394,12 @@ export default function Page() {
 
         {/* Przyciski eksportu i importu */}
         <div className={styles.buttonsContainer}>
-          {/* Tymczasowo ukryte przyciski statystyk */}
-          {/* 
           <Link href="/zawodnicy" className={styles.playersButton}>
             👥 Statystyki zawodników
           </Link>
           <Link href="/statystyki-zespolu" className={styles.teamStatsButton}>
             📊 Statystyki zespołu
           </Link>
-          */}
           <ExportButton
             players={players}
             actions={actions}

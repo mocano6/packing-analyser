@@ -102,6 +102,46 @@
   color: white;
 }
 
+.chartTypeControls {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.chartTypeButton {
+  padding: 10px 20px;
+  border: 3px solid #ddd;
+  border-radius: 8px;
+  background-color: #fff;
+  color: #333;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  min-width: 150px;
+}
+
+.chartTypeButton:hover:not(:disabled) {
+  border-color: #6610f2;
+  color: #6610f2;
+  transform: translateY(-1px);
+}
+
+.chartTypeButton.active {
+  background-color: #6610f2;
+  border-color: #6610f2;
+  color: white;
+  box-shadow: 0 2px 4px rgba(102, 16, 242, 0.3);
+}
+
+.chartTypeButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: #ddd;
+  color: #999;
+}
+
 .chartContainer h3 {
   margin: 0 0 20px 0;
   color: #333;

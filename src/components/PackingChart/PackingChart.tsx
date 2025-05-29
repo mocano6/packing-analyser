@@ -1,7 +1,19 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { 
+  PieChart, 
+  Pie, 
+  Cell, 
+  ResponsiveContainer, 
+  Tooltip, 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Legend 
+} from 'recharts';
 import { Player, Action, TeamInfo } from '@/types';
 import styles from './PackingChart.module.css';
 
@@ -46,8 +58,9 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
   const [selectedActionType, setSelectedActionType] = useState<'pass' | 'dribble'>('pass');
   const [sortField, setSortField] = useState<SortField>('totalPacking');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [showMatchChart, setShowMatchChart] = useState<boolean>(false);
 
-  const { chartData, tableData } = useMemo(() => {
+  const { chartData, tableData, matchChartData } = useMemo(() => {
     const playerStats = new Map<string, { 
       name: string; 
       // Podania
@@ -239,8 +252,63 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       }
     });
 
-    return { chartData, tableData };
-  }, [actions, selectedChart, selectedMetric, selectedActionType, sortField, sortDirection]);
+    // Dane dla wykresu mecz po mecz (tylko dla wybranego zawodnika)
+    const matchChartData = selectedPlayerId && matches ? matches
+      .filter(match => match.matchId)
+      .map(match => {
+        // Pobierz akcje dla tego meczu i zawodnika
+        const matchActions = actions.filter(action => 
+          action.matchId === match.matchId && 
+          (action.senderId === selectedPlayerId || 
+           (action.receiverId === selectedPlayerId && selectedActionType === 'pass'))
+        );
+
+        let packingValue = 0;
+        let pxtValue = 0;
+        let xtValue = 0;
+        
+        matchActions.forEach(action => {
+          const packingPoints = action.packingPoints || 0;
+          const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+          const pxtCalculated = xTDifference * packingPoints;
+          const isDribble = action.actionType === 'dribble';
+
+          // Sprawdź czy uwzględnić akcję zgodnie z wybranym typem
+          let shouldInclude = false;
+          
+          if (selectedActionType === 'dribble' && isDribble && action.senderId === selectedPlayerId) {
+            shouldInclude = true;
+          } else if (selectedActionType === 'pass' && !isDribble) {
+            if (selectedChart === 'total' && 
+                (action.senderId === selectedPlayerId || action.receiverId === selectedPlayerId)) {
+              shouldInclude = true;
+            } else if (selectedChart === 'sender' && action.senderId === selectedPlayerId) {
+              shouldInclude = true;
+            } else if (selectedChart === 'receiver' && action.receiverId === selectedPlayerId) {
+              shouldInclude = true;
+            }
+          }
+
+          if (shouldInclude) {
+            packingValue += packingPoints;
+            pxtValue += pxtCalculated;
+            xtValue += xTDifference;
+          }
+        });
+
+        return {
+          matchName: `${match.opponent} (${match.date})`,
+          Packing: packingValue,
+          PxT: pxtValue,
+          xT: xtValue,
+          actionsCount: matchActions.length
+        };
+      })
+      .filter(item => Math.abs(item.Packing) > 0.01 || Math.abs(item.PxT) > 0.01 || Math.abs(item.xT) > 0.01 || item.actionsCount > 0)
+      : [];
+
+    return { chartData, tableData, matchChartData };
+  }, [actions, selectedChart, selectedMetric, selectedActionType, sortField, sortDirection, selectedPlayerId, matches]);
 
   const handleClick = (data: any) => {
     if (selectedPlayerId === data.id) {
@@ -297,6 +365,23 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
     return decimals === 0 ? Math.round(value).toString() : value.toFixed(decimals);
   };
 
+  // Custom tooltip dla wykresu meczowego
+  const MatchTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className={styles.tooltip}>
+          <p className={styles.tooltipLabel}>{label}</p>
+          <p>Packing: {formatValue(data.Packing, 0)}</p>
+          <p>PxT: {formatValue(data.PxT, 2)}</p>
+          <p>xT: {formatValue(data.xT, 3)}</p>
+          <p>Akcji: {data.actionsCount}</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className={styles.chartContainer}>
       <div className={styles.actionTypeControls}>
@@ -351,52 +436,133 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           </button>
         )}
       </div>
+
+      {/* Przycisk do przełączania między wykresami */}
+      <div className={styles.chartTypeControls}>
+        <button 
+          className={`${styles.chartTypeButton} ${!showMatchChart ? styles.active : ''}`}
+          onClick={() => setShowMatchChart(false)}
+        >
+          📊 Rozkład zagregowany
+        </button>
+        <button 
+          className={`${styles.chartTypeButton} ${showMatchChart ? styles.active : ''}`}
+          onClick={() => setShowMatchChart(true)}
+          disabled={!selectedPlayerId}
+        >
+          📈 Wyniki mecz po mecz
+        </button>
+      </div>
       
-      <h3>{getChartTitle()}</h3>
+      <h3>{showMatchChart ? `Statystyki mecz po mecz - ${chartData.find(d => d.id === selectedPlayerId)?.name || 'Wybierz zawodnika'}` : getChartTitle()}</h3>
       
-      {chartData.length > 0 ? (
-        <div className={styles.chart}>
-          <ResponsiveContainer width="100%" height={400}>
-            <PieChart>
-              <Pie
-                data={chartData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                outerRadius={150}
-                fill="#8884d8"
-                onClick={handleClick}
-                label={({ name, value, percent }) => 
-                  `${name}: ${getValueLabel(value)} (${(percent * 100).toFixed(1)}%)`
-                }
-                labelLine={false}
-              >
-                {chartData.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={COLORS[index % COLORS.length]}
-                    stroke={selectedPlayerId === entry.id ? '#000' : 'none'}
-                    strokeWidth={selectedPlayerId === entry.id ? 3 : 0}
-                    style={{ cursor: 'pointer' }}
-                  />
-                ))}
-              </Pie>
-              <Tooltip content={<CustomTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+      {!showMatchChart ? (
+        // Oryginalny wykres kołowy
+        chartData.length > 0 ? (
+          <div className={styles.chart}>
+            <ResponsiveContainer width="100%" height={400}>
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={150}
+                  fill="#8884d8"
+                  onClick={handleClick}
+                  label={({ name, value, percent }) => 
+                    `${name}: ${getValueLabel(value)} (${(percent * 100).toFixed(1)}%)`
+                  }
+                  labelLine={false}
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                      stroke={selectedPlayerId === entry.id ? '#000' : 'none'}
+                      strokeWidth={selectedPlayerId === entry.id ? 3 : 0}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip content={<CustomTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className={styles.noData}>
+            <p>Brak danych dla wybranej kategorii</p>
+          </div>
+        )
       ) : (
-        <div className={styles.noData}>
-          <p>Brak danych dla wybranej kategorii</p>
-        </div>
+        // Wykres meczowy (mecz po mecz) - pokazuje wszystkie metryki jednocześnie
+        selectedPlayerId && matchChartData.length > 0 ? (
+          <div className={styles.chart}>
+            <ResponsiveContainer width="100%" height={500}>
+              <LineChart data={matchChartData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="matchName" 
+                  angle={-45}
+                  textAnchor="end"
+                  height={100}
+                  interval={0}
+                />
+                <YAxis 
+                  yAxisId="left" 
+                  orientation="left"
+                  label={{ value: 'xT / PxT', angle: -90, position: 'insideLeft' }}
+                />
+                <YAxis 
+                  yAxisId="right" 
+                  orientation="right"
+                  label={{ value: 'Packing', angle: 90, position: 'insideRight' }}
+                />
+                <Tooltip content={<MatchTooltip />} />
+                <Legend />
+                <Line 
+                  yAxisId="left"
+                  type="monotone" 
+                  dataKey="xT" 
+                  stroke="#8884d8" 
+                  strokeWidth={2}
+                  dot={{ fill: '#8884d8', strokeWidth: 2, r: 4 }}
+                  name="xT"
+                />
+                <Line 
+                  yAxisId="left"
+                  type="monotone" 
+                  dataKey="PxT" 
+                  stroke="#82ca9d" 
+                  strokeWidth={2}
+                  dot={{ fill: '#82ca9d', strokeWidth: 2, r: 4 }}
+                  name="PxT"
+                />
+                <Line 
+                  yAxisId="right"
+                  type="monotone" 
+                  dataKey="Packing" 
+                  stroke="#ffc658" 
+                  strokeWidth={2}
+                  dot={{ fill: '#ffc658', strokeWidth: 2, r: 4 }}
+                  name="Packing"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className={styles.noData}>
+            <p>{!selectedPlayerId ? 'Wybierz zawodnika, aby zobaczyć wykres mecz po mecz' : 'Brak danych meczowych dla wybranego zawodnika'}</p>
+          </div>
+        )
       )}
       
       {selectedPlayerId && (
         <div className={styles.selectedPlayer}>
           <p>
             Wybrany zawodnik: {chartData.find(d => d.id === selectedPlayerId)?.name || 'Nieznany'}
-            {chartData.find(d => d.id === selectedPlayerId) && (
+            {chartData.find(d => d.id === selectedPlayerId) && !showMatchChart && (
               <span className={styles.playerValue}>
                 {' '}({getValueLabel(chartData.find(d => d.id === selectedPlayerId)!.value)} {selectedMetric === 'packing' ? 'pkt' : 'PxT'})
               </span>
