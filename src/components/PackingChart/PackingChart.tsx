@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useMemo } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import React, { useMemo, useState } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Player, Action } from '@/types';
 import styles from './PackingChart.module.css';
 
@@ -30,35 +30,61 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export default function PackingChart({ actions, players, selectedPlayerId, onPlayerSelect }: PackingChartProps) {
+  const [selectedChart, setSelectedChart] = useState<'total' | 'sender' | 'receiver'>('total');
+
   const chartData = useMemo(() => {
-    // Grupowanie akcji według zawodników
-    const playerStats = new Map<string, { name: string; value: number }>();
+    const playerStats = new Map<string, { 
+      name: string; 
+      totalValue: number; 
+      senderValue: number; 
+      receiverValue: number; 
+    }>();
 
     actions.forEach(action => {
+      const packingPoints = action.packingPoints || 0;
+
       // Dodajemy punkty dla nadawcy
       if (action.senderId) {
-        const currentValue = playerStats.get(action.senderId)?.value || 0;
+        const current = playerStats.get(action.senderId) || { 
+          name: action.senderName || 'Nieznany zawodnik', 
+          totalValue: 0, 
+          senderValue: 0, 
+          receiverValue: 0 
+        };
         playerStats.set(action.senderId, {
-          name: action.senderName || 'Nieznany zawodnik',
-          value: currentValue + (action.packingPoints || 0)
+          ...current,
+          totalValue: current.totalValue + packingPoints,
+          senderValue: current.senderValue + packingPoints
         });
       }
 
       // Dodajemy punkty dla odbiorcy
       if (action.receiverId) {
-        const currentValue = playerStats.get(action.receiverId)?.value || 0;
+        const current = playerStats.get(action.receiverId) || { 
+          name: action.receiverName || 'Nieznany zawodnik', 
+          totalValue: 0, 
+          senderValue: 0, 
+          receiverValue: 0 
+        };
         playerStats.set(action.receiverId, {
-          name: action.receiverName || 'Nieznany zawodnik',
-          value: currentValue + (action.packingPoints || 0)
+          ...current,
+          totalValue: current.totalValue + packingPoints,
+          receiverValue: current.receiverValue + packingPoints
         });
       }
     });
 
-    return Array.from(playerStats.entries()).map(([id, data]) => ({
-      id,
-      ...data
-    }));
-  }, [actions]);
+    // Zwracamy dane w zależności od wybranego typu diagramu
+    return Array.from(playerStats.entries())
+      .map(([id, data]) => ({
+        id,
+        name: data.name,
+        value: selectedChart === 'total' ? data.totalValue : 
+               selectedChart === 'sender' ? data.senderValue : 
+               data.receiverValue
+      }))
+      .filter(item => item.value > 0); // Filtrujemy zawodników bez punktów w danej kategorii
+  }, [actions, selectedChart]);
 
   const handleClick = (data: any) => {
     if (selectedPlayerId === data.id) {
@@ -68,42 +94,93 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
     }
   };
 
+  const getChartTitle = () => {
+    switch (selectedChart) {
+      case 'sender':
+        return 'Packing jako podający';
+      case 'receiver':
+        return 'Packing jako przyjmujący';
+      default:
+        return 'Całkowity udział w packingu';
+    }
+  };
+
   return (
     <div className={styles.chartContainer}>
-      <h3>Udział zawodników w packingu</h3>
-      <div className={styles.chart}>
-        <ResponsiveContainer width="100%" height={400}>
-          <PieChart>
-            <Pie
-              data={chartData}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              outerRadius={150}
-              fill="#8884d8"
-              onClick={handleClick}
-              label={({ name, value }) => `${name}: ${Math.round(value)}`}
-            >
-              {chartData.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={COLORS[index % COLORS.length]}
-                  stroke={selectedPlayerId === entry.id ? '#000' : 'none'}
-                  strokeWidth={selectedPlayerId === entry.id ? 2 : 0}
-                />
-              ))}
-            </Pie>
-            <Tooltip content={<CustomTooltip />} />
-            <Legend
-              wrapperStyle={{ padding: '10px' }}
-              formatter={(value, entry) => (
-                <span className={styles.legendItem}>{value}</span>
-              )}
-            />
-          </PieChart>
-        </ResponsiveContainer>
+      <div className={styles.chartControls}>
+        <button 
+          className={`${styles.controlButton} ${selectedChart === 'total' ? styles.active : ''}`}
+          onClick={() => setSelectedChart('total')}
+        >
+          Łącznie
+        </button>
+        <button 
+          className={`${styles.controlButton} ${selectedChart === 'sender' ? styles.active : ''}`}
+          onClick={() => setSelectedChart('sender')}
+        >
+          Jako podający
+        </button>
+        <button 
+          className={`${styles.controlButton} ${selectedChart === 'receiver' ? styles.active : ''}`}
+          onClick={() => setSelectedChart('receiver')}
+        >
+          Jako przyjmujący
+        </button>
       </div>
+      
+      <h3>{getChartTitle()}</h3>
+      
+      {chartData.length > 0 ? (
+        <div className={styles.chart}>
+          <ResponsiveContainer width="100%" height={400}>
+            <PieChart>
+              <Pie
+                data={chartData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={150}
+                fill="#8884d8"
+                onClick={handleClick}
+                label={({ name, value, percent }) => 
+                  `${name}: ${Math.round(value)} (${(percent * 100).toFixed(1)}%)`
+                }
+                labelLine={false}
+              >
+                {chartData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={COLORS[index % COLORS.length]}
+                    stroke={selectedPlayerId === entry.id ? '#000' : 'none'}
+                    strokeWidth={selectedPlayerId === entry.id ? 3 : 0}
+                    style={{ cursor: 'pointer' }}
+                  />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className={styles.noData}>
+          <p>Brak danych dla wybranej kategorii</p>
+        </div>
+      )}
+      
+      {selectedPlayerId && (
+        <div className={styles.selectedPlayer}>
+          <p>
+            Wybrany zawodnik: {chartData.find(d => d.id === selectedPlayerId)?.name || 'Nieznany'}
+          </p>
+          <button 
+            className={styles.clearSelection}
+            onClick={() => onPlayerSelect(null)}
+          >
+            Wyczyść wybór
+          </button>
+        </div>
+      )}
     </div>
   );
 } 
