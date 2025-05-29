@@ -18,6 +18,17 @@ const COLORS = [
   '#96CEB4', '#FFEEAD', '#D4A5A5', '#9B59B6', '#3498DB'
 ];
 
+const CustomTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className={styles.tooltip}>
+        <p>{`${payload[0].name}: ${Math.round(payload[0].value)} punktów`}</p>
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function PackingChart({ actions, players, selectedPlayerId, onPlayerSelect }: PackingChartProps) {
   const chartData = useMemo(() => {
     // Grupowanie akcji według zawodników
@@ -83,10 +94,13 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
                 />
               ))}
             </Pie>
-            <Tooltip
-              formatter={(value: number) => [`${Math.round(value)} punktów`, 'Packing']}
+            <Tooltip content={<CustomTooltip />} />
+            <Legend
+              wrapperStyle={{ padding: '10px' }}
+              formatter={(value, entry) => (
+                <span className={styles.legendItem}>{value}</span>
+              )}
             />
-            <Legend />
           </PieChart>
         </ResponsiveContainer>
       </div>
