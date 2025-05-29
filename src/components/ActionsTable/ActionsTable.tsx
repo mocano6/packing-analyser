@@ -50,25 +50,12 @@ const HeaderCell: React.FC<SortableHeaderProps> = ({
 const ActionRow = ({
   action,
   onDelete,
+  onEdit,
 }: {
   action: ActionsTableProps["actions"][0];
   onDelete: (id: string) => void;
+  onEdit?: (action: ActionsTableProps["actions"][0]) => void;
 }) => {
-  // Dodane rozszerzone logowanie dla diagnozy
-  console.log("Dane akcji:", {
-    id: action.id,
-    isSecondHalf: action.isSecondHalf,
-    minute: action.minute,
-    senderId: action.senderId,
-    senderName: action.senderName,
-    senderNumber: action.senderNumber,
-    receiverId: action.receiverId,
-    receiverName: action.receiverName,
-    receiverNumber: action.receiverNumber,
-    xTValueStart: action.xTValueStart,
-    xTValueEnd: action.xTValueEnd
-  });
-
   const getEvents = () => {
     const events = [];
     if (action.isP3) events.push("P3");
@@ -118,6 +105,15 @@ const ActionRow = ({
       <div className={styles.cell}>{action.packingPoints ? Math.round(action.packingPoints) : "-"}</div>
       <div className={styles.cell}>{getEvents()}</div>
       <div className={styles.cellActions}>
+        {onEdit && (
+          <button 
+            onClick={() => onEdit(action)} 
+            className={styles.editBtn} 
+            title="Edytuj akcję"
+          >
+            ✎
+          </button>
+        )}
         <button onClick={() => onDelete(action.id)} className={styles.deleteBtn} title="Usuń akcję">
           ✕
         </button>
@@ -131,6 +127,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   actions,
   players,
   onDeleteAction,
+  onEditAction,
   onRefreshPlayersData
 }) => {
   const [sortConfig, setSortConfig] = useState<{
@@ -325,6 +322,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
                 key={action.id}
                 action={action}
                 onDelete={onDeleteAction || (() => {})}
+                onEdit={onEditAction}
               />
             ))
           )}

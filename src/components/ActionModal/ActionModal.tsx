@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import styles from "./ActionModal.module.css";
-import { Player } from "@/types";
+import { Player, Action, TeamInfo } from "@/types";
 import ActionTypeToggle from "../ActionTypeToggle/ActionTypeToggle";
 import { ACTION_BUTTONS } from "../PointsButtons/constants";
 import PlayerCard from "./PlayerCard";
+import { TEAMS } from "@/constants/teams";
 
 interface ActionModalProps {
   isOpen: boolean;
@@ -33,6 +34,10 @@ interface ActionModalProps {
   onSecondHalfToggle: (checked: boolean) => void;
   onSaveAction: () => void;
   onReset: () => void;
+  editingAction?: Action | null;
+  allMatches?: TeamInfo[];
+  selectedMatchId?: string | null;
+  onMatchSelect?: (matchId: string) => void;
 }
 
 const ActionModal: React.FC<ActionModalProps> = ({
@@ -61,7 +66,59 @@ const ActionModal: React.FC<ActionModalProps> = ({
   onSecondHalfToggle,
   onSaveAction,
   onReset,
+  editingAction,
+  allMatches,
+  selectedMatchId,
+  onMatchSelect,
 }) => {
+  const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
+
+  // Określamy czy jesteśmy w trybie edycji
+  const isEditMode = !!editingAction;
+
+  // Funkcja do pobierania nazwy zespołu
+  const getTeamName = (teamId: string) => {
+    const team = Object.values(TEAMS).find(team => team.id === teamId);
+    return team ? team.name : teamId;
+  };
+
+  // Efekt do aktualizacji wybranego meczu przy edycji
+  useEffect(() => {
+    if (editingAction && editingAction.matchId) {
+      console.log("ActionModal: Ustawiam mecz z editingAction:", editingAction.matchId);
+      setCurrentSelectedMatch(editingAction.matchId);
+      if (onMatchSelect) {
+        onMatchSelect(editingAction.matchId);
+      }
+    } else if (selectedMatchId) {
+      console.log("ActionModal: Ustawiam mecz z selectedMatchId:", selectedMatchId);
+      setCurrentSelectedMatch(selectedMatchId);
+    }
+  }, [editingAction?.matchId, selectedMatchId]);
+
+  // Funkcja obsługi zmiany meczu z useCallback dla lepszej optymalizacji
+  const handleMatchChange = useCallback((matchId: string) => {
+    console.log("ActionModal: Zmiana meczu na:", matchId);
+    setCurrentSelectedMatch(matchId);
+    if (onMatchSelect) {
+      onMatchSelect(matchId);
+    }
+  }, [onMatchSelect]);
+
+  // Filtrowanie zawodników według wybranego meczu (tylko w trybie edycji)
+  const filteredPlayers = React.useMemo(() => {
+    if (!isEditMode || !allMatches || !currentSelectedMatch) {
+      return players;
+    }
+    
+    const selectedMatch = allMatches.find(match => match.matchId === currentSelectedMatch);
+    if (!selectedMatch) {
+      return players;
+    }
+    
+    return players.filter(player => player.teams?.includes(selectedMatch.team));
+  }, [isEditMode, allMatches, currentSelectedMatch, players]);
+
   if (!isOpen) return null;
 
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,21 +228,18 @@ const ActionModal: React.FC<ActionModalProps> = ({
       return;
     }
 
-    // Sprawdzamy czy strefy są zapisane w localStorage
-    const tempStartZone = localStorage.getItem('tempStartZone');
-    const tempEndZone = localStorage.getItem('tempEndZone');
-    
-    // Logujemy informacje o strefach z localStorage
-    console.log("ActionModal: Wartości stref z localStorage:", {
-      tempStartZone,
-      tempEndZone
-    });
-    
-    // Jeśli brakuje stref w localStorage, wyświetlamy alert
-    if (!tempStartZone || !tempEndZone) {
-      console.error("ActionModal: Brak informacji o strefach w localStorage!");
-      alert("Błąd: Brak informacji o wybranych strefach. Proszę wybrać strefy początkową i końcową na boisku.");
-      return;
+    // W trybie edycji nie sprawdzamy stref z localStorage
+    if (!isEditMode) {
+      // Sprawdzamy czy strefy są zapisane w localStorage (tylko dla nowych akcji)
+      const tempStartZone = localStorage.getItem('tempStartZone');
+      const tempEndZone = localStorage.getItem('tempEndZone');
+      
+      // Jeśli brakuje stref w localStorage, wyświetlamy alert
+      if (!tempStartZone || !tempEndZone) {
+        console.error("ActionModal: Brak informacji o strefach w localStorage!");
+        alert("Błąd: Brak informacji o wybranych strefach. Proszę wybrać strefy początkową i końcową na boisku.");
+        return;
+      }
     }
 
     // Dodajemy log przed zapisaniem, aby sprawdzić stan w konsoli
@@ -199,10 +253,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
       isShot,
       isGoal,
       isPenaltyAreaEntry,
-      strefy: {
-        startZone: tempStartZone ? Number(tempStartZone) : null,
-        endZone: tempEndZone ? Number(tempEndZone) : null
-      }
+      isEditMode
     });
 
     // Wywołaj funkcję zapisującą akcję, ale nie zamykaj modalu od razu
@@ -238,8 +289,30 @@ const ActionModal: React.FC<ActionModalProps> = ({
   return (
     <div className={styles.modalOverlay} onClick={handleCancel}>
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <h2>Dodaj akcję</h2>
+        <h2>{isEditMode ? "Edytuj akcję" : "Dodaj akcję"}</h2>
         <div className={styles.form}>
+          {/* Wybór meczu - tylko w trybie edycji */}
+          {isEditMode && allMatches && allMatches.length > 0 && (
+            <div className={styles.formGroup}>
+              <label>Mecz:</label>
+              <select
+                value={currentSelectedMatch || ''}
+                onChange={(e) => {
+                  const matchId = e.target.value;
+                  handleMatchChange(matchId);
+                }}
+                className={styles.select}
+              >
+                <option value="">-- Wybierz mecz --</option>
+                {allMatches.map(match => (
+                  <option key={match.matchId} value={match.matchId}>
+                    {match.opponent} ({match.date})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Typ akcji */}
           <div className={styles.formGroup}>
             <div className={styles.togglesRow}>
@@ -283,7 +356,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
               )}
             </div>
             <div className={styles.playersGrid}>
-              {players.map((player) => (
+              {filteredPlayers.map((player) => (
                 <PlayerCard
                   key={player.id}
                   player={player}

@@ -21,12 +21,13 @@ import { initializeTeams, checkTeamsCollection } from "@/utils/initializeTeams";
 import { useAuth } from "@/hooks/useAuth";
 import toast from 'react-hot-toast';
 import OfflineStatusBanner from "@/components/OfflineStatusBanner/OfflineStatusBanner";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesModal";
 import MatchInfoModal from "@/components/MatchInfoModal/MatchInfoModal";
 import Link from "next/link";
+import ActionModal from "@/components/ActionModal/ActionModal";
 
 // Rozszerzenie interfejsu Window
 declare global {
@@ -77,6 +78,8 @@ export default function Page() {
   const [isSecondHalf, setIsSecondHalf] = React.useState(false);
   const [matchesListRefreshCounter, setMatchesListRefreshCounter] = useState(0);
   const [selectedZone, setSelectedZone] = React.useState<string | number | null>(null);
+  const [isActionEditModalOpen, setIsActionEditModalOpen] = React.useState(false);
+  const [editingAction, setEditingAction] = React.useState<Action | null>(null);
 
   const useActionsStateRef = useRef<any>(null);
 
@@ -1002,6 +1005,145 @@ export default function Page() {
     }
   };
 
+  // Obsługa edycji akcji
+  const handleEditAction = (action: Action) => {
+    console.log("Otwieranie edycji akcji:", action);
+    setEditingAction(action);
+    setIsActionEditModalOpen(true);
+  };
+
+  // Obsługa zapisania edytowanej akcji
+  const handleSaveEditedAction = async (editedAction: Action) => {
+    console.log("💾 Zapisywanie edytowanej akcji:", editedAction);
+    
+    try {
+      if (!editedAction.matchId) {
+        console.error("❌ Brak matchId w edytowanej akcji");
+        alert("Nie można zapisać akcji bez przypisania do meczu");
+        return;
+      }
+
+      // Sprawdź czy Firebase jest dostępne
+      if (!db) {
+        console.error("❌ Firebase nie jest zainicjalizowane");
+        alert("Błąd połączenia z bazą danych");
+        return;
+      }
+
+      // Znajdź oryginalną akcję, żeby sprawdzić czy zmieniał się mecz
+      const originalAction = actions.find(a => a.id === editedAction.id);
+      const originalMatchId = originalAction?.matchId;
+      
+      console.log("📋 Porównanie meczów - oryginalny:", originalMatchId, "nowy:", editedAction.matchId);
+
+      // Czy akcja została przeniesiona do innego meczu?
+      const isMovedToNewMatch = originalMatchId && originalMatchId !== editedAction.matchId;
+
+      if (isMovedToNewMatch) {
+        console.log("🔄 Przenoszenie akcji między meczami");
+        
+        // 1. Usuń akcję ze starego meczu
+        const oldMatchRef = doc(db, "matches", originalMatchId);
+        const oldMatchDoc = await getDoc(oldMatchRef);
+        
+        if (oldMatchDoc.exists()) {
+          const oldMatchData = oldMatchDoc.data() as TeamInfo;
+          const oldActions = oldMatchData.actions_packing || [];
+          const filteredOldActions = oldActions.filter(a => a.id !== editedAction.id);
+          
+          console.log("🗑️ Usuwanie akcji ze starego meczu:", originalMatchId);
+          await updateDoc(oldMatchRef, {
+            actions_packing: filteredOldActions
+          });
+        }
+
+        // 2. Dodaj akcję do nowego meczu
+        const newMatchRef = doc(db, "matches", editedAction.matchId);
+        const newMatchDoc = await getDoc(newMatchRef);
+        
+        if (!newMatchDoc.exists()) {
+          console.error("❌ Nowy mecz nie istnieje:", editedAction.matchId);
+          alert("Wybrany mecz nie istnieje");
+          return;
+        }
+
+        const newMatchData = newMatchDoc.data() as TeamInfo;
+        const newActions = newMatchData.actions_packing || [];
+        
+        console.log("➕ Dodawanie akcji do nowego meczu:", editedAction.matchId);
+        const updatedNewActions = [...newActions, removeUndefinedFields(editedAction)];
+        
+        await updateDoc(newMatchRef, {
+          actions_packing: updatedNewActions
+        });
+
+        // Aktualizuj lokalny stan jeśli dotknięty jest aktualny mecz
+        if (matchInfo?.matchId === originalMatchId) {
+          // Usuń akcję z lokalnego stanu (stary mecz)
+          const filteredActions = actions.filter(a => a.id !== editedAction.id);
+          setActions(filteredActions);
+        } else if (matchInfo?.matchId === editedAction.matchId) {
+          // Dodaj akcję do lokalnego stanu (nowy mecz)
+          setActions([...actions, editedAction]);
+        }
+      } else {
+        console.log("📝 Aktualizacja akcji w tym samym meczu");
+        
+        // Standardowa aktualizacja w tym samym meczu
+        const matchRef = doc(db, "matches", editedAction.matchId);
+        const matchDoc = await getDoc(matchRef);
+
+        if (!matchDoc.exists()) {
+          console.error("❌ Mecz nie istnieje:", editedAction.matchId);
+          alert("Wybrany mecz nie istnieje");
+          return;
+        }
+
+        const matchData = matchDoc.data() as TeamInfo;
+        const currentActions = matchData.actions_packing || [];
+        
+        const actionIndex = currentActions.findIndex(a => a.id === editedAction.id);
+        if (actionIndex === -1) {
+          console.error("❌ Nie znaleziono akcji do edycji:", editedAction.id);
+          alert("Nie znaleziono akcji do edycji");
+          return;
+        }
+
+        const updatedActions = [...currentActions];
+        updatedActions[actionIndex] = removeUndefinedFields(editedAction);
+
+        await updateDoc(matchRef, {
+          actions_packing: updatedActions
+        });
+
+        // Aktualizuj lokalny stan jeśli to aktualny mecz
+        if (matchInfo && editedAction.matchId === matchInfo.matchId) {
+          setActions(updatedActions);
+        }
+      }
+
+      console.log("✅ Akcja zapisana pomyślnie");
+      setIsActionEditModalOpen(false);
+      setEditingAction(null);
+      
+      // Wywołaj event odświeżenia dla innych komponentów
+      const refreshEvent = new CustomEvent('matchesListRefresh', {
+        detail: { timestamp: Date.now() }
+      });
+      document.dispatchEvent(refreshEvent);
+      
+    } catch (error) {
+      console.error("❌ Błąd podczas zapisywania edytowanej akcji:", error);
+      alert("Wystąpił błąd podczas zapisywania akcji: " + (error instanceof Error ? error.message : String(error)));
+    }
+  };
+
+  // Obsługa zamknięcia modalu edycji akcji
+  const handleCloseActionEditModal = () => {
+    setIsActionEditModalOpen(false);
+    setEditingAction(null);
+  };
+
   return (
     <div className={styles.container}>
       <OfflineStatusBanner />
@@ -1044,7 +1186,7 @@ export default function Page() {
             setSelectedReceiverId={setSelectedReceiverId}
             actionMinute={actionMinute}
             setActionMinute={setActionMinute}
-            actionType={actionType}
+            actionType={(editingAction?.actionType as "pass" | "dribble") || 'pass'}
             setActionType={setActionType}
             currentPoints={currentPoints}
             setCurrentPoints={setCurrentPoints}
@@ -1071,6 +1213,7 @@ export default function Page() {
           actions={actions}
           players={players}
           onDeleteAction={handleDeleteAction}
+          onEditAction={handleEditAction}
           onRefreshPlayersData={handleRefreshPlayersData}
         />
 
@@ -1120,14 +1263,146 @@ export default function Page() {
           />
         )}
 
+        {/* Modal edycji akcji */}
+        <ActionModal
+          isOpen={isActionEditModalOpen}
+          onClose={handleCloseActionEditModal}
+          players={players}
+          selectedPlayerId={editingAction?.senderId || null}
+          selectedReceiverId={editingAction?.receiverId || null}
+          onSenderSelect={(id) => {
+            if (editingAction) {
+              const player = players.find(p => p.id === id);
+              setEditingAction({
+                ...editingAction,
+                senderId: id || '',
+                senderName: player?.name || '',
+                senderNumber: player?.number || 0
+              });
+            }
+          }}
+          onReceiverSelect={(id) => {
+            if (editingAction) {
+              const player = players.find(p => p.id === id);
+              setEditingAction({
+                ...editingAction,
+                receiverId: id || '',
+                receiverName: player?.name || '',
+                receiverNumber: player?.number || 0
+              });
+            }
+          }}
+          actionMinute={editingAction?.minute || 0}
+          onMinuteChange={(minute) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                minute
+              });
+            }
+          }}
+          actionType={(editingAction?.actionType as "pass" | "dribble") || 'pass'}
+          onActionTypeChange={(type) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                actionType: type
+              });
+            }
+          }}
+          currentPoints={editingAction?.packingPoints || 0}
+          onAddPoints={(points) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                packingPoints: points
+              });
+            }
+          }}
+          isP3Active={editingAction?.isP3 || false}
+          onP3Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP3: !editingAction.isP3
+              });
+            }
+          }}
+          isShot={editingAction?.isShot || false}
+          onShotToggle={(checked) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isShot: checked
+              });
+            }
+          }}
+          isGoal={editingAction?.isGoal || false}
+          onGoalToggle={(checked) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isGoal: checked
+              });
+            }
+          }}
+          isPenaltyAreaEntry={editingAction?.isPenaltyAreaEntry || false}
+          onPenaltyAreaEntryToggle={(checked) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isPenaltyAreaEntry: checked
+              });
+            }
+          }}
+          isSecondHalf={editingAction?.isSecondHalf || false}
+          onSecondHalfToggle={(checked) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isSecondHalf: checked
+              });
+            }
+          }}
+          onSaveAction={() => {
+            console.log("💾 Zapisywanie edytowanej akcji:", editingAction);
+            if (editingAction) {
+              handleSaveEditedAction(editingAction);
+            }
+          }}
+          onReset={() => {
+            if (editingAction) {
+              const originalAction = actions.find(a => a.id === editingAction.id);
+              if (originalAction) {
+                setEditingAction({ ...originalAction });
+              }
+            }
+          }}
+          editingAction={editingAction}
+          allMatches={allMatches}
+          selectedMatchId={editingAction?.matchId || null}
+          onMatchSelect={(matchId) => {
+            console.log("🔄 Zmiana meczu dla akcji na:", matchId);
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                matchId
+              });
+            }
+          }}
+        />
+
         {/* Przyciski eksportu i importu */}
         <div className={styles.buttonsContainer}>
+          {/* Tymczasowo ukryte przyciski statystyk */}
+          {/* 
           <Link href="/zawodnicy" className={styles.playersButton}>
             👥 Statystyki zawodników
           </Link>
           <Link href="/statystyki-zespolu" className={styles.teamStatsButton}>
             📊 Statystyki zespołu
           </Link>
+          */}
           <ExportButton
             players={players}
             actions={actions}

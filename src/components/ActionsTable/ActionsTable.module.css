@@ -113,12 +113,37 @@
   opacity: 0;
 }
 
-.actionRow:hover .deleteBtn {
+.editBtn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  color: #2196f3;
+  opacity: 0;
+}
+
+.actionRow:hover .deleteBtn,
+.actionRow:hover .editBtn {
   opacity: 1;
 }
 
 .deleteBtn:hover {
   background-color: #ffebee;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.editBtn:hover {
+  background-color: #e3f2fd;
   transform: translateY(-1px);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }
