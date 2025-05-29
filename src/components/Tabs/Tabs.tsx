@@ -4,7 +4,7 @@
 import React from "react";
 import styles from "./Tabs.module.css";
 
-export type Tab = "packing";
+export type Tab = "packing" | "players";
 
 export interface TabsProps {
   activeTab: Tab;
@@ -35,6 +35,18 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
           id="packing-tab"
         >
           Packing
+        </button>
+        <button
+          className={`${styles.tab} ${
+            activeTab === "players" ? styles.active : ""
+          }`}
+          onClick={handleTabChange("players")}
+          role="tab"
+          aria-selected={activeTab === "players"}
+          aria-controls="players-panel"
+          id="players-tab"
+        >
+          Zawodnicy
         </button>
       </div>
     </div>

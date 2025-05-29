@@ -1057,37 +1057,47 @@ export default function Page() {
 
         <Tabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-        <ActionSection
-          selectedZone={selectedZone}
-          handleZoneSelect={handleZoneSelection}
-          players={filteredPlayers}
-          selectedPlayerId={selectedPlayerId}
-          setSelectedPlayerId={setSelectedPlayerId}
-          selectedReceiverId={selectedReceiverId}
-          setSelectedReceiverId={setSelectedReceiverId}
-          actionMinute={actionMinute}
-          setActionMinute={setActionMinute}
-          actionType={actionType}
-          setActionType={setActionType}
-          currentPoints={currentPoints}
-          setCurrentPoints={setCurrentPoints}
-          isP3Active={isP3Active}
-          setIsP3Active={setIsP3Active}
-          isShot={isShot}
-          setIsShot={setIsShot}
-          isGoal={isGoal}
-          setIsGoal={setIsGoal}
-          isPenaltyAreaEntry={isPenaltyAreaEntry}
-          setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
-          isSecondHalf={isSecondHalf}
-          setIsSecondHalf={handleSecondHalfToggle}
-          handleSaveAction={onSaveAction}
-          resetActionState={resetCustomActionState}
-          startZone={startZone}
-          endZone={endZone}
-          isActionModalOpen={isActionModalOpen}
-          setIsActionModalOpen={setIsActionModalOpen}
-        />
+        {activeTab === "packing" && (
+          <ActionSection
+            selectedZone={selectedZone}
+            handleZoneSelect={handleZoneSelection}
+            players={filteredPlayers}
+            selectedPlayerId={selectedPlayerId}
+            setSelectedPlayerId={setSelectedPlayerId}
+            selectedReceiverId={selectedReceiverId}
+            setSelectedReceiverId={setSelectedReceiverId}
+            actionMinute={actionMinute}
+            setActionMinute={setActionMinute}
+            actionType={actionType}
+            setActionType={setActionType}
+            currentPoints={currentPoints}
+            setCurrentPoints={setCurrentPoints}
+            isP3Active={isP3Active}
+            setIsP3Active={setIsP3Active}
+            isShot={isShot}
+            setIsShot={setIsShot}
+            isGoal={isGoal}
+            setIsGoal={setIsGoal}
+            isPenaltyAreaEntry={isPenaltyAreaEntry}
+            setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
+            isSecondHalf={isSecondHalf}
+            setIsSecondHalf={handleSecondHalfToggle}
+            handleSaveAction={onSaveAction}
+            resetActionState={resetCustomActionState}
+            startZone={startZone}
+            endZone={endZone}
+            isActionModalOpen={isActionModalOpen}
+            setIsActionModalOpen={setIsActionModalOpen}
+          />
+        )}
+
+        {activeTab === "players" && (
+          <div className={styles.playersPanel}>
+            <h2>Zarządzanie zawodnikami</h2>
+            <p>Panel zarządzania zawodnikami będzie dostępny wkrótce.</p>
+          </div>
+        )}
+
         <ActionsTable
           actions={actions}
           players={players}

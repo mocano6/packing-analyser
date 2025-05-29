@@ -1,5 +1,5 @@
 // src/types/index.ts
-export type Tab = "packing";
+export type Tab = "packing" | "players";
 
 export type Zone = number;
 
