@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const path = require('path');
+
 const nextConfig = {
   output: 'standalone',
   images: {
@@ -56,7 +58,7 @@ const nextConfig = {
         buildDependencies: {
           config: [__filename],
         },
-        cacheDirectory: '.next/cache',
+        cacheDirectory: path.resolve(__dirname, '.next/cache'),
         maxAge: 172800000, // 2 dni
         compression: 'gzip',
         allowCollectingMemory: true,
@@ -69,6 +71,8 @@ const nextConfig = {
 
     return config;
   },
+  reactStrictMode: true,
+  swcMinify: true,
 }
 
 module.exports = nextConfig 
