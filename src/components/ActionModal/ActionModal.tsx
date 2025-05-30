@@ -119,11 +119,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
     return players.filter(player => player.teams?.includes(selectedMatch.team));
   }, [isEditMode, allMatches, currentSelectedMatch, players]);
 
-  // Debug actionType changes - MUSI być przed warunkiem return null
-  useEffect(() => {
-    console.log("🔄 ActionModal: actionType zmieniony na:", actionType);
-  }, [actionType]);
-
   if (!isOpen) return null;
 
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,7 +126,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
   };
 
   const handleActionTypeChange = (type: "pass" | "dribble") => {
-    console.log("🎯 ActionModal: handleActionTypeChange wywołane z:", type);
     onActionTypeChange(type);
     
     // Jeśli zmieniamy na drybling, usuwamy odbiorcę

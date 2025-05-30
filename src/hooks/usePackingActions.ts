@@ -61,11 +61,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
   const [actions, setActions] = useState<Action[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Debugowanie zmian actionType - MUSI być tuż po useState
-  useEffect(() => {
-    console.log("🔧 usePackingActions: actionType się zmienił na:", actionType);
-  }, [actionType]);
-
   // Pobieranie akcji przy zmianie meczu
   useEffect(() => {
     if (matchInfo?.matchId) {
