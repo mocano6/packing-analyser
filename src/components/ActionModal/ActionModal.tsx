@@ -119,12 +119,12 @@ const ActionModal: React.FC<ActionModalProps> = ({
     return players.filter(player => player.teams?.includes(selectedMatch.team));
   }, [isEditMode, allMatches, currentSelectedMatch, players]);
 
-  if (!isOpen) return null;
-
-  // Debug actionType changes
+  // Debug actionType changes - MUSI być przed warunkiem return null
   useEffect(() => {
     console.log("🔄 ActionModal: actionType zmieniony na:", actionType);
   }, [actionType]);
+
+  if (!isOpen) return null;
 
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onMinuteChange(parseInt(e.target.value) || 0);
