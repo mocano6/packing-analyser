@@ -493,12 +493,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     }
   }, []);
 
-  // Wrapper dla setActionType z debuggiem
-  const setActionTypeWithDebug = useCallback((type: "pass" | "dribble") => {
-    console.log("🔧 usePackingActions: setActionType wywołane, zmiana z:", actionType, "na:", type);
-    setActionType(type);
-  }, [actionType]);
-
   return {
     // Stany
     actions,
@@ -520,7 +514,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     setSelectedReceiverId,
     setCurrentPoints,
     setActionMinute,
-    setActionType: setActionTypeWithDebug,
+    setActionType,
     setIsP3Active,
     setIsShot,
     setIsGoal,

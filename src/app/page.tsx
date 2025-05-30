@@ -127,7 +127,7 @@ export default function Page() {
     setSelectedReceiverId,
     setCurrentPoints,
     setActionMinute,
-    setActionType: originalSetActionType,
+    setActionType,
     setIsP3Active,
     setIsShot,
     setIsGoal,
@@ -1144,12 +1144,6 @@ export default function Page() {
     setEditingAction(null);
   };
 
-  // Wrapper dla setActionType z debuggiem
-  const setActionType = (type: "pass" | "dribble") => {
-    console.log("🎯 page.tsx: setActionType wrapper wywołane z:", type);
-    originalSetActionType(type);
-  };
-
   return (
     <div className={styles.container}>
       <OfflineStatusBanner />
@@ -1192,7 +1186,7 @@ export default function Page() {
             setSelectedReceiverId={setSelectedReceiverId}
             actionMinute={actionMinute}
             setActionMinute={setActionMinute}
-            actionType={(editingAction?.actionType as "pass" | "dribble") || 'pass'}
+            actionType={actionType}
             setActionType={setActionType}
             currentPoints={currentPoints}
             setCurrentPoints={setCurrentPoints}
@@ -1308,7 +1302,7 @@ export default function Page() {
               });
             }
           }}
-          actionType={(editingAction?.actionType as "pass" | "dribble") || 'pass'}
+          actionType={editingAction?.actionType as "pass" | "dribble" || 'pass'}
           onActionTypeChange={(type) => {
             if (editingAction) {
               setEditingAction({
