@@ -14,12 +14,16 @@ const ActionTypeToggle = memo(function ActionTypeToggle({
   onActionTypeChange,
 }: ActionTypeToggleProps) {
   const handlePassClick = useCallback(() => {
+    console.log("🔵 ActionTypeToggle: Kliknięto przycisk 'Podanie'");
     onActionTypeChange("pass");
   }, [onActionTypeChange]);
 
   const handleDribbleClick = useCallback(() => {
+    console.log("🟣 ActionTypeToggle: Kliknięto przycisk 'Drybling'");
     onActionTypeChange("dribble");
   }, [onActionTypeChange]);
+
+  console.log("🔄 ActionTypeToggle render - actionType:", actionType);
 
   return (
     <div

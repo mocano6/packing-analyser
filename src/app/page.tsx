@@ -127,7 +127,7 @@ export default function Page() {
     setSelectedReceiverId,
     setCurrentPoints,
     setActionMinute,
-    setActionType,
+    setActionType: originalSetActionType,
     setIsP3Active,
     setIsShot,
     setIsGoal,
@@ -1142,6 +1142,12 @@ export default function Page() {
   const handleCloseActionEditModal = () => {
     setIsActionEditModalOpen(false);
     setEditingAction(null);
+  };
+
+  // Wrapper dla setActionType z debuggiem
+  const setActionType = (type: "pass" | "dribble") => {
+    console.log("🎯 page.tsx: setActionType wrapper wywołane z:", type);
+    originalSetActionType(type);
   };
 
   return (

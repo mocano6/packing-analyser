@@ -126,6 +126,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
   };
 
   const handleActionTypeChange = (type: "pass" | "dribble") => {
+    console.log("🎯 ActionModal: handleActionTypeChange wywołane z:", type);
     onActionTypeChange(type);
     
     // Jeśli zmieniamy na drybling, usuwamy odbiorcę
