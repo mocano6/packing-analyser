@@ -1186,7 +1186,7 @@ export default function Page() {
             setSelectedReceiverId={setSelectedReceiverId}
             actionMinute={actionMinute}
             setActionMinute={setActionMinute}
-            actionType={(editingAction?.actionType as "pass" | "dribble") || 'pass'}
+            actionType={actionType}
             setActionType={setActionType}
             currentPoints={currentPoints}
             setCurrentPoints={setCurrentPoints}
@@ -1302,7 +1302,7 @@ export default function Page() {
               });
             }
           }}
-          actionType={(editingAction?.actionType as "pass" | "dribble") || 'pass'}
+          actionType={editingAction?.actionType as "pass" | "dribble" || 'pass'}
           onActionTypeChange={(type) => {
             if (editingAction) {
               setEditingAction({
@@ -1395,7 +1395,7 @@ export default function Page() {
 
         {/* Przyciski eksportu i importu */}
         <div className={styles.buttonsContainer}>
-          <Link href="/zawodnicy" className={styles.playersButton}>
+          {/* <Link href="/zawodnicy" className={styles.playersButton}>
             👥 Statystyki zawodników
           </Link>
           <Link href="/statystyki-zespolu" className={styles.teamStatsButton}>
@@ -1403,7 +1403,7 @@ export default function Page() {
           </Link>
           <Link href="/lista-zawodnikow" className={styles.listButton}>
             📋 Lista wszystkich zawodników
-          </Link>
+          </Link> */}
           <ExportButton
             players={players}
             actions={actions}
