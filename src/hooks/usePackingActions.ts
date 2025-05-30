@@ -61,6 +61,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
   const [actions, setActions] = useState<Action[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  // Debugowanie zmian actionType - MUSI być tuż po useState
+  useEffect(() => {
+    console.log("🔧 usePackingActions: actionType się zmienił na:", actionType);
+  }, [actionType]);
+
   // Pobieranie akcji przy zmianie meczu
   useEffect(() => {
     if (matchInfo?.matchId) {
@@ -492,11 +497,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
   const setActionTypeWithDebug = useCallback((type: "pass" | "dribble") => {
     console.log("🔧 usePackingActions: setActionType wywołane, zmiana z:", actionType, "na:", type);
     setActionType(type);
-  }, [actionType]);
-
-  // Debugowanie zmian actionType
-  useEffect(() => {
-    console.log("🔧 usePackingActions: actionType się zmienił na:", actionType);
   }, [actionType]);
 
   return {
