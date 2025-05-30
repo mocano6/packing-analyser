@@ -1,0 +1,308 @@
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: #f8f9fa;
+  min-height: 100vh;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.header h1 {
+  margin: 0;
+  color: #333;
+  font-size: 28px;
+}
+
+.backButton {
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.backButton:hover {
+  background-color: #0056b3;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 20px;
+  padding: 20px;
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.searchBox {
+  flex: 1;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  font-size: 16px;
+  transition: border-color 0.2s;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.stats {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.totalCount, .filteredCount {
+  padding: 8px 12px;
+  background-color: #e9ecef;
+  border-radius: 4px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.duplicatesWarning {
+  padding: 8px 12px;
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 4px;
+  color: #856404;
+  font-weight: 600;
+}
+
+/* Sekcja duplikatów */
+.duplicatesSection {
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: #fff3cd;
+  border: 2px solid #ffeaa7;
+  border-radius: 10px;
+}
+
+.duplicatesSection h3 {
+  margin: 0 0 20px 0;
+  color: #856404;
+  font-size: 20px;
+}
+
+.duplicateGroup {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: white;
+  border-radius: 8px;
+  border: 1px solid #ffeaa7;
+}
+
+.duplicateGroup h4 {
+  margin: 0 0 15px 0;
+  color: #856404;
+  font-size: 16px;
+}
+
+.duplicateList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.duplicateItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.playerInfo {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex: 1;
+}
+
+.playerName {
+  font-weight: 600;
+  color: #333;
+  min-width: 150px;
+}
+
+.playerNumber {
+  background-color: #007bff;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.playerBirthYear {
+  color: #6c757d;
+  font-size: 14px;
+}
+
+.playerTeams {
+  color: #28a745;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.playerActions {
+  background-color: #17a2b8;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+/* Tabela */
+.tableContainer {
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th {
+  background-color: #f8f9fa;
+  padding: 15px 10px;
+  text-align: left;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 2px solid #dee2e6;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.sortableHeader {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.sortableHeader:hover {
+  background-color: #e9ecef;
+}
+
+.tableRow {
+  border-bottom: 1px solid #dee2e6;
+  transition: background-color 0.2s;
+}
+
+.tableRow:hover {
+  background-color: #f8f9fa;
+}
+
+.table td {
+  padding: 12px 10px;
+  vertical-align: middle;
+}
+
+.actionsCount {
+  text-align: center;
+  font-weight: 600;
+}
+
+.noActions {
+  color: #dc3545;
+}
+
+.deleteButton {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background-color: #c82333;
+}
+
+.deleteButton:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.deleteWarning {
+  margin-left: 5px;
+  color: #ffc107;
+  font-size: 14px;
+}
+
+.noResults {
+  text-align: center;
+  padding: 40px;
+  color: #6c757d;
+  font-style: italic;
+  font-size: 16px;
+}
+
+/* Responsywność */
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+
+  .controls {
+    padding: 15px;
+  }
+
+  .stats {
+    justify-content: center;
+  }
+
+  .duplicateItem {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .playerInfo {
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-start;
+  }
+
+  .table {
+    font-size: 12px;
+  }
+
+  .table th,
+  .table td {
+    padding: 8px 6px;
+  }
+} 

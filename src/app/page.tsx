@@ -1228,6 +1228,7 @@ export default function Page() {
           }
           currentTeam={selectedTeam}
           allTeams={Object.values(TEAMS)}
+          existingPlayers={players}
         />
 
         {/* Modal dla nowego meczu */}
@@ -1399,6 +1400,9 @@ export default function Page() {
           </Link>
           <Link href="/statystyki-zespolu" className={styles.teamStatsButton}>
             📊 Statystyki zespołu
+          </Link>
+          <Link href="/lista-zawodnikow" className={styles.listButton}>
+            📋 Lista wszystkich zawodników
           </Link>
           <ExportButton
             players={players}

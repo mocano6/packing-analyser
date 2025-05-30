@@ -93,6 +93,26 @@
 }
 
 .teamStatsButton:hover {
-  background-color: #e1bee7;
-  transform: translateY(-1px);
+  background-color: #0056b3;
+  transform: translateY(-2px);
+}
+
+.listButton {
+  padding: 12px 20px;
+  background-color: #6610f2;
+  color: white;
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+.listButton:hover {
+  background-color: #5a0dcf;
+  transform: translateY(-2px);
 }
