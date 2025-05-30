@@ -4,7 +4,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import Link from "next/link";
 import { Player, Action } from '@/types';
 import { usePlayersState } from "@/hooks/usePlayersState";
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import styles from './page.module.css';
 
@@ -14,6 +14,7 @@ export default function ListaZawodnikow() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [allActions, setAllActions] = useState<Action[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isMergingDuplicates, setIsMergingDuplicates] = useState(false);
 
   const { players, handleDeletePlayer: deletePlayer } = usePlayersState();
 
@@ -133,6 +134,155 @@ export default function ListaZawodnikow() {
 
   const duplicates = findDuplicates();
 
+  // Funkcja do sparowania duplikatów
+  const mergeDuplicates = async () => {
+    if (duplicates.length === 0) {
+      alert('Nie znaleziono duplikatów do sparowania.');
+      return;
+    }
+
+    if (!db) {
+      alert('Firebase nie jest zainicjalizowane. Nie można sparować duplikatów.');
+      return;
+    }
+
+    const confirmMerge = window.confirm(
+      `Czy na pewno chcesz sparować ${duplicates.length} grup duplikatów?\n\n` +
+      'Operacja ta:\n' +
+      '• Przeniesie wszystkie akcje z duplikatów do głównego zawodnika\n' +
+      '• Usunie duplikaty z bazy danych\n' +
+      '• Nie może być cofnięta\n\n' +
+      'Czy kontynuować?'
+    );
+
+    if (!confirmMerge) return;
+
+    setIsMergingDuplicates(true);
+    let mergedCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (const { players: duplicatePlayers } of duplicates) {
+        if (duplicatePlayers.length < 2) continue;
+
+        // Sortuj zawodników: przedział starszemu (ma więcej akcji), a jeśli równo to starszemu ID
+        const sortedPlayers = [...duplicatePlayers].sort((a, b) => {
+          if (a.actionsCount !== b.actionsCount) {
+            return b.actionsCount - a.actionsCount; // Więcej akcji = główny
+          }
+          return a.id.localeCompare(b.id); // Starsze ID = główny
+        });
+
+        const mainPlayer = sortedPlayers[0]; // Główny zawodnik (zostanie)
+        const duplicatesToMerge = sortedPlayers.slice(1); // Duplikaty (zostaną usunięte)
+
+        console.log(`Sparowywanie grup duplikatów dla: ${mainPlayer.name}`);
+        console.log(`Główny zawodnik: ${mainPlayer.id} (${mainPlayer.actionsCount} akcji)`);
+        console.log(`Duplikaty: ${duplicatesToMerge.map(p => `${p.id} (${p.actionsCount} akcji)`).join(', ')}`);
+
+        try {
+          // Krok 1: Znajdź wszystkie akcje duplikatów i przenieś je do głównego zawodnika
+          const matchesSnapshot = await getDocs(collection(db, 'matches'));
+          
+          for (const matchDoc of matchesSnapshot.docs) {
+            const matchData = matchDoc.data();
+            let actionsChanged = false;
+            
+            if (matchData.actions_packing && Array.isArray(matchData.actions_packing)) {
+              const updatedActions = matchData.actions_packing.map((action: Action) => {
+                const updatedAction = { ...action };
+                
+                // Sprawdź czy akcja ma senderId lub receiverId duplikatu
+                duplicatesToMerge.forEach(duplicate => {
+                  if (action.senderId === duplicate.id) {
+                    updatedAction.senderId = mainPlayer.id;
+                    updatedAction.senderName = mainPlayer.name;
+                    updatedAction.senderNumber = mainPlayer.number;
+                    actionsChanged = true;
+                    console.log(`Przeniesiono akcję (sender): ${action.id} z ${duplicate.id} na ${mainPlayer.id}`);
+                  }
+                  
+                  if (action.receiverId === duplicate.id) {
+                    updatedAction.receiverId = mainPlayer.id;
+                    updatedAction.receiverName = mainPlayer.name;
+                    updatedAction.receiverNumber = mainPlayer.number;
+                    actionsChanged = true;
+                    console.log(`Przeniesiono akcję (receiver): ${action.id} z ${duplicate.id} na ${mainPlayer.id}`);
+                  }
+                });
+                
+                return updatedAction;
+              });
+
+              // Zapisz zaktualizowane akcje jeśli były zmiany
+              if (actionsChanged) {
+                await updateDoc(doc(db, 'matches', matchDoc.id), {
+                  actions_packing: updatedActions
+                });
+                console.log(`Zaktualizowano akcje w meczu: ${matchDoc.id}`);
+              }
+            }
+          }
+
+          // Krok 2: Połącz zespoły z duplikatów z głównym zawodnikiem
+          const allTeams = new Set(mainPlayer.teams || []);
+          duplicatesToMerge.forEach(duplicate => {
+            if (duplicate.teams) {
+              duplicate.teams.forEach(team => allTeams.add(team));
+            }
+          });
+
+          // Aktualizuj głównego zawodnika z połączonymi zespołami
+          const updatedMainPlayer = {
+            ...mainPlayer,
+            teams: Array.from(allTeams),
+            // Zaktualizuj pozycję jeśli była pusta
+            position: mainPlayer.position || duplicatesToMerge.find(d => d.position)?.position || mainPlayer.position,
+            // Zaktualizuj rok urodzenia jeśli był pusty
+            birthYear: mainPlayer.birthYear || duplicatesToMerge.find(d => d.birthYear)?.birthYear || mainPlayer.birthYear
+          };
+
+          await updateDoc(doc(db, 'players', mainPlayer.id), {
+            teams: updatedMainPlayer.teams,
+            position: updatedMainPlayer.position,
+            birthYear: updatedMainPlayer.birthYear
+          });
+
+          // Krok 3: Usuń duplikaty
+          for (const duplicate of duplicatesToMerge) {
+            await deleteDoc(doc(db, 'players', duplicate.id));
+            console.log(`Usunięto duplikat: ${duplicate.id} (${duplicate.name})`);
+          }
+
+          mergedCount++;
+          console.log(`✅ Pomyślnie sparowano grupę duplikatów dla: ${mainPlayer.name}`);
+
+        } catch (error) {
+          console.error(`❌ Błąd podczas sparowywania duplikatów dla ${mainPlayer.name}:`, error);
+          errorCount++;
+        }
+      }
+
+      // Odśwież dane po zakończeniu
+      window.location.reload(); // Prościej niż manualne odświeżanie stanu
+
+    } catch (error) {
+      console.error('❌ Błąd podczas sparowywania duplikatów:', error);
+      alert('Wystąpił błąd podczas sparowywania duplikatów. Sprawdź konsolę i spróbuj ponownie.');
+    } finally {
+      setIsMergingDuplicates(false);
+    }
+
+    if (mergedCount > 0 || errorCount > 0) {
+      alert(
+        `Sparowanie duplikatów zakończone!\n\n` +
+        `✅ Pomyślnie sparowano: ${mergedCount} grup\n` +
+        `❌ Błędy: ${errorCount} grup\n\n` +
+        `Strona zostanie odświeżona aby pokazać zaktualizowane dane.`
+      );
+    }
+  };
+
   const handleSort = (field: 'name' | 'actions' | 'teams') => {
     if (sortBy === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -196,7 +346,17 @@ export default function ListaZawodnikow() {
       {/* Sekcja duplikatów */}
       {duplicates.length > 0 && (
         <div className={styles.duplicatesSection}>
-          <h3>⚠️ Potencjalne duplikaty (to samo imię i nazwisko)</h3>
+          <div className={styles.duplicatesHeader}>
+            <h3>⚠️ Potencjalne duplikaty (to samo imię i nazwisko)</h3>
+            <button
+              onClick={mergeDuplicates}
+              disabled={isMergingDuplicates}
+              className={styles.mergeDuplicatesButton}
+              title="Sparuj wszystkie duplikaty automatycznie"
+            >
+              {isMergingDuplicates ? 'Sparowywanie...' : `🔄 Sparuj ${duplicates.length} grup duplikatów`}
+            </button>
+          </div>
           {duplicates.map(({ name, players: duplicatePlayers }) => (
             <div key={name} className={styles.duplicateGroup}>
               <h4>Nazwa: "{name.charAt(0).toUpperCase() + name.slice(1)}"</h4>

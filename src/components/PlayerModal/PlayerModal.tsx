@@ -61,17 +61,30 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
     const errors: string[] = [];
     const nameLower = playerData.name.toLowerCase().trim();
 
-    // Sprawdź duplikaty imienia i nazwiska
-    const nameExists = existingPlayers.some(player => {
+    // Sprawdź duplikaty imienia, nazwiska i roku urodzenia
+    const duplicateExists = existingPlayers.some(player => {
       // Pomijamy aktualnie edytowanego zawodnika
       if (editingPlayer && player.id === editingPlayer.id) {
         return false;
       }
-      return player.name.toLowerCase().trim() === nameLower;
+      
+      const sameNameAndSurname = player.name.toLowerCase().trim() === nameLower;
+      const sameBirthYear = player.birthYear === playerData.birthYear;
+      
+      // Duplikat to ten sam zawodnik (imię + nazwisko) z tym samym rokiem urodzenia
+      // Jeśli rok nie jest podany u żadnego z zawodników, to sprawdzamy tylko imię i nazwisko
+      return sameNameAndSurname && (
+        (!player.birthYear && !playerData.birthYear) || 
+        sameBirthYear
+      );
     });
 
-    if (nameExists) {
-      errors.push("Zawodnik o takim imieniu i nazwisku już istnieje!");
+    if (duplicateExists) {
+      if (playerData.birthYear) {
+        errors.push(`Zawodnik o imieniu ${playerData.name} urodzony w ${playerData.birthYear} już istnieje!`);
+      } else {
+        errors.push(`Zawodnik o imieniu ${playerData.name} już istnieje! Jeśli to inny zawodnik, dodaj rok urodzenia.`);
+      }
     }
 
     // Sprawdź duplikaty numeru w tym samym zespole
