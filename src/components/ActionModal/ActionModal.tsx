@@ -121,6 +121,11 @@ const ActionModal: React.FC<ActionModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Debug actionType changes
+  useEffect(() => {
+    console.log("🔄 ActionModal: actionType zmieniony na:", actionType);
+  }, [actionType]);
+
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onMinuteChange(parseInt(e.target.value) || 0);
   };
