@@ -107,16 +107,26 @@ const ActionModal: React.FC<ActionModalProps> = ({
 
   // Filtrowanie zawodników według wybranego meczu (tylko w trybie edycji)
   const filteredPlayers = React.useMemo(() => {
-    if (!isEditMode || !allMatches || !currentSelectedMatch) {
-      return players;
-    }
+    let playersToFilter = isEditMode && allMatches && currentSelectedMatch ? 
+      players.filter(player => {
+        const selectedMatch = allMatches.find(match => match.matchId === currentSelectedMatch);
+        return selectedMatch ? player.teams?.includes(selectedMatch.team) : false;
+      }) : 
+      players;
     
-    const selectedMatch = allMatches.find(match => match.matchId === currentSelectedMatch);
-    if (!selectedMatch) {
-      return players;
-    }
-    
-    return players.filter(player => player.teams?.includes(selectedMatch.team));
+    // Sortowanie alfabetyczne po nazwisku
+    return playersToFilter.sort((a, b) => {
+      // Wyciągnij nazwisko (ostatnie słowo) z pełnej nazwy
+      const getLastName = (fullName: string) => {
+        const words = fullName.trim().split(/\s+/);
+        return words[words.length - 1].toLowerCase();
+      };
+      
+      const lastNameA = getLastName(a.name);
+      const lastNameB = getLastName(b.name);
+      
+      return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
+    });
   }, [isEditMode, allMatches, currentSelectedMatch, players]);
 
   if (!isOpen) return null;

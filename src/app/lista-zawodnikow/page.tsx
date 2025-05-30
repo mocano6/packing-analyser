@@ -78,10 +78,17 @@ export default function ListaZawodnikow() {
     return filtered.sort((a, b) => {
       let aValue, bValue;
       
+      // Funkcja do wyciągnięcia nazwiska (ostatnie słowo) z pełnej nazwy
+      const getLastName = (fullName: string) => {
+        const words = fullName.trim().split(/\s+/);
+        return words[words.length - 1].toLowerCase();
+      };
+      
       switch (sortBy) {
         case 'name':
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
+          // Sortuj po nazwisku zamiast po pełnej nazwie
+          aValue = getLastName(a.name);
+          bValue = getLastName(b.name);
           break;
         case 'actions':
           aValue = a.actionsCount;
@@ -97,8 +104,8 @@ export default function ListaZawodnikow() {
 
       if (typeof aValue === 'string' && typeof bValue === 'string') {
         return sortDirection === 'asc' 
-          ? aValue.localeCompare(bValue)
-          : bValue.localeCompare(aValue);
+          ? aValue.localeCompare(bValue, 'pl', { sensitivity: 'base' })
+          : bValue.localeCompare(aValue, 'pl', { sensitivity: 'base' });
       } else {
         return sortDirection === 'asc' 
           ? (aValue as number) - (bValue as number)
@@ -226,7 +233,7 @@ export default function ListaZawodnikow() {
           <thead>
             <tr>
               <th onClick={() => handleSort('name')} className={styles.sortableHeader}>
-                Imię i nazwisko {getSortIcon('name')}
+                Imię i nazwisko (sortuj wg nazwiska) {getSortIcon('name')}
               </th>
               <th>Numer</th>
               <th>Rok urodzenia</th>
