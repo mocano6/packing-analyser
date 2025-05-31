@@ -264,6 +264,30 @@ export default function ZawodnicyPage() {
     console.log('🚨 Znaleziono duplikaty:', duplicates);
   } else {
     console.log('✅ Brak duplikatów w zespole:', selectedTeam);
+    console.log('Ale sprawdźmy czy są duplikaty w filteredPlayers...');
+    
+    // Sprawdź czy są duplikaty imion w filteredPlayers
+    const playerNames = filteredPlayers.map(p => getPlayerFullName(p));
+    const uniqueNames = [...new Set(playerNames)];
+    console.log('👥 Wszyscy zawodnicy:', playerNames);
+    console.log('🔢 Unikalne imiona:', uniqueNames);
+    console.log('📊 Czy są duplikaty w nazwach?', playerNames.length !== uniqueNames.length);
+    
+    // Znajdź duplikaty ręcznie
+    const nameCounts: { [key: string]: number } = {};
+    playerNames.forEach(name => {
+      nameCounts[name] = (nameCounts[name] || 0) + 1;
+    });
+    
+    const actualDuplicates = Object.entries(nameCounts).filter(([_, count]) => count > 1);
+    console.log('🔍 Ręczne wyszukiwanie duplikatów:', actualDuplicates);
+    
+    // Sprawdź szczegóły dla Oliwier Sujka
+    const oliwierPlayers = filteredPlayers.filter(p => 
+      getPlayerFullName(p).toLowerCase().includes('oliwier') && 
+      getPlayerFullName(p).toLowerCase().includes('sujka')
+    );
+    console.log('👨 Zawodnicy z imieniem Oliwier Sujka:', oliwierPlayers);
   }
 
   // Funkcja do sparowania duplikatów
@@ -567,6 +591,31 @@ export default function ZawodnicyPage() {
           ))}
         </div>
       )}
+
+      {/* Debug info dla duplikatów */}
+      <div style={{ 
+        padding: '10px', 
+        backgroundColor: '#f0f0f0', 
+        margin: '10px 0',
+        borderRadius: '5px',
+        fontSize: '12px',
+        fontFamily: 'monospace'
+      }}>
+        <strong>🐛 DEBUG INFO:</strong><br/>
+        Liczba duplikatów: {duplicates.length}<br/>
+        Czy sekcja duplikatów powinna się wyświetlić: {duplicates.length > 0 ? 'TAK' : 'NIE'}<br/>
+        Liczba zawodników w zespole: {filteredPlayers.length}<br/>
+        Wybrany zespół: {selectedTeam}<br/>
+        {(() => {
+          console.log('🎯 RENDER DEBUG:', { 
+            duplicatesLength: duplicates.length, 
+            shouldShowSection: duplicates.length > 0,
+            playersCount: filteredPlayers.length,
+            selectedTeam 
+          });
+          return '';
+        })()}
+      </div>
 
       <div className={styles.playersPanel}>
         <h2>Statystyki zawodników</h2>
