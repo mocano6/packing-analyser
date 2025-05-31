@@ -28,6 +28,7 @@ import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesMod
 import MatchInfoModal from "@/components/MatchInfoModal/MatchInfoModal";
 import Link from "next/link";
 import ActionModal from "@/components/ActionModal/ActionModal";
+import { sortPlayersByLastName, getPlayerFullName } from "@/utils/playerUtils";
 
 // Rozszerzenie interfejsu Window
 declare global {
@@ -160,18 +161,7 @@ export default function Page() {
     });
     
     // Sortowanie alfabetyczne po nazwisku
-    return teamFiltered.sort((a, b) => {
-      // Wyciągnij nazwisko (ostatnie słowo) z pełnej nazwy
-      const getLastName = (fullName: string) => {
-        const words = fullName.trim().split(/\s+/);
-        return words[words.length - 1].toLowerCase();
-      };
-      
-      const lastNameA = getLastName(a.name);
-      const lastNameB = getLastName(b.name);
-      
-      return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
-    });
+    return sortPlayersByLastName(teamFiltered);
   }, [players, selectedTeam]);
 
   React.useEffect(() => {
