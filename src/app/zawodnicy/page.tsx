@@ -288,6 +288,68 @@ export default function ZawodnicyPage() {
       getPlayerFullName(p).toLowerCase().includes('sujka')
     );
     console.log('👨 Zawodnicy z imieniem Oliwier Sujka:', oliwierPlayers);
+    
+    // NOWE DEBUGGING - sprawdź zawodników w akcjach
+    console.log('\n🎯 DEBUGGING TABELI vs FILTERED PLAYERS:');
+    
+    // Zbierz wszystkich zawodników z akcji (senderów i odbiorców)
+    const playersFromActions = new Set<string>();
+    const playerNamesFromActions = new Map<string, { id: string, name: string }>();
+    
+    filteredActions.forEach(action => {
+      if (action.senderId) {
+        playersFromActions.add(action.senderId);
+        if (action.senderName) {
+          playerNamesFromActions.set(action.senderId, {
+            id: action.senderId,
+            name: action.senderName
+          });
+        }
+      }
+      if (action.receiverId) {
+        playersFromActions.add(action.receiverId);
+        if (action.receiverName) {
+          playerNamesFromActions.set(action.receiverId, {
+            id: action.receiverId,
+            name: action.receiverName
+          });
+        }
+      }
+    });
+    
+    console.log('📊 Zawodnicy w akcjach (unique IDs):', playersFromActions.size);
+    console.log('📊 Zawodnicy w filteredPlayers:', filteredPlayers.length);
+    
+    // Sprawdź Oliwier Sujka w akcjach
+    const oliwierInActions = Array.from(playerNamesFromActions.values()).filter(p => 
+      p.name.toLowerCase().includes('oliwier') && p.name.toLowerCase().includes('sujka')
+    );
+    console.log('👨 Oliwier Sujka w akcjach:', oliwierInActions);
+    
+    // Sprawdź czy wszystkie ID z akcji są w filteredPlayers
+    const playerIdsInFiltered = new Set(filteredPlayers.map(p => p.id));
+    const playersInActionsButNotInFiltered = Array.from(playersFromActions).filter(id => 
+      !playerIdsInFiltered.has(id)
+    );
+    
+    console.log('🚨 Zawodnicy w akcjach ale NIE w filteredPlayers:', playersInActionsButNotInFiltered);
+    playersInActionsButNotInFiltered.forEach(id => {
+      const playerFromAction = playerNamesFromActions.get(id);
+      console.log(`  - ID: ${id}, Nazwa: ${playerFromAction?.name || 'brak'}`);
+    });
+    
+    // Sprawdź duplikaty w nazwach z akcji
+    const nameCountsFromActions: { [key: string]: string[] } = {};
+    Array.from(playerNamesFromActions.values()).forEach(player => {
+      const name = player.name.toLowerCase().trim();
+      if (!nameCountsFromActions[name]) {
+        nameCountsFromActions[name] = [];
+      }
+      nameCountsFromActions[name].push(player.id);
+    });
+    
+    const duplicateNamesInActions = Object.entries(nameCountsFromActions).filter(([_, ids]) => ids.length > 1);
+    console.log('🔥 Duplikaty nazw w akcjach:', duplicateNamesInActions);
   }
 
   // Funkcja do sparowania duplikatów
