@@ -150,24 +150,83 @@ export default function ZawodnicyPage() {
     );
   }, [allActions, selectedMatches]);
 
-  // Znajdź potencjalne duplikaty
+  // Znajdź potencjalne duplikaty - ulepszona wersja
   const findDuplicates = () => {
-    const nameGroups: { [key: string]: Player[] } = {};
+    const duplicatesFound: { name: string; players: Player[] }[] = [];
     
-    filteredPlayers.forEach(player => {
-      const nameKey = getPlayerFullName(player).toLowerCase().trim();
-      if (!nameGroups[nameKey]) {
-        nameGroups[nameKey] = [];
+    // Grupuj zawodników po podobnych imionach/nazwiskach
+    for (let i = 0; i < filteredPlayers.length; i++) {
+      for (let j = i + 1; j < filteredPlayers.length; j++) {
+        const player1 = filteredPlayers[i];
+        const player2 = filteredPlayers[j];
+        
+        let areDuplicates = false;
+        let duplicateName = "";
+        
+        // Sprawdź różne kryteria duplikatów
+        
+        // 1. Identyczne pole name (jeśli istnieje)
+        if (player1.name && player2.name && 
+            player1.name.toLowerCase().trim() === player2.name.toLowerCase().trim()) {
+          areDuplicates = true;
+          duplicateName = player1.name.trim();
+        }
+        
+        // 2. Identyczne firstName + lastName
+        else if (player1.firstName && player1.lastName && 
+                 player2.firstName && player2.lastName &&
+                 player1.firstName.toLowerCase().trim() === player2.firstName.toLowerCase().trim() &&
+                 player1.lastName.toLowerCase().trim() === player2.lastName.toLowerCase().trim()) {
+          areDuplicates = true;
+          duplicateName = `${player1.firstName} ${player1.lastName}`.trim();
+        }
+        
+        // 3. getPlayerFullName zwraca identyczne wartości (i nie są puste)
+        else {
+          const fullName1 = getPlayerFullName(player1).toLowerCase().trim();
+          const fullName2 = getPlayerFullName(player2).toLowerCase().trim();
+          if (fullName1 && fullName2 && fullName1 === fullName2) {
+            areDuplicates = true;
+            duplicateName = getPlayerFullName(player1).trim();
+          }
+        }
+        
+        if (areDuplicates) {
+          // Sprawdź czy ta grupa duplikatów już istnieje
+          let existingGroup = duplicatesFound.find(group => 
+            group.players.some(p => p.id === player1.id || p.id === player2.id)
+          );
+          
+          if (existingGroup) {
+            // Dodaj do istniejącej grupy jeśli nie ma jeszcze tego zawodnika
+            if (!existingGroup.players.some(p => p.id === player1.id)) {
+              existingGroup.players.push(player1);
+            }
+            if (!existingGroup.players.some(p => p.id === player2.id)) {
+              existingGroup.players.push(player2);
+            }
+          } else {
+            // Utwórz nową grupę duplikatów
+            duplicatesFound.push({
+              name: duplicateName,
+              players: [player1, player2]
+            });
+          }
+        }
       }
-      nameGroups[nameKey].push(player);
-    });
-
-    return Object.entries(nameGroups)
-      .filter(([_, players]) => players.length > 1)
-      .map(([name, players]) => ({ name, players }));
+    }
+    
+    return duplicatesFound;
   };
 
   const duplicates = findDuplicates();
+  
+  // Debug log dla duplikatów
+  if (duplicates.length > 0) {
+    console.log('🚨 Znaleziono duplikaty:', duplicates);
+  } else {
+    console.log('✅ Brak duplikatów w zespole:', selectedTeam);
+  }
 
   // Funkcja do sparowania duplikatów
   const mergeDuplicates = async () => {
