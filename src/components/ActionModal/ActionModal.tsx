@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import styles from "./ActionModal.module.css";
 import { Player, Action, TeamInfo } from "@/types";
 import ActionTypeToggle from "../ActionTypeToggle/ActionTypeToggle";
 import { ACTION_BUTTONS } from "../PointsButtons/constants";
 import PlayerCard from "./PlayerCard";
 import { TEAMS } from "@/constants/teams";
+import { sortPlayersByLastName } from '@/utils/playerUtils';
 
 interface ActionModalProps {
   isOpen: boolean;
@@ -115,19 +116,8 @@ const ActionModal: React.FC<ActionModalProps> = ({
       players;
     
     // Sortowanie alfabetyczne po nazwisku
-    return playersToFilter.sort((a, b) => {
-      // Wyciągnij nazwisko (ostatnie słowo) z pełnej nazwy
-      const getLastName = (fullName: string) => {
-        const words = fullName.trim().split(/\s+/);
-        return words[words.length - 1].toLowerCase();
-      };
-      
-      const lastNameA = getLastName(a.name);
-      const lastNameB = getLastName(b.name);
-      
-      return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
-    });
-  }, [isEditMode, allMatches, currentSelectedMatch, players]);
+    return sortPlayersByLastName(playersToFilter);
+  }, [players, isEditMode, allMatches, currentSelectedMatch]);
 
   if (!isOpen) return null;
 

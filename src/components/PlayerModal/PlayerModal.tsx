@@ -29,6 +29,8 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
   existingPlayers = [],
 }) => {
   const [formData, setFormData] = useState<Omit<Player, "id">>({
+    firstName: "",
+    lastName: "",
     name: "",
     number: 1,
     position: "",
@@ -38,7 +40,8 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
   });
 
   const [errors, setErrors] = useState<{
-    name?: string;
+    firstName?: string;
+    lastName?: string;
     number?: string;
     general?: string;
   }>({});
@@ -59,7 +62,8 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
   // Funkcja walidacji duplikatów
   const validateForDuplicates = (playerData: Omit<Player, "id">): string[] => {
     const errors: string[] = [];
-    const nameLower = playerData.name.toLowerCase().trim();
+    const firstNameLower = playerData.firstName.toLowerCase().trim();
+    const lastNameLower = playerData.lastName.toLowerCase().trim();
 
     // Sprawdź duplikaty imienia, nazwiska i roku urodzenia
     const duplicateExists = existingPlayers.some(player => {
@@ -68,7 +72,20 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
         return false;
       }
       
-      const sameNameAndSurname = player.name.toLowerCase().trim() === nameLower;
+      // Sprawdź po firstName i lastName lub po starym name (dla kompatybilności)
+      let sameNameAndSurname = false;
+      
+      if (player.firstName && player.lastName) {
+        // Nowy format z firstName i lastName
+        sameNameAndSurname = 
+          player.firstName.toLowerCase().trim() === firstNameLower &&
+          player.lastName.toLowerCase().trim() === lastNameLower;
+      } else if (player.name) {
+        // Stary format z name - porównaj z połączonym firstName lastName
+        const fullName = `${playerData.firstName} ${playerData.lastName}`.toLowerCase().trim();
+        sameNameAndSurname = player.name.toLowerCase().trim() === fullName;
+      }
+      
       const sameBirthYear = player.birthYear === playerData.birthYear;
       
       // Duplikat to ten sam zawodnik (imię + nazwisko) z tym samym rokiem urodzenia
@@ -80,10 +97,11 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
     });
 
     if (duplicateExists) {
+      const fullName = `${playerData.firstName} ${playerData.lastName}`;
       if (playerData.birthYear) {
-        errors.push(`Zawodnik o imieniu ${playerData.name} urodzony w ${playerData.birthYear} już istnieje!`);
+        errors.push(`Zawodnik o imieniu ${fullName} urodzony w ${playerData.birthYear} już istnieje!`);
       } else {
-        errors.push(`Zawodnik o imieniu ${playerData.name} już istnieje! Jeśli to inny zawodnik, dodaj rok urodzenia.`);
+        errors.push(`Zawodnik o imieniu ${fullName} już istnieje! Jeśli to inny zawodnik, dodaj rok urodzenia.`);
       }
     }
 
@@ -112,8 +130,27 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (editingPlayer) {
+        // Obsługa migracji danych - jeśli są firstName i lastName używaj ich, 
+        // w przeciwnym razie podziel name na firstName i lastName
+        let firstName = editingPlayer.firstName || "";
+        let lastName = editingPlayer.lastName || "";
+        
+        if (!firstName && !lastName && editingPlayer.name) {
+          // Migracja starych danych - podziel name na firstName i lastName
+          const nameParts = editingPlayer.name.trim().split(/\s+/);
+          if (nameParts.length >= 2) {
+            firstName = nameParts[0];
+            lastName = nameParts.slice(1).join(" "); // Wszystko po pierwszym słowie to nazwisko
+          } else if (nameParts.length === 1) {
+            firstName = nameParts[0];
+            lastName = "";
+          }
+        }
+        
         setFormData({
-          name: editingPlayer.name,
+          firstName: firstName,
+          lastName: lastName,
+          name: editingPlayer.name || `${firstName} ${lastName}`.trim(),
           number: editingPlayer.number,
           position: editingPlayer.position || "",
           birthYear: editingPlayer.birthYear,
@@ -122,6 +159,8 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
         });
       } else {
         setFormData({
+          firstName: "",
+          lastName: "",
           name: "",
           number: 1,
           position: "",
@@ -146,10 +185,19 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
       processedValue = value ? parseInt(value) : undefined;
     }
 
-    setFormData((prev) => ({
-      ...prev,
+    const updatedFormData = {
+      ...formData,
       [name]: processedValue,
-    }));
+    };
+
+    // Jeśli zmieniono firstName lub lastName, zaktualizuj też pole name
+    if (name === "firstName" || name === "lastName") {
+      const firstName = name === "firstName" ? processedValue : formData.firstName;
+      const lastName = name === "lastName" ? processedValue : formData.lastName;
+      updatedFormData.name = `${firstName.trim()} ${lastName.trim()}`.trim();
+    }
+
+    setFormData(updatedFormData);
 
     // Czyść błędy związane z tym polem
     if (errors[name as keyof typeof errors]) {
@@ -174,8 +222,12 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
     // Podstawowa walidacja
     const newErrors: typeof errors = {};
     
-    if (!formData.name.trim()) {
-      newErrors.name = "Imię i nazwisko są wymagane";
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = "Imię jest wymagane";
+    }
+    
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = "Nazwisko jest wymagane";
     }
     
     if (formData.number < 1 || formData.number > 99) {
@@ -195,7 +247,13 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
       return;
     }
 
-    onSave(formData);
+    // Ustaw pole name z firstName i lastName dla kompatybilności
+    const playerDataToSave = {
+      ...formData,
+      name: `${formData.firstName.trim()} ${formData.lastName.trim()}`
+    };
+
+    onSave(playerDataToSave);
     onClose();
   };
 
@@ -213,18 +271,34 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
           )}
           
           <div className={styles.formGroup}>
-            <label className={styles.formLabel} htmlFor="name">Imię i nazwisko</label>
+            <label className={styles.formLabel} htmlFor="firstName">Imię</label>
             <input
               type="text"
-              id="name"
-              name="name"
-              value={formData.name}
+              id="firstName"
+              name="firstName"
+              value={formData.firstName}
               onChange={handleChange}
               required
-              className={`${styles.formInput} ${errors.name ? styles.inputError : ''}`}
+              className={`${styles.formInput} ${errors.firstName ? styles.inputError : ''}`}
             />
-            {errors.name && (
-              <div className={styles.fieldError}>{errors.name}</div>
+            {errors.firstName && (
+              <div className={styles.fieldError}>{errors.firstName}</div>
+            )}
+          </div>
+          
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel} htmlFor="lastName">Nazwisko</label>
+            <input
+              type="text"
+              id="lastName"
+              name="lastName"
+              value={formData.lastName}
+              onChange={handleChange}
+              required
+              className={`${styles.formInput} ${errors.lastName ? styles.inputError : ''}`}
+            />
+            {errors.lastName && (
+              <div className={styles.fieldError}>{errors.lastName}</div>
             )}
           </div>
           

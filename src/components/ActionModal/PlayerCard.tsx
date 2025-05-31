@@ -2,6 +2,7 @@
 
 import React, { memo } from "react";
 import { Player } from "@/types";
+import { getPlayerFullName } from "@/utils/playerUtils";
 import styles from "./ActionModal.module.css";
 
 interface PlayerCardProps {
@@ -51,7 +52,7 @@ const PlayerCard: React.FC<PlayerCardProps> = memo(function PlayerCard({
         <div className={styles.number}>{player.number}</div>
 
         <div className={styles.playerInfo}>
-          <div className={styles.name}>{player.name}</div>
+          <div className={styles.name}>{getPlayerFullName(player)}</div>
           <div className={styles.details}>
             {player.position && (
               <span className={styles.position}>{player.position}</span>
