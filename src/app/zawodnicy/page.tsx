@@ -150,105 +150,88 @@ export default function ZawodnicyPage() {
     );
   }, [allActions, selectedMatches]);
 
-  // Znajdź potencjalne duplikaty - ulepszona wersja
+  // Znajdź potencjalne duplikaty - ulepszona wersja dla akcji vs zawodników
   const findDuplicates = () => {
     const duplicatesFound: { name: string; players: Player[] }[] = [];
     
-    console.log('🔍 DEBUGGING DUPLIKATÓW:');
-    console.log('Liczba zawodników w zespole:', filteredPlayers.length);
-    console.log('Zawodnicy w zespole:', filteredPlayers.map(p => ({
-      id: p.id,
-      name: p.name,
-      firstName: p.firstName,
-      lastName: p.lastName,
-      fullName: getPlayerFullName(p)
-    })));
+    console.log('🔍 DEBUGGING DUPLIKATÓW - NOWA WERSJA:');
     
-    // Grupuj zawodników po podobnych imionach/nazwiskach
-    for (let i = 0; i < filteredPlayers.length; i++) {
-      for (let j = i + 1; j < filteredPlayers.length; j++) {
-        const player1 = filteredPlayers[i];
-        const player2 = filteredPlayers[j];
-        
-        console.log(`\n🔄 Porównuję: ${getPlayerFullName(player1)} vs ${getPlayerFullName(player2)}`);
-        
-        let areDuplicates = false;
-        let duplicateName = "";
-        
-        // Sprawdź różne kryteria duplikatów
-        
-        // 1. Identyczne pole name (jeśli istnieje)
-        if (player1.name && player2.name) {
-          const name1 = player1.name.toLowerCase().trim();
-          const name2 = player2.name.toLowerCase().trim();
-          console.log(`  Porównanie name: "${name1}" vs "${name2}"`);
-          if (name1 === name2) {
-            areDuplicates = true;
-            duplicateName = player1.name.trim();
-            console.log(`  ✅ DUPLIKAT przez name: ${duplicateName}`);
-          }
-        }
-        
-        // 2. Identyczne firstName + lastName
-        if (!areDuplicates && player1.firstName && player1.lastName && 
-                 player2.firstName && player2.lastName) {
-          const firstName1 = player1.firstName.toLowerCase().trim();
-          const lastName1 = player1.lastName.toLowerCase().trim();
-          const firstName2 = player2.firstName.toLowerCase().trim();
-          const lastName2 = player2.lastName.toLowerCase().trim();
-          
-          console.log(`  Porównanie firstName+lastName: "${firstName1} ${lastName1}" vs "${firstName2} ${lastName2}"`);
-          
-          if (firstName1 === firstName2 && lastName1 === lastName2) {
-            areDuplicates = true;
-            duplicateName = `${player1.firstName} ${player1.lastName}`.trim();
-            console.log(`  ✅ DUPLIKAT przez firstName+lastName: ${duplicateName}`);
-          }
-        }
-        
-        // 3. getPlayerFullName zwraca identyczne wartości (i nie są puste)
-        if (!areDuplicates) {
-          const fullName1 = getPlayerFullName(player1).toLowerCase().trim();
-          const fullName2 = getPlayerFullName(player2).toLowerCase().trim();
-          console.log(`  Porównanie getPlayerFullName: "${fullName1}" vs "${fullName2}"`);
-          
-          if (fullName1 && fullName2 && fullName1 === fullName2) {
-            areDuplicates = true;
-            duplicateName = getPlayerFullName(player1).trim();
-            console.log(`  ✅ DUPLIKAT przez getPlayerFullName: ${duplicateName}`);
-          }
-        }
-        
-        if (areDuplicates) {
-          console.log(`  🎯 ZNALEZIONO DUPLIKAT: ${duplicateName}`);
-          
-          // Sprawdź czy ta grupa duplikatów już istnieje
-          let existingGroup = duplicatesFound.find(group => 
-            group.players.some(p => p.id === player1.id || p.id === player2.id)
-          );
-          
-          if (existingGroup) {
-            console.log(`  📝 Dodaję do istniejącej grupy`);
-            // Dodaj do istniejącej grupy jeśli nie ma jeszcze tego zawodnika
-            if (!existingGroup.players.some(p => p.id === player1.id)) {
-              existingGroup.players.push(player1);
-            }
-            if (!existingGroup.players.some(p => p.id === player2.id)) {
-              existingGroup.players.push(player2);
-            }
-          } else {
-            console.log(`  📝 Tworzę nową grupę duplikatów`);
-            // Utwórz nową grupę duplikatów
-            duplicatesFound.push({
-              name: duplicateName,
-              players: [player1, player2]
-            });
-          }
-        } else {
-          console.log(`  ❌ Nie są duplikatami`);
-        }
+    // Zbierz wszystkich zawodników z akcji (senderów i odbiorców)
+    const playersFromActions = new Map<string, { id: string, name: string }>();
+    
+    filteredActions.forEach(action => {
+      if (action.senderId && action.senderName) {
+        playersFromActions.set(action.senderId, {
+          id: action.senderId,
+          name: action.senderName
+        });
       }
-    }
+      if (action.receiverId && action.receiverName) {
+        playersFromActions.set(action.receiverId, {
+          id: action.receiverId,
+          name: action.receiverName
+        });
+      }
+    });
+    
+    // Sprawdź duplikaty w nazwach z akcji
+    const nameCountsFromActions: { [key: string]: { id: string, name: string }[] } = {};
+    Array.from(playersFromActions.values()).forEach(player => {
+      const name = player.name.toLowerCase().trim();
+      if (!nameCountsFromActions[name]) {
+        nameCountsFromActions[name] = [];
+      }
+      nameCountsFromActions[name].push(player);
+    });
+    
+    // Znajdź duplikaty w akcjach
+    const duplicateNamesInActions = Object.entries(nameCountsFromActions).filter(([_, players]) => players.length > 1);
+    console.log('🔥 Duplikaty nazw w akcjach:', duplicateNamesInActions);
+    
+    // Dla każdego duplikatu z akcji, sprawdź czy można go sparować
+    duplicateNamesInActions.forEach(([name, actionPlayers]) => {
+      console.log(`\n🎯 Przetwarzam duplikat: ${name}`);
+      
+      const allPlayersForName: Player[] = [];
+      
+      // Dodaj zawodników z filteredPlayers o tej samej nazwie
+      filteredPlayers.forEach(player => {
+        const playerName = getPlayerFullName(player).toLowerCase().trim();
+        if (playerName === name) {
+          allPlayersForName.push(player);
+          console.log(`  ✅ Znaleziono w filteredPlayers: ${player.id} - ${getPlayerFullName(player)}`);
+        }
+      });
+      
+      // Dodaj zawodników z akcji o tej samej nazwie (którzy NIE są w filteredPlayers)
+      actionPlayers.forEach(actionPlayer => {
+        // Sprawdź czy ten ID już jest w filteredPlayers
+        const existsInFiltered = filteredPlayers.some(p => p.id === actionPlayer.id);
+        if (!existsInFiltered) {
+          // Utwórz tymczasowy obiekt Player dla zawodnika z akcji
+          const tempPlayer: Player = {
+            id: actionPlayer.id,
+            firstName: '',
+            lastName: '',
+            name: actionPlayer.name,
+            number: 0,
+            position: 'Nieznana',
+            teams: [], // Nie należy do żadnego zespołu
+          };
+          allPlayersForName.push(tempPlayer);
+          console.log(`  ⚠️ Znaleziono w akcjach (nie w zespole): ${actionPlayer.id} - ${actionPlayer.name}`);
+        }
+      });
+      
+      // Jeśli mamy więcej niż 1 zawodnika o tej nazwie, to są duplikaty
+      if (allPlayersForName.length > 1) {
+        duplicatesFound.push({
+          name: name,
+          players: allPlayersForName
+        });
+        console.log(`  🎯 DUPLIKAT DODANY: ${name} (${allPlayersForName.length} zawodników)`);
+      }
+    });
     
     console.log('\n🏁 WYNIK WYSZUKIWANIA DUPLIKATÓW:');
     console.log('Liczba grup duplikatów:', duplicatesFound.length);
@@ -264,92 +247,6 @@ export default function ZawodnicyPage() {
     console.log('🚨 Znaleziono duplikaty:', duplicates);
   } else {
     console.log('✅ Brak duplikatów w zespole:', selectedTeam);
-    console.log('Ale sprawdźmy czy są duplikaty w filteredPlayers...');
-    
-    // Sprawdź czy są duplikaty imion w filteredPlayers
-    const playerNames = filteredPlayers.map(p => getPlayerFullName(p));
-    const uniqueNames = [...new Set(playerNames)];
-    console.log('👥 Wszyscy zawodnicy:', playerNames);
-    console.log('🔢 Unikalne imiona:', uniqueNames);
-    console.log('📊 Czy są duplikaty w nazwach?', playerNames.length !== uniqueNames.length);
-    
-    // Znajdź duplikaty ręcznie
-    const nameCounts: { [key: string]: number } = {};
-    playerNames.forEach(name => {
-      nameCounts[name] = (nameCounts[name] || 0) + 1;
-    });
-    
-    const actualDuplicates = Object.entries(nameCounts).filter(([_, count]) => count > 1);
-    console.log('🔍 Ręczne wyszukiwanie duplikatów:', actualDuplicates);
-    
-    // Sprawdź szczegóły dla Oliwier Sujka
-    const oliwierPlayers = filteredPlayers.filter(p => 
-      getPlayerFullName(p).toLowerCase().includes('oliwier') && 
-      getPlayerFullName(p).toLowerCase().includes('sujka')
-    );
-    console.log('👨 Zawodnicy z imieniem Oliwier Sujka:', oliwierPlayers);
-    
-    // NOWE DEBUGGING - sprawdź zawodników w akcjach
-    console.log('\n🎯 DEBUGGING TABELI vs FILTERED PLAYERS:');
-    
-    // Zbierz wszystkich zawodników z akcji (senderów i odbiorców)
-    const playersFromActions = new Set<string>();
-    const playerNamesFromActions = new Map<string, { id: string, name: string }>();
-    
-    filteredActions.forEach(action => {
-      if (action.senderId) {
-        playersFromActions.add(action.senderId);
-        if (action.senderName) {
-          playerNamesFromActions.set(action.senderId, {
-            id: action.senderId,
-            name: action.senderName
-          });
-        }
-      }
-      if (action.receiverId) {
-        playersFromActions.add(action.receiverId);
-        if (action.receiverName) {
-          playerNamesFromActions.set(action.receiverId, {
-            id: action.receiverId,
-            name: action.receiverName
-          });
-        }
-      }
-    });
-    
-    console.log('📊 Zawodnicy w akcjach (unique IDs):', playersFromActions.size);
-    console.log('📊 Zawodnicy w filteredPlayers:', filteredPlayers.length);
-    
-    // Sprawdź Oliwier Sujka w akcjach
-    const oliwierInActions = Array.from(playerNamesFromActions.values()).filter(p => 
-      p.name.toLowerCase().includes('oliwier') && p.name.toLowerCase().includes('sujka')
-    );
-    console.log('👨 Oliwier Sujka w akcjach:', oliwierInActions);
-    
-    // Sprawdź czy wszystkie ID z akcji są w filteredPlayers
-    const playerIdsInFiltered = new Set(filteredPlayers.map(p => p.id));
-    const playersInActionsButNotInFiltered = Array.from(playersFromActions).filter(id => 
-      !playerIdsInFiltered.has(id)
-    );
-    
-    console.log('🚨 Zawodnicy w akcjach ale NIE w filteredPlayers:', playersInActionsButNotInFiltered);
-    playersInActionsButNotInFiltered.forEach(id => {
-      const playerFromAction = playerNamesFromActions.get(id);
-      console.log(`  - ID: ${id}, Nazwa: ${playerFromAction?.name || 'brak'}`);
-    });
-    
-    // Sprawdź duplikaty w nazwach z akcji
-    const nameCountsFromActions: { [key: string]: string[] } = {};
-    Array.from(playerNamesFromActions.values()).forEach(player => {
-      const name = player.name.toLowerCase().trim();
-      if (!nameCountsFromActions[name]) {
-        nameCountsFromActions[name] = [];
-      }
-      nameCountsFromActions[name].push(player.id);
-    });
-    
-    const duplicateNamesInActions = Object.entries(nameCountsFromActions).filter(([_, ids]) => ids.length > 1);
-    console.log('🔥 Duplikaty nazw w akcjach:', duplicateNamesInActions);
   }
 
   // Funkcja do sparowania duplikatów
