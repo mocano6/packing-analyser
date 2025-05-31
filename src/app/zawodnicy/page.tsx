@@ -154,8 +154,6 @@ export default function ZawodnicyPage() {
   const findDuplicates = () => {
     const duplicatesFound: { name: string; players: Player[] }[] = [];
     
-    console.log('🔍 DEBUGGING DUPLIKATÓW - NOWA WERSJA:');
-    
     // Zbierz wszystkich zawodników z akcji (senderów i odbiorców)
     const playersFromActions = new Map<string, { id: string, name: string }>();
     
@@ -186,12 +184,9 @@ export default function ZawodnicyPage() {
     
     // Znajdź duplikaty w akcjach
     const duplicateNamesInActions = Object.entries(nameCountsFromActions).filter(([_, players]) => players.length > 1);
-    console.log('🔥 Duplikaty nazw w akcjach:', duplicateNamesInActions);
     
     // Dla każdego duplikatu z akcji, sprawdź czy można go sparować
     duplicateNamesInActions.forEach(([name, actionPlayers]) => {
-      console.log(`\n🎯 Przetwarzam duplikat: ${name}`);
-      
       const allPlayersForName: Player[] = [];
       
       // Dodaj zawodników z filteredPlayers o tej samej nazwie
@@ -199,7 +194,6 @@ export default function ZawodnicyPage() {
         const playerName = getPlayerFullName(player).toLowerCase().trim();
         if (playerName === name) {
           allPlayersForName.push(player);
-          console.log(`  ✅ Znaleziono w filteredPlayers: ${player.id} - ${getPlayerFullName(player)}`);
         }
       });
       
@@ -219,7 +213,6 @@ export default function ZawodnicyPage() {
             teams: [], // Nie należy do żadnego zespołu
           };
           allPlayersForName.push(tempPlayer);
-          console.log(`  ⚠️ Znaleziono w akcjach (nie w zespole): ${actionPlayer.id} - ${actionPlayer.name}`);
         }
       });
       
@@ -229,26 +222,14 @@ export default function ZawodnicyPage() {
           name: name,
           players: allPlayersForName
         });
-        console.log(`  🎯 DUPLIKAT DODANY: ${name} (${allPlayersForName.length} zawodników)`);
       }
     });
-    
-    console.log('\n🏁 WYNIK WYSZUKIWANIA DUPLIKATÓW:');
-    console.log('Liczba grup duplikatów:', duplicatesFound.length);
-    console.log('Duplikaty:', duplicatesFound);
     
     return duplicatesFound;
   };
 
   const duplicates = findDuplicates();
   
-  // Debug log dla duplikatów
-  if (duplicates.length > 0) {
-    console.log('🚨 Znaleziono duplikaty:', duplicates);
-  } else {
-    console.log('✅ Brak duplikatów w zespole:', selectedTeam);
-  }
-
   // Funkcja do sparowania duplikatów
   const mergeDuplicates = async () => {
     if (duplicates.length === 0) {
@@ -298,8 +279,6 @@ export default function ZawodnicyPage() {
         const mainPlayer = sortedPlayers[0]; // Główny zawodnik (zostanie)
         const duplicatesToMerge = sortedPlayers.slice(1); // Duplikaty (zostaną usunięte)
 
-        console.log(`Sparowywanie grup duplikatów dla: ${getPlayerFullName(mainPlayer)}`);
-
         try {
           // Krok 1: Znajdź wszystkie akcje duplikatów i przenieś je do głównego zawodnika
           const matchesSnapshot = await getDocs(collection(db, 'matches'));
@@ -344,23 +323,19 @@ export default function ZawodnicyPage() {
           // Krok 2: Usuń duplikaty z kolekcji players
           for (const duplicate of duplicatesToMerge) {
             await deleteDoc(doc(db, 'players', duplicate.id));
-            console.log(`Usunięto duplikat: ${duplicate.id} (${getPlayerFullName(duplicate)})`);
           }
 
           mergedCount++;
-          console.log(`✅ Pomyślnie sparowano grupę duplikatów dla: ${getPlayerFullName(mainPlayer)}`);
 
         } catch (error) {
-          console.error(`❌ Błąd podczas sparowywania duplikatów dla ${getPlayerFullName(mainPlayer)}:`, error);
           errorCount++;
         }
       }
 
       // Odśwież dane po zakończeniu
-      window.location.reload(); // Prościej niż manualne odświeżanie stanu
+      window.location.reload();
 
     } catch (error) {
-      console.error('❌ Błąd podczas sparowywania duplikatów:', error);
       alert('Wystąpił błąd podczas sparowywania duplikatów. Sprawdź konsolę i spróbuj ponownie.');
     } finally {
       setIsMergingDuplicates(false);
@@ -551,31 +526,6 @@ export default function ZawodnicyPage() {
         </div>
       )}
 
-      {/* Debug info dla duplikatów */}
-      <div style={{ 
-        padding: '10px', 
-        backgroundColor: '#f0f0f0', 
-        margin: '10px 0',
-        borderRadius: '5px',
-        fontSize: '12px',
-        fontFamily: 'monospace'
-      }}>
-        <strong>🐛 DEBUG INFO:</strong><br/>
-        Liczba duplikatów: {duplicates.length}<br/>
-        Czy sekcja duplikatów powinna się wyświetlić: {duplicates.length > 0 ? 'TAK' : 'NIE'}<br/>
-        Liczba zawodników w zespole: {filteredPlayers.length}<br/>
-        Wybrany zespół: {selectedTeam}<br/>
-        {(() => {
-          console.log('🎯 RENDER DEBUG:', { 
-            duplicatesLength: duplicates.length, 
-            shouldShowSection: duplicates.length > 0,
-            playersCount: filteredPlayers.length,
-            selectedTeam 
-          });
-          return '';
-        })()}
-      </div>
-
       <div className={styles.playersPanel}>
         <h2>Statystyki zawodników</h2>
         {isLoadingActions ? (
@@ -614,4 +564,4 @@ export default function ZawodnicyPage() {
       />
     </div>
   );
-} 
+}
