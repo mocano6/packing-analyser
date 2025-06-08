@@ -3,14 +3,8 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { 
   getFirestore, 
-  connectFirestoreEmulator,
-  enableMultiTabIndexedDbPersistence,
-  CACHE_SIZE_UNLIMITED,
   enableNetwork,
   disableNetwork,
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
   Firestore
 } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
@@ -35,29 +29,12 @@ if (typeof window !== 'undefined') {
   // Inicjalizacja Firebase tylko po stronie klienta
   app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
   
-  // Nowa konfiguracja Firestore - bezpośrednio w trybie offline z lokalną pamięcią podręczną
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager()
-    })
-  });
+  // Uproszę konfigurację Firestore - używam standardowej inicjalizacji
+  db = getFirestore(app);
 
   // Inicjalizacja auth i storage
   auth = getAuth(app);
   storage = getStorage(app);
-
-  // Włączamy sieć Firestore przy inicjalizacji
-  localStorage.removeItem('firestore_offline_mode');
-  
-  if (db) {
-    enableNetwork(db)
-      .then(() => {
-        console.log('🌐 Sieć Firestore włączona przy inicjalizacji');
-      })
-      .catch(err => {
-        console.error('❌ Błąd przy włączaniu sieci Firestore:', err);
-      });
-  }
 }
 
 // Funkcja do wymuszenia trybu offline - użyta w komponentach

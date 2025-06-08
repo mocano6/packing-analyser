@@ -1,12 +1,13 @@
 // src/hooks/usePlayersState.ts
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Player } from "../types";
 import { db } from "../lib/firebase";
+import { getPlayerFullName } from '@/utils/playerUtils';
 import { 
   collection, getDocs, addDoc, updateDoc, 
-  deleteDoc, doc, query, where, writeBatch, setDoc, getDoc 
+  deleteDoc, doc, query, where, writeBatch, getDoc, setDoc, getDocsFromServer, onSnapshot
 } from "firebase/firestore";
 
 // Helper do generowania ID (alternatywa dla crypto.randomUUID())
@@ -22,113 +23,151 @@ export function usePlayersState() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+  const [editingPlayerData, setEditingPlayerData] = useState<Player | null>(null);
+  const [isRefetching, setIsRefetching] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Ref do śledzenia aktualnego stanu (bez closure)
+  const playersRef = useRef<Player[]>([]);
 
   // Pobierz zawodników z Firebase podczas inicjalizacji
   useEffect(() => {
     const fetchPlayers = async () => {
       try {
         setIsLoading(true);
-        console.log('🔍 Pobieranie zawodników z Firebase...');
         
         // Sprawdź czy Firebase jest dostępne
         if (!db) {
           console.warn('⚠️ Firebase nie jest zainicjalizowane - używam localStorage');
-          // Sprawdź localStorage jako fallback
           if (typeof window !== "undefined") {
             try {
               const savedPlayers = localStorage.getItem("players");
               if (savedPlayers) {
                 const localPlayers = JSON.parse(savedPlayers) as Player[];
-                console.log('📦 Załadowano zawodników z localStorage:', localPlayers.length);
                 setPlayers(localPlayers);
               } else {
-                console.log('📭 Brak zawodników w localStorage');
                 setPlayers([]);
               }
             } catch (error) {
-              console.error("❌ Błąd odczytu z localStorage:", error);
+              console.error("❌ Błąd odczytu localStorage:", error);
               setPlayers([]);
             }
           }
           return;
         }
         
+        // Firebase jest dostępne - używaj TYLKO Firebase
+        // Wyczyść localStorage żeby uniknąć konfliktów z starymi danymi
+        if (typeof window !== "undefined") {
+          const oldData = localStorage.getItem("players");
+          if (oldData) {
+            localStorage.removeItem("players");
+          }
+        }
+        
         const playersCollection = collection(db, "players");
         const playersSnapshot = await getDocs(playersCollection);
         
         if (!playersSnapshot.empty) {
-          const playersList = playersSnapshot.docs.map(doc => ({
+                  const playersList = playersSnapshot.docs.map(doc => {
+          const data = doc.data();
+          const player = {
             id: doc.id,
-            ...doc.data()
-          })) as Player[];
+            ...data
+          };
           
-          console.log('✅ Zawodnicy pobrani z Firebase:', playersList.length);
-          setPlayers(playersList);
-        } else {
-          console.log('📋 Brak zawodników w Firebase - sprawdzam localStorage');
+
           
-          // Sprawdź dane w localStorage jako fallback
-          if (typeof window !== "undefined") {
-            try {
-              const savedPlayers = localStorage.getItem("players");
-              if (savedPlayers) {
-                const localPlayers = JSON.parse(savedPlayers) as Player[];
-                console.log('📦 Znaleziono zawodników w localStorage:', localPlayers.length);
-                setPlayers(localPlayers);
-                
-                // Opcjonalnie zapisz dane z localStorage do Firebase
-                if (localPlayers.length > 0 && db) {
-                  console.log('⬆️ Synchronizuję zawodników z localStorage do Firebase...');
-                  const batch = writeBatch(db);
-                  
-                  localPlayers.forEach(player => {
-                    const playerRef = doc(collection(db!, "players"));
-                    batch.set(playerRef, {
-                      name: player.name,
-                      number: player.number,
-                      position: player.position || "",
-                      birthYear: player.birthYear,
-                      imageUrl: player.imageUrl || "",
-                      teams: player.teams || []
-                    });
-                  });
-                  
-                  await batch.commit();
-                  console.log('✅ Zawodnicy z localStorage zapisani do Firebase');
-                  
-                  // Odśwież dane z Firebase po synchronizacji
-                  const updatedSnapshot = await getDocs(playersCollection);
-                  const updatedPlayersList = updatedSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                  })) as Player[];
-                  setPlayers(updatedPlayersList);
-                }
-              } else {
-                console.log('📭 Brak zawodników zarówno w Firebase jak i localStorage');
-                setPlayers([]);
-              }
-            } catch (error) {
-              console.error("❌ Błąd odczytu z localStorage:", error);
-              setPlayers([]);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('❌ Błąd pobierania zawodników z Firebase:', error);
+          return player;
+        }) as Player[];
+          
+
+          
+
         
-        // Sprawdź localStorage jako fallback przy błędzie Firebase
+        // Wykryj i usuń duplikaty w Firebase przed normalizacją
+        const playersById = new Map<string, Player>();
+        const duplicates: { existing: Player; duplicate: Player }[] = [];
+        
+        playersList.forEach(player => {
+          if (playersById.has(player.id)) {
+            const existing = playersById.get(player.id);
+            if (existing) {
+              duplicates.push({ existing: existing, duplicate: player });
+            }
+          } else {
+            playersById.set(player.id, player);
+          }
+        });
+        
+        if (duplicates.length > 0) {
+          // Dla każdego duplikatu, zachowaj najnowszą wersję (z więcej danymi)
+          duplicates.forEach(({existing, duplicate}) => {
+            const existingTeamsCount = Array.isArray(existing.teams) ? existing.teams.length : 0;
+            const duplicateTeamsCount = Array.isArray(duplicate.teams) ? duplicate.teams.length : 0;
+            
+            // Wybierz wersję z większą liczbą zespołów lub LW pozycją
+            const shouldKeepDuplicate = 
+              duplicateTeamsCount > existingTeamsCount || 
+              (duplicate.position === 'LW' && existing.position === 'LS');
+              
+            if (shouldKeepDuplicate) {
+              playersById.set(duplicate.id, duplicate);
+            }
+          });
+        }
+        
+        // Konwertuj z powrotem na tablicę (bez duplikatów)
+        const cleanedPlayersList = Array.from(playersById.values());
+
+        // Normalizuj dane i usuń duplikaty
+        const uniqueMap = new Map();
+        cleanedPlayersList.forEach(player => {
+          // Napraw format teams - upewnij się że teams to zawsze tablica
+          let normalizedPlayer = { ...player };
+          
+          if (typeof normalizedPlayer.teams === 'string') {
+            // Jeśli teams to string, zamień na tablicę
+            normalizedPlayer.teams = [normalizedPlayer.teams];
+          } else if (!Array.isArray(normalizedPlayer.teams)) {
+            // Jeśli teams to null/undefined, ustaw pustą tablicę
+            normalizedPlayer.teams = [];
+          }
+          
+          uniqueMap.set(player.id, normalizedPlayer); // Ostatni wpis z tym ID zostanie zachowany
+        });
+        
+        const cleanPlayers = Array.from(uniqueMap.values());
+        
+        // Zastąp cały stan (nie dodawaj do istniejącego)
+        setPlayers(cleanPlayers);
+        playersRef.current = cleanPlayers; // Aktualizuj ref
+          
+        // Zapisz do localStorage jako backup
+        if (typeof window !== "undefined") {
+          localStorage.setItem("players", JSON.stringify(cleanPlayers));
+        }
+          
+        } else {
+          setPlayers([]);
+        }
+        
+      } catch (error) {
+        console.error('Błąd pobierania z Firebase, używam localStorage jako fallback:', error);
+        
+        // TYLKO W PRZYPADKU BŁĘDU Firebase - użyj localStorage
         if (typeof window !== "undefined") {
           try {
             const savedPlayers = localStorage.getItem("players");
             if (savedPlayers) {
               const localPlayers = JSON.parse(savedPlayers) as Player[];
-              console.log('🆘 Używam danych z localStorage jako fallback:', localPlayers.length);
               setPlayers(localPlayers);
+            } else {
+              setPlayers([]);
             }
           } catch (localError) {
-            console.error("❌ Błąd fallback z localStorage:", localError);
+            console.error("Błąd odczytu localStorage:", localError);
+            setPlayers([]);
           }
         }
       } finally {
@@ -139,17 +178,137 @@ export function usePlayersState() {
     fetchPlayers();
   }, []);
 
-  // Backup do localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined" && players.length > 0) {
+  // Funkcja do ponownego pobrania danych z Firebase (z wymuszeniem odczytu z serwera)
+  const refetchPlayers = useCallback(async (forceServerFetch = false) => {
+    if (!db) return;
+    
+    // Zabezpieczenie przed wielokrotnym wywołaniem
+    if (isRefetching) {
+      return;
+    }
+    
+    try {
+      setIsRefetching(true);
+      
+      // Wyczyść localStorage przed refetch żeby nie było konfliktów
+      if (typeof window !== "undefined") {
+        const oldLocalData = localStorage.getItem("players");
+        if (oldLocalData) {
+          localStorage.removeItem("players");
+        }
+      }
+      
+      const playersCollection = collection(db, "players");
+      // Jeśli wymuszamy, użyj getDocsFromServer zamiast getDocs (pomija cache)
+      const playersSnapshot = forceServerFetch 
+        ? await getDocsFromServer(playersCollection)
+        : await getDocs(playersCollection);
+      
+      if (!playersSnapshot.empty) {
+        const playersList = playersSnapshot.docs.map(doc => {
+          const data = doc.data();
+          const player = {
+            id: doc.id,
+            ...data
+          };
+          
+          return player;
+        }) as Player[];
+        
+
+        
+        // Wykryj i usuń duplikaty w Firebase przed normalizacją
+        const playersById = new Map<string, Player>();
+        const duplicates: { existing: Player; duplicate: Player }[] = [];
+        
+        playersList.forEach(player => {
+          if (playersById.has(player.id)) {
+            const existing = playersById.get(player.id);
+            if (existing) {
+              duplicates.push({ existing: existing, duplicate: player });
+            }
+          } else {
+            playersById.set(player.id, player);
+          }
+        });
+        
+        if (duplicates.length > 0) {
+          // Dla każdego duplikatu, zachowaj najnowszą wersję (z więcej danymi)
+          duplicates.forEach(({existing, duplicate}) => {
+            const existingTeamsCount = Array.isArray(existing.teams) ? existing.teams.length : 0;
+            const duplicateTeamsCount = Array.isArray(duplicate.teams) ? duplicate.teams.length : 0;
+            
+            // Wybierz wersję z większą liczbą zespołów lub LW pozycją
+            const shouldKeepDuplicate = 
+              duplicateTeamsCount > existingTeamsCount || 
+              (duplicate.position === 'LW' && existing.position === 'LS');
+              
+            if (shouldKeepDuplicate) {
+              playersById.set(duplicate.id, duplicate);
+            }
+          });
+        }
+        
+        // Konwertuj z powrotem na tablicę (bez duplikatów)
+        const cleanedPlayersList = Array.from(playersById.values());
+        
+        // Normalizuj dane i usuń duplikaty - IDENTYCZNE z fetchPlayers
+        const uniqueMap = new Map();
+        cleanedPlayersList.forEach(player => {
+          // Napraw format teams - upewnij się że teams to zawsze tablica
+          let normalizedPlayer = { ...player };
+          
+          if (typeof normalizedPlayer.teams === 'string') {
+            // Jeśli teams to string, zamień na tablicę
+            normalizedPlayer.teams = [normalizedPlayer.teams];
+          } else if (!Array.isArray(normalizedPlayer.teams)) {
+            // Jeśli teams to null/undefined, ustaw pustą tablicę
+            normalizedPlayer.teams = [];
+          }
+          
+          uniqueMap.set(player.id, normalizedPlayer);
+        });
+        
+        const cleanPlayers = Array.from(uniqueMap.values());
+        
+        // Wyczyść localStorage przed ustawieniem nowego stanu
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("players");
+        }
+        
+        // Zastąp cały stan danymi odświeżonymi
+        setPlayers(cleanPlayers);
+        playersRef.current = cleanPlayers; // Aktualizuj ref
+        
+        // Zapisz nowe dane do localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem("players", JSON.stringify(cleanPlayers));
+        }
+      } else {
+        console.log('📭 Brak zawodników w Firebase po odświeżeniu');
+        setPlayers([]);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("players");
+        }
+      }
+    } catch (error) {
+      console.error('❌ Błąd odświeżania danych:', error);
+    } finally {
+      setIsRefetching(false);
+    }
+  }, [isRefetching]);
+
+  // Backup do localStorage tylko po zapisie (nie po każdej zmianie stanu)
+  const saveToLocalStorage = useCallback((playersToSave: Player[]) => {
+    if (typeof window !== "undefined" && playersToSave.length > 0) {
       try {
-        localStorage.setItem("players", JSON.stringify(players));
-        console.log('💾 Zawodnicy zapisani do localStorage');
+        localStorage.setItem("players", JSON.stringify(playersToSave));
+        console.log('💾 Zapisano do localStorage jako backup');
       } catch (error) {
         console.error("❌ Błąd zapisu do localStorage:", error);
       }
     }
-  }, [players]);
+  }, []);
 
   // Usuwanie zawodnika
   const handleDeletePlayer = useCallback(async (playerId: string) => {
@@ -157,90 +316,66 @@ export function usePlayersState() {
     
     // Znajdź zawodnika w lokalnym stanie
     const playerToDelete = players.find(p => p.id === playerId);
-    console.log('👤 Zawodnik do usunięcia:', playerToDelete?.name || 'Nieznany');
+    console.log('👤 Zawodnik do usunięcia:', playerToDelete ? getPlayerFullName(playerToDelete) : 'Nieznany');
     
-    if (
-      typeof window !== "undefined" &&
-      window.confirm(`Czy na pewno chcesz usunąć zawodnika ${playerToDelete?.name || playerId}?`)
-    ) {
-      try {
-        setIsLoading(true);
-        console.log('⏳ Usuwanie zawodnika z Firebase...');
-        
-        // Sprawdź czy Firebase jest dostępne
-        if (!db) {
-          throw new Error("Firebase nie jest zainicjalizowane - dane zapisywane tylko lokalnie");
-        }
-        
-        // Dodatkowe logowanie stanu Firebase
-        console.log('🔗 Stan połączenia Firebase:', {
-          dbAvailable: !!db,
-          windowDefined: typeof window !== 'undefined',
-          playersInState: players.length
-        });
-        
-        // Usuwanie z Firebase
-        await deleteDoc(doc(db, "players", playerId));
-        console.log('✅ Zawodnik usunięty z Firebase');
-        
-        // Aktualizacja lokalnego stanu
-        setPlayers((prev) => {
-          const updated = prev.filter((p) => p.id !== playerId);
-          console.log('🔄 Zaktualizowano lokalny stan:', {
-            bylo: prev.length,
-            jest: updated.length,
-            usunieto: prev.length - updated.length
-          });
-          return updated;
-        });
-        
-        console.log('✅ Zawodnik usunięty pomyślnie');
-        return true;
-      } catch (error) {
-        console.error('❌ Błąd usuwania zawodnika:', error);
-        console.error('🔍 Szczegóły błędu:', {
-          name: error instanceof Error ? error.name : 'Unknown',
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined
-        });
-        
-        // Sprawdź typ błędu i pokaż odpowiedni komunikat
-        let errorMessage = 'Wystąpił błąd podczas usuwania zawodnika.';
-        if (error instanceof Error) {
-          if (error.message.includes('offline') || error.message.includes('network')) {
-            errorMessage = 'Brak połączenia z internetem. Spróbuj ponownie później.';
-          } else if (error.message.includes('permission') || error.message.includes('Missing or insufficient permissions')) {
-            errorMessage = 'Brak uprawnień do usuwania zawodników. Sprawdź konfigurację Firebase.';
-          } else if (error.message.includes('zainicjalizowane')) {
-            errorMessage = 'Problem z inicjalizacją bazy danych. Odśwież stronę.';
-          } else {
-            errorMessage = `Błąd: ${error.message}`;
-          }
-        }
-        
-        alert(errorMessage + ' Spróbuj ponownie.');
-        return false;
-      } finally {
-        setIsLoading(false);
+    // USUNIĘTO KONFIRMACJĘ - będzie obsługiwana w komponencie
+    try {
+      setIsLoading(true);
+      console.log('⏳ Usuwanie zawodnika z Firebase...');
+      
+      // Sprawdź czy Firebase jest dostępne
+      if (!db) {
+        throw new Error("Firebase nie jest zainicjalizowane - dane zapisywane tylko lokalnie");
       }
+      
+      // Usuwanie z Firebase
+      await deleteDoc(doc(db, "players", playerId));
+      
+      // Aktualizacja lokalnego stanu
+      setPlayers((prev) => prev.filter((p) => p.id !== playerId));
+      return true;
+    } catch (error) {
+      console.error('Błąd usuwania zawodnika:', error);
+      
+      // Sprawdź typ błędu i pokaż odpowiedni komunikat
+      let errorMessage = 'Wystąpił błąd podczas usuwania zawodnika.';
+      if (error instanceof Error) {
+        if (error.message.includes('offline') || error.message.includes('network')) {
+          errorMessage = 'Brak połączenia z internetem. Spróbuj ponownie później.';
+        } else if (error.message.includes('permission') || error.message.includes('Missing or insufficient permissions')) {
+          errorMessage = 'Brak uprawnień do usuwania zawodników. Sprawdź konfigurację Firebase.';
+        } else if (error.message.includes('zainicjalizowane')) {
+          errorMessage = 'Problem z inicjalizacją bazy danych. Odśwież stronę.';
+        } else {
+          errorMessage = `Błąd: ${error.message}`;
+        }
+      }
+      
+      alert(errorMessage + ' Spróbuj ponownie.');
+      return false;
+    } finally {
+      setIsLoading(false);
     }
-    
-    console.log('🚫 Usuwanie anulowane przez użytkownika');
-    return false;
   }, [players]);
+
+  // Stan zabezpieczający przed wielokrotnym wywołaniem
+  const [isSaving, setIsSaving] = useState(false);
 
   // Dodawanie/edycja zawodnika
   const handleSavePlayer = useCallback(
     async (playerData: Omit<Player, "id">) => {
-      console.log('💾 Próba zapisania zawodnika:', playerData);
-      console.log('🔧 Tryb edycji:', editingPlayerId ? `Edycja ID: ${editingPlayerId}` : 'Nowy zawodnik');
+      // Zabezpieczenie przed wielokrotnym wywołaniem
+      if (isSaving) {
+        return;
+      }
       
       try {
+        setIsSaving(true);
         setIsLoading(true);
         
         // Sprawdź czy Firebase jest dostępne
         if (!db) {
-          throw new Error("Firebase nie jest zainicjalizowane - dane zapisywane tylko lokalnie");
+          throw new Error("Firebase nie jest zainicjalizowane");
         }
         
         // Walidacja danych
@@ -248,78 +383,54 @@ export function usePlayersState() {
           throw new Error("Imię i nazwisko są wymagane");
         }
         
-        // Dodatkowe logowanie stanu Firebase
-        console.log('🔗 Stan połączenia Firebase:', {
-          dbAvailable: !!db,
-          windowDefined: typeof window !== 'undefined'
-        });
+        const isEditing = editingPlayerId !== null && editingPlayerId !== undefined;
         
-        if (editingPlayerId) {
-          console.log('✏️ Aktualizacja istniejącego zawodnika:', editingPlayerId);
-          
-          // Aktualizacja istniejącego zawodnika
+        if (isEditing) {
+          // EDYCJA - sprawdź czy dokument istnieje, jeśli nie - utwórz go
           const playerRef = doc(db, "players", editingPlayerId);
           
-          // Przygotuj dane do aktualizacji (usuń undefined values)
+          // Sprawdź czy dokument istnieje
+          const playerDoc = await getDoc(playerRef);
+          
+          // Przygotuj dane do zapisu (usuń undefined values)
           const updateData = Object.fromEntries(
             Object.entries(playerData).filter(([_, value]) => value !== undefined)
           );
           
-          console.log('📝 Dane do aktualizacji:', updateData);
+          if (playerDoc.exists()) {
+            // Dokument istnieje - aktualizuj go
+            await updateDoc(playerRef, updateData);
+          } else {
+            // Dokument nie istnieje - utwórz go
+            await setDoc(playerRef, updateData);
+          }
           
-          await updateDoc(playerRef, updateData);
-          console.log('✅ Zawodnik zaktualizowany w Firebase');
-          
-          // Aktualizacja lokalnego stanu
-          setPlayers((prev) => {
-            const updated = prev.map((player) =>
-              player.id === editingPlayerId
-                ? { ...player, ...playerData, id: editingPlayerId }
-                : player
-            );
-            console.log('🔄 Zaktualizowano lokalny stan zawodnika, łącznie zawodników:', updated.length);
-            return updated;
-          });
         } else {
-          console.log('➕ Dodawanie nowego zawodnika');
-          
-          // Przygotuj dane do dodania (usuń undefined values)
+          // NOWY ZAWODNIK - dodaj nowego
           const addData = Object.fromEntries(
             Object.entries(playerData).filter(([_, value]) => value !== undefined)
           );
           
-          console.log('📝 Dane do dodania:', addData);
-          
-          // Dodawanie nowego zawodnika
+          // Dodaj do Firebase
           const newPlayerRef = await addDoc(collection(db, "players"), addData);
-          console.log('✅ Nowy zawodnik dodany do Firebase z ID:', newPlayerRef.id);
-          
-          // Aktualizacja lokalnego stanu
-          const newPlayer: Player = {
-            id: newPlayerRef.id,
-            ...playerData,
-          };
-          setPlayers((prev) => {
-            const updated = [...prev, newPlayer];
-            console.log('🔄 Dodano zawodnika do lokalnego stanu, łącznie zawodników:', updated.length);
-            return updated;
-          });
         }
         
         // Zamknij modal i resetuj stan edycji
         setIsModalOpen(false);
         setEditingPlayerId(null);
-        console.log('✅ Zawodnik zapisany pomyślnie - modal zamknięty');
+        setEditingPlayerData(null); // Wyczyść dane edytowanego zawodnika
+        
+        // Wyczyść localStorage przed odświeżeniem
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("players");
+        }
+        
+        // Po zapisie odśwież dane z serwera
+        await refetchPlayers(true); // Wymuś odczyt z serwera
         
       } catch (error) {
-        console.error('❌ Błąd zapisywania zawodnika:', error);
-        console.error('🔍 Szczegóły błędu:', {
-          name: error instanceof Error ? error.name : 'Unknown',
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined
-        });
+        console.error('Błąd zapisywania zawodnika:', error);
         
-        // Sprawdź typ błędu i pokaż odpowiedni komunikat
         let errorMessage = 'Wystąpił błąd podczas zapisywania zawodnika.';
         if (error instanceof Error) {
           if (error.message.includes('offline') || error.message.includes('network')) {
@@ -338,98 +449,57 @@ export function usePlayersState() {
         alert(errorMessage + ' Spróbuj ponownie.');
       } finally {
         setIsLoading(false);
+        setIsSaving(false);
       }
     },
-    [editingPlayerId]
+    [editingPlayerId, isSaving] // Usunięto players z dependencies żeby uniknąć niepotrzebnych re-renderów
   );
 
-  const handleEditPlayer = useCallback((playerId: string) => {
-    console.log('✏️ Rozpoczęcie edycji zawodnika:', playerId);
-    setEditingPlayerId(playerId);
-    setIsModalOpen(true);
+  const handleEditPlayer = useCallback(async (playerId: string) => {
+    try {
+      // Pobierz najnowsze dane bezpośrednio z Firebase przed edycją
+      if (!db) {
+        console.error('Firebase nie jest dostępne');
+        return;
+      }
+      
+      const playerDoc = await getDoc(doc(db, "players", playerId));
+      if (playerDoc.exists()) {
+        const playerData = { id: playerDoc.id, ...playerDoc.data() } as Player;
+        
+        setEditingPlayerId(playerId);
+        setEditingPlayerData(playerData); // Ustaw świeże dane z Firebase
+        setIsModalOpen(true);
+      } else {
+        console.error('Zawodnik nie istnieje w Firebase');
+        alert('Zawodnik nie został znaleziony w bazie danych');
+      }
+    } catch (error) {
+      console.error('Błąd pobierania zawodnika z Firebase:', error);
+      alert('Błąd podczas pobierania danych zawodnika');
+    }
   }, []);
 
   const closeModal = useCallback(() => {
-    console.log('❌ Zamykanie modalu edycji zawodnika');
     setIsModalOpen(false);
     setEditingPlayerId(null);
+    setEditingPlayerData(null); // Wyczyść dane edytowanego zawodnika
   }, []);
 
-  // Funkcja pomocnicza do pobrania edytowanego gracza
-  const getEditingPlayer = useCallback(() => {
-    if (!editingPlayerId) return null;
-    return players.find((p) => p.id === editingPlayerId) || null;
-  }, [players, editingPlayerId]);
-
-  // Funkcja diagnostyczna do sprawdzania połączenia z Firebase
-  const testConnection = useCallback(async () => {
-    console.log('🔧 Testowanie połączenia z Firebase...');
-    
-    try {
-      console.log('🔗 Stan środowiska:', {
-        window: typeof window !== 'undefined',
-        db: !!db,
-        firebaseConfig: {
-          apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? '✅ Ustawiony' : '❌ Brak',
-          authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ? '✅ Ustawiony' : '❌ Brak',
-          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? '✅ Ustawiony' : '❌ Brak',
-        }
-      });
-
-      // Sprawdź czy Firebase jest dostępne
-      if (!db) {
-        throw new Error("Firebase nie jest zainicjalizowane");
-      }
-
-      // Sprawdź podstawowe operacje na Firebase
-      const testDoc = doc(collection(db, "permission_tests"));
-      
-      console.log('📝 Test zapisu do Firebase...');
-      await setDoc(testDoc, {
-        timestamp: new Date().toISOString(),
-        test: 'connection_test',
-        userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'server'
-      });
-      console.log('✅ Test zapisu zakończony sukcesem');
-      
-      console.log('📖 Test odczytu z Firebase...');
-      const testRead = await getDoc(testDoc);
-      if (testRead.exists()) {
-        console.log('✅ Test odczytu zakończony sukcesem:', testRead.data());
-      } else {
-        console.warn('⚠️ Dokument testowy nie istnieje');
-      }
-      
-      console.log('🗑️ Test usuwania z Firebase...');
-      await deleteDoc(testDoc);
-      console.log('✅ Test usuwania zakończony sukcesem');
-      
-      return { success: true, message: 'Wszystkie testy Firebase zakończone sukcesem' };
-      
-    } catch (error) {
-      console.error('❌ Błąd podczas testowania Firebase:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : String(error),
-        details: error instanceof Error ? {
-          name: error.name,
-          stack: error.stack
-        } : undefined
-      };
-    }
-  }, []);
+  // Usunięto getEditingPlayer - teraz używamy editingPlayerData ze świeżymi danymi z Firebase
 
   return {
     players,
     isModalOpen,
     editingPlayerId,
-    editingPlayer: getEditingPlayer(),
+    editingPlayer: editingPlayerData, // Użyj świeżych danych z Firebase
     isLoading,
     setIsModalOpen,
     handleDeletePlayer,
     handleSavePlayer,
     handleEditPlayer,
     closeModal,
-    testConnection,
+    refetchPlayers,
   };
 }
+

@@ -49,15 +49,25 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
   const positions = [
     { value: "GK", label: "Bramkarz (GK)" },
     { value: "CB", label: "Środkowy obrońca (CB)" },
-    { value: "LB", label: "Lewy obrońca (LB)" },
-    { value: "RB", label: "Prawy obrońca (RB)" },
     { value: "DM", label: "Defensywny pomocnik (DM)" },
-    { value: "CM", label: "Środkowy pomocnik (CM)" },
     { value: "AM", label: "Ofensywny pomocnik (AM)" },
     { value: "LW", label: "Lewy skrzydłowy (LW)" },
     { value: "RW", label: "Prawy skrzydłowy (RW)" },
     { value: "ST", label: "Napastnik (ST)" },
   ];
+
+  // Mapowanie starych pozycji na nowe (dla kompatybilności wstecznej)
+  const mapOldPositionToNew = (position: string): string => {
+    const mapping: { [key: string]: string } = {
+      'LS': 'LW',  // Left Side -> Left Wing
+      'RS': 'RW',  // Right Side -> Right Wing
+      'CF': 'ST',  // Center Forward -> Striker
+      'CAM': 'AM', // Central Attacking Midfielder -> Attacking Midfielder
+      'CDM': 'DM', // Central Defensive Midfielder -> Defensive Midfielder
+    };
+    
+    return mapping[position] || position;
+  };
 
   // Funkcja walidacji duplikatów
   const validateForDuplicates = (playerData: Omit<Player, "id">): string[] => {
@@ -105,31 +115,21 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
       }
     }
 
-    // Sprawdź duplikaty numeru w tym samym zespole
-    const numberExists = existingPlayers.some(player => {
-      // Pomijamy aktualnie edytowanego zawodnika
-      if (editingPlayer && player.id === editingPlayer.id) {
-        return false;
-      }
-      
-      // Sprawdź czy numer jest zajęty w którymkolwiek z zespołów
-      const hasCommonTeam = player.teams?.some(team => 
-        playerData.teams.includes(team)
-      );
-      
-      return player.number === playerData.number && hasCommonTeam;
-    });
-
-    if (numberExists) {
-      errors.push(`Numer ${playerData.number} jest już zajęty w tym zespole!`);
-    }
-
     return errors;
   };
 
   useEffect(() => {
     if (isOpen) {
       if (editingPlayer) {
+        // DEBUG: Sprawdź jakie dane otrzymuje modal
+        console.log('🔍 PlayerModal otrzymał editingPlayer:', {
+          id: editingPlayer.id,
+          name: editingPlayer.name,
+          position: editingPlayer.position,
+          teams: editingPlayer.teams,
+          teamsLength: Array.isArray(editingPlayer.teams) ? editingPlayer.teams.length : 'nie array'
+        });
+        
         // Obsługa migracji danych - jeśli są firstName i lastName używaj ich, 
         // w przeciwnym razie podziel name na firstName i lastName
         let firstName = editingPlayer.firstName || "";
@@ -147,16 +147,19 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
           }
         }
         
-        setFormData({
+        const formDataToSet = {
           firstName: firstName,
           lastName: lastName,
           name: editingPlayer.name || `${firstName} ${lastName}`.trim(),
           number: editingPlayer.number,
-          position: editingPlayer.position || "",
+          position: editingPlayer.position || "", // Używaj pozycji bezpośrednio z Firebase bez mapowania
           birthYear: editingPlayer.birthYear,
           imageUrl: editingPlayer.imageUrl || "",
-          teams: editingPlayer.teams || [currentTeam],
-        });
+          teams: Array.isArray(editingPlayer.teams) ? editingPlayer.teams : (editingPlayer.teams ? [editingPlayer.teams] : [currentTeam]),
+        };
+        
+
+        setFormData(formDataToSet);
       } else {
         setFormData({
           firstName: "",
@@ -210,10 +213,23 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
   };
 
   const handleTeamChange = (teamId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      teams: [teamId],
-    }));
+    setFormData((prev) => {
+      const currentTeams = prev.teams || [];
+      
+      if (currentTeams.includes(teamId)) {
+        // Jeśli zespół jest już wybrany, usuń go
+        return {
+          ...prev,
+          teams: currentTeams.filter(id => id !== teamId),
+        };
+      } else {
+        // Jeśli zespół nie jest wybrany, dodaj go
+        return {
+          ...prev,
+          teams: [...currentTeams, teamId],
+        };
+      }
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -232,6 +248,11 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
     
     if (formData.number < 1 || formData.number > 99) {
       newErrors.number = "Numer musi być między 1 a 99";
+    }
+
+    // Walidacja zespołów
+    if (!formData.teams || formData.teams.length === 0) {
+      newErrors.general = "Zawodnik musi należeć do przynajmniej jednego zespołu";
     }
 
     // Walidacja duplikatów
@@ -253,8 +274,9 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
       name: `${formData.firstName.trim()} ${formData.lastName.trim()}`
     };
 
+
+
     onSave(playerDataToSave);
-    onClose();
   };
 
   if (!isOpen) return null;
@@ -326,7 +348,6 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
               name="position"
               value={formData.position}
               onChange={handleChange}
-              required
               className={styles.formSelect}
             >
               <option value="">Wybierz pozycję</option>
@@ -359,14 +380,14 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
           </div>
 
           <div className={styles.formTeams}>
-            <label>Zespoły:</label>
+            <label>Zespoły (można wybrać wiele):</label>
             <div className={styles.teamsButtonContainer}>
               {allTeams.map((team) => (
                 <button
                   key={team.id}
                   type="button"
                   className={`${styles.teamButton} ${
-                    formData.teams.includes(team.id) ? styles.activeTeam : ""
+                    (formData.teams && Array.isArray(formData.teams) && formData.teams.includes(team.id)) ? styles.activeTeam : ""
                   }`}
                   onClick={() => handleTeamChange(team.id)}
                 >

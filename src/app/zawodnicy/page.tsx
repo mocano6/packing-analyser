@@ -25,6 +25,7 @@ export default function ZawodnicyPage() {
     players,
     isModalOpen,
     editingPlayerId,
+    editingPlayer, // Dodano editingPlayer ze świeżymi danymi z Firebase
     setIsModalOpen,
     handleDeletePlayer,
     handleSavePlayer,
@@ -133,9 +134,30 @@ export default function ZawodnicyPage() {
 
   // Filtruj zawodników według wybranego zespołu
   const filteredPlayers = useMemo(() => {
-    const teamFiltered = players.filter(player => 
-      player.teams && player.teams.includes(selectedTeam)
-    );
+    console.log(`🔍 Filtrowanie zawodników dla zespołu: ${selectedTeam}`);
+    console.log(`📋 Całkowita liczba zawodników: ${players.length}`);
+    
+    // DEBUG: Sprawdź Kacpra w lokalnym stanie podczas filtrowania
+    const kacperInLocal = players.find(p => p.name?.includes('Kacper Kotala') || p.id === 'ARyCtMT5iQHd8snLBmgB');
+    if (kacperInLocal) {
+      console.log('🔍 Kacper podczas filtrowania:', {
+        id: kacperInLocal.id,
+        name: kacperInLocal.name,
+        teams: kacperInLocal.teams,
+        teamsLength: Array.isArray(kacperInLocal.teams) ? kacperInLocal.teams.length : 'nie array',
+        includesSelectedTeam: kacperInLocal.teams && kacperInLocal.teams.includes(selectedTeam)
+      });
+    }
+    
+    const teamFiltered = players.filter(player => {
+      const hasTeams = player.teams && player.teams.includes(selectedTeam);
+      if (player.name?.includes('Kacper')) {
+        console.log(`🔍 Kacper filtracja: teams=${player.teams}, includes ${selectedTeam}? ${hasTeams}`);
+      }
+      return hasTeams;
+    });
+    
+    console.log(`✅ Po filtracji: ${teamFiltered.length} zawodników w zespole ${selectedTeam}`);
     
     // Sortowanie alfabetyczne po nazwisku
     return sortPlayersByLastName(teamFiltered);
@@ -554,13 +576,10 @@ export default function ZawodnicyPage() {
         isOpen={isModalOpen}
         onClose={closeModal}
         onSave={handleSavePlayerWithTeams}
-        editingPlayer={
-          editingPlayerId
-            ? players.find((p) => p.id === editingPlayerId)
-            : undefined
-        }
+        editingPlayer={editingPlayer || undefined} // Użyj editingPlayer z usePlayersState (ze świeżymi danymi z Firebase)
         currentTeam={selectedTeam}
         allTeams={Object.values(TEAMS)}
+        existingPlayers={players}
       />
     </div>
   );

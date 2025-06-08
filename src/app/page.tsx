@@ -30,6 +30,7 @@ import Link from "next/link";
 import ActionModal from "@/components/ActionModal/ActionModal";
 import { sortPlayersByLastName, getPlayerFullName } from "@/utils/playerUtils";
 
+
 // Rozszerzenie interfejsu Window
 declare global {
   interface Window {
@@ -89,12 +90,13 @@ export default function Page() {
     players,
     isModalOpen,
     editingPlayerId,
+    editingPlayer, // Dodano editingPlayer ze świeżymi danymi z Firebase
     setIsModalOpen,
     handleDeletePlayer,
     handleSavePlayer,
     handleEditPlayer,
     closeModal,
-    testConnection,
+    refetchPlayers,
   } = usePlayersState();
 
   const {
@@ -155,9 +157,20 @@ export default function Page() {
   }, [hookSelectedZone]);
 
   const filteredPlayers = useMemo(() => {
-    // Filtruj graczy na podstawie wybranego zespołu
+
+    
+    // Filtruj graczy na podstawie wybranego zespołu z normalizacją
     const teamFiltered = players.filter(player => {
-      return player.teams && player.teams.includes(selectedTeam);
+      // Normalizuj teams - upewnij się że to zawsze tablica
+      let teams = player.teams;
+      
+      if (typeof teams === 'string') {
+        teams = [teams];
+      } else if (!Array.isArray(teams)) {
+        teams = [];
+      }
+      
+      return teams.includes(selectedTeam);
     });
     
     // Sortowanie alfabetyczne po nazwisku
@@ -169,39 +182,32 @@ export default function Page() {
     const savedHalf = localStorage.getItem('currentHalf');
     if (savedHalf) {
       const isP2 = savedHalf === 'P2';
-      console.log(`page.tsx: Wczytano wartość połowy z localStorage: ${savedHalf}`);
+
       setIsSecondHalf(isP2);
     }
   }, []);
 
   // Dodajemy useCallback dla fetchMatches, aby można było bezpiecznie używać go w efektach
   const refreshMatchesList = useCallback(async (teamId?: string) => {
-    console.log("⚡ Wymuszam odświeżenie listy meczów dla zespołu:", teamId || selectedTeam);
-    
     try {
       // Używamy blokady, aby zapobiec wielokrotnym wywołaniom
       if (window._isRefreshingMatches) {
-        console.log("🚫 Odświeżanie listy meczów już trwa, pomijam");
         return;
       }
       
       window._isRefreshingMatches = true;
       
       const matches = await fetchMatches(teamId || selectedTeam);
-      console.log("📋 Lista meczów pobrana pomyślnie, elementów:", matches?.length || 0);
       
       // Używamy funkcji aktualizującej, aby uniknąć uzależnienia od bieżącej wartości
       if (matches) {
         // Opóźniamy aktualizację licznika, aby uniknąć pętli renderowania
         setTimeout(() => {
-          setMatchesListRefreshCounter(prev => {
-            console.log("🔄 Zwiększam licznik odświeżeń:", prev, "->", prev + 1);
-            return prev + 1;
-          });
+          setMatchesListRefreshCounter(prev => prev + 1);
         }, 50);
       }
     } catch (error) {
-      console.error("❌ Błąd podczas odświeżania listy meczów:", error);
+      console.error("Błąd podczas odświeżania listy meczów:", error);
     } finally {
       // Resetujemy blokadę po zakończeniu
       setTimeout(() => {
@@ -218,7 +224,7 @@ export default function Page() {
     if (initEffectExecutedRef.current) return;
     initEffectExecutedRef.current = true;
     
-    console.log("🔄 Inicjalizacja aplikacji - odświeżanie listy meczów");
+
     
     // Używamy setTimeout, aby zapewnić, że Firebase jest w pełni zainicjalizowany
     const timer = setTimeout(async () => {
@@ -226,7 +232,7 @@ export default function Page() {
         await fetchMatches(selectedTeam);
         // Nie aktualizujemy licznika tutaj - to tylko inicjalne pobranie danych
       } catch (error) {
-        console.error("❌ Błąd podczas inicjalizacji listy meczów:", error);
+        console.error("Błąd podczas inicjalizacji listy meczów:", error);
       }
     }, 300);
     
@@ -332,13 +338,13 @@ export default function Page() {
       
       // Ustawiamy zespół, jeśli został przekazany i różni się od obecnego
       if (teamId && teamId !== selectedTeam) {
-        console.log("🔄 Zmieniam wybrany zespół na:", teamId);
+  
         setSelectedTeam(teamId);
         // Nie wykonujemy żadnych dodatkowych akcji - zmiana selectedTeam
         // spowoduje ponowne pobranie danych przez efekt zależny od selectedTeam
       } else if (isMounted) {
         // Odświeżamy listę tylko jeśli teamId jest taki sam jak obecny lub nie został podany
-        console.log("🔄 Odświeżam listę meczów bez zmiany zespołu");
+
         // Zamiast wywoływać refreshMatchesList, tylko zwiększamy licznik
         window._isRefreshingMatches = true;
         
@@ -352,20 +358,17 @@ export default function Page() {
     };
     
     // Dodajemy nasłuchiwanie na zdarzenie odświeżenia listy
-    console.log("🎧 Dodaję nasłuchiwanie na zdarzenie matchesListRefresh");
     document.addEventListener('matchesListRefresh', handleRefreshMatchesList);
     
     // Usuwamy nasłuchiwanie przy odmontowaniu komponentu
     return () => {
       isMounted = false;
-      console.log("🛑 Usuwam nasłuchiwanie na zdarzenie matchesListRefresh");
       document.removeEventListener('matchesListRefresh', handleRefreshMatchesList);
     };
   }, [selectedTeam]); // Usuwamy wszelkie zależności od funkcji, które mogą powodować pętlę
 
   // Dodajemy efekt, który reaguje na zmianę selectedTeam
   React.useEffect(() => {
-    console.log("🔄 Zmiana wybranego zespołu na:", selectedTeam);
     refreshMatchesList(selectedTeam);
   }, [selectedTeam, refreshMatchesList]);
 
@@ -387,10 +390,12 @@ export default function Page() {
       }
     }
     
-    handleSavePlayer({
+    const finalPlayerData = {
       ...playerData,
       teams: teams,
-    });
+    };
+    
+    handleSavePlayer(finalPlayerData);
   };
 
   const onDeletePlayer = async (playerId: string) => {
@@ -601,7 +606,11 @@ export default function Page() {
           // Resetujemy stan komponentu
           setEndZone(null);
           setStartZone(null);
+          
+          // DODANO: Zamykamy modal i resetujemy wybór zawodników po zapisaniu akcji
           setIsActionModalOpen(false);
+          setSelectedPlayerId(null);
+          setSelectedReceiverId(null);
         } else {
           console.error("Zapis akcji nie powiódł się - zachowuję wybrane strefy");
         }
@@ -810,7 +819,16 @@ export default function Page() {
     // Używamy funkcji z nowego hooka
     resetActionState();
     
-    console.log("Wykonano resetowanie stanu akcji przy zachowaniu stref i zawodników");
+    // DODANO: Resetujemy także strefy na boisku i selectedZone
+    setStartZone(null);
+    setEndZone(null);
+    setSelectedZone(null);
+    
+    // Czyścimy również localStorage ze stref
+    localStorage.removeItem('tempStartZone');
+    localStorage.removeItem('tempEndZone');
+    
+    console.log("Wykonano resetowanie stanu akcji - wyczyszczono strefy i zawodników");
   };
 
   // Modyfikujemy funkcję obsługi przełącznika half
@@ -1038,13 +1056,13 @@ export default function Page() {
       const originalAction = actions.find(a => a.id === editedAction.id);
       const originalMatchId = originalAction?.matchId;
       
-      console.log("📋 Porównanie meczów - oryginalny:", originalMatchId, "nowy:", editedAction.matchId);
+      
 
       // Czy akcja została przeniesiona do innego meczu?
       const isMovedToNewMatch = originalMatchId && originalMatchId !== editedAction.matchId;
 
       if (isMovedToNewMatch) {
-        console.log("🔄 Przenoszenie akcji między meczami");
+        
         
         // 1. Usuń akcję ze starego meczu
         const oldMatchRef = doc(db, "matches", originalMatchId);
@@ -1168,6 +1186,12 @@ export default function Page() {
       />
 
       <main className={styles.content}>
+        <div className={styles.controls}>
+          <div className={styles.leftControls}>
+
+
+          </div>
+        </div>
         <PlayersGrid
           players={filteredPlayers}
           selectedPlayerId={selectedPlayerId}
@@ -1225,11 +1249,7 @@ export default function Page() {
           isOpen={isModalOpen}
           onClose={closeModal}
           onSave={handleSavePlayerWithTeams}
-          editingPlayer={
-            editingPlayerId
-              ? players.find((p) => p.id === editingPlayerId)
-              : undefined
-          }
+          editingPlayer={editingPlayer || undefined} // Użyj editingPlayer z usePlayersState (ze świeżymi danymi z Firebase)
           currentTeam={selectedTeam}
           allTeams={Object.values(TEAMS)}
           existingPlayers={players}
@@ -1387,7 +1407,7 @@ export default function Page() {
           allMatches={allMatches}
           selectedMatchId={editingAction?.matchId || null}
           onMatchSelect={(matchId) => {
-            console.log("🔄 Zmiana meczu dla akcji na:", matchId);
+
             if (editingAction) {
               setEditingAction({
                 ...editingAction,
@@ -1399,6 +1419,7 @@ export default function Page() {
 
         {/* Przyciski eksportu i importu */}
         <div className={styles.buttonsContainer}>
+          {/* UKRYTE TYMCZASOWO
           <Link href="/zawodnicy" className={styles.playersButton}>
             👥 Statystyki zawodników
           </Link>
@@ -1408,6 +1429,7 @@ export default function Page() {
           <Link href="/lista-zawodnikow" className={styles.listButton}>
             📋 Lista wszystkich zawodników
           </Link>
+          */}
           <ExportButton
             players={players}
             actions={actions}
