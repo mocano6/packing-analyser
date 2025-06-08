@@ -1390,7 +1390,7 @@ export default function Page() {
             }
           }}
           onSaveAction={() => {
-            console.log("💾 Zapisywanie edytowanej akcji:", editingAction);
+
             if (editingAction) {
               handleSaveEditedAction(editingAction);
             }
