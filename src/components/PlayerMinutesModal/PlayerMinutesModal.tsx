@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { PlayerMinutesModalProps, PlayerMinutes } from "@/types";
 import styles from "./PlayerMinutesModal.module.css";
 import { TEAMS } from "@/constants/teams";
@@ -135,9 +135,22 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
   if (!isOpen) return null;
 
   // Filtruj graczy z wybranego zespołu
-  const teamPlayers = players.filter(player => 
-    player.teams && player.teams.includes(match.team)
-  );
+  const teamPlayers = useMemo(() => {
+    return players
+      .filter(player => player.teams && player.teams.includes(match.team))
+      .sort((a, b) => {
+        // Wyciągnij nazwisko (ostatnie słowo) z pełnej nazwy
+        const getLastName = (fullName: string) => {
+          const words = fullName.trim().split(/\s+/);
+          return words[words.length - 1].toLowerCase();
+        };
+        
+        const lastNameA = getLastName(a.name);
+        const lastNameB = getLastName(b.name);
+        
+        return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
+      });
+  }, [players, match.team]);
 
   return (
     <div className={styles.modalOverlay}>

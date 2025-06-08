@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs, doc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 import { updatePlayerWithAction } from "@/utils/syncPlayerData";
+import { getPlayerFullName } from '@/utils/playerUtils';
 
 // Funkcja do konwersji numeru strefy na format literowo-liczbowy
 // Zakładamy, że boisko ma 12 kolumn (a-l) i 8 wierszy (1-8)
@@ -114,7 +115,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
           if (actionWithValidHalf.senderId && (!actionWithValidHalf.senderName || !actionWithValidHalf.senderNumber)) {
             const senderPlayer = players.find(p => p.id === actionWithValidHalf.senderId);
             if (senderPlayer) {
-              actionWithValidHalf.senderName = senderPlayer.name;
+              actionWithValidHalf.senderName = getPlayerFullName(senderPlayer);
               actionWithValidHalf.senderNumber = senderPlayer.number;
             }
           }
@@ -123,7 +124,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
           if (actionWithValidHalf.receiverId && (!actionWithValidHalf.receiverName || !actionWithValidHalf.receiverNumber)) {
             const receiverPlayer = players.find(p => p.id === actionWithValidHalf.receiverId);
             if (receiverPlayer) {
-              actionWithValidHalf.receiverName = receiverPlayer.name;
+              actionWithValidHalf.receiverName = getPlayerFullName(receiverPlayer);
               actionWithValidHalf.receiverNumber = receiverPlayer.number;
             }
           }
@@ -268,7 +269,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
       if (selectedPlayerId) {
         const senderPlayer = players.find(p => p.id === selectedPlayerId);
         if (senderPlayer) {
-          newAction.senderName = senderPlayer.name;
+          newAction.senderName = getPlayerFullName(senderPlayer);
           newAction.senderNumber = senderPlayer.number;
         }
       }
@@ -277,7 +278,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
       if (actionType === "pass" && selectedReceiverId) {
         const receiverPlayer = players.find(p => p.id === selectedReceiverId);
         if (receiverPlayer) {
-          newAction.receiverName = receiverPlayer.name;
+          newAction.receiverName = getPlayerFullName(receiverPlayer);
           newAction.receiverNumber = receiverPlayer.number;
         }
       }
@@ -462,8 +463,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     setIsShot(false);
     setIsGoal(false);
     setIsPenaltyAreaEntry(false);
-    // Nie resetujemy selectedPlayerId, selectedReceiverId i isSecondHalf,
-    // bo te stany są utrzymywane między akcjami
+    // DODANO: Resetujemy także wybór zawodników po zapisaniu akcji
+    setSelectedPlayerId(null);
+    setSelectedReceiverId(null);
+    // Nie resetujemy isSecondHalf, bo połowa meczu jest utrzymywana między akcjami
   }, []);
 
   // Funkcja synchronizująca wzbogacone akcje z bazą Firebase

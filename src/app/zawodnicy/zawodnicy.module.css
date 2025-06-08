@@ -251,4 +251,117 @@
   .tableCell:nth-child(5) {
     display: none;
   }
+}
+
+/* Sekcja duplikatów */
+.duplicatesSection {
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: #fff3cd;
+  border: 2px solid #ffeaa7;
+  border-radius: 10px;
+}
+
+.duplicatesHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.duplicatesSection h3 {
+  margin: 0;
+  color: #856404;
+  font-size: 20px;
+}
+
+.mergeDuplicatesButton {
+  padding: 10px 15px;
+  background-color: #fd7e14;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.mergeDuplicatesButton:hover:not(:disabled) {
+  background-color: #e8590c;
+  transform: translateY(-1px);
+}
+
+.mergeDuplicatesButton:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.duplicateGroup {
+  margin-bottom: 20px;
+  padding: 15px;
+  border: 1px solid #f0c674;
+  border-radius: 8px;
+  background-color: #fffbf0;
+}
+
+.duplicateGroup h4 {
+  margin: 0 0 10px 0;
+  color: #8b4513;
+  font-size: 16px;
+}
+
+.duplicateList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.duplicateItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.playerInfo {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex: 1;
+}
+
+.playerName {
+  font-weight: 600;
+  color: #333;
+  min-width: 120px;
+}
+
+.playerNumber {
+  color: #666;
+  font-weight: 500;
+  min-width: 40px;
+}
+
+.playerBirthYear {
+  color: #666;
+  font-size: 13px;
+  min-width: 80px;
+}
+
+.playerTeams {
+  color: #666;
+  font-size: 13px;
+  min-width: 100px;
+}
+
+.playerActions {
+  color: #007bff;
+  font-weight: 600;
+  font-size: 13px;
+  min-width: 60px;
 } 

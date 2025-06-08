@@ -5,7 +5,9 @@ export type Zone = number;
 
 export interface Player {
   id: string;
-  name: string;
+  firstName: string;
+  lastName: string;
+  name?: string; // Zachowane dla kompatybilności wstecznej - będzie wypełniane automatycznie
   number: number;
   position: string;
   birthYear?: number;

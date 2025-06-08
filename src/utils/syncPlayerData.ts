@@ -1,6 +1,7 @@
 import { db } from "@/lib/firebase";
 import { collection, doc, getDoc, getDocs, updateDoc, query, where } from "firebase/firestore";
 import { Player, Action, TeamInfo, PlayerMinutes } from "@/types";
+import { getPlayerFullName } from '@/utils/playerUtils';
 
 /**
  * Funkcja synchronizująca dane akcji z zawodnikami
@@ -113,9 +114,9 @@ export const syncPlayerData = async (): Promise<boolean> => {
       if (hasActionsToSync) {
         const playerRef = doc(db, "players", player.id);
         await updateDoc(playerRef, playerUpdates);
-        console.log(`✅ Zaktualizowano dane zawodnika ${player.name} (${player.id})`);
+        console.log(`✅ Zaktualizowano dane zawodnika ${getPlayerFullName(player)} (${player.id})`);
       } else {
-        console.log(`ℹ️ Brak nowych danych do synchronizacji dla zawodnika ${player.name} (${player.id})`);
+        console.log(`ℹ️ Brak nowych danych do synchronizacji dla zawodnika ${getPlayerFullName(player)} (${player.id})`);
       }
     }
     
@@ -167,7 +168,7 @@ export const updatePlayerWithAction = async (
           
           // Aktualizuj dane zawodnika
           await updateDoc(senderRef, { actionsSent });
-          console.log(`✅ Zaktualizowano akcje nadawcy ${senderData.name} (${action.senderId})`);
+          console.log(`✅ Zaktualizowano akcje nadawcy ${getPlayerFullName(senderData)} (${action.senderId})`);
         }
       }
     }
@@ -196,7 +197,7 @@ export const updatePlayerWithAction = async (
           
           // Aktualizuj dane zawodnika
           await updateDoc(receiverRef, { actionsReceived });
-          console.log(`✅ Zaktualizowano akcje odbiorcy ${receiverData.name} (${action.receiverId})`);
+          console.log(`✅ Zaktualizowano akcje odbiorcy ${getPlayerFullName(receiverData)} (${action.receiverId})`);
         }
       }
     }
@@ -240,7 +241,7 @@ export const updatePlayerWithMinutes = async (
         
         // Aktualizuj dane zawodnika
         await updateDoc(playerRef, { matchesInfo });
-        console.log(`✅ Zaktualizowano minuty zawodnika ${playerData.name} (${playerMinute.playerId})`);
+        console.log(`✅ Zaktualizowano minuty zawodnika ${getPlayerFullName(playerData)} (${playerMinute.playerId})`);
       }
     }
     
