@@ -1396,8 +1396,7 @@ export default function Page() {
 
         {/* Przyciski eksportu i importu */}
         <div className={styles.buttonsContainer}>
-          {/* UKRYTE PRZYCISKI STATYSTYK - będą pokazane w development */}
-          {/* <Link href="/zawodnicy" className={styles.playersButton}>
+          <Link href="/zawodnicy" className={styles.playersButton}>
             👥 Statystyki zawodników
           </Link>
           <Link href="/statystyki-zespolu" className={styles.teamStatsButton}>
@@ -1405,7 +1404,7 @@ export default function Page() {
           </Link>
           <Link href="/lista-zawodnikow" className={styles.listButton}>
             📋 Lista wszystkich zawodników
-          </Link> */}
+          </Link>
           <ExportButton
             players={players}
             actions={actions}
