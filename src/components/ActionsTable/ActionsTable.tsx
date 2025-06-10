@@ -166,14 +166,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   const sortedActions = useMemo(() => {
     const result = [...actions];
     
-    // Wyświetlamy informacje debugowe
-    console.log("Wszystkie akcje przed sortowaniem:", result.map(a => ({
-      id: a.id,
-      isSecondHalf: a.isSecondHalf,
-      minute: a.minute,
-      xTValueStart: a.xTValueStart,
-      xTValueEnd: a.xTValueEnd
-    })));
+
     
     const { key, direction } = sortConfig;
     const multiplier = direction === "asc" ? 1 : -1;

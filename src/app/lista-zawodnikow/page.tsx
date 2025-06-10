@@ -280,13 +280,8 @@ export default function ListaZawodnikow() {
     let errorCount = 0;
 
     try {
-      console.log('🔄 Rozpoczynam sparowanie:', duplicates.length, 'grup');
-      
       for (const { key, players: duplicatePlayers } of duplicates) {
-        console.log(`👥 Przetwarzam grupę duplikatów: ${key}`, duplicatePlayers.map(p => getPlayerFullName(p) || 'Brak nazwy'));
-        
         if (duplicatePlayers.length < 2) {
-          console.log('⚠️ Grupa ma mniej niż 2 zawodników, pomijam');
           continue;
         }
 
@@ -300,10 +295,6 @@ export default function ListaZawodnikow() {
 
         const mainPlayer = sortedPlayers[0]; // Główny zawodnik (zostanie)
         const duplicatesToMerge = sortedPlayers.slice(1); // Duplikaty (zostaną usunięte)
-
-        console.log(`🎯 Sparowywanie grupy dla: ${getPlayerFullName(mainPlayer) || 'Brak nazwy'}`);
-        console.log(`👑 Główny zawodnik: ${mainPlayer.id} (${mainPlayer.actionsCount} akcji)`);
-        console.log(`🗑️ Duplikaty do usunięcia: ${duplicatesToMerge.map(p => `${p.id} (${p.actionsCount} akcji)`).join(', ')}`);
 
         try {
           // Krok 1: Znajdź wszystkie akcje duplikatów i przenieś je do głównego zawodnika

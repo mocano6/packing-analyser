@@ -147,7 +147,6 @@ export default function Page() {
 
   // Automatycznie aktywuj tryb deweloperski (obejście uwierzytelniania)
   useEffect(() => {
-    console.log('🔓 Aktywacja trybu deweloperskiego - obejście uwierzytelniania');
     localStorage.setItem('packing_app_bypass_auth', 'true');
   }, []);
 
@@ -250,7 +249,6 @@ export default function Page() {
       if (!isMounted) return;
       
       const hash = window.location.hash;
-      console.log("Zmiana hash URL:", hash);
       
       // Jeśli hash zawiera informację o odświeżeniu dla konkretnego zespołu
       if (hash.startsWith('#refresh=')) {
@@ -877,21 +875,16 @@ export default function Page() {
     const savedStartZone = localStorage.getItem('tempStartZone');
     const savedEndZone = localStorage.getItem('tempEndZone');
     
-    console.log("Sprawdzenie zapisanych stref w localStorage:", { savedStartZone, savedEndZone });
-    
     // Jeśli są strefy w localStorage, a stan jest pusty, wczytujemy je
     if (savedStartZone && startZone === null) {
-      console.log("Wczytuję startZone z localStorage:", savedStartZone);
       setStartZone(Number(savedStartZone));
     }
     
     if (savedEndZone && endZone === null) {
-      console.log("Wczytuję endZone z localStorage:", savedEndZone);
       setEndZone(Number(savedEndZone));
       
       // Jeśli mamy obie strefy, otwieramy ActionModal
       if (savedStartZone && !isActionModalOpen) {
-        console.log("Obie strefy wczytane z localStorage, otwieram ActionModal");
         setTimeout(() => setIsActionModalOpen(true), 100);
       }
     }
@@ -904,21 +897,17 @@ export default function Page() {
         // Najpierw sprawdzamy, czy aplikacja jest już w trybie offline
         const isOfflineMode = typeof window !== 'undefined' && localStorage.getItem('firestore_offline_mode') === 'true';
         if (isOfflineMode) {
-          console.log("📴 Aplikacja w trybie offline - pomijam inicjalizację kolekcji teams");
           return;
         }
         
         const teamsExist = await checkTeamsCollection();
         if (!teamsExist) {
-          console.log("Kolekcja teams nie istnieje, rozpoczynam inicjalizację...");
           const initialized = await initializeTeams();
           if (initialized) {
-            console.log("Pomyślnie utworzono kolekcję teams w Firebase");
             // Po inicjalizacji pobierz zespoły, aby zaktualizować pamięć podręczną
             await fetchTeams();
           }
         } else {
-          console.log("Kolekcja teams już istnieje w Firebase");
           // Pobierz zespoły do pamięci podręcznej
           await fetchTeams();
         }
@@ -927,7 +916,6 @@ export default function Page() {
         
         // Sprawdzamy, czy to błąd uprawnień
         if (error instanceof Error && error.message.includes("Missing or insufficient permissions")) {
-          console.log("🔒 Wykryto brak uprawnień do kolekcji teams, przełączam na tryb offline");
           if (typeof window !== 'undefined') {
             localStorage.setItem('firestore_offline_mode', 'true');
             toast.error("Brak uprawnień do kolekcji teams. Aplikacja działa w trybie offline.");
@@ -986,8 +974,6 @@ export default function Page() {
     );
     
     if (hasChanges) {
-      console.log("Uzupełniono dane graczy w akcjach - zapisuję do bazy danych");
-      
       // Synchronizuj z bazą danych
       if (syncEnrichedActions) {
         syncEnrichedActions(matchInfo.matchId, enrichedActions);
@@ -995,16 +981,12 @@ export default function Page() {
       
       // Aktualizuj lokalny stan akcji
       setActions(enrichedActions);
-    } else {
-      console.log("Wszystkie akcje mają już uzupełnione dane graczy");
     }
   };
 
   // Obsługa synchronizacji wzbogaconych akcji z Firebase
   const syncEnrichedActions = async (matchId: string, updatedActions: Action[]) => {
     try {
-      console.log("Synchronizacja wzbogaconych akcji z Firebase dla meczu:", matchId);
-      
       // Sprawdź czy Firebase jest dostępne
       if (!db) {
         console.error("Firebase nie jest zainicjalizowane - nie można zsynchronizować akcji");
@@ -1019,35 +1001,31 @@ export default function Page() {
         actions_packing: updatedActions.map(action => removeUndefinedFields(action))
       });
       
-      console.log("✅ Wzbogacone akcje zsynchronizowane z Firebase");
       return true;
     } catch (error) {
-      console.error("❌ Błąd podczas synchronizacji wzbogaconych akcji:", error);
+      console.error("Błąd podczas synchronizacji wzbogaconych akcji:", error);
       return false;
     }
   };
 
   // Obsługa edycji akcji
   const handleEditAction = (action: Action) => {
-    console.log("Otwieranie edycji akcji:", action);
     setEditingAction(action);
     setIsActionEditModalOpen(true);
   };
 
   // Obsługa zapisania edytowanej akcji
   const handleSaveEditedAction = async (editedAction: Action) => {
-    console.log("💾 Zapisywanie edytowanej akcji:", editedAction);
-    
     try {
       if (!editedAction.matchId) {
-        console.error("❌ Brak matchId w edytowanej akcji");
+        console.error("Brak matchId w edytowanej akcji");
         alert("Nie można zapisać akcji bez przypisania do meczu");
         return;
       }
 
       // Sprawdź czy Firebase jest dostępne
       if (!db) {
-        console.error("❌ Firebase nie jest zainicjalizowane");
+        console.error("Firebase nie jest zainicjalizowane");
         alert("Błąd połączenia z bazą danych");
         return;
       }
@@ -1188,8 +1166,6 @@ export default function Page() {
       <main className={styles.content}>
         <div className={styles.controls}>
           <div className={styles.leftControls}>
-
-
           </div>
         </div>
         <PlayersGrid
@@ -1234,6 +1210,7 @@ export default function Page() {
             endZone={endZone}
             isActionModalOpen={isActionModalOpen}
             setIsActionModalOpen={setIsActionModalOpen}
+            matchInfo={matchInfo}
           />
         )}
 
@@ -1419,8 +1396,8 @@ export default function Page() {
 
         {/* Przyciski eksportu i importu */}
         <div className={styles.buttonsContainer}>
-          {/* UKRYTE TYMCZASOWO
-          <Link href="/zawodnicy" className={styles.playersButton}>
+          {/* UKRYTE PRZYCISKI STATYSTYK - będą pokazane w development */}
+          {/* <Link href="/zawodnicy" className={styles.playersButton}>
             👥 Statystyki zawodników
           </Link>
           <Link href="/statystyki-zespolu" className={styles.teamStatsButton}>
@@ -1428,8 +1405,7 @@ export default function Page() {
           </Link>
           <Link href="/lista-zawodnikow" className={styles.listButton}>
             📋 Lista wszystkich zawodników
-          </Link>
-          */}
+          </Link> */}
           <ExportButton
             players={players}
             actions={actions}

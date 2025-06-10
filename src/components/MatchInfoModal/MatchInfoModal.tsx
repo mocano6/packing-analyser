@@ -28,16 +28,12 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   onSave,
   currentInfo,
 }) => {
-  // Dodaję konsolę logującą dla debugowania
-  console.log("MatchInfoModal otwarty, currentInfo:", currentInfo);
-
   const [formData, setFormData] = useState<TeamInfo>(
     currentInfo || defaultMatchInfo
   );
 
   // Reset formularza przy otwarciu modalu
   useEffect(() => {
-    console.log("MatchInfoModal useEffect, currentInfo:", currentInfo);
     setFormData(currentInfo || defaultMatchInfo);
   }, [currentInfo, isOpen]);
 
@@ -71,17 +67,10 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
       infoToSave.matchId = currentInfo.matchId;
     }
     
-    // Dodajemy logi
-    console.log("MatchInfoModal handleSubmit - rozpoczęcie zapisu");
-    console.log("MatchInfoModal handleSubmit - dane formularza przed zapisem:", formData);
-    console.log("MatchInfoModal handleSubmit - wybrany zespół:", formData.team);
-    
     // Usuwamy pole time z danych przed zapisaniem
     if ('time' in infoToSave) {
       delete infoToSave.time;
     }
-    
-    console.log("MatchInfoModal handleSubmit - dane do zapisania:", infoToSave);
     
     // Zapamiętaj ID zespołu przed zapisem
     const teamId = infoToSave.team;
@@ -100,15 +89,11 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
       // Wywołaj funkcję zapisu
       onSave(infoToSave);
       
-      // Dodajemy dodatkowy komunikat potwierdzający zapis
-      console.log("MatchInfoModal - wysłano dane do zapisu, zamykam modal...");
-      
       // Zamykamy modal
       onClose();
       
       // Lepsze rozwiązanie: Użyj hash URL do wymuszenia odświeżenia listy meczów
       // To pozwala na odświeżenie listy bez pełnego przeładowania strony
-      console.log("🔄 Ustawiam hash URL dla zespołu:", teamId);
       window.location.hash = `refresh=${teamId}`;
       
     } catch (error) {

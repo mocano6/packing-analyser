@@ -50,24 +50,19 @@ export const initializeTeams = async (): Promise<boolean> => {
       throw permissionError; // Przekazujemy dalej inne błędy
     }
     
-    console.log("Dokumenty teams nie istnieją, rozpoczynam tworzenie kolekcji...");
-    
     // Dodaj wszystkie zespoły z stałej TEAMS do Firebase
     const promises = Object.values(TEAMS).map(async team => {
       try {
-        console.log(`Próba dodania zespołu: ${team.name} (${team.id})`);
         await setDoc(doc(db, "teams", team.id), {
           id: team.id,
           name: team.name,
           createdAt: new Date(),
           isSystem: true  // Flaga informująca, że jest to systemowy zespół
         });
-        console.log(`✅ Dodano zespół: ${team.name} (${team.id})`);
         return true;
       } catch (error) {
         // Sprawdzamy, czy to błąd uprawnień
         if (error instanceof Error && error.message.includes("Missing or insufficient permissions")) {
-          console.error(`🔒 Błąd uprawnień przy dodawaniu zespołu ${team.name}, przełączam na tryb offline`);
           if (typeof window !== 'undefined') {
             localStorage.setItem('firestore_offline_mode', 'true');
             toast.error("Brak uprawnień do zapisywania zespołów. Aplikacja działa w trybie offline.");
@@ -75,7 +70,7 @@ export const initializeTeams = async (): Promise<boolean> => {
           return false;
         }
         
-        console.error(`❌ Błąd dodawania zespołu ${team.name}:`, error);
+        console.error(`Błąd dodawania zespołu ${team.name}:`, error);
         throw error; // Przekazujemy błąd dalej, aby przerwać całą operację
       }
     });
@@ -91,21 +86,19 @@ export const initializeTeams = async (): Promise<boolean> => {
     // Sprawdźmy, czy zespoły zostały dodane
     const verificationResult = await checkTeamsCollection();
     if (verificationResult) {
-      console.log("✅ Pomyślnie zainicjalizowano kolekcję teams i zweryfikowano jej istnienie.");
       return true;
     } else {
-      console.error("❌ Inicjalizacja zakończona, ale weryfikacja nie powiodła się. Kolekcja może być pusta.");
+      console.error("Inicjalizacja zakończona, ale weryfikacja nie powiodła się. Kolekcja może być pusta.");
       return false;
     }
   } catch (error) {
-    console.error("❌ Błąd podczas inicjalizacji kolekcji teams:", error);
+    console.error("Błąd podczas inicjalizacji kolekcji teams:", error);
     
     if (error instanceof Error) {
       console.error("Szczegóły błędu:", error);
       
       // Jeśli to błąd uprawnień, włączamy tryb offline i pozwalamy aplikacji działać dalej
       if (error.message.includes("Missing or insufficient permissions")) {
-        console.log("🔒 Wykryto brak uprawnień, przełączam na tryb offline");
         if (typeof window !== 'undefined') {
           localStorage.setItem('firestore_offline_mode', 'true');
           toast.error("Brak dostępu do bazy danych. Aplikacja działa w trybie offline.");
@@ -127,11 +120,8 @@ export const forceInitializeTeams = async (): Promise<boolean> => {
     // Sprawdź, czy tryb offline jest aktywny
     const isOfflineMode = typeof window !== 'undefined' && localStorage.getItem('firestore_offline_mode') === 'true';
     if (isOfflineMode) {
-      console.log("📴 Aplikacja jest w trybie offline - pomijam inicjalizację zespołów w Firebase");
       return true; // Zwracamy true, aby aplikacja mogła kontynuować działanie
     }
-    
-    console.log("Wymuszam inicjalizację kolekcji teams...");
     
     // Dodaj wszystkie zespoły z stałej TEAMS do Firebase
     for (const team of Object.values(TEAMS)) {
@@ -143,11 +133,9 @@ export const forceInitializeTeams = async (): Promise<boolean> => {
           isSystem: true,
           updatedAt: new Date() // Dodajemy pole updatedAt dla rozróżnienia
         }, { merge: true });
-        console.log(`Zaktualizowano/dodano zespół: ${team.name} (${team.id})`);
       } catch (e) {
         // Sprawdzamy, czy to błąd uprawnień
         if (e instanceof Error && e.message.includes("Missing or insufficient permissions")) {
-          console.error(`🔒 Błąd uprawnień przy wymuszonym dodawaniu zespołu ${team.name}, przełączam na tryb offline`);
           if (typeof window !== 'undefined') {
             localStorage.setItem('firestore_offline_mode', 'true');
             toast.error("Brak uprawnień do zapisywania zespołów. Aplikacja działa w trybie offline.");
@@ -187,11 +175,8 @@ export const checkTeamsCollection = async (): Promise<boolean> => {
     // Sprawdź, czy tryb offline jest aktywny
     const isOfflineMode = typeof window !== 'undefined' && localStorage.getItem('firestore_offline_mode') === 'true';
     if (isOfflineMode) {
-      console.log("📴 Aplikacja jest w trybie offline - pomijam sprawdzenie kolekcji teams");
       return true; // Zwracamy true, aby aplikacja mogła kontynuować działanie
     }
-    
-    console.log("Sprawdzanie kolekcji teams...");
     
     // Sprawdźmy po kolei każdy dokument, czy istnieje
     const teamIds = Object.values(TEAMS).map(team => team.id);
@@ -203,15 +188,11 @@ export const checkTeamsCollection = async (): Promise<boolean> => {
         const teamDoc = await getDoc(teamDocRef);
         
         if (teamDoc.exists()) {
-          console.log(`✅ Zespół ${teamId} istnieje w Firebase`);
           existingCount++;
-        } else {
-          console.log(`❌ Zespół ${teamId} NIE istnieje w Firebase`);
         }
       } catch (e) {
         // Sprawdzamy, czy to błąd uprawnień
         if (e instanceof Error && e.message.includes("Missing or insufficient permissions")) {
-          console.error(`🔒 Błąd uprawnień przy sprawdzaniu zespołu ${teamId}, przełączam na tryb offline`);
           if (typeof window !== 'undefined') {
             localStorage.setItem('firestore_offline_mode', 'true');
             toast.error("Brak uprawnień do odczytu zespołów. Aplikacja działa w trybie offline.");
@@ -225,7 +206,6 @@ export const checkTeamsCollection = async (): Promise<boolean> => {
     }
     
     const allExist = existingCount === teamIds.length;
-    console.log(`Znaleziono ${existingCount}/${teamIds.length} zespołów w Firebase. Wynik sprawdzenia: ${allExist ? 'SUKCES' : 'NIEPOWODZENIE'}`);
     
     return allExist;
   } catch (error) {
@@ -236,7 +216,6 @@ export const checkTeamsCollection = async (): Promise<boolean> => {
       
       // Jeśli to błąd uprawnień, włączamy tryb offline i pozwalamy aplikacji działać dalej
       if (error.message.includes("Missing or insufficient permissions")) {
-        console.log("🔒 Wykryto brak uprawnień, przełączam na tryb offline");
         if (typeof window !== 'undefined') {
           localStorage.setItem('firestore_offline_mode', 'true');
           toast.error("Brak dostępu do bazy danych. Aplikacja działa w trybie offline.");

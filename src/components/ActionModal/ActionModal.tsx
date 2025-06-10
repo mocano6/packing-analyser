@@ -39,6 +39,7 @@ interface ActionModalProps {
   allMatches?: TeamInfo[];
   selectedMatchId?: string | null;
   onMatchSelect?: (matchId: string) => void;
+  matchInfo?: TeamInfo | null;
 }
 
 const ActionModal: React.FC<ActionModalProps> = ({
@@ -71,6 +72,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
   allMatches,
   selectedMatchId,
   onMatchSelect,
+  matchInfo,
 }) => {
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
 
@@ -106,18 +108,50 @@ const ActionModal: React.FC<ActionModalProps> = ({
     }
   }, [onMatchSelect]);
 
-  // Filtrowanie zawodników według wybranego meczu (tylko w trybie edycji)
+  // Filtrowanie zawodników według wybranego meczu i minut rozegranych
   const filteredPlayers = React.useMemo(() => {
-    let playersToFilter = isEditMode && allMatches && currentSelectedMatch ? 
-      players.filter(player => {
-        const selectedMatch = allMatches.find(match => match.matchId === currentSelectedMatch);
-        return selectedMatch ? player.teams?.includes(selectedMatch.team) : false;
-      }) : 
-      players;
+    let playersToFilter: Player[] = [];
+    let selectedMatch: TeamInfo | null = null;
+
+    if (isEditMode && allMatches && currentSelectedMatch) {
+      // W trybie edycji używamy wybranego meczu
+      selectedMatch = allMatches.find(match => match.matchId === currentSelectedMatch) || null;
+    } else if (matchInfo) {
+      // W trybie dodawania nowej akcji używamy aktualnego meczu
+      selectedMatch = matchInfo;
+    }
+
+    if (selectedMatch) {
+      // Filtruj zawodników należących do zespołu
+      const teamPlayers = players.filter(player => 
+        player.teams?.includes(selectedMatch!.team)
+      );
+
+      // Filtruj tylko zawodników z co najmniej 1 minutą rozegranych w tym meczu
+      playersToFilter = teamPlayers.filter(player => {
+        const playerMinutes = selectedMatch!.playerMinutes?.find(pm => pm.playerId === player.id);
+        
+        if (!playerMinutes) {
+          return false; // Jeśli brak danych o minutach, nie pokazuj zawodnika
+        }
+
+        // Oblicz czas gry
+        const playTime = playerMinutes.startMinute === 0 && playerMinutes.endMinute === 0
+          ? 0
+          : Math.max(0, playerMinutes.endMinute - playerMinutes.startMinute + 1);
+
+        return playTime >= 1; // Pokazuj tylko zawodników z co najmniej 1 minutą
+      });
+
+
+    } else {
+      // Jeśli nie ma wybranego meczu, pokazuj wszystkich zawodników z zespołu
+      playersToFilter = players;
+    }
     
     // Sortowanie alfabetyczne po nazwisku
     return sortPlayersByLastName(playersToFilter);
-  }, [players, isEditMode, allMatches, currentSelectedMatch]);
+  }, [players, isEditMode, allMatches, currentSelectedMatch, matchInfo]);
 
   if (!isOpen) return null;
 
@@ -356,16 +390,29 @@ const ActionModal: React.FC<ActionModalProps> = ({
               )}
             </div>
             <div className={styles.playersGrid}>
-              {filteredPlayers.map((player) => (
-                <PlayerCard
-                  key={player.id}
-                  player={player}
-                  isSender={actionType === "pass" ? player.id === selectedPlayerId : false}
-                  isReceiver={actionType === "pass" ? player.id === selectedReceiverId : false}
-                  isDribbler={actionType === "dribble" ? player.id === selectedPlayerId : false}
-                  onSelect={handlePlayerClick}
-                />
-              ))}
+              {filteredPlayers.length > 0 ? (
+                filteredPlayers.map((player) => (
+                  <PlayerCard
+                    key={player.id}
+                    player={player}
+                    isSender={actionType === "pass" ? player.id === selectedPlayerId : false}
+                    isReceiver={actionType === "pass" ? player.id === selectedReceiverId : false}
+                    isDribbler={actionType === "dribble" ? player.id === selectedPlayerId : false}
+                    onSelect={handlePlayerClick}
+                  />
+                ))
+              ) : (
+                <div className={styles.noPlayersMessage}>
+                  {matchInfo ? (
+                    <>
+                      Brak zawodników z co najmniej 1 minutą rozegranych w tym meczu.<br/>
+                      <small>Sprawdź czy zostały ustawione minuty zawodników w meczu.</small>
+                    </>
+                  ) : (
+                    "Wybierz mecz, aby zobaczyć dostępnych zawodników."
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

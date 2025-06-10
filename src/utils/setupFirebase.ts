@@ -77,10 +77,6 @@ export class FirebaseInitializer {
     auth: Auth;
     storage: FirebaseStorage;
   }> {
-    if (this.isDebugEnabled) {
-      console.log('🔥 Inicjalizacja Firebase...');
-    }
-    
     try {
       // Inicjalizacja Firebase
       this.app = initializeApp(this.firebaseConfig);
@@ -100,10 +96,6 @@ export class FirebaseInitializer {
         await this.setupOfflineMode();
       }
       
-      if (this.isDebugEnabled) {
-        console.log('✅ Firebase zainicjalizowane pomyślnie');
-      }
-      
       // Zwrócenie zainicjalizowanych usług
       return {
         app: this.app,
@@ -118,7 +110,7 @@ export class FirebaseInitializer {
         { showNotification: true }
       );
       
-      console.error('❌ Błąd podczas inicjalizacji Firebase:', error);
+      console.error('Błąd podczas inicjalizacji Firebase:', error);
       
       // Zwróć puste obiekty, aby uniknąć błędów w aplikacji
       throw new Error('Nie udało się zainicjalizować Firebase');
@@ -127,10 +119,6 @@ export class FirebaseInitializer {
   
   // Konfiguracja emulatorów lokalnych
   private setupEmulators(): void {
-    if (this.isDebugEnabled) {
-      console.log('🧪 Konfiguracja emulatorów Firebase...');
-    }
-    
     try {
       // Konfiguracja emulatora Auth
       if (this.auth && this.initConfig.emulatorHosts?.auth) {
@@ -160,12 +148,8 @@ export class FirebaseInitializer {
           connectStorageEmulator(this.storage, host, port);
         }
       }
-      
-      if (this.isDebugEnabled) {
-        console.log('✅ Emulatory Firebase skonfigurowane');
-      }
     } catch (error) {
-      console.error('❌ Błąd podczas konfiguracji emulatorów Firebase:', error);
+      console.error('Błąd podczas konfiguracji emulatorów Firebase:', error);
     }
   }
   
@@ -175,40 +159,28 @@ export class FirebaseInitializer {
       return;
     }
     
-    if (this.isDebugEnabled) {
-      console.log('🔄 Konfiguracja trybu offline dla Firestore...');
-    }
-    
     try {
       // Włącz persistencję dla wielu zakładek
       await enableMultiTabIndexedDbPersistence(this.db);
       this.isOfflineEnabled = true;
       
-      if (this.isDebugEnabled) {
-        console.log('✅ Tryb offline dla Firestore włączony');
-      }
-      
       // Nasłuchuj na zmiany stanu połączenia
       this.setupConnectionListeners();
     } catch (error: any) {
       if (error.code === 'failed-precondition') {
-        console.warn('⚠️ Tryb offline nie mógł zostać włączony - aplikacja jest otwarta w wielu zakładkach.');
+        console.warn('Tryb offline nie mógł zostać włączony - aplikacja jest otwarta w wielu zakładkach.');
         
         // Spróbuj włączyć zwykłą persistencję
         try {
           await enableIndexedDbPersistence(this.db);
           this.isOfflineEnabled = true;
-          
-          if (this.isDebugEnabled) {
-            console.log('✅ Podstawowy tryb offline dla Firestore włączony');
-          }
         } catch (innerError) {
-          console.error('❌ Nie udało się włączyć trybu offline dla Firestore:', innerError);
+          console.error('Nie udało się włączyć trybu offline dla Firestore:', innerError);
         }
       } else if (error.code === 'unimplemented') {
-        console.warn('⚠️ Twoja przeglądarka nie obsługuje trybu offline dla Firestore.');
+        console.warn('Twoja przeglądarka nie obsługuje trybu offline dla Firestore.');
       } else {
-        console.error('❌ Błąd podczas włączania trybu offline dla Firestore:', error);
+        console.error('Błąd podczas włączania trybu offline dla Firestore:', error);
       }
     }
   }

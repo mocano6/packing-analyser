@@ -230,6 +230,38 @@
   margin-top: 16px;
 }
 
+/* Style dla metodologii packingu */
+.methodologyRule {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  padding: 12px;
+  background-color: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.ruleIcon {
+  font-size: 20px;
+  margin-right: 12px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.packingNote {
+  background-color: #f0f9f0;
+  border-radius: 8px;
+  padding: 16px;
+  border-left: 4px solid #22c55e;
+  margin-top: 16px;
+}
+
+.packingNote p {
+  margin: 0;
+  font-weight: 500;
+  color: #16a34a;
+}
+
 @media (max-width: 600px) {
   .instructionsContainer {
     margin: 10px;
@@ -241,5 +273,14 @@
 
   .instructionsList {
     padding: 0 15px 15px;
+  }
+  
+  .methodologyRule {
+    flex-direction: column;
+  }
+  
+  .ruleIcon {
+    margin-bottom: 8px;
+    margin-right: 0;
   }
 }

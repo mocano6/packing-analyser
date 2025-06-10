@@ -39,21 +39,8 @@ const ZoneCell = memo(function ZoneCell({
   }, [xTValue]);
 
   const handleClick = () => {
-    console.log(`Kliknięto strefę ${zoneIndex} z wartością xT: ${xTValue.toFixed(3)}`);
     onSelect(zoneIndex);
   };
-
-  // Debugowanie (opcjonalne) - usuń w wersji produkcyjnej
-  useEffect(() => {
-    if (isFirstSelection || isSecondSelection) {
-      console.log(`ZoneCell ${zoneIndex}: `, { 
-        isFirstSelection, 
-        isSecondSelection,
-        xTValue: xTValue.toFixed(3),
-        label: isFirstSelection ? "PASS" : isSecondSelection ? "RECEIVE" : "NONE" 
-      });
-    }
-  }, [zoneIndex, isFirstSelection, isSecondSelection, xTValue]);
 
   const cellClassName = `${styles.zoneCell} ${getSelectionClass()}`;
 

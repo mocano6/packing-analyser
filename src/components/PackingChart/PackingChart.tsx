@@ -45,10 +45,12 @@ const CustomTooltip = ({ active, payload }: any) => {
 type SortField = 'name' | 'totalPacking' | 'senderPacking' | 'receiverPacking' | 
                 'totalPxT' | 'senderPxT' | 'receiverPxT' | 
                 'totalXT' | 'senderXT' | 'receiverXT' |
-                'totalDribbling' | 'senderDribbling' |
-                'totalDribblingPxT' | 'senderDribblingPxT' |
-                'totalDribblingXT' | 'senderDribblingXT' |
-                'minutesPercentage';
+                'totalDribbling' | 'totalDribblingPxT' | 'totalDribblingXT' |
+                'totalP3' | 'senderP3' | 'receiverP3' |
+                'totalPenaltyArea' | 'senderPenaltyArea' | 'receiverPenaltyArea' |
+                'totalShots' | 'senderShots' | 'receiverShots' |
+                'totalGoals' | 'senderGoals' | 'receiverGoals' |
+                'minutesPercentage' | 'actualMinutes';
 
 type SortDirection = 'asc' | 'desc';
 
@@ -59,6 +61,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
   const [sortField, setSortField] = useState<SortField>('totalPacking');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showMatchChart, setShowMatchChart] = useState<boolean>(false);
+  const [isPer90Minutes, setIsPer90Minutes] = useState<boolean>(false);
 
   // Automatycznie przełącz na 'sender' gdy wybieramy drybling
   useEffect(() => {
@@ -87,8 +90,22 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       senderDribblingPxT: number;
       totalDribblingXT: number;
       senderDribblingXT: number;
+      // Przejęcie i podanie
+      totalP3: number;
+      senderP3: number;
+      receiverP3: number;
+      totalPenaltyArea: number;
+      senderPenaltyArea: number;
+      receiverPenaltyArea: number;
+      totalShots: number;
+      senderShots: number;
+      receiverShots: number;
+      totalGoals: number;
+      senderGoals: number;
+      receiverGoals: number;
       // Minuty
       minutesPercentage: number;
+      actualMinutes: number;
     }>();
 
     // Oblicz % możliwych minut dla każdego zawodnika
@@ -119,11 +136,38 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       return totalMaxMinutes > 0 ? (totalPlayerMinutes / totalMaxMinutes) * 100 : 0;
     };
 
+    // Oblicz rzeczywiste minuty dla zawodnika
+    const calculateActualMinutes = (playerId: string): number => {
+      if (!matches || matches.length === 0) return 0;
+
+      let totalPlayerMinutes = 0;
+
+      matches.forEach(match => {
+        if (!match.playerMinutes) return;
+
+        // Znajdź minuty tego zawodnika w tym meczu
+        const playerMinutesInMatch = match.playerMinutes.find(pm => pm.playerId === playerId);
+        const playerMinutesCount = playerMinutesInMatch 
+          ? playerMinutesInMatch.endMinute - playerMinutesInMatch.startMinute 
+          : 0;
+
+        totalPlayerMinutes += playerMinutesCount;
+      });
+
+      return totalPlayerMinutes;
+    };
+
     actions.forEach(action => {
       const packingPoints = action.packingPoints || 0;
       const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
       const pxtValue = xTDifference * packingPoints;
       const isDribble = action.actionType === 'dribble';
+      
+      // Dodatkowe statystyki
+      const isP3 = action.isP3 || false;
+      const isPenaltyArea = action.isPenaltyAreaEntry || false;
+      const isShot = action.isShot || false;
+      const isGoal = action.isGoal || false;
 
       // Dodajemy punkty dla nadawcy
       if (action.senderId) {
@@ -135,7 +179,12 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           totalDribbling: 0, senderDribbling: 0,
           totalDribblingPxT: 0, senderDribblingPxT: 0,
           totalDribblingXT: 0, senderDribblingXT: 0,
-          minutesPercentage: calculateMinutesPercentage(action.senderId)
+          totalP3: 0, senderP3: 0, receiverP3: 0,
+          totalPenaltyArea: 0, senderPenaltyArea: 0, receiverPenaltyArea: 0,
+          totalShots: 0, senderShots: 0, receiverShots: 0,
+          totalGoals: 0, senderGoals: 0, receiverGoals: 0,
+          minutesPercentage: calculateMinutesPercentage(action.senderId),
+          actualMinutes: calculateActualMinutes(action.senderId)
         };
         
         if (isDribble) {
@@ -146,7 +195,15 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
             totalDribblingPxT: current.totalDribblingPxT + pxtValue,
             senderDribblingPxT: current.senderDribblingPxT + pxtValue,
             totalDribblingXT: current.totalDribblingXT + xTDifference,
-            senderDribblingXT: current.senderDribblingXT + xTDifference
+            senderDribblingXT: current.senderDribblingXT + xTDifference,
+            totalP3: current.totalP3 + (isP3 ? 1 : 0),
+            senderP3: current.senderP3 + (isP3 ? 1 : 0),
+            totalPenaltyArea: current.totalPenaltyArea + (isPenaltyArea ? 1 : 0),
+            senderPenaltyArea: current.senderPenaltyArea + (isPenaltyArea ? 1 : 0),
+            totalShots: current.totalShots + (isShot ? 1 : 0),
+            senderShots: current.senderShots + (isShot ? 1 : 0),
+            totalGoals: current.totalGoals + (isGoal ? 1 : 0),
+            senderGoals: current.senderGoals + (isGoal ? 1 : 0)
           });
         } else {
           playerStats.set(action.senderId, {
@@ -156,7 +213,15 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
             totalPxT: current.totalPxT + pxtValue,
             senderPxT: current.senderPxT + pxtValue,
             totalXT: current.totalXT + xTDifference,
-            senderXT: current.senderXT + xTDifference
+            senderXT: current.senderXT + xTDifference,
+            totalP3: current.totalP3 + (isP3 ? 1 : 0),
+            senderP3: current.senderP3 + (isP3 ? 1 : 0),
+            totalPenaltyArea: current.totalPenaltyArea + (isPenaltyArea ? 1 : 0),
+            senderPenaltyArea: current.senderPenaltyArea + (isPenaltyArea ? 1 : 0),
+            totalShots: current.totalShots + (isShot ? 1 : 0),
+            senderShots: current.senderShots + (isShot ? 1 : 0),
+            totalGoals: current.totalGoals + (isGoal ? 1 : 0),
+            senderGoals: current.senderGoals + (isGoal ? 1 : 0)
           });
         }
       }
@@ -171,7 +236,12 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           totalDribbling: 0, senderDribbling: 0,
           totalDribblingPxT: 0, senderDribblingPxT: 0,
           totalDribblingXT: 0, senderDribblingXT: 0,
-          minutesPercentage: calculateMinutesPercentage(action.receiverId)
+          totalP3: 0, senderP3: 0, receiverP3: 0,
+          totalPenaltyArea: 0, senderPenaltyArea: 0, receiverPenaltyArea: 0,
+          totalShots: 0, senderShots: 0, receiverShots: 0,
+          totalGoals: 0, senderGoals: 0, receiverGoals: 0,
+          minutesPercentage: calculateMinutesPercentage(action.receiverId),
+          actualMinutes: calculateActualMinutes(action.receiverId)
         };
         playerStats.set(action.receiverId, {
           ...current,
@@ -180,7 +250,15 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           totalPxT: current.totalPxT + pxtValue,
           receiverPxT: current.receiverPxT + pxtValue,
           totalXT: current.totalXT + xTDifference,
-          receiverXT: current.receiverXT + xTDifference
+          receiverXT: current.receiverXT + xTDifference,
+          totalP3: current.totalP3 + (isP3 ? 1 : 0),
+          receiverP3: current.receiverP3 + (isP3 ? 1 : 0),
+          totalPenaltyArea: current.totalPenaltyArea + (isPenaltyArea ? 1 : 0),
+          receiverPenaltyArea: current.receiverPenaltyArea + (isPenaltyArea ? 1 : 0),
+          totalShots: current.totalShots + (isShot ? 1 : 0),
+          receiverShots: current.receiverShots + (isShot ? 1 : 0),
+          totalGoals: current.totalGoals + (isGoal ? 1 : 0),
+          receiverGoals: current.receiverGoals + (isGoal ? 1 : 0)
         });
       }
     });
@@ -234,7 +312,20 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
         senderDribblingPxT: data.senderDribblingPxT,
         totalDribblingXT: data.totalDribblingXT,
         senderDribblingXT: data.senderDribblingXT,
-        minutesPercentage: data.minutesPercentage
+        totalP3: data.totalP3,
+        senderP3: data.senderP3,
+        receiverP3: data.receiverP3,
+        totalPenaltyArea: data.totalPenaltyArea,
+        senderPenaltyArea: data.senderPenaltyArea,
+        receiverPenaltyArea: data.receiverPenaltyArea,
+        totalShots: data.totalShots,
+        senderShots: data.senderShots,
+        receiverShots: data.receiverShots,
+        totalGoals: data.totalGoals,
+        senderGoals: data.senderGoals,
+        receiverGoals: data.receiverGoals,
+        minutesPercentage: data.minutesPercentage,
+        actualMinutes: data.actualMinutes
       }))
       .filter(item => 
         item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01 ||
@@ -243,8 +334,15 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
 
     // Sortowanie tabeli
     const tableData = [...unsortedTableData].sort((a, b) => {
-      const aValue = a[sortField];
-      const bValue = b[sortField];
+      let aValue = a[sortField];
+      let bValue = b[sortField];
+      
+      // Jeśli sortujemy po wartościach liczbowych w trybie /90 min, przelicz je
+      if (isPer90Minutes && typeof aValue === 'number' && typeof bValue === 'number' && 
+          sortField !== 'name' && sortField !== 'minutesPercentage' && sortField !== 'actualMinutes') {
+        aValue = a.actualMinutes > 0 ? (aValue / a.actualMinutes) * 90 : 0;
+        bValue = b.actualMinutes > 0 ? (bValue / b.actualMinutes) * 90 : 0;
+      }
       
       if (typeof aValue === 'string' && typeof bValue === 'string') {
         return sortDirection === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
@@ -314,7 +412,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       : [];
 
     return { chartData, tableData, matchChartData };
-  }, [actions, selectedChart, selectedMetric, selectedActionType, sortField, sortDirection, selectedPlayerId, matches]);
+  }, [actions, selectedChart, selectedMetric, selectedActionType, sortField, sortDirection, selectedPlayerId, matches, isPer90Minutes]);
 
   const handleClick = (data: any) => {
     if (selectedPlayerId === data.id) {
@@ -369,6 +467,13 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
 
   const formatValue = (value: number, decimals: number = 2) => {
     return decimals === 0 ? Math.round(value).toString() : value.toFixed(decimals);
+  };
+
+  // Funkcja do przeliczania wartości na 90 minut
+  const formatValuePer90 = (value: number, actualMinutes: number, decimals: number = 2) => {
+    if (actualMinutes === 0) return formatValue(0, decimals);
+    const per90Value = (value / actualMinutes) * 90;
+    return formatValue(per90Value, decimals);
   };
 
   // Custom tooltip dla wykresu meczowego
@@ -579,7 +684,17 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
 
       {/* Tabela ze statystykami */}
       <div className={styles.statsTable}>
-        <h4>Szczegółowe statystyki</h4>
+        <div className={styles.tableHeader}>
+          <h4>Szczegółowe statystyki</h4>
+          <label className={styles.per90Checkbox}>
+            <input
+              type="checkbox"
+              checked={isPer90Minutes}
+              onChange={(e) => setIsPer90Minutes(e.target.checked)}
+            />
+            /90 min
+          </label>
+        </div>
         <div className={styles.tableContainer}>
           <table className={styles.table}>
             <thead>
@@ -590,9 +705,9 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
                 <th colSpan={3}>Podania - Packing</th>
                 <th colSpan={3}>Podania - PxT</th>
                 <th colSpan={3}>Podania - xT</th>
-                <th colSpan={2}>Drybling - Packing</th>
-                <th colSpan={2}>Drybling - PxT</th>
-                <th colSpan={2}>Drybling - xT</th>
+                <th colSpan={3}>Drybling</th>
+                <th colSpan={4}>Przejęcie</th>
+                <th colSpan={4}>Podanie</th>
                 <th rowSpan={2} onClick={() => handleSort('minutesPercentage')} className={styles.sortableHeader}>
                   % minut {getSortIcon('minutesPercentage')}
                 </th>
@@ -626,22 +741,37 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
                   Przyjmujący {getSortIcon('receiverXT')}
                 </th>
                 <th onClick={() => handleSort('totalDribbling')} className={styles.sortableHeader}>
-                  Łącznie {getSortIcon('totalDribbling')}
-                </th>
-                <th onClick={() => handleSort('senderDribbling')} className={styles.sortableHeader}>
-                  Wykonujący {getSortIcon('senderDribbling')}
+                  Packing {getSortIcon('totalDribbling')}
                 </th>
                 <th onClick={() => handleSort('totalDribblingPxT')} className={styles.sortableHeader}>
-                  Łącznie {getSortIcon('totalDribblingPxT')}
-                </th>
-                <th onClick={() => handleSort('senderDribblingPxT')} className={styles.sortableHeader}>
-                  Wykonujący {getSortIcon('senderDribblingPxT')}
+                  PxT {getSortIcon('totalDribblingPxT')}
                 </th>
                 <th onClick={() => handleSort('totalDribblingXT')} className={styles.sortableHeader}>
-                  Łącznie {getSortIcon('totalDribblingXT')}
+                  xT {getSortIcon('totalDribblingXT')}
                 </th>
-                <th onClick={() => handleSort('senderDribblingXT')} className={styles.sortableHeader}>
-                  Wykonujący {getSortIcon('senderDribblingXT')}
+                <th onClick={() => handleSort('senderP3')} className={styles.sortableHeader}>
+                  P3 {getSortIcon('senderP3')}
+                </th>
+                <th onClick={() => handleSort('senderPenaltyArea')} className={styles.sortableHeader}>
+                  PK {getSortIcon('senderPenaltyArea')}
+                </th>
+                <th onClick={() => handleSort('senderShots')} className={styles.sortableHeader}>
+                  Strzał {getSortIcon('senderShots')}
+                </th>
+                <th onClick={() => handleSort('senderGoals')} className={styles.sortableHeader}>
+                  Br {getSortIcon('senderGoals')}
+                </th>
+                <th onClick={() => handleSort('receiverP3')} className={styles.sortableHeader}>
+                  P3 {getSortIcon('receiverP3')}
+                </th>
+                <th onClick={() => handleSort('receiverPenaltyArea')} className={styles.sortableHeader}>
+                  PK {getSortIcon('receiverPenaltyArea')}
+                </th>
+                <th onClick={() => handleSort('receiverShots')} className={styles.sortableHeader}>
+                  Strzał {getSortIcon('receiverShots')}
+                </th>
+                <th onClick={() => handleSort('receiverGoals')} className={styles.sortableHeader}>
+                  Br {getSortIcon('receiverGoals')}
                 </th>
               </tr>
             </thead>
@@ -654,22 +784,29 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
                 >
                   <td className={styles.playerName}>{player.name}</td>
                   {/* Podania */}
-                  <td>{formatValue(player.totalPacking, 0)}</td>
-                  <td>{formatValue(player.senderPacking, 0)}</td>
-                  <td>{formatValue(player.receiverPacking, 0)}</td>
-                  <td>{formatValue(player.totalPxT, 2)}</td>
-                  <td>{formatValue(player.senderPxT, 2)}</td>
-                  <td>{formatValue(player.receiverPxT, 2)}</td>
-                  <td>{formatValue(player.totalXT, 3)}</td>
-                  <td>{formatValue(player.senderXT, 3)}</td>
-                  <td>{formatValue(player.receiverXT, 3)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.totalPacking, player.actualMinutes, 1) : formatValue(player.totalPacking, 0)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.senderPacking, player.actualMinutes, 1) : formatValue(player.senderPacking, 0)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.receiverPacking, player.actualMinutes, 1) : formatValue(player.receiverPacking, 0)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.totalPxT, player.actualMinutes, 2) : formatValue(player.totalPxT, 2)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.senderPxT, player.actualMinutes, 2) : formatValue(player.senderPxT, 2)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.receiverPxT, player.actualMinutes, 2) : formatValue(player.receiverPxT, 2)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.totalXT, player.actualMinutes, 3) : formatValue(player.totalXT, 3)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.senderXT, player.actualMinutes, 3) : formatValue(player.senderXT, 3)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.receiverXT, player.actualMinutes, 3) : formatValue(player.receiverXT, 3)}</td>
                   {/* Drybling */}
-                  <td>{formatValue(player.totalDribbling, 0)}</td>
-                  <td>{formatValue(player.senderDribbling, 0)}</td>
-                  <td>{formatValue(player.totalDribblingPxT, 2)}</td>
-                  <td>{formatValue(player.senderDribblingPxT, 2)}</td>
-                  <td>{formatValue(player.totalDribblingXT, 3)}</td>
-                  <td>{formatValue(player.senderDribblingXT, 3)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.totalDribbling, player.actualMinutes, 1) : formatValue(player.totalDribbling, 0)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.totalDribblingPxT, player.actualMinutes, 2) : formatValue(player.totalDribblingPxT, 2)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.totalDribblingXT, player.actualMinutes, 3) : formatValue(player.totalDribblingXT, 3)}</td>
+                  {/* Przejęcie */}
+                  <td>{isPer90Minutes ? formatValuePer90(player.senderP3, player.actualMinutes, 1) : formatValue(player.senderP3, 0)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.senderPenaltyArea, player.actualMinutes, 1) : formatValue(player.senderPenaltyArea, 0)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.senderShots, player.actualMinutes, 1) : formatValue(player.senderShots, 0)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.senderGoals, player.actualMinutes, 1) : formatValue(player.senderGoals, 0)}</td>
+                  {/* Podanie */}
+                  <td>{isPer90Minutes ? formatValuePer90(player.receiverP3, player.actualMinutes, 1) : formatValue(player.receiverP3, 0)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.receiverPenaltyArea, player.actualMinutes, 1) : formatValue(player.receiverPenaltyArea, 0)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.receiverShots, player.actualMinutes, 1) : formatValue(player.receiverShots, 0)}</td>
+                  <td>{isPer90Minutes ? formatValuePer90(player.receiverGoals, player.actualMinutes, 1) : formatValue(player.receiverGoals, 0)}</td>
                   <td>{formatValue(player.minutesPercentage, 0)}</td>
                 </tr>
               ))}

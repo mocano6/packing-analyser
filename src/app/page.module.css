@@ -15,26 +15,74 @@
 /* Styl dla kontenera przycisków */
 .buttonsContainer {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   margin-top: 20px;
   margin-bottom: 20px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
-.logoutButton {
+/* Bazowy styl dla wszystkich przycisków w kontenerze */
+.buttonsContainer > * {
   padding: 10px 16px;
-  background-color: #fee2e2;
-  color: #dc2626;
-  border: none;
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
+  text-decoration: none;
+  border: none;
   cursor: pointer;
   transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  box-sizing: border-box;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.buttonsContainer > *:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.playersButton {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.playersButton:hover {
+  background-color: #bbdefb;
+  color: #0d47a1;
+}
+
+.teamStatsButton {
+  background-color: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.teamStatsButton:hover {
+  background-color: #e1bee7;
+  color: #4a148c;
+}
+
+.listButton {
+  background-color: #6610f2;
+  color: white;
+}
+
+.listButton:hover {
+  background-color: #5a0dcf;
+}
+
+.logoutButton {
+  background-color: #fee2e2;
+  color: #dc2626;
+  margin-left: auto; /* Przesuwa przycisk wyloguj na prawą stronę */
 }
 
 .logoutButton:hover {
-  background: #1e40af;
-  transform: translateY(-1px);
+  background-color: #fecaca;
+  color: #b91c1c;
 }
 
 .actionButton {
@@ -57,62 +105,4 @@
 .actionButton:hover {
   background-color: #388e3c;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-}
-
-/* Dodaj styl dla innych przycisków jeśli potrzeba */
-
-.playersButton {
-  padding: 12px 24px;
-  background-color: #e3f2fd;
-  color: #1976d2;
-  text-decoration: none;
-  border-radius: 6px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.playersButton:hover {
-  background-color: #bbdefb;
-  transform: translateY(-1px);
-}
-
-.teamStatsButton {
-  padding: 12px 24px;
-  background-color: #f3e5f5;
-  color: #7b1fa2;
-  text-decoration: none;
-  border-radius: 6px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.teamStatsButton:hover {
-  background-color: #0056b3;
-  transform: translateY(-2px);
-}
-
-.listButton {
-  padding: 12px 20px;
-  background-color: #6610f2;
-  color: white;
-  text-decoration: none;
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: none;
-  cursor: pointer;
-}
-
-.listButton:hover {
-  background-color: #5a0dcf;
-  transform: translateY(-2px);
 }
