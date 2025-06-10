@@ -54,22 +54,22 @@ const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players 
         </div>
         
         {!isPlayerMinutesCollapsed && (
-          <div className={styles.playerMinutesList}>
+        <div className={styles.playerMinutesList}>
             {filteredPlayerMinutes.map((playerMinute) => {
-              const player = players.find(p => p.id === playerMinute.playerId);
-              if (!player) return null;
+            const player = players.find(p => p.id === playerMinute.playerId);
+            if (!player) return null;
 
-              return (
-                <div key={playerMinute.playerId} className={styles.playerMinuteItem}>
-                  <span className={styles.playerName}>{player.name}</span>
-                  <span className={styles.playerPosition}>{playerMinute.position || player.position}</span>
-                  <span className={styles.playerMinutes}>
-                    {playerMinute.startMinute === 0 && playerMinute.endMinute === 0 ? 0 : playerMinute.endMinute - playerMinute.startMinute + 1} min
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+            return (
+              <div key={playerMinute.playerId} className={styles.playerMinuteItem}>
+                <span className={styles.playerName}>{player.name}</span>
+                <span className={styles.playerPosition}>{playerMinute.position || player.position}</span>
+                <span className={styles.playerMinutes}>
+                  {playerMinute.startMinute === 0 && playerMinute.endMinute === 0 ? 0 : playerMinute.endMinute - playerMinute.startMinute + 1} min
+                </span>
+              </div>
+            );
+          })}
+        </div>
         )}
       </div>
     );
@@ -166,7 +166,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
       return 0;
     });
   }, [allMatches, selectedTeam, sortKey, sortDirection, refreshCounter]);
-
+    
   // Oblicz mecze do wyświetlenia na podstawie stanu collapse/expand
   const { displayedMatches, hasMoreMatches, needsScroll } = React.useMemo(() => {
     const totalMatches = teamMatches.length;

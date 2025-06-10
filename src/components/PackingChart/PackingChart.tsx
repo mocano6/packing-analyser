@@ -685,7 +685,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       {/* Tabela ze statystykami */}
       <div className={styles.statsTable}>
         <div className={styles.tableHeader}>
-          <h4>Szczegółowe statystyki</h4>
+        <h4>Szczegółowe statystyki</h4>
           <label className={styles.per90Checkbox}>
             <input
               type="checkbox"

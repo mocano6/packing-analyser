@@ -39,10 +39,10 @@ export function usePlayersState() {
         // Sprawdź czy Firebase jest dostępne
         if (!db) {
           console.warn('⚠️ Firebase nie jest zainicjalizowane - używam localStorage');
-          if (typeof window !== "undefined") {
-            try {
-              const savedPlayers = localStorage.getItem("players");
-              if (savedPlayers) {
+        if (typeof window !== "undefined") {
+          try {
+            const savedPlayers = localStorage.getItem("players");
+            if (savedPlayers) {
                 const localPlayers = JSON.parse(savedPlayers) as Player[];
                 setPlayers(localPlayers);
               } else {
@@ -144,12 +144,12 @@ export function usePlayersState() {
         playersRef.current = cleanPlayers; // Aktualizuj ref
           
         // Zapisz do localStorage jako backup
-        if (typeof window !== "undefined") {
+          if (typeof window !== "undefined") {
           localStorage.setItem("players", JSON.stringify(cleanPlayers));
         }
           
-        } else {
-          setPlayers([]);
+              } else {
+              setPlayers([]);
         }
         
       } catch (error) {
@@ -393,14 +393,14 @@ export function usePlayersState() {
           const playerDoc = await getDoc(playerRef);
           
           // Przygotuj dane do zapisu (usuń undefined values)
-          const updateData = Object.fromEntries(
-            Object.entries(playerData).filter(([_, value]) => value !== undefined)
-          );
-          
+                const updateData = Object.fromEntries(
+                  Object.entries(playerData).filter(([_, value]) => value !== undefined)
+                );
+                
           if (playerDoc.exists()) {
             // Dokument istnieje - aktualizuj go
             await updateDoc(playerRef, updateData);
-          } else {
+                  } else {
             // Dokument nie istnieje - utwórz go
             await setDoc(playerRef, updateData);
           }

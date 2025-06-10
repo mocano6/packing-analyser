@@ -51,32 +51,32 @@ const PlayersGrid = memo(function PlayersGrid({
       </div>
       
       {!isCollapsed && (
-        <div className={styles.playersGrid}>
-          {players.map((player) => (
-            <PlayerTile
-              key={player.id}
-              player={player}
-              isSelected={player.id === selectedPlayerId}
-              onSelect={onPlayerSelect}
-              onEdit={onEditPlayer}
-              onDelete={onDeletePlayer}
-            />
-          ))}
-          <div
-            className={`${styles.playerTile} ${styles.addPlayerTile}`}
-            onClick={onAddPlayer}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onAddPlayer();
-              }
-            }}
-            role="button"
-            tabIndex={0}
-            aria-label="Dodaj nowego zawodnika"
-          >
-            +
-          </div>
+    <div className={styles.playersGrid}>
+      {players.map((player) => (
+        <PlayerTile
+          key={player.id}
+          player={player}
+          isSelected={player.id === selectedPlayerId}
+          onSelect={onPlayerSelect}
+          onEdit={onEditPlayer}
+          onDelete={onDeletePlayer}
+        />
+      ))}
+      <div
+        className={`${styles.playerTile} ${styles.addPlayerTile}`}
+        onClick={onAddPlayer}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onAddPlayer();
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label="Dodaj nowego zawodnika"
+      >
+        +
+      </div>
         </div>
       )}
     </div>

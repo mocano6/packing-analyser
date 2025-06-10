@@ -392,14 +392,14 @@ const ActionModal: React.FC<ActionModalProps> = ({
             <div className={styles.playersGrid}>
               {filteredPlayers.length > 0 ? (
                 filteredPlayers.map((player) => (
-                  <PlayerCard
-                    key={player.id}
-                    player={player}
-                    isSender={actionType === "pass" ? player.id === selectedPlayerId : false}
-                    isReceiver={actionType === "pass" ? player.id === selectedReceiverId : false}
-                    isDribbler={actionType === "dribble" ? player.id === selectedPlayerId : false}
-                    onSelect={handlePlayerClick}
-                  />
+                <PlayerCard
+                  key={player.id}
+                  player={player}
+                  isSender={actionType === "pass" ? player.id === selectedPlayerId : false}
+                  isReceiver={actionType === "pass" ? player.id === selectedReceiverId : false}
+                  isDribbler={actionType === "dribble" ? player.id === selectedPlayerId : false}
+                  onSelect={handlePlayerClick}
+                />
                 ))
               ) : (
                 <div className={styles.noPlayersMessage}>
