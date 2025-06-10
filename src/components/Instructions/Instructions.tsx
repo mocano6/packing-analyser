@@ -120,6 +120,42 @@ export default function Instructions() {
           </>
         ),
       },
+      methodology: {
+        title: "Metodologia Packingu",
+        content: (
+          <>
+            <div className={styles.cardInfo}>
+              <h4>Kiedy zaliczamy packing? ✅</h4>
+              <div className={styles.methodologyRule}>
+                <span className={styles.ruleIcon}>✅</span>
+                <p><strong>Podanie do stopy kolegi:</strong> Jeśli podanie (głową, wybicie, czy świadome podanie) trafia bezpośrednio do stopy kolegi z drużyny - packing zaliczamy.</p>
+              </div>
+              
+              <div className={styles.methodologyRule}>
+                <span className={styles.ruleIcon}>✅</span>
+                <p><strong>Kontakt z inną częścią ciała + stopa:</strong> Jeśli po kontakcie piłki z głową, klatką piersiową, kolanem lub inną częścią ciała, piłka następnie zostanie przyjęta stopą - packing zaliczamy.</p>
+              </div>
+              
+              <div className={styles.methodologyRule}>
+                <span className={styles.ruleIcon}>✅</span>
+                <p><strong>Przedłużenie głową do kolegi:</strong> Jeśli zawodnik przedłuży piłkę głową, a następny kontakt będzie stopą innego zawodnika z drużyny - packing zaliczamy.</p>
+              </div>
+            </div>
+
+            <div className={styles.cardInfo}>
+              <h4>Kiedy NIE zaliczamy packingu? ❌</h4>
+              <div className={styles.methodologyRule}>
+                <span className={styles.ruleIcon}>❌</span>
+                <p><strong>Brak kontaktu ze stopą:</strong> Jeśli po podaniu nie ma kontaktu ze stopą (tylko głowa, klatka, kolano) i następuje strata piłki - packing NIE zaliczony.</p>
+              </div>
+            </div>
+
+            <div className={styles.packingNote}>
+              <p><strong>Kluczowa zasada:</strong> Packing zaliczamy tylko wtedy, gdy w akcji uczestniczy stopa zawodnika przyjmującego piłkę, niezależnie od tego, czy wcześniej piłka miała kontakt z innymi częściami ciała.</p>
+            </div>
+          </>
+        ),
+      },
       tips: {
         title: "Wskazówki",
         content: (

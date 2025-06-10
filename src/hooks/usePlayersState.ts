@@ -456,6 +456,13 @@ export function usePlayersState() {
   );
 
   const handleEditPlayer = useCallback(async (playerId: string) => {
+    console.log('🔍 Próba edycji zawodnika z ID:', playerId);
+    
+    // Sprawdź czy zawodnik istnieje w lokalnym stanie
+    const localPlayer = players.find(p => p.id === playerId);
+    console.log('👤 Zawodnik w lokalnym stanie:', localPlayer ? 
+      `${localPlayer.name} (ID: ${localPlayer.id})` : 'Nie znaleziono');
+    
     try {
       // Pobierz najnowsze dane bezpośrednio z Firebase przed edycją
       if (!db) {
@@ -463,22 +470,45 @@ export function usePlayersState() {
         return;
       }
       
+      console.log('🔥 Próba pobrania z Firebase ID:', playerId);
       const playerDoc = await getDoc(doc(db, "players", playerId));
+      console.log('📄 Rezultat getDoc - exists():', playerDoc.exists());
+      
       if (playerDoc.exists()) {
         const playerData = { id: playerDoc.id, ...playerDoc.data() } as Player;
+        console.log('✅ Pobrano dane z Firebase:', playerData.name);
         
         setEditingPlayerId(playerId);
         setEditingPlayerData(playerData); // Ustaw świeże dane z Firebase
         setIsModalOpen(true);
       } else {
-        console.error('Zawodnik nie istnieje w Firebase');
-        alert('Zawodnik nie został znaleziony w bazie danych');
+        console.error('❌ Zawodnik nie istnieje w Firebase - ID:', playerId);
+        
+        // Jeśli zawodnik istnieje lokalnie ale nie w Firebase, spróbuj go utworzyć
+        if (localPlayer) {
+          console.log('💾 Próba utworzenia zawodnika w Firebase z lokalnych danych');
+          try {
+            const { id, ...playerDataWithoutId } = localPlayer;
+            await setDoc(doc(db, "players", playerId), playerDataWithoutId);
+            console.log('✅ Utworzono zawodnika w Firebase');
+            
+            // Teraz spróbuj ponownie edytować
+            setEditingPlayerId(playerId);
+            setEditingPlayerData(localPlayer);
+            setIsModalOpen(true);
+          } catch (createError) {
+            console.error('❌ Błąd tworzenia zawodnika w Firebase:', createError);
+            alert('Nie można utworzyć zawodnika w bazie danych');
+          }
+        } else {
+          alert('Zawodnik nie został znaleziony w bazie danych');
+        }
       }
     } catch (error) {
-      console.error('Błąd pobierania zawodnika z Firebase:', error);
+      console.error('❌ Błąd pobierania zawodnika z Firebase:', error);
       alert('Błąd podczas pobierania danych zawodnika');
     }
-  }, []);
+  }, [players]);
 
   const closeModal = useCallback(() => {
     setIsModalOpen(false);

@@ -71,7 +71,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
       const savedHalf = localStorage.getItem('currentHalf');
       if (savedHalf) {
         const isP2 = savedHalf === 'P2';
-        console.log(`usePackingActions: Wczytano połowę z localStorage: ${savedHalf}`);
         setIsSecondHalf(isP2);
       }
     } else {
@@ -84,7 +83,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
   const loadActionsForMatch = async (matchId: string) => {
     try {
       setIsLoading(true);
-      console.log("Ładowanie akcji dla meczu:", matchId);
       
       // Pobierz dokument meczu
       const matchRef = doc(db, "matches", matchId);
@@ -94,10 +92,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         const matchData = matchDoc.data() as TeamInfo;
         // Sprawdź czy istnieje tablica akcji
         const loadedActions = matchData.actions_packing || [];
-        
-        // Dodajemy log dla sprawdzenia, czy akcje mają ustawioną wartość isSecondHalf
-        console.log(`Załadowano ${loadedActions.length} akcji dla meczu:`, matchId);
-        console.log("Przykładowe wartości isSecondHalf:", loadedActions.slice(0, 3).map(a => a.isSecondHalf));
         
         // Uzupełniamy brakujące dane zawodników w akcjach
         const enrichedActions = loadedActions.map(action => {
@@ -139,14 +133,12 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         );
         
         if (dataWasEnriched) {
-          console.log("Akcje zostały wzbogacone o dane zawodników - synchronizuję z bazą danych");
           // Synchronizujemy wzbogacone akcje z bazą Firebase
           syncEnrichedActions(matchId, enrichedActions);
         }
         
         setActions(enrichedActions);
       } else {
-        console.log("Nie znaleziono meczu o ID:", matchId);
         setActions([]);
       }
     } catch (error) {
@@ -163,7 +155,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     value1?: number, 
     value2?: number
   ) => {
-    console.log("Wybrano strefę:", zone, xT, value1, value2);
     setSelectedZone(zone);
     return true; // Zwracamy true, aby funkcja mogła być sprawdzana na truthiness
   }, []);
@@ -178,20 +169,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     packingValue?: number,
     isSecondHalfParam?: boolean
   ): Promise<boolean> => {
-    // Najpierw wyświetlmy szczegółowe dane o przekazanych parametrach
-    console.log("handleSaveAction wywołane z parametrami:", {
-      matchInfoArg: matchInfoArg ? { matchId: matchInfoArg.matchId, team: matchInfoArg.team } : null,
-      startZone,
-      endZone,
-      startZoneXT,
-      endZoneXT,
-      packingValue,
-      isSecondHalfParam,
-      startZoneType: typeof startZone,
-      endZoneType: typeof endZone,
-      selectedPlayerId
-    });
-
     // Sprawdzmy każdy parametr oddzielnie, aby zidentyfikować dokładnie, który jest problemem
     if (!matchInfoArg) {
       console.error("Brak danych meczu (matchInfoArg jest null/undefined)");
@@ -222,10 +199,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     }
     
     try {
-      console.log("Zapisuję akcję do lokalnego stanu i dokumentu meczu...");
-      console.log("Wartości xT otrzymane:", { startZoneXT, endZoneXT });
-      console.log("Informacja o połowie meczu:", isSecondHalfParam);
-      
       // Konwertujemy strefy na format literowo-liczbowy, jeśli podano liczby
       // Najpierw upewniamy się, że startZone i endZone nie są null
       const formattedStartZone = startZone !== null ? 
@@ -239,8 +212,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
       // Nowa logika: nigdy nie używaj wartości domyślnej 0 - jeśli nie ma wartości, użyj undefined
       const xTStart = typeof startZoneXT === 'number' ? startZoneXT : undefined;
       const xTEnd = typeof endZoneXT === 'number' ? endZoneXT : undefined;
-      
-      console.log("Wartości xT do zapisania - Start:", xTStart, "End:", xTEnd);
       
       // Tworzymy nową akcję
       const newAction: Action = {
@@ -283,27 +254,14 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         }
       }
       
-      console.log("Utworzona akcja z wartościami xT i połową meczu:", { 
-        xTValueStart: newAction.xTValueStart, 
-        xTValueEnd: newAction.xTValueEnd,
-        isSecondHalf: newAction.isSecondHalf,
-        senderName: newAction.senderName,
-        senderNumber: newAction.senderNumber,
-        receiverName: newAction.receiverName,
-        receiverNumber: newAction.receiverNumber
-      });
-      
       // Usuwamy pola undefined z obiektu akcji przed zapisem
       const cleanedAction = removeUndefinedFields(newAction);
-      console.log("Akcja po oczyszczeniu z wartości undefined:", cleanedAction);
       
       // Dodajemy akcję do lokalnego stanu
       setActions(prevActions => [...prevActions, cleanedAction]);
       
       // Zapisujemy do Firebase
       try {
-        console.log("Próba zapisania akcji do dokumentu meczu...");
-        
         // Pobierz aktualny dokument meczu
         const matchRef = doc(db, "matches", matchInfoArg.matchId);
         const matchDoc = await getDoc(matchRef);
@@ -321,15 +279,12 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
             actions_packing: [...cleanedActions, cleanedAction]
           });
           
-          console.log("✅ Akcja została zapisana w dokumencie meczu z ID:", cleanedAction.id);
-          
           // Po udanym zapisie zaktualizuj dane zawodników
           try {
             // Aktualizuj dane zawodników o nową akcję
             await updatePlayerWithAction(cleanedAction, matchInfoArg);
-            console.log("✅ Zaktualizowano dane zawodników o nową akcję");
           } catch (playerUpdateError) {
-            console.error("❌ Błąd podczas aktualizacji danych zawodników:", playerUpdateError);
+              console.error("Błąd podczas aktualizacji danych zawodników:", playerUpdateError);
             // Nie przerywamy wykonania - akcja została już zapisana
           }
           
@@ -339,19 +294,15 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
           console.error("Nie znaleziono meczu o ID:", matchInfoArg.matchId);
         }
       } catch (firebaseError) {
-        console.error("❌ Błąd podczas zapisywania akcji w Firebase:", firebaseError);
+          console.error("Błąd podczas zapisywania akcji w Firebase:", firebaseError);
         
         // Obsługa błędu wewnętrznego stanu Firestore
         const errorHandled = await handleFirestoreError(firebaseError, db);
         
-        if (errorHandled) {
-          console.log("✅ Błąd Firestore został obsłużony - akcja została zapisana lokalnie");
-        } else {
-          console.warn("⚠️ Akcja została dodana tylko lokalnie - synchronizacja z Firebase nieudana");
+          if (!errorHandled) {
+            console.warn("Akcja została dodana tylko lokalnie - synchronizacja z Firebase nieudana");
         }
       }
-      
-      console.log("Akcja została zapisana:", cleanedAction);
       
       // Po zapisaniu resetujemy stan
       resetActionState();

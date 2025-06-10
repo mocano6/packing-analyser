@@ -14,6 +14,8 @@ interface CurrentMatchInfoProps {
 }
 
 const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players }) => {
+  const [isPlayerMinutesCollapsed, setIsPlayerMinutesCollapsed] = useState(true);
+
   if (!matchInfo || !matchInfo.matchId) {
     return null;
   }
@@ -24,25 +26,51 @@ const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players 
       return null;
     }
 
+    // Filtruj zawodników z co najmniej 1 minutą rozegrana
+    const filteredPlayerMinutes = matchInfo.playerMinutes.filter(playerMinute => {
+      const playTime = playerMinute.startMinute === 0 && playerMinute.endMinute === 0 
+        ? 0 
+        : playerMinute.endMinute - playerMinute.startMinute + 1;
+      return playTime >= 1;
+    });
+
+    if (filteredPlayerMinutes.length === 0) {
+      return null;
+    }
+
     return (
       <div className={styles.playerMinutesInfo}>
-        <h4>Czas gry zawodników:</h4>
-        <div className={styles.playerMinutesList}>
-          {matchInfo.playerMinutes.map((playerMinute) => {
-            const player = players.find(p => p.id === playerMinute.playerId);
-            if (!player) return null;
-
-            return (
-              <div key={playerMinute.playerId} className={styles.playerMinuteItem}>
-                <span className={styles.playerName}>{player.name}</span>
-                <span className={styles.playerPosition}>{playerMinute.position || player.position}</span>
-                <span className={styles.playerMinutes}>
-                  {playerMinute.startMinute === 0 && playerMinute.endMinute === 0 ? 0 : playerMinute.endMinute - playerMinute.startMinute + 1} min
-                </span>
-              </div>
-            );
-          })}
+        <div 
+          className={styles.playerMinutesHeader}
+          onClick={() => setIsPlayerMinutesCollapsed(!isPlayerMinutesCollapsed)}
+        >
+          <h4>Czas gry zawodników ({filteredPlayerMinutes.length})</h4>
+          <button 
+            className={styles.collapseButton}
+            aria-label={isPlayerMinutesCollapsed ? "Rozwiń listę minut zawodników" : "Zwiń listę minut zawodników"}
+          >
+            {isPlayerMinutesCollapsed ? "▼" : "▲"}
+          </button>
         </div>
+        
+        {!isPlayerMinutesCollapsed && (
+          <div className={styles.playerMinutesList}>
+            {filteredPlayerMinutes.map((playerMinute) => {
+              const player = players.find(p => p.id === playerMinute.playerId);
+              if (!player) return null;
+
+              return (
+                <div key={playerMinute.playerId} className={styles.playerMinuteItem}>
+                  <span className={styles.playerName}>{player.name}</span>
+                  <span className={styles.playerPosition}>{playerMinute.position || player.position}</span>
+                  <span className={styles.playerMinutes}>
+                    {playerMinute.startMinute === 0 && playerMinute.endMinute === 0 ? 0 : playerMinute.endMinute - playerMinute.startMinute + 1} min
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
@@ -109,19 +137,12 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   const [sortKey, setSortKey] = useState<keyof TeamInfo>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isMatchesTableExpanded, setIsMatchesTableExpanded] = useState(false);
   
   // Automatycznie aktywuj tryb deweloperski (obejście uwierzytelniania)
   React.useEffect(() => {
-    console.log('🔓 MatchInfoHeader: Aktywacja trybu deweloperskiego - obejście uwierzytelniania');
     localStorage.setItem('packing_app_bypass_auth', 'true');
   }, []);
-  
-  // Dodajemy zależność refreshCounter do useEffect dla lepszego debugowania
-  useEffect(() => {
-    console.log('🔄 MatchInfoHeader - refreshCounter zmieniony na:', refreshCounter);
-    console.log('📋 MatchInfoHeader - allMatches:', allMatches.length, 'elementów');
-    console.log('👥 MatchInfoHeader - selectedTeam:', selectedTeam);
-  }, [allMatches, selectedTeam, refreshCounter]);
   
   // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
   const getTeamName = (teamId: string) => {
@@ -132,14 +153,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
 
   // Filtrowanie meczów wybranego zespołu - używamy useMemo dla optymalizacji
   const teamMatches = React.useMemo(() => {
-    console.log(`🔍 Filtruję mecze dla zespołu ${selectedTeam}, dostępnych meczów: ${allMatches.length}`);
-    console.log('🔢 Aktualna wartość refreshCounter:', refreshCounter);
-    
-    // Dodajemy dodatkowe debugowanie
-    console.log('🧾 Szczegóły meczów:', allMatches.map(m => `${m.matchId}: ${m.team} vs ${m.opponent}`));
-    
     const filtered = allMatches.filter(match => match.team === selectedTeam);
-    console.log(`📊 Po filtrowaniu: ${filtered.length} meczów dla zespołu ${selectedTeam}`);
     
     return filtered.sort((a, b) => {
       const aValue = a[sortKey];
@@ -152,11 +166,31 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
       return 0;
     });
   }, [allMatches, selectedTeam, sortKey, sortDirection, refreshCounter]);
+
+  // Oblicz mecze do wyświetlenia na podstawie stanu collapse/expand
+  const { displayedMatches, hasMoreMatches, needsScroll } = React.useMemo(() => {
+    const totalMatches = teamMatches.length;
     
-  // Dodajemy debugowanie wyników filtrowania
-  useEffect(() => {
-    console.log('📊 MatchInfoHeader - teamMatches po filtrowaniu:', teamMatches.length, 'elementów');
-  }, [teamMatches]);
+    if (totalMatches === 0) {
+      return { displayedMatches: [], hasMoreMatches: false, needsScroll: false };
+    }
+    
+    // Jeśli tabela jest zwinięta, pokazuj maksymalnie 2 mecze
+    if (!isMatchesTableExpanded) {
+      return {
+        displayedMatches: teamMatches.slice(0, 2),
+        hasMoreMatches: totalMatches > 2,
+        needsScroll: false
+      };
+    }
+    
+    // Jeśli tabela jest rozwinięta, pokazuj wszystkie mecze z suwakiem jeśli potrzeba
+    return {
+      displayedMatches: teamMatches, // Pokazuj wszystkie mecze
+      hasMoreMatches: false,
+      needsScroll: totalMatches > 5 // Suwak pojawi się gdy więcej niż 5 meczów
+    };
+  }, [teamMatches, isMatchesTableExpanded]);
 
   // Funkcja do dodania nowego meczu
   const handleAddMatch = () => {
@@ -255,9 +289,9 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
           <div className={styles.headerCell}>Akcje</div>
         </div>
 
-        <div className={styles.tableBody}>
-          {teamMatches.length > 0 ? (
-            teamMatches.map((match) => {
+        <div className={`${styles.tableBody} ${needsScroll ? styles.scrollableTable : ''}`}>
+          {displayedMatches.length > 0 ? (
+            displayedMatches.map((match) => {
               const isSelected = matchInfo?.matchId === match.matchId;
               const isHomeMatch = match.isHome === true;
               const isBeingDeleted = isDeleting === match.matchId;
@@ -319,7 +353,6 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                                 setIsDeleting(match.matchId);
                                 // Wywołujemy funkcję usuwania, a funkcja ta zajmie się także odświeżeniem listy
                                 onDeleteMatch(match.matchId);
-                                console.log("Usuwanie i odświeżanie obsługiwane przez hook useMatchInfo");
                               }
                             }
                           }}
@@ -371,7 +404,6 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                                 setIsDeleting(match.matchId);
                                 // Wywołujemy funkcję usuwania, a funkcja ta zajmie się także odświeżeniem listy
                                 onDeleteMatch(match.matchId);
-                                console.log("Usuwanie i odświeżanie obsługiwane przez hook useMatchInfo");
                               }
                             }
                           }}
@@ -394,6 +426,29 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
             </div>
           )}
         </div>
+        
+        {/* Przycisk rozwijania/zwijania tabeli meczów */}
+        {(hasMoreMatches || isMatchesTableExpanded) && (
+          <div className={styles.tableExpandButton}>
+            <button 
+              className={styles.expandBtn}
+              onClick={() => setIsMatchesTableExpanded(!isMatchesTableExpanded)}
+              aria-label={isMatchesTableExpanded ? "Zwiń listę meczów" : "Rozwiń listę meczów"}
+            >
+              {isMatchesTableExpanded ? (
+                <>
+                  <span>Pokaż mniej</span>
+                  <span className={styles.expandIcon}>▲</span>
+                </>
+              ) : (
+                <>
+                  <span>Pokaż więcej ({teamMatches.length - 2})</span>
+                  <span className={styles.expandIcon}>▼</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

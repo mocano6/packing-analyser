@@ -134,12 +134,10 @@ export function useMatchInfo() {
   // Sprawdzamy połączenie sieciowe
   useEffect(() => {
     const handleOnline = () => {
-      console.log("🌐 Aplikacja jest online");
       setIsOfflineMode(false);
     };
 
     const handleOffline = () => {
-      console.log("📴 Aplikacja jest offline");
       setIsOfflineMode(true);
     };
 
@@ -163,9 +161,8 @@ export function useMatchInfo() {
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem(LOCAL_MATCHES_CACHE_KEY, JSON.stringify(localCacheRef.current));
-        console.log('💾 Cache zapisany do localStorage, elementów:', localCacheRef.current.data.length);
       } catch (err) {
-        console.error('❌ Błąd podczas zapisywania cache do localStorage:', err);
+        console.error('Błąd podczas zapisywania cache do localStorage:', err);
       }
     }
   };
@@ -177,11 +174,10 @@ export function useMatchInfo() {
         const cachedData = localStorage.getItem(LOCAL_MATCHES_CACHE_KEY);
         if (cachedData) {
           const parsedCache = JSON.parse(cachedData) as MatchesCache;
-          console.log('📂 Wczytano cache z localStorage, elementów:', parsedCache.data.length);
           return parsedCache;
         }
       } catch (err) {
-        console.error('❌ Błąd podczas wczytywania cache z localStorage:', err);
+        console.error('Błąd podczas wczytywania cache z localStorage:', err);
       }
     }
     return null;
@@ -286,7 +282,7 @@ export function useMatchInfo() {
       // Dodajemy opóźnienie przed próbą pobrania danych
       await new Promise(res => setTimeout(res, 300));
       
-      console.log("🔄 Próba synchronizacji danych z Firebase dla zespołu:", teamId || "wszystkie");
+
       
       // Używamy kolejki operacji i mechanizmu ponownych prób
       const matchesData = await firebaseQueue.add(async () => {
@@ -316,15 +312,13 @@ export function useMatchInfo() {
           ...doc.data()
         })) as TeamInfo[];
             } else {
-              console.log('❌ Brak meczów w Firebase');
               return [];
             }
           } catch (err) {
-            console.error("⚠️ Błąd przy pobieraniu meczów z Firebase:", err);
+            console.error("Błąd przy pobieraniu meczów z Firebase:", err);
             
             // Rozszerzona obsługa błędów offline
             if (String(err).includes("client is offline") || String(err).includes("Failed to get document because the client is offline")) {
-              console.warn("📴 Wykryto tryb offline. Przełączam aplikację na tryb lokalnego cache.");
               setIsOfflineMode(true);
               
               // Zapisz status offline do localStorage
@@ -339,14 +333,11 @@ export function useMatchInfo() {
               const filteredMatches = teamId 
                 ? cachedMatches.filter(match => match.team === teamId)
                 : cachedMatches;
-                
-              console.log('🚑 Używam cache z powodu trybu offline, elementów:', filteredMatches.length);
               
               return filteredMatches;
             }
             // W przypadku błędu uprawnień, przełączamy się na tryb offline
             else if (String(err).includes("permission") || String(err).includes("Missing or insufficient permissions")) {
-              console.warn("🔒 Problem z uprawnieniami Firebase, przełączam na tryb offline");
               setIsOfflineMode(true);
               setError("Brak uprawnień do synchronizacji danych z bazą. Działamy w trybie offline.");
               
@@ -355,8 +346,6 @@ export function useMatchInfo() {
               const filteredMatches = teamId 
                 ? cachedMatches.filter(match => match.team === teamId)
                 : cachedMatches;
-                
-              console.log('🚑 Używam cache z powodu problemów z uprawnieniami, elementów:', filteredMatches.length);
               
               return filteredMatches;
             }
@@ -365,19 +354,16 @@ export function useMatchInfo() {
         }, 2, 2000); // Mniejsze parametry ponownych prób
       });
       
-      console.log('🏆 Pobrane mecze z Firebase:', matchesData.length, 'elementów');
-      
       // Aktualizacja cache'u i stanu
       updateLocalCache(matchesData, teamId);
         setAllMatches(matchesData);
       
       return matchesData;
     } catch (err) {
-      console.error("❌ Błąd podczas pobierania meczów z Firebase:", err);
+      console.error("Błąd podczas pobierania meczów z Firebase:", err);
       
       // Sprawdzenie czy to błąd offline
       if (String(err).includes("client is offline") || String(err).includes("Failed to get document because the client is offline")) {
-        console.warn("📴 Wykryto tryb offline. Przełączam aplikację na tryb lokalnego cache.");
         setIsOfflineMode(true);
         
         // Zapisz status offline do localStorage
@@ -393,8 +379,6 @@ export function useMatchInfo() {
       const filteredMatches = teamId 
         ? cachedMatches.filter(match => match.team === teamId)
         : cachedMatches;
-        
-      console.log('🚑 Używam cache jako źródła awaryjnego, elementów:', filteredMatches.length);
       
       return filteredMatches;
     } finally {
@@ -407,7 +391,6 @@ export function useMatchInfo() {
 
   // Funkcja do powiadamiania użytkownika o błędach
   const notifyUser = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    console.log(`Powiadomienie [${type}]: ${message}`);
     switch (type) {
       case 'success':
         toast.success(message);
@@ -426,17 +409,13 @@ export function useMatchInfo() {
       setIsLoading(true);
       setError(null);
       
-      console.log("🔍 fetchMatches: Rozpoczynam pobieranie meczów dla zespołu:", teamId || "wszystkie");
-      
       // 1. Najpierw sprawdzamy cache
       const cachedMatches = localCacheRef.current.data;
-      console.log(`📂 Cache zawiera ${cachedMatches.length} meczów`);
       
       // 2. Filtrujemy dane z cache'u (jeśli jest teamId)
       let filteredMatches = cachedMatches;
       if (teamId) {
         filteredMatches = cachedMatches.filter(match => match.team === teamId);
-        console.log(`🔍 Po filtrowaniu cache'u: ${filteredMatches.length} meczów dla zespołu ${teamId}`);
       }
       
       // 3. Aktualizujemy stan z cache'u
@@ -468,7 +447,6 @@ export function useMatchInfo() {
                                localStorage.getItem('firestore_offline_mode') === 'true';
         
         if (!isOnline || isOfflineForced) {
-          console.log("📴 Wykryto tryb offline - pomijam synchronizację z Firebase");
           setIsOfflineMode(true);
           return filteredMatches;
         }
@@ -485,7 +463,6 @@ export function useMatchInfo() {
             } catch (error) {
               // Rozszerzona obsługa błędów offline
               if (String(error).includes("client is offline") || String(error).includes("Failed to get document because the client is offline")) {
-                console.log("📴 Klient jest offline - pomijam synchronizację z Firebase");
                 setIsOfflineMode(true);
                 
                 // Zapisz informację o trybie offline do localStorage
@@ -527,7 +504,7 @@ export function useMatchInfo() {
             
             if (teamId) {
               const teamMatches = firebaseMatches.filter(match => match.team === teamId);
-              console.log(`🔄 Odświeżono dane z Firebase: ${teamMatches.length} meczów dla zespołu ${teamId}`);
+
               
               if (teamMatches.length !== filteredMatches.length) {
                 console.log('📊 Wykryto różnicę między cache a Firebase, aktualizuję stan');

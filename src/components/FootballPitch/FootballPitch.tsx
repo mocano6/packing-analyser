@@ -26,11 +26,7 @@ const FootballPitch = memo(function FootballPitch({
 }: FootballPitchProps) {
   // Logowanie zmian stref dla debugowania
   useEffect(() => {
-    console.log("FootballPitch - zmiany stref:", {
-      startZone,
-      endZone,
-      selectedZone
-    });
+    
   }, [startZone, endZone, selectedZone]);
   
   // Obsługa kliknięcia na strefę
@@ -40,9 +36,6 @@ const FootballPitch = memo(function FootballPitch({
       const row = Math.floor(zoneIndex / 12);
       const col = zoneIndex % 12;
       const xTValue = getXTValueFromMatrix(row, col);
-      
-      console.log(`FootballPitch - handleZoneClick: strefa ${zoneIndex}, xT: ${xTValue.toFixed(3)}`);
-      
       // Przekaż strefę i wartości do rodzica
       onZoneSelect(zoneIndex, xTValue);
     },

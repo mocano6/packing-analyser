@@ -47,19 +47,16 @@ const OfflineStatus: React.FC<OfflineStatusProps> = ({ className }) => {
       
       // Inicjalizacja stanu na podstawie aktualnego statusu połączenia
       setIsOnline(navigator.onLine);
-      console.log('Status połączenia:', navigator.onLine ? 'online' : 'offline');
       
       setInitialCheckDone(true);
     }, 1000);
     
     // Nasłuchiwanie zmian stanu połączenia
     const handleOnline = () => {
-      console.log('Aplikacja przeszła w tryb online');
       setIsOnline(true);
     };
 
     const handleOffline = () => {
-      console.log('Aplikacja przeszła w tryb offline');
       setIsOnline(false);
     };
 

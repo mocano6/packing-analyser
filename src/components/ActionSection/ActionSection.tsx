@@ -5,7 +5,7 @@ import React, { memo, useEffect } from "react";
 import FootballPitch from "../FootballPitch/FootballPitch";
 import ActionModal from "../ActionModal/ActionModal";
 import styles from "./ActionSection.module.css";
-import { Player } from "@/types";
+import { Player, TeamInfo } from "@/types";
 
 export interface ActionSectionProps {
   selectedZone: string | number | null;
@@ -42,6 +42,7 @@ export interface ActionSectionProps {
   endZone: number | null;
   isActionModalOpen: boolean;
   setIsActionModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  matchInfo?: TeamInfo | null;
 }
 
 const ActionSection = memo(function ActionSection({
@@ -74,6 +75,7 @@ const ActionSection = memo(function ActionSection({
   endZone,
   isActionModalOpen,
   setIsActionModalOpen,
+  matchInfo,
 }: ActionSectionProps) {
   // Dodajemy efekt, który będzie monitorował wartości stref
   useEffect(() => {
@@ -188,6 +190,7 @@ const ActionSection = memo(function ActionSection({
         onSecondHalfToggle={handleSecondHalfToggle}
         onSaveAction={handleSaveActionWrapper}
         onReset={resetActionState}
+        matchInfo={matchInfo}
       />
     </section>
   );

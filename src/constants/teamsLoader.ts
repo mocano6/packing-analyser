@@ -46,19 +46,20 @@ export async function fetchTeams(): Promise<Record<string, Team>> {
   // Jeśli mamy cache i nie jest starszy niż CACHE_TTL, zwróć cache
   const now = Date.now();
   if (cachedTeams && (now - lastFetchTime < CACHE_TTL)) {
-    console.log("Używam zapisanych w pamięci danych o zespołach");
     return cachedTeams;
   }
 
   // Sprawdź, czy aplikacja jest w trybie offline
   const isOfflineMode = typeof window !== 'undefined' && localStorage.getItem('firestore_offline_mode') === 'true';
   if (isOfflineMode) {
-    console.log("📴 Aplikacja w trybie offline - używam domyślnych zespołów");
     return DEFAULT_TEAMS;
   }
 
   try {
-    console.log("Pobieranie zespołów z Firebase...");
+    if (!db) {
+      throw new Error("Firebase nie jest zainicjalizowane");
+    }
+    
     const teamsCollection = collection(db, "teams");
     const teamsSnapshot = await getDocs(teamsCollection);
     
@@ -85,7 +86,6 @@ export async function fetchTeams(): Promise<Record<string, Team>> {
     // Aktualizujemy cache
     cachedTeams = teams;
     lastFetchTime = now;
-    console.log("Pobrano zespoły z Firebase:", Object.keys(teams).length);
     
     return teams;
   } catch (error) {
@@ -96,7 +96,7 @@ export async function fetchTeams(): Promise<Record<string, Team>> {
       if (error.message.includes("Missing or insufficient permissions") || 
           error.message.includes("client is offline") ||
           error.message.includes("Failed to get document because the client is offline")) {
-        console.log("🔒 Wykryto brak uprawnień lub tryb offline, przełączam na tryb offline");
+
         
         if (typeof window !== 'undefined') {
           localStorage.setItem('firestore_offline_mode', 'true');
