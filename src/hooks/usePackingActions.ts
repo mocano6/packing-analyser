@@ -10,19 +10,21 @@ import { updatePlayerWithAction } from "@/utils/syncPlayerData";
 import { getPlayerFullName } from '@/utils/playerUtils';
 
 // Funkcja do konwersji numeru strefy na format literowo-liczbowy
-// Zakładamy, że boisko ma 12 kolumn (a-l) i 8 wierszy (1-8)
 function convertZoneNumberToString(zoneNumber: number | string): string {
   if (typeof zoneNumber === 'string') return zoneNumber; // Jeśli już string, zwracamy bez zmian
   
-  // Zakładamy, że numeracja biegnie od lewej do prawej, od góry do dołu
-  // np. 0-11 to pierwszy wiersz, 12-23 to drugi wiersz, itd.
-  const row = Math.floor(zoneNumber / 12) + 1; // Wiersze od 1
-  const col = zoneNumber % 12; // Kolumny od 0
+  // Obliczanie wiersza i kolumny na podstawie zone (0-95)
+  const row = Math.floor(zoneNumber / 12);
+  const col = zoneNumber % 12;
   
-  // Konwertujemy kolumnę na literę (0 -> 'a', 1 -> 'b', itd.)
-  const colLetter = String.fromCharCode(97 + col); // 97 to kod ASCII dla 'a'
+  // Mapujemy indeksy wierszy na litery (0->a, 1->b, ..., 7->h)
+  const rowLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+  const rowLetter = rowLetters[row];
   
-  return `${colLetter}${row}`;
+  // Konwertujemy indeks kolumny na numer (0->1, 1->2, ..., 11->12)
+  const colNumber = col + 1;
+  
+  return `${rowLetter}${colNumber}`;
 }
 
 // Funkcja pomocnicza do usuwania undefined z obiektów, zachowująca typ
@@ -325,7 +327,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
       return false;
     }
     
-    console.log("Usuwam akcję:", actionId);
     try {
       // Usuwanie akcji z lokalnego stanu
       setActions(prevActions => prevActions.filter(action => action.id !== actionId));
@@ -346,8 +347,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         await updateDoc(matchRef, {
           actions_packing: cleanedActions
         });
-        
-        console.log("✅ Akcja została usunięta z dokumentu meczu:", actionId);
       } else {
         console.error("Nie znaleziono meczu o ID:", matchInfo.matchId);
       }
@@ -371,16 +370,12 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     }
     
     if (window.confirm("Czy na pewno chcesz usunąć wszystkie akcje?")) {
-      console.log("Usuwam wszystkie akcje");
-      
       try {
         // Aktualizacja dokumentu meczu - ustawienie pustej tablicy akcji
         const matchRef = doc(db, "matches", matchInfo.matchId);
         await updateDoc(matchRef, {
           actions_packing: []
         });
-        
-        console.log(`✅ Usunięto wszystkie akcje z dokumentu meczu: ${matchInfo.matchId}`);
         
         // Czyścimy stan lokalny
         setActions([]);
@@ -399,7 +394,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
 
   // Dodaj nową funkcję do ustawiania połowy meczu
   const setCurrentHalf = useCallback((value: boolean) => {
-    console.log(`usePackingActions: Zmiana połowy na ${value ? 'P2' : 'P1'}`);
     setIsSecondHalf(value);
     
     // Zapisujemy wartość w localStorage dla spójności w całej aplikacji
@@ -434,7 +428,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         actions_packing: enrichedActions.map(action => removeUndefinedFields(action))
       });
       
-      console.log(`✅ Synchronizacja uzupełnionych danych graczy dla ${enrichedActions.length} akcji powiodła się`);
+
     } catch (error) {
       console.error("❌ Błąd podczas synchronizacji uzupełnionych akcji:", error);
       // Obsługa błędu wewnętrznego stanu Firestore

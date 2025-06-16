@@ -8,6 +8,7 @@ import { getXTColor } from "./utils";
 export interface ZoneCellProps {
   zoneIndex: number;
   xTValue: number;
+  zoneName: string;
   isSelected: boolean;
   isFirstSelection: boolean;
   isSecondSelection: boolean;
@@ -17,6 +18,7 @@ export interface ZoneCellProps {
 const ZoneCell = memo(function ZoneCell({
   zoneIndex,
   xTValue,
+  zoneName,
   isSelected,
   isFirstSelection,
   isSecondSelection,
@@ -59,7 +61,10 @@ const ZoneCell = memo(function ZoneCell({
       data-selection-type={isFirstSelection ? "pass" : isSecondSelection ? "receive" : "none"}
     >
       {!isFirstSelection && !isSecondSelection && (
-        <span className={styles.xTValue}>{xTValue.toFixed(3)}</span>
+        <div className={styles.cellContent}>
+          <span className={styles.xTValue}>{xTValue.toFixed(3)}</span>
+          <span className={styles.zoneName}>{zoneName}</span>
+        </div>
       )}
       {isFirstSelection && <span className={styles.actionText}>PASS</span>}
       {isSecondSelection && <span className={styles.actionText}>RECEIVE</span>}

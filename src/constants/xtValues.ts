@@ -194,4 +194,26 @@ export const zoneNameToString = (zoneName: [string, number] | null): string => {
   return `${zoneName[0]}${zoneName[1]}`;
 };
 
+/**
+ * Funkcja konwertująca nazwę strefy na indeks
+ * @param zoneName Nazwa strefy w formacie "A1", "B5", etc.
+ * @returns Indeks strefy (0-95) lub null jeśli nazwa nieprawidłowa
+ */
+export const zoneNameToIndex = (zoneName: string): number | null => {
+  if (!zoneName || zoneName.length < 2) return null;
+  
+  const letter = zoneName[0].toLowerCase();
+  const numberStr = zoneName.slice(1);
+  const number = parseInt(numberStr, 10);
+  
+  if (isNaN(number) || number < 1 || number > 12) return null;
+  
+  const rowLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+  const rowIndex = rowLetters.indexOf(letter);
+  
+  if (rowIndex === -1) return null;
+  
+  return rowIndex * 12 + (number - 1);
+};
+
 export default XT_VALUES; 
