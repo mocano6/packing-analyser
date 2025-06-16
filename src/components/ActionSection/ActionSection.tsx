@@ -110,17 +110,13 @@ const ActionSection = memo(function ActionSection({
 
   // Modyfikujemy funkcję obsługującą zapisywanie akcji
   const handleSaveActionWrapper = () => {
-    console.log("ActionSection: handleSaveActionWrapper wywołane, wartości stref:", { startZone, endZone });
-    
     // Dodatkowe sprawdzenie stref przed zapisem
     if (startZone === null || startZone === undefined) {
-      console.error("ActionSection: Brak strefy początkowej - nie można zapisać akcji");
       alert("Wybierz strefę początkową akcji!");
       return;
     }
 
     if (endZone === null || endZone === undefined) {
-      console.error("ActionSection: Brak strefy końcowej - nie można zapisać akcji");
       alert("Wybierz strefę końcową akcji!");
       return;
     }
@@ -131,23 +127,8 @@ const ActionSection = memo(function ActionSection({
 
   const handlePitchZoneSelect = (zone: number | null, xT?: number, value1?: number, value2?: number) => {
     if (zone !== null) {
-      console.log("ActionSection: handlePitchZoneSelect wywołane z:", { zone, xT });
-      
       // Wywołujemy funkcję handleZoneSelect w komponencie nadrzędnym
-      const result = handleZoneSelect(zone, xT, value1, value2);
-      
-      // Po zaktualizowaniu stref, sprawdzamy czy ActionModal powinien zostać otwarty
-      // Jest to dodatkowe zabezpieczenie, gdyby w handleZoneSelect nie działało otwieranie modalu
-      setTimeout(() => {
-        if (startZone !== null && endZone !== null && !isActionModalOpen) {
-          console.log("ActionSection: Wykryto obie strefy ustawione, można otworzyć ActionModal", {
-            startZone,
-            endZone
-          });
-        }
-      }, 100);
-      
-      return result;
+      return handleZoneSelect(zone, xT, value1, value2);
     }
   };
 

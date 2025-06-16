@@ -406,10 +406,7 @@ export default function Page() {
 
   // Funkcja przygotowująca strefy do zapisu akcji
   const prepareZonesForAction = () => {
-    console.log("prepareZonesForAction - wartości wejściowe:", { startZone, endZone });
-    
     if (!startZone || !endZone) {
-      console.error("Brak wartości startZone lub endZone!");
       return false;
     }
     
@@ -429,7 +426,6 @@ export default function Page() {
       if (isDrybling) {
         // To jest drybling - dla dryblingu potrzebujemy przekazać te same wartości dla value1 i value2
         setActionType("dribble");
-        console.log("Ustawiamy drybling:", { startZone, startXT });
         
         // Najpierw czyścimy poprzednie wartości
         handleZoneSelect(null); // reset
@@ -442,7 +438,6 @@ export default function Page() {
       } else {
         // To jest podanie
         setActionType("pass");
-        console.log("Ustawiamy podanie:", { startZone, endZone, startXT, endXT });
         
         // Najpierw czyścimy poprzednie wartości
         handleZoneSelect(null); // reset
@@ -462,31 +457,26 @@ export default function Page() {
       
       return true;
     } catch (error) {
-      console.error("Błąd podczas przygotowywania stref:", error);
       return false;
     }
   };
 
   const onSaveAction = async () => {
-    console.log("onSaveAction wywołana z wartościami stref:", { startZone, endZone });
-    
     // Sprawdzamy czy matchInfo istnieje przed wywołaniem handleSaveAction
     if (!matchInfo) {
-      console.error("Brak informacji o meczu - nie można zapisać akcji");
+      alert("Wybierz mecz, aby zapisać akcję!");
       toggleMatchModal(true);
       return;
     }
     
     // Sprawdzamy, czy wszystkie wymagane dane są ustawione
     if (!selectedPlayerId) {
-      console.error("Brak wybranego zawodnika - nie można zapisać akcji");
       alert("Wybierz zawodnika rozpoczynającego akcję!");
       return;
     }
     
     // W przypadku podania sprawdzamy, czy wybrany jest odbiorca
     if (actionType === "pass" && !selectedReceiverId) {
-      console.error("Brak wybranego odbiorcy dla podania - nie można zapisać akcji");
       alert("Wybierz zawodnika kończącego podanie!");
       return;
     }
@@ -500,7 +490,6 @@ export default function Page() {
       const savedStartZone = localStorage.getItem('tempStartZone');
       if (savedStartZone) {
         finalStartZone = Number(savedStartZone);
-        console.log("Pobrano startZone z localStorage:", finalStartZone);
       }
     }
     
@@ -509,34 +498,17 @@ export default function Page() {
       const savedEndZone = localStorage.getItem('tempEndZone');
       if (savedEndZone) {
         finalEndZone = Number(savedEndZone);
-        console.log("Pobrano endZone z localStorage:", finalEndZone);
       }
     }
     
-    // Sprawdzamy szczegółowo strefy
-    console.log("Sprawdzanie stref przed zapisem:", {
-      startZone: finalStartZone,
-      endZone: finalEndZone,
-      startZoneType: typeof finalStartZone,
-      endZoneType: typeof finalEndZone,
-      startZoneValue: finalStartZone === 0 ? "zero" : finalStartZone,
-      endZoneValue: finalEndZone === 0 ? "zero" : finalEndZone,
-      localStorage: {
-        tempStartZone: localStorage.getItem('tempStartZone'),
-        tempEndZone: localStorage.getItem('tempEndZone')
-      }
-    });
-    
     // Sprawdzamy czy startZone jest zdefiniowane (nawet jeśli jest zerem)
     if (finalStartZone === null || finalStartZone === undefined) {
-      console.error("Brak strefy początkowej - nie można zapisać akcji");
       alert("Wybierz strefę początkową akcji!");
       return;
     }
 
     // Sprawdzamy czy endZone jest zdefiniowane (nawet jeśli jest zerem)
     if (finalEndZone === null || finalEndZone === undefined) {
-      console.error("Brak strefy końcowej - nie można zapisać akcji");
       alert("Wybierz strefę końcową akcji!");
       return;
     }
@@ -557,30 +529,8 @@ export default function Page() {
         setActionType("dribble");
       }
       
-      // Logujemy stan przed wywołaniem handleSaveAction
-      console.log("Stan przed zapisem akcji:", {
-        selectedPlayerId,
-        selectedReceiverId,
-        actionType: isDrybling ? "dribble" : "pass",
-        startZone: finalStartZone,
-        endZone: finalEndZone,
-        startXT,
-        endXT,
-        currentPoints
-      });
-      
       // Wywołujemy handleSaveAction z matchInfo, wartościami stref i wartościami xT
       try {
-        console.log("Wywołuję handleSaveAction z parametrami:", {
-          matchInfo: { matchId: matchInfo.matchId, team: matchInfo.team },
-          startZone: finalStartZone,
-          endZone: finalEndZone,
-          startXT,
-          endXT,
-          currentPoints,
-          isSecondHalf
-        });
-        
         const success = await handleSaveAction(
           matchInfo, 
           finalStartZone, 
@@ -591,12 +541,8 @@ export default function Page() {
           isSecondHalf
         );
         
-        console.log("Wynik handleSaveAction:", success);
-        
         if (success) {
           // Resetujemy stan tylko jeśli zapis się powiódł
-          console.log("Akcja zapisana pomyślnie - resetuję stany stref");
-          
           // Usuwamy wartości stref z localStorage
           localStorage.removeItem('tempStartZone');
           localStorage.removeItem('tempEndZone');
@@ -609,11 +555,8 @@ export default function Page() {
           setIsActionModalOpen(false);
           setSelectedPlayerId(null);
           setSelectedReceiverId(null);
-        } else {
-          console.error("Zapis akcji nie powiódł się - zachowuję wybrane strefy");
         }
       } catch (error) {
-        console.error("Błąd podczas zapisywania akcji:", error);
         alert("Wystąpił błąd podczas zapisywania akcji: " + (error instanceof Error ? error.message : String(error)));
       }
     } catch (error) {
@@ -639,47 +582,31 @@ export default function Page() {
 
   // Funkcja do otwierania modalu nowego meczu
   const openNewMatchModal = () => {
-    console.log("Otwieranie modalu dla nowego meczu");
     setIsNewMatchModalOpen(true);
   };
 
   // Funkcja do zamykania modalu nowego meczu
   const closeNewMatchModal = () => {
-    console.log("Zamykanie modalu dla nowego meczu");
     setIsNewMatchModalOpen(false);
-    
-    // Hook useMatchInfo sam zajmuje się odświeżeniem listy meczów
-    console.log("Modal nowego meczu zamknięty - lista meczów zostanie odświeżona automatycznie");
   };
   
   // Funkcja do otwierania modalu edycji meczu
   const openEditMatchModal = () => {
-    console.log("Otwieranie modalu dla edycji meczu");
     toggleMatchModal(true);
   };
 
   // Funkcja do zamykania modalu edycji meczu
   const closeEditMatchModal = () => {
-    console.log("Zamykanie modalu dla edycji meczu");
     toggleMatchModal(false);
-    
-    // Hook useMatchInfo sam zajmuje się odświeżeniem listy meczów
-    console.log("Modal edycji meczu zamknięty - lista meczów zostanie odświeżona automatycznie");
   };
 
   // Modyfikujemy funkcje obsługi zapisywania, aby odświeżały listę meczów po zapisie
   const handleSaveNewMatch = async (matchInfo: TeamInfo) => {
-    console.log("💾 Zapisywanie nowego meczu:", matchInfo);
     try {
       // Zapisujemy mecz
       const savedMatch = await handleSaveMatchInfo(matchInfo);
-      console.log("✅ Nowy mecz zapisany:", savedMatch);
-      
-      // Hook useMatchInfo sam zajmuje się odświeżeniem listy meczów
-      
       return savedMatch;
     } catch (error) {
-      console.error("❌ Błąd przy zapisywaniu nowego meczu:", error);
       alert("Wystąpił błąd przy zapisywaniu meczu. Spróbuj ponownie.");
       return null;
     }
@@ -687,17 +614,11 @@ export default function Page() {
 
   // Obsługa zapisywania edytowanego meczu
   const handleSaveEditedMatch = async (matchInfo: TeamInfo) => {
-    console.log("💾 Zapisywanie edytowanego meczu:", matchInfo);
     try {
       // Zapisujemy mecz
       const savedMatch = await handleSaveMatchInfo(matchInfo);
-      console.log("✅ Edytowany mecz zapisany:", savedMatch);
-      
-      // Hook useMatchInfo sam zajmuje się odświeżeniem listy meczów
-      
       return savedMatch;
     } catch (error) {
-      console.error("❌ Błąd przy zapisywaniu edytowanego meczu:", error);
       alert("Wystąpił błąd przy zapisywaniu meczu. Spróbuj ponownie.");
       return null;
     }
@@ -722,10 +643,6 @@ export default function Page() {
     const newActions = data.actions.filter(
       importedAction => !actions.some(a => a.id === importedAction.id)
     );
-    if (newActions.length > 0) {
-      // Dodajemy nowe akcje do lokalnego stanu - będą pobrane przez hook useActionsState
-      console.log(`Dodano ${newActions.length} nowych akcji`);
-    }
     
     // Aktualizuj informacje o meczu, jeśli to nowy mecz
     if (data.matchInfo && !allMatches.some(m => m.matchId === data.matchInfo.matchId)) {
@@ -744,59 +661,46 @@ export default function Page() {
   // Nowa funkcja do obsługi wyboru strefy
   const handleZoneSelection = (zoneId: number, xT?: number) => {
     if (zoneId === null || zoneId === undefined) {
-      console.error("handleZoneSelection: Otrzymano pustą strefę!");
       return;
     }
-    
-    console.log("handleZoneSelection wywołane z:", { 
-      zoneId, 
-      xT, 
-      isNumber: typeof zoneId === 'number',
-      startZone, 
-      endZone 
-    });
     
     // Jeśli nie mamy startZone, to ustawiamy ją
     if (startZone === null) {
-      console.log("Ustawiam startZone:", zoneId);
       setStartZone(zoneId);
-      
-      // Zapisujemy strefę początkową w localStorage 
       localStorage.setItem('tempStartZone', String(zoneId));
-      
-      // Dodatkowe sprawdzenie po ustawieniu
-      setTimeout(() => {
-        console.log("Sprawdzenie po ustawieniu startZone:", { startZone });
-      }, 50);
       return;
     }
     
-    // Jeśli mamy startZone, ale nie mamy endZone, to ustawiamy ją
-    if (endZone === null) {
-      console.log("Ustawiam endZone:", zoneId);
+    // Jeśli mamy startZone, sprawdzamy czy to ta sama strefa (drybling)
+    if (startZone === zoneId) {
+      // To jest drybling - ustawiamy endZone na tę samą wartość
       setEndZone(zoneId);
-      
-      // Zapisujemy strefę końcową w localStorage
       localStorage.setItem('tempEndZone', String(zoneId));
+      setActionType("dribble");
       
-      // Dodatkowe sprawdzenie po ustawieniu
+      // Odczekaj chwilę przed otwarciem modalu, aby stan się zaktualizował
       setTimeout(() => {
-        console.log("Sprawdzenie po ustawieniu endZone:", { endZone });
-        
-        // Odczekaj jeszcze chwilę przed otwarciem modalu, aby stan się zaktualizował
-        setTimeout(() => {
-          // Otwieramy ActionModal bez resetowania wyboru zawodnika
-          console.log("Otwieram ActionModal z wartościami stref:", { startZone, endZone });
-          setIsActionModalOpen(true);
-        }, 50);
-      }, 50);
+        setIsActionModalOpen(true);
+      }, 100);
+      
+      return;
+    }
+    
+    // Jeśli mamy startZone, ale nie mamy endZone i to inna strefa - to podanie
+    if (endZone === null) {
+      setEndZone(zoneId);
+      localStorage.setItem('tempEndZone', String(zoneId));
+      setActionType("pass");
+      
+      // Odczekaj chwilę przed otwarciem modalu, aby stan się zaktualizował
+      setTimeout(() => {
+        setIsActionModalOpen(true);
+      }, 100);
       
       return;
     }
     
     // Jeśli mamy obie strefy, resetujemy je i zaczynamy od nowa
-    console.log("Resetuję strefy i ustawiam nową startZone:", zoneId);
-    
     // Najpierw resetujemy strefy
     setEndZone(null);
     localStorage.removeItem('tempEndZone');
@@ -806,8 +710,6 @@ export default function Page() {
       // Ustawiamy nową strefę początkową
       setStartZone(zoneId);
       localStorage.setItem('tempStartZone', String(zoneId));
-      
-      console.log("Strefy po resecie:", { startZone: zoneId, endZone: null });
     }, 50);
   };
 
@@ -825,16 +727,12 @@ export default function Page() {
     // Czyścimy również localStorage ze stref
     localStorage.removeItem('tempStartZone');
     localStorage.removeItem('tempEndZone');
-    
-    console.log("Wykonano resetowanie stanu akcji - wyczyszczono strefy i zawodników");
   };
 
   // Modyfikujemy funkcję obsługi przełącznika half
   const handleSecondHalfToggle = React.useCallback((value: React.SetStateAction<boolean>) => {
     // Określamy nową wartość niezależnie od typu value (funkcja lub wartość bezpośrednia)
     const newValue = typeof value === 'function' ? value(isSecondHalf) : value;
-    
-    console.log("page.tsx - zmiana połowy na:", newValue ? "P2" : "P1", "obecna wartość:", isSecondHalf);
     
     // Zapisujemy wartość w stanie lokalnym
     setIsSecondHalf(newValue);
@@ -1402,9 +1300,9 @@ export default function Page() {
           <Link href="/statystyki-zespolu" className={styles.teamStatsButton}>
             📊 Statystyki zespołu
           </Link>
-          <Link href="/lista-zawodnikow" className={styles.listButton}>
+          {/* <Link href="/lista-zawodnikow" className={styles.listButton}>
             📋 Lista wszystkich zawodników
-          </Link>
+          </Link> */}
           <ExportButton
             players={players}
             actions={actions}
@@ -1428,3 +1326,4 @@ export default function Page() {
     </div>
   );
 }
+
