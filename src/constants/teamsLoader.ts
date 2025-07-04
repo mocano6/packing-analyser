@@ -118,6 +118,14 @@ export async function getTeamsArray(): Promise<Team[]> {
   return Object.values(teams);
 }
 
+/**
+ * Czyści cache zespołów - wymusza ponowne pobranie z Firebase przy następnym wywołaniu fetchTeams
+ */
+export function clearTeamsCache(): void {
+  cachedTeams = null;
+  lastFetchTime = 0;
+}
+
 // Eksportujemy domyślne zespoły dla kompatybilności wstecznej
 export const TEAMS = DEFAULT_TEAMS;
 export default TEAMS; 

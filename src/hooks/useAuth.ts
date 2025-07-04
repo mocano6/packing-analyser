@@ -1,189 +1,195 @@
 import { useState, useEffect } from "react";
-import { db } from "@/lib/firebase";
-import { collection, doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
-import { compareHash, hashPassword } from "@/utils/password";
+import { getDB } from "@/lib/firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { AuthService, AuthState } from "@/utils/authService";
 import { toast } from "react-hot-toast";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 
-// Klucz localStorage do przechowywania tokenu autentykacji
-const AUTH_TOKEN_KEY = "packing_app_auth_token";
-// Czas ważności tokenu (24 godziny)
-const TOKEN_VALIDITY_MS = 24 * 60 * 60 * 1000;
+// Typ dla użytkownika z uprawnieniami do zespołów
+export interface UserData {
+  email: string;
+  allowedTeams: string[];
+  role: 'user' | 'admin';
+  createdAt: Date;
+  lastLogin: Date;
+}
 
 interface UseAuthReturnType {
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (password: string) => Promise<boolean>;
+  user: any;
+  userTeams: string[];
+  isAdmin: boolean;
   logout: () => void;
-  setPassword: (newPassword: string) => Promise<boolean>;
-  resetPassword: () => Promise<boolean>;
-  isPasswordSet: boolean;
+  refreshUserData: () => Promise<void>;
 }
 
 export function useAuth(): UseAuthReturnType {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isPasswordSet, setIsPasswordSet] = useState<boolean>(false);
+  const [authState, setAuthState] = useState<AuthState>({
+    user: null,
+    isAuthenticated: false,
+    isLoading: true,
+    isAnonymous: false,
+    error: null
+  });
+  const [userTeams, setUserTeams] = useState<string[]>([]);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isUserDataLoading, setIsUserDataLoading] = useState<boolean>(false);
 
-  // Sprawdź token przy starcie
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const token = localStorage.getItem(AUTH_TOKEN_KEY);
-        if (token) {
-          // Sprawdź, czy token nie wygasł
-          const tokenTime = parseInt(token.split('_')[1]);
-          if (Date.now() - tokenTime < TOKEN_VALIDITY_MS) {
-            setIsAuthenticated(true);
-          } else {
-            localStorage.removeItem(AUTH_TOKEN_KEY);
-          }
-        }
-      } catch (error) {
-        console.error("Błąd podczas sprawdzania autentykacji:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const authService = AuthService.getInstance();
 
-    checkAuth();
-  }, []);
-
-  // Logowanie z użyciem hasła
-  const login = async (password: string): Promise<boolean> => {
-    try {
-      setIsLoading(true);
-      
-      // Pobierz hasło z Firebase
-      const settingsRef = doc(db, "settings", "password");
-      const settingsDoc = await getDoc(settingsRef).catch(error => {
-        handleFirestoreError(error, db);
-        toast.error("Błąd połączenia z bazą danych. Proszę spróbować ponownie.");
-        throw error;
-      });
-      
-      if (!settingsDoc.exists()) {
-        // Jeśli dokument z hasłem nie istnieje, pierwszy użytkownik może ustawić hasło
-        console.log('ℹ️ Dokument hasła nie istnieje - ustawianie pierwszego hasła');
-        const success = await setPassword(password);
-        if (success) {
-          toast.success("Ustawiono nowe hasło i zalogowano pomyślnie");
-        }
-        return success;
-      }
-      
-      const { hash, salt } = settingsDoc.data();
-      
-      // Porównaj hasło
-      const isValid = await compareHash(password, hash, salt);
-      
-      if (isValid) {
-        // Generowanie tokenu z timestampem
-        const token = `auth_${Date.now()}`;
-        localStorage.setItem(AUTH_TOKEN_KEY, token);
-        setIsAuthenticated(true);
-        toast.success("Zalogowano pomyślnie");
-        return true;
-      }
-      
-      toast.error("Nieprawidłowe hasło");
-      return false;
-    } catch (error) {
-      console.error("Błąd podczas logowania:", error);
-      toast.error("Błąd podczas logowania. Spróbuj ponownie.");
-      return false;
-    } finally {
-      setIsLoading(false);
+  // Pobiera dane użytkownika z Firestore na podstawie UID
+  const fetchUserData = async (uid: string, userEmail?: string, isUserAuthenticated: boolean = true, isMounted: () => boolean = () => true): Promise<UserData | null> => {
+    // Nie próbuj pobierać danych jeśli użytkownik nie jest zalogowany
+    if (!isUserAuthenticated) {
+      return null;
     }
-  };
 
-  // Wylogowanie
-  const logout = () => {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    setIsAuthenticated(false);
-    toast.success("Wylogowano pomyślnie");
-  };
-
-  // Ustawienie nowego hasła
-  const setPassword = async (newPassword: string): Promise<boolean> => {
     try {
-      setIsLoading(true);
-      
-      // Haszowanie hasła
-      const { hash, salt } = await hashPassword(newPassword);
-      
-      // Zapisz w Firebase
-      const settingsRef = doc(db, "settings", "password");
-      await setDoc(settingsRef, { hash, salt, updatedAt: new Date() }).catch(error => {
-        handleFirestoreError(error, db);
-        toast.error("Błąd zapisu hasła. Spróbuj ponownie.");
-        throw error;
-      });
-      
-      // Automatyczne zalogowanie po ustawieniu hasła
-      const token = `auth_${Date.now()}`;
-      localStorage.setItem(AUTH_TOKEN_KEY, token);
-      setIsAuthenticated(true);
-      setIsPasswordSet(true);
-      
-      return true;
-    } catch (error) {
-      console.error("Błąd podczas ustawiania hasła:", error);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  // Funkcja do resetowania hasła
-  const resetPassword = async (): Promise<boolean> => {
-    try {
-      setIsLoading(true);
-      console.log('🔄 Resetowanie hasła...');
-      
-      // Usuń token uwierzytelniania
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      
-      // Usuń dokument hasła w Firebase
-      const settingsRef = doc(db, "settings", "password");
-      const settingsDoc = await getDoc(settingsRef).catch(error => {
+      const db = getDB();
+      const userRef = doc(db, "users", uid);
+      const userDoc = await getDoc(userRef).catch(error => {
         handleFirestoreError(error, db);
         throw error;
       });
-      
-      if (settingsDoc.exists()) {
-        await deleteDoc(settingsRef).catch(error => {
+
+      if (!userDoc.exists()) {
+        // Jeśli użytkownik nie istnieje, tworzymy nowy dokument
+        console.log('Tworzenie nowego użytkownika w bazie danych');
+        console.log('Email z parametru:', userEmail);
+        
+        const newUserData: UserData = {
+          email: userEmail || '',
+          allowedTeams: [], // Domyślnie brak dostępu do zespołów
+          role: 'user',
+          createdAt: new Date(),
+          lastLogin: new Date()
+        };
+
+        console.log('Dane nowego użytkownika:', newUserData);
+
+        await setDoc(userRef, newUserData).catch(error => {
           handleFirestoreError(error, db);
           throw error;
         });
-        console.log('✅ Dokument hasła został usunięty z Firebase');
-      } else {
-        console.log('ℹ️ Dokument hasła nie istnieje w Firebase');
+
+        console.log('Użytkownik został utworzony w Firestore');
+        return newUserData;
+      }
+
+      const userData = userDoc.data() as UserData;
+      
+      // Sprawdź czy trzeba zaktualizować email (może być pusty w starych dokumentach)
+      const needsEmailUpdate = !userData.email && userEmail;
+      
+      // Aktualizuj ostatnie logowanie i email jeśli potrzeba
+      const updateData: any = {
+        lastLogin: new Date()
+      };
+      
+      if (needsEmailUpdate) {
+        updateData.email = userEmail;
+        console.log('Aktualizuję email dla istniejącego użytkownika:', userEmail);
       }
       
-      // Wyloguj użytkownika
-      setIsAuthenticated(false);
-      setIsPasswordSet(false);
-      
-      toast.success("Hasło zostało zresetowane. Przy następnym logowaniu należy ustawić nowe hasło.");
-      console.log('✅ Hasło zostało zresetowane. Przy następnym logowaniu można ustawić nowe hasło.');
-      return true;
+      await setDoc(userRef, updateData, { merge: true }).catch(error => {
+        handleFirestoreError(error, db);
+        console.error('Błąd aktualizacji danych użytkownika:', error);
+      });
+
+      return {
+        ...userData,
+        email: userData.email || userEmail || '', // Użyj zaktualizowanego emaila
+        lastLogin: new Date()
+      };
     } catch (error) {
-      console.error('❌ Błąd podczas resetowania hasła:', error);
-      toast.error("Błąd podczas resetowania hasła. Spróbuj ponownie.");
-      return false;
-    } finally {
-      setIsLoading(false);
+      console.error("Błąd podczas pobierania danych użytkownika:", error);
+      
+      // Wyświetlaj błąd tylko jeśli użytkownik jest nadal zalogowany i komponent jest zamontowany
+      if (isUserAuthenticated && isMounted()) {
+        toast.error("Błąd podczas pobierania uprawnień użytkownika");
+      }
+      
+      return null;
     }
   };
 
-  return { 
-    isAuthenticated, 
-    isLoading, 
-    login, 
-    logout, 
-    setPassword, 
-    resetPassword,
-    isPasswordSet 
+  // Odświeża dane użytkownika
+  const refreshUserData = async (): Promise<void> => {
+    if (!authState.user?.uid || !authState.isAuthenticated) return;
+
+    setIsUserDataLoading(true);
+    const userData = await fetchUserData(authState.user.uid, authState.user.email || undefined, authState.isAuthenticated, () => true);
+    if (userData) {
+      setUserTeams(userData.allowedTeams);
+      setIsAdmin(userData.role === 'admin');
+    }
+    setIsUserDataLoading(false);
+  };
+
+  // Nasłuchuj na zmiany stanu uwierzytelniania
+  useEffect(() => {
+    let isMounted = true;
+
+    const unsubscribe = authService.subscribe(async (newAuthState) => {
+      if (!isMounted) return;
+      
+      setAuthState(newAuthState);
+
+      if (newAuthState.isAuthenticated && newAuthState.user && !newAuthState.isAnonymous) {
+        // Pobierz dane użytkownika z Firestore
+        if (isMounted) {
+          setIsUserDataLoading(true);
+          const userData = await fetchUserData(newAuthState.user.uid, newAuthState.user.email || undefined, newAuthState.isAuthenticated, () => isMounted);
+          if (userData && isMounted) {
+            setUserTeams(userData.allowedTeams);
+            setIsAdmin(userData.role === 'admin');
+          }
+          if (isMounted) {
+            setIsUserDataLoading(false);
+          }
+        }
+      } else {
+        // Wyczyść dane użytkownika przy wylogowaniu
+        if (isMounted) {
+          setUserTeams([]);
+          setIsAdmin(false);
+          setIsUserDataLoading(false);
+        }
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  // Funkcja wylogowania
+  const logout = async () => {
+    try {
+      // Wyczyść dane użytkownika od razu
+      setUserTeams([]);
+      setIsAdmin(false);
+      setIsUserDataLoading(false);
+      
+      await authService.signOut();
+    } catch (error) {
+      console.error("Błąd podczas wylogowania:", error);
+      toast.error("Błąd podczas wylogowania");
+    }
+  };
+
+  // Kombinuj stan ładowania uwierzytelniania i danych użytkownika
+  const isLoading = authState.isLoading || (authState.isAuthenticated && !authState.isAnonymous && isUserDataLoading);
+
+  return {
+    isAuthenticated: authState.isAuthenticated && !authState.isAnonymous,
+    isLoading,
+    user: authState.user,
+    userTeams,
+    isAdmin,
+    logout,
+    refreshUserData
   };
 } 

@@ -3,10 +3,10 @@
 import { useState, useCallback, useEffect } from "react";
 import { Player, Action, TeamInfo } from "@/types";
 import { v4 as uuidv4 } from 'uuid';
-import { db } from "@/lib/firebase";
+import { getDB } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs, doc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
-import { updatePlayerWithAction } from "@/utils/syncPlayerData";
+import { updatePlayerWithAction, removePlayerAction } from "@/utils/syncPlayerData";
 import { getPlayerFullName } from '@/utils/playerUtils';
 
 // Funkcja do konwersji numeru strefy na format literowo-liczbowy
@@ -87,7 +87,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
       setIsLoading(true);
       
       // Pobierz dokument meczu
-      const matchRef = doc(db, "matches", matchId);
+      const matchRef = doc(getDB(), "matches", matchId);
       const matchDoc = await getDoc(matchRef);
       
       if (matchDoc.exists()) {
@@ -265,7 +265,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
       // Zapisujemy do Firebase
       try {
         // Pobierz aktualny dokument meczu
-        const matchRef = doc(db, "matches", matchInfoArg.matchId);
+        const matchRef = doc(getDB(), "matches", matchInfoArg.matchId);
         const matchDoc = await getDoc(matchRef);
         
         if (matchDoc.exists()) {
@@ -299,7 +299,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
           console.error("Błąd podczas zapisywania akcji w Firebase:", firebaseError);
         
         // Obsługa błędu wewnętrznego stanu Firestore
-        const errorHandled = await handleFirestoreError(firebaseError, db);
+        const errorHandled = await handleFirestoreError(firebaseError, getDB());
         
           if (!errorHandled) {
             console.warn("Akcja została dodana tylko lokalnie - synchronizacja z Firebase nieudana");
@@ -314,7 +314,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
       console.error("Błąd podczas zapisywania akcji:", error);
       
       // Obsługa błędu wewnętrznego stanu Firestore
-      await handleFirestoreError(error, db);
+      await handleFirestoreError(error, getDB());
       
       return false;
     }
@@ -328,15 +328,29 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     }
     
     try {
-      // Usuwanie akcji z lokalnego stanu
-      setActions(prevActions => prevActions.filter(action => action.id !== actionId));
-      
-      // Usuwanie z dokumentu meczu
-      const matchRef = doc(db, "matches", matchInfo.matchId);
+      // Sprawdzamy dostępność bazy danych przez próbę dostępu
+      getDB();
+    } catch (dbError) {
+      console.error("Brak połączenia z bazą danych");
+      return false;
+    }
+    
+    // Dodaj potwierdzenie przed usunięciem
+    if (!window.confirm("Czy na pewno chcesz usunąć tę akcję?")) {
+      return false;
+    }
+    
+    try {
+      // NAJPIERW usuwamy z Firebase
+      const matchRef = doc(getDB(), "matches", matchInfo.matchId);
       const matchDoc = await getDoc(matchRef);
       
       if (matchDoc.exists()) {
         const matchData = matchDoc.data() as TeamInfo;
+        
+        // Znajdź akcję, którą chcemy usunąć, aby uzyskać senderId i receiverId
+        const actionToDelete = (matchData.actions_packing || []).find(action => action.id === actionId);
+        
         // Filtrujemy akcje, aby usunąć tę o podanym ID
         const updatedActions = (matchData.actions_packing || []).filter(action => action.id !== actionId);
         
@@ -347,8 +361,28 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         await updateDoc(matchRef, {
           actions_packing: cleanedActions
         });
+        
+        // USUWAMY AKCJĘ Z DANYCH ZAWODNIKÓW
+        if (actionToDelete) {
+          try {
+            await removePlayerAction(
+              actionId, 
+              matchInfo.matchId, 
+              actionToDelete.senderId, 
+              actionToDelete.receiverId
+            );
+          } catch (playerError) {
+            console.error("Błąd podczas usuwania akcji z danych zawodników:", playerError);
+            // Nie przerywamy - akcja została już usunięta z meczu
+          }
+        }
+        
+        // DOPIERO PO UDANYM ZAPISIE usuwamy z lokalnego stanu
+        setActions(prevActions => prevActions.filter(action => action.id !== actionId));
+        
       } else {
         console.error("Nie znaleziono meczu o ID:", matchInfo.matchId);
+        return false;
       }
       
       return true;
@@ -356,7 +390,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
       console.error("Błąd podczas usuwania akcji:", error);
       
       // Obsługa błędu wewnętrznego stanu Firestore
-      await handleFirestoreError(error, db);
+      await handleFirestoreError(error, getDB());
+      
+      // Pokaż użytkownikowi błąd
+      alert("Wystąpił błąd podczas usuwania akcji. Spróbuj ponownie.");
       
       return false;
     }
@@ -371,11 +408,38 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     
     if (window.confirm("Czy na pewno chcesz usunąć wszystkie akcje?")) {
       try {
+        // Pobierz aktualny dokument meczu, aby uzyskać listę akcji do usunięcia z danych zawodników
+        const matchRef = doc(getDB(), "matches", matchInfo.matchId);
+        const matchDoc = await getDoc(matchRef);
+        
+        let actionsToRemove: Action[] = [];
+        if (matchDoc.exists()) {
+          const matchData = matchDoc.data() as TeamInfo;
+          actionsToRemove = matchData.actions_packing || [];
+        }
+        
         // Aktualizacja dokumentu meczu - ustawienie pustej tablicy akcji
-        const matchRef = doc(db, "matches", matchInfo.matchId);
         await updateDoc(matchRef, {
           actions_packing: []
         });
+        
+        // USUWAMY WSZYSTKIE AKCJE Z DANYCH ZAWODNIKÓW
+        if (actionsToRemove.length > 0) {
+          try {
+            for (const action of actionsToRemove) {
+              await removePlayerAction(
+                action.id, 
+                matchInfo.matchId, 
+                action.senderId, 
+                action.receiverId
+              );
+            }
+            console.log(`✅ Usunięto ${actionsToRemove.length} akcji z danych zawodników`);
+          } catch (playerError) {
+            console.error("Błąd podczas usuwania akcji z danych zawodników:", playerError);
+            // Nie przerywamy - akcje zostały już usunięte z meczu
+          }
+        }
         
         // Czyścimy stan lokalny
         setActions([]);
@@ -384,7 +448,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         console.error("Błąd podczas usuwania wszystkich akcji:", error);
         
         // Obsługa błędu wewnętrznego stanu Firestore
-        await handleFirestoreError(error, db);
+        await handleFirestoreError(error, getDB());
         
         return false;
       }
@@ -421,7 +485,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
 
     try {
       // Pobierz aktualny dokument meczu
-      const matchRef = doc(db, "matches", matchId);
+      const matchRef = doc(getDB(), "matches", matchId);
       
       // Aktualizuj dokument z wzbogaconymi akcjami
       await updateDoc(matchRef, {
@@ -432,7 +496,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     } catch (error) {
       console.error("❌ Błąd podczas synchronizacji uzupełnionych akcji:", error);
       // Obsługa błędu wewnętrznego stanu Firestore
-      await handleFirestoreError(error, db);
+      await handleFirestoreError(error, getDB());
     }
   }, []);
 

@@ -2,26 +2,27 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
+import { AuthService } from '@/utils/authService';
 import styles from './LoginForm.module.css';
 
 export default function LoginForm() {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loginSuccess, setLoginSuccess] = useState(false);
-  const { login, isAuthenticated } = useAuth();
+  const [isRegistering, setIsRegistering] = useState(false);
   const router = useRouter();
+  const authService = AuthService.getInstance();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      setLoginSuccess(true);
-      const timer = setTimeout(() => {
+    const unsubscribe = authService.subscribe((authState) => {
+      if (authState.isAuthenticated && !authState.isAnonymous) {
         router.push('/');
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [isAuthenticated, router]);
+      }
+    });
+
+    return unsubscribe;
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,37 +30,34 @@ export default function LoginForm() {
     setIsLoading(true);
 
     try {
-      if (!password) {
-        throw new Error('Wprowadź hasło');
+      if (!email || !password) {
+        throw new Error('Wprowadź email i hasło');
       }
 
-      await login(password);
-      setLoginSuccess(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Wystąpił błąd podczas logowania');
+      if (isRegistering) {
+        await authService.registerWithEmail(email, password);
+      } else {
+        await authService.signInWithEmail(email, password);
+      }
+    } catch (err: any) {
+      console.error('Błąd logowania:', err);
+      if (err.code === 'auth/user-not-found') {
+        setError('Nie znaleziono użytkownika o tym adresie email');
+      } else if (err.code === 'auth/wrong-password') {
+        setError('Nieprawidłowe hasło');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('Nieprawidłowy format adresu email');
+      } else if (err.code === 'auth/email-already-in-use') {
+        setError('Konto z tym adresem email już istnieje');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Hasło jest zbyt słabe. Użyj co najmniej 6 znaków');
+      } else {
+        setError(err.message || 'Wystąpił błąd podczas logowania');
+      }
     } finally {
       setIsLoading(false);
     }
   };
-
-  if (loginSuccess) {
-    return (
-      <div className={styles.loginContainer}>
-        <div className={styles.loginCard}>
-          <h1 className={styles.loginTitle}>Zalogowano pomyślnie!</h1>
-          <p className={styles.successMessage}>
-            Za chwilę zostaniesz przekierowany do aplikacji...
-          </p>
-          <button
-            className={styles.loginButton}
-            onClick={() => router.push('/')}
-          >
-            Przejdź do aplikacji
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={styles.loginContainer}>
@@ -67,11 +65,27 @@ export default function LoginForm() {
         <div className={styles.header}>
           <h1 className={styles.title}>Packing Analyzer</h1>
           <p className={styles.subtitle}>
-            Wprowadź hasło, aby uzyskać dostęp do aplikacji
+            {isRegistering ? 'Utwórz nowe konto' : 'Zaloguj się do aplikacji'}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
+          <div className={styles.inputGroup}>
+            <label htmlFor="email" className={styles.label}>
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={styles.input}
+              placeholder="wprowadz@email.com"
+              disabled={isLoading}
+              required
+            />
+          </div>
+
           <div className={styles.inputGroup}>
             <label htmlFor="password" className={styles.label}>
               Hasło
@@ -84,6 +98,8 @@ export default function LoginForm() {
               className={styles.input}
               placeholder="Wprowadź hasło"
               disabled={isLoading}
+              required
+              minLength={6}
             />
           </div>
 
@@ -101,8 +117,20 @@ export default function LoginForm() {
             {isLoading ? (
               <div className={styles.spinner} />
             ) : (
-              'Zaloguj się'
+              isRegistering ? 'Utwórz konto' : 'Zaloguj się'
             )}
+          </button>
+
+          <button
+            type="button"
+            className={styles.toggleButton}
+            onClick={() => setIsRegistering(!isRegistering)}
+            disabled={isLoading}
+          >
+            {isRegistering 
+              ? 'Masz już konto? Zaloguj się' 
+              : 'Nie masz konta? Zarejestruj się'
+            }
           </button>
         </form>
       </div>

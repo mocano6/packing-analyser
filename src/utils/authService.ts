@@ -17,6 +17,7 @@ import {
 } from 'firebase/auth';
 
 import { handleFirebaseError } from './errorHandler';
+import { isFirebaseReady } from '@/lib/firebase';
 
 // Typy uwierzytelniania
 export type AuthMode = 'anonymous' | 'email';
@@ -45,37 +46,76 @@ export class AuthService {
   private listeners: Array<(state: AuthState) => void> = [];
   private _authState: AuthState = { ...initialAuthState };
   private preferredAuthMode: AuthMode = 'anonymous';
+  private isInitialized = false;
 
   // Konstruktor prywatny dla implementacji wzorca Singleton
   private constructor() {
-    // Inicjalizacja nasłuchiwania stanu uwierzytelniania
-    const auth = getAuth();
-    
-    onAuthStateChanged(auth, (user) => {
-      this.updateAuthState({
-        user,
-        isAuthenticated: !!user,
-        isLoading: false,
-        isAnonymous: user ? user.isAnonymous : false,
-        error: null
-      });
-    }, (error) => {
-      console.error('Błąd monitorowania stanu uwierzytelniania:', error);
+    this.initializeWhenReady();
+  }
+
+  // Inicjalizuje Auth Service gdy Firebase jest gotowy
+  private async initializeWhenReady() {
+    // Czekaj aż Firebase będzie gotowy (tylko po stronie klienta)
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    // Sprawdź czy Firebase jest gotowy, jeśli nie - czekaj
+    let attempts = 0;
+    while (!isFirebaseReady() && attempts < 50) { // Max 5 sekund oczekiwania
+      await new Promise(resolve => setTimeout(resolve, 100));
+      attempts++;
+    }
+
+    if (!isFirebaseReady()) {
+      console.error('Firebase nie został zainicjalizowany w czasie');
       this.updateAuthState({
         ...this._authState,
         isLoading: false,
-        error: error.message
+        error: 'Błąd inicjalizacji Firebase'
       });
-    });
-    
-    // Ustaw trwałość sesji
-    setPersistence(auth, browserLocalPersistence)
-      .catch(error => {
-        console.error('Błąd ustawiania trwałości sesji:', error);
+      return;
+    }
+
+    try {
+      // Inicjalizacja nasłuchiwania stanu uwierzytelniania
+      const auth = getAuth();
+      
+      onAuthStateChanged(auth, (user) => {
+        this.updateAuthState({
+          user,
+          isAuthenticated: !!user,
+          isLoading: false,
+          isAnonymous: user ? user.isAnonymous : false,
+          error: null
+        });
+      }, (error) => {
+        console.error('Błąd monitorowania stanu uwierzytelniania:', error);
+        this.updateAuthState({
+          ...this._authState,
+          isLoading: false,
+          error: error.message
+        });
       });
       
-    // Sprawdź, czy mamy zapisany tryb uwierzytelniania
-    this.loadPreferredAuthMode();
+      // Ustaw trwałość sesji
+      setPersistence(auth, browserLocalPersistence)
+        .catch(error => {
+          console.error('Błąd ustawiania trwałości sesji:', error);
+        });
+        
+      // Sprawdź, czy mamy zapisany tryb uwierzytelniania
+      this.loadPreferredAuthMode();
+      
+      this.isInitialized = true;
+    } catch (error) {
+      console.error('Błąd inicjalizacji AuthService:', error);
+      this.updateAuthState({
+        ...this._authState,
+        isLoading: false,
+        error: 'Błąd inicjalizacji uwierzytelniania'
+      });
+    }
   }
   
   // Metoda pobierania instancji (wzorzec Singleton)
@@ -133,9 +173,24 @@ export class AuthService {
       console.error('Błąd wczytywania trybu uwierzytelniania:', error);
     }
   }
+
+  // Sprawdza czy service jest zainicjalizowany
+  private async waitForInitialization(): Promise<void> {
+    let attempts = 0;
+    while (!this.isInitialized && attempts < 50) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      attempts++;
+    }
+    
+    if (!this.isInitialized) {
+      throw new Error('AuthService nie został zainicjalizowany');
+    }
+  }
   
   // Loguje użytkownika anonimowo
   public async signInAnonymously(): Promise<void> {
+    await this.waitForInitialization();
+    
     try {
       this.updateAuthState({ isLoading: true, error: null });
       
@@ -158,6 +213,8 @@ export class AuthService {
   
   // Loguje użytkownika przez email i hasło
   public async signInWithEmail(email: string, password: string): Promise<void> {
+    await this.waitForInitialization();
+    
     try {
       this.updateAuthState({ isLoading: true, error: null });
       
@@ -180,6 +237,8 @@ export class AuthService {
   
   // Rejestruje nowego użytkownika przez email i hasło
   public async registerWithEmail(email: string, password: string): Promise<void> {
+    await this.waitForInitialization();
+    
     try {
       this.updateAuthState({ isLoading: true, error: null });
       
@@ -202,6 +261,8 @@ export class AuthService {
   
   // Wylogowuje użytkownika
   public async signOut(): Promise<void> {
+    await this.waitForInitialization();
+    
     try {
       this.updateAuthState({ isLoading: true, error: null });
       
@@ -223,6 +284,8 @@ export class AuthService {
   
   // Automatycznie loguje użytkownika używając preferowanego trybu
   public async autoSignIn(): Promise<void> {
+    await this.waitForInitialization();
+    
     // Jeśli użytkownik jest już zalogowany, nic nie rób
     if (this._authState.isAuthenticated) {
       return;

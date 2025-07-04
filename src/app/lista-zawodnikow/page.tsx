@@ -4,6 +4,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import Link from "next/link";
 import { Player, Action } from '@/types';
 import { usePlayersState } from "@/hooks/usePlayersState";
+import { useAuth } from "@/hooks/useAuth";
 import { getPlayerFullName } from '@/utils/playerUtils';
 import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -18,7 +19,48 @@ export default function ListaZawodnikow() {
   const [isMergingDuplicates, setIsMergingDuplicates] = useState(false);
   const [expandedPlayerIds, setExpandedPlayerIds] = useState<Set<string>>(new Set());
 
-  const { players, handleDeletePlayer: deletePlayer, cleanupDuplicateIds, syncAllPlayersToFirebase, removeDuplicatesFromFirebase } = usePlayersState();
+  const { isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
+  const { players, handleDeletePlayer: deletePlayer } = usePlayersState();
+
+  // Sprawdź uprawnienia administratora
+  if (authLoading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loading}>
+          <div className={styles.spinner}></div>
+          <p>Sprawdzanie uprawnień...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.accessDenied}>
+          <h2>🔒 Brak dostępu</h2>
+          <p>Musisz być zalogowany, aby uzyskać dostęp do tej strony.</p>
+          <Link href="/login" className={styles.loginButton}>
+            Przejdź do logowania
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.accessDenied}>
+          <h2>🔒 Brak uprawnień</h2>
+          <p>Tylko administratorzy mają dostęp do listy wszystkich zawodników.</p>
+          <Link href="/" className={styles.backButton}>
+            Powrót do aplikacji
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   // Pobierz wszystkie akcje z Firebase
   useEffect(() => {
@@ -490,16 +532,18 @@ export default function ListaZawodnikow() {
             {isMergingDuplicates ? 'Sparowywanie...' : `🔄 Sparuj ${duplicates.length} grup duplikatów`}
           </button>
           <button 
-            onClick={removeDuplicatesFromFirebase}
+            onClick={() => console.log('Funkcja czyszczenia Firebase niedostępna')}
             className={styles.cleanupButton}
             title="Usuń duplikaty z Firebase (na podstawie name + number)"
+            disabled
           >
             🧹 Wyczyść duplikaty Firebase
           </button>
           <button 
-            onClick={cleanupDuplicateIds}
+            onClick={() => console.log('Funkcja czyszczenia lokalnie niedostępna')}
             className={styles.cleanupButton}
             title="Usuń duplikaty ID z lokalnego stanu"
+            disabled
           >
             🧹 Wyczyść duplikaty lokalnie
           </button>

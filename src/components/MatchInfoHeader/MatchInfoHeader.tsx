@@ -118,6 +118,8 @@ interface MatchInfoHeaderProps {
   refreshCounter?: number;
   isOfflineMode?: boolean;
   players?: Player[]; // Dodajemy players jako nową właściwość
+  availableTeams?: any[]; // Zespoły dostępne dla użytkownika
+  isAdmin?: boolean; // Czy użytkownik jest administratorem
 }
 
 const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
@@ -133,6 +135,8 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   refreshCounter = 0,
   isOfflineMode = false,
   players = [], // Domyślna wartość to pusta tablica
+  availableTeams = Object.values(TEAMS), // Domyślnie wszystkie zespoły
+  isAdmin = false,
 }) => {
   const [sortKey, setSortKey] = useState<keyof TeamInfo>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -236,6 +240,8 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
             selectedTeam={selectedTeam}
             onChange={onChangeTeam}
             className={styles.teamDropdown}
+            availableTeams={availableTeams}
+            showLabel={true}
           />
         </div>
         

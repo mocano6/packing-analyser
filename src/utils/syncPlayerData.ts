@@ -1,4 +1,4 @@
-import { db } from "@/lib/firebase";
+import { getDB } from "@/lib/firebase";
 import { collection, doc, getDoc, getDocs, updateDoc, query, where } from "firebase/firestore";
 import { Player, Action, TeamInfo, PlayerMinutes } from "@/types";
 import { getPlayerFullName } from '@/utils/playerUtils';
@@ -13,7 +13,7 @@ export const syncPlayerData = async (): Promise<boolean> => {
     console.log("Rozpoczynam synchronizację danych zawodników...");
     
     // 1. Pobierz wszystkich zawodników
-    const playersCollection = collection(db, "players");
+    const playersCollection = collection(getDB(), "players");
     const playersSnapshot = await getDocs(playersCollection);
     
     if (playersSnapshot.empty) {
@@ -29,7 +29,7 @@ export const syncPlayerData = async (): Promise<boolean> => {
     console.log(`Pobrano ${players.length} zawodników do synchronizacji`);
     
     // 2. Pobierz wszystkie mecze
-    const matchesCollection = collection(db, "matches");
+    const matchesCollection = collection(getDB(), "matches");
     const matchesSnapshot = await getDocs(matchesCollection);
     
     if (matchesSnapshot.empty) {
@@ -112,7 +112,7 @@ export const syncPlayerData = async (): Promise<boolean> => {
         Object.keys(playerUpdates.matchesInfo || {}).length > 0;
       
       if (hasActionsToSync) {
-        const playerRef = doc(db, "players", player.id);
+        const playerRef = doc(getDB(), "players", player.id);
         await updateDoc(playerRef, playerUpdates);
         console.log(`✅ Zaktualizowano dane zawodnika ${getPlayerFullName(player)} (${player.id})`);
       } else {
@@ -146,7 +146,7 @@ export const updatePlayerWithAction = async (
     
     // 1. Aktualizuj dane nadawcy (senderId)
     if (action.senderId) {
-      const senderRef = doc(db, "players", action.senderId);
+      const senderRef = doc(getDB(), "players", action.senderId);
       const senderDoc = await getDoc(senderRef);
       
       if (senderDoc.exists()) {
@@ -175,7 +175,7 @@ export const updatePlayerWithAction = async (
     
     // 2. Aktualizuj dane odbiorcy (receiverId), jeśli istnieje
     if (action.receiverId) {
-      const receiverRef = doc(db, "players", action.receiverId);
+      const receiverRef = doc(getDB(), "players", action.receiverId);
       const receiverDoc = await getDoc(receiverRef);
       
       if (receiverDoc.exists()) {
@@ -204,26 +204,98 @@ export const updatePlayerWithAction = async (
     
     return true;
   } catch (error) {
-    console.error("❌ Błąd podczas aktualizacji zawodnika z nową akcją:", error);
+    console.error("❌ Błąd podczas aktualizacji danych zawodnika:", error);
     return false;
   }
 };
 
 /**
- * Funkcja aktualizująca dane zawodnika po zapisaniu PlayerMinutes
+ * NOWA FUNKCJA: Usuwa akcję z danych zawodników
+ * Ta funkcja usuwa określoną akcję z actionsSent i actionsReceived zawodników
+ */
+export const removePlayerAction = async (
+  actionId: string,
+  matchId: string,
+  senderId?: string,
+  receiverId?: string
+): Promise<boolean> => {
+  if (!matchId || !actionId) {
+    console.error("Brak wymaganych parametrów do usunięcia akcji z danych zawodnika");
+    return false;
+  }
+  
+  try {
+    // 1. Usuń akcję z danych nadawcy (senderId)
+    if (senderId) {
+      const senderRef = doc(getDB(), "players", senderId);
+      const senderDoc = await getDoc(senderRef);
+      
+      if (senderDoc.exists()) {
+        const senderData = senderDoc.data() as Player;
+        
+        if (senderData.actionsSent && senderData.actionsSent[matchId]) {
+          // Filtruj akcje, aby usunąć tę o podanym ID
+          const updatedActionsSent = senderData.actionsSent[matchId].filter(
+            action => action.id !== actionId
+          );
+          
+          // Zaktualizuj dane
+          const updatedSenderActions = { ...senderData.actionsSent };
+          updatedSenderActions[matchId] = updatedActionsSent;
+          
+          await updateDoc(senderRef, { actionsSent: updatedSenderActions });
+          console.log(`✅ Usunięto akcję z danych nadawcy (${senderId})`);
+        }
+      }
+    }
+    
+    // 2. Usuń akcję z danych odbiorcy (receiverId)
+    if (receiverId) {
+      const receiverRef = doc(getDB(), "players", receiverId);
+      const receiverDoc = await getDoc(receiverRef);
+      
+      if (receiverDoc.exists()) {
+        const receiverData = receiverDoc.data() as Player;
+        
+        if (receiverData.actionsReceived && receiverData.actionsReceived[matchId]) {
+          // Filtruj akcje, aby usunąć tę o podanym ID
+          const updatedActionsReceived = receiverData.actionsReceived[matchId].filter(
+            action => action.id !== actionId
+          );
+          
+          // Zaktualizuj dane
+          const updatedReceiverActions = { ...receiverData.actionsReceived };
+          updatedReceiverActions[matchId] = updatedActionsReceived;
+          
+          await updateDoc(receiverRef, { actionsReceived: updatedReceiverActions });
+          console.log(`✅ Usunięto akcję z danych odbiorcy (${receiverId})`);
+        }
+      }
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("❌ Błąd podczas usuwania akcji z danych zawodnika:", error);
+    return false;
+  }
+};
+
+/**
+ * Funkcja aktualizująca dane zawodnika po zmianie informacji o minutach
  */
 export const updatePlayerWithMinutes = async (
   playerMinutes: PlayerMinutes[],
   matchId: string
 ): Promise<boolean> => {
-  if (!matchId || playerMinutes.length === 0) {
-    console.log("Brak danych do aktualizacji minut zawodników");
+  if (!matchId || !playerMinutes || playerMinutes.length === 0) {
+    console.error("Brak wymaganych parametrów do aktualizacji minut zawodników");
     return false;
   }
   
   try {
+    // Dla każdego zawodnika z podanymi minutami
     for (const playerMinute of playerMinutes) {
-      const playerRef = doc(db, "players", playerMinute.playerId);
+      const playerRef = doc(getDB(), "players", playerMinute.playerId);
       const playerDoc = await getDoc(playerRef);
       
       if (playerDoc.exists()) {
@@ -232,14 +304,14 @@ export const updatePlayerWithMinutes = async (
         // Inicjalizacja struktury, jeśli nie istnieje
         const matchesInfo = playerData.matchesInfo || {};
         
-        // Aktualizacja informacji o meczu
+        // Aktualizuj informacje o meczu
         matchesInfo[matchId] = {
           startMinute: playerMinute.startMinute,
           endMinute: playerMinute.endMinute,
           position: playerMinute.position || playerData.position || "CB"
         };
         
-        // Aktualizuj dane zawodnika
+        // Zaktualizuj dane zawodnika
         await updateDoc(playerRef, { matchesInfo });
         console.log(`✅ Zaktualizowano minuty zawodnika ${getPlayerFullName(playerData)} (${playerMinute.playerId})`);
       }

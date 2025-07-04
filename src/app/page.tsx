@@ -11,7 +11,7 @@ import { usePlayersState } from "@/hooks/usePlayersState";
 import { useActionsState } from "@/hooks/useActionsState";
 import { usePackingActions } from "@/hooks/usePackingActions";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
-import { TEAMS, fetchTeams } from "@/constants/teamsLoader";
+import { TEAMS, fetchTeams, getTeamsArray, Team } from "@/constants/teamsLoader";
 import { getXTValueFromMatrix } from "@/constants/xtValues";
 import styles from "./page.module.css";
 import OfflineStatus from '@/components/OfflineStatus/OfflineStatus';
@@ -22,7 +22,7 @@ import { useAuth } from "@/hooks/useAuth";
 import toast from 'react-hot-toast';
 import OfflineStatusBanner from "@/components/OfflineStatusBanner/OfflineStatusBanner";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { getDB } from "@/lib/firebase";
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesModal";
 import MatchInfoModal from "@/components/MatchInfoModal/MatchInfoModal";
@@ -82,6 +82,7 @@ export default function Page() {
   const [selectedZone, setSelectedZone] = React.useState<string | number | null>(null);
   const [isActionEditModalOpen, setIsActionEditModalOpen] = React.useState(false);
   const [editingAction, setEditingAction] = React.useState<Action | null>(null);
+  const [allTeams, setAllTeams] = React.useState<Team[]>([]);
 
   const useActionsStateRef = useRef<any>(null);
 
@@ -143,12 +144,62 @@ export default function Page() {
     setActions,
   } = packingActions;
 
-  const { logout } = useAuth();
+  const { isAuthenticated, isLoading, userTeams, isAdmin, logout } = useAuth();
 
-  // Automatycznie aktywuj tryb deweloperski (obejście uwierzytelniania)
+  // Pobierz zespoły z Firebase
   useEffect(() => {
-    localStorage.setItem('packing_app_bypass_auth', 'true');
+    const loadTeams = async () => {
+      try {
+        const teams = await getTeamsArray();
+        setAllTeams(teams);
+      } catch (error) {
+        console.error("Błąd podczas pobierania zespołów:", error);
+        // Jeśli nie udało się pobrać, użyj domyślnych zespołów
+        setAllTeams(Object.values(TEAMS));
+      }
+    };
+
+    loadTeams();
+
+    // Słuchaj na zmiany w zespołach (np. po dodaniu/usunięciu w panelu admin)
+    const handleTeamsChanged = () => {
+      console.log('Odświeżam zespoły po zmianie w cache');
+      loadTeams();
+    };
+
+    // Dodaj słuchacza na custom event
+    window.addEventListener('teamsChanged', handleTeamsChanged);
+
+    return () => {
+      window.removeEventListener('teamsChanged', handleTeamsChanged);
+    };
   }, []);
+
+  // Filtruj dostępne zespoły na podstawie uprawnień użytkownika
+  const availableTeams = useMemo(() => {
+    if (isAdmin) {
+      // Administratorzy mają dostęp do wszystkich zespołów
+      return allTeams;
+    }
+    
+    if (!userTeams || userTeams.length === 0) {
+      return [];
+    }
+    
+    // Filtruj zespoły na podstawie uprawnień użytkownika
+    return allTeams.filter(team => userTeams.includes(team.id));
+  }, [userTeams, isAdmin, allTeams]);
+
+  // Użyj tylko stanu ładowania z useAuth - nie dodawaj własnej logiki
+  // Hook useAuth już obsługuje kombinację ładowania uwierzytelniania i danych użytkownika
+  const isAppLoading = isLoading;
+
+  // Ustaw domyślny zespół na pierwszy dostępny
+  useEffect(() => {
+    if (availableTeams.length > 0 && !availableTeams.find(team => team.id === selectedTeam)) {
+      setSelectedTeam(availableTeams[0].id);
+    }
+  }, [availableTeams, selectedTeam]);
 
   // Gdy hookSelectedZone się zmienia, aktualizujemy lokalny selectedZone
   useEffect(() => {
@@ -156,8 +207,6 @@ export default function Page() {
   }, [hookSelectedZone]);
 
   const filteredPlayers = useMemo(() => {
-
-    
     // Filtruj graczy na podstawie wybranego zespołu z normalizacją
     const teamFiltered = players.filter(player => {
       // Normalizuj teams - upewnij się że to zawsze tablica
@@ -181,7 +230,6 @@ export default function Page() {
     const savedHalf = localStorage.getItem('currentHalf');
     if (savedHalf) {
       const isP2 = savedHalf === 'P2';
-
       setIsSecondHalf(isP2);
     }
   }, []);
@@ -222,8 +270,6 @@ export default function Page() {
   React.useEffect(() => {
     if (initEffectExecutedRef.current) return;
     initEffectExecutedRef.current = true;
-    
-
     
     // Używamy setTimeout, aby zapewnić, że Firebase jest w pełni zainicjalizowany
     const timer = setTimeout(async () => {
@@ -336,13 +382,11 @@ export default function Page() {
       
       // Ustawiamy zespół, jeśli został przekazany i różni się od obecnego
       if (teamId && teamId !== selectedTeam) {
-  
         setSelectedTeam(teamId);
         // Nie wykonujemy żadnych dodatkowych akcji - zmiana selectedTeam
         // spowoduje ponowne pobranie danych przez efekt zależny od selectedTeam
       } else if (isMounted) {
         // Odświeżamy listę tylko jeśli teamId jest taki sam jak obecny lub nie został podany
-
         // Zamiast wywoływać refreshMatchesList, tylko zwiększamy licznik
         window._isRefreshingMatches = true;
         
@@ -369,6 +413,151 @@ export default function Page() {
   React.useEffect(() => {
     refreshMatchesList(selectedTeam);
   }, [selectedTeam, refreshMatchesList]);
+
+  // Dodajemy efekt, który sprawdzi wartości stref w localStorage przy renderowaniu
+  useEffect(() => {
+    // Sprawdzamy, czy w localStorage są zapisane tymczasowe strefy
+    const savedStartZone = localStorage.getItem('tempStartZone');
+    const savedEndZone = localStorage.getItem('tempEndZone');
+    
+    // Jeśli są strefy w localStorage, a stan jest pusty, wczytujemy je
+    if (savedStartZone && startZone === null) {
+      setStartZone(Number(savedStartZone));
+    }
+    
+    if (savedEndZone && endZone === null) {
+      setEndZone(Number(savedEndZone));
+      
+      // Jeśli mamy obie strefy, otwieramy ActionModal
+      if (savedStartZone && !isActionModalOpen) {
+        setTimeout(() => setIsActionModalOpen(true), 100);
+      }
+    }
+  }, []);  // Wykonaj tylko raz przy montowaniu komponentu
+
+  // Dodajemy efekt, który sprawdzi i zainicjalizuje kolekcję teams
+  useEffect(() => {
+    const setupTeamsCollection = async () => {
+      try {
+        // Najpierw sprawdzamy, czy aplikacja jest już w trybie offline
+        const isOfflineMode = typeof window !== 'undefined' && localStorage.getItem('firestore_offline_mode') === 'true';
+        if (isOfflineMode) {
+          return;
+        }
+        
+        const teamsExist = await checkTeamsCollection();
+        if (!teamsExist) {
+          const initialized = await initializeTeams();
+          if (initialized) {
+            // Po inicjalizacji pobierz zespoły, aby zaktualizować pamięć podręczną
+            await fetchTeams();
+          }
+        } else {
+          // Pobierz zespoły do pamięci podręcznej
+          await fetchTeams();
+        }
+      } catch (error) {
+        console.error("Błąd podczas sprawdzania/inicjalizacji kolekcji teams:", error);
+        
+        // Sprawdzamy, czy to błąd uprawnień
+        if (error instanceof Error && error.message.includes("Missing or insufficient permissions")) {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('firestore_offline_mode', 'true');
+            toast.error("Brak uprawnień do kolekcji teams. Aplikacja działa w trybie offline.");
+          }
+        }
+      }
+    };
+
+    // Wywołanie funkcji inicjalizującej
+    setupTeamsCollection();
+  }, []); // Wykonaj tylko raz przy montowaniu komponentu
+
+  // Modyfikujemy funkcję obsługi przełącznika half
+  const handleSecondHalfToggle = React.useCallback((value: React.SetStateAction<boolean>) => {
+    // Określamy nową wartość niezależnie od typu value (funkcja lub wartość bezpośrednia)
+    const newValue = typeof value === 'function' ? value(isSecondHalf) : value;
+    
+    // Zapisujemy wartość w stanie lokalnym
+    setIsSecondHalf(newValue);
+    
+    // Ustawiamy isSecondHalf w hooku usePackingActions
+    if (typeof packingActions.setIsSecondHalf === 'function') {
+      packingActions.setIsSecondHalf(newValue);
+    }
+    
+    // Zapisujemy wartość w localStorage
+    localStorage.setItem('currentHalf', newValue ? 'P2' : 'P1');
+    
+    // Przekazujemy wartość do hooka useActionsState
+    if (useActionsStateRef.current?.setIsSecondHalf) {
+      useActionsStateRef.current.setIsSecondHalf(newValue);
+    }
+  }, [isSecondHalf, packingActions]);
+
+  // Sprawdź czy użytkownik ma dostęp do aplikacji
+  if (isAppLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh' 
+      }}>
+        <div style={{ 
+          width: '40px', 
+          height: '40px', 
+          border: '4px solid #f3f3f3',
+          borderTop: '4px solid #3b82f6',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div style={{ padding: "20px", textAlign: "center" }}>
+        <h1>Brak dostępu</h1>
+        <p>Musisz być zalogowany, aby uzyskać dostęp do aplikacji.</p>
+        <Link href="/login" style={{
+          padding: "10px 20px",
+          backgroundColor: "#4a90e2",
+          color: "white",
+          textDecoration: "none",
+          borderRadius: "4px",
+          display: "inline-block"
+        }}>
+          Przejdź do logowania
+        </Link>
+      </div>
+    );
+  }
+
+  if (availableTeams.length === 0) {
+    return (
+      <div style={{ padding: "20px", textAlign: "center" }}>
+        <h1>Brak uprawnień</h1>
+        <p>Nie masz dostępu do żadnych zespołów. Skontaktuj się z administratorem.</p>
+        <p>Status: {isAdmin ? 'Administrator' : 'Użytkownik'}</p>
+        <p>Przypisane zespoły: {userTeams && userTeams.length > 0 ? userTeams.join(', ') : 'Brak'}</p>
+        <button
+          onClick={logout}
+          style={{
+            padding: "10px 20px",
+            backgroundColor: "#e74c3c",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer"
+          }}
+        >
+          Wyloguj się
+        </button>
+      </div>
+    );
+  }
 
   // Funkcja do zapisywania zawodnika
   const handleSavePlayerWithTeams = (playerData: Omit<Player, "id">) => {
@@ -729,28 +918,6 @@ export default function Page() {
     localStorage.removeItem('tempEndZone');
   };
 
-  // Modyfikujemy funkcję obsługi przełącznika half
-  const handleSecondHalfToggle = React.useCallback((value: React.SetStateAction<boolean>) => {
-    // Określamy nową wartość niezależnie od typu value (funkcja lub wartość bezpośrednia)
-    const newValue = typeof value === 'function' ? value(isSecondHalf) : value;
-    
-    // Zapisujemy wartość w stanie lokalnym
-    setIsSecondHalf(newValue);
-    
-    // Ustawiamy isSecondHalf w hooku usePackingActions
-    if (typeof packingActions.setIsSecondHalf === 'function') {
-      packingActions.setIsSecondHalf(newValue);
-    }
-    
-    // Zapisujemy wartość w localStorage
-    localStorage.setItem('currentHalf', newValue ? 'P2' : 'P1');
-    
-    // Przekazujemy wartość do hooka useActionsState
-    if (useActionsStateRef.current?.setIsSecondHalf) {
-      useActionsStateRef.current.setIsSecondHalf(newValue);
-    }
-  }, [isSecondHalf, packingActions]);
-
   // Modyfikacja funkcji usuwania meczu
   const handleMatchDelete = async (matchId: string) => {
     console.log("🗑️ Usuwanie meczu o ID:", matchId);
@@ -766,65 +933,6 @@ export default function Page() {
       alert("Wystąpił błąd podczas usuwania meczu. Spróbuj ponownie.");
     }
   };
-
-  // Dodajemy efekt, który sprawdzi wartości stref w localStorage przy renderowaniu
-  useEffect(() => {
-    // Sprawdzamy, czy w localStorage są zapisane tymczasowe strefy
-    const savedStartZone = localStorage.getItem('tempStartZone');
-    const savedEndZone = localStorage.getItem('tempEndZone');
-    
-    // Jeśli są strefy w localStorage, a stan jest pusty, wczytujemy je
-    if (savedStartZone && startZone === null) {
-      setStartZone(Number(savedStartZone));
-    }
-    
-    if (savedEndZone && endZone === null) {
-      setEndZone(Number(savedEndZone));
-      
-      // Jeśli mamy obie strefy, otwieramy ActionModal
-      if (savedStartZone && !isActionModalOpen) {
-        setTimeout(() => setIsActionModalOpen(true), 100);
-      }
-    }
-  }, []);  // Wykonaj tylko raz przy montowaniu komponentu
-
-  // Dodajemy efekt, który sprawdzi i zainicjalizuje kolekcję teams
-  useEffect(() => {
-    const setupTeamsCollection = async () => {
-      try {
-        // Najpierw sprawdzamy, czy aplikacja jest już w trybie offline
-        const isOfflineMode = typeof window !== 'undefined' && localStorage.getItem('firestore_offline_mode') === 'true';
-        if (isOfflineMode) {
-          return;
-        }
-        
-        const teamsExist = await checkTeamsCollection();
-        if (!teamsExist) {
-          const initialized = await initializeTeams();
-          if (initialized) {
-            // Po inicjalizacji pobierz zespoły, aby zaktualizować pamięć podręczną
-            await fetchTeams();
-          }
-        } else {
-          // Pobierz zespoły do pamięci podręcznej
-          await fetchTeams();
-        }
-      } catch (error) {
-        console.error("Błąd podczas sprawdzania/inicjalizacji kolekcji teams:", error);
-        
-        // Sprawdzamy, czy to błąd uprawnień
-        if (error instanceof Error && error.message.includes("Missing or insufficient permissions")) {
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('firestore_offline_mode', 'true');
-            toast.error("Brak uprawnień do kolekcji teams. Aplikacja działa w trybie offline.");
-          }
-        }
-      }
-    };
-
-    // Wywołanie funkcji inicjalizującej
-    setupTeamsCollection();
-  }, []); // Wykonaj tylko raz przy montowaniu komponentu
 
   // Funkcja obsługująca wylogowanie
   const handleLogout = () => {
@@ -885,11 +993,7 @@ export default function Page() {
   // Obsługa synchronizacji wzbogaconych akcji z Firebase
   const syncEnrichedActions = async (matchId: string, updatedActions: Action[]) => {
     try {
-      // Sprawdź czy Firebase jest dostępne
-      if (!db) {
-        console.error("Firebase nie jest zainicjalizowane - nie można zsynchronizować akcji");
-        return false;
-      }
+      const db = getDB();
       
       // Pobierz referencję do dokumentu meczu
       const matchRef = doc(db, "matches", matchId);
@@ -921,12 +1025,7 @@ export default function Page() {
         return;
       }
 
-      // Sprawdź czy Firebase jest dostępne
-      if (!db) {
-        console.error("Firebase nie jest zainicjalizowane");
-        alert("Błąd połączenia z bazą danych");
-        return;
-      }
+      const db = getDB();
 
       // Znajdź oryginalną akcję, żeby sprawdzić czy zmieniał się mecz
       const originalAction = actions.find(a => a.id === editedAction.id);
@@ -1039,8 +1138,38 @@ export default function Page() {
   // Obsługa zamknięcia modalu edycji akcji
   const handleCloseActionEditModal = () => {
     setIsActionEditModalOpen(false);
-    setEditingAction(null);
-  };
+          setEditingAction(null);
+    };
+
+  // Najpierw sprawdź czy aplikacja się ładuje
+  if (isAppLoading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loading}>
+          <div className={styles.spinner}></div>
+          <p>Ładowanie aplikacji...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Sprawdź czy użytkownik ma dostęp do jakichkolwiek zespołów
+  if (isAuthenticated && !isAdmin && (!userTeams || userTeams.length === 0)) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.noTeamsAccess}>
+          <h2>🚫 Brak dostępu do zespołów</h2>
+          <p>Twoje konto nie ma uprawnień do żadnego zespołu. Skontaktuj się z administratorem, aby uzyskać dostęp.</p>
+          <button 
+            onClick={handleLogout}
+            className={styles.logoutButton}
+          >
+            Wyloguj się
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container}>
@@ -1059,6 +1188,8 @@ export default function Page() {
         refreshCounter={matchesListRefreshCounter}
         isOfflineMode={isOfflineMode}
         players={players}
+        availableTeams={availableTeams}
+        isAdmin={isAdmin}
       />
 
       <main className={styles.content}>
@@ -1126,7 +1257,7 @@ export default function Page() {
           onSave={handleSavePlayerWithTeams}
           editingPlayer={editingPlayer || undefined} // Użyj editingPlayer z usePlayersState (ze świeżymi danymi z Firebase)
           currentTeam={selectedTeam}
-          allTeams={Object.values(TEAMS)}
+          allTeams={availableTeams}
           existingPlayers={players}
         />
 
@@ -1136,6 +1267,7 @@ export default function Page() {
           onClose={closeNewMatchModal}
           onSave={handleSaveNewMatch}
           currentInfo={null}
+          availableTeams={availableTeams}
         />
 
         {/* Modal dla edycji meczu */}
@@ -1144,6 +1276,7 @@ export default function Page() {
           onClose={closeEditMatchModal}
           onSave={handleSaveEditedMatch}
           currentInfo={matchInfo}
+          availableTeams={availableTeams}
         />
 
         {/* Modal minut zawodników */}
@@ -1300,9 +1433,17 @@ export default function Page() {
           <Link href="/statystyki-zespolu" className={styles.teamStatsButton}>
             📊 Statystyki zespołu
           </Link>
-          {/* <Link href="/lista-zawodnikow" className={styles.listButton}>
-            📋 Lista wszystkich zawodników
-          </Link> */}
+          {/* Linki tylko dla administratorów */}
+          {isAdmin && (
+            <>
+              <Link href="/lista-zawodnikow" className={styles.listButton}>
+                📋 Lista wszystkich zawodników
+              </Link>
+              <Link href="/weryfikacja-meczow" className={styles.verificationButton}>
+                🔍 Weryfikacja meczów
+              </Link>
+            </>
+          )}
           <ExportButton
             players={players}
             actions={actions}
@@ -1312,6 +1453,11 @@ export default function Page() {
             onImportSuccess={handleImportSuccess}
             onImportError={handleImportError}
           />
+          {isAdmin && (
+            <Link href="/admin" className={styles.adminButton} title="Panel administratora">
+              ⚙️ Admin
+            </Link>
+          )}
           <button 
             onClick={handleLogout}
             className={styles.logoutButton}

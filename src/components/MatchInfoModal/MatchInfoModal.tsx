@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { TeamInfo } from "@/types";
 import { TEAMS } from "@/constants/teams";
+import { Team } from "@/constants/teamsLoader";
 import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import styles from "./MatchInfoModal.module.css";
 
@@ -12,30 +13,32 @@ interface MatchInfoModalProps {
   onClose: () => void;
   onSave: (matchInfo: TeamInfo) => void;
   currentInfo: TeamInfo | null;
+  availableTeams?: Team[];
 }
 
-const defaultMatchInfo: TeamInfo = {
-  team: TEAMS.REZERWY.id,
+const getDefaultMatchInfo = (availableTeams?: Team[]): TeamInfo => ({
+  team: availableTeams && availableTeams.length > 0 ? availableTeams[0].id : TEAMS.REZERWY.id,
   opponent: "",
   competition: "",
   date: new Date().toISOString().split("T")[0],
   isHome: true,
-};
+});
 
 const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   isOpen,
   onClose,
   onSave,
   currentInfo,
+  availableTeams,
 }) => {
   const [formData, setFormData] = useState<TeamInfo>(
-    currentInfo || defaultMatchInfo
+    currentInfo || getDefaultMatchInfo(availableTeams)
   );
 
   // Reset formularza przy otwarciu modalu
   useEffect(() => {
-    setFormData(currentInfo || defaultMatchInfo);
-  }, [currentInfo, isOpen]);
+    setFormData(currentInfo || getDefaultMatchInfo(availableTeams));
+  }, [currentInfo, isOpen, availableTeams]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -119,6 +122,7 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
               onChange={(teamId) => 
                 setFormData(prev => ({ ...prev, team: teamId }))
               }
+              availableTeams={availableTeams}
             />
           </div>
 
