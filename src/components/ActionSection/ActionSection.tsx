@@ -38,6 +38,7 @@ export interface ActionSectionProps {
   setIsSecondHalf: React.Dispatch<React.SetStateAction<boolean>>;
   handleSaveAction: () => void;
   resetActionState: () => void;
+  resetActionPoints: () => void;
   startZone: number | null;
   endZone: number | null;
   isActionModalOpen: boolean;
@@ -71,6 +72,7 @@ const ActionSection = memo(function ActionSection({
   setIsSecondHalf,
   handleSaveAction,
   resetActionState,
+  resetActionPoints,
   startZone,
   endZone,
   isActionModalOpen,
@@ -171,6 +173,7 @@ const ActionSection = memo(function ActionSection({
         onSecondHalfToggle={handleSecondHalfToggle}
         onSaveAction={handleSaveActionWrapper}
         onReset={resetActionState}
+        onResetPoints={resetActionPoints}
         matchInfo={matchInfo}
       />
     </section>

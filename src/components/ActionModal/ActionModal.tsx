@@ -35,6 +35,7 @@ interface ActionModalProps {
   onSecondHalfToggle: (checked: boolean) => void;
   onSaveAction: () => void;
   onReset: () => void;
+  onResetPoints: () => void;
   editingAction?: Action | null;
   allMatches?: TeamInfo[];
   selectedMatchId?: string | null;
@@ -68,6 +69,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
   onSecondHalfToggle,
   onSaveAction,
   onReset,
+  onResetPoints,
   editingAction,
   allMatches,
   selectedMatchId,
@@ -150,7 +152,19 @@ const ActionModal: React.FC<ActionModalProps> = ({
     }
     
     // Sortowanie alfabetyczne po nazwisku
-    return sortPlayersByLastName(playersToFilter);
+    const sortedPlayers = sortPlayersByLastName(playersToFilter);
+    
+    // Debug: logujemy informacje o filtrowaniu
+    if (isEditMode && currentSelectedMatch) {
+      console.log(`ActionModal: Filtrowanie zawodników dla meczu ${currentSelectedMatch}:`, {
+        totalPlayers: players.length,
+        teamPlayers: players.filter(p => p.teams?.includes(selectedMatch?.team || '')).length,
+        playersWithMinutes: sortedPlayers.length,
+        selectedMatch: selectedMatch?.opponent
+      });
+    }
+    
+    return sortedPlayers;
   }, [players, isEditMode, allMatches, currentSelectedMatch, matchInfo]);
 
   if (!isOpen) return null;
@@ -301,23 +315,14 @@ const ActionModal: React.FC<ActionModalProps> = ({
   };
 
   const handleReset = () => {
-    // Zapisz aktualną wartość minuty oraz zachowaj informację o połowie meczu
-    const currentMinute = actionMinute;
-    const currentHalf = isSecondHalf;
-    
-    // Zresetuj tylko dane z formularza: 
-    // - punkty, 
-    // - przełączniki P3, strzał, bramka, wejście w PK
-    // - NIE resetujemy wyboru zawodników ani stref (startZone, endZone)
-    
-    // Wywołaj funkcję resetowania stanu z komponentu nadrzędnego
-    onReset();
-    
-    // Przywróć zapisane wartości minuty i połowy meczu
-    onMinuteChange(currentMinute);
-    onSecondHalfToggle(currentHalf);
-    
-    console.log("Reset formularza akcji - zachowano wartości stref i zaznaczonych zawodników");
+    if (isEditMode) {
+      // W trybie edycji - użyj oryginalnej funkcji onReset (przywraca oryginalną akcję)
+      onReset();
+    } else {
+      // W trybie dodawania nowej akcji - użyj funkcji onResetPoints z hooka
+      // która resetuje TYLKO punkty i przełączniki, zachowując zawodników, minutę, połowę, strefy
+      onResetPoints();
+    }
   };
 
   return (
@@ -391,19 +396,31 @@ const ActionModal: React.FC<ActionModalProps> = ({
             </div>
             <div className={styles.playersGrid}>
               {filteredPlayers.length > 0 ? (
-                filteredPlayers.map((player) => (
-                <PlayerCard
-                  key={player.id}
-                  player={player}
-                  isSender={actionType === "pass" ? player.id === selectedPlayerId : false}
-                  isReceiver={actionType === "pass" ? player.id === selectedReceiverId : false}
-                  isDribbler={actionType === "dribble" ? player.id === selectedPlayerId : false}
-                  onSelect={handlePlayerClick}
-                />
-                ))
+                <>
+                  {isEditMode && filteredPlayers.length < 3 && (
+                    <div className={styles.warningMessage}>
+                      ⚠️ Tylko {filteredPlayers.length} zawodnik{filteredPlayers.length === 1 ? '' : 'ów'} dostępn{filteredPlayers.length === 1 ? 'y' : 'ych'} w tym meczu
+                    </div>
+                  )}
+                  {filteredPlayers.map((player) => (
+                  <PlayerCard
+                    key={player.id}
+                    player={player}
+                    isSender={actionType === "pass" ? player.id === selectedPlayerId : false}
+                    isReceiver={actionType === "pass" ? player.id === selectedReceiverId : false}
+                    isDribbler={actionType === "dribble" ? player.id === selectedPlayerId : false}
+                    onSelect={handlePlayerClick}
+                  />
+                  ))}
+                </>
               ) : (
                 <div className={styles.noPlayersMessage}>
-                  {matchInfo ? (
+                  {isEditMode && currentSelectedMatch ? (
+                    <>
+                      Brak zawodników z ustawionymi minutami w wybranym meczu.<br/>
+                      <small>Sprawdź czy zostały ustawione minuty zawodników w meczu lub wybierz inny mecz.</small>
+                    </>
+                  ) : matchInfo ? (
                     <>
                       Brak zawodników z co najmniej 1 minutą rozegranych w tym meczu.<br/>
                       <small>Sprawdź czy zostały ustawione minuty zawodników w meczu.</small>
@@ -436,18 +453,31 @@ const ActionModal: React.FC<ActionModalProps> = ({
                   </span>
                 </button>
               ) : (
-                <button
-                  key={index}
-                  className={styles.actionButton}
+                <div 
+                  key={index} 
+                  className={styles.pointsButtonGroup}
                   onClick={() => handlePointsAdd(button.points)}
                   title={button.description}
-                  type="button"
                 >
                   <span className={styles.buttonLabel}>{button.label}: <b>{currentPoints}</b></span>
                   <span className={styles.buttonDescription}>
                     {button.description}
                   </span>
-                </button>
+                  <div className={styles.pointsControls}>
+                    <button
+                      className={styles.subtractButton}
+                      onClick={(e) => {
+                        e.stopPropagation(); // Zapobiega wywołaniu onClick z głównego div'a
+                        handlePointsAdd(-button.points);
+                      }}
+                      title={`Odejmij ${button.points} pkt`}
+                      type="button"
+                      disabled={currentPoints < button.points}
+                    >
+                      −
+                    </button>
+                  </div>
+                </div>
               )
             )}
 
@@ -523,14 +553,45 @@ const ActionModal: React.FC<ActionModalProps> = ({
             
             <div className={styles.minuteInput}>
               <label htmlFor="action-minute-modal">Minuta:</label>
-              <input
-                id="action-minute-modal"
-                type="number"
-                value={actionMinute}
-                onChange={handleMinuteChange}
-                min={isSecondHalf ? 46 : 1}
-                max={isSecondHalf ? 130 : 65}
-              />
+              <div className={styles.minuteControls}>
+                <button
+                  type="button"
+                  className={styles.minuteButton}
+                  onClick={() => {
+                    const newMinute = Math.max(
+                      isSecondHalf ? 46 : 1, 
+                      actionMinute - 1
+                    );
+                    onMinuteChange(newMinute);
+                  }}
+                  title="Zmniejsz minutę"
+                >
+                  −
+                </button>
+                <input
+                  id="action-minute-modal"
+                  type="number"
+                  value={actionMinute}
+                  onChange={handleMinuteChange}
+                  min={isSecondHalf ? 46 : 1}
+                  max={isSecondHalf ? 130 : 65}
+                  className={styles.minuteField}
+                />
+                <button
+                  type="button"
+                  className={styles.minuteButton}
+                  onClick={() => {
+                    const newMinute = Math.min(
+                      isSecondHalf ? 130 : 65, 
+                      actionMinute + 1
+                    );
+                    onMinuteChange(newMinute);
+                  }}
+                  title="Zwiększ minutę"
+                >
+                  +
+                </button>
+              </div>
             </div>
             
             <button

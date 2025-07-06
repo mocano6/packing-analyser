@@ -8,7 +8,7 @@ import Instructions from "@/components/Instructions/Instructions";
 import PlayersGrid from "@/components/PlayersGrid/PlayersGrid";
 import Tabs from "@/components/Tabs/Tabs";
 import { usePlayersState } from "@/hooks/usePlayersState";
-import { useActionsState } from "@/hooks/useActionsState";
+
 import { usePackingActions } from "@/hooks/usePackingActions";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { TEAMS, fetchTeams, getTeamsArray, Team } from "@/constants/teamsLoader";
@@ -84,7 +84,7 @@ export default function Page() {
   const [editingAction, setEditingAction] = React.useState<Action | null>(null);
   const [allTeams, setAllTeams] = React.useState<Team[]>([]);
 
-  const useActionsStateRef = useRef<any>(null);
+
 
   // Custom hooks
   const {
@@ -114,6 +114,9 @@ export default function Page() {
   } = useMatchInfo();
 
   const packingActions = usePackingActions(players, matchInfo);
+  
+  // Wyciągnij funkcję resetActionPoints z hooka
+  const { resetActionPoints } = packingActions;
   
   const {
     actions,
@@ -489,10 +492,7 @@ export default function Page() {
     // Zapisujemy wartość w localStorage
     localStorage.setItem('currentHalf', newValue ? 'P2' : 'P1');
     
-    // Przekazujemy wartość do hooka useActionsState
-    if (useActionsStateRef.current?.setIsSecondHalf) {
-      useActionsStateRef.current.setIsSecondHalf(newValue);
-    }
+
   }, [isSecondHalf, packingActions]);
 
   // Sprawdź czy użytkownik ma dostęp do aplikacji
@@ -1235,6 +1235,7 @@ export default function Page() {
             setIsSecondHalf={handleSecondHalfToggle}
             handleSaveAction={onSaveAction}
             resetActionState={resetCustomActionState}
+            resetActionPoints={resetActionPoints}
             startZone={startZone}
             endZone={endZone}
             isActionModalOpen={isActionModalOpen}
@@ -1348,7 +1349,7 @@ export default function Page() {
             if (editingAction) {
               setEditingAction({
                 ...editingAction,
-                packingPoints: points
+                packingPoints: (editingAction.packingPoints || 0) + points
               });
             }
           }}
@@ -1411,6 +1412,7 @@ export default function Page() {
               }
             }
           }}
+          onResetPoints={resetActionPoints}
           editingAction={editingAction}
           allMatches={allMatches}
           selectedMatchId={editingAction?.matchId || null}

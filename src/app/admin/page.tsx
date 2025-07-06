@@ -186,6 +186,43 @@ service cloud.firestore {
       </section>
 
       <section style={{ marginBottom: "30px" }}>
+        <h2>🔄 Migracja struktury danych</h2>
+        <p>
+          Analiza i migracja struktury zawodników z obecnej struktury (players.teams[]) 
+          na nową strukturę z subcollections (teams/{'{teamId}'}/members/).
+        </p>
+        <div style={{ 
+          backgroundColor: "#e7f3ff", 
+          padding: "15px", 
+          borderRadius: "4px", 
+          marginBottom: "15px" 
+        }}>
+          <strong>💡 Korzyści migracji:</strong>
+          <ul style={{ marginTop: "10px", marginBottom: "0" }}>
+            <li>Różne numery zawodników w różnych zespołach</li>
+            <li>Status członkostwa (aktywny/wypożyczony/zawieszony)</li>
+            <li>Historia transferów i dat dołączenia</li>
+            <li>Szybsze zapytania do bazy danych</li>
+            <li>Lepsze bezpieczeństwo na poziomie zespołu</li>
+          </ul>
+        </div>
+        <Link 
+          href="/admin/migration"
+          style={{
+            display: "inline-block",
+            padding: "10px 20px",
+            backgroundColor: "#17a2b8",
+            color: "white",
+            textDecoration: "none",
+            borderRadius: "4px",
+            cursor: "pointer"
+          }}
+        >
+          🔍 Przeprowadź analizę danych
+        </Link>
+      </section>
+
+      <section style={{ marginBottom: "30px" }}>
         <h2>Reguły bezpieczeństwa Firebase</h2>
         <p>
           Poniżej znajdują się zalecane reguły bezpieczeństwa dla nowego systemu uwierzytelniania.

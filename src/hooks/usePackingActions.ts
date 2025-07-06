@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDB } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs, doc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
-import { updatePlayerWithAction, removePlayerAction } from "@/utils/syncPlayerData";
+// Usunięto import funkcji synchronizacji - akcje są teraz tylko w matches
 import { getPlayerFullName } from '@/utils/playerUtils';
 
 // Funkcja do konwersji numeru strefy na format literowo-liczbowy
@@ -281,14 +281,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
             actions_packing: [...cleanedActions, cleanedAction]
           });
           
-          // Po udanym zapisie zaktualizuj dane zawodników
-          try {
-            // Aktualizuj dane zawodników o nową akcję
-            await updatePlayerWithAction(cleanedAction, matchInfoArg);
-          } catch (playerUpdateError) {
-              console.error("Błąd podczas aktualizacji danych zawodników:", playerUpdateError);
-            // Nie przerywamy wykonania - akcja została już zapisana
-          }
+          // Akcje są teraz przechowywane tylko w matches - nie duplikujemy w players
           
           // Po udanym zapisie odświeżamy akcje z bazy
           loadActionsForMatch(matchInfoArg.matchId);
@@ -362,20 +355,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
           actions_packing: cleanedActions
         });
         
-        // USUWAMY AKCJĘ Z DANYCH ZAWODNIKÓW
-        if (actionToDelete) {
-          try {
-            await removePlayerAction(
-              actionId, 
-              matchInfo.matchId, 
-              actionToDelete.senderId, 
-              actionToDelete.receiverId
-            );
-          } catch (playerError) {
-            console.error("Błąd podczas usuwania akcji z danych zawodników:", playerError);
-            // Nie przerywamy - akcja została już usunięta z meczu
-          }
-        }
+        // Akcje są teraz przechowywane tylko w matches - nie duplikujemy w players
         
         // DOPIERO PO UDANYM ZAPISIE usuwamy z lokalnego stanu
         setActions(prevActions => prevActions.filter(action => action.id !== actionId));
@@ -423,23 +403,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
           actions_packing: []
         });
         
-        // USUWAMY WSZYSTKIE AKCJE Z DANYCH ZAWODNIKÓW
-        if (actionsToRemove.length > 0) {
-          try {
-            for (const action of actionsToRemove) {
-              await removePlayerAction(
-                action.id, 
-                matchInfo.matchId, 
-                action.senderId, 
-                action.receiverId
-              );
-            }
-            console.log(`✅ Usunięto ${actionsToRemove.length} akcji z danych zawodników`);
-          } catch (playerError) {
-            console.error("Błąd podczas usuwania akcji z danych zawodników:", playerError);
-            // Nie przerywamy - akcje zostały już usunięte z meczu
-          }
-        }
+        // Akcje są teraz przechowywane tylko w matches - nie duplikujemy w players
+        console.log(`✅ Usunięto ${actionsToRemove.length} akcji z meczu`);
         
         // Czyścimy stan lokalny
         setActions([]);
@@ -464,7 +429,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     localStorage.setItem('currentHalf', value ? 'P2' : 'P1');
   }, []);
 
-  // Reset stanu akcji
+  // Reset stanu akcji - pełny reset (używany przy zamykaniu modalu)
   const resetActionState = useCallback(() => {
     setSelectedZone(null);
     setCurrentPoints(0);
@@ -476,6 +441,17 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     setSelectedPlayerId(null);
     setSelectedReceiverId(null);
     // Nie resetujemy isSecondHalf, bo połowa meczu jest utrzymywana między akcjami
+  }, []);
+
+  // Reset tylko punktów i przełączników (zachowuje zawodników, minutę, połowę)
+  const resetActionPoints = useCallback(() => {
+    setCurrentPoints(0);
+    setIsP3Active(false);
+    setIsShot(false);
+    setIsGoal(false);
+    setIsPenaltyAreaEntry(false);
+    // NIE resetujemy: selectedPlayerId, selectedReceiverId, actionMinute, isSecondHalf, selectedZone
+    console.log("🔄 Reset punktów i przełączników - zachowano zawodników, minutę, połowę i strefy");
   }, []);
 
   // Funkcja synchronizująca wzbogacone akcje z bazą Firebase
@@ -535,6 +511,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     handleDeleteAction,
     handleDeleteAllActions,
     resetActionState,
+    resetActionPoints,
     loadActionsForMatch,
     syncEnrichedActions
   };

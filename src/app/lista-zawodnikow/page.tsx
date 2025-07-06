@@ -7,7 +7,7 @@ import { usePlayersState } from "@/hooks/usePlayersState";
 import { useAuth } from "@/hooks/useAuth";
 import { getPlayerFullName } from '@/utils/playerUtils';
 import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { getDB } from '@/lib/firebase';
 import styles from './page.module.css';
 
 export default function ListaZawodnikow() {
@@ -22,58 +22,15 @@ export default function ListaZawodnikow() {
   const { isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
   const { players, handleDeletePlayer: deletePlayer } = usePlayersState();
 
-  // Sprawdź uprawnienia administratora
-  if (authLoading) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.loading}>
-          <div className={styles.spinner}></div>
-          <p>Sprawdzanie uprawnień...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.accessDenied}>
-          <h2>🔒 Brak dostępu</h2>
-          <p>Musisz być zalogowany, aby uzyskać dostęp do tej strony.</p>
-          <Link href="/login" className={styles.loginButton}>
-            Przejdź do logowania
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.accessDenied}>
-          <h2>🔒 Brak uprawnień</h2>
-          <p>Tylko administratorzy mają dostęp do listy wszystkich zawodników.</p>
-          <Link href="/" className={styles.backButton}>
-            Powrót do aplikacji
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
+  // WSZYSTKIE HOOKI MUSZĄ BYĆ PRZED WARUNKAMI RETURN!
+  
   // Pobierz wszystkie akcje z Firebase
   useEffect(() => {
     const fetchAllActions = async () => {
-      if (!db) {
-        console.error('Firebase nie jest zainicjalizowane');
-        return;
-      }
-
       setIsLoading(true);
       try {
         // Pobierz wszystkie mecze
-        const matchesSnapshot = await getDocs(collection(db, 'matches'));
+        const matchesSnapshot = await getDocs(collection(getDB(), 'matches'));
         const allMatchActions: Action[] = [];
 
         // Przejdź przez każdy mecz i pobierz jego akcje
@@ -116,8 +73,9 @@ export default function ListaZawodnikow() {
   const filteredAndSortedPlayers = useMemo(() => {
     let filtered = playersWithStats.filter(player =>
       getPlayerFullName(player).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      player.number.toString().includes(searchTerm) ||
-      (player.teamsString.toLowerCase().includes(searchTerm.toLowerCase()))
+      (player.number?.toString() || '').includes(searchTerm) ||
+      (player.teamsString.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      player.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return filtered.sort((a, b) => {
@@ -246,6 +204,46 @@ export default function ListaZawodnikow() {
 
   const duplicates = findDuplicates();
 
+  // SPRAWDŹ UPRAWNIENIA (PO WSZYSTKICH HOOKACH)
+  if (authLoading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loading}>
+          <div className={styles.spinner}></div>
+          <p>Sprawdzanie uprawnień...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.accessDenied}>
+          <h2>🔒 Brak dostępu</h2>
+          <p>Musisz być zalogowany, aby uzyskać dostęp do tej strony.</p>
+          <Link href="/login" className={styles.loginButton}>
+            Przejdź do logowania
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.accessDenied}>
+          <h2>🔒 Brak uprawnień</h2>
+          <p>Tylko administratorzy mają dostęp do listy wszystkich zawodników.</p>
+          <Link href="/" className={styles.backButton}>
+            Powrót do aplikacji
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   // Funkcja do przełączania rozwinięcia akcji zawodnika
   const togglePlayerActions = (playerId: string) => {
     setExpandedPlayerIds(prev => {
@@ -294,10 +292,7 @@ export default function ListaZawodnikow() {
       return;
     }
 
-    if (!db) {
-      alert('Firebase nie jest zainicjalizowane. Nie można sparować duplikatów.');
-      return;
-    }
+    // Firebase jest zawsze dostępne przez getDB()
 
     // Pokaż szczegóły duplikatów do sparowania
     const duplicatesSummary = duplicates.map(({ key, players }) => 
@@ -341,7 +336,7 @@ export default function ListaZawodnikow() {
         try {
           // Krok 1: Znajdź wszystkie akcje duplikatów i przenieś je do głównego zawodnika
           console.log('📝 Krok 1: Przenoszenie akcji...');
-          const matchesSnapshot = await getDocs(collection(db, 'matches'));
+          const matchesSnapshot = await getDocs(collection(getDB(), 'matches'));
           let totalActionsUpdated = 0;
           
           for (const matchDoc of matchesSnapshot.docs) {
@@ -378,7 +373,7 @@ export default function ListaZawodnikow() {
 
               // Zapisz zaktualizowane akcje jeśli były zmiany
               if (actionsChanged) {
-                await updateDoc(doc(db, 'matches', matchDoc.id), {
+                await updateDoc(doc(getDB(), 'matches', matchDoc.id), {
                   actions_packing: updatedActions
                 });
                 console.log(`   💾 Zaktualizowano akcje w meczu: ${matchDoc.id}`);
@@ -413,7 +408,7 @@ export default function ListaZawodnikow() {
             birthYear: mainPlayer.birthYear || duplicatesToMerge.find(d => d.birthYear)?.birthYear || mainPlayer.birthYear
           };
 
-          await updateDoc(doc(db, 'players', mainPlayer.id), {
+          await updateDoc(doc(getDB(), 'players', mainPlayer.id), {
             teams: updatedMainPlayer.teams,
             position: updatedMainPlayer.position,
             birthYear: updatedMainPlayer.birthYear
@@ -423,7 +418,7 @@ export default function ListaZawodnikow() {
           // Krok 3: Usuń duplikaty
           console.log('🗑️ Krok 3: Usuwanie duplikatów...');
           for (const duplicate of duplicatesToMerge) {
-            await deleteDoc(doc(db, 'players', duplicate.id));
+            await deleteDoc(doc(getDB(), 'players', duplicate.id));
             console.log(`   ❌ Usunięto duplikat: ${duplicate.id} (${getPlayerFullName(duplicate) || 'Brak nazwy'})`);
           }
 
@@ -495,6 +490,9 @@ export default function ListaZawodnikow() {
     <div className={styles.container}>
       <div className={styles.header}>
         <h1>Lista wszystkich zawodników</h1>
+        <p style={{ margin: "5px 0", fontSize: "14px", color: "#6c757d" }}>
+          Wyszukuj po imieniu, nazwisku, numerze, zespole lub ID zawodnika. Najedź na skrócone ID aby zobaczyć pełne.
+        </p>
         <Link href="/" className={styles.backButton}>
           ← Powrót do głównej
         </Link>
@@ -504,7 +502,7 @@ export default function ListaZawodnikow() {
         <div className={styles.searchBox}>
           <input
             type="text"
-            placeholder="Szukaj zawodnika (imię, nazwisko, numer, zespół)..."
+            placeholder="Szukaj zawodnika (imię, nazwisko, numer, zespół, ID)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className={styles.searchInput}
@@ -564,7 +562,7 @@ export default function ListaZawodnikow() {
                   <div key={player.id} className={styles.duplicateItem}>
                     <div className={styles.playerInfo}>
                       <span className={styles.playerName}>{getPlayerFullName(player)}</span>
-                      <span className={styles.playerNumber}>#{player.number}</span>
+                      <span className={styles.playerNumber}>#{player.number || 'Brak'}</span>
                       <span className={styles.playerBirthYear}>
                         {player.birthYear ? `ur. ${player.birthYear}` : 'Brak roku urodzenia'}
                       </span>
@@ -596,6 +594,7 @@ export default function ListaZawodnikow() {
                 Imię i nazwisko (sortuj wg nazwiska) {getSortIcon('name')}
               </th>
               <th>Numer</th>
+              <th>ID</th>
               <th>Rok urodzenia</th>
               <th>Pozycja</th>
               <th onClick={() => handleSort('teams')} className={styles.sortableHeader}>
@@ -611,7 +610,8 @@ export default function ListaZawodnikow() {
             {filteredAndSortedPlayers.map((player) => (
               <tr key={player.id} className={styles.tableRow}>
                 <td className={styles.playerName}>{getPlayerFullName(player)}</td>
-                <td className={styles.playerNumber}>#{player.number}</td>
+                <td className={styles.playerNumber}>#{player.number || 'Brak'}</td>
+                <td className={styles.playerId} title={player.id}>{player.id.slice(0, 8)}...</td>
                 <td>{player.birthYear || '-'}</td>
                 <td>{player.position || '-'}</td>
                 <td className={styles.playerTeams}>{player.teamsString || '-'}</td>

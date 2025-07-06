@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { PlayerMinutes } from "@/types";
-import { db } from "@/lib/firebase";
+import { getDB } from "@/lib/firebase";
 import { 
   collection, getDocs, addDoc, updateDoc, deleteDoc, 
   doc, query, where, orderBy, writeBatch, getDoc, setDoc
@@ -11,7 +11,7 @@ import {
 import { handleFirestoreError, resetFirestoreConnection } from "@/utils/firestoreErrorHandler";
 import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
-import { updatePlayerWithMinutes } from "@/utils/syncPlayerData";
+// Usunięto import synchronizacji - minuty są teraz tylko w matches
 
 // Rozszerzenie interfejsu Window
 declare global {
@@ -288,7 +288,7 @@ export function useMatchInfo() {
       const matchesData = await firebaseQueue.add(async () => {
         return withRetry(async () => {
           try {
-      const matchesCollection = collection(db, "matches");
+      const matchesCollection = collection(getDB(), "matches");
       let matchesQuery;
       
       if (teamId) {
@@ -458,7 +458,7 @@ export function useMatchInfo() {
           const testPermissions = async () => {
             try {
               // Sprawdzenie, czy możemy uzyskać dostęp do kolekcji "matches"
-              const testDoc = doc(db, "matches", "test_permissions");
+              const testDoc = doc(getDB(), "matches", "test_permissions");
               return await getDoc(testDoc);
             } catch (error) {
               // Rozszerzona obsługa błędów offline
@@ -762,7 +762,7 @@ export function useMatchInfo() {
       // Zapisujemy w Firebase w tle, tylko jeśli nie jesteśmy w trybie offline
       if (!isOfflineMode) {
         try {
-          const docRef = doc(db, "matches", matchId);
+          const docRef = doc(getDB(), "matches", matchId);
           await setDoc(docRef, matchData);
           console.log('✅ Zapisano mecz w Firebase:', matchId);
           notifyUser("Mecz został zapisany", "success");
@@ -785,7 +785,7 @@ export function useMatchInfo() {
           }
           
           // Obsługa błędu Firebase
-          await handleFirestoreError(firebaseError, db);
+          await handleFirestoreError(firebaseError, getDB());
           
           const errorMessage = `Zmiany zapisane lokalnie, ale wystąpił błąd synchronizacji z bazą danych: ${firebaseError instanceof Error ? firebaseError.message : String(firebaseError)}`;
           setError(errorMessage);
@@ -866,7 +866,7 @@ export function useMatchInfo() {
       // Usuwamy z Firebase w tle, jeśli nie jesteśmy w trybie offline
       if (!isOfflineMode) {
         try {
-          const docRef = doc(db, "matches", matchId);
+          const docRef = doc(getDB(), "matches", matchId);
           await deleteDoc(docRef);
           console.log('✅ Usunięto mecz z Firebase:', matchId);
           notifyUser("Mecz został usunięty", "success");
@@ -874,7 +874,7 @@ export function useMatchInfo() {
           console.error('❌ Błąd podczas usuwania meczu z Firebase:', firebaseError);
           
           // Obsługa błędu Firebase
-          await handleFirestoreError(firebaseError, db);
+          await handleFirestoreError(firebaseError, getDB());
           
           const errorMessage = `Mecz usunięty lokalnie, ale wystąpił błąd synchronizacji z bazą danych: ${firebaseError instanceof Error ? firebaseError.message : String(firebaseError)}`;
           setError(errorMessage);
@@ -959,7 +959,7 @@ export function useMatchInfo() {
       if (!isOfflineMode) {
         try {
           // Aktualizuj dane w Firebase
-          const matchRef = doc(db, "matches", match.matchId);
+          const matchRef = doc(getDB(), "matches", match.matchId);
           await updateDoc(matchRef, {
             playerMinutes: playerMinutes,
             lastUpdated: new Date().toISOString()
@@ -967,21 +967,15 @@ export function useMatchInfo() {
           
           console.log('✅ Minuty zawodników zaktualizowane w Firebase');
           
-          // Aktualizuj dane w kolekcji players
-          try {
-            await updatePlayerWithMinutes(playerMinutes, match.matchId);
-            console.log('✅ Zaktualizowano dane zawodników o nowe minuty i pozycje');
-          } catch (playerUpdateError) {
-            console.error('❌ Błąd podczas aktualizacji danych zawodników:', playerUpdateError);
-            // Nie przerywamy wykonania - minuty zostały już zapisane w meczu
-          }
+          // Minuty zawodników są teraz przechowywane tylko w matches - nie duplikujemy w players
+          console.log('✅ Minuty zawodników zapisane w meczu');
           
           notifyUser("Minuty zawodników zostały zapisane", "success");
         } catch (firebaseError) {
           console.error('❌ Błąd podczas synchronizacji minut zawodników z Firebase:', firebaseError);
           
           // Obsługa błędu Firebase
-          await handleFirestoreError(firebaseError, db);
+          await handleFirestoreError(firebaseError, getDB());
           
           const errorMessage = `Minuty zawodników zapisane lokalnie, ale wystąpił błąd synchronizacji z bazą danych: ${firebaseError instanceof Error ? firebaseError.message : String(firebaseError)}`;
           setError(errorMessage);
