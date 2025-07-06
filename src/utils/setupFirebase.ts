@@ -194,7 +194,7 @@ export class FirebaseInitializer {
     // Obsługa zdarzeń online/offline
     window.addEventListener('online', () => {
       if (this.isDebugEnabled) {
-        console.log('🌐 Przywrócono połączenie z siecią');
+  
       }
       
       if (this.db) {
@@ -204,10 +204,7 @@ export class FirebaseInitializer {
       }
     });
     
-    window.addEventListener('offline', () => {
-      if (this.isDebugEnabled) {
-        console.log('🔌 Utracono połączenie z siecią');
-      }
+          window.addEventListener('offline', () => {
       
       if (this.db) {
         disableNetwork(this.db).catch(error => {

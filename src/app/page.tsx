@@ -166,7 +166,7 @@ export default function Page() {
 
     // Słuchaj na zmiany w zespołach (np. po dodaniu/usunięciu w panelu admin)
     const handleTeamsChanged = () => {
-      console.log('Odświeżam zespoły po zmianie w cache');
+
       loadTeams();
     };
 
@@ -302,7 +302,7 @@ export default function Page() {
       // Jeśli hash zawiera informację o odświeżeniu dla konkretnego zespołu
       if (hash.startsWith('#refresh=')) {
         const teamId = hash.replace('#refresh=', '');
-        console.log("Wykryto żądanie odświeżenia dla zespołu:", teamId);
+  
         
         // Wyczyść hash
         window.location.hash = '';
@@ -321,7 +321,6 @@ export default function Page() {
             
             // Unikamy nakładających się operacji
             if (window._isRefreshingMatches) {
-              console.log("🚫 Pominięto odświeżanie - już trwa inna operacja");
               return;
             }
             
@@ -376,12 +375,10 @@ export default function Page() {
       
       // Ignoruj zdarzenia starsze niż ostatnie przetworzone lub gdy trwa już odświeżanie
       if (timestamp <= lastEventTimestamp || window._isRefreshingMatches) {
-        console.log(`🚫 Ignoruję zdarzenie matchesListRefresh o czasie ${timestamp}`);
         return;
       }
       
       lastEventTimestamp = timestamp;
-      console.log(`🔔 Złapano zdarzenie matchesListRefresh o czasie ${timestamp} dla zespołu:`, teamId);
       
       // Ustawiamy zespół, jeśli został przekazany i różni się od obecnego
       if (teamId && teamId !== selectedTeam) {
@@ -920,11 +917,8 @@ export default function Page() {
 
   // Modyfikacja funkcji usuwania meczu
   const handleMatchDelete = async (matchId: string) => {
-    console.log("🗑️ Usuwanie meczu o ID:", matchId);
-    
     try {
       await handleDeleteMatch(matchId);
-      console.log("✅ Mecz usunięty pomyślnie");
       
       // Hook useMatchInfo sam zajmuje się odświeżeniem listy meczów
       // Nie ma potrzeby dodatkowego wywoływania refreshMatchesList
@@ -1048,7 +1042,7 @@ export default function Page() {
           const oldActions = oldMatchData.actions_packing || [];
           const filteredOldActions = oldActions.filter(a => a.id !== editedAction.id);
           
-          console.log("🗑️ Usuwanie akcji ze starego meczu:", originalMatchId);
+  
           await updateDoc(oldMatchRef, {
             actions_packing: filteredOldActions
           });
@@ -1067,7 +1061,7 @@ export default function Page() {
         const newMatchData = newMatchDoc.data() as TeamInfo;
         const newActions = newMatchData.actions_packing || [];
         
-        console.log("➕ Dodawanie akcji do nowego meczu:", editedAction.matchId);
+
         const updatedNewActions = [...newActions, removeUndefinedFields(editedAction)];
         
         await updateDoc(newMatchRef, {
@@ -1084,7 +1078,7 @@ export default function Page() {
           setActions([...actions, editedAction]);
         }
       } else {
-        console.log("📝 Aktualizacja akcji w tym samym meczu");
+        // Aktualizacja akcji w tym samym meczu
         
         // Standardowa aktualizacja w tym samym meczu
         const matchRef = doc(db, "matches", editedAction.matchId);
@@ -1119,7 +1113,7 @@ export default function Page() {
         }
       }
 
-      console.log("✅ Akcja zapisana pomyślnie");
+
       setIsActionEditModalOpen(false);
       setEditingAction(null);
       
@@ -1399,7 +1393,7 @@ export default function Page() {
             }
           }}
           onSaveAction={() => {
-            console.log("💾 Zapisywanie edytowanej akcji:", editingAction);
+      
             if (editingAction) {
               handleSaveEditedAction(editingAction);
             }

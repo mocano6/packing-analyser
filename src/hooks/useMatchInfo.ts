@@ -238,21 +238,16 @@ export function useMatchInfo() {
 
   // Rozszerzona funkcja otwierania/zamykania modalu
   const toggleMatchModal = (isOpen: boolean, isNewMatch: boolean = false) => {
-    console.log(`toggleMatchModal wywoływany z isOpen=${isOpen}, isNewMatch=${isNewMatch}`);
-    
     // Zawsze aktualizujemy stan modalu - najpierw ustawiamy stan
     if (isOpen === false) {
-      console.log("Zamykanie modalu meczu - ustawiam stan na FALSE");
       setIsMatchModalOpen(false);
     } else {
-      console.log("Otwieranie modalu meczu - ustawiam stan na TRUE");
       setIsMatchModalOpen(true);
     }
     
     // Jeśli otwieramy modal dla nowego meczu, resetujemy dane meczu
     if (isOpen && isNewMatch) {
       // Opóźnienie jest potrzebne, aby zmiany stanu nastąpiły w odpowiedniej kolejności
-      console.log("Resetowanie danych meczu dla nowego meczu");
       setTimeout(() => {
         setMatchInfo(null);
       }, 0);
@@ -266,15 +261,11 @@ export function useMatchInfo() {
       
       // Sprawdzamy czy jesteśmy w trybie offline
       if (isOfflineMode) {
-        console.log("📴 W trybie offline, używamy tylko lokalnego cache");
-        
         // Zwracamy dane z cache zamiast rzucać wyjątek
         const cachedMatches = localCacheRef.current.data;
         const filteredMatches = teamId 
           ? cachedMatches.filter(match => match.team === teamId)
           : cachedMatches;
-          
-        console.log('🚑 Używam cache w trybie offline, elementów:', filteredMatches.length);
         
         return filteredMatches;
       }
@@ -706,7 +697,7 @@ export function useMatchInfo() {
       setError(null);
       
       // Dodajemy informacje debugujące
-      console.log('💾 handleSaveMatchInfo - rozpoczęcie zapisu meczu');
+      
       
       // Sprawdzamy tryb offline
       if (isOfflineMode && info.matchId && info.matchId !== 'local') {
@@ -724,7 +715,7 @@ export function useMatchInfo() {
         lastUpdated: new Date().toISOString(),
       };
       
-      console.log('📋 Dane do zapisania:', matchData);
+  
       
       // Najpierw aktualizujemy cache lokalnie
       const updatedCacheData = [...localCacheRef.current.data];
@@ -764,7 +755,7 @@ export function useMatchInfo() {
         try {
           const docRef = doc(getDB(), "matches", matchId);
           await setDoc(docRef, matchData);
-          console.log('✅ Zapisano mecz w Firebase:', matchId);
+  
           notifyUser("Mecz został zapisany", "success");
         } catch (firebaseError) {
           console.error('❌ Błąd zapisu do Firebase:', firebaseError);
@@ -798,7 +789,7 @@ export function useMatchInfo() {
         notifyUser("Mecz zapisany lokalnie", "success");
       }
       
-      console.log('📋 handleSaveMatchInfo - zakończono operację zapisu');
+
       return matchId;
       
     } catch (error) {
@@ -829,7 +820,7 @@ export function useMatchInfo() {
   // Funkcja do usuwania meczu
   const handleDeleteMatch = useCallback(async (matchId: string) => {
     try {
-      console.log('🗑️ handleDeleteMatch - rozpoczęcie usuwania meczu:', matchId);
+  
       
       if (isOfflineMode) {
         console.warn("❌ Próba usunięcia meczu z Firebase w trybie offline");
@@ -868,7 +859,7 @@ export function useMatchInfo() {
         try {
           const docRef = doc(getDB(), "matches", matchId);
           await deleteDoc(docRef);
-          console.log('✅ Usunięto mecz z Firebase:', matchId);
+  
           notifyUser("Mecz został usunięty", "success");
         } catch (firebaseError) {
           console.error('❌ Błąd podczas usuwania meczu z Firebase:', firebaseError);
@@ -887,7 +878,7 @@ export function useMatchInfo() {
         notifyUser("Mecz usunięty lokalnie", "success");
       }
       
-      console.log('🗑️ handleDeleteMatch - zakończono operację usuwania');
+
       return true;
       
     } catch (error) {
@@ -918,7 +909,7 @@ export function useMatchInfo() {
         throw new Error("Brak ID meczu");
       }
       
-      console.log("📝 handleSavePlayerMinutes - zapisywanie minut dla meczu:", match.matchId);
+  
       
       if (isOfflineMode) {
         console.warn("❌ Próba aktualizacji minut zawodników w trybie offline");
@@ -965,10 +956,7 @@ export function useMatchInfo() {
             lastUpdated: new Date().toISOString()
           });
           
-          console.log('✅ Minuty zawodników zaktualizowane w Firebase');
-          
           // Minuty zawodników są teraz przechowywane tylko w matches - nie duplikujemy w players
-          console.log('✅ Minuty zawodników zapisane w meczu');
           
           notifyUser("Minuty zawodników zostały zapisane", "success");
         } catch (firebaseError) {

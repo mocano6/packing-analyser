@@ -90,20 +90,17 @@ const ActionModal: React.FC<ActionModalProps> = ({
   // Efekt do aktualizacji wybranego meczu przy edycji
   useEffect(() => {
     if (editingAction && editingAction.matchId) {
-      console.log("ActionModal: Ustawiam mecz z editingAction:", editingAction.matchId);
       setCurrentSelectedMatch(editingAction.matchId);
       if (onMatchSelect) {
         onMatchSelect(editingAction.matchId);
       }
     } else if (selectedMatchId) {
-      console.log("ActionModal: Ustawiam mecz z selectedMatchId:", selectedMatchId);
       setCurrentSelectedMatch(selectedMatchId);
     }
   }, [editingAction?.matchId, selectedMatchId]);
 
   // Funkcja obsługi zmiany meczu z useCallback dla lepszej optymalizacji
   const handleMatchChange = useCallback((matchId: string) => {
-    console.log("ActionModal: Zmiana meczu na:", matchId);
     setCurrentSelectedMatch(matchId);
     if (onMatchSelect) {
       onMatchSelect(matchId);
@@ -154,15 +151,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
     // Sortowanie alfabetyczne po nazwisku
     const sortedPlayers = sortPlayersByLastName(playersToFilter);
     
-    // Debug: logujemy informacje o filtrowaniu
-    if (isEditMode && currentSelectedMatch) {
-      console.log(`ActionModal: Filtrowanie zawodników dla meczu ${currentSelectedMatch}:`, {
-        totalPlayers: players.length,
-        teamPlayers: players.filter(p => p.teams?.includes(selectedMatch?.team || '')).length,
-        playersWithMinutes: sortedPlayers.length,
-        selectedMatch: selectedMatch?.opponent
-      });
-    }
+
     
     return sortedPlayers;
   }, [players, isEditMode, allMatches, currentSelectedMatch, matchInfo]);
@@ -260,7 +249,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
       onMinuteChange(45);
     }
     
-    console.log(`Zmieniono połowę na: ${value ? 'P2' : 'P1'}`);
   };
 
   const handleSave = async () => {
@@ -284,25 +272,10 @@ const ActionModal: React.FC<ActionModalProps> = ({
       
       // Jeśli brakuje stref w localStorage, wyświetlamy alert
       if (!tempStartZone || !tempEndZone) {
-        console.error("ActionModal: Brak informacji o strefach w localStorage!");
         alert("Błąd: Brak informacji o wybranych strefach. Proszę wybrać strefy początkową i końcową na boisku.");
         return;
       }
     }
-
-    // Dodajemy log przed zapisaniem, aby sprawdzić stan w konsoli
-    console.log("ActionModal: Zapisuję akcję, stan przed zapisem:", {
-      selectedPlayerId,
-      selectedReceiverId,
-      actionType,
-      actionMinute,
-      currentPoints,
-      isP3Active,
-      isShot,
-      isGoal,
-      isPenaltyAreaEntry,
-      isEditMode
-    });
 
     // Wywołaj funkcję zapisującą akcję, ale nie zamykaj modalu od razu
     // Komponent nadrzędny sam zadecyduje czy i kiedy zamknąć modal

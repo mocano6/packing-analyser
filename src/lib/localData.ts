@@ -31,7 +31,7 @@ export class LocalDataManager {
       };
       localStorage.setItem(key, JSON.stringify(dataToSave));
       this.updateCollectionIndex(collection, id);
-      console.log(`✅ Dane zapisane lokalnie: ${collection}/${id}`);
+    
     } catch (error) {
       console.error(`❌ Błąd podczas zapisywania danych lokalnie (${collection}/${id}):`, error);
     }
@@ -65,7 +65,7 @@ export class LocalDataManager {
       const key = `${this.prefix}${collection}_${id}`;
       localStorage.removeItem(key);
       this.removeFromCollectionIndex(collection, id);
-      console.log(`✅ Dane usunięte lokalnie: ${collection}/${id}`);
+  
     } catch (error) {
       console.error(`❌ Błąd podczas usuwania danych lokalnych (${collection}/${id}):`, error);
     }
@@ -149,7 +149,7 @@ export class LocalDataManager {
    * Wyświetla diagnostykę lokalnych danych
    */
   diagnostics(): void {
-    console.log('📊 Diagnostyka lokalnych danych:');
+
     
     // Znajdź wszystkie klucze z prefixem aplikacji
     const allKeys = Object.keys(localStorage)
@@ -163,10 +163,10 @@ export class LocalDataManager {
     for (const indexKey of collectionIndices) {
       const collection = indexKey.replace(this.prefix, '').replace('_index', '');
       const index = this.getCollectionIndex(collection);
-      console.log(`- Kolekcja ${collection}: ${index.length} dokumentów`);
+
     }
     
-    console.log(`Łącznie znaleziono ${allKeys.length} kluczy i ${collectionIndices.length} kolekcji`);
+    
   }
   
   /**
@@ -211,7 +211,7 @@ export class LocalDataManager {
         }
       }
       
-      console.log('✅ Dane zostały zaimportowane');
+
     } catch (error) {
       console.error('❌ Błąd podczas importu lokalnych danych:', error);
     }
@@ -231,7 +231,7 @@ export class LocalDataManager {
         localStorage.removeItem(key);
       }
       
-      console.log(`✅ Usunięto ${allKeys.length} kluczy lokalnych`);
+
     } catch (error) {
       console.error('❌ Błąd podczas czyszczenia lokalnych danych:', error);
     }

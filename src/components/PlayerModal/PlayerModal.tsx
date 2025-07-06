@@ -121,14 +121,6 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (editingPlayer) {
-        // DEBUG: Sprawdź jakie dane otrzymuje modal
-        console.log('🔍 PlayerModal otrzymał editingPlayer:', {
-          id: editingPlayer.id,
-          name: editingPlayer.name,
-          position: editingPlayer.position,
-          teams: editingPlayer.teams,
-          teamsLength: Array.isArray(editingPlayer.teams) ? editingPlayer.teams.length : 'nie array'
-        });
         
         // Obsługa migracji danych - jeśli są firstName i lastName używaj ich, 
         // w przeciwnym razie podziel name na firstName i lastName

@@ -36,15 +36,14 @@ export function usePlayersState() {
   // Pobierz zawodników z nowej struktury teams/{teamId}/members/
   const fetchPlayersFromNewStructure = async (): Promise<Player[]> => {
     try {
-      console.log('🔍 Próbuję pobrać z nowej struktury teams/{teamId}/members/...');
+
       
       // 1. Pobierz wszystkie zespoły
       const teamsSnapshot = await getDocs(collection(getDB(), "teams"));
       
-      if (teamsSnapshot.empty) {
-        console.log('📭 Brak zespołów w bazie danych');
-        return [];
-      }
+              if (teamsSnapshot.empty) {
+          return [];
+        }
 
       // 2. Pobierz członków z wszystkich zespołów
       const allPlayers = new Map<string, Player>();
@@ -112,7 +111,7 @@ export function usePlayersState() {
       );
       
       const playersList = Array.from(allPlayers.values());
-      console.log(`✅ Pobrano ${playersList.length} zawodników z nowej struktury`);
+      
       return playersList;
       
     } catch (error) {
@@ -122,16 +121,14 @@ export function usePlayersState() {
   };
 
   // Pobierz zawodników ze starej struktury players.teams[]
-  const fetchPlayersFromOldStructure = async (): Promise<Player[]> => {
-    try {
-      console.log('🔍 Próbuję pobrać ze starej struktury players.teams[]...');
+      const fetchPlayersFromOldStructure = async (): Promise<Player[]> => {
+      try {
       
       const playersSnapshot = await getDocs(collection(getDB(), "players"));
       
-      if (playersSnapshot.empty) {
-        console.log('📭 Brak zawodników w starej strukturze');
-        return [];
-      }
+              if (playersSnapshot.empty) {
+          return [];
+        }
 
              const playersList = playersSnapshot.docs.map(doc => {
          const data = doc.data() as Player;
@@ -151,7 +148,7 @@ export function usePlayersState() {
          return player;
        }) as Player[];
 
-      console.log(`✅ Pobrano ${playersList.length} zawodników ze starej struktury`);
+      
       return playersList;
       
     } catch (error) {
@@ -176,14 +173,11 @@ export function usePlayersState() {
       
       // 2. Jeśli nowa struktura jest pusta, użyj starej
       if (playersList.length === 0) {
-        console.log('🔄 Nowa struktura pusta, używam starej struktury jako fallback');
         playersList = await fetchPlayersFromOldStructure();
       }
       
       setPlayers(playersList);
       playersRef.current = playersList;
-      
-      console.log(`✅ Łącznie pobrano ${playersList.length} zawodników`);
       
     } catch (error) {
       console.error('❌ Błąd pobierania zawodników:', error);
@@ -212,10 +206,7 @@ export function usePlayersState() {
 
   // Usuwanie zawodnika (obsługuje obie struktury)
   const handleDeletePlayer = useCallback(async (playerId: string) => {
-    console.log('🗑️ Próba usunięcia zawodnika:', playerId);
-    
     const playerToDelete = players.find(p => p.id === playerId);
-    console.log('👤 Zawodnik do usunięcia:', playerToDelete ? getPlayerFullName(playerToDelete) : 'Nieznany');
     
     try {
       setIsLoading(true);
@@ -237,7 +228,6 @@ export function usePlayersState() {
               
               if (memberSnapshot.exists()) {
                 await deleteDoc(memberDoc);
-                console.log(`✅ Usunięto zawodnika z zespołu ${teamId} (nowa struktura)`);
               }
             } catch (error) {
               console.error(`Błąd usuwania z zespołu ${teamId}:`, error);
@@ -245,21 +235,18 @@ export function usePlayersState() {
           })
         );
       } catch (error) {
-        console.log('ℹ️ Błąd usuwania z nowej struktury (prawdopodobnie nie istnieje):', error);
+        // nowa struktura prawdopodobnie nie istnieje
       }
       
       // 2. Usuń ze starej struktury players
       try {
         await deleteDoc(doc(getDB(), "players", playerId));
-        console.log('✅ Usunięto zawodnika ze starej struktury');
       } catch (error) {
         console.error('❌ Błąd usuwania ze starej struktury:', error);
       }
       
       // 3. Aktualizuj lokalny stan
       setPlayers((prev) => prev.filter((p) => p.id !== playerId));
-      
-      console.log('✅ Zawodnik usunięty pomyślnie');
       return true;
       
     } catch (error) {
@@ -310,7 +297,7 @@ export function usePlayersState() {
         const hasNewStructure = !teamsSnapshot.empty;
         
         if (hasNewStructure) {
-          console.log('💾 Zapisuję do nowej struktury');
+          // Zapisuj do nowej struktury
           
           if (isEditing) {
             // EDYCJA w nowej strukturze
@@ -420,7 +407,7 @@ export function usePlayersState() {
           }
           
         } else {
-          console.log('💾 Zapisuję do starej struktury');
+          // Zapisuj do starej struktury
           
           // STARA STRUKTURA - zapisz bezpośrednio do players
           if (isEditing) {
@@ -459,7 +446,7 @@ export function usePlayersState() {
         setEditingPlayerId(null);
         setEditingPlayerData(null);
         
-        console.log('✅ Zawodnik zapisany pomyślnie');
+
         
       } catch (error) {
         console.error('❌ Błąd zapisywania zawodnika:', error);

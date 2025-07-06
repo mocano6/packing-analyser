@@ -35,14 +35,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
       const usersData: UserWithId[] = [];
       usersSnapshot.forEach(doc => {
         const userData = doc.data() as UserData;
-        console.log(`Użytkownik ${doc.id}:`, userData); // Debug log
+
         usersData.push({
           id: doc.id,
           ...userData
         });
       });
 
-      console.log('Wszyscy użytkownicy:', usersData); // Debug log
+      
       setUsers(usersData);
     } catch (error) {
       console.error("Błąd podczas pobierania użytkowników:", error);
@@ -59,7 +59,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
     try {
       const teamsData = await getTeamsArray();
       setTeams(teamsData);
-      console.log('Pobrane zespoły:', teamsData); // Debug log
+      
     } catch (error) {
       console.error("Błąd podczas pobierania zespołów:", error);
       toast.error("Błąd podczas pobierania listy zespołów");

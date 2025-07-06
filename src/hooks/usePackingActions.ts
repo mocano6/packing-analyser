@@ -404,7 +404,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         });
         
         // Akcje są teraz przechowywane tylko w matches - nie duplikujemy w players
-        console.log(`✅ Usunięto ${actionsToRemove.length} akcji z meczu`);
+    
         
         // Czyścimy stan lokalny
         setActions([]);
@@ -451,7 +451,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     setIsGoal(false);
     setIsPenaltyAreaEntry(false);
     // NIE resetujemy: selectedPlayerId, selectedReceiverId, actionMinute, isSecondHalf, selectedZone
-    console.log("🔄 Reset punktów i przełączników - zachowano zawodników, minutę, połowę i strefy");
   }, []);
 
   // Funkcja synchronizująca wzbogacone akcje z bazą Firebase

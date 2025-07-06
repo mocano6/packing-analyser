@@ -41,7 +41,7 @@ export default function ListaZawodnikow() {
           }
         });
 
-        console.log(`Pobrano ${allMatchActions.length} akcji z ${matchesSnapshot.docs.length} meczów`);
+
         setAllActions(allMatchActions);
       } catch (error) {
         console.error('Błąd podczas pobierania akcji:', error);
@@ -119,7 +119,7 @@ export default function ListaZawodnikow() {
 
   // Znajdź potencjalne duplikaty
   const findDuplicates = () => {
-    console.log('🔍 Sprawdzanie duplikatów...', playersWithStats.length, 'zawodników');
+    
     
     // Funkcja do normalizacji nazwy
     const normalizeName = (name: string) => {
@@ -143,7 +143,7 @@ export default function ListaZawodnikow() {
     playersWithStats.forEach(player => {
       const originalName = getPlayerFullName(player) || '';
       const normalizedName = normalizeName(originalName);
-      console.log(`   📝 Zawodnik: "${originalName}" → normalizowana: "${normalizedName}"`);
+      
       
       if (normalizedName) {
         if (!nameGroups[normalizedName]) {
@@ -162,42 +162,7 @@ export default function ListaZawodnikow() {
         players 
       }));
 
-    console.log('📊 Wyniki wykrywania duplikatów:', {
-      nameDuplicates: nameDuplicates.length,
-      total: nameDuplicates.length
-    });
-    
-    // Loguj szczegóły każdej grupy duplikatów
-    nameDuplicates.forEach((group, index) => {
-      console.log(`   📋 Grupa ${index + 1}: "${group.key}"`, 
-        group.players.map(p => `${getPlayerFullName(p)} (#${p.number}, ID: ${p.id})`));
-    });
 
-    // DODATKOWE DEBUGOWANIE - sprawdź czy "Barłomiej Zieliński" jest wykrywany
-    const barłomiejPlayers = playersWithStats.filter(p => {
-      const fullName = getPlayerFullName(p);
-      return fullName && (fullName.includes('Barłomiej') || fullName.includes('Bartłomiej'));
-    });
-    
-    if (barłomiejPlayers.length > 0) {
-      console.log('🔍 SPRAWDZENIE "Barłomiej/Bartłomiej":');
-      barłomiejPlayers.forEach(player => {
-        const fullName = getPlayerFullName(player) || '';
-        const normalized = normalizeName(fullName);
-        console.log(`  👤 "${fullName}" (ID: ${player.id}) → "${normalized}"`);
-      });
-      
-      // Sprawdź czy znormalizowane nazwy są identyczne
-      const normalizedNames = barłomiejPlayers.map(p => normalizeName(getPlayerFullName(p) || ''));
-      const uniqueNormalized = [...new Set(normalizedNames)];
-      console.log(`  🎯 Unikalne znormalizowane nazwy: ${uniqueNormalized.length}`, uniqueNormalized);
-      
-      if (uniqueNormalized.length < barłomiejPlayers.length) {
-        console.log('  ✅ Duplikaty powinny być wykryte!');
-      } else {
-        console.log('  ❌ Duplikaty NIE BĘDĄ wykryte - różne znormalizowane nazwy');
-      }
-    }
 
     return nameDuplicates;
   };
@@ -285,7 +250,6 @@ export default function ListaZawodnikow() {
 
   // Funkcja do sparowania duplikatów
   const mergeDuplicates = async () => {
-    console.log('🔧 mergeDuplicates START:', { duplicatesCount: duplicates.length });
     
     if (duplicates.length === 0) {
       alert('Nie znaleziono duplikatów do sparowania.');
@@ -335,7 +299,7 @@ export default function ListaZawodnikow() {
 
         try {
           // Krok 1: Znajdź wszystkie akcje duplikatów i przenieś je do głównego zawodnika
-          console.log('📝 Krok 1: Przenoszenie akcji...');
+
           const matchesSnapshot = await getDocs(collection(getDB(), 'matches'));
           let totalActionsUpdated = 0;
           
@@ -355,7 +319,6 @@ export default function ListaZawodnikow() {
                     updatedAction.senderNumber = mainPlayer.number;
                     actionsChanged = true;
                     totalActionsUpdated++;
-                    console.log(`   ✅ Przeniesiono akcję (sender): ${action.id} z ${duplicate.id} na ${mainPlayer.id}`);
                   }
                   
                   if (action.receiverId === duplicate.id) {
@@ -364,7 +327,6 @@ export default function ListaZawodnikow() {
                     updatedAction.receiverNumber = mainPlayer.number;
                     actionsChanged = true;
                     totalActionsUpdated++;
-                    console.log(`   ✅ Przeniesiono akcję (receiver): ${action.id} z ${duplicate.id} na ${mainPlayer.id}`);
                   }
                 });
                 
@@ -376,15 +338,11 @@ export default function ListaZawodnikow() {
                 await updateDoc(doc(getDB(), 'matches', matchDoc.id), {
                   actions_packing: updatedActions
                 });
-                console.log(`   💾 Zaktualizowano akcje w meczu: ${matchDoc.id}`);
               }
             }
           }
           
-          console.log(`📊 Łącznie przeniesionych akcji: ${totalActionsUpdated}`);
-
           // Krok 2: Połącz zespoły z duplikatów z głównym zawodnikiem
-          console.log('🏆 Krok 2: Łączenie zespołów...');
           const allTeams = new Set(mainPlayer.teams || []);
           const teamsBeforeMerge = Array.from(allTeams);
           
@@ -395,8 +353,6 @@ export default function ListaZawodnikow() {
           });
           
           const teamsAfterMerge = Array.from(allTeams);
-          console.log(`   🔄 Zespoły przed: ${teamsBeforeMerge.join(', ')}`);
-          console.log(`   ✅ Zespoły po: ${teamsAfterMerge.join(', ')}`);
 
           // Aktualizuj głównego zawodnika z połączonymi zespołami
           const updatedMainPlayer = {
@@ -413,17 +369,12 @@ export default function ListaZawodnikow() {
             position: updatedMainPlayer.position,
             birthYear: updatedMainPlayer.birthYear
           });
-          console.log(`   💾 Zaktualizowano głównego zawodnika: ${mainPlayer.id}`);
-
           // Krok 3: Usuń duplikaty
-          console.log('🗑️ Krok 3: Usuwanie duplikatów...');
           for (const duplicate of duplicatesToMerge) {
             await deleteDoc(doc(getDB(), 'players', duplicate.id));
-            console.log(`   ❌ Usunięto duplikat: ${duplicate.id} (${getPlayerFullName(duplicate) || 'Brak nazwy'})`);
           }
 
           mergedCount++;
-          console.log(`✅ Pomyślnie sparowano grupę duplikatów dla: ${getPlayerFullName(mainPlayer) || 'Brak nazwy'}`);
 
         } catch (error) {
           console.error(`❌ Błąd podczas sparowywania duplikatów dla ${getPlayerFullName(mainPlayer) || 'Brak nazwy'}:`, error);
@@ -431,10 +382,7 @@ export default function ListaZawodnikow() {
         }
       }
 
-      console.log(`🏁 Sparowanie zakończone: ${mergedCount} sukces, ${errorCount} błędy`);
-      
       // Odśwież dane po zakończeniu
-      console.log('🔄 Odświeżam stronę...');
       window.location.reload(); // Prościej niż manualne odświeżanie stanu
 
     } catch (error) {
@@ -470,14 +418,10 @@ export default function ListaZawodnikow() {
 
   const handleDeletePlayerFromList = async (playerId: string, playerName: string) => {
     if (window.confirm(`Czy na pewno chcesz usunąć zawodnika ${playerName}?`)) {
-      console.log('🗑️ Próba usunięcia zawodnika:', { playerId, playerName });
-      
       const success = await deletePlayer(playerId);
-      console.log('📊 Wynik usuwania:', success);
       
       if (success) {
         alert(`Zawodnik ${playerName} został usunięty`);
-        console.log('🔄 Odświeżam stronę po usunięciu zawodnika...');
         // Odśwież stronę aby zaktualizować listę
         window.location.reload();
       } else {
@@ -530,7 +474,7 @@ export default function ListaZawodnikow() {
             {isMergingDuplicates ? 'Sparowywanie...' : `🔄 Sparuj ${duplicates.length} grup duplikatów`}
           </button>
           <button 
-            onClick={() => console.log('Funkcja czyszczenia Firebase niedostępna')}
+            onClick={() => {}}
             className={styles.cleanupButton}
             title="Usuń duplikaty z Firebase (na podstawie name + number)"
             disabled
@@ -538,7 +482,7 @@ export default function ListaZawodnikow() {
             🧹 Wyczyść duplikaty Firebase
           </button>
           <button 
-            onClick={() => console.log('Funkcja czyszczenia lokalnie niedostępna')}
+            onClick={() => {}}
             className={styles.cleanupButton}
             title="Usuń duplikaty ID z lokalnego stanu"
             disabled

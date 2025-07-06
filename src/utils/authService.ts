@@ -198,7 +198,7 @@ export class AuthService {
       await signInAnonymously(auth);
       
       this.savePreferredAuthMode('anonymous');
-      console.log('Zalogowano anonimowo');
+
     } catch (error) {
       const response = handleFirebaseError(error, 'anonimowe logowanie');
       
@@ -222,7 +222,7 @@ export class AuthService {
       await signInWithEmailAndPassword(auth, email, password);
       
       this.savePreferredAuthMode('email');
-      console.log('Zalogowano przez email');
+
     } catch (error) {
       const response = handleFirebaseError(error, 'logowanie przez email');
       
@@ -246,7 +246,7 @@ export class AuthService {
       await createUserWithEmailAndPassword(auth, email, password);
       
       this.savePreferredAuthMode('email');
-      console.log('Zarejestrowano nowego użytkownika');
+
     } catch (error) {
       const response = handleFirebaseError(error, 'rejestracja');
       
@@ -269,7 +269,7 @@ export class AuthService {
       const auth = getAuth();
       await firebaseSignOut(auth);
       
-      console.log('Wylogowano użytkownika');
+
     } catch (error) {
       const response = handleFirebaseError(error, 'wylogowanie');
       

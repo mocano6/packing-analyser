@@ -276,7 +276,7 @@ export class SecureStorage {
     keysToRemove.forEach(key => localStorage.removeItem(key));
     
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`[SecureStorage] Usunięto ${keysToRemove.length} elementów`);
+  
     }
   };
 }

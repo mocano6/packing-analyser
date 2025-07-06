@@ -133,7 +133,7 @@ const ImportButton: React.FC<ImportButtonProps> = ({
     }
     
     await batch.commit();
-    console.log('Gracze zaimportowani do Firebase');
+    
   };
 
   const importActions = async (actions: Action[], matchInfo: any) => {
@@ -163,7 +163,7 @@ const ImportButton: React.FC<ImportButtonProps> = ({
     }
     
     await batch.commit();
-    console.log(`Zaimportowano ${newActions.length} nowych akcji do Firebase`);
+    
     
     return newActions.length;
   };

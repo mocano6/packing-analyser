@@ -120,7 +120,7 @@ export default function ZawodnicyPage() {
         const allActionsArrays = await Promise.all(allActionsPromises);
         const flatActions = allActionsArrays.flat();
         setAllActions(flatActions);
-        console.log(`Pobrano ${flatActions.length} akcji ze wszystkich meczów zespołu ${selectedTeam}`);
+  
       } catch (error) {
         console.error("Błąd podczas pobierania akcji:", error);
         setAllActions([]);
@@ -134,30 +134,10 @@ export default function ZawodnicyPage() {
 
   // Filtruj zawodników według wybranego zespołu
   const filteredPlayers = useMemo(() => {
-    console.log(`🔍 Filtrowanie zawodników dla zespołu: ${selectedTeam}`);
-    console.log(`📋 Całkowita liczba zawodników: ${players.length}`);
-    
-    // DEBUG: Sprawdź Kacpra w lokalnym stanie podczas filtrowania
-    const kacperInLocal = players.find(p => p.name?.includes('Kacper Kotala') || p.id === 'ARyCtMT5iQHd8snLBmgB');
-    if (kacperInLocal) {
-      console.log('🔍 Kacper podczas filtrowania:', {
-        id: kacperInLocal.id,
-        name: kacperInLocal.name,
-        teams: kacperInLocal.teams,
-        teamsLength: Array.isArray(kacperInLocal.teams) ? kacperInLocal.teams.length : 'nie array',
-        includesSelectedTeam: kacperInLocal.teams && kacperInLocal.teams.includes(selectedTeam)
-      });
-    }
-    
     const teamFiltered = players.filter(player => {
       const hasTeams = player.teams && player.teams.includes(selectedTeam);
-      if (player.name?.includes('Kacper')) {
-        console.log(`🔍 Kacper filtracja: teams=${player.teams}, includes ${selectedTeam}? ${hasTeams}`);
-      }
       return hasTeams;
     });
-    
-    console.log(`✅ Po filtracji: ${teamFiltered.length} zawodników w zespole ${selectedTeam}`);
     
     // Sortowanie alfabetyczne po nazwisku
     return sortPlayersByLastName(teamFiltered);

@@ -82,7 +82,7 @@ const ActionSection = memo(function ActionSection({
   // Dodajemy efekt, który będzie monitorował wartości stref
   useEffect(() => {
     if (isActionModalOpen) {
-      console.log("ActionSection: Modal otwarty, aktualne strefy:", { startZone, endZone });
+
     }
   }, [isActionModalOpen, startZone, endZone]);
 
@@ -95,19 +95,11 @@ const ActionSection = memo(function ActionSection({
   };
 
   const handleSecondHalfToggle = (value: boolean) => {
-    console.log("ActionSection - zmiana połowy na:", value ? "P2" : "P1", "poprzednia wartość:", isSecondHalf);
-    
     // Zapisujemy również w localStorage dla spójności w całej aplikacji
     localStorage.setItem('currentHalf', value ? 'P2' : 'P1');
     
     // Aktualizujemy stan w komponencie nadrzędnym
     setIsSecondHalf(value);
-    
-    // Dodatkowe sprawdzenie
-    setTimeout(() => {
-      const storedValue = localStorage.getItem('currentHalf');
-      console.log("ActionSection - po zmianie, wartość w localStorage:", storedValue);
-    }, 50);
   };
 
   // Modyfikujemy funkcję obsługującą zapisywanie akcji
@@ -146,7 +138,6 @@ const ActionSection = memo(function ActionSection({
       <ActionModal
         isOpen={isActionModalOpen}
         onClose={() => {
-          console.log("ActionSection: Zamykanie modalu akcji");
           setIsActionModalOpen(false);
           resetActionState();
         }}
