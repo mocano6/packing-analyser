@@ -61,7 +61,7 @@ const ExportButton: React.FC<ExportButtonProps> = ({
   };
 
   return (
-    <button className={styles.exportButton} onClick={handleExport} title="Eksportuj dane do pliku JSON">
+    <button className={`${styles.exportButton} export-button`} onClick={handleExport} title="Eksportuj dane do pliku JSON">
       <span className={styles.icon}>📤</span>
       Eksportuj dane
     </button>

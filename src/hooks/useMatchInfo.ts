@@ -216,10 +216,10 @@ export function useMatchInfo() {
         }
       }
       
-      // Sprawdź, czy jesteśmy online i dane są stare (starsze niż 5 minut)
-      const isStale = Date.now() - cachedData.timestamp > 5 * 60 * 1000;
+      // Sprawdź, czy jesteśmy online i dane są stale (starsze niż 30 sekund)
+      const isStale = Date.now() - cachedData.timestamp > 30 * 1000; // Zmieniono z 5 minut na 30 sekund dla aplikacji wieloużytkownikowej
       if (!isOfflineMode && isStale) {
-        console.log('🕒 Cache jest przestarzały, próba odświeżenia danych z Firebase');
+        // Usunięto console.log - cache odświeża się często, więc niepotrzebny
         fetchFromFirebase(cachedData.lastTeamId).catch(err => {
           console.warn("Nie udało się odświeżyć danych z Firebase:", err);
           // Używamy danych z cache w razie błędu

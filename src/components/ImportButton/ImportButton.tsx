@@ -3,7 +3,7 @@
 import React, { useState, useRef } from "react";
 import { Player, Action } from "@/types";
 import styles from "./ImportButton.module.css";
-import { db } from "@/lib/firebase";
+import { getDB } from "@/lib/firebase";
 import { 
   collection, addDoc, getDocs, query, where, 
   doc, writeBatch
@@ -100,6 +100,7 @@ const ImportButton: React.FC<ImportButtonProps> = ({
   const importPlayers = async (players: Player[], matchInfo: any) => {
     // Sprawdź, którzy gracze już istnieją
     const existingPlayers = new Map<string, Player>();
+    const db = getDB();
     
     for (const player of players) {
       const playerQuery = query(
@@ -137,6 +138,8 @@ const ImportButton: React.FC<ImportButtonProps> = ({
   };
 
   const importActions = async (actions: Action[], matchInfo: any) => {
+    const db = getDB();
+    
     // Sprawdź, które akcje już istnieją
     const actionsQuery = query(
       collection(db, "actions_packing"), 
@@ -171,7 +174,7 @@ const ImportButton: React.FC<ImportButtonProps> = ({
   return (
     <>
       <button 
-        className={styles.importButton} 
+        className={`${styles.importButton} import-button`} 
         onClick={handleImportClick}
         disabled={isLoading}
         title="Importuj dane z pliku JSON"

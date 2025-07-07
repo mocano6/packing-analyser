@@ -29,6 +29,7 @@ import MatchInfoModal from "@/components/MatchInfoModal/MatchInfoModal";
 import Link from "next/link";
 import ActionModal from "@/components/ActionModal/ActionModal";
 import { sortPlayersByLastName, getPlayerFullName } from "@/utils/playerUtils";
+import SidePanel from "@/components/SidePanel/SidePanel";
 
 
 // Rozszerzenie interfejsu Window
@@ -110,6 +111,7 @@ export default function Page() {
     handleDeleteMatch,
     handleSavePlayerMinutes,
     fetchMatches,
+    forceRefreshFromFirebase,
     isOfflineMode
   } = useMatchInfo();
 
@@ -936,6 +938,11 @@ export default function Page() {
     }
   };
 
+  // Funkcja do odświeżania danych z Firebase
+  const handleRefreshData = async () => {
+    await forceRefreshFromFirebase(selectedTeam);
+  };
+
   // Przekażę informację do ActionsTable, aby można było zaktualizować dane akcji o imiona graczy
   const handleRefreshPlayersData = () => {
     if (!players || !matchInfo?.matchId) return;
@@ -1421,47 +1428,18 @@ export default function Page() {
           }}
         />
 
-        {/* Przyciski eksportu i importu */}
-        <div className={styles.buttonsContainer}>
-          <Link href="/zawodnicy" className={styles.playersButton}>
-            👥 Statystyki zawodników
-          </Link>
-          <Link href="/statystyki-zespolu" className={styles.teamStatsButton}>
-            📊 Statystyki zespołu
-          </Link>
-          {/* Linki tylko dla administratorów */}
-          {isAdmin && (
-            <>
-              <Link href="/lista-zawodnikow" className={styles.listButton}>
-                📋 Lista wszystkich zawodników
-              </Link>
-              <Link href="/weryfikacja-meczow" className={styles.verificationButton}>
-                🔍 Weryfikacja meczów
-              </Link>
-            </>
-          )}
-          <ExportButton
-            players={players}
-            actions={actions}
-            matchInfo={matchInfo}
-          />
-          <ImportButton 
-            onImportSuccess={handleImportSuccess}
-            onImportError={handleImportError}
-          />
-          {isAdmin && (
-            <Link href="/admin" className={styles.adminButton} title="Panel administratora">
-              ⚙️ Admin
-            </Link>
-          )}
-          <button 
-            onClick={handleLogout}
-            className={styles.logoutButton}
-            title="Wyloguj się z aplikacji"
-          >
-            Wyloguj
-          </button>
-        </div>
+        {/* Panel boczny z menu */}
+        <SidePanel
+          players={players}
+          actions={actions}
+          matchInfo={matchInfo}
+          isAdmin={isAdmin}
+          selectedTeam={selectedTeam}
+          onRefreshData={handleRefreshData}
+          onImportSuccess={handleImportSuccess}
+          onImportError={handleImportError}
+          onLogout={handleLogout}
+        />
 
         <OfflineStatus />
       </main>

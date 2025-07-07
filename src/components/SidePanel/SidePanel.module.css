@@ -1,0 +1,325 @@
+/* Trigger button - przycisk aktywujący panel */
+.trigger {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px 0 0 8px;
+  padding: 16px 12px;
+  cursor: pointer;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  min-height: 80px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.trigger:hover {
+  right: 2px;
+  box-shadow: -4px 0 15px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+}
+
+.triggerOpen {
+  right: 350px; /* Szerokość panelu */
+  border-radius: 8px 0 0 8px;
+  background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+}
+
+.triggerIcon {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.triggerText {
+  font-size: 11px;
+  letter-spacing: 1px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+/* Overlay - ciemne tło */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 999;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Panel główny */
+.panel {
+  position: fixed;
+  top: 0;
+  right: -350px; /* Ukryty poza ekranem */
+  width: 350px;
+  height: 100vh;
+  background: white;
+  box-shadow: -5px 0 20px rgba(0, 0, 0, 0.1);
+  z-index: 1001;
+  transition: right 0.3s ease;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.panelOpen {
+  right: 0; /* Wysunięty */
+}
+
+/* Header panelu */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.closeButton:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Zawartość panelu */
+.content {
+  flex: 1;
+  padding: 16px 0;
+}
+
+/* Sekcje */
+.section {
+  margin-bottom: 24px;
+  border-bottom: 1px solid #f3f4f6;
+  padding-bottom: 16px;
+}
+
+.section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.section h4 {
+  margin: 0 0 12px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Elementy menu */
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  text-decoration: none;
+  color: #374151;
+  transition: all 0.2s ease;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.menuItem:hover {
+  background-color: #f9fafb;
+  color: #1f2937;
+  padding-left: 32px;
+}
+
+.menuItem:active {
+  background-color: #f3f4f6;
+}
+
+/* Ikony */
+.icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Specjalne style dla przycisku wylogowania */
+.logoutItem {
+  color: #dc2626;
+  border-top: 1px solid #f3f4f6;
+  margin-top: 8px;
+}
+
+.logoutItem:hover {
+  background-color: #fef2f2;
+  color: #b91c1c;
+}
+
+/* Responsywność */
+@media (max-width: 768px) {
+  .panel {
+    width: 100vw;
+    right: -100vw;
+  }
+  
+  .triggerOpen {
+    right: 100vw;
+  }
+  
+  .trigger {
+    padding: 12px 8px;
+    min-height: 60px;
+  }
+  
+  .triggerIcon {
+    font-size: 16px;
+  }
+  
+  .triggerText {
+    font-size: 10px;
+  }
+}
+
+/* Animacje dla elementów menu */
+.menuItem {
+  position: relative;
+  overflow: hidden;
+}
+
+.menuItem::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transform: scaleY(0);
+  transition: transform 0.2s ease;
+}
+
+.menuItem:hover::before {
+  transform: scaleY(1);
+}
+
+/* Wrapper dla ExportButton i ImportButton */
+.exportImportWrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.exportImportWrapper:hover {
+  background-color: #f9fafb;
+  padding-left: 32px;
+}
+
+.exportImportWrapper::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transform: scaleY(0);
+  transition: transform 0.2s ease;
+}
+
+.exportImportWrapper:hover::before {
+  transform: scaleY(1);
+}
+
+/* Style dla komponentów ExportButton i ImportButton w panelu */
+.exportImportWrapper :global(.export-button),
+.exportImportWrapper :global(.import-button) {
+  width: 100%;
+  background: none !important;
+  border: none !important;
+  color: #374151 !important;
+  padding: 0 !important;
+  text-align: left !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  min-width: auto !important;
+  height: auto !important;
+  min-height: auto !important;
+}
+
+.exportImportWrapper :global(.export-button):hover,
+.exportImportWrapper :global(.import-button):hover {
+  background: none !important;
+  transform: none !important;
+  box-shadow: none !important;
+  color: #1f2937 !important;
+}
+
+/* Smooth scrolling dla długiej zawartości */
+.panel {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f9fafb;
+}
+
+.panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.panel::-webkit-scrollbar-track {
+  background: #f9fafb;
+}
+
+.panel::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.panel::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+} 
