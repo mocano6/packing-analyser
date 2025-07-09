@@ -4,9 +4,10 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Player, Action, TeamInfo } from "@/types";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
+import { useTeams } from "@/hooks/useTeams";
+import { useAuth } from "@/hooks/useAuth";
 import PackingChart from '@/components/PackingChart/PackingChart';
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
-import { TEAMS } from "@/constants/teamsLoader";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, getDocs, updateDoc, deleteDoc } from "firebase/firestore";
 import { sortPlayersByLastName, getPlayerFullName } from "@/utils/playerUtils";
@@ -14,7 +15,6 @@ import Link from "next/link";
 import styles from "./zawodnicy.module.css";
 
 export default function ZawodnicyPage() {
-  const [selectedTeam, setSelectedTeam] = useState<string>(TEAMS.REZERWY.id);
   const [selectedMatches, setSelectedMatches] = useState<string[]>([]);
   const [allActions, setAllActions] = useState<Action[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
@@ -25,7 +25,7 @@ export default function ZawodnicyPage() {
     players,
     isModalOpen,
     editingPlayerId,
-    editingPlayer, // Dodano editingPlayer ze świeżymi danymi z Firebase
+    editingPlayer,
     setIsModalOpen,
     handleDeletePlayer,
     handleSavePlayer,
@@ -33,14 +33,118 @@ export default function ZawodnicyPage() {
     closeModal,
   } = usePlayersState();
 
-  const { allMatches, fetchMatches } = useMatchInfo();
+  const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
+  const { teams, isLoading: isTeamsLoading } = useTeams();
+  const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, logout } = useAuth();
 
-  // Pobierz mecze dla wybranego zespołu
+  // Filtruj dostępne zespoły na podstawie uprawnień użytkownika (tak jak w głównej aplikacji)
+  const availableTeams = useMemo(() => {
+    if (isAdmin) {
+      // Administratorzy mają dostęp do wszystkich zespołów
+      return teams;
+    }
+    
+    if (!userTeams || userTeams.length === 0) {
+      return [];
+    }
+    
+    // Filtruj zespoły na podstawie uprawnień użytkownika
+    return teams.filter(team => userTeams.includes(team.id));
+  }, [userTeams, isAdmin, teams]);
+
+  // Konwertuj availableTeams array na format używany w komponencie
+  const teamsObject = useMemo(() => {
+    const obj: Record<string, { id: string; name: string }> = {};
+    availableTeams.forEach(team => {
+      obj[team.id] = team;
+    });
+    return obj;
+  }, [availableTeams]);
+
+  // Wybierz pierwszy dostępny zespół jako domyślny
+  const [selectedTeam, setSelectedTeam] = useState<string>("");
+  
+  // Ustaw domyślny zespół gdy teams się załadują
+  useEffect(() => {
+    if (availableTeams.length > 0 && !selectedTeam) {
+      setSelectedTeam(availableTeams[0].id);
+    }
+  }, [availableTeams, selectedTeam]);
+
+  // Sprawdź czy aplikacja się ładuje
+  if (authLoading || isTeamsLoading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loading}>
+          <div className={styles.spinner}></div>
+          <p>Ładowanie aplikacji...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Sprawdź uwierzytelnienie
+  if (!isAuthenticated) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.accessDenied}>
+          <h2>🔒 Brak dostępu</h2>
+          <p>Musisz być zalogowany, aby uzyskać dostęp do tej strony.</p>
+          <Link href="/login" className={styles.loginButton}>
+            Przejdź do logowania
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Sprawdź czy użytkownik ma dostęp do jakichkolwiek zespołów
+  if (!isAdmin && (!userTeams || userTeams.length === 0)) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.noTeamsAccess}>
+          <h2>🚫 Brak dostępu do zespołów</h2>
+          <p>Twoje konto nie ma uprawnień do żadnego zespołu. Skontaktuj się z administratorem, aby uzyskać dostęp.</p>
+          <button 
+            onClick={logout}
+            className={styles.logoutButton}
+          >
+            Wyloguj się
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Sprawdź czy są dostępne zespoły
+  if (availableTeams.length === 0) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.noTeamsAccess}>
+          <h2>⚠️ Brak dostępnych zespołów</h2>
+          <p>Nie znaleziono żadnych zespołów dostępnych dla Twojego konta.</p>
+          <Link href="/" className={styles.backButton}>
+            Powrót do aplikacji
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Pobierz mecze dla wybranego zespołu - wymusza odświeżenie cache
   useEffect(() => {
     if (selectedTeam) {
-      fetchMatches(selectedTeam);
+      // Wymuszaj odświeżenie z Firebase przy każdej zmianie zespołu na stronie statystyk
+      // żeby uniknąć problemów z cache
+      forceRefreshFromFirebase(selectedTeam).then(() => {
+        console.log('✅ Wymuszone odświeżenie meczów dla zespołu:', selectedTeam);
+      }).catch(error => {
+        console.error('❌ Błąd podczas wymuszania odświeżenia:', error);
+        // Fallback - spróbuj zwykłego fetchMatches
+        fetchMatches(selectedTeam);
+      });
     }
-  }, [selectedTeam, fetchMatches]);
+  }, [selectedTeam, forceRefreshFromFirebase, fetchMatches]);
 
   // Filtruj mecze według wybranego zespołu
   const teamMatches = useMemo(() => {
@@ -416,18 +520,27 @@ export default function ZawodnicyPage() {
         <label htmlFor="team-select" className={styles.label}>
           Wybierz zespół:
         </label>
-        <select
-          id="team-select"
-          value={selectedTeam}
-          onChange={(e) => setSelectedTeam(e.target.value)}
-          className={styles.teamSelect}
-        >
-          {Object.values(TEAMS).map(team => (
-            <option key={team.id} value={team.id}>
-              {team.name}
-            </option>
-          ))}
-        </select>
+        {isTeamsLoading ? (
+          <p>Ładowanie zespołów...</p>
+        ) : (
+          <select
+            id="team-select"
+            value={selectedTeam}
+            onChange={(e) => setSelectedTeam(e.target.value)}
+            className={styles.teamSelect}
+            disabled={availableTeams.length === 0}
+          >
+            {availableTeams.length === 0 ? (
+              <option value="">Brak dostępnych zespołów</option>
+            ) : (
+              Object.values(teamsObject).map(team => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))
+            )}
+          </select>
+        )}
       </div>
 
       {/* Sekcja wyboru meczów - tabela */}
@@ -558,7 +671,7 @@ export default function ZawodnicyPage() {
         onSave={handleSavePlayerWithTeams}
         editingPlayer={editingPlayer || undefined} // Użyj editingPlayer z usePlayersState (ze świeżymi danymi z Firebase)
         currentTeam={selectedTeam}
-        allTeams={Object.values(TEAMS)}
+        allTeams={Object.values(teamsObject)}
         existingPlayers={players}
       />
     </div>

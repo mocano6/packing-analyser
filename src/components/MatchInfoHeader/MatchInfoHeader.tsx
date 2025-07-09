@@ -11,9 +11,10 @@ import styles from "./MatchInfoHeader.module.css";
 interface CurrentMatchInfoProps {
   matchInfo: TeamInfo | null;
   players: Player[];
+  allAvailableTeams?: { id: string; name: string }[];
 }
 
-const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players }) => {
+const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players, allAvailableTeams = [] }) => {
   const [isPlayerMinutesCollapsed, setIsPlayerMinutesCollapsed] = useState(true);
 
   if (!matchInfo || !matchInfo.matchId) {
@@ -77,9 +78,15 @@ const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players 
 
   // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
   const getTeamName = (teamId: string) => {
-    // Znajdź zespół w obiekcie TEAMS
-    const team = Object.values(TEAMS).find(team => team.id === teamId);
-    return team ? team.name : teamId; // Jeśli nie znaleziono, zwróć ID jako fallback
+    // Najpierw sprawdź w zespołach z Firebase
+    const team = allAvailableTeams.find(team => team.id === teamId);
+    if (team) {
+      return team.name;
+    }
+    
+    // Fallback do domyślnych zespołów
+    const defaultTeam = Object.values(TEAMS).find(team => team.id === teamId);
+    return defaultTeam ? defaultTeam.name : teamId;
   };
 
   return (
@@ -120,6 +127,7 @@ interface MatchInfoHeaderProps {
   players?: Player[]; // Dodajemy players jako nową właściwość
   availableTeams?: any[]; // Zespoły dostępne dla użytkownika
   isAdmin?: boolean; // Czy użytkownik jest administratorem
+  allAvailableTeams?: { id: string; name: string }[]; // Dodajemy allAvailableTeams do props
 }
 
 const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
@@ -137,6 +145,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   players = [], // Domyślna wartość to pusta tablica
   availableTeams = Object.values(TEAMS), // Domyślnie wszystkie zespoły
   isAdmin = false,
+  allAvailableTeams = [], // Domyślna wartość to pusta tablica
 }) => {
   const [sortKey, setSortKey] = useState<keyof TeamInfo>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -150,9 +159,15 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   
   // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
   const getTeamName = (teamId: string) => {
-    // Znajdź zespół w obiekcie TEAMS
-    const team = Object.values(TEAMS).find(team => team.id === teamId);
-    return team ? team.name : teamId; // Jeśli nie znaleziono, zwróć ID jako fallback
+    // Najpierw sprawdź w zespołach z Firebase
+    const team = allAvailableTeams.find(team => team.id === teamId);
+    if (team) {
+      return team.name;
+    }
+    
+    // Fallback do domyślnych zespołów
+    const defaultTeam = Object.values(TEAMS).find(team => team.id === teamId);
+    return defaultTeam ? defaultTeam.name : teamId;
   };
 
   // Filtrowanie meczów wybranego zespołu - używamy useMemo dla optymalizacji
@@ -232,7 +247,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   return (
     <div className={styles.matchInfoContainer}>
       {/* Dodajemy komponent wyświetlający szczegóły bieżącego meczu */}
-      <CurrentMatchInfo matchInfo={matchInfo} players={players} />
+      <CurrentMatchInfo matchInfo={matchInfo} players={players} allAvailableTeams={allAvailableTeams} />
       
       <div className={styles.headerControls}>
         <div className={styles.teamSelector}>

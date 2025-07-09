@@ -381,4 +381,80 @@
     padding: 8px 10px;
     font-size: 12px;
   }
+}
+
+/* Style dla loading, access denied i no teams access */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  gap: 16px;
+  padding: 60px 20px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading p {
+  color: #6c757d;
+  font-size: 16px;
+}
+
+.accessDenied,
+.noTeamsAccess {
+  text-align: center;
+  padding: 60px 20px;
+  background-color: #f8f9fa;
+  border: 2px solid #dc3545;
+  border-radius: 12px;
+  margin: 40px auto;
+  max-width: 500px;
+}
+
+.accessDenied h2,
+.noTeamsAccess h2 {
+  color: #dc3545;
+  margin-bottom: 20px;
+  font-size: 24px;
+}
+
+.accessDenied p,
+.noTeamsAccess p {
+  color: #6c757d;
+  margin-bottom: 30px;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.loginButton,
+.logoutButton {
+  padding: 12px 24px;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  display: inline-block;
+  transition: background-color 0.2s;
+}
+
+.loginButton:hover,
+.logoutButton:hover {
+  background-color: #c82333;
 } 

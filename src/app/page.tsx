@@ -1191,6 +1191,7 @@ export default function Page() {
         players={players}
         availableTeams={availableTeams}
         isAdmin={isAdmin}
+        allAvailableTeams={allTeams}
       />
 
       <main className={styles.content}>
