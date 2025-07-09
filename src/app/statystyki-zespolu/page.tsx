@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Action, TeamInfo } from "@/types";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
@@ -55,29 +55,15 @@ export default function StatystykiZespoluPage() {
 
   const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
 
-  // Stabilne funkcje z useCallback żeby uniknąć infinite loops
-  const stableForceRefresh = useCallback((teamId: string) => {
-    return forceRefreshFromFirebase(teamId);
-  }, [forceRefreshFromFirebase]);
-
-  const stableFetchMatches = useCallback((teamId: string) => {
-    return fetchMatches(teamId);
-  }, [fetchMatches]);
-
-  // Pobierz mecze dla wybranego zespołu - wymusza odświeżenie cache
+  // Pobierz mecze dla wybranego zespołu - tylko przy zmianie zespołu
   useEffect(() => {
     if (selectedTeam) {
-      // Wymuszaj odświeżenie z Firebase przy każdej zmianie zespołu na stronie statystyk
-      // żeby uniknąć problemów z cache
-      stableForceRefresh(selectedTeam).then(() => {
-        console.log('✅ Wymuszone odświeżenie meczów dla zespołu:', selectedTeam);
-      }).catch(error => {
-        console.error('❌ Błąd podczas wymuszania odświeżenia:', error);
-        // Fallback - spróbuj zwykłego fetchMatches
-        stableFetchMatches(selectedTeam);
+      // Nie wymuszaj odświeżenia przy każdej zmianie - używaj normalnego fetchMatches
+      fetchMatches(selectedTeam).catch(error => {
+        console.error('❌ Błąd podczas pobierania meczów:', error);
       });
     }
-  }, [selectedTeam, stableForceRefresh, stableFetchMatches]);
+  }, [selectedTeam]); // Tylko selectedTeam w dependency - bez funkcji żeby uniknąć infinite loop
 
   // Filtruj mecze według wybranego zespołu
   const teamMatches = useMemo(() => {

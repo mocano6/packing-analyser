@@ -326,11 +326,15 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
         receiverGoals: data.receiverGoals,
         minutesPercentage: data.minutesPercentage,
         actualMinutes: data.actualMinutes
-      }))
-      .filter(item => 
-        item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01 ||
-        item.totalDribbling > 0 || Math.abs(item.totalDribblingPxT) > 0.01
-      );
+      }));
+
+    // Filtruj zawodników - pokaż tylko tych z akcjami
+    const filteredTableData = unsortedTableData.filter(item => 
+      item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01 ||
+      item.totalDribbling > 0 || Math.abs(item.totalDribblingPxT) > 0.01
+    );
+
+    unsortedTableData = filteredTableData;
 
     // Sortowanie tabeli
     const tableData = [...unsortedTableData].sort((a, b) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Player, Action, TeamInfo } from "@/types";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
@@ -37,14 +37,7 @@ export default function ZawodnicyPage() {
   const { teams, isLoading: isTeamsLoading } = useTeams();
   const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, logout } = useAuth();
 
-  // Stabilne funkcje z useCallback żeby uniknąć infinite loops
-  const stableForceRefresh = useCallback((teamId: string) => {
-    return forceRefreshFromFirebase(teamId);
-  }, [forceRefreshFromFirebase]);
-
-  const stableFetchMatches = useCallback((teamId: string) => {
-    return fetchMatches(teamId);
-  }, [fetchMatches]);
+  // Usunięto stabilne funkcje - nie są już potrzebne
 
   // Filtruj dostępne zespoły na podstawie uprawnień użytkownika (tak jak w głównej aplikacji)
   const availableTeams = useMemo(() => {
@@ -80,20 +73,15 @@ export default function ZawodnicyPage() {
     }
   }, [availableTeams, selectedTeam]);
 
-  // Pobierz mecze dla wybranego zespołu - wymusza odświeżenie cache
+  // Pobierz mecze dla wybranego zespołu - tylko przy zmianie zespołu
   useEffect(() => {
     if (selectedTeam) {
-      // Wymuszaj odświeżenie z Firebase przy każdej zmianie zespołu na stronie statystyk
-      // żeby uniknąć problemów z cache
-      stableForceRefresh(selectedTeam).then(() => {
-        console.log('✅ Wymuszone odświeżenie meczów dla zespołu:', selectedTeam);
-      }).catch(error => {
-        console.error('❌ Błąd podczas wymuszania odświeżenia:', error);
-        // Fallback - spróbuj zwykłego fetchMatches
-        stableFetchMatches(selectedTeam);
+      // Nie wymuszaj odświeżenia przy każdej zmianie - używaj normalnego fetchMatches
+      fetchMatches(selectedTeam).catch(error => {
+        console.error('❌ Błąd podczas pobierania meczów:', error);
       });
     }
-  }, [selectedTeam, stableForceRefresh, stableFetchMatches]); // Usunięto funkcje z dependency array żeby uniknąć infinite loop
+  }, [selectedTeam]); // Tylko selectedTeam w dependency - bez funkcji żeby uniknąć infinite loop
 
   // Filtruj mecze według wybranego zespołu
   const teamMatches = useMemo(() => {
@@ -110,7 +98,7 @@ export default function ZawodnicyPage() {
     }
   }, [teamMatches]);
 
-  // Pobierz akcje ze wszystkich meczów zespołu
+    // Pobierz akcje ze wszystkich meczów zespołu
   useEffect(() => {
     const loadAllActionsForTeam = async () => {
       if (teamMatches.length === 0) {
@@ -141,20 +129,34 @@ export default function ZawodnicyPage() {
             if (matchDoc.exists()) {
               const matchData = matchDoc.data();
               
-              // Pobierz akcje z kolekcji w ramach dokumentu meczu
+              // Sprawdź czy mecz ma akcje w polu actions_packing
+              if (matchData.actions_packing && Array.isArray(matchData.actions_packing)) {
+                matchData.actions_packing.forEach((actionData: Action) => {
+                  if (match.matchId) {
+                    allActionsData.push({
+                      ...actionData,
+                      matchId: match.matchId
+                    });
+                  }
+                });
+              }
+              
+              // Sprawdź też kolekcję actions (stara struktura)
               const actionsCollectionRef = collection(db, "matches", match.matchId, "actions");
               const actionsSnapshot = await getDocs(actionsCollectionRef);
               
-                             actionsSnapshot.forEach((actionDoc) => {
-                 const actionData = actionDoc.data() as Action;
-                 if (match.matchId) {
-                   allActionsData.push({
-                     ...actionData,
-                     id: actionDoc.id,
-                     matchId: match.matchId
-                   });
-                 }
-               });
+              if (!actionsSnapshot.empty) {
+                actionsSnapshot.forEach((actionDoc) => {
+                  const actionData = actionDoc.data() as Action;
+                  if (match.matchId) {
+                    allActionsData.push({
+                      ...actionData,
+                      id: actionDoc.id,
+                      matchId: match.matchId
+                    });
+                  }
+                });
+              }
             }
           } catch (error) {
             console.error(`Błąd podczas pobierania akcji dla meczu ${match.matchId}:`, error);
@@ -162,12 +164,12 @@ export default function ZawodnicyPage() {
         }
 
         // Filtruj tylko akcje zawodników z wybranego zespołu
-        const teamPlayersIds = players
-          .filter(player => {
-            const hasTeams = player.teams && player.teams.includes(selectedTeam);
-            return hasTeams;
-          })
-          .map(player => player.id);
+        const teamPlayers = players.filter(player => {
+          const hasTeams = player.teams && player.teams.includes(selectedTeam);
+          return hasTeams;
+        });
+        
+        const teamPlayersIds = teamPlayers.map(player => player.id);
 
         const filteredActions = allActionsData.filter(action => 
           teamPlayersIds.includes(action.senderId) || 
