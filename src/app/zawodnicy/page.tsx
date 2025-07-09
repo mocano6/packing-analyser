@@ -71,7 +71,133 @@ export default function ZawodnicyPage() {
     }
   }, [availableTeams, selectedTeam]);
 
-  // Sprawdź czy aplikacja się ładuje
+  // Pobierz mecze dla wybranego zespołu - wymusza odświeżenie cache
+  useEffect(() => {
+    if (selectedTeam) {
+      // Wymuszaj odświeżenie z Firebase przy każdej zmianie zespołu na stronie statystyk
+      // żeby uniknąć problemów z cache
+      forceRefreshFromFirebase(selectedTeam).then(() => {
+        console.log('✅ Wymuszone odświeżenie meczów dla zespołu:', selectedTeam);
+      }).catch(error => {
+        console.error('❌ Błąd podczas wymuszania odświeżenia:', error);
+        // Fallback - spróbuj zwykłego fetchMatches
+        fetchMatches(selectedTeam);
+      });
+    }
+  }, [selectedTeam, forceRefreshFromFirebase, fetchMatches]);
+
+  // Filtruj mecze według wybranego zespołu
+  const teamMatches = useMemo(() => {
+    return allMatches.filter(match => match.team === selectedTeam);
+  }, [allMatches, selectedTeam]);
+
+  // Zaznacz wszystkie mecze domyślnie przy zmianie zespołu
+  useEffect(() => {
+    if (teamMatches.length > 0) {
+      const validMatchIds = teamMatches
+        .map(match => match.matchId)
+        .filter((id): id is string => id !== undefined);
+      setSelectedMatches(validMatchIds);
+    }
+  }, [teamMatches]);
+
+  // Pobierz akcje ze wszystkich meczów zespołu
+  useEffect(() => {
+    const loadAllActionsForTeam = async () => {
+      if (teamMatches.length === 0) {
+        setAllActions([]);
+        return;
+      }
+
+      // Sprawdź czy Firebase jest dostępne
+      if (!db) {
+        console.error("Firebase nie jest zainicjalizowane");
+        setAllActions([]);
+        return;
+      }
+
+      setIsLoadingActions(true);
+
+      try {
+        const allActionsData: Action[] = [];
+
+        // Pobierz akcje ze wszystkich meczów dla wybranego zespołu
+        for (const match of teamMatches) {
+          if (!match.matchId) continue;
+
+          try {
+            // Pobierz dokument meczu
+            const matchDoc = await getDoc(doc(db, "matches", match.matchId));
+            
+            if (matchDoc.exists()) {
+              const matchData = matchDoc.data();
+              
+              // Pobierz akcje z kolekcji w ramach dokumentu meczu
+              const actionsCollectionRef = collection(db, "matches", match.matchId, "actions");
+              const actionsSnapshot = await getDocs(actionsCollectionRef);
+              
+                             actionsSnapshot.forEach((actionDoc) => {
+                 const actionData = actionDoc.data() as Action;
+                 if (match.matchId) {
+                   allActionsData.push({
+                     ...actionData,
+                     id: actionDoc.id,
+                     matchId: match.matchId
+                   });
+                 }
+               });
+            }
+          } catch (error) {
+            console.error(`Błąd podczas pobierania akcji dla meczu ${match.matchId}:`, error);
+          }
+        }
+
+        // Filtruj tylko akcje zawodników z wybranego zespołu
+        const teamPlayersIds = players
+          .filter(player => {
+            const hasTeams = player.teams && player.teams.includes(selectedTeam);
+            return hasTeams;
+          })
+          .map(player => player.id);
+
+        const filteredActions = allActionsData.filter(action => 
+          teamPlayersIds.includes(action.senderId) || 
+          (action.receiverId && teamPlayersIds.includes(action.receiverId))
+        );
+
+        setAllActions(filteredActions);
+      } catch (error) {
+        console.error("Błąd podczas pobierania akcji:", error);
+        setAllActions([]);
+      } finally {
+        setIsLoadingActions(false);
+      }
+    };
+
+    loadAllActionsForTeam();
+  }, [teamMatches, players, selectedTeam]);
+
+  // Filtruj zawodników według wybranego zespołu
+  const filteredPlayers = useMemo(() => {
+    const teamFiltered = players.filter(player => {
+      const hasTeams = player.teams && player.teams.includes(selectedTeam);
+      return hasTeams;
+    });
+    
+    // Sortowanie alfabetyczne po nazwisku
+    return sortPlayersByLastName(teamFiltered);
+  }, [players, selectedTeam]);
+
+  // Filtruj akcje według zaznaczonych meczów
+  const filteredActions = useMemo(() => {
+    if (selectedMatches.length === 0) return [];
+    
+    return allActions.filter(action => 
+      action.matchId && selectedMatches.includes(action.matchId)
+    );
+  }, [allActions, selectedMatches]);
+
+  // TERAZ sprawdź czy aplikacja się ładuje - WSZYSTKIE HOOKI MUSZĄ BYĆ POWYŻEJ!
   if (authLoading || isTeamsLoading) {
     return (
       <div className={styles.container}>
@@ -130,131 +256,6 @@ export default function ZawodnicyPage() {
       </div>
     );
   }
-
-  // Pobierz mecze dla wybranego zespołu - wymusza odświeżenie cache
-  useEffect(() => {
-    if (selectedTeam) {
-      // Wymuszaj odświeżenie z Firebase przy każdej zmianie zespołu na stronie statystyk
-      // żeby uniknąć problemów z cache
-      forceRefreshFromFirebase(selectedTeam).then(() => {
-        console.log('✅ Wymuszone odświeżenie meczów dla zespołu:', selectedTeam);
-      }).catch(error => {
-        console.error('❌ Błąd podczas wymuszania odświeżenia:', error);
-        // Fallback - spróbuj zwykłego fetchMatches
-        fetchMatches(selectedTeam);
-      });
-    }
-  }, [selectedTeam, forceRefreshFromFirebase, fetchMatches]);
-
-  // Filtruj mecze według wybranego zespołu
-  const teamMatches = useMemo(() => {
-    return allMatches.filter(match => match.team === selectedTeam);
-  }, [allMatches, selectedTeam]);
-
-  // Zaznacz wszystkie mecze domyślnie przy zmianie zespołu
-  useEffect(() => {
-    if (teamMatches.length > 0) {
-      const validMatchIds = teamMatches
-        .map(match => match.matchId)
-        .filter((id): id is string => id !== undefined);
-      setSelectedMatches(validMatchIds);
-    }
-  }, [teamMatches]);
-
-  // Pobierz akcje ze wszystkich meczów zespołu
-  useEffect(() => {
-    const loadAllActionsForTeam = async () => {
-      if (teamMatches.length === 0) {
-        setAllActions([]);
-        return;
-      }
-
-      // Sprawdź czy Firebase jest dostępne
-      if (!db) {
-        console.error("Firebase nie jest zainicjalizowane");
-        setAllActions([]);
-        return;
-      }
-
-      setIsLoadingActions(true);
-      try {
-        const allActionsPromises = teamMatches.map(async (match) => {
-          if (!match.matchId) return [];
-          
-          try {
-            const matchRef = doc(db!, "matches", match.matchId);
-            const matchDoc = await getDoc(matchRef);
-            
-            if (matchDoc.exists()) {
-              const matchData = matchDoc.data() as TeamInfo;
-              const matchActions = matchData.actions_packing || [];
-              
-              // Uzupełnij dane zawodników w akcjach
-              return matchActions.map(action => {
-                const enrichedAction = { ...action };
-                
-                // Dodaj dane nadawcy
-                if (action.senderId && (!action.senderName || !action.senderNumber)) {
-                  const senderPlayer = players.find(p => p.id === action.senderId);
-                  if (senderPlayer) {
-                    enrichedAction.senderName = senderPlayer.name;
-                    enrichedAction.senderNumber = senderPlayer.number;
-                  }
-                }
-                
-                // Dodaj dane odbiorcy
-                if (action.receiverId && (!action.receiverName || !action.receiverNumber)) {
-                  const receiverPlayer = players.find(p => p.id === action.receiverId);
-                  if (receiverPlayer) {
-                    enrichedAction.receiverName = receiverPlayer.name;
-                    enrichedAction.receiverNumber = receiverPlayer.number;
-                  }
-                }
-                
-                return enrichedAction;
-              });
-            }
-            return [];
-          } catch (error) {
-            console.error(`Błąd podczas pobierania akcji dla meczu ${match.matchId}:`, error);
-            return [];
-          }
-        });
-
-        const allActionsArrays = await Promise.all(allActionsPromises);
-        const flatActions = allActionsArrays.flat();
-        setAllActions(flatActions);
-  
-      } catch (error) {
-        console.error("Błąd podczas pobierania akcji:", error);
-        setAllActions([]);
-      } finally {
-        setIsLoadingActions(false);
-      }
-    };
-
-    loadAllActionsForTeam();
-  }, [teamMatches, players, selectedTeam]);
-
-  // Filtruj zawodników według wybranego zespołu
-  const filteredPlayers = useMemo(() => {
-    const teamFiltered = players.filter(player => {
-      const hasTeams = player.teams && player.teams.includes(selectedTeam);
-      return hasTeams;
-    });
-    
-    // Sortowanie alfabetyczne po nazwisku
-    return sortPlayersByLastName(teamFiltered);
-  }, [players, selectedTeam]);
-
-  // Filtruj akcje według zaznaczonych meczów
-  const filteredActions = useMemo(() => {
-    if (selectedMatches.length === 0) return [];
-    
-    return allActions.filter(action => 
-      action.matchId && selectedMatches.includes(action.matchId)
-    );
-  }, [allActions, selectedMatches]);
 
   // Znajdź potencjalne duplikaty - ulepszona wersja dla akcji vs zawodników
   const findDuplicates = () => {

@@ -55,7 +55,94 @@ export default function StatystykiZespoluPage() {
 
   const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
 
-  // Sprawdź czy aplikacja się ładuje
+  // Pobierz mecze dla wybranego zespołu - wymusza odświeżenie cache
+  useEffect(() => {
+    if (selectedTeam) {
+      // Wymuszaj odświeżenie z Firebase przy każdej zmianie zespołu na stronie statystyk
+      // żeby uniknąć problemów z cache
+      forceRefreshFromFirebase(selectedTeam).then(() => {
+        console.log('✅ Wymuszone odświeżenie meczów dla zespołu:', selectedTeam);
+      }).catch(error => {
+        console.error('❌ Błąd podczas wymuszania odświeżenia:', error);
+        // Fallback - spróbuj zwykłego fetchMatches
+        fetchMatches(selectedTeam);
+      });
+    }
+  }, [selectedTeam, forceRefreshFromFirebase, fetchMatches]);
+
+  // Filtruj mecze według wybranego zespołu
+  const teamMatches = useMemo(() => {
+    return allMatches.filter(match => match.team === selectedTeam);
+  }, [allMatches, selectedTeam]);
+
+  // Wybierz pierwszy mecz domyślnie przy zmianie zespołu
+  useEffect(() => {
+    if (teamMatches.length > 0 && teamMatches[0].matchId) {
+      setSelectedMatch(teamMatches[0].matchId);
+    } else {
+      setSelectedMatch("");
+    }
+  }, [teamMatches]);
+
+  // Pobierz akcje dla wybranego meczu
+  useEffect(() => {
+    const loadActionsForMatch = async () => {
+      if (!selectedMatch) {
+        setAllActions([]);
+        return;
+      }
+
+      setIsLoadingActions(true);
+
+             try {
+         if (!db) {
+           console.error("Firebase nie jest zainicjalizowane");
+           setAllActions([]);
+           return;
+         }
+
+         const matchDoc = await getDoc(doc(db, "matches", selectedMatch));
+         
+         if (matchDoc.exists()) {
+           const matchData = matchDoc.data() as TeamInfo;
+           const actions = matchData.actions_packing || [];
+           setAllActions(actions);
+         } else {
+           setAllActions([]);
+         }
+       } catch (error) {
+        console.error("Błąd podczas pobierania akcji:", error);
+        setAllActions([]);
+      } finally {
+        setIsLoadingActions(false);
+      }
+    };
+
+    loadActionsForMatch();
+  }, [selectedMatch]);
+
+  // Przygotuj dane dla wykresu
+  const chartData = useMemo(() => {
+    if (allActions.length === 0) return [];
+
+    // Grupuj akcje po minutach
+    const actionsPerMinute: Record<number, number> = {};
+    
+    allActions.forEach(action => {
+      const minute = Math.floor(action.minute);
+      actionsPerMinute[minute] = (actionsPerMinute[minute] || 0) + 1;
+    });
+
+    // Konwertuj na format dla wykresu
+    return Object.entries(actionsPerMinute)
+      .map(([minute, count]) => ({
+        minute: parseInt(minute),
+        actions: count
+      }))
+      .sort((a, b) => a.minute - b.minute);
+  }, [allActions]);
+
+  // TERAZ sprawdź czy aplikacja się ładuje - WSZYSTKIE HOOKI MUSZĄ BYĆ POWYŻEJ!
   if (authLoading || isTeamsLoading) {
     return (
       <div className={styles.container}>
@@ -115,153 +202,6 @@ export default function StatystykiZespoluPage() {
     );
   }
 
-  // Pobierz mecze dla wybranego zespołu - wymusza odświeżenie cache
-  useEffect(() => {
-    if (selectedTeam) {
-      // Wymuszaj odświeżenie z Firebase przy każdej zmianie zespołu na stronie statystyk
-      // żeby uniknąć problemów z cache
-      forceRefreshFromFirebase(selectedTeam).then(() => {
-        console.log('✅ Wymuszone odświeżenie meczów dla zespołu:', selectedTeam);
-      }).catch(error => {
-        console.error('❌ Błąd podczas wymuszania odświeżenia:', error);
-        // Fallback - spróbuj zwykłego fetchMatches
-        fetchMatches(selectedTeam);
-      });
-    }
-  }, [selectedTeam, forceRefreshFromFirebase, fetchMatches]);
-
-  // Filtruj mecze według wybranego zespołu
-  const teamMatches = useMemo(() => {
-    return allMatches.filter(match => match.team === selectedTeam);
-  }, [allMatches, selectedTeam]);
-
-  // Wybierz pierwszy mecz domyślnie przy zmianie zespołu
-  useEffect(() => {
-    if (teamMatches.length > 0 && teamMatches[0].matchId) {
-      setSelectedMatch(teamMatches[0].matchId);
-    } else {
-      setSelectedMatch("");
-    }
-  }, [teamMatches]);
-
-  // Pobierz akcje dla wybranego meczu
-  useEffect(() => {
-    const loadActionsForMatch = async () => {
-      if (!selectedMatch || !db) {
-        setAllActions([]);
-        return;
-      }
-
-      setIsLoadingActions(true);
-      try {
-        const matchRef = doc(db!, "matches", selectedMatch);
-        const matchDoc = await getDoc(matchRef);
-        
-        if (matchDoc.exists()) {
-          const matchData = matchDoc.data() as TeamInfo;
-          const matchActions = matchData.actions_packing || [];
-          setAllActions(matchActions);
-          console.log(`Pobrano ${matchActions.length} akcji dla meczu ${selectedMatch}`);
-        } else {
-          setAllActions([]);
-        }
-      } catch (error) {
-        console.error("Błąd podczas pobierania akcji:", error);
-        setAllActions([]);
-      } finally {
-        setIsLoadingActions(false);
-      }
-    };
-
-    loadActionsForMatch();
-  }, [selectedMatch]);
-
-  // Oblicz dane dla wykresu - przyrost wartości w czasie meczu
-  const chartData = useMemo(() => {
-    if (allActions.length === 0) return [];
-
-    // Sortuj akcje według czasu
-    const sortedActions = [...allActions].sort((a, b) => {
-      const minuteA = a.minute || 0;
-      const minuteB = b.minute || 0;
-      return minuteA - minuteB;
-    });
-
-    // Grupuj akcje w 5-minutowe przedziały
-    const timeIntervals: {
-      interval: number;
-      label: string;
-      actions: Action[];
-    }[] = [];
-    
-    for (let i = 0; i <= 90; i += 5) {
-      timeIntervals.push({
-        interval: i,
-        label: `${i}-${i + 5}'`,
-        actions: []
-      });
-    }
-
-    // Przypisz akcje do przedziałów czasowych
-    sortedActions.forEach(action => {
-      const minute = action.minute || 0;
-      const intervalIndex = Math.floor(minute / 5);
-      if (intervalIndex < timeIntervals.length) {
-        timeIntervals[intervalIndex].actions.push(action);
-      }
-    });
-
-    // Oblicz skumulowane wartości
-    let cumulativeXt = 0;
-    let cumulativePxT = 0;
-    let cumulativePacking = 0;
-
-    const data = timeIntervals.map(interval => {
-      // Oblicz wartości dla tego przedziału
-      let intervalXt = 0;
-      let intervalPxT = 0;
-      let intervalPacking = 0;
-
-      interval.actions.forEach(action => {
-        const packingPoints = action.packingPoints || 0;
-        const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
-        const pxtValue = xTDifference * packingPoints;
-
-        intervalXt += xTDifference;
-        intervalPxT += pxtValue;
-        intervalPacking += packingPoints;
-      });
-
-      // Dodaj do skumulowanych wartości
-      cumulativeXt += intervalXt;
-      cumulativePxT += intervalPxT;
-      cumulativePacking += intervalPacking;
-
-      return {
-        time: interval.label,
-        minute: interval.interval,
-        xT: Math.round(cumulativeXt * 1000) / 1000,
-        PxT: Math.round(cumulativePxT * 100) / 100,
-        Packing: cumulativePacking,
-        intervalXt: Math.round(intervalXt * 1000) / 1000,
-        intervalPxT: Math.round(intervalPxT * 100) / 100,
-        intervalPacking: intervalPacking,
-        actionsCount: interval.actions.length
-      };
-    });
-
-    // Usuń przedziały z końca, które mają zerowe wartości skumulowane
-    let lastNonZeroIndex = data.length - 1;
-    while (lastNonZeroIndex >= 0 && 
-           data[lastNonZeroIndex].xT === 0 && 
-           data[lastNonZeroIndex].PxT === 0 && 
-           data[lastNonZeroIndex].Packing === 0) {
-      lastNonZeroIndex--;
-    }
-
-    return data.slice(0, lastNonZeroIndex + 1);
-  }, [allActions]);
-
   // Znajdź wybrany mecz dla wyświetlenia informacji
   const selectedMatchInfo = useMemo(() => {
     return teamMatches.find(match => match.matchId === selectedMatch);
@@ -274,13 +214,10 @@ export default function StatystykiZespoluPage() {
       return (
         <div className={styles.tooltip}>
           <p className={styles.tooltipLabel}>{`Minuty: ${label}`}</p>
-          <p>Akcji w przedziale: {data.actionsCount}</p>
+          <p>Akcji w przedziale: {data.actions}</p>
           {payload.map((entry: any, index: number) => (
             <p key={index} style={{ color: entry.color }}>
               {`${entry.dataKey}: ${entry.value}`}
-              {entry.dataKey === 'xT' && data.intervalXt !== 0 && ` (+${data.intervalXt})`}
-              {entry.dataKey === 'PxT' && data.intervalPxT !== 0 && ` (+${data.intervalPxT})`}
-              {entry.dataKey === 'Packing' && data.intervalPacking !== 0 && ` (+${data.intervalPacking})`}
             </p>
           ))}
         </div>
@@ -380,7 +317,7 @@ export default function StatystykiZespoluPage() {
                 <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis 
-                    dataKey="time" 
+                    dataKey="minute" 
                     angle={-45}
                     textAnchor="end"
                     height={80}
@@ -389,38 +326,17 @@ export default function StatystykiZespoluPage() {
                   <YAxis 
                     yAxisId="left" 
                     orientation="left"
-                    label={{ value: 'xT / PxT', angle: -90, position: 'insideLeft' }}
-                  />
-                  <YAxis 
-                    yAxisId="right" 
-                    orientation="right"
-                    label={{ value: 'Packing', angle: 90, position: 'insideRight' }}
+                    label={{ value: 'Akcje', angle: -90, position: 'insideLeft' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend />
                   <Line 
                     yAxisId="left"
                     type="monotone" 
-                    dataKey="xT" 
+                    dataKey="actions" 
                     stroke="#8884d8" 
                     strokeWidth={2}
-                    name="Skumulowany xT"
-                  />
-                  <Line 
-                    yAxisId="left"
-                    type="monotone" 
-                    dataKey="PxT" 
-                    stroke="#82ca9d" 
-                    strokeWidth={2}
-                    name="Skumulowany PxT"
-                  />
-                  <Line 
-                    yAxisId="right"
-                    type="monotone" 
-                    dataKey="Packing" 
-                    stroke="#ffc658" 
-                    strokeWidth={2}
-                    name="Skumulowany Packing"
+                    name="Akcje"
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -435,25 +351,13 @@ export default function StatystykiZespoluPage() {
                     <tr>
                       <th>Czas</th>
                       <th>Akcje</th>
-                      <th>xT +</th>
-                      <th>PxT +</th>
-                      <th>Packing +</th>
-                      <th>xT skumulowany</th>
-                      <th>PxT skumulowany</th>
-                      <th>Packing skumulowany</th>
                     </tr>
                   </thead>
                   <tbody>
                     {chartData.map((interval, index) => (
                       <tr key={index}>
-                        <td>{interval.time}</td>
-                        <td>{interval.actionsCount}</td>
-                        <td>{interval.intervalXt}</td>
-                        <td>{interval.intervalPxT}</td>
-                        <td>{interval.intervalPacking}</td>
-                        <td>{interval.xT}</td>
-                        <td>{interval.PxT}</td>
-                        <td>{interval.Packing}</td>
+                        <td>{interval.minute}</td>
+                        <td>{interval.actions}</td>
                       </tr>
                     ))}
                   </tbody>
