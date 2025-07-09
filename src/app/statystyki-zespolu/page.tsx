@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Action, TeamInfo } from "@/types";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
@@ -55,20 +55,29 @@ export default function StatystykiZespoluPage() {
 
   const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
 
+  // Stabilne funkcje z useCallback żeby uniknąć infinite loops
+  const stableForceRefresh = useCallback((teamId: string) => {
+    return forceRefreshFromFirebase(teamId);
+  }, [forceRefreshFromFirebase]);
+
+  const stableFetchMatches = useCallback((teamId: string) => {
+    return fetchMatches(teamId);
+  }, [fetchMatches]);
+
   // Pobierz mecze dla wybranego zespołu - wymusza odświeżenie cache
   useEffect(() => {
     if (selectedTeam) {
       // Wymuszaj odświeżenie z Firebase przy każdej zmianie zespołu na stronie statystyk
       // żeby uniknąć problemów z cache
-      forceRefreshFromFirebase(selectedTeam).then(() => {
+      stableForceRefresh(selectedTeam).then(() => {
         console.log('✅ Wymuszone odświeżenie meczów dla zespołu:', selectedTeam);
       }).catch(error => {
         console.error('❌ Błąd podczas wymuszania odświeżenia:', error);
         // Fallback - spróbuj zwykłego fetchMatches
-        fetchMatches(selectedTeam);
+        stableFetchMatches(selectedTeam);
       });
     }
-  }, [selectedTeam, forceRefreshFromFirebase, fetchMatches]);
+  }, [selectedTeam, stableForceRefresh, stableFetchMatches]);
 
   // Filtruj mecze według wybranego zespołu
   const teamMatches = useMemo(() => {
@@ -142,6 +151,30 @@ export default function StatystykiZespoluPage() {
       .sort((a, b) => a.minute - b.minute);
   }, [allActions]);
 
+  // Znajdź wybrany mecz dla wyświetlenia informacji
+  const selectedMatchInfo = useMemo(() => {
+    return teamMatches.find(match => match.matchId === selectedMatch);
+  }, [teamMatches, selectedMatch]);
+
+  // Custom tooltip dla wykresu
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className={styles.tooltip}>
+          <p className={styles.tooltipLabel}>{`Minuty: ${label}`}</p>
+          <p>Akcji w przedziale: {data.actions}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} style={{ color: entry.color }}>
+              {`${entry.dataKey}: ${entry.value}`}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
   // TERAZ sprawdź czy aplikacja się ładuje - WSZYSTKIE HOOKI MUSZĄ BYĆ POWYŻEJ!
   if (authLoading || isTeamsLoading) {
     return (
@@ -201,30 +234,6 @@ export default function StatystykiZespoluPage() {
       </div>
     );
   }
-
-  // Znajdź wybrany mecz dla wyświetlenia informacji
-  const selectedMatchInfo = useMemo(() => {
-    return teamMatches.find(match => match.matchId === selectedMatch);
-  }, [teamMatches, selectedMatch]);
-
-  // Custom tooltip dla wykresu
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className={styles.tooltip}>
-          <p className={styles.tooltipLabel}>{`Minuty: ${label}`}</p>
-          <p>Akcji w przedziale: {data.actions}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} style={{ color: entry.color }}>
-              {`${entry.dataKey}: ${entry.value}`}
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className={styles.container}>

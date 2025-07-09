@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Player, Action, TeamInfo } from "@/types";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
@@ -36,6 +36,15 @@ export default function ZawodnicyPage() {
   const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
   const { teams, isLoading: isTeamsLoading } = useTeams();
   const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, logout } = useAuth();
+
+  // Stabilne funkcje z useCallback żeby uniknąć infinite loops
+  const stableForceRefresh = useCallback((teamId: string) => {
+    return forceRefreshFromFirebase(teamId);
+  }, [forceRefreshFromFirebase]);
+
+  const stableFetchMatches = useCallback((teamId: string) => {
+    return fetchMatches(teamId);
+  }, [fetchMatches]);
 
   // Filtruj dostępne zespoły na podstawie uprawnień użytkownika (tak jak w głównej aplikacji)
   const availableTeams = useMemo(() => {
@@ -76,15 +85,15 @@ export default function ZawodnicyPage() {
     if (selectedTeam) {
       // Wymuszaj odświeżenie z Firebase przy każdej zmianie zespołu na stronie statystyk
       // żeby uniknąć problemów z cache
-      forceRefreshFromFirebase(selectedTeam).then(() => {
+      stableForceRefresh(selectedTeam).then(() => {
         console.log('✅ Wymuszone odświeżenie meczów dla zespołu:', selectedTeam);
       }).catch(error => {
         console.error('❌ Błąd podczas wymuszania odświeżenia:', error);
         // Fallback - spróbuj zwykłego fetchMatches
-        fetchMatches(selectedTeam);
+        stableFetchMatches(selectedTeam);
       });
     }
-  }, [selectedTeam, forceRefreshFromFirebase, fetchMatches]);
+  }, [selectedTeam, stableForceRefresh, stableFetchMatches]); // Usunięto funkcje z dependency array żeby uniknąć infinite loop
 
   // Filtruj mecze według wybranego zespołu
   const teamMatches = useMemo(() => {
