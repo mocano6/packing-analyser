@@ -71,7 +71,7 @@ function removeUndefinedFields<T extends object>(obj: T): T {
 
 export default function Page() {
   const [activeTab] = React.useState<"packing">("packing");
-  const [selectedTeam, setSelectedTeam] = React.useState<string>(TEAMS.REZERWY.id);
+  const [selectedTeam, setSelectedTeam] = React.useState<string>(""); // Zmieniłem z TEAMS.REZERWY.id na pusty string
   const [isPlayerMinutesModalOpen, setIsPlayerMinutesModalOpen] = React.useState(false);
   const [editingMatch, setEditingMatch] = React.useState<TeamInfo | null>(null);
   const [isActionModalOpen, setIsActionModalOpen] = React.useState(false);
@@ -296,7 +296,11 @@ export default function Page() {
     // Używamy setTimeout, aby zapewnić, że Firebase jest w pełni zainicjalizowany
     const timer = setTimeout(async () => {
       try {
-        await fetchMatches(selectedTeam);
+        // Wywołuj fetchMatches tylko jeśli selectedTeam jest ustawiony
+        if (selectedTeam) {
+          await fetchMatches(selectedTeam);
+        } else {
+        }
         // Nie aktualizujemy licznika tutaj - to tylko inicjalne pobranie danych
       } catch (error) {
         console.error("Błąd podczas inicjalizacji listy meczów:", error);
@@ -430,7 +434,10 @@ export default function Page() {
 
   // Dodajemy efekt, który reaguje na zmianę selectedTeam
   React.useEffect(() => {
-    refreshMatchesList(selectedTeam);
+    // Wywołuj refreshMatchesList tylko gdy selectedTeam jest ustawiony (nie pusty)
+    if (selectedTeam) {
+      refreshMatchesList(selectedTeam);
+    }
   }, [selectedTeam, refreshMatchesList]);
 
   // Dodajemy efekt, który sprawdzi wartości stref w localStorage przy renderowaniu

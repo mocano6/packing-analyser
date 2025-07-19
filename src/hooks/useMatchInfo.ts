@@ -396,6 +396,13 @@ export function useMatchInfo() {
 
   // Funkcja do pobierania meczów (z cache'u, próbuje z Firebase w tle jeśli online)
   const fetchMatches = useCallback(async (teamId?: string) => {
+    // Jeśli teamId jest pusty, nie wykonuj żadnych operacji
+    if (!teamId) {
+      setAllMatches([]);
+      setMatchInfo(null);
+      return [];
+    }
+    
     try {
       setIsLoading(true);
       setError(null);
@@ -403,15 +410,8 @@ export function useMatchInfo() {
       // 1. Najpierw sprawdzamy cache
       const cachedMatches = localCacheRef.current.data;
       
-      // 2. Filtrujemy dane z cache'u (jeśli jest teamId)
-      let filteredMatches = cachedMatches;
-      if (teamId) {
-        filteredMatches = cachedMatches.filter(match => match.team === teamId);
-        
-        if (cachedMatches.length > 0 && filteredMatches.length === 0) {
-          console.warn(`⚠️ HOOK fetchMatches: cache ma mecze ale żaden nie pasuje do teamId="${teamId}"`);
-        }
-      }
+      // 2. Filtrujemy dane z cache'u
+      const filteredMatches = cachedMatches.filter(match => match.team === teamId);
       
       // 3. Aktualizujemy stan z cache'u
       setAllMatches(filteredMatches);
@@ -580,7 +580,6 @@ export function useMatchInfo() {
         }
       }
       
-      console.log(`🔙 HOOK fetchMatches: SUCCESS - zwracam ${filteredMatches.length} meczów`);
       return filteredMatches;
     } catch (err) {
       console.error("❌ Błąd krytyczny w fetchMatches:", err);
