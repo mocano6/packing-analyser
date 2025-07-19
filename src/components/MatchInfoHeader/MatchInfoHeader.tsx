@@ -78,6 +78,15 @@ const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players,
 
   // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
   const getTeamName = (teamId: string) => {
+    console.log(`🏷️ CurrentMatchInfo getTeamName DEBUG dla teamId: "${teamId}"`);
+    console.log(`   allAvailableTeams.length:`, allAvailableTeams.length);
+    
+    if (allAvailableTeams.length > 0) {
+      console.log(`   allAvailableTeams:`, allAvailableTeams.map(t => `${t.name} (${t.id})`));
+    }
+    
+    console.log(`   TEAMS IDs:`, Object.values(TEAMS).map(t => `${t.name} (${t.id})`));
+    
     // Najpierw sprawdź w zespołach z Firebase
     const team = allAvailableTeams.find(team => team.id === teamId);
     if (team) {
@@ -86,7 +95,11 @@ const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players,
     
     // Fallback do domyślnych zespołów
     const defaultTeam = Object.values(TEAMS).find(team => team.id === teamId);
-    return defaultTeam ? defaultTeam.name : teamId;
+    if (defaultTeam) {
+      return defaultTeam.name;
+    }
+    
+    return teamId;
   };
 
   return (
@@ -159,6 +172,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   
   // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
   const getTeamName = (teamId: string) => {
+    
     // Najpierw sprawdź w zespołach z Firebase
     const team = allAvailableTeams.find(team => team.id === teamId);
     if (team) {
@@ -167,12 +181,20 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
     
     // Fallback do domyślnych zespołów
     const defaultTeam = Object.values(TEAMS).find(team => team.id === teamId);
-    return defaultTeam ? defaultTeam.name : teamId;
+    if (defaultTeam) {
+      return defaultTeam.name;
+    }
+    
+    return teamId;
   };
 
   // Filtrowanie meczów wybranego zespołu - używamy useMemo dla optymalizacji
   const teamMatches = React.useMemo(() => {
     const filtered = allMatches.filter(match => match.team === selectedTeam);
+    
+    if (allMatches.length > 0 && filtered.length === 0) {
+      console.warn(`⚠️ PROBLEM: allMatches ma mecze, ale żaden nie pasuje do selectedTeam!`);
+    }
     
     return filtered.sort((a, b) => {
       const aValue = a[sortKey];

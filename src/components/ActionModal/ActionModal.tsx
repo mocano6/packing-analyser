@@ -23,6 +23,10 @@ interface ActionModalProps {
   onActionTypeChange: (type: "pass" | "dribble") => void;
   currentPoints: number;
   onAddPoints: (points: number) => void;
+  isP1Active: boolean;
+  onP1Toggle: () => void;
+  isP2Active: boolean;
+  onP2Toggle: () => void;
   isP3Active: boolean;
   onP3Toggle: () => void;
   isShot: boolean;
@@ -57,6 +61,10 @@ const ActionModal: React.FC<ActionModalProps> = ({
   onActionTypeChange,
   currentPoints,
   onAddPoints,
+  isP1Active,
+  onP1Toggle,
+  isP2Active,
+  onP2Toggle,
   isP3Active,
   onP3Toggle,
   isShot,
@@ -406,41 +414,65 @@ const ActionModal: React.FC<ActionModalProps> = ({
             </div>
           </div>
 
-          {/* Przyciski punktów */}
-          <div className={styles.buttonsGrid}>
-            {ACTION_BUTTONS.map((button, index) =>
-              button.type === "toggle" ? (
+          {/* Wszystkie przyciski w jednym rzędzie */}
+          <div className={styles.compactButtonsRow}>
+            {/* Połączony element P1, P2, P3 */}
+            <div className={styles.pButtonsGroup}>
+              <div className={styles.pTopRow}>
                 <button
-                  key={index}
-                  className={`${styles.actionButton} ${
-                    isP3Active ? styles.activeButton : ""
+                  className={`${styles.compactButton} ${
+                    isP1Active ? styles.activeButton : ""
                   }`}
-                  onClick={onP3Toggle}
-                  title={button.description}
-                  aria-pressed={isP3Active}
+                  onClick={onP1Toggle}
+                  title="Aktywuj/Dezaktywuj P1"
+                  aria-pressed={isP1Active}
                   type="button"
                 >
-                  <span className={styles.buttonLabel}>{button.label}</span>
-                  <span className={styles.buttonDescription}>
-                    {button.description}
-                  </span>
+                  <span className={styles.compactLabel}>P1</span>
                 </button>
-              ) : (
-                <div 
-                  key={index} 
-                  className={styles.pointsButtonGroup}
-                  onClick={() => handlePointsAdd(button.points)}
-                  title={button.description}
+                
+                <button
+                  className={`${styles.compactButton} ${
+                    isP2Active ? styles.activeButton : ""
+                  }`}
+                  onClick={onP2Toggle}
+                  title="Aktywuj/Dezaktywuj P2"
+                  aria-pressed={isP2Active}
+                  type="button"
                 >
-                  <span className={styles.buttonLabel}>{button.label}: <b>{currentPoints}</b></span>
-                  <span className={styles.buttonDescription}>
-                    {button.description}
-                  </span>
-                  <div className={styles.pointsControls}>
+                  <span className={styles.compactLabel}>P2</span>
+                </button>
+              </div>
+              
+              <button
+                className={`${styles.compactButton} ${styles.pButtonBottom} ${
+                  isP3Active ? styles.activeButton : ""
+                }`}
+                onClick={onP3Toggle}
+                title="Aktywuj/Dezaktywuj P3"
+                aria-pressed={isP3Active}
+                type="button"
+              >
+                <span className={styles.compactLabel}>P3</span>
+              </button>
+            </div>
+
+            {/* Pozostałe przyciski punktów */}
+            {ACTION_BUTTONS.map((button, index) => {
+              if (button.type === "points") {
+                return (
+                  <div 
+                    key={index} 
+                    className={styles.compactPointsButton}
+                    onClick={() => handlePointsAdd(button.points)}
+                    title={button.description}
+                  >
+                    <span className={styles.compactLabel}>{button.label}</span>
+                    <span className={styles.pointsValue}><b>{currentPoints}</b></span>
                     <button
-                      className={styles.subtractButton}
+                      className={styles.compactSubtractButton}
                       onClick={(e) => {
-                        e.stopPropagation(); // Zapobiega wywołaniu onClick z głównego div'a
+                        e.stopPropagation();
                         handlePointsAdd(-button.points);
                       }}
                       title={`Odejmij ${button.points} pkt`}
@@ -450,62 +482,51 @@ const ActionModal: React.FC<ActionModalProps> = ({
                       −
                     </button>
                   </div>
-                </div>
-              )
-            )}
+                );
+              }
+              return null;
+            })}
 
-            {/* Przycisk "Wejście w PK" */}
+            {/* Pozostałe przyciski toggle */}
             <button
-              className={`${styles.actionButton} ${
+              className={`${styles.compactButton} ${
                 isPenaltyAreaEntry ? styles.activeButton : ""
               }`}
               onClick={handlePenaltyAreaEntryToggle}
               aria-pressed={isPenaltyAreaEntry}
               type="button"
+              title="Wejście w pole karne"
             >
-              <span className={styles.buttonLabel}>Wejście w PK</span>
-              <span className={styles.buttonDescription}>
-                Zaznacz jeśli akcja zakończyła się wejściem w pole karne
-              </span>
+              <span className={styles.compactLabel}>Wejście PK</span>
             </button>
 
-            {/* Przycisk "Strzał" */}
             <button
-              className={`${styles.actionButton} ${
+              className={`${styles.compactButton} ${
                 isShot ? styles.activeButton : ""
               }`}
               onClick={handleShotToggle}
               aria-pressed={isShot}
               type="button"
+              title="Strzał"
             >
-              <span className={styles.buttonLabel}>Strzał</span>
-              <span className={styles.buttonDescription}>
-                Zaznacz jeśli akcja zakończyła się strzałem
-              </span>
+              <span className={styles.compactLabel}>Strzał</span>
             </button>
 
-            {/* Przycisk "Bramka" */}
             <button
-              className={`${styles.actionButton} ${
+              className={`${styles.compactButton} ${
                 isGoal ? styles.activeButton : ""
-              }`}
+              } ${!isShot ? styles.disabledButton : ""}`}
               onClick={handleGoalToggle}
               disabled={!isShot}
               aria-pressed={isGoal}
               aria-disabled={!isShot}
               type="button"
-              style={{
-                opacity: !isShot ? 0.5 : 1,
-                cursor: !isShot ? "not-allowed" : "pointer",
-              }}
+              title={!isShot ? "Musisz najpierw zaznaczyć Strzał" : "Gol"}
             >
-              <span className={styles.buttonLabel}>Bramka</span>
-              <span className={styles.buttonDescription}>
-                Zaznacz jeśli strzał zakończył się bramką
-              </span>
+              <span className={styles.compactLabel}>Gol</span>
             </button>
           </div>
-
+          
           {/* Przyciski kontrolne z polem minuty pomiędzy */}
           <div className={styles.controlButtons}>
             <button

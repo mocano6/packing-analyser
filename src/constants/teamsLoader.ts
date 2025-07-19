@@ -16,6 +16,10 @@ export const DEFAULT_TEAMS = {
     id: "89039437-62a7-4eda-b67d-70a4fb24e4ea",
     name: "Rezerwy"
   },
+  POLONIA_BYTOM: {
+    id: "4fqwPiTdSZSLEwUHo785",
+    name: "Polonia Bytom"
+  },
   U19: {
     id: "1595da8a-a9d6-463d-a49d-5e2c41ff36be",
     name: "U19"

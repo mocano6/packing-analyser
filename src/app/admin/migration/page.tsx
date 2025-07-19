@@ -67,7 +67,7 @@ export default function MigrationAnalysisPage() {
       setIsAnalyzing(true);
       setError(null);
 
-      console.log("📊 Ładowanie danych z Firebase...");
+
 
              // Pobierz zawodników
        const playersSnapshot = await getDocs(collection(getDB(), "players"));
@@ -94,7 +94,7 @@ export default function MigrationAnalysisPage() {
       setMatches(matchesData);
       setTeams(teamsData);
 
-      console.log(`✅ Załadowano: ${playersData.length} zawodników, ${matchesData.length} meczów, ${teamsData.length} zespołów`);
+      
 
       // Przeprowadź analizę
       const analysisResult = analyzeData(playersData);

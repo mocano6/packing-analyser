@@ -26,6 +26,10 @@ export interface ActionSectionProps {
   setActionType: (type: "pass" | "dribble") => void;
   currentPoints: number;
   setCurrentPoints: React.Dispatch<React.SetStateAction<number>>;
+  isP1Active: boolean;
+  setIsP1Active: React.Dispatch<React.SetStateAction<boolean>>;
+  isP2Active: boolean;
+  setIsP2Active: React.Dispatch<React.SetStateAction<boolean>>;
   isP3Active: boolean;
   setIsP3Active: React.Dispatch<React.SetStateAction<boolean>>;
   isShot: boolean;
@@ -60,6 +64,10 @@ const ActionSection = memo(function ActionSection({
   setActionType,
   currentPoints,
   setCurrentPoints,
+  isP1Active,
+  setIsP1Active,
+  isP2Active,
+  setIsP2Active,
   isP3Active,
   setIsP3Active,
   isShot,
@@ -152,6 +160,10 @@ const ActionSection = memo(function ActionSection({
         onActionTypeChange={setActionType}
         currentPoints={currentPoints}
         onAddPoints={handleAddPoints}
+        isP1Active={isP1Active}
+        onP1Toggle={() => setIsP1Active(!isP1Active)}
+        isP2Active={isP2Active}
+        onP2Toggle={() => setIsP2Active(!isP2Active)}
         isP3Active={isP3Active}
         onP3Toggle={handleP3Toggle}
         isShot={isShot}

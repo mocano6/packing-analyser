@@ -71,6 +71,8 @@ export interface Action {
   xTValueStart?: number;
   xTValueEnd?: number;
   PxT?: number;
+  isP1?: boolean;
+  isP2?: boolean;
   isP3?: boolean;
   isShot?: boolean;
   isGoal?: boolean;

@@ -105,7 +105,7 @@ export default function WeryfikacjaMeczow() {
           });
         });
 
-        console.log(`Pobrano ${allMatches.length} meczów`);
+
         setMatches(allMatches);
       } catch (error) {
         console.error('Błąd podczas pobierania meczów:', error);

@@ -330,9 +330,9 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
 
     // Filtruj zawodników - pokaż tylko tych z akcjami
     const filteredTableData = unsortedTableData.filter(item => 
-      item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01 ||
-      item.totalDribbling > 0 || Math.abs(item.totalDribblingPxT) > 0.01
-    );
+        item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01 ||
+        item.totalDribbling > 0 || Math.abs(item.totalDribblingPxT) > 0.01
+      );
 
     unsortedTableData = filteredTableData;
 

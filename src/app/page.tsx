@@ -99,6 +99,7 @@ export default function Page() {
     handleEditPlayer,
     closeModal,
     refetchPlayers,
+    migratePlayersFromTeamsToPlayers
   } = usePlayersState();
 
   const {
@@ -128,6 +129,8 @@ export default function Page() {
     currentPoints,
     actionMinute,
     actionType,
+    isP1Active,
+    isP2Active,
     isP3Active,
     isShot,
     isGoal,
@@ -137,6 +140,8 @@ export default function Page() {
     setCurrentPoints,
     setActionMinute,
     setActionType,
+    setIsP1Active,
+    setIsP2Active,
     setIsP3Active,
     setIsShot,
     setIsGoal,
@@ -201,8 +206,12 @@ export default function Page() {
 
   // Ustaw domyślny zespół na pierwszy dostępny
   useEffect(() => {
-    if (availableTeams.length > 0 && !availableTeams.find(team => team.id === selectedTeam)) {
-      setSelectedTeam(availableTeams[0].id);
+    if (availableTeams.length > 0) {
+      const teamExists = availableTeams.find(team => team.id === selectedTeam);
+      
+      if (!teamExists) {
+        setSelectedTeam(availableTeams[0].id);
+      }
     }
   }, [availableTeams, selectedTeam]);
 
@@ -223,7 +232,8 @@ export default function Page() {
         teams = [];
       }
       
-      return teams.includes(selectedTeam);
+      const hasTeam = teams.includes(selectedTeam);
+      return hasTeam;
     });
     
     // Sortowanie alfabetyczne po nazwisku
@@ -237,10 +247,17 @@ export default function Page() {
       const isP2 = savedHalf === 'P2';
       setIsSecondHalf(isP2);
     }
-  }, []);
+    
+    // Dodaj funkcję migracji do konsoli przeglądarki dla ręcznego użycia
+    if (typeof window !== 'undefined') {
+      (window as any).migratePlayers = migratePlayersFromTeamsToPlayers;
+    }
+  }, [migratePlayersFromTeamsToPlayers]);
 
   // Dodajemy useCallback dla fetchMatches, aby można było bezpiecznie używać go w efektach
   const refreshMatchesList = useCallback(async (teamId?: string) => {
+    const targetTeamId = teamId || selectedTeam;
+    
     try {
       // Używamy blokady, aby zapobiec wielokrotnym wywołaniom
       if (window._isRefreshingMatches) {
@@ -249,7 +266,7 @@ export default function Page() {
       
       window._isRefreshingMatches = true;
       
-      const matches = await fetchMatches(teamId || selectedTeam);
+      const matches = await fetchMatches(targetTeamId);
       
       // Używamy funkcji aktualizującej, aby uniknąć uzależnienia od bieżącej wartości
       if (matches) {
@@ -259,7 +276,7 @@ export default function Page() {
         }, 50);
       }
     } catch (error) {
-      console.error("Błąd podczas odświeżania listy meczów:", error);
+      console.error("❌ PAGE.TSX refreshMatchesList błąd:", error);
     } finally {
       // Resetujemy blokadę po zakończeniu
       setTimeout(() => {
@@ -1225,6 +1242,10 @@ export default function Page() {
             setActionType={setActionType}
             currentPoints={currentPoints}
             setCurrentPoints={setCurrentPoints}
+            isP1Active={isP1Active}
+            setIsP1Active={setIsP1Active}
+            isP2Active={isP2Active}
+            setIsP2Active={setIsP2Active}
             isP3Active={isP3Active}
             setIsP3Active={setIsP3Active}
             isShot={isShot}
@@ -1352,6 +1373,24 @@ export default function Page() {
               setEditingAction({
                 ...editingAction,
                 packingPoints: (editingAction.packingPoints || 0) + points
+              });
+            }
+          }}
+          isP1Active={editingAction?.isP1 || false}
+          onP1Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP1: !editingAction.isP1
+              });
+            }
+          }}
+          isP2Active={editingAction?.isP2 || false}
+          onP2Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP2: !editingAction.isP2
               });
             }
           }}

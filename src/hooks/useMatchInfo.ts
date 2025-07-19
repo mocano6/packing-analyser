@@ -407,6 +407,10 @@ export function useMatchInfo() {
       let filteredMatches = cachedMatches;
       if (teamId) {
         filteredMatches = cachedMatches.filter(match => match.team === teamId);
+        
+        if (cachedMatches.length > 0 && filteredMatches.length === 0) {
+          console.warn(`⚠️ HOOK fetchMatches: cache ma mecze ale żaden nie pasuje do teamId="${teamId}"`);
+        }
       }
       
       // 3. Aktualizujemy stan z cache'u
@@ -498,7 +502,6 @@ export function useMatchInfo() {
 
               
               if (teamMatches.length !== filteredMatches.length) {
-                console.log('📊 Wykryto różnicę między cache a Firebase, aktualizuję stan');
                 setAllMatches(teamMatches);
                 
                 // Aktualizacja wybranego meczu
@@ -510,9 +513,7 @@ export function useMatchInfo() {
                 }
               }
             } else {
-              console.log(`🔄 Odświeżono dane z Firebase: ${firebaseMatches.length} meczów łącznie`);
               if (firebaseMatches.length !== filteredMatches.length) {
-                console.log('📊 Wykryto różnicę między cache a Firebase, aktualizuję stan');
                 setAllMatches(firebaseMatches);
               }
             }
@@ -579,6 +580,7 @@ export function useMatchInfo() {
         }
       }
       
+      console.log(`🔙 HOOK fetchMatches: SUCCESS - zwracam ${filteredMatches.length} meczów`);
       return filteredMatches;
     } catch (err) {
       console.error("❌ Błąd krytyczny w fetchMatches:", err);
@@ -610,7 +612,8 @@ export function useMatchInfo() {
       }
       
       // Zawsze zwracamy dane z cache w przypadku błędu
-      return localCacheRef.current.data.filter(match => !teamId || match.team === teamId);
+      const errorResult = localCacheRef.current.data.filter(match => !teamId || match.team === teamId);
+      return errorResult;
     } finally {
       setIsLoading(false);
     }
@@ -619,7 +622,6 @@ export function useMatchInfo() {
   // Funkcja do pełnego odświeżenia danych z Firebase (ignoruje cache)
   const forceRefreshFromFirebase = async (teamId?: string) => {
     try {
-      console.log("🔄 Wymuszam pełne odświeżenie danych z Firebase");
       setIsLoading(true);
       
       // Sprawdzamy, czy jesteśmy w trybie offline przed próbą odświeżenia
@@ -631,19 +633,16 @@ export function useMatchInfo() {
       
       // Wyczyść cache dla danego zespołu
       if (teamId) {
-        console.log(`🗑️ Czyszczę cache dla zespołu: ${teamId}`);
         // Usuwamy z cache tylko dane dla danego zespołu
         const otherTeamsData = localCacheRef.current.data.filter(m => m.team !== teamId);
         updateLocalCache(otherTeamsData);
       } else {
-        console.log("🗑️ Czyszczę cały cache");
         // Czyszczenie całego cache
         updateLocalCache([]);
       }
       
       // Pobierz świeże dane bezpośrednio z Firebase
       const freshData = await fetchFromFirebase(teamId);
-      console.log(`✅ Pobrano świeże dane z Firebase: ${freshData.length} elementów`);
       
       // Uaktualnij stan aplikacji
       const filteredData = teamId 

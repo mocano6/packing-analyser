@@ -98,7 +98,7 @@ export default function ZawodnicyPage() {
     }
   }, [teamMatches]);
 
-    // Pobierz akcje ze wszystkich meczów zespołu
+  // Pobierz akcje ze wszystkich meczów zespołu
   useEffect(() => {
     const loadAllActionsForTeam = async () => {
       if (teamMatches.length === 0) {
@@ -121,7 +121,7 @@ export default function ZawodnicyPage() {
         // Pobierz akcje ze wszystkich meczów dla wybranego zespołu
         for (const match of teamMatches) {
           if (!match.matchId) continue;
-
+          
           try {
             // Pobierz dokument meczu
             const matchDoc = await getDoc(doc(db, "matches", match.matchId));
@@ -153,8 +153,8 @@ export default function ZawodnicyPage() {
                       ...actionData,
                       id: actionDoc.id,
                       matchId: match.matchId
-                    });
-                  }
+              });
+            }
                 });
               }
             }
@@ -535,23 +535,23 @@ export default function ZawodnicyPage() {
         {isTeamsLoading ? (
           <p>Ładowanie zespołów...</p>
         ) : (
-          <select
-            id="team-select"
-            value={selectedTeam}
-            onChange={(e) => setSelectedTeam(e.target.value)}
-            className={styles.teamSelect}
+        <select
+          id="team-select"
+          value={selectedTeam}
+          onChange={(e) => setSelectedTeam(e.target.value)}
+          className={styles.teamSelect}
             disabled={availableTeams.length === 0}
-          >
+        >
             {availableTeams.length === 0 ? (
               <option value="">Brak dostępnych zespołów</option>
             ) : (
               Object.values(teamsObject).map(team => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
+            <option key={team.id} value={team.id}>
+              {team.name}
+            </option>
               ))
             )}
-          </select>
+        </select>
         )}
       </div>
 

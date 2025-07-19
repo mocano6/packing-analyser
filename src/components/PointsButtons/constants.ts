@@ -17,8 +17,20 @@ export const ACTION_BUTTONS: ActionButton[] = [
   },
   {
     points: 0,
-    label: "Podanie do P3",
-    description: "Aktywuj/Dezaktywuj",
+    label: "P1",
+    description: "Aktywuj/Dezaktywuj P1",
+    type: "toggle",
+  },
+  {
+    points: 0,
+    label: "P2", 
+    description: "Aktywuj/Dezaktywuj P2",
+    type: "toggle",
+  },
+  {
+    points: 0,
+    label: "P3",
+    description: "Aktywuj/Dezaktywuj P3",
     type: "toggle",
   },
 ];

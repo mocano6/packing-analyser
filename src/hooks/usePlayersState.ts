@@ -33,6 +33,78 @@ export function usePlayersState() {
   
   const playersRef = useRef<Player[]>([]);
 
+  // Funkcja migracji zawodników z teams/members do players
+  const migratePlayersFromTeamsToPlayers = async (): Promise<boolean> => {
+    try {
+      console.log('🔄 Rozpoczynam migrację zawodników z teams/members do players...');
+      
+      const playersFromNewStructure = await fetchPlayersFromNewStructure();
+      const playersFromOldStructure = await fetchPlayersFromOldStructure();
+      
+      if (playersFromNewStructure.length === 0) {
+        console.log('✅ Brak zawodników do migracji w teams/members');
+        return true;
+      }
+      
+      console.log(`📊 Migruję ${playersFromNewStructure.length} zawodników...`);
+      
+              for (const player of playersFromNewStructure) {
+          try {
+            // Sprawdź czy zawodnik już istnieje w players
+            const existingPlayer = playersFromOldStructure.find(p => p.id === player.id);
+            
+            if (existingPlayer) {
+              // Sprawdź czy istniejący zawodnik ma prawidłowe pole teams
+              const hasValidTeams = Array.isArray(existingPlayer.teams) && existingPlayer.teams.length > 0;
+              
+              if (hasValidTeams) {
+                console.log(`✅ Zawodnik ${player.name} już istnieje w players z prawidłowymi teams - pomijam`);
+                continue;
+              } else {
+                console.log(`🔄 Zawodnik ${player.name} istnieje w players ale ma błędne teams (${JSON.stringify(existingPlayer.teams)}) - aktualizuję`);
+                // Kontynuuj do aktualizacji
+              }
+            } else {
+              console.log(`➕ Dodaję nowego zawodnika ${player.name} do players`);
+            }
+          
+          // Dodaj do kolekcji players
+          const playerData = {
+            firstName: player.firstName || '',
+            lastName: player.lastName || '',
+            name: player.name || `${player.firstName || ''} ${player.lastName || ''}`.trim(),
+            birthYear: player.birthYear,
+            imageUrl: player.imageUrl,
+            position: player.position || 'CB',
+            number: player.number || 0,
+            teams: player.teams || [],
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          
+                      // Zapisz z tym samym ID (używaj setDoc żeby nadpisać istniejące dane)
+            await setDoc(doc(getDB(), "players", player.id), playerData);
+            
+            if (existingPlayer) {
+              console.log(`✅ Zaktualizowano: ${player.name} - dodano teams: ${JSON.stringify(player.teams)}`);
+            } else {
+              console.log(`✅ Zmigrowano nowego: ${player.name}`);
+            }
+          
+        } catch (error) {
+          console.error(`❌ Błąd migracji zawodnika ${player.name}:`, error);
+        }
+      }
+      
+      console.log('✅ Migracja zakończona!');
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Błąd podczas migracji:', error);
+      return false;
+    }
+  };
+
   // Pobierz zawodników z nowej struktury teams/{teamId}/members/
   const fetchPlayersFromNewStructure = async (): Promise<Player[]> => {
     try {
@@ -75,9 +147,17 @@ export function usePlayersState() {
                   
                   const playerData = playerDoc.data();
                   
-                  // Sprawdź czy playerData ma wymagane pola
-                  if (!playerData || !playerData.firstName || !playerData.position) {
-                    console.warn(`Nieprawidłowe dane zawodnika ${membership.playerId}:`, playerData);
+                  // Sprawdź czy playerData ma wymagane pola (bardziej elastyczna walidacja)
+                  if (!playerData) {
+                    console.warn(`Brak danych dla zawodnika ${membership.playerId}`);
+                    return;
+                  }
+                  
+
+                  
+                  // Mniej restrykcyjna walidacja - nie wymagaj position
+                  if (!playerData.firstName && !playerData.name) {
+                    console.warn(`Zawodnik ${membership.playerId} nie ma firstName ani name - pomijam`, playerData);
                     return;
                   }
                   
@@ -90,12 +170,13 @@ export function usePlayersState() {
                     name: playerData.name || `${playerData.firstName || ''} ${playerData.lastName || ''}`.trim(),
                     birthYear: playerData.birthYear,
                     imageUrl: playerData.imageUrl,
-                    position: playerData.position || 'CB',
-                    number: membership.number,
+                    position: playerData.position || 'CB', // Domyślna pozycja jeśli brak
+                    number: membership.number || 0, // Domyślny numer
                     teams: existingPlayer 
                       ? [...(existingPlayer.teams || []), teamId]
                       : [teamId]
                   };
+
                   
                   allPlayers.set(membership.playerId, player);
                   
@@ -126,6 +207,8 @@ export function usePlayersState() {
       
       const playersSnapshot = await getDocs(collection(getDB(), "players"));
       
+
+      
               if (playersSnapshot.empty) {
           return [];
         }
@@ -138,6 +221,8 @@ export function usePlayersState() {
            ...dataWithoutId
          };
 
+
+
          // Napraw format teams - upewnij się że teams to zawsze tablica
          if (typeof player.teams === 'string') {
            player.teams = [player.teams];
@@ -147,6 +232,7 @@ export function usePlayersState() {
          
          return player;
        }) as Player[];
+
 
       
       return playersList;
@@ -168,13 +254,56 @@ export function usePlayersState() {
         return;
       }
 
-      // 1. Najpierw spróbuj nową strukturę
-      let playersList = await fetchPlayersFromNewStructure();
+      // Sprawdź ile zawodników jest w każdej strukturze
+      const playersFromOldStructure = await fetchPlayersFromOldStructure();
+      const playersFromNewStructure = await fetchPlayersFromNewStructure();
       
-      // 2. Jeśli nowa struktura jest pusta, użyj starej
-      if (playersList.length === 0) {
-        playersList = await fetchPlayersFromOldStructure();
+      // Użyj starej struktury, ale pokaż informacje o nowej
+      let playersList = playersFromOldStructure;
+      
+      if (playersFromNewStructure.length > 0 && playersFromOldStructure.length === 0) {
+        console.warn('⚠️ UWAGA: Znaleziono zawodników tylko w nowej strukturze teams/members!');
+        
+        // Automatyczna migracja
+        const migrationSuccess = await migratePlayersFromTeamsToPlayers();
+        
+        if (migrationSuccess) {
+          // Po migracji pobierz ponownie ze starej struktury
+          const playersAfterMigration = await fetchPlayersFromOldStructure();
+          playersList = playersAfterMigration;
+        } else {
+          // Jeśli migracja się nie udała, użyj tymczasowo nowej struktury
+          console.error('❌ Migracja się nie udała, używam tymczasowo nowej struktury');
+          playersList = playersFromNewStructure;
+        }
+      } else if (playersFromNewStructure.length > 0 && playersFromOldStructure.length > 0) {
+        console.warn('⚠️ UWAGA: Zawodnicy są w OBIE strukturach!');
+        
+        // Automatyczna migracja pozostałych zawodników z teams/members
+        const migrationSuccess = await migratePlayersFromTeamsToPlayers();
+        
+        if (migrationSuccess) {
+          // Po migracji pobierz ponownie ze starej struktury (teraz powinni być wszyscy)
+          const playersAfterMigration = await fetchPlayersFromOldStructure();
+          playersList = playersAfterMigration;
+        } else {
+          // Jeśli migracja się nie udała, scal ręcznie (bez duplikatów)
+          console.error('❌ Migracja się nie udała, scalanie ręcznie');
+          const combinedPlayers = [...playersFromOldStructure];
+          
+          // Dodaj zawodników z nowej struktury którzy nie istnieją w starej
+          playersFromNewStructure.forEach(newPlayer => {
+            const existsInOld = playersFromOldStructure.some(oldPlayer => oldPlayer.id === newPlayer.id);
+            if (!existsInOld) {
+              combinedPlayers.push(newPlayer);
+            }
+          });
+          
+          playersList = combinedPlayers;
+        }
       }
+      
+
       
       setPlayers(playersList);
       playersRef.current = playersList;
@@ -215,37 +344,10 @@ export function usePlayersState() {
         throw new Error("Firebase nie jest zainicjalizowane");
       }
       
-      // 1. Usuń z nowej struktury teams/{teamId}/members/
-      try {
-        const teamsSnapshot = await getDocs(collection(getDB(), "teams"));
-        
-        await Promise.all(
-          teamsSnapshot.docs.map(async (teamDoc) => {
-            const teamId = teamDoc.id;
-            try {
-              const memberDoc = doc(getDB(), "teams", teamId, "members", playerId);
-              const memberSnapshot = await getDoc(memberDoc);
-              
-              if (memberSnapshot.exists()) {
-                await deleteDoc(memberDoc);
-              }
-            } catch (error) {
-              console.error(`Błąd usuwania z zespołu ${teamId}:`, error);
-            }
-          })
-        );
-      } catch (error) {
-        // nowa struktura prawdopodobnie nie istnieje
-      }
-      
-      // 2. Usuń ze starej struktury players
-      try {
+      // Usuń tylko ze starej struktury players (z polem teams)
         await deleteDoc(doc(getDB(), "players", playerId));
-      } catch (error) {
-        console.error('❌ Błąd usuwania ze starej struktury:', error);
-      }
       
-      // 3. Aktualizuj lokalny stan
+              // Aktualizuj lokalny stan
       setPlayers((prev) => prev.filter((p) => p.id !== playerId));
       return true;
       
@@ -292,12 +394,11 @@ export function usePlayersState() {
         const isEditing = editingPlayerId !== null && editingPlayerId !== undefined;
         const now = new Date();
         
-        // Sprawdź czy istnieje nowa struktura (czy są jakieś zespoły)
-        const teamsSnapshot = await getDocs(collection(getDB(), "teams"));
-        const hasNewStructure = !teamsSnapshot.empty;
+        // ZAWSZE używaj starej struktury (players z polem teams)
+        const hasNewStructure = false; // Wymuś użycie starej struktury
         
         if (hasNewStructure) {
-          // Zapisuj do nowej struktury
+          // Ten kod nie będzie wykonywany - pozostawiam dla dokumentacji
           
           if (isEditing) {
             // EDYCJA w nowej strukturze
@@ -521,6 +622,7 @@ export function usePlayersState() {
     handleSavePlayer,
     handleEditPlayer,
     closeModal,
-    refetchPlayers
+    refetchPlayers,
+    migratePlayersFromTeamsToPlayers // Eksport funkcji migracji dla ręcznego użycia
   };
 } 

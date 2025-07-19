@@ -97,15 +97,15 @@ export default function StatystykiZespoluPage() {
          }
 
          const matchDoc = await getDoc(doc(db, "matches", selectedMatch));
-         
-         if (matchDoc.exists()) {
-           const matchData = matchDoc.data() as TeamInfo;
+        
+        if (matchDoc.exists()) {
+          const matchData = matchDoc.data() as TeamInfo;
            const actions = matchData.actions_packing || [];
            setAllActions(actions);
-         } else {
-           setAllActions([]);
-         }
-       } catch (error) {
+        } else {
+          setAllActions([]);
+        }
+      } catch (error) {
         console.error("Błąd podczas pobierania akcji:", error);
         setAllActions([]);
       } finally {
@@ -126,7 +126,7 @@ export default function StatystykiZespoluPage() {
     allActions.forEach(action => {
       const minute = Math.floor(action.minute);
       actionsPerMinute[minute] = (actionsPerMinute[minute] || 0) + 1;
-    });
+      });
 
     // Konwertuj na format dla wykresu
     return Object.entries(actionsPerMinute)
@@ -238,23 +238,23 @@ export default function StatystykiZespoluPage() {
         {isTeamsLoading ? (
           <p>Ładowanie zespołów...</p>
         ) : (
-          <select
-            id="team-select"
-            value={selectedTeam}
-            onChange={(e) => setSelectedTeam(e.target.value)}
-            className={styles.teamSelect}
+        <select
+          id="team-select"
+          value={selectedTeam}
+          onChange={(e) => setSelectedTeam(e.target.value)}
+          className={styles.teamSelect}
             disabled={availableTeams.length === 0}
-          >
+        >
             {availableTeams.length === 0 ? (
               <option value="">Brak dostępnych zespołów</option>
             ) : (
               Object.values(teamsObject).map(team => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
+            <option key={team.id} value={team.id}>
+              {team.name}
+            </option>
               ))
             )}
-          </select>
+        </select>
         )}
       </div>
 

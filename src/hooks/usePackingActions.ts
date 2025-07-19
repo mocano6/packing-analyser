@@ -52,6 +52,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
   const [actionMinute, setActionMinute] = useState<number>(1);
   const [actionType, setActionType] = useState<"pass" | "dribble">("pass");
   const [currentPoints, setCurrentPoints] = useState<number>(0);
+  const [isP1Active, setIsP1Active] = useState<boolean>(false);
+  const [isP2Active, setIsP2Active] = useState<boolean>(false);
   const [isP3Active, setIsP3Active] = useState<boolean>(false);
   const [isShot, setIsShot] = useState<boolean>(false);
   const [isGoal, setIsGoal] = useState<boolean>(false);
@@ -94,6 +96,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         const matchData = matchDoc.data() as TeamInfo;
         // Sprawdź czy istnieje tablica akcji
         const loadedActions = matchData.actions_packing || [];
+        
+
         
         // Uzupełniamy brakujące dane zawodników w akcjach
         const enrichedActions = loadedActions.map(action => {
@@ -230,7 +234,9 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         // Przypisujemy wartości xT tylko jeśli są zdefiniowane
         ...(xTStart !== undefined && { xTValueStart: xTStart }),
         ...(xTEnd !== undefined && { xTValueEnd: xTEnd }),
-        isP3: isP3Active,
+        isP1: isP1Active,
+      isP2: isP2Active,
+      isP3: isP3Active,
         isShot: isShot,
         isGoal: isGoal,
         isPenaltyAreaEntry: isPenaltyAreaEntry,
@@ -311,7 +317,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
       
       return false;
     }
-  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP3Active, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf]);
+  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP1Active, isP2Active, isP3Active, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf]);
 
   // Usuwanie akcji
   const handleDeleteAction = useCallback(async (actionId: string) => {
@@ -433,6 +439,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
   const resetActionState = useCallback(() => {
     setSelectedZone(null);
     setCurrentPoints(0);
+    setIsP1Active(false);
+    setIsP2Active(false);
     setIsP3Active(false);
     setIsShot(false);
     setIsGoal(false);
@@ -446,6 +454,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
   // Reset tylko punktów i przełączników (zachowuje zawodników, minutę, połowę)
   const resetActionPoints = useCallback(() => {
     setCurrentPoints(0);
+    setIsP1Active(false);
+    setIsP2Active(false);
     setIsP3Active(false);
     setIsShot(false);
     setIsGoal(false);
@@ -484,6 +494,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     currentPoints,
     actionMinute,
     actionType,
+    isP1Active,
+    isP2Active,
     isP3Active,
     isShot,
     isGoal,
@@ -497,6 +509,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     setCurrentPoints,
     setActionMinute,
     setActionType,
+    setIsP1Active,
+    setIsP2Active,
     setIsP3Active,
     setIsShot,
     setIsGoal,

@@ -58,6 +58,8 @@ const ActionRow = ({
 }) => {
   const getEvents = () => {
     const events = [];
+    if (action.isP1) events.push("P1");
+    if (action.isP2) events.push("P2");
     if (action.isP3) events.push("P3");
     if (action.isPenaltyAreaEntry) events.push("PK");
     if (action.isShot) {
