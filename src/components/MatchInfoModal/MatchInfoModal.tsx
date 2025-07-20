@@ -14,10 +14,11 @@ interface MatchInfoModalProps {
   onSave: (matchInfo: TeamInfo) => void;
   currentInfo: TeamInfo | null;
   availableTeams?: Team[];
+  selectedTeam?: string; // Dodany prop
 }
 
-const getDefaultMatchInfo = (availableTeams?: Team[]): TeamInfo => ({
-  team: availableTeams && availableTeams.length > 0 ? availableTeams[0].id : TEAMS.REZERWY.id,
+const getDefaultMatchInfo = (availableTeams?: Team[], selectedTeam?: string): TeamInfo => ({
+  team: selectedTeam || (availableTeams && availableTeams.length > 0 ? availableTeams[0].id : TEAMS.REZERWY.id),
   opponent: "",
   competition: "",
   date: new Date().toISOString().split("T")[0],
@@ -30,15 +31,16 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   onSave,
   currentInfo,
   availableTeams,
+  selectedTeam,
 }) => {
   const [formData, setFormData] = useState<TeamInfo>(
-    currentInfo || getDefaultMatchInfo(availableTeams)
+    currentInfo || getDefaultMatchInfo(availableTeams, selectedTeam)
   );
 
   // Reset formularza przy otwarciu modalu
   useEffect(() => {
-    setFormData(currentInfo || getDefaultMatchInfo(availableTeams));
-  }, [currentInfo, isOpen, availableTeams]);
+    setFormData(currentInfo || getDefaultMatchInfo(availableTeams, selectedTeam));
+  }, [currentInfo, isOpen, availableTeams, selectedTeam]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>

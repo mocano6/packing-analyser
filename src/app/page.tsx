@@ -30,6 +30,8 @@ import Link from "next/link";
 import ActionModal from "@/components/ActionModal/ActionModal";
 import { sortPlayersByLastName, getPlayerFullName } from "@/utils/playerUtils";
 import SidePanel from "@/components/SidePanel/SidePanel";
+import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
+import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 
 
 // Rozszerzenie interfejsu Window
@@ -84,7 +86,7 @@ export default function Page() {
   const [isActionEditModalOpen, setIsActionEditModalOpen] = React.useState(false);
   const [editingAction, setEditingAction] = React.useState<Action | null>(null);
   const [allTeams, setAllTeams] = React.useState<Team[]>([]);
-
+  const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
 
 
   // Custom hooks
@@ -214,6 +216,13 @@ export default function Page() {
       }
     }
   }, [availableTeams, selectedTeam]);
+
+  // Inicjalizuj selectedSeason na aktualny sezon
+  useEffect(() => {
+    if (selectedSeason === null) {
+      setSelectedSeason("all"); // Domyślnie pokazuj wszystkie sezony
+    }
+  }, [selectedSeason]);
 
   // Gdy hookSelectedZone się zmienia, aktualizujemy lokalny selectedZone
   useEffect(() => {
@@ -1216,6 +1225,8 @@ export default function Page() {
         availableTeams={availableTeams}
         isAdmin={isAdmin}
         allAvailableTeams={allTeams}
+        selectedSeason={selectedSeason || undefined}
+        onChangeSeason={setSelectedSeason}
       />
 
       <main className={styles.content}>
@@ -1299,6 +1310,7 @@ export default function Page() {
           onSave={handleSaveNewMatch}
           currentInfo={null}
           availableTeams={availableTeams}
+          selectedTeam={selectedTeam}
         />
 
         {/* Modal dla edycji meczu */}

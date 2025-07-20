@@ -37,6 +37,7 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
     birthYear: undefined,
     imageUrl: "",
     teams: [currentTeam],
+    isTestPlayer: false,
   });
 
   const [errors, setErrors] = useState<{
@@ -148,6 +149,7 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
           birthYear: editingPlayer.birthYear,
           imageUrl: editingPlayer.imageUrl || "",
           teams: Array.isArray(editingPlayer.teams) ? editingPlayer.teams : (editingPlayer.teams ? [editingPlayer.teams] : [currentTeam]),
+          isTestPlayer: editingPlayer.isTestPlayer,
         };
         
 
@@ -162,6 +164,7 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
           birthYear: undefined,
           imageUrl: "",
           teams: [currentTeam],
+          isTestPlayer: false,
         });
       }
       setErrors({});
@@ -171,10 +174,13 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
     let processedValue: any = value;
 
-    if (name === "number") {
+    if (type === "checkbox") {
+      const target = e.target as HTMLInputElement;
+      processedValue = target.checked;
+    } else if (name === "number") {
       processedValue = parseInt(value) || 1;
     } else if (name === "birthYear") {
       processedValue = value ? parseInt(value) : undefined;
@@ -369,6 +375,19 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
               onChange={handleChange}
               className={styles.formInput}
             />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>
+              <input
+                type="checkbox"
+                name="isTestPlayer"
+                checked={formData.isTestPlayer || false}
+                onChange={handleChange}
+                className={styles.checkbox}
+              />
+              Zawodnik testowany
+            </label>
           </div>
 
           <div className={styles.formTeams}>

@@ -10,8 +10,18 @@
   margin-bottom: 16px;
 }
 
+.selectorsGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .teamSelector {
-  margin-right: 15px;
+  /* margin usunięty - używamy gap w selectorsGroup */
+}
+
+.seasonSelector {
+  /* margin usunięty - używamy gap w selectorsGroup */
 }
 
 .teamDropdown {
@@ -30,7 +40,28 @@
   padding-right: 30px;
 }
 
+.seasonDropdown {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+  font-size: 14px;
+  min-width: 150px;
+  background-color: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232196f3'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+  padding-right: 30px;
+}
+
 .teamDropdown:focus {
+  outline: none;
+  border-color: #2196f3;
+}
+
+.seasonDropdown:focus {
   outline: none;
   border-color: #2196f3;
 }

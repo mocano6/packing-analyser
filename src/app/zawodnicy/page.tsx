@@ -12,6 +12,8 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, getDocs, updateDoc, deleteDoc } from "firebase/firestore";
 import { sortPlayersByLastName, getPlayerFullName } from "@/utils/playerUtils";
 import Link from "next/link";
+import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
+import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import styles from "./zawodnicy.module.css";
 
 export default function ZawodnicyPage() {
@@ -73,6 +75,16 @@ export default function ZawodnicyPage() {
     }
   }, [availableTeams, selectedTeam]);
 
+  // Stan dla wybranego sezonu
+  const [selectedSeason, setSelectedSeason] = useState<string>("");
+
+  // Inicjalizuj selectedSeason na aktualny sezon
+  useEffect(() => {
+    if (!selectedSeason) {
+      setSelectedSeason("all"); // Domyślnie pokazuj wszystkie sezony
+    }
+  }, [selectedSeason]);
+
   // Pobierz mecze dla wybranego zespołu - tylko przy zmianie zespołu
   useEffect(() => {
     if (selectedTeam) {
@@ -83,9 +95,16 @@ export default function ZawodnicyPage() {
     }
   }, [selectedTeam]); // Tylko selectedTeam w dependency - bez funkcji żeby uniknąć infinite loop
 
-  // Filtruj mecze według wybranego zespołu
+  // Filtruj mecze według wybranego zespołu i sezonu
   const teamMatches = useMemo(() => {
-    return allMatches.filter(match => match.team === selectedTeam);
+    const teamFiltered = allMatches.filter(match => match.team === selectedTeam);
+    return selectedSeason ? filterMatchesBySeason(teamFiltered, selectedSeason) : teamFiltered;
+  }, [allMatches, selectedTeam, selectedSeason]);
+
+  // Oblicz dostępne sezony na podstawie meczów wybranego zespołu
+  const availableSeasons = useMemo(() => {
+    const teamFiltered = allMatches.filter(match => match.team === selectedTeam);
+    return getAvailableSeasonsFromMatches(teamFiltered);
   }, [allMatches, selectedTeam]);
 
   // Zaznacz wszystkie mecze domyślnie przy zmianie zespołu
@@ -527,32 +546,44 @@ export default function ZawodnicyPage() {
         <h1>Statystyki zawodników</h1>
       </div>
 
-      {/* Sekcja wyboru zespołu */}
-      <div className={styles.teamSelector}>
-        <label htmlFor="team-select" className={styles.label}>
-          Wybierz zespół:
-        </label>
-        {isTeamsLoading ? (
-          <p>Ładowanie zespołów...</p>
-        ) : (
-        <select
-          id="team-select"
-          value={selectedTeam}
-          onChange={(e) => setSelectedTeam(e.target.value)}
-          className={styles.teamSelect}
-            disabled={availableTeams.length === 0}
-        >
-            {availableTeams.length === 0 ? (
-              <option value="">Brak dostępnych zespołów</option>
-            ) : (
-              Object.values(teamsObject).map(team => (
-            <option key={team.id} value={team.id}>
-              {team.name}
-            </option>
-              ))
-            )}
-        </select>
-        )}
+      {/* Sekcja wyboru zespołu i sezonu */}
+      <div className={styles.selectorsContainer}>
+        <div className={styles.teamSelector}>
+          <label htmlFor="team-select" className={styles.label}>
+            Wybierz zespół:
+          </label>
+          {isTeamsLoading ? (
+            <p>Ładowanie zespołów...</p>
+          ) : (
+          <select
+            id="team-select"
+            value={selectedTeam}
+            onChange={(e) => setSelectedTeam(e.target.value)}
+            className={styles.teamSelect}
+              disabled={availableTeams.length === 0}
+          >
+              {availableTeams.length === 0 ? (
+                <option value="">Brak dostępnych zespołów</option>
+              ) : (
+                Object.values(teamsObject).map(team => (
+              <option key={team.id} value={team.id}>
+                {team.name}
+              </option>
+                ))
+              )}
+          </select>
+          )}
+        </div>
+
+        <div className={styles.seasonSelector}>
+          <SeasonSelector
+            selectedSeason={selectedSeason}
+            onChange={setSelectedSeason}
+            showLabel={true}
+            availableSeasons={availableSeasons}
+            className={styles.teamSelect}
+          />
+        </div>
       </div>
 
       {/* Sekcja wyboru meczów - tabela */}

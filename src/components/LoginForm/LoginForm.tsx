@@ -121,7 +121,7 @@ export default function LoginForm() {
             )}
           </button>
 
-          <button
+          {/* <button
             type="button"
             className={styles.toggleButton}
             onClick={() => setIsRegistering(!isRegistering)}
@@ -131,7 +131,7 @@ export default function LoginForm() {
               ? 'Masz już konto? Zaloguj się' 
               : 'Nie masz konta? Zarejestruj się'
             }
-          </button>
+          </button> */}
         </form>
       </div>
     </div>

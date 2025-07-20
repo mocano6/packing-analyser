@@ -120,6 +120,10 @@ const PlayerTile = memo(function PlayerTile({
         </>
       )}
 
+      {player.isTestPlayer && (
+        <div className={styles.testPlayerBadge}>T</div>
+      )}
+
       <div className={styles.playerContent}>
         <div className={styles.number}>{player.number}</div>
 

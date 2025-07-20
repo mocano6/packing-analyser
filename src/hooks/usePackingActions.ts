@@ -301,7 +301,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         const errorHandled = await handleFirestoreError(firebaseError, getDB());
         
           if (!errorHandled) {
-            console.warn("Akcja została dodana tylko lokalnie - synchronizacja z Firebase nieudana");
+            // Akcja została dodana tylko lokalnie - synchronizacja z Firebase nieudana
         }
       }
       

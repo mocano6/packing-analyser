@@ -5,6 +5,8 @@ import React, { useState, KeyboardEvent, useEffect } from "react";
 import { TeamInfo, Player } from "@/types";
 import { TEAMS } from "@/constants/teams";
 import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
+import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
+import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import styles from "./MatchInfoHeader.module.css";
 
 // Nowy komponent do wyświetlania informacji o bieżącym meczu
@@ -133,6 +135,8 @@ interface MatchInfoHeaderProps {
   availableTeams?: any[]; // Zespoły dostępne dla użytkownika
   isAdmin?: boolean; // Czy użytkownik jest administratorem
   allAvailableTeams?: { id: string; name: string }[]; // Dodajemy allAvailableTeams do props
+  selectedSeason?: string; // Dodajemy selectedSeason do props
+  onChangeSeason?: (season: string) => void; // Dodajemy callback do zmiany sezonu
 }
 
 const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
@@ -147,16 +151,18 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   onAddNewMatch,
   refreshCounter = 0,
   isOfflineMode = false,
-  players = [], // Domyślna wartość to pusta tablica
-  availableTeams = Object.values(TEAMS), // Domyślnie wszystkie zespoły
+  players = [],
+  availableTeams = [],
   isAdmin = false,
   allAvailableTeams = [], // Domyślna wartość to pusta tablica
+  selectedSeason,
+  onChangeSeason,
 }) => {
   const [sortKey, setSortKey] = useState<keyof TeamInfo>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isMatchesTableExpanded, setIsMatchesTableExpanded] = useState(false);
-  
+  const [deletingMatchIds, setDeletingMatchIds] = useState<Set<string>>(new Set());
+
   // Automatycznie aktywuj tryb deweloperski (obejście uwierzytelniania)
   React.useEffect(() => {
     localStorage.setItem('packing_app_bypass_auth', 'true');
@@ -166,12 +172,14 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   const getTeamName = (teamId: string) => {
     
     // Najpierw sprawdź w zespołach z Firebase
-    const team = allAvailableTeams.find(team => team.id === teamId);
-    if (team) {
-      return team.name;
+    if (allAvailableTeams && allAvailableTeams.length > 0) {
+      const firebaseTeam = allAvailableTeams.find(team => team.id === teamId);
+      if (firebaseTeam) {
+        return firebaseTeam.name;
+      }
     }
     
-    // Fallback do domyślnych zespołów
+    // Następnie sprawdź w domyślnych zespołach
     const defaultTeam = Object.values(TEAMS).find(team => team.id === teamId);
     if (defaultTeam) {
       return defaultTeam.name;
@@ -180,11 +188,15 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
     return teamId;
   };
 
-  // Filtrowanie meczów wybranego zespołu - używamy useMemo dla optymalizacji
+  // Filtrowanie meczów wybranego zespołu i sezonu - używamy useMemo dla optymalizacji
   const teamMatches = React.useMemo(() => {
-    const filtered = allMatches.filter(match => match.team === selectedTeam);
+    // Najpierw filtruj według zespołu
+    const teamFiltered = allMatches.filter(match => match.team === selectedTeam);
     
-    return filtered.sort((a, b) => {
+    // Następnie filtruj według sezonu (jeśli sezon jest wybrany)
+    const seasonFiltered = selectedSeason ? filterMatchesBySeason(teamFiltered, selectedSeason) : teamFiltered;
+    
+    return seasonFiltered.sort((a, b) => {
       const aValue = a[sortKey];
       const bValue = b[sortKey];
       
@@ -194,7 +206,13 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
       }
       return 0;
     });
-  }, [allMatches, selectedTeam, sortKey, sortDirection, refreshCounter]);
+  }, [allMatches, selectedTeam, selectedSeason, sortKey, sortDirection, refreshCounter]);
+
+  // Oblicz dostępne sezony na podstawie meczów wybranego zespołu
+  const availableSeasons = React.useMemo(() => {
+    const teamFiltered = allMatches.filter(match => match.team === selectedTeam);
+    return getAvailableSeasonsFromMatches(teamFiltered);
+  }, [allMatches, selectedTeam]);
     
   // Oblicz mecze do wyświetlenia na podstawie stanu collapse/expand
   const { displayedMatches, hasMoreMatches, needsScroll } = React.useMemo(() => {
@@ -260,14 +278,28 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
       <CurrentMatchInfo matchInfo={matchInfo} players={players} allAvailableTeams={allAvailableTeams} />
       
       <div className={styles.headerControls}>
-        <div className={styles.teamSelector}>
-          <TeamsSelector
-            selectedTeam={selectedTeam}
-            onChange={onChangeTeam}
-            className={styles.teamDropdown}
-            availableTeams={availableTeams}
-            showLabel={true}
-          />
+        <div className={styles.selectorsGroup}>
+          <div className={styles.seasonSelector}>
+            {selectedSeason && onChangeSeason && (
+              <SeasonSelector
+                selectedSeason={selectedSeason}
+                onChange={onChangeSeason}
+                className={styles.seasonDropdown}
+                showLabel={true}
+                availableSeasons={availableSeasons}
+              />
+            )}
+          </div>
+          
+          <div className={styles.teamSelector}>
+            <TeamsSelector
+              selectedTeam={selectedTeam}
+              onChange={onChangeTeam}
+              className={styles.teamDropdown}
+              availableTeams={availableTeams}
+              showLabel={true}
+            />
+          </div>
         </div>
         
         <div className={styles.controlsContainer}>
@@ -325,7 +357,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
             displayedMatches.map((match) => {
               const isSelected = matchInfo?.matchId === match.matchId;
               const isHomeMatch = match.isHome === true;
-              const isBeingDeleted = isDeleting === match.matchId;
+              const isBeingDeleted = deletingMatchIds.has(match.matchId);
               
               return (
                 <div 
@@ -381,7 +413,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                             if (match.matchId && !isBeingDeleted) {
                               if (window.confirm("Czy na pewno chcesz usunąć ten mecz?")) {
                                 // Ustawienie flagi usuwania
-                                setIsDeleting(match.matchId);
+                                setDeletingMatchIds(prev => new Set([...prev, match.matchId]));
                                 // Wywołujemy funkcję usuwania, a funkcja ta zajmie się także odświeżeniem listy
                                 onDeleteMatch(match.matchId);
                               }
@@ -432,7 +464,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                             if (match.matchId && !isBeingDeleted) {
                               if (window.confirm("Czy na pewno chcesz usunąć ten mecz?")) {
                                 // Ustawienie flagi usuwania
-                                setIsDeleting(match.matchId);
+                                setDeletingMatchIds(prev => new Set([...prev, match.matchId]));
                                 // Wywołujemy funkcję usuwania, a funkcja ta zajmie się także odświeżeniem listy
                                 onDeleteMatch(match.matchId);
                               }

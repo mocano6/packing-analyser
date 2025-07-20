@@ -221,18 +221,11 @@ export function useMatchInfo() {
       if (!isOfflineMode && isStale) {
         // Usunięto console.log - cache odświeża się często, więc niepotrzebny
         fetchFromFirebase(cachedData.lastTeamId).catch(err => {
-          console.warn("Nie udało się odświeżyć danych z Firebase:", err);
-          // Używamy danych z cache w razie błędu
+          // Nie udało się odświeżyć danych z Firebase
         });
       }
     } else {
-      // Brak danych w cache'u, próbujemy pobrać z Firebase jeśli online
-      if (!isOfflineMode) {
-        fetchFromFirebase().catch(err => {
-          console.warn("Nie udało się pobrać danych z Firebase:", err);
-          // W trybie offline będziemy używać pustej listy
-        });
-      }
+      // Nie udało się pobrać danych z Firebase
     }
   }, [isOfflineMode]);
 
@@ -481,7 +474,7 @@ export function useMatchInfo() {
           const testResult = await Promise.race([testPermissions(), timeoutPromise])
             .catch(error => {
               if (String(error).includes("Timeout")) {
-                console.warn("⏱️ Przekroczono czas oczekiwania na Firebase, przełączam na tryb offline");
+                // Przekroczono czas oczekiwania na Firebase, przełączam na tryb offline
                 setIsOfflineMode(true);
                 return null;
               }
@@ -522,7 +515,7 @@ export function useMatchInfo() {
             
             // Dodajemy rozszerzoną obsługę błędów
             if (String(error).includes("client is offline") || String(error).includes("Failed to get document because the client is offline")) {
-              console.warn("📴 Wykryto tryb offline. Przełączam aplikację na tryb lokalnego cache.");
+              // Wykryto tryb offline. Przełączam aplikację na tryb lokalnego cache.
               notifyUser("Aplikacja działa w trybie offline z lokalnym cache.", "info");
               setIsOfflineMode(true);
               
@@ -557,7 +550,7 @@ export function useMatchInfo() {
           console.error("🔒 Błąd podczas testowania uprawnień Firebase:", permissionError);
           
           if (String(permissionError).includes("client is offline") || String(permissionError).includes("Failed to get document because the client is offline")) {
-            console.log("📴 Klient jest offline - pomijam synchronizację z Firebase");
+            // Klient jest offline - pomijam synchronizację z Firebase
             notifyUser("Wykryto tryb offline. Działamy z lokalną pamięcią podręczną.", "info");
             setIsOfflineMode(true);
             
@@ -587,7 +580,7 @@ export function useMatchInfo() {
       
       // Sprawdzamy, czy to błąd związany z trybem offline
       if (String(err).includes("client is offline") || String(err).includes("Failed to get document because the client is offline")) {
-        console.log("📴 Klient jest offline - przełączam na tryb offline");
+        // Klient jest offline - przełączam na tryb offline
         notifyUser("Wykryto tryb offline. Działamy z lokalnym cache.", "info");
         setIsOfflineMode(true);
         

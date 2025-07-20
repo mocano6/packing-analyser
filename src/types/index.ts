@@ -13,6 +13,7 @@ export interface Player {
   birthYear?: number;
   imageUrl?: string;
   teams: string[]; // Tablica identyfikatorów zespołów, do których należy zawodnik
+  isTestPlayer?: boolean; // Czy zawodnik jest testowany
   // Akcje są teraz przechowywane tylko w matches/{matchId}.actions_packing[]
   // Minuty zawodników są teraz przechowywane tylko w matches/{matchId}.playerMinutes[]
 }
