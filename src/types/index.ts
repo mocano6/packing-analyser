@@ -59,6 +59,7 @@ export interface Action {
   fromZone: string;
   toZone: string;
   actionType: string;
+  videoTimestamp?: number; // Czas w sekundach z YouTube playera
   // Dodatkowe pola z ActionsPacking
   senderId: string;
   senderName?: string;
@@ -125,9 +126,11 @@ export interface TeamInfo {
   matchId?: string;
   team: string;
   opponent: string;
+  opponentLogo?: string; // URL lub base64 grafiki przeciwnika
   isHome: boolean;
   competition: string;
   date: string;
+  videoUrl?: string; // URL wideo z YouTube dla tego meczu
   playerMinutes?: PlayerMinutes[];
   actions_packing?: Action[]; // Tablica akcji packing związanych z tym meczem
 }

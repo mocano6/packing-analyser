@@ -36,6 +36,11 @@
   background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
 }
 
+.triggerOpen:hover {
+  right: 352px; /* Zachowaj 2px przesunięcie nawet gdy panel jest otwarty */
+  box-shadow: -4px 0 15px rgba(0, 0, 0, 0.2);
+}
+
 .triggerIcon {
   font-size: 18px;
   margin-bottom: 4px;

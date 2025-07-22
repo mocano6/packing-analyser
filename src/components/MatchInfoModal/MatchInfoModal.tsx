@@ -6,6 +6,7 @@ import { TeamInfo } from "@/types";
 import { TEAMS } from "@/constants/teams";
 import { Team } from "@/constants/teamsLoader";
 import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
+import OpponentLogoInput from "@/components/OpponentLogoInput/OpponentLogoInput";
 import styles from "./MatchInfoModal.module.css";
 
 interface MatchInfoModalProps {
@@ -23,6 +24,7 @@ const getDefaultMatchInfo = (availableTeams?: Team[], selectedTeam?: string): Te
   competition: "",
   date: new Date().toISOString().split("T")[0],
   isHome: true,
+  videoUrl: "",
 });
 
 const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
@@ -141,6 +143,15 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
           </div>
 
           <div className={styles.formGroup}>
+            <label>Logo przeciwnika (opcjonalne):</label>
+            <OpponentLogoInput
+              value={formData.opponentLogo}
+              onChange={(logoUrl) => setFormData(prev => ({ ...prev, opponentLogo: logoUrl }))}
+              onRemove={() => setFormData(prev => ({ ...prev, opponentLogo: undefined }))}
+            />
+          </div>
+
+          <div className={styles.formGroup}>
             <label htmlFor="competition">Rozgrywki:</label>
             <input
               id="competition"
@@ -162,6 +173,22 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
               onChange={handleChange}
               required
             />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label htmlFor="videoUrl">URL wideo z YouTube (opcjonalne):</label>
+            <input
+              id="videoUrl"
+              name="videoUrl"
+              type="text"
+              value={formData.videoUrl || ""}
+              onChange={handleChange}
+              placeholder="https://www.youtube.com/watch?v=... lub https://youtu.be/..."
+              className={styles.formInput}
+            />
+            <small className={styles.helpText}>
+              Obsługiwane formaty: youtube.com/watch?v=..., youtu.be/..., youtube.com/embed/...
+            </small>
           </div>
 
           <div className={styles.formGroup}>

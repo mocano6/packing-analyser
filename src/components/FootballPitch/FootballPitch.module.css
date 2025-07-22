@@ -275,3 +275,101 @@
     height: 20px;
   }
 }
+
+/* PUNKT ŚRODKOWY */
+.centerSpot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 10;
+}
+
+/* ŁUK KARNY LEWY */
+.penaltyArcLeft {
+  position: absolute;
+  left: 10.5%;           /* Dostosowane do proporcji 12/8 */
+  top: 50%;
+  width: 20%;            /* Dostosowane do proporcji 12/8 */
+  height: 30%;           /* Dostosowane do proporcji 12/8 */
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 0;
+  clip-path: polygon(45% 10%, 100% 10%, 100% 90%, 45% 90%);
+}
+
+/* ŁUK KARNY PRAWY */
+.penaltyArcRight {
+  position: absolute;
+  right: 10.5%;          /* Dostosowane do proporcji 12/8 */
+  top: 50%;
+  width: 20%;            /* Dostosowane do proporcji 12/8 */
+  height: 30%;           /* Dostosowane do proporcji 12/8 */
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 0;
+  clip-path: polygon(0% 10%, 55% 10%, 55% 90%, 0% 90%);
+}
+
+/* PUNKT KARNY LEWY */
+.penaltySpotLeft {
+  position: absolute;
+  left: 11.5%;           /* Dostosowane do proporcji 12/8 */
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 10;
+}
+
+/* PUNKT KARNY PRAWY */
+.penaltySpotRight {
+  position: absolute;
+  right: 11.5%;          /* Dostosowane do proporcji 12/8 */
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 10;
+}
+
+/* BRAMKA LEWA */
+.goalLeft {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 1%;             /* Dostosowane do proporcji 12/8 */
+  height: 12.5%;         /* Dostosowane do proporcji 12/8 */
+  background: rgba(255, 255, 255, 1);
+  transform: translateY(-50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 1);
+}
+
+/* BRAMKA PRAWA */
+.goalRight {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 1%;             /* Dostosowane do proporcji 12/8 */
+  height: 12.5%;         /* Dostosowane do proporcji 12/8 */
+  background: rgba(255, 255, 255, 1);
+  transform: translateY(-50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 1);
+}

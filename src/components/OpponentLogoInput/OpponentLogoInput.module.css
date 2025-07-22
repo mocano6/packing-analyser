@@ -1,0 +1,89 @@
+.container {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.content {
+  padding: 12px;
+}
+
+.clipboardSection {
+  text-align: center;
+}
+
+.clipboardButton {
+  padding: 12px 24px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+  margin-bottom: 8px;
+}
+
+.clipboardButton:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.clipboardButton:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.preview {
+  position: relative;
+  padding: 12px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.previewImage {
+  max-width: 100%;
+  max-height: 80px;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+}
+
+.removeButton {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.removeButton:hover {
+  background: #dc2626;
+}
+
+.helpText {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .clipboardButton {
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+  
+  .previewImage {
+    max-height: 60px;
+  }
+} 

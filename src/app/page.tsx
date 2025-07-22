@@ -31,6 +31,8 @@ import ActionModal from "@/components/ActionModal/ActionModal";
 import { sortPlayersByLastName, getPlayerFullName } from "@/utils/playerUtils";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
+import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
+import XGPitch from "@/components/XGPitch/XGPitch";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 
 
@@ -72,8 +74,15 @@ function removeUndefinedFields<T extends object>(obj: T): T {
 }
 
 export default function Page() {
-  const [activeTab] = React.useState<"packing">("packing");
-  const [selectedTeam, setSelectedTeam] = React.useState<string>(""); // Zmieniłem z TEAMS.REZERWY.id na pusty string
+  const [activeTab, setActiveTab] = React.useState<"packing" | "xg">("packing");
+  // Inicjalizuj selectedTeam z localStorage lub pustym stringiem
+  const [selectedTeam, setSelectedTeam] = React.useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedTeam') || "";
+    }
+    return "";
+  });
+  
   const [isPlayerMinutesModalOpen, setIsPlayerMinutesModalOpen] = React.useState(false);
   const [editingMatch, setEditingMatch] = React.useState<TeamInfo | null>(null);
   const [isActionModalOpen, setIsActionModalOpen] = React.useState(false);
@@ -88,6 +97,91 @@ export default function Page() {
   const [allTeams, setAllTeams] = React.useState<Team[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
 
+  // Ref do YouTube Video
+  const youtubeVideoRef = useRef<YouTubeVideoRef>(null);
+
+  // State do przechowywania aktualnego czasu z zewnętrznego wideo
+  const [externalVideoTime, setExternalVideoTime] = useState<number>(0);
+  const [isVideoVisible, setIsVideoVisible] = useState<boolean>(true);
+
+  // Funkcja do otwierania ActionModal z zapisaniem czasu YouTube
+  const openActionModalWithVideoTime = async () => {
+    
+    // Sprawdź czy mamy otwarte zewnętrzne okno wideo
+    // Używamy localStorage do sprawdzenia czy okno jest otwarte
+    const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
+    
+    // Jeśli otrzymujemy czas z zewnętrznego okna (externalVideoTime > 0), to znaczy że okno jest faktycznie otwarte
+    const hasExternalVideoTime = externalVideoTime > 0;
+    
+    if (isExternalWindowOpen || hasExternalVideoTime) {
+      // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
+      const externalWindow = (window as any).externalVideoWindow;
+      if (externalWindow && !externalWindow.closed) {
+        externalWindow.postMessage({
+          type: 'GET_CURRENT_TIME'
+        }, '*');
+      } else {
+        window.postMessage({
+          type: 'GET_CURRENT_TIME'
+        }, '*');
+      }
+      
+      // Czekaj na odpowiedź z zewnętrznego okna
+      const waitForTime = new Promise<number | null>((resolve) => {
+        const handleTimeResponse = (event: MessageEvent) => {
+          if (event.data.type === 'CURRENT_TIME_RESPONSE') {
+            window.removeEventListener('message', handleTimeResponse);
+            resolve(event.data.time);
+          }
+        };
+        window.addEventListener('message', handleTimeResponse);
+        setTimeout(() => {
+          window.removeEventListener('message', handleTimeResponse);
+          resolve(null); // null oznacza timeout
+        }, 1000);
+      });
+      
+      const time = await waitForTime;
+      if (time === null) {
+        if (hasExternalVideoTime) {
+          // Użyj ostatniego znanego czasu z zewnętrznego okna
+          localStorage.setItem('tempVideoTimestamp', String(externalVideoTime));
+        } else {
+          const proceed = window.confirm('Nie udało się pobrać czasu z wideo. Czy zapisać akcję bez czasu?');
+          if (!proceed) return;
+          localStorage.setItem('tempVideoTimestamp', '0');
+        }
+      } else if (time > 0) {
+        localStorage.setItem('tempVideoTimestamp', String(time));
+      } else if (externalVideoTime > 0) {
+        // Fallback do ostatniego znanego czasu
+        localStorage.setItem('tempVideoTimestamp', String(externalVideoTime));
+      }
+    } else if (youtubeVideoRef.current) {
+      try {
+        const currentTime = await youtubeVideoRef.current.getCurrentTime();
+        // Zapisz czas do localStorage tymczasowo
+        localStorage.setItem('tempVideoTimestamp', String(Math.floor(currentTime)));
+      } catch (error) {
+        console.warn('Nie udało się pobrać czasu z YouTube:', error);
+      }
+    }
+    setIsActionModalOpen(true);
+  };
+
+  // Nasłuchuj wiadomości z zewnętrznego wideo
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data.type === 'VIDEO_TIME_UPDATE') {
+        setExternalVideoTime(event.data.time);
+      } else if (event.data.type === 'CURRENT_TIME_RESPONSE') {
+      }
+    };
+    
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   // Custom hooks
   const {
@@ -206,23 +300,38 @@ export default function Page() {
   // Hook useAuth już obsługuje kombinację ładowania uwierzytelniania i danych użytkownika
   const isAppLoading = isLoading;
 
-  // Ustaw domyślny zespół na pierwszy dostępny
+  // Ustaw domyślny zespół na pierwszy dostępny i zapisz w localStorage
   useEffect(() => {
     if (availableTeams.length > 0) {
       const teamExists = availableTeams.find(team => team.id === selectedTeam);
       
       if (!teamExists) {
-        setSelectedTeam(availableTeams[0].id);
+        const firstTeamId = availableTeams[0].id;
+        setSelectedTeam(firstTeamId);
+        localStorage.setItem('selectedTeam', firstTeamId);
       }
     }
   }, [availableTeams, selectedTeam]);
 
-  // Inicjalizuj selectedSeason na aktualny sezon
+  // Zapisuj wybrany zespół w localStorage przy każdej zmianie
   useEffect(() => {
-    if (selectedSeason === null) {
-      setSelectedSeason("all"); // Domyślnie pokazuj wszystkie sezony
+    if (selectedTeam) {
+      localStorage.setItem('selectedTeam', selectedTeam);
     }
-  }, [selectedSeason]);
+  }, [selectedTeam]);
+
+  // Inicjalizuj selectedSeason na najnowszy sezon na podstawie meczów
+  useEffect(() => {
+    if (selectedSeason === null && allMatches.length > 0) {
+      const availableSeasons = getAvailableSeasonsFromMatches(allMatches);
+      if (availableSeasons.length > 0) {
+        // Wybierz najnowszy sezon (pierwszy w posortowanej liście)
+        setSelectedSeason(availableSeasons[0].id);
+      } else {
+        setSelectedSeason("all");
+      }
+    }
+  }, [selectedSeason, allMatches]);
 
   // Gdy hookSelectedZone się zmienia, aktualizujemy lokalny selectedZone
   useEffect(() => {
@@ -465,7 +574,7 @@ export default function Page() {
       
       // Jeśli mamy obie strefy, otwieramy ActionModal
       if (savedStartZone && !isActionModalOpen) {
-        setTimeout(() => setIsActionModalOpen(true), 100);
+        setTimeout(() => openActionModalWithVideoTime(), 100);
       }
     }
   }, []);  // Wykonaj tylko raz przy montowaniu komponentu
@@ -776,6 +885,13 @@ export default function Page() {
           setIsActionModalOpen(false);
           setSelectedPlayerId(null);
           setSelectedReceiverId(null);
+          
+          // DODANO: Przenieś focus do okna z wideo po zapisaniu akcji (tylko jeśli jest otwarte)
+          const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
+          if (isExternalWindowOpen) {
+            // Możemy wysłać wiadomość do zewnętrznego okna, ale nie otwieramy nowego
+            window.postMessage({ type: 'FOCUS_WINDOW' }, '*');
+          }
         }
       } catch (error) {
         alert("Wystąpił błąd podczas zapisywania akcji: " + (error instanceof Error ? error.message : String(error)));
@@ -881,6 +997,7 @@ export default function Page() {
 
   // Nowa funkcja do obsługi wyboru strefy
   const handleZoneSelection = (zoneId: number, xT?: number) => {
+    
     if (zoneId === null || zoneId === undefined) {
       return;
     }
@@ -901,7 +1018,7 @@ export default function Page() {
       
       // Odczekaj chwilę przed otwarciem modalu, aby stan się zaktualizował
       setTimeout(() => {
-        setIsActionModalOpen(true);
+        openActionModalWithVideoTime();
       }, 100);
       
       return;
@@ -915,7 +1032,7 @@ export default function Page() {
       
       // Odczekaj chwilę przed otwarciem modalu, aby stan się zaktualizował
       setTimeout(() => {
-        setIsActionModalOpen(true);
+        openActionModalWithVideoTime();
       }, 100);
       
       return;
@@ -1242,8 +1359,14 @@ export default function Page() {
           onEditPlayer={handleEditPlayer}
           onDeletePlayer={onDeletePlayer}
         />
+        <YouTubeVideo 
+          ref={youtubeVideoRef} 
+          matchInfo={matchInfo} 
+          isVisible={isVideoVisible}
+          onToggleVisibility={() => setIsVideoVisible(!isVideoVisible)}
+        />
 
-        <Tabs activeTab={activeTab} onTabChange={() => {}} />
+        <Tabs activeTab={activeTab} onTabChange={setActiveTab} />
 
         {activeTab === "packing" && (
           <ActionSection
@@ -1285,12 +1408,22 @@ export default function Page() {
           />
         )}
 
+        {activeTab === "xg" && (
+          <XGPitch
+            onShotAdd={(x, y) => {
+              console.log(`Strzał dodany na pozycji: ${x.toFixed(1)}%, ${y.toFixed(1)}%`);
+              // Tutaj można dodać logikę zapisywania strzałów
+            }}
+          />
+        )}
+
         <ActionsTable
           actions={actions}
           players={players}
           onDeleteAction={handleDeleteAction}
           onEditAction={handleEditAction}
           onRefreshPlayersData={handleRefreshPlayersData}
+          youtubeVideoRef={youtubeVideoRef}
         />
 
         <PlayerModal

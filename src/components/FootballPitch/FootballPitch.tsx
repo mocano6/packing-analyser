@@ -169,10 +169,17 @@ const FootballPitch = memo(function FootballPitch({
         <div className={styles.pitchLines} aria-hidden="true">
           <div className={styles.centerLine} />
           <div className={styles.centerCircle} />
+          <div className={styles.centerSpot} />
           <div className={styles.penaltyAreaLeft} />
           <div className={styles.goalAreaLeft} />
           <div className={styles.penaltyAreaRight} />
           <div className={styles.goalAreaRight} />
+          <div className={styles.penaltyArcLeft} />
+          <div className={styles.penaltyArcRight} />
+          <div className={styles.penaltySpotLeft} />
+          <div className={styles.penaltySpotRight} />
+          <div className={styles.goalLeft} />
+          <div className={styles.goalRight} />
         </div>
       </div>
     </div>

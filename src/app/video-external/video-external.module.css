@@ -1,0 +1,92 @@
+.container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.header {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.header h1 {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.matchInfo {
+  margin-bottom: 15px;
+}
+
+.matchInfo p {
+  margin: 5px 0;
+  color: #34495e;
+  font-size: 16px;
+}
+
+.timeDisplay {
+  background: linear-gradient(45deg, #2196F3, #21CBF3);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+}
+
+.videoSection {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.instructions {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.instructions p {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  font-size: 16px;
+}
+
+.instructions ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #34495e;
+}
+
+.instructions li {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+/* Responsywność */
+@media (max-width: 768px) {
+  .container {
+    padding: 10px;
+  }
+  
+  .header h1 {
+    font-size: 24px;
+  }
+  
+  .timeDisplay {
+    font-size: 16px;
+  }
+} 

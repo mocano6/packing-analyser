@@ -15,7 +15,8 @@ type SortKey =
   | "endZone"
   | "type"
   | "packing"
-  | "events";
+  | "events"
+  | "videoTimestamp";
 
 type SortDirection = "asc" | "desc";
 
@@ -51,10 +52,12 @@ const ActionRow = ({
   action,
   onDelete,
   onEdit,
+  onVideoTimeClick,
 }: {
   action: ActionsTableProps["actions"][0];
   onDelete: (id: string) => void;
   onEdit?: (action: ActionsTableProps["actions"][0]) => void;
+  onVideoTimeClick?: (videoTimestamp?: number) => void;
 }) => {
   const getEvents = () => {
     const events = [];
@@ -75,13 +78,21 @@ const ActionRow = ({
   const isSecondHalf = action.isSecondHalf === true;
 
   // Przygotuj dane zawodników w bezpieczny sposób
-  const senderDisplay = action.senderName && action.senderNumber 
-    ? `${action.senderNumber}-${action.senderName}` 
+  const senderDisplay = action.senderName 
+    ? `${action.senderNumber || '?'} ${action.senderName}`
     : (action.senderId ? `ID: ${action.senderId.substring(0, 6)}...` : '-');
-  
-  const receiverDisplay = action.receiverName && action.receiverNumber 
-    ? `${action.receiverNumber}-${action.receiverName}` 
+    
+  const receiverDisplay = action.receiverName 
+    ? `${action.receiverNumber || '?'} ${action.receiverName}`
     : (action.receiverId ? `ID: ${action.receiverId.substring(0, 6)}...` : '-');
+
+  // Funkcja formatująca czas wideo (sekundy -> mm:ss)
+  const formatVideoTime = (seconds?: number): string => {
+    if (!seconds) return '-';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <div className={`${styles.actionRow} ${isSecondHalf ? styles.secondHalfRow : styles.firstHalfRow}`}>
@@ -90,6 +101,22 @@ const ActionRow = ({
           {isSecondHalf ? 'P2' : 'P1'}
         </span>
         &nbsp;{action.minute}'
+      </div>
+      <div className={styles.cell}>
+        {action.videoTimestamp ? (
+          <span 
+            className={styles.videoTimeLink}
+            onClick={(e) => {
+              e.stopPropagation();
+              onVideoTimeClick?.(action.videoTimestamp);
+            }}
+            title="Kliknij aby przejść do tego momentu w wideo"
+          >
+            {formatVideoTime(action.videoTimestamp)}
+          </span>
+        ) : (
+          <span>-</span>
+        )}
       </div>
       <div className={styles.cell}>
         {senderDisplay}
@@ -130,7 +157,8 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   players,
   onDeleteAction,
   onEditAction,
-  onRefreshPlayersData
+  onRefreshPlayersData,
+  youtubeVideoRef
 }) => {
   const [sortConfig, setSortConfig] = useState<{
     key: SortKey;
@@ -155,6 +183,28 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
     
     setHasMissingPlayerData(missingData);
   }, [actions]);
+
+  // Funkcja do obsługi kliknięcia na czas wideo
+  const handleVideoTimeClick = async (videoTimestamp?: number) => {
+    if (!videoTimestamp) return;
+    
+    // Sprawdź czy mamy otwarte zewnętrzne okno wideo
+    const externalWindow = window.open('', 'youtube-video');
+    if (externalWindow && !externalWindow.closed) {
+      // Wyślij wiadomość do zewnętrznego okna
+      externalWindow.postMessage({
+        type: 'SEEK_TO_TIME',
+        time: videoTimestamp
+      }, '*');
+    } else if (youtubeVideoRef?.current) {
+      // Fallback do lokalnego wideo
+      try {
+        await youtubeVideoRef.current.seekTo(videoTimestamp);
+      } catch (error) {
+        console.warn('Nie udało się przewinąć wideo do czasu:', videoTimestamp, error);
+      }
+    }
+  };
 
   const handleSort = (key: SortKey) => {
     setSortConfig((prevSort) => ({
@@ -225,6 +275,9 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           comparison = getEventPriority(a) - getEventPriority(b);
           break;
         }
+        case "videoTimestamp":
+          comparison = (a.videoTimestamp || 0) - (b.videoTimestamp || 0);
+          break;
       }
 
       return comparison * multiplier;
@@ -253,6 +306,13 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           <HeaderCell
             label="Połowa / Min"
             sortKey="minute"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <HeaderCell
+            label="Czas wideo"
+            sortKey="videoTimestamp"
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}
             onSort={handleSort}
@@ -318,6 +378,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
                 action={action}
                 onDelete={onDeleteAction || (() => {})}
                 onEdit={onEditAction}
+                onVideoTimeClick={handleVideoTimeClick}
               />
             ))
           )}

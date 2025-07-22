@@ -1,5 +1,6 @@
 // src/components/ActionsTable/ActionsTable.types.ts
 import { Action, Player } from "@/types";
+import { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 
 // Rozszerzony typ akcji używany w tabeli
 export interface ActionsTableAction extends Action {
@@ -16,4 +17,5 @@ export interface ActionsTableProps {
   onDeleteAction?: (actionId: string) => void;
   onEditAction?: (action: Action) => void;
   onRefreshPlayersData?: () => void;
+  youtubeVideoRef?: React.RefObject<YouTubeVideoRef>;
 }

@@ -21,7 +21,7 @@
 
 .tableHeader {
   display: grid;
-  grid-template-columns: 1fr 1fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr;
+  grid-template-columns: 1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px;
   background-color: #fafafa;
   font-weight: 600;
   border-bottom: 1px solid #eaeaea;
@@ -52,7 +52,7 @@
 
 .actionRow {
   display: grid;
-  grid-template-columns: 1fr 1fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr;
+  grid-template-columns: 1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
@@ -89,10 +89,11 @@
 
 .cellActions {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   position: relative;
-  padding: 14px 16px;
+  padding: 14px 8px;
 }
 
 .deleteBtn {
@@ -409,4 +410,49 @@
 .refreshButton span {
   margin-right: 0.625rem;
   font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .tableHeader, .actionRow {
+    grid-template-columns: 
+      minmax(80px, 1fr)    /* Połowa/Min */
+      minmax(60px, 80px)   /* Czas wideo */
+      minmax(100px, 1fr)   /* Zawodnik start */
+      minmax(60px, 0.8fr)  /* xT start */
+      minmax(100px, 1fr)   /* Zawodnik koniec */
+      minmax(60px, 0.8fr)  /* xT koniec */
+      minmax(80px, 0.8fr)  /* Rodzaj */
+      minmax(60px, 0.8fr)  /* Packing */
+      minmax(80px, 0.8fr)  /* Wydarzenia */
+      minmax(60px, 80px);  /* Akcje */
+  }
+
+  .headerCell, .cell, .cellActions {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+
+  .cellActions {
+    padding: 10px 4px;
+  }
+}
+
+.videoTimeLink {
+  color: #2196f3;
+  cursor: pointer;
+  text-decoration: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.videoTimeLink:hover {
+  background-color: #e3f2fd;
+  text-decoration: underline;
+}
+
+.videoTimeLink:active {
+  background-color: #bbdefb;
 }

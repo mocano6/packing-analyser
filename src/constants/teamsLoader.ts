@@ -6,6 +6,7 @@ import { toast } from "react-hot-toast";
 export interface Team {
   id: string;
   name: string;
+  logo?: string; // URL lub base64 grafiki zespołu
   createdAt?: Date;
   isSystem?: boolean;
 }
@@ -14,27 +15,33 @@ export interface Team {
 export const DEFAULT_TEAMS = {
   REZERWY: {
     id: "89039437-62a7-4eda-b67d-70a4fb24e4ea",
-    name: "Rezerwy"
+    name: "Rezerwy",
+    logo: undefined
   },
   POLONIA_BYTOM: {
     id: "4fqwPiTdSZSLEwUHo785",
-    name: "Polonia Bytom"
+    name: "Polonia Bytom",
+    logo: undefined
   },
   U19: {
     id: "1595da8a-a9d6-463d-a49d-5e2c41ff36be",
-    name: "U19"
+    name: "U19",
+    logo: undefined
   },
   U17: {
     id: "58f3862c-75d5-4fa7-a18d-0c8e3b00402a",
-    name: "U17"
+    name: "U17",
+    logo: undefined
   },
   U16: {
     id: "06141fa4-80bc-404e-8fcb-63ef2d0a7815",
-    name: "U16"
+    name: "U16",
+    logo: undefined
   },
   U15: {
     id: "0ebf0d57-4f2c-4c12-937f-635feb2af332",
-    name: "U15"
+    name: "U15",
+    logo: undefined
   }
 } as const;
 
@@ -83,7 +90,10 @@ export async function fetchTeams(): Promise<Record<string, Team>> {
       
       teams[key] = {
         id: teamData.id,
-        name: teamData.name
+        name: teamData.name,
+        logo: teamData.logo,
+        createdAt: teamData.createdAt,
+        isSystem: teamData.isSystem
       };
     });
     

@@ -65,25 +65,45 @@ export default function ZawodnicyPage() {
     return obj;
   }, [availableTeams]);
 
-  // Wybierz pierwszy dostępny zespół jako domyślny
-  const [selectedTeam, setSelectedTeam] = useState<string>("");
+  // Inicjalizuj selectedTeam z localStorage lub pustym stringiem
+  const [selectedTeam, setSelectedTeam] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedTeam') || "";
+    }
+    return "";
+  });
   
-  // Ustaw domyślny zespół gdy teams się załadują
+  // Ustaw domyślny zespół gdy teams się załadują i zapisz w localStorage
   useEffect(() => {
     if (availableTeams.length > 0 && !selectedTeam) {
-      setSelectedTeam(availableTeams[0].id);
+      const firstTeamId = availableTeams[0].id;
+      setSelectedTeam(firstTeamId);
+      localStorage.setItem('selectedTeam', firstTeamId);
     }
   }, [availableTeams, selectedTeam]);
+
+  // Zapisuj wybrany zespół w localStorage przy każdej zmianie
+  useEffect(() => {
+    if (selectedTeam) {
+      localStorage.setItem('selectedTeam', selectedTeam);
+    }
+  }, [selectedTeam]);
 
   // Stan dla wybranego sezonu
   const [selectedSeason, setSelectedSeason] = useState<string>("");
 
-  // Inicjalizuj selectedSeason na aktualny sezon
+  // Inicjalizuj selectedSeason na najnowszy sezon na podstawie meczów
   useEffect(() => {
-    if (!selectedSeason) {
-      setSelectedSeason("all"); // Domyślnie pokazuj wszystkie sezony
+    if (!selectedSeason && allMatches.length > 0) {
+      const availableSeasons = getAvailableSeasonsFromMatches(allMatches);
+      if (availableSeasons.length > 0) {
+        // Wybierz najnowszy sezon (pierwszy w posortowanej liście)
+        setSelectedSeason(availableSeasons[0].id);
+      } else {
+        setSelectedSeason("all");
+      }
     }
-  }, [selectedSeason]);
+  }, [selectedSeason, allMatches]);
 
   // Pobierz mecze dla wybranego zespołu - tylko przy zmianie zespołu
   useEffect(() => {

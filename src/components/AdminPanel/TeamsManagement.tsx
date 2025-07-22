@@ -6,6 +6,7 @@ import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc, setDoc } from "
 import { toast } from "react-hot-toast";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 import { Team, clearTeamsCache } from "@/constants/teamsLoader";
+import OpponentLogoInput from "@/components/OpponentLogoInput/OpponentLogoInput";
 
 interface TeamsManagementProps {
   currentUserIsAdmin: boolean;
@@ -18,6 +19,8 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
   const [isAddingTeam, setIsAddingTeam] = useState<boolean>(false);
   const [newTeamName, setNewTeamName] = useState<string>("");
   const [editTeamName, setEditTeamName] = useState<string>("");
+  const [editingTeamLogo, setEditingTeamLogo] = useState<string | null>(null);
+  const [newTeamLogo, setNewTeamLogo] = useState<string>("");
 
   // Pobierz wszystkie zespoły z Firebase
   const fetchTeams = async () => {
@@ -121,9 +124,16 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
       const db = getDB();
       const teamRef = doc(db, "teams", teamId);
       
-      await updateDoc(teamRef, {
+      const updateData: any = {
         name: newName.trim()
-      }).catch(error => {
+      };
+
+      // Dodaj logo jeśli zostało zmienione
+      if (editingTeamLogo !== null) {
+        updateData.logo = editingTeamLogo;
+      }
+
+      await updateDoc(teamRef, updateData).catch(error => {
         handleFirestoreError(error, db);
         throw error;
       });
@@ -131,12 +141,17 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
       // Aktualizuj lokalny stan
       setTeams(prev => prev.map(team => 
         team.id === teamId 
-          ? { ...team, name: newName.trim() }
+          ? { 
+              ...team, 
+              name: newName.trim(),
+              logo: editingTeamLogo !== null ? editingTeamLogo : team.logo
+            }
           : team
       ).sort((a, b) => a.name.localeCompare(b.name)));
 
       setEditingTeam(null);
       setEditTeamName("");
+      setEditingTeamLogo(null);
 
       // Wyczyść cache zespołów aby zmiany były widoczne w głównej aplikacji
       clearTeamsCache();
@@ -146,10 +161,10 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
         window.dispatchEvent(new CustomEvent('teamsChanged'));
       }
 
-      toast.success("Nazwa zespołu została zaktualizowana");
+      toast.success("Zespół został zaktualizowany");
     } catch (error) {
-      console.error("Błąd podczas aktualizacji nazwy zespołu:", error);
-      toast.error("Błąd podczas aktualizacji nazwy zespołu");
+      console.error("Błąd podczas aktualizacji zespołu:", error);
+      toast.error("Błąd podczas aktualizacji zespołu");
     }
   };
 
@@ -193,14 +208,17 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
 
   // Rozpocznij edycję nazwy zespołu
   const startEditingTeam = (teamId: string, currentName: string) => {
+    const team = teams.find(t => t.id === teamId);
     setEditingTeam(teamId);
     setEditTeamName(currentName);
+    setEditingTeamLogo(team?.logo || null);
   };
 
   // Anuluj edycję
   const cancelEditing = () => {
     setEditingTeam(null);
     setEditTeamName("");
+    setEditingTeamLogo(null);
   };
 
   // Anuluj dodawanie
@@ -336,6 +354,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
             <thead>
               <tr style={{ backgroundColor: "#f0f0f0" }}>
                 <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>ID</th>
+                <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>Logo</th>
                 <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>Nazwa</th>
                 <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>Typ</th>
                 <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>Data utworzenia</th>
@@ -355,6 +374,33 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
                     textOverflow: "ellipsis"
                   }}>
                     {team.id}
+                  </td>
+                  <td style={{ padding: "12px", border: "1px solid #ddd", textAlign: "center" }}>
+                    {editingTeam === team.id ? (
+                      <div style={{ maxWidth: "120px" }}>
+                        <OpponentLogoInput
+                          value={editingTeamLogo || undefined}
+                          onChange={(logoUrl) => setEditingTeamLogo(logoUrl)}
+                          onRemove={() => setEditingTeamLogo(null)}
+                        />
+                      </div>
+                    ) : (
+                      team.logo ? (
+                        <img 
+                          src={team.logo} 
+                          alt={`Logo ${team.name}`}
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            objectFit: "contain",
+                            borderRadius: "4px",
+                            border: "1px solid #ddd"
+                          }}
+                        />
+                      ) : (
+                        <span style={{ color: "#999", fontSize: "12px" }}>Brak logo</span>
+                      )
+                    )}
                   </td>
                   <td style={{ padding: "12px", border: "1px solid #ddd" }}>
                     {editingTeam === team.id ? (

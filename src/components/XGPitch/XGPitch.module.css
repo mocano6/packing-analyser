@@ -1,0 +1,256 @@
+/* src/components/XGPitch/XGPitch.module.css */
+
+.pitchContainer {
+  width: 95%;
+  margin: 0 auto;
+  aspect-ratio: 1.544;  /* 105m/68m - realne proporcje FIFA */
+  position: relative;
+}
+
+/* Przycisk przełączania orientacji */
+.flipButton {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 20;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(33, 150, 243, 0.9);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(4px);
+}
+
+.flipButton:hover {
+  background: rgba(33, 150, 243, 1);
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.flipButton:active {
+  transform: scale(0.95);
+}
+
+.flipButton svg {
+  transition: transform 0.3s ease;
+}
+
+.pitch {
+  width: 100%;
+  height: 100%;
+  background: #bcbcbc;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+  transition: transform 0.4s ease;
+  cursor: crosshair;
+}
+
+/* Klasa dla odbitej orientacji */
+.pitch.flipped {
+  /* Logiczne odbicie - bez wizualnych zmian */
+}
+
+.pitchLines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* LINIA ŚRODKOWA */
+.centerLine {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: rgba(255, 255, 255, 1);
+  transform: translateX(-50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+/* KOŁO ŚRODKOWE */
+.centerCircle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 17.4%;          /* 2 × 9.15m / 105m = 17.4% */
+  height: 26.9%;         /* 2 × 9.15m / 68m = 26.9% */
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+/* PUNKT ŚRODKOWY */
+.centerSpot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;            /* Zwiększony rozmiar */
+  height: 8px;           /* Zwiększony rozmiar */
+  background: rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 10;           /* Na wierzchu */
+}
+
+/* POLE KARNE LEWE */
+.penaltyAreaLeft {
+  position: absolute;
+  left: 0;
+  top: 20.3%;            /* (68m - 40.32m) / 2 / 68m = 20.3% */
+  width: 15.7%;          /* 16.5m / 105m = 15.7% */
+  height: 59.4%;         /* 40.32m / 68m = 59.4% */
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-left: none;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+/* POLE KARNE PRAWE */
+.penaltyAreaRight {
+  position: absolute;
+  right: 0;
+  top: 20.3%;            /* Symetrycznie */
+  width: 15.7%;          /* 16.5m / 105m = 15.7% */
+  height: 59.4%;         /* 40.32m / 68m = 59.4% */
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-right: none;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+/* POLE BRAMKOWE LEWE */
+.goalAreaLeft {
+  position: absolute;
+  left: 0;
+  top: 36.5%;            /* (68m - 18.32m) / 2 / 68m = 36.5% */
+  width: 5.2%;           /* 5.5m / 105m = 5.2% */
+  height: 26.9%;         /* 18.32m / 68m = 26.9% */
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-left: none;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+/* POLE BRAMKOWE PRAWE */
+.goalAreaRight {
+  position: absolute;
+  right: 0;
+  top: 36.5%;            /* Symetrycznie */
+  width: 5.2%;           /* 5.5m / 105m = 5.2% */
+  height: 26.9%;         /* 18.32m / 68m = 26.9% */
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-right: none;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+/* ŁUK KARNY LEWY - większy fragment łuku z punktu karnego */
+.penaltyArcLeft {
+  position: absolute;
+  left: 10.5%;           /* 11m / 105m = 10.5% (punkt karny) */
+  top: 50%;
+  width: 17.4%;          /* 2 × 9.15m / 105m = 17.4% (średnica) */
+  height: 26.9%;         /* 2 × 9.15m / 68m = 26.9% (średnica) */
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 15;           /* Wyższy z-index - na samym wierzchu */
+  /* Odwrócona część - pokazuje fragment który powinien być widoczny */
+  clip-path: polygon(45% 10%, 100% 10%, 100% 90%, 45% 90%);
+}
+
+/* ŁUK KARNY PRAWY - większy fragment łuku z punktu karnego */
+.penaltyArcRight {
+  position: absolute;
+  right: 10.5%;          /* 11m / 105m = 10.5% (punkt karny) */
+  top: 50%;
+  width: 17.4%;          /* 2 × 9.15m / 105m = 17.4% (średnica) */
+  height: 26.9%;         /* 2 × 9.15m / 68m = 26.9% (średnica) */
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 15;           /* Wyższy z-index - na samym wierzchu */
+  /* Odwrócona część - pokazuje fragment który powinien być widoczny */
+  clip-path: polygon(0% 10%, 55% 10%, 55% 90%, 0% 90%);
+}
+
+/* PUNKT KARNY LEWY */
+.penaltySpotLeft {
+  position: absolute;
+  left: 10.5%;           /* 11m / 105m = 10.5% */
+  top: 50%;
+  width: 8px;            /* Zwiększony rozmiar */
+  height: 8px;           /* Zwiększony rozmiar */
+  background: rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 10;           /* Na wierzchu */
+}
+
+/* PUNKT KARNY PRAWY */
+.penaltySpotRight {
+  position: absolute;
+  right: 10.5%;          /* 11m / 105m = 10.5% */
+  top: 50%;
+  width: 8px;            /* Zwiększony rozmiar */
+  height: 8px;           /* Zwiększony rozmiar */
+  background: rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 10;           /* Na wierzchu */
+}
+
+/* BRAMKA LEWA */
+.goalLeft {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 0.8%;           /* Lekko wystaje do wewnątrz */
+  height: 10.8%;         /* 7.32m / 68m = 10.8% */
+  background: rgba(255, 255, 255, 1);
+  transform: translateY(-50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 1);
+}
+
+/* BRAMKA PRAWA */
+.goalRight {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 0.8%;           /* Lekko wystaje do wewnątrz */
+  height: 10.8%;         /* 7.32m / 68m = 10.8% */
+  background: rgba(255, 255, 255, 1);
+  transform: translateY(-50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 1);
+}
+
+@media (max-width: 600px) {
+  .flipButton {
+    width: 36px;
+    height: 36px;
+    top: 8px;
+    right: 8px;
+  }
+  
+  .flipButton svg {
+    width: 20px;
+    height: 20px;
+  }
+} 

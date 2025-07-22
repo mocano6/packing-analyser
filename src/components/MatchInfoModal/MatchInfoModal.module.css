@@ -16,8 +16,11 @@
   background-color: white;
   border-radius: 8px;
   padding: 24px;
+  padding-bottom: 0;
   width: 100%;
-  max-width: 400px;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   position: relative;
 }
@@ -62,6 +65,15 @@
   justify-content: flex-end;
   gap: 12px;
   margin-top: 20px;
+  position: sticky;
+  bottom: 0;
+  background: white;
+  padding: 20px 24px 24px 24px;
+  border-top: 1px solid #e5e7eb;
+  margin-left: -24px;
+  margin-right: -24px;
+  margin-bottom: -24px;
+  z-index: 10;
 }
 
 .saveButton,
@@ -151,6 +163,7 @@
   .modalContent {
     margin: 20px;
     padding: 20px;
+    max-height: calc(100vh - 40px);
   }
 }
 
@@ -179,4 +192,17 @@
   0% { opacity: 0.7; }
   50% { opacity: 1; }
   100% { opacity: 0.7; }
+}
+
+.savingInProgress .saveButton {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.helpText {
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+  margin-top: 4px;
+  display: block;
 }

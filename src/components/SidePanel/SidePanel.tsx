@@ -47,7 +47,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
       {/* Trigger button */}
       <div 
         className={`${styles.trigger} ${isOpen ? styles.triggerOpen : ''}`}
-        onMouseEnter={() => setIsOpen(true)}
+        onClick={() => setIsOpen(!isOpen)}
       >
         <span className={styles.triggerIcon}>☰</span>
         <span className={styles.triggerText}>Menu</span>
@@ -64,7 +64,6 @@ const SidePanel: React.FC<SidePanelProps> = ({
       {/* Side panel */}
       <div 
         className={`${styles.panel} ${isOpen ? styles.panelOpen : ''}`}
-        onMouseLeave={() => setIsOpen(false)}
       >
         <div className={styles.header}>
           <h3>Menu aplikacji</h3>

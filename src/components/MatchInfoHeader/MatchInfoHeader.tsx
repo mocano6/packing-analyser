@@ -134,7 +134,7 @@ interface MatchInfoHeaderProps {
   players?: Player[]; // Dodajemy players jako nową właściwość
   availableTeams?: any[]; // Zespoły dostępne dla użytkownika
   isAdmin?: boolean; // Czy użytkownik jest administratorem
-  allAvailableTeams?: { id: string; name: string }[]; // Dodajemy allAvailableTeams do props
+  allAvailableTeams?: { id: string; name: string; logo?: string }[]; // Dodajemy allAvailableTeams do props
   selectedSeason?: string; // Dodajemy selectedSeason do props
   onChangeSeason?: (season: string) => void; // Dodajemy callback do zmiany sezonu
 }
@@ -366,8 +366,33 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                   onClick={() => onSelectMatch(match)}
                 >
                   <div className={styles.cell}>{match.date}</div>
-                  <div className={styles.cell}>{getTeamName(match.team)}</div>
-                  <div className={styles.cell}>{match.opponent}</div>
+                  <div className={styles.cell}>
+                    <div className={styles.teamCell}>
+                      {(() => {
+                        const team = allAvailableTeams.find(t => t.id === match.team);
+                        return team?.logo ? (
+                          <img 
+                            src={team.logo} 
+                            alt={`Logo ${getTeamName(match.team)}`}
+                            className={styles.teamLogo}
+                          />
+                        ) : null;
+                      })()}
+                      <span>{getTeamName(match.team)}</span>
+                    </div>
+                  </div>
+                  <div className={styles.cell}>
+                    <div className={styles.opponentCell}>
+                      {match.opponentLogo && (
+                        <img 
+                          src={match.opponentLogo} 
+                          alt={`Logo ${match.opponent}`}
+                          className={styles.opponentLogo}
+                        />
+                      )}
+                      <span>{match.opponent}</span>
+                    </div>
+                  </div>
                   <div className={styles.cell}>
                     <span className={styles.competition}>{match.competition}</span>
                   </div>

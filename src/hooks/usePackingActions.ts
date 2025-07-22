@@ -219,6 +219,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
       const xTStart = typeof startZoneXT === 'number' ? startZoneXT : undefined;
       const xTEnd = typeof endZoneXT === 'number' ? endZoneXT : undefined;
       
+      // Pobierz czas z YouTube z localStorage
+      const videoTimestamp = localStorage.getItem('tempVideoTimestamp');
+      const parsedVideoTimestamp = videoTimestamp ? parseInt(videoTimestamp) : undefined;
+      const isValidTimestamp = parsedVideoTimestamp && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp > 0;
+      
       // Tworzymy nową akcję
       const newAction: Action = {
         id: uuidv4(), // Generujemy unikalny identyfikator
@@ -231,6 +236,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
         actionType: actionType,
         minute: actionMinute,
         packingPoints: packingValue || currentPoints,
+        ...(isValidTimestamp && { videoTimestamp: parsedVideoTimestamp }),
         // Przypisujemy wartości xT tylko jeśli są zdefiniowane
         ...(xTStart !== undefined && { xTValueStart: xTStart }),
         ...(xTEnd !== undefined && { xTValueEnd: xTEnd }),
@@ -448,6 +454,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
     // DODANO: Resetujemy także wybór zawodników po zapisaniu akcji
     setSelectedPlayerId(null);
     setSelectedReceiverId(null);
+    // Wyczyść zapisany czas YouTube
+    localStorage.removeItem('tempVideoTimestamp');
     // Nie resetujemy isSecondHalf, bo połowa meczu jest utrzymywana między akcjami
   }, []);
 
