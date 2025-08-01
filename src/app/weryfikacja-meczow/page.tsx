@@ -105,7 +105,6 @@ export default function WeryfikacjaMeczow() {
           });
         });
 
-
         setMatches(allMatches);
       } catch (error) {
         console.error('Błąd podczas pobierania meczów:', error);
@@ -115,8 +114,11 @@ export default function WeryfikacjaMeczow() {
       }
     };
 
-    fetchMatches();
-  }, []);
+    // Wykonaj fetchMatches tylko jeśli użytkownik jest zalogowany i ma uprawnienia
+    if (isAuthenticated && isAdmin) {
+      fetchMatches();
+    }
+  }, [isAuthenticated, isAdmin]);
 
   // Filtrowanie i sortowanie
   const filteredAndSortedMatches = useMemo(() => {

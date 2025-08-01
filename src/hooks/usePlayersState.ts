@@ -319,7 +319,7 @@ export function usePlayersState() {
   // Pobierz dane podczas inicjalizacji
   useEffect(() => {
     fetchAllPlayers();
-  }, [fetchAllPlayers]);
+  }, []);
 
   // Funkcja do ponownego pobrania danych
   const refetchPlayers = useCallback(async () => {
@@ -331,7 +331,7 @@ export function usePlayersState() {
     } finally {
       setIsRefetching(false);
     }
-  }, [fetchAllPlayers, isRefetching]);
+  }, [isRefetching]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Usuwanie zawodnika (obsługuje obie struktury)
   const handleDeletePlayer = useCallback(async (playerId: string) => {
