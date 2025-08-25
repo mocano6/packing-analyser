@@ -28,6 +28,7 @@ import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesMod
 import MatchInfoModal from "@/components/MatchInfoModal/MatchInfoModal";
 import Link from "next/link";
 import ActionModal from "@/components/ActionModal/ActionModal";
+import MatchInfoHeader from "@/components/MatchInfoHeader/MatchInfoHeader";
 import { sortPlayersByLastName, getPlayerFullName } from "@/utils/playerUtils";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
@@ -56,9 +57,7 @@ const ActionsTable = dynamic(
     ssr: false,
   }
 );
-const MatchInfoHeader = dynamic(
-  () => import("@/components/MatchInfoHeader/MatchInfoHeader")
-);
+
 
 // Funkcja pomocnicza do usuwania undefined z obiektów, zachowująca typ
 function removeUndefinedFields<T extends object>(obj: T): T {
@@ -283,17 +282,27 @@ export default function Page() {
 
   // Filtruj dostępne zespoły na podstawie uprawnień użytkownika
   const availableTeams = useMemo(() => {
+    console.log('🔍 DEBUG strona główna:');
+    console.log('- isAdmin:', isAdmin);
+    console.log('- userTeams:', userTeams);
+    console.log('- allTeams count:', allTeams.length);
+    console.log('- allTeams names:', allTeams.map(t => t.name));
+    
     if (isAdmin) {
       // Administratorzy mają dostęp do wszystkich zespołów
+      console.log('✅ Użytkownik jest ADMINEM - zwracam wszystkie zespoły');
       return allTeams;
     }
     
     if (!userTeams || userTeams.length === 0) {
+      console.log('❌ Brak userTeams - zwracam pustą tablicę');
       return [];
     }
     
     // Filtruj zespoły na podstawie uprawnień użytkownika
-    return allTeams.filter(team => userTeams.includes(team.id));
+    const filtered = allTeams.filter(team => userTeams.includes(team.id));
+    console.log('✅ Przefiltrowane zespoły:', filtered.map(t => `${t.name} (${t.id})`));
+    return filtered;
   }, [userTeams, isAdmin, allTeams]);
 
   // Użyj tylko stanu ładowania z useAuth - nie dodawaj własnej logiki

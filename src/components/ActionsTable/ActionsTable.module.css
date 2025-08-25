@@ -11,6 +11,48 @@
   margin-bottom: 16px;
 }
 
+.headerButtons {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Style dla przełącznika metryk */
+.metricToggle {
+  display: flex;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #d1d5db;
+  background-color: #f9fafb;
+}
+
+.metricButton {
+  padding: 8px 16px;
+  border: none;
+  background-color: transparent;
+  color: #374151;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border-right: 1px solid #d1d5db;
+}
+
+.metricButton:last-child {
+  border-right: none;
+}
+
+.metricButton:hover {
+  background-color: #e5e7eb;
+  color: #111827;
+}
+
+.metricButton.active {
+  background-color: #3b82f6;
+  color: white;
+  font-weight: 600;
+}
+
 .matchesTable {
   background: white;
   border-radius: 8px;

@@ -42,7 +42,7 @@
 
 .tableHeader {
   display: grid;
-  grid-template-columns: minmax(180px, 2fr) minmax(70px, 0.7fr) minmax(70px, 0.7fr) minmax(140px, 1fr) minmax(70px, 0.7fr);
+  grid-template-columns: minmax(180px, 2fr) minmax(70px, 0.7fr) minmax(70px, 0.7fr) minmax(140px, 1fr) minmax(120px, 0.9fr) minmax(70px, 0.7fr);
   gap: 10px;
   padding: 10px;
   border-bottom: 1px solid #ccc;
@@ -65,7 +65,7 @@
 
 .playerRow {
   display: grid;
-  grid-template-columns: minmax(180px, 2fr) minmax(70px, 0.7fr) minmax(70px, 0.7fr) minmax(140px, 1fr) minmax(70px, 0.7fr);
+  grid-template-columns: minmax(180px, 2fr) minmax(70px, 0.7fr) minmax(70px, 0.7fr) minmax(140px, 1fr) minmax(120px, 0.9fr) minmax(70px, 0.7fr);
   gap: 10px;
   align-items: center;
   padding: 10px;
@@ -114,6 +114,13 @@
   outline: none;
   border-color: #2196f3;
   box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+.numberInput:disabled {
+  background-color: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+  border-color: #ddd;
 }
 
 .playTime {
@@ -198,4 +205,38 @@
   background-color: white;
   font-size: 14px;
   height: 36px;
-} 
+}
+
+/* Style dla pól statusu */
+.statusInput {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.statusSelect {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: white;
+  font-size: 14px;
+  height: 36px;
+}
+
+.statusSelect option[value="kontuzja"] {
+  color: #f44336;
+}
+
+.statusSelect option[value="brak_powolania"] {
+  color: #ff9800;
+}
+
+.statusSelect option[value="dostepny"] {
+  color: #4caf50;
+}
+
+.statusSelect option[value="inny_zespol"] {
+  color: #9c27b0;
+}

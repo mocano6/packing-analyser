@@ -2,8 +2,8 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { 
-  PieChart, 
-  Pie, 
+  PieChart,
+  Pie,
   Cell, 
   ResponsiveContainer, 
   Tooltip, 
@@ -17,12 +17,42 @@ import {
 import { Player, Action, TeamInfo } from '@/types';
 import styles from './PackingChart.module.css';
 
+interface NetworkNode {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  totalValue: number;
+  radius: number;
+  connectionCount: number;
+  senderValue?: number;
+  receiverValue?: number;
+  actionCount?: number;
+}
+
+interface NetworkEdge {
+  source: string;
+  target: string;
+  value: number;
+  thickness: number;
+}
+
 interface PackingChartProps {
   actions: Action[];
   players: Player[];
   selectedPlayerId: string | null;
   onPlayerSelect: (playerId: string | null) => void;
   matches?: TeamInfo[];
+  teams?: { id: string; name: string }[];
+  birthYearFilter: {from: string; to: string};
+  onBirthYearFilterChange: (value: {from: string; to: string}) => void;
+  selectedPositions: string[];
+  onSelectedPositionsChange: (positions: string[]) => void;
+  availablePositions: { value: string; label: string }[];
+  showPositionsDropdown: boolean;
+  setShowPositionsDropdown: (show: boolean) => void;
+  handlePositionToggle: (position: string) => void;
+  handleSelectAllPositions: () => void;
 }
 
 const COLORS = [
@@ -50,18 +80,50 @@ type SortField = 'name' | 'totalPacking' | 'senderPacking' | 'receiverPacking' |
                 'totalPenaltyArea' | 'senderPenaltyArea' | 'receiverPenaltyArea' |
                 'totalShots' | 'senderShots' | 'receiverShots' |
                 'totalGoals' | 'senderGoals' | 'receiverGoals' |
+                'passCount' | 'senderPassCount' | 'receiverPassCount' | 'dribblingCount' |
+                'averagePxT' | 'senderAveragePxT' | 'receiverAveragePxT' | 
+                'dribblingAveragePxT' | 'dribblingAveragePacking' | 'dribblingAverageXT' |
                 'minutesPercentage' | 'actualMinutes';
 
 type SortDirection = 'asc' | 'desc';
 
-export default function PackingChart({ actions, players, selectedPlayerId, onPlayerSelect, matches }: PackingChartProps) {
+export default function PackingChart({ 
+  actions, 
+  players, 
+  selectedPlayerId, 
+  onPlayerSelect, 
+  matches,
+  teams,
+  birthYearFilter,
+  onBirthYearFilterChange,
+  selectedPositions,
+  onSelectedPositionsChange,
+  availablePositions,
+  showPositionsDropdown,
+  setShowPositionsDropdown,
+  handlePositionToggle,
+  handleSelectAllPositions
+}: PackingChartProps) {
   const [selectedChart, setSelectedChart] = useState<'sender' | 'receiver'>('sender');
-  const [selectedMetric, setSelectedMetric] = useState<'packing' | 'pxt'>('packing');
+  const [selectedMetric, setSelectedMetric] = useState<'packing' | 'pxt'>('pxt');
   const [selectedActionType, setSelectedActionType] = useState<'pass' | 'dribble'>('pass');
   const [sortField, setSortField] = useState<SortField>('totalPacking');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showMatchChart, setShowMatchChart] = useState<boolean>(false);
+  const [showNetworkChart, setShowNetworkChart] = useState<boolean>(false);
   const [isPer90Minutes, setIsPer90Minutes] = useState<boolean>(false);
+  const [minMinutesFilter, setMinMinutesFilter] = useState<number>(0);
+  const [tableMetric, setTableMetric] = useState<'packing' | 'pxt' | 'xt'>('pxt');
+  const [additionalActionsRole, setAdditionalActionsRole] = useState<'sender' | 'receiver'>('sender');
+  const [playerDetailsRole, setPlayerDetailsRole] = useState<'sender' | 'receiver' | 'dribbling'>('sender');
+  // Pozycje są teraz zarządzane przez rodzica
+
+  // Zunifikuj pozycje LW->LS, RW->RS
+  const normalizePosition = (position: string): string => {
+    if (position === 'LW') return 'LS';
+    if (position === 'RW') return 'RS';
+    return position;
+  };
 
   // Automatycznie przełącz na 'sender' gdy wybieramy drybling
   useEffect(() => {
@@ -70,7 +132,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
     }
   }, [selectedActionType, selectedChart]);
 
-  const { chartData, tableData, matchChartData } = useMemo(() => {
+  const { chartData, tableData, matchChartData, networkData } = useMemo(() => {
     const playerStats = new Map<string, { 
       name: string; 
       // Podania
@@ -108,7 +170,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       actualMinutes: number;
     }>();
 
-    // Oblicz % możliwych minut dla każdego zawodnika
+    // Oblicz % możliwych minut dla każdego zawodnika (tylko na wybranej pozycji jeśli filtr aktywny)
     const calculateMinutesPercentage = (playerId: string): number => {
       if (!matches || matches.length === 0) return 0;
 
@@ -118,16 +180,22 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       matches.forEach(match => {
         if (!match.playerMinutes) return;
 
+        // Znajdź minuty tego zawodnika w tym meczu
+        const playerMinutesInMatch = match.playerMinutes.find(pm => pm.playerId === playerId);
+        if (!playerMinutesInMatch) return;
+
+        // Jeśli mamy filtr pozycji, sprawdź czy grał na tej pozycji
+        if (selectedPositions.length > 0) {
+          const normalizedPosition = normalizePosition(playerMinutesInMatch.position || '');
+          if (!selectedPositions.includes(normalizedPosition)) return; // Pomiń ten mecz
+        }
+
+        const playerMinutesCount = playerMinutesInMatch.endMinute - playerMinutesInMatch.startMinute;
+
         // Znajdź maksymalną liczbę minut w tym meczu
         const maxMinutesInMatch = Math.max(
           ...match.playerMinutes.map(pm => pm.endMinute - pm.startMinute)
         );
-
-        // Znajdź minuty tego zawodnika w tym meczu
-        const playerMinutesInMatch = match.playerMinutes.find(pm => pm.playerId === playerId);
-        const playerMinutesCount = playerMinutesInMatch 
-          ? playerMinutesInMatch.endMinute - playerMinutesInMatch.startMinute 
-          : 0;
 
         totalPlayerMinutes += playerMinutesCount;
         totalMaxMinutes += maxMinutesInMatch;
@@ -136,7 +204,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       return totalMaxMinutes > 0 ? (totalPlayerMinutes / totalMaxMinutes) * 100 : 0;
     };
 
-    // Oblicz rzeczywiste minuty dla zawodnika
+    // Oblicz rzeczywiste minuty dla zawodnika (tylko na wybranej pozycji jeśli filtr aktywny)
     const calculateActualMinutes = (playerId: string): number => {
       if (!matches || matches.length === 0) return 0;
 
@@ -147,19 +215,48 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
 
         // Znajdź minuty tego zawodnika w tym meczu
         const playerMinutesInMatch = match.playerMinutes.find(pm => pm.playerId === playerId);
-        const playerMinutesCount = playerMinutesInMatch 
-          ? playerMinutesInMatch.endMinute - playerMinutesInMatch.startMinute 
-          : 0;
+        if (!playerMinutesInMatch) return;
 
+        // Jeśli mamy filtr pozycji, sprawdź czy grał na tej pozycji
+        if (selectedPositions.length > 0) {
+          const normalizedPosition = normalizePosition(playerMinutesInMatch.position || '');
+          if (!selectedPositions.includes(normalizedPosition)) return; // Pomiń ten mecz
+        }
+
+        const playerMinutesCount = playerMinutesInMatch.endMinute - playerMinutesInMatch.startMinute;
         totalPlayerMinutes += playerMinutesCount;
       });
 
       return totalPlayerMinutes;
     };
 
+    // Sprawdź czy akcja powinna być uwzględniona dla wybranej pozycji
+    const shouldIncludeAction = (action: any, playerId: string): boolean => {
+      // Jeśli nie ma filtra pozycji, uwzględnij wszystkie akcje
+      if (selectedPositions.length === 0) return true;
+
+      // Znajdź mecz dla tej akcji
+      const matchForAction = matches?.find(match => match.matchId === action.matchId);
+      if (!matchForAction || !matchForAction.playerMinutes) return false;
+
+      // Sprawdź czy zawodnik grał na wybranej pozycji w tym meczu
+      const playerInMatch = matchForAction.playerMinutes.find(pm => pm.playerId === playerId);
+      if (!playerInMatch || !playerInMatch.position) return false;
+
+      // Sprawdź czy pozycja pasuje (z normalizacją)
+      const normalizedPosition = normalizePosition(playerInMatch.position);
+      return selectedPositions.includes(normalizedPosition);
+    };
+
     actions.forEach(action => {
       const packingPoints = action.packingPoints || 0;
       const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+      
+      // Pomiń akcje z ujemną lub zerową wartością xT
+      if (xTDifference <= 0) {
+        return;
+      }
+      
       const pxtValue = xTDifference * packingPoints;
       const isDribble = action.actionType === 'dribble';
       
@@ -170,8 +267,8 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       const isGoal = action.isGoal || false;
 
       // Dodajemy punkty dla nadawcy
-      if (action.senderId) {
-        const current = playerStats.get(action.senderId) || { 
+      if (action.senderId && shouldIncludeAction(action, action.senderId)) {
+        const current = playerStats.get(action.senderId) || ({ 
           name: action.senderName || 'Nieznany zawodnik', 
           totalPacking: 0, senderPacking: 0, receiverPacking: 0,
           totalPxT: 0, senderPxT: 0, receiverPxT: 0,
@@ -183,15 +280,20 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           totalPenaltyArea: 0, senderPenaltyArea: 0, receiverPenaltyArea: 0,
           totalShots: 0, senderShots: 0, receiverShots: 0,
           totalGoals: 0, senderGoals: 0, receiverGoals: 0,
+          passCount: 0, // Liczba podań łącznie
+          senderPassCount: 0, // Liczba podań jako podający
+          receiverPassCount: 0, // Liczba podań jako przyjmujący
+          dribblingCount: 0, // Liczba dryblingu
           minutesPercentage: calculateMinutesPercentage(action.senderId),
           actualMinutes: calculateActualMinutes(action.senderId)
-        };
+        } as any);
         
         if (isDribble) {
           playerStats.set(action.senderId, {
             ...current,
             totalDribbling: current.totalDribbling + packingPoints,
             senderDribbling: current.senderDribbling + packingPoints,
+            dribblingCount: current.dribblingCount + 1, // Zlicz drybling
             totalDribblingPxT: current.totalDribblingPxT + pxtValue,
             senderDribblingPxT: current.senderDribblingPxT + pxtValue,
             totalDribblingXT: current.totalDribblingXT + xTDifference,
@@ -214,6 +316,8 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
             senderPxT: current.senderPxT + pxtValue,
             totalXT: current.totalXT + xTDifference,
             senderXT: current.senderXT + xTDifference,
+            passCount: current.passCount + 1, // Zlicz podanie łącznie
+            senderPassCount: current.senderPassCount + 1, // Zlicz podanie jako sender
             totalP3: current.totalP3 + (isP3 ? 1 : 0),
             senderP3: current.senderP3 + (isP3 ? 1 : 0),
             totalPenaltyArea: current.totalPenaltyArea + (isPenaltyArea ? 1 : 0),
@@ -227,8 +331,8 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       }
 
       // Dodajemy punkty dla odbiorcy (tylko dla podań)
-      if (action.receiverId && !isDribble) {
-        const current = playerStats.get(action.receiverId) || { 
+      if (action.receiverId && !isDribble && shouldIncludeAction(action, action.receiverId)) {
+        const current = playerStats.get(action.receiverId) || ({ 
           name: action.receiverName || 'Nieznany zawodnik', 
           totalPacking: 0, senderPacking: 0, receiverPacking: 0,
           totalPxT: 0, senderPxT: 0, receiverPxT: 0,
@@ -240,9 +344,13 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           totalPenaltyArea: 0, senderPenaltyArea: 0, receiverPenaltyArea: 0,
           totalShots: 0, senderShots: 0, receiverShots: 0,
           totalGoals: 0, senderGoals: 0, receiverGoals: 0,
+          passCount: 0, // Liczba podań łącznie
+          senderPassCount: 0, // Liczba podań jako podający
+          receiverPassCount: 0, // Liczba podań jako przyjmujący
+          dribblingCount: 0, // Liczba dryblingu
           minutesPercentage: calculateMinutesPercentage(action.receiverId),
           actualMinutes: calculateActualMinutes(action.receiverId)
-        };
+        } as any);
         playerStats.set(action.receiverId, {
           ...current,
           totalPacking: current.totalPacking + packingPoints,
@@ -251,6 +359,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           receiverPxT: current.receiverPxT + pxtValue,
           totalXT: current.totalXT + xTDifference,
           receiverXT: current.receiverXT + xTDifference,
+          receiverPassCount: current.receiverPassCount + 1, // Zlicz podanie jako receiver
           totalP3: current.totalP3 + (isP3 ? 1 : 0),
           receiverP3: current.receiverP3 + (isP3 ? 1 : 0),
           totalPenaltyArea: current.totalPenaltyArea + (isPenaltyArea ? 1 : 0),
@@ -290,13 +399,69 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           value: value
         };
       })
-      .filter(item => Math.abs(item.value) > 0.01);
+      .filter(item => Math.abs(item.value) > 0.001 || item.value > 0); // Złagodzone filtrowanie
+      
+    // Jeśli brak danych z akcjami, pokaż zawodników z minutami
+    if (chartData.length === 0) {
+      const playersWithMinutes = Array.from(playerStats.entries())
+        .filter(([id, data]) => data.actualMinutes > 0)
+        .map(([id, data]) => ({
+          id,
+          name: data.name,
+          value: data.actualMinutes // Pokaż minuty jako wartość
+        }))
+        .slice(0, 10); // Tylko top 10
+        
+      if (playersWithMinutes.length > 0) {
+        chartData.push(...playersWithMinutes);
+      }
+    }
 
     // Dane dla tabeli
     let unsortedTableData = Array.from(playerStats.entries())
-      .map(([id, data]) => ({
-        id,
-        name: data.name,
+      .map(([id, data]) => {
+        // Znajdź pozycje zawodnika z meczów (jeśli filtr aktywny, pokaż tylko wybraną pozycję)
+        let position = 'Nieznana';
+        if (selectedPositions.length > 0) {
+          // Jeśli filtr aktywny, sprawdź czy grał na którejś z pozycji
+          const playedPositions: string[] = [];
+          matches?.forEach(match => {
+            if (!match.playerMinutes) return;
+            const playerInMatch = match.playerMinutes.find(pm => pm.playerId === id);
+            if (!playerInMatch || !playerInMatch.position) return;
+            const normalizedPosition = normalizePosition(playerInMatch.position);
+            if (selectedPositions.includes(normalizedPosition) && !playedPositions.includes(normalizedPosition)) {
+              playedPositions.push(normalizedPosition);
+            }
+          });
+          position = playedPositions.length > 0 ? playedPositions.join(', ') : 'Nieznana';
+        } else {
+          // Bez filtra, pokaż wszystkie pozycje
+          const matchPositions: string[] = [];
+          if (matches) {
+            matches.forEach(match => {
+              if (match.playerMinutes) {
+                match.playerMinutes.forEach(pm => {
+                  if (pm.playerId === id && pm.position) {
+                    matchPositions.push(normalizePosition(pm.position));
+                  }
+                });
+              }
+            });
+          }
+          const uniquePositions = [...new Set(matchPositions)];
+          position = uniquePositions.length > 0 ? uniquePositions.join(', ') : 'Nieznana';
+        }
+        
+        // Znajdź zawodnika żeby pobrać rok urodzenia
+        const playerData = players.find(p => p.id === id);
+        const birthYear = playerData?.birthYear;
+
+        return {
+          id,
+          name: data.name,
+          birthYear,
+          position,
         totalPacking: data.totalPacking,
         senderPacking: data.senderPacking,
         receiverPacking: data.receiverPacking,
@@ -324,14 +489,32 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
         totalGoals: data.totalGoals,
         senderGoals: data.senderGoals,
         receiverGoals: data.receiverGoals,
-        minutesPercentage: data.minutesPercentage,
-        actualMinutes: data.actualMinutes
-      }));
+                  passCount: (data as any).passCount,
+          senderPassCount: (data as any).senderPassCount,
+          receiverPassCount: (data as any).receiverPassCount,
+          dribblingCount: (data as any).dribblingCount,
+          senderAveragePxT: (data as any).senderPassCount > 0 ? (data as any).senderPxT / (data as any).senderPassCount : 0,
+          receiverAveragePxT: (data as any).receiverPassCount > 0 ? (data as any).receiverPxT / (data as any).receiverPassCount : 0,
+          dribblingAveragePxT: (data as any).dribblingCount > 0 ? (data as any).totalDribblingPxT / (data as any).dribblingCount : 0,
+          dribblingAveragePacking: (data as any).dribblingCount > 0 ? (data as any).totalDribbling / (data as any).dribblingCount : 0,
+          dribblingAverageXT: (data as any).dribblingCount > 0 ? (data as any).totalDribblingXT / (data as any).dribblingCount : 0,
+          averagePxT: (data as any).passCount > 0 ? (data as any).totalPxT / (data as any).passCount : 0,
+          minutesPercentage: data.minutesPercentage,
+          actualMinutes: data.actualMinutes
+        } as any;
+      });
 
-    // Filtruj zawodników - pokaż tylko tych z akcjami
+    // Filtruj zawodników - pokaż tylko tych z akcjami lub z minutami gry
     const filteredTableData = unsortedTableData.filter(item => 
-        item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01 ||
-        item.totalDribbling > 0 || Math.abs(item.totalDribblingPxT) > 0.01
+        (item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01 ||
+        item.totalDribbling > 0 || Math.abs(item.totalDribblingPxT) > 0.01 ||
+        item.actualMinutes > 0) && 
+        item.actualMinutes >= minMinutesFilter &&
+        (selectedPositions.length === 0 || selectedPositions.some(pos => item.position.includes(pos))) &&
+        (!birthYearFilter.from.trim() && !birthYearFilter.to.trim() || 
+         (item.birthYear && 
+          (!birthYearFilter.from.trim() || item.birthYear >= parseInt(birthYearFilter.from.trim())) &&
+          (!birthYearFilter.to.trim() || item.birthYear <= parseInt(birthYearFilter.to.trim()))))
       );
 
     unsortedTableData = filteredTableData;
@@ -342,7 +525,9 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       let bValue = b[sortField];
       
       // Jeśli sortujemy po wartościach liczbowych w trybie /90 min, przelicz je
-      if (isPer90Minutes && typeof aValue === 'number' && typeof bValue === 'number' && 
+      // Specjalne przypadki: passCount i dribblingCount zawsze per 90 minut
+      if ((isPer90Minutes || sortField === 'passCount' || sortField === 'dribblingCount') && 
+          typeof aValue === 'number' && typeof bValue === 'number' && 
           sortField !== 'name' && sortField !== 'minutesPercentage' && sortField !== 'actualMinutes') {
         aValue = a.actualMinutes > 0 ? (aValue / a.actualMinutes) * 90 : 0;
         bValue = b.actualMinutes > 0 ? (bValue / b.actualMinutes) * 90 : 0;
@@ -381,6 +566,12 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
         matchActions.forEach(action => {
           const packingPoints = action.packingPoints || 0;
           const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+          
+          // Pomiń akcje z ujemną lub zerową wartością xT
+          if (xTDifference <= 0) {
+            return;
+          }
+          
           const pxtCalculated = xTDifference * packingPoints;
           const isDribble = action.actionType === 'dribble';
 
@@ -404,19 +595,168 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
           }
         });
 
+        // Znajdź minuty zawodnika w tym meczu
+        const playerMinutes = match.playerMinutes?.find(pm => pm.playerId === selectedPlayerId);
+        const minutesPlayed = playerMinutes ? Math.max(0, playerMinutes.endMinute - playerMinutes.startMinute) : 0;
+        const position = playerMinutes?.position || 'Nieznana';
+
+        // Oblicz całkowite punkty zespołu w meczu
+        const teamActions = actions.filter(action => action.matchId === match.matchId);
+        let teamTotalPacking = 0;
+        let teamTotalPxT = 0;
+        let teamTotalXt = 0;
+
+        teamActions.forEach(action => {
+          const packingPoints = action.packingPoints || 0;
+          const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+          if (xTDifference > 0) { // Tylko pozytywne xT
+            teamTotalPacking += packingPoints;
+            teamTotalPxT += xTDifference * packingPoints;
+            teamTotalXt += xTDifference;
+          }
+        });
+
+        // Oblicz procent zawodnika w zespole
+        const packingPercent = teamTotalPacking > 0 ? (packingValue / teamTotalPacking * 100) : 0;
+        const pxtPercent = teamTotalPxT > 0 ? (pxtValue / teamTotalPxT * 100) : 0;
+        const xtPercent = teamTotalXt > 0 ? (xtValue / teamTotalXt * 100) : 0;
+
         return {
           matchName: `${match.opponent} (${match.date})`,
           Packing: packingValue,
           PxT: pxtValue,
           xT: xtValue,
-          actionsCount: matchActions.length
+          actionsCount: matchActions.length,
+          minutesPlayed,
+          position,
+          packingPercent,
+          pxtPercent,
+          xtPercent
         };
       })
-      .filter(item => Math.abs(item.Packing) > 0.01 || Math.abs(item.PxT) > 0.01 || Math.abs(item.xT) > 0.01 || item.actionsCount > 0)
+      .filter(item => item.minutesPlayed > 0) // Zachowaj wszystkie mecze gdzie zawodnik grał, aby utrzymać ciągłość linii
       : [];
 
-    return { chartData, tableData, matchChartData };
-  }, [actions, selectedChart, selectedMetric, selectedActionType, sortField, sortDirection, selectedPlayerId, matches, isPer90Minutes]);
+    // Dane dla wykresu sieciowego (ego network dla wybranego zawodnika)
+    const networkConnections = new Map<string, {
+      senderValue: number; // PxT gdy wybrany zawodnik podaje
+      receiverValue: number; // PxT gdy wybrany zawodnik otrzymuje
+    }>(); 
+
+    // Analizuj tylko podania wybranego zawodnika
+    if (selectedPlayerId) {
+      actions.forEach(action => {
+        if (action.actionType === 'pass' && 
+            (action.senderId === selectedPlayerId || action.receiverId === selectedPlayerId)) {
+          
+          const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+          if (xTDifference <= 0) return; // Pomiń akcje z ujemną lub zerową wartością xT
+          
+          const packingPoints = action.packingPoints || 0;
+          const pxtValue = xTDifference * packingPoints;
+          
+          // Sprawdź filtry pozycji
+          if (!action.senderId || !action.receiverId ||
+              !shouldIncludeAction(action, action.senderId) || 
+              !shouldIncludeAction(action, action.receiverId)) return;
+          
+          // Znajdź drugiego zawodnika (nie wybranego)
+          const otherPlayerId = action.senderId === selectedPlayerId ? action.receiverId : action.senderId;
+          if (!otherPlayerId) return;
+          
+          const current = networkConnections.get(otherPlayerId) || { senderValue: 0, receiverValue: 0 };
+          
+          if (action.senderId === selectedPlayerId) {
+            // Wybrany zawodnik podaje
+            current.senderValue += pxtValue;
+          } else {
+            // Wybrany zawodnik otrzymuje
+            current.receiverValue += pxtValue;
+          }
+          
+          networkConnections.set(otherPlayerId, current);
+        }
+      });
+    }
+
+    // Stwórz węzły tylko jeśli jest wybrany zawodnik
+    const networkNodes: NetworkNode[] = [];
+    const networkEdges: NetworkEdge[] = [];
+
+    if (selectedPlayerId && networkConnections.size > 0) {
+      // Dodaj centralny węzeł (wybrany zawodnik)
+      const selectedPlayer = players.find(p => p.id === selectedPlayerId);
+      networkNodes.push({
+        id: selectedPlayerId,
+        name: selectedPlayer?.name || 'Nieznany',
+        x: 300, // Środek
+        y: 300,
+        totalValue: Array.from(networkConnections.values()).reduce((sum, conn) => sum + conn.senderValue + conn.receiverValue, 0),
+        radius: 40, // Jeszcze większy centralny węzeł
+        connectionCount: networkConnections.size
+      });
+
+      // Dodaj węzły partnerów wokół środka
+      const partners = Array.from(networkConnections.entries())
+        .sort(([, a], [, b]) => {
+          // Sortuj według aktywnej metryki (sender/receiver)
+          const aValue = selectedChart === 'sender' ? a.senderValue : a.receiverValue;
+          const bValue = selectedChart === 'sender' ? b.senderValue : b.receiverValue;
+          return bValue - aValue;
+        })
+        .slice(0, 10); // Maksymalnie 10 partnerów
+
+      partners.forEach(([partnerId, connection], index) => {
+        const player = players.find(p => p.id === partnerId);
+        const angle = (index / partners.length) * 2 * Math.PI;
+        const radius = 180; // Promień okręgu wokół środka
+        
+        const currentValue = selectedChart === 'sender' ? connection.senderValue : connection.receiverValue;
+        
+        // Debug: sprawdź czy wartości się zmieniają
+        console.log(`Partner ${partnerId}: sender=${connection.senderValue}, receiver=${connection.receiverValue}, current=${currentValue}, chart=${selectedChart}`);
+        
+        // Policz liczbę podań między zawodnikami
+        const actionCount = actions.filter(a => 
+          a.actionType === 'pass' && 
+          ((a.senderId === selectedPlayerId && a.receiverId === partnerId) ||
+           (a.receiverId === selectedPlayerId && a.senderId === partnerId))
+        ).length;
+        
+        networkNodes.push({
+          id: partnerId,
+          name: player?.name || 'Nieznany',
+          x: 300 + radius * Math.cos(angle),
+          y: 300 + radius * Math.sin(angle),
+          totalValue: currentValue,
+          radius: Math.max(15, Math.min(35, 15 + currentValue * 2)), // Większe węzły
+          connectionCount: 1,
+          senderValue: connection.senderValue,
+          receiverValue: connection.receiverValue,
+          actionCount
+        });
+
+        // Dodaj krawędź
+        if (currentValue > 0) {
+          networkEdges.push({
+            source: selectedPlayerId,
+            target: partnerId,
+            value: currentValue,
+            thickness: Math.max(4, Math.min(20, 4 + currentValue * 3)) // Jeszcze grubsze linie
+          });
+        }
+      });
+    }
+
+    const networkData = {
+      nodes: networkNodes,
+      edges: networkEdges
+    };
+
+    return { chartData, tableData, matchChartData, networkData };
+  }, [actions, players, selectedChart, selectedMetric, selectedActionType, sortField, sortDirection, selectedPlayerId, matches, isPer90Minutes, minMinutesFilter, tableMetric, additionalActionsRole, selectedPositions, birthYearFilter]);
+
+  // availablePositions są przekazywane jako prop
 
   const handleClick = (data: any) => {
     if (selectedPlayerId === data.id) {
@@ -444,9 +784,99 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
   };
 
   const getSortIcon = (field: SortField) => {
-    if (sortField !== field) return '↕️';
-    return sortDirection === 'asc' ? '↑' : '↓';
+    if (sortField !== field) {
+      return <span className={styles.sortIcon}>⊡</span>;
+    }
+    return sortDirection === 'asc' 
+      ? <span className={`${styles.sortIcon} ${styles.sortAsc}`}>▴</span>
+      : <span className={`${styles.sortIcon} ${styles.sortDesc}`}>▾</span>;
   };
+
+  // Pomocnicza funkcja do konwersji team id na nazwę
+  const getTeamName = (teamId: string) => {
+    if (!teams) return teamId;
+    const team = teams.find(t => t.id === teamId);
+    return team ? team.name : teamId;
+  };
+
+  // Oblicz statystyki zawodnika per mecz
+  const getPlayerMatchStats = useMemo(() => {
+    if (!selectedPlayerId || !matches) return [];
+
+    return matches.map(match => {
+      const matchActions = actions.filter(action => action.matchId === match.matchId);
+      let totalPacking = 0;
+      let totalPxT = 0;
+      let totalXT = 0;
+      let senderPacking = 0;
+      let senderPxT = 0;
+      let senderXT = 0;
+      let receiverPacking = 0;
+      let receiverPxT = 0;
+      let receiverXT = 0;
+      let dribblingPacking = 0;
+      let dribblingPxT = 0;
+      let dribblingXT = 0;
+      let actionsCount = 0;
+
+      matchActions.forEach(action => {
+        const packingPoints = action.packingPoints || 0;
+        const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+        
+        // Pomiń akcje z ujemną lub zerową wartością xT
+        if (xTDifference <= 0) return;
+        
+        const pxtValue = xTDifference * packingPoints;
+        const isDribble = action.actionType === 'dribble';
+
+        if (action.senderId === selectedPlayerId) {
+          if (isDribble) {
+            dribblingPacking += packingPoints;
+            dribblingPxT += pxtValue;
+            dribblingXT += xTDifference;
+          } else {
+            senderPacking += packingPoints;
+            senderPxT += pxtValue;
+            senderXT += xTDifference;
+          }
+          actionsCount++;
+        }
+        if (action.receiverId === selectedPlayerId && action.actionType === 'pass') {
+          receiverPacking += packingPoints;
+          receiverPxT += pxtValue;
+          receiverXT += xTDifference;
+          actionsCount++;
+        }
+      });
+
+      totalPacking = senderPacking + receiverPacking + dribblingPacking;
+      totalPxT = senderPxT + receiverPxT + dribblingPxT;
+      totalXT = senderXT + receiverXT + dribblingXT;
+
+      // Znajdź minuty zawodnika w tym meczu
+      const playerMinutes = match.playerMinutes?.find(pm => pm.playerId === selectedPlayerId);
+      const minutesPlayed = playerMinutes ? Math.max(0, playerMinutes.endMinute - playerMinutes.startMinute) : 0;
+
+      return {
+        match,
+        totalPacking,
+        totalPxT,
+        totalXT,
+        senderPacking,
+        senderPxT,
+        senderXT,
+        receiverPacking,
+        receiverPxT,
+        receiverXT,
+        dribblingPacking,
+        dribblingPxT,
+        dribblingXT,
+        actionsCount,
+        minutesPlayed
+      };
+    }).filter(stat => stat.actionsCount > 0 || stat.minutesPlayed > 0); // Tylko mecze gdzie grał lub miał akcje
+  }, [selectedPlayerId, actions, matches]);
+
 
   const getChartTitle = () => {
     const actionTypeName = selectedActionType === 'pass' ? 'Podania' : 'Drybling';
@@ -487,9 +917,12 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       return (
         <div className={styles.tooltip}>
           <p className={styles.tooltipLabel}>{label}</p>
-          <p>Packing: {formatValue(data.Packing, 0)}</p>
-          <p>PxT: {formatValue(data.PxT, 2)}</p>
-          <p>xT: {formatValue(data.xT, 3)}</p>
+          <p>Minuty: {data.minutesPlayed} min</p>
+          <p>Pozycja: {data.position}</p>
+          <hr style={{margin: '6px 0', border: 'none', borderTop: '1px solid #ddd'}} />
+          <p>Packing: {formatValue(data.Packing, 0)} ({formatValue(data.packingPercent, 1)}%)</p>
+          <p>PxT: {formatValue(data.PxT, 2)} ({formatValue(data.pxtPercent, 1)}%)</p>
+          <p>xT: {formatValue(data.xT, 3)} ({formatValue(data.xtPercent, 1)}%)</p>
           <p>Akcji: {data.actionsCount}</p>
         </div>
       );
@@ -499,93 +932,291 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
 
   return (
     <div className={styles.chartContainer}>
-      <div className={styles.actionTypeControls}>
-        <button 
-          className={`${styles.actionTypeButton} ${selectedActionType === 'pass' ? styles.active : ''}`}
-          onClick={() => setSelectedActionType('pass')}
-        >
-          Podania
-        </button>
-        <button 
-          className={`${styles.actionTypeButton} ${selectedActionType === 'dribble' ? styles.active : ''}`}
-          onClick={() => setSelectedActionType('dribble')}
-        >
-          Drybling
-        </button>
-      </div>
+      {/* Zgrupowane kontrolki */}
+      <div className={styles.controlsContainer}>
+        <h4 className={styles.controlsTitle}>Ustawienia wykresu</h4>
+        
+        <div className={styles.controlsRow}>
+          <div className={styles.controlGroup}>
+            <span className={styles.controlGroupLabel}>Typ akcji</span>
+            <div className={styles.actionTypeControls}>
+              <button 
+                className={`${styles.actionTypeButton} ${selectedActionType === 'pass' ? styles.active : ''}`}
+                onClick={() => setSelectedActionType('pass')}
+              >
+                ⚽ Podania
+              </button>
+              <button 
+                className={`${styles.actionTypeButton} ${selectedActionType === 'dribble' ? styles.active : ''}`}
+                onClick={() => setSelectedActionType('dribble')}
+              >
+                🏃 Drybling
+              </button>
+            </div>
+          </div>
 
-      <div className={styles.metricControls}>
-        <button 
-          className={`${styles.metricButton} ${selectedMetric === 'packing' ? styles.active : ''}`}
-          onClick={() => setSelectedMetric('packing')}
-        >
-          Packing
-        </button>
-        <button 
-          className={`${styles.metricButton} ${selectedMetric === 'pxt' ? styles.active : ''}`}
-          onClick={() => setSelectedMetric('pxt')}
-        >
-          PxT
-        </button>
-      </div>
+          <div className={styles.controlGroup}>
+            <span className={styles.controlGroupLabel}>Metryka</span>
+            <div className={styles.metricControls}>
+              <button 
+                className={`${styles.metricButton} ${selectedMetric === 'packing' ? styles.active : ''}`}
+                onClick={() => setSelectedMetric('packing')}
+              >
+                Packing
+              </button>
+              <button 
+                className={`${styles.metricButton} ${selectedMetric === 'pxt' ? styles.active : ''}`}
+                onClick={() => setSelectedMetric('pxt')}
+              >
+                PxT
+              </button>
+            </div>
+          </div>
 
-      <div className={styles.chartControls}>
-        <button 
-          className={`${styles.controlButton} ${selectedChart === 'sender' ? styles.active : ''}`}
-          onClick={() => setSelectedChart('sender')}
-        >
-          Podający
-        </button>
-        {selectedActionType === 'pass' && (
-          <button 
-            className={`${styles.controlButton} ${selectedChart === 'receiver' ? styles.active : ''}`}
-            onClick={() => setSelectedChart('receiver')}
-          >
-            Przyjmujący
-          </button>
-        )}
-      </div>
+          <div className={styles.controlGroup}>
+            <span className={styles.controlGroupLabel}>Rola</span>
+            <div className={styles.chartControls}>
+              <button 
+                className={`${styles.controlButton} ${selectedChart === 'sender' ? styles.active : ''}`}
+                onClick={() => setSelectedChart('sender')}
+              >
+                📤 Podający
+              </button>
+              {selectedActionType === 'pass' && (
+                <button 
+                  className={`${styles.controlButton} ${selectedChart === 'receiver' ? styles.active : ''}`}
+                  onClick={() => setSelectedChart('receiver')}
+                >
+                  📥 Przyjmujący
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
 
-      {/* Przycisk do przełączania między wykresami */}
-      <div className={styles.chartTypeControls}>
-        <button 
-          className={`${styles.chartTypeButton} ${!showMatchChart ? styles.active : ''}`}
-          onClick={() => setShowMatchChart(false)}
-        >
-          📊 Statystyki ogólne
-        </button>
-        <button 
-          className={`${styles.chartTypeButton} ${showMatchChart ? styles.active : ''}`}
-          onClick={() => setShowMatchChart(true)}
-          disabled={!selectedPlayerId}
-        >
-          📈 Mecz po meczu
-        </button>
+        <div className={styles.controlsRow}>
+          <div className={styles.controlGroup}>
+            <span className={styles.controlGroupLabel}>Typ wykresu</span>
+            <div className={styles.chartTypeControls}>
+              <button 
+                className={`${styles.chartTypeButton} ${!showMatchChart && !showNetworkChart ? styles.active : ''}`}
+                onClick={() => {setShowMatchChart(false); setShowNetworkChart(false);}}
+              >
+                📊 Statystyki ogólne
+              </button>
+              <button 
+                className={`${styles.chartTypeButton} ${showMatchChart ? styles.active : ''}`}
+                onClick={() => {setShowMatchChart(true); setShowNetworkChart(false);}}
+                disabled={!selectedPlayerId}
+              >
+                📈 Mecz po meczu
+              </button>
+              <button 
+                className={`${styles.chartTypeButton} ${showNetworkChart ? styles.active : ''}`}
+                onClick={() => {setShowNetworkChart(true); setShowMatchChart(false);}}
+              >
+                ⚛️ Sieć połączeń
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
       
-      <h3>{showMatchChart ? `Statystyki mecz po mecz - ${chartData.find(d => d.id === selectedPlayerId)?.name || 'Wybierz zawodnika'}` : getChartTitle()}</h3>
+      <h3>{showNetworkChart ? (selectedPlayerId ? `Sieć połączeń - ${chartData.find(d => d.id === selectedPlayerId)?.name || players.find(p => p.id === selectedPlayerId)?.name || 'Nieznany'}` : 'Sieć połączeń - wybierz zawodnika') : showMatchChart ? `Statystyki mecz po mecz - ${chartData.find(d => d.id === selectedPlayerId)?.name || 'Wybierz zawodnika'}` : getChartTitle()}</h3>
       
-      {!showMatchChart ? (
+      {showNetworkChart ? (
+        // Wykres sieciowy (pajęczyna połączeń)
+        networkData.nodes.length > 0 ? (
+          <div className={styles.chart}>
+            <svg width="600" height="600" viewBox="0 0 600 600" className={styles.networkChart}>
+              {/* Rysuj krawędzie (połączenia) */}
+              {networkData.edges.map((edge, index) => {
+                const sourceNode = networkData.nodes.find(n => n.id === edge.source);
+                const targetNode = networkData.nodes.find(n => n.id === edge.target);
+                if (!sourceNode || !targetNode) return null;
+                
+                // Oblicz środek linii dla etykiety
+                const midX = (sourceNode.x + targetNode.x) / 2;
+                const midY = (sourceNode.y + targetNode.y) / 2;
+                
+                // Oblicz kąt linii dla obrotu tekstu
+                const angle = Math.atan2(targetNode.y - sourceNode.y, targetNode.x - sourceNode.x) * 180 / Math.PI;
+                const rotation = Math.abs(angle) > 90 ? angle + 180 : angle;
+                
+                return (
+                  <g key={`edge-${index}`}>
+                    <line
+                      x1={sourceNode.x}
+                      y1={sourceNode.y}
+                      x2={targetNode.x}
+                      y2={targetNode.y}
+                      stroke="#82ca9d"
+                      strokeWidth={edge.thickness}
+                      opacity={0.7}
+                    >
+                      <title>{`${sourceNode.name} ↔ ${targetNode.name}: ${edge.value.toFixed(2)} PxT`}</title>
+                    </line>
+                    
+                    {/* Etykieta na linii z wartością PxT */}
+                    <text
+                      x={midX}
+                      y={midY - 3}
+                      textAnchor="middle"
+                      fontSize="9"
+                      fill="#2d7a2d"
+                      fontWeight="bold"
+                      transform={`rotate(${rotation} ${midX} ${midY})`}
+                      style={{ 
+                        textShadow: '1px 1px 2px rgba(255,255,255,0.8)',
+                        filter: 'drop-shadow(0px 0px 2px rgba(255,255,255,0.8))'
+                      }}
+                    >
+                      {edge.value.toFixed(1)}
+                    </text>
+                  </g>
+                );
+              })}
+              
+              {/* Rysuj węzły (zawodnicy) */}
+              {networkData.nodes.map((node) => {
+                const isCenter = node.id === selectedPlayerId;
+                const senderValue = node.senderValue || 0;
+                const receiverValue = node.receiverValue || 0;
+                const totalActions = node.actionCount || node.connectionCount;
+                
+                return (
+                  <g key={node.id}>
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={node.radius}
+                      fill={isCenter ? "#ff6b6b" : "#0088FE"}
+                      stroke={isCenter ? "#000" : "#fff"}
+                      strokeWidth={isCenter ? 3 : 2}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleClick({ id: node.id })}
+                    >
+                      <title>{isCenter ? 
+                        `${node.name}: Centrum sieci, ${node.connectionCount} połączeń` :
+                        `${node.name}: PxT: ${node.totalValue.toFixed(2)}, Podania: ${totalActions}, Podający: ${senderValue.toFixed(1)}, Przyjmujący: ${receiverValue.toFixed(1)}`
+                      }</title>
+                    </circle>
+                    
+                    {/* Nazwa zawodnika */}
+                    <text
+                      x={node.x}
+                      y={node.y - node.radius - 25}
+                      textAnchor="middle"
+                      fontSize="12"
+                      fontWeight="bold"
+                      fill="#333"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleClick({ id: node.id })}
+                    >
+                      {node.name}
+                    </text>
+                    
+                    {/* Dane w środku koła */}
+                    <text
+                      x={node.x}
+                      y={node.y + 3}
+                      textAnchor="middle"
+                      fontSize="9"
+                      fill="#fff"
+                      fontWeight="bold"
+                    >
+                      {isCenter ? node.connectionCount : totalActions}
+                    </text>
+                    
+                    {/* Statystyki pod węzłem */}
+                    {!isCenter && (
+                      <>
+                        <text
+                          x={node.x}
+                          y={node.y + node.radius + 15}
+                          textAnchor="middle"
+                          fontSize="10"
+                          fill="#333"
+                          fontWeight="600"
+                        >
+                          PxT: {node.totalValue.toFixed(1)}
+                        </text>
+                        <text
+                          x={node.x}
+                          y={node.y + node.radius + 27}
+                          textAnchor="middle"
+                          fontSize="9"
+                          fill="#666"
+                        >
+                          P: {senderValue.toFixed(1)} | O: {receiverValue.toFixed(1)}
+                        </text>
+                      </>
+                    )}
+                    
+                    {/* Statystyki centrum */}
+                    {isCenter && (
+                      <text
+                        x={node.x}
+                        y={node.y + node.radius + 15}
+                        textAnchor="middle"
+                        fontSize="10"
+                        fill="#333"
+                        fontWeight="600"
+                      >
+                        {node.connectionCount} partnerów
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+            
+            {/* Legenda i opis */}
+            <div className={styles.networkLegend}>
+              <div className={styles.legendItem}>
+                <div className={styles.legendCircle} style={{ backgroundColor: '#0088FE' }}></div>
+                <span>Partner (rozmiar = siła połączenia)</span>
+              </div>
+              <div className={styles.legendItem}>
+                <div className={styles.legendLine} style={{ backgroundColor: '#82ca9d' }}></div>
+                <span>Połączenie PxT (grubość = siła)</span>
+              </div>
+              <div className={styles.legendItem}>
+                <div className={styles.legendCircle} style={{ backgroundColor: '#ff6b6b' }}></div>
+                <span>Wybrany zawodnik</span>
+              </div>
+            </div>
+
+          </div>
+        ) : (
+          <div className={styles.noData}>
+            <p>{!selectedPlayerId ? 'Wybierz zawodnika, aby zobaczyć jego sieć połączeń' : 'Brak połączeń dla wybranego zawodnika'}</p>
+            <p style={{fontSize: '14px', color: '#666', marginTop: '10px'}}>
+              {!selectedPlayerId 
+                ? 'Kliknij na zawodnika w tabeli lub wykresie aby zobaczyć jego partnerów' 
+                : 'Sprawdź czy zawodnik ma podania w wybranych meczach'}
+            </p>
+          </div>
+        )
+      ) : !showMatchChart ? (
         // Oryginalny wykres kołowy
         chartData.length > 0 ? (
           <div className={styles.chart}>
-            <ResponsiveContainer width="100%" height={400}>
+            <ResponsiveContainer width="100%" height={500}>
               <PieChart>
                 <Pie
-                  data={chartData}
+                  data={chartData.slice(0, 10)}
                   dataKey="value"
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  outerRadius={150}
+                  outerRadius={180}
+                  innerRadius={60}
                   fill="#8884d8"
                   onClick={handleClick}
-                  label={({ name, value, percent }) => 
-                    `${name}: ${getValueLabel(value)} (${(percent * 100).toFixed(1)}%)`
-                  }
-                  labelLine={false}
+                  paddingAngle={2}
                 >
-                  {chartData.map((entry, index) => (
+                  {chartData.slice(0, 10).map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={COLORS[index % COLORS.length]}
@@ -595,13 +1226,30 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
                     />
                   ))}
                 </Pie>
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip 
+                  formatter={(value: number) => [getValueLabel(value), selectedMetric === 'packing' ? 'Packing' : 'PxT']}
+                  labelStyle={{ fontSize: '14px', fontWeight: 'bold' }}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={80}
+                  iconType="circle"
+                  wrapperStyle={{ 
+                    fontSize: '11px', 
+                    paddingTop: '15px', 
+                    maxHeight: '80px',
+                    overflow: 'hidden'
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
         ) : (
           <div className={styles.noData}>
             <p>Brak danych dla wybranej kategorii</p>
+            <p style={{fontSize: '14px', color: '#666', marginTop: '10px'}}>
+              Wybierz mecze i zawodników z akcjami lub sprawdź ustawienia filtrów
+            </p>
           </div>
         )
       ) : (
@@ -637,6 +1285,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
                   stroke="#8884d8" 
                   strokeWidth={2}
                   dot={{ fill: '#8884d8', strokeWidth: 2, r: 4 }}
+                  connectNulls={true}
                   name="xT"
                 />
                 <Line 
@@ -646,6 +1295,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
                   stroke="#82ca9d" 
                   strokeWidth={2}
                   dot={{ fill: '#82ca9d', strokeWidth: 2, r: 4 }}
+                  connectNulls={true}
                   name="PxT"
                 />
                 <Line 
@@ -655,6 +1305,7 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
                   stroke="#ffc658" 
                   strokeWidth={2}
                   dot={{ fill: '#ffc658', strokeWidth: 2, r: 4 }}
+                  connectNulls={true}
                   name="Packing"
                 />
               </LineChart>
@@ -689,15 +1340,124 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
       {/* Tabela ze statystykami */}
       <div className={styles.statsTable}>
         <div className={styles.tableHeader}>
-        <h4>Szczegółowe statystyki</h4>
-          <label className={styles.per90Checkbox}>
-            <input
-              type="checkbox"
-              checked={isPer90Minutes}
-              onChange={(e) => setIsPer90Minutes(e.target.checked)}
-            />
-            /90 min
-          </label>
+          <h4>Szczegółowe statystyki ({tableData.length} zawodników)</h4>
+          <div className={styles.tableControls}>
+            <div className={styles.metricToggle}>
+              <button
+                className={`${styles.metricButton} ${tableMetric === 'packing' ? styles.active : ''}`}
+                onClick={() => setTableMetric('packing')}
+              >
+                Packing
+              </button>
+              <button
+                className={`${styles.metricButton} ${tableMetric === 'pxt' ? styles.active : ''}`}
+                onClick={() => setTableMetric('pxt')}
+              >
+                PxT
+              </button>
+              <button
+                className={`${styles.metricButton} ${tableMetric === 'xt' ? styles.active : ''}`}
+                onClick={() => setTableMetric('xt')}
+              >
+                xT
+              </button>
+            </div>
+
+
+            
+            <label className={styles.per90Checkbox}>
+              <input
+                type="checkbox"
+                checked={isPer90Minutes}
+                onChange={(e) => setIsPer90Minutes(e.target.checked)}
+              />
+              /90 min
+            </label>
+            <div className={styles.filterItem}>
+              <label htmlFor="minMinutes">Min. minut:</label>
+              <input
+                id="minMinutes"
+                type="number"
+                min="0"
+                max="90"
+                value={minMinutesFilter}
+                onChange={(e) => setMinMinutesFilter(Number(e.target.value))}
+                className={styles.filterInput}
+                placeholder="0"
+              />
+            </div>
+            <div className={styles.filterItem}>
+              <label>Rocznik urodzenia:</label>
+              <div className={styles.yearRangeContainer}>
+                <input
+                  type="number"
+                  value={birthYearFilter.from}
+                  onChange={(e) => onBirthYearFilterChange({...birthYearFilter, from: e.target.value})}
+                  placeholder="od"
+                  className={styles.filterInput}
+                  min="1990"
+                  max="2020"
+                />
+                <span className={styles.yearRangeSeparator}>-</span>
+                <input
+                  type="number"
+                  value={birthYearFilter.to}
+                  onChange={(e) => onBirthYearFilterChange({...birthYearFilter, to: e.target.value})}
+                  placeholder="do"
+                  className={styles.filterInput}
+                  min="1990"
+                  max="2020"
+                />
+              </div>
+            </div>
+            <div className={styles.filterItem}>
+              <div className={styles.label}>
+                Wybierz pozycje ({selectedPositions.length}/{availablePositions.length}):
+              </div>
+              <div className={`${styles.dropdownContainer} dropdownContainer`}>
+                <div 
+                  className={styles.dropdownToggle}
+                  onClick={() => setShowPositionsDropdown(!showPositionsDropdown)}
+                >
+                  <span>
+                    {selectedPositions.length === 0 ? 'Brak wybranych pozycji' : 
+                     selectedPositions.length === availablePositions.length ? 'Wszystkie pozycje' :
+                     `${selectedPositions.length} pozycji`}
+                  </span>
+                  <span className={styles.dropdownArrow}>{showPositionsDropdown ? '▲' : '▼'}</span>
+                </div>
+                {showPositionsDropdown && (
+                  <div className={styles.dropdownMenu}>
+                    <div 
+                      className={styles.dropdownItem}
+                      onClick={handleSelectAllPositions}
+                    >
+                      <input 
+                        type="checkbox" 
+                        checked={selectedPositions.length === availablePositions.length}
+                        onChange={() => {}}
+                      />
+                      <span>Wszystkie pozycje</span>
+                    </div>
+                    {availablePositions.map(position => (
+                      <div 
+                        key={position.value}
+                        className={styles.dropdownItem}
+                        onClick={() => handlePositionToggle(position.value)}
+                      >
+                        <input 
+                          type="checkbox" 
+                          checked={selectedPositions.includes(position.value)}
+                          onChange={() => {}}
+                        />
+                        <span>{position.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
         <div className={styles.tableContainer}>
           <table className={styles.table}>
@@ -706,117 +1466,348 @@ export default function PackingChart({ actions, players, selectedPlayerId, onPla
                 <th rowSpan={2} onClick={() => handleSort('name')} className={styles.sortableHeader}>
                   Zawodnik {getSortIcon('name')}
                 </th>
-                <th colSpan={3}>Podania - Packing</th>
-                <th colSpan={3}>Podania - PxT</th>
-                <th colSpan={3}>Podania - xT</th>
-                <th colSpan={3}>Drybling</th>
-                <th colSpan={4}>Przejęcie</th>
-                <th colSpan={4}>Podanie</th>
+                <th colSpan={tableMetric === 'packing' ? 2 : 4}>
+                  Podania - {tableMetric === 'packing' ? 'Packing' : tableMetric === 'pxt' ? 'PxT' : 'xT'}
+                </th>
+                <th colSpan={tableMetric === 'packing' ? 1 : 2}>
+                  Drybling - {tableMetric === 'packing' ? 'Packing' : tableMetric === 'pxt' ? 'PxT' : 'xT'}
+                </th>
+                <th colSpan={2}>Aktywność</th>
+                <th colSpan={4}>
+                  <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'}}>
+                    <span>Dodatkowe akcje -</span>
+                    <select 
+                      value={additionalActionsRole} 
+                      onChange={(e) => setAdditionalActionsRole(e.target.value as 'sender' | 'receiver')}
+                      style={{padding: '2px 4px', fontSize: '12px', border: '1px solid #ddd', borderRadius: '3px'}}
+                    >
+                      <option value="sender">Podający</option>
+                      <option value="receiver">Przyjmujący</option>
+                    </select>
+                  </div>
+                </th>
                 <th rowSpan={2} onClick={() => handleSort('minutesPercentage')} className={styles.sortableHeader}>
-                  % minut {getSortIcon('minutesPercentage')}
+                  % {getSortIcon('minutesPercentage')}
+                </th>
+                <th rowSpan={2} onClick={() => handleSort('actualMinutes')} className={styles.sortableHeader}>
+                  Minuty {getSortIcon('actualMinutes')}
                 </th>
               </tr>
               <tr className={styles.subHeader}>
-                <th onClick={() => handleSort('totalPacking')} className={styles.sortableHeader}>
-                  Łącznie {getSortIcon('totalPacking')}
+                {/* Kolumny dla wybranej metryki podań */}
+                {tableMetric === 'packing' && (
+                  <>
+                    <th onClick={() => handleSort('senderPacking')} className={styles.sortableHeader}>
+                      Podający {getSortIcon('senderPacking')}
+                    </th>
+                    <th onClick={() => handleSort('receiverPacking')} className={styles.sortableHeader}>
+                      Przyjmujący {getSortIcon('receiverPacking')}
+                    </th>
+                  </>
+                )}
+                {tableMetric === 'pxt' && (
+                  <>
+                    <th onClick={() => handleSort('senderPxT')} className={styles.sortableHeader}>
+                      Podający {getSortIcon('senderPxT')}
+                    </th>
+                    <th onClick={() => handleSort('senderAveragePxT')} className={styles.sortableHeader}>
+                      Śr. PxT/podanie (P) {getSortIcon('senderAveragePxT')}
+                    </th>
+                    <th onClick={() => handleSort('receiverPxT')} className={styles.sortableHeader}>
+                      Przyjmujący {getSortIcon('receiverPxT')}
+                    </th>
+                    <th onClick={() => handleSort('receiverAveragePxT')} className={styles.sortableHeader}>
+                      Śr. PxT/podanie (O) {getSortIcon('receiverAveragePxT')}
+                    </th>
+                  </>
+                )}
+                {tableMetric === 'xt' && (
+                  <>
+                    <th onClick={() => handleSort('senderXT')} className={styles.sortableHeader}>
+                      Podający {getSortIcon('senderXT')}
+                    </th>
+                    <th onClick={() => handleSort('senderAveragePxT')} className={styles.sortableHeader}>
+                      Śr. PxT/podanie (P) {getSortIcon('senderAveragePxT')}
+                    </th>
+                    <th onClick={() => handleSort('receiverXT')} className={styles.sortableHeader}>
+                      Przyjmujący {getSortIcon('receiverXT')}
+                    </th>
+                    <th onClick={() => handleSort('receiverAveragePxT')} className={styles.sortableHeader}>
+                      Śr. PxT/podanie (O) {getSortIcon('receiverAveragePxT')}
+                    </th>
+                  </>
+                )}
+                                {tableMetric === 'packing' && (
+                  <th onClick={() => handleSort('totalDribbling')} className={styles.sortableHeader}>
+                    Packing {getSortIcon('totalDribbling')}
+                  </th>
+                )}
+                {tableMetric === 'pxt' && (
+                  <>
+                    <th onClick={() => handleSort('totalDribblingPxT')} className={styles.sortableHeader}>
+                      PxT {getSortIcon('totalDribblingPxT')}
+                    </th>
+                    <th onClick={() => handleSort('dribblingAveragePxT')} className={styles.sortableHeader}>
+                      Śr. PxT/drybling {getSortIcon('dribblingAveragePxT')}
+                    </th>
+                  </>
+                )}
+                {tableMetric === 'xt' && (
+                  <>
+                    <th onClick={() => handleSort('totalDribblingXT')} className={styles.sortableHeader}>
+                      xT {getSortIcon('totalDribblingXT')}
+                    </th>
+                    <th onClick={() => handleSort('dribblingAverageXT')} className={styles.sortableHeader}>
+                      Śr. xT/drybling {getSortIcon('dribblingAverageXT')}
+                    </th>
+                  </>
+                )}
+                <th onClick={() => handleSort('passCount')} className={styles.sortableHeader}>
+                  Podania/90 {getSortIcon('passCount')}
                 </th>
-                <th onClick={() => handleSort('senderPacking')} className={styles.sortableHeader}>
-                  Podający {getSortIcon('senderPacking')}
+                <th onClick={() => handleSort('dribblingCount')} className={styles.sortableHeader}>
+                  Drybling/90 {getSortIcon('dribblingCount')}
                 </th>
-                <th onClick={() => handleSort('receiverPacking')} className={styles.sortableHeader}>
-                  Przyjmujący {getSortIcon('receiverPacking')}
+                <th onClick={() => handleSort(additionalActionsRole === 'sender' ? 'senderP3' : 'receiverP3')} className={styles.sortableHeader}>
+                  P3 {getSortIcon(additionalActionsRole === 'sender' ? 'senderP3' : 'receiverP3')}
                 </th>
-                <th onClick={() => handleSort('totalPxT')} className={styles.sortableHeader}>
-                  Łącznie {getSortIcon('totalPxT')}
+                <th onClick={() => handleSort(additionalActionsRole === 'sender' ? 'senderPenaltyArea' : 'receiverPenaltyArea')} className={styles.sortableHeader}>
+                  PK {getSortIcon(additionalActionsRole === 'sender' ? 'senderPenaltyArea' : 'receiverPenaltyArea')}
                 </th>
-                <th onClick={() => handleSort('senderPxT')} className={styles.sortableHeader}>
-                  Podający {getSortIcon('senderPxT')}
+                <th onClick={() => handleSort(additionalActionsRole === 'sender' ? 'senderShots' : 'receiverShots')} className={styles.sortableHeader}>
+                  Strzał {getSortIcon(additionalActionsRole === 'sender' ? 'senderShots' : 'receiverShots')}
                 </th>
-                <th onClick={() => handleSort('receiverPxT')} className={styles.sortableHeader}>
-                  Przyjmujący {getSortIcon('receiverPxT')}
+                <th onClick={() => handleSort(additionalActionsRole === 'sender' ? 'senderGoals' : 'receiverGoals')} className={styles.sortableHeader}>
+                  Br {getSortIcon(additionalActionsRole === 'sender' ? 'senderGoals' : 'receiverGoals')}
                 </th>
-                <th onClick={() => handleSort('totalXT')} className={styles.sortableHeader}>
-                  Łącznie {getSortIcon('totalXT')}
-                </th>
-                <th onClick={() => handleSort('senderXT')} className={styles.sortableHeader}>
-                  Podający {getSortIcon('senderXT')}
-                </th>
-                <th onClick={() => handleSort('receiverXT')} className={styles.sortableHeader}>
-                  Przyjmujący {getSortIcon('receiverXT')}
-                </th>
-                <th onClick={() => handleSort('totalDribbling')} className={styles.sortableHeader}>
-                  Packing {getSortIcon('totalDribbling')}
-                </th>
-                <th onClick={() => handleSort('totalDribblingPxT')} className={styles.sortableHeader}>
-                  PxT {getSortIcon('totalDribblingPxT')}
-                </th>
-                <th onClick={() => handleSort('totalDribblingXT')} className={styles.sortableHeader}>
-                  xT {getSortIcon('totalDribblingXT')}
-                </th>
-                <th onClick={() => handleSort('senderP3')} className={styles.sortableHeader}>
-                  P3 {getSortIcon('senderP3')}
-                </th>
-                <th onClick={() => handleSort('senderPenaltyArea')} className={styles.sortableHeader}>
-                  PK {getSortIcon('senderPenaltyArea')}
-                </th>
-                <th onClick={() => handleSort('senderShots')} className={styles.sortableHeader}>
-                  Strzał {getSortIcon('senderShots')}
-                </th>
-                <th onClick={() => handleSort('senderGoals')} className={styles.sortableHeader}>
-                  Br {getSortIcon('senderGoals')}
-                </th>
-                <th onClick={() => handleSort('receiverP3')} className={styles.sortableHeader}>
-                  P3 {getSortIcon('receiverP3')}
-                </th>
-                <th onClick={() => handleSort('receiverPenaltyArea')} className={styles.sortableHeader}>
-                  PK {getSortIcon('receiverPenaltyArea')}
-                </th>
-                <th onClick={() => handleSort('receiverShots')} className={styles.sortableHeader}>
-                  Strzał {getSortIcon('receiverShots')}
-                </th>
-                <th onClick={() => handleSort('receiverGoals')} className={styles.sortableHeader}>
-                  Br {getSortIcon('receiverGoals')}
-                </th>
+
               </tr>
             </thead>
             <tbody>
-              {tableData.map((player, index) => (
+              {tableData.length === 0 ? (
+                <tr>
+                  <td colSpan={tableMetric === 'packing' ? 11 : 13} style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                    Brak danych do wyświetlenia
+                  </td>
+                </tr>
+              ) : (
+                tableData.map((player, index) => (
                 <tr 
                   key={player.id} 
                   className={`${styles.tableRow} ${selectedPlayerId === player.id ? styles.selectedRow : ''}`}
                   onClick={() => handleTableRowClick(player.id)}
                 >
-                  <td className={styles.playerName}>{player.name}</td>
-                  {/* Podania */}
-                  <td>{isPer90Minutes ? formatValuePer90(player.totalPacking, player.actualMinutes, 1) : formatValue(player.totalPacking, 0)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.senderPacking, player.actualMinutes, 1) : formatValue(player.senderPacking, 0)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.receiverPacking, player.actualMinutes, 1) : formatValue(player.receiverPacking, 0)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.totalPxT, player.actualMinutes, 2) : formatValue(player.totalPxT, 2)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.senderPxT, player.actualMinutes, 2) : formatValue(player.senderPxT, 2)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.receiverPxT, player.actualMinutes, 2) : formatValue(player.receiverPxT, 2)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.totalXT, player.actualMinutes, 3) : formatValue(player.totalXT, 3)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.senderXT, player.actualMinutes, 3) : formatValue(player.senderXT, 3)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.receiverXT, player.actualMinutes, 3) : formatValue(player.receiverXT, 3)}</td>
+                  <td className={styles.playerName}>
+                    {player.name}
+                    {(player as any).birthYear && (
+                      <span className={styles.birthYear}> ({(player as any).birthYear})</span>
+                    )}
+                  </td>
+                  {/* Podania - dynamiczne w zależności od wybranej metryki */}
+                  {tableMetric === 'packing' && (
+                    <>
+                      <td>
+                        {isPer90Minutes ? formatValuePer90(player.senderPacking, player.actualMinutes, 1) : formatValue(player.senderPacking, 0)}
+                        <small style={{color: '#666', marginLeft: '4px'}}>
+                          ({isPer90Minutes ? formatValuePer90((player as any).senderPassCount, player.actualMinutes, 0) : (player as any).senderPassCount})
+                        </small>
+                      </td>
+                      <td>
+                        {isPer90Minutes ? formatValuePer90(player.receiverPacking, player.actualMinutes, 1) : formatValue(player.receiverPacking, 0)}
+                        <small style={{color: '#666', marginLeft: '4px'}}>
+                          ({isPer90Minutes ? formatValuePer90((player as any).receiverPassCount, player.actualMinutes, 0) : (player as any).receiverPassCount})
+                        </small>
+                      </td>
+                    </>
+                  )}
+                  {tableMetric === 'pxt' && (
+                    <>
+                      <td>
+                        {isPer90Minutes ? formatValuePer90(player.senderPxT, player.actualMinutes, 2) : formatValue(player.senderPxT, 2)}
+                        <small style={{color: '#666', marginLeft: '4px'}}>
+                          ({isPer90Minutes ? formatValuePer90(player.senderPassCount, player.actualMinutes, 0) : player.senderPassCount})
+                        </small>
+                      </td>
+                      <td>{formatValue(player.senderAveragePxT, 3)}</td>
+                      <td>
+                        {isPer90Minutes ? formatValuePer90(player.receiverPxT, player.actualMinutes, 2) : formatValue(player.receiverPxT, 2)}
+                        <small style={{color: '#666', marginLeft: '4px'}}>
+                          ({isPer90Minutes ? formatValuePer90(player.receiverPassCount, player.actualMinutes, 0) : player.receiverPassCount})
+                        </small>
+                      </td>
+                      <td>{formatValue(player.receiverAveragePxT, 3)}</td>
+                    </>
+                  )}
+                  {tableMetric === 'xt' && (
+                    <>
+                      <td>
+                        {isPer90Minutes ? formatValuePer90(player.senderXT, player.actualMinutes, 3) : formatValue(player.senderXT, 3)}
+                        <small style={{color: '#666', marginLeft: '4px'}}>
+                          ({isPer90Minutes ? formatValuePer90(player.senderPassCount, player.actualMinutes, 0) : player.senderPassCount})
+                        </small>
+                      </td>
+                      <td>{formatValue(player.senderAveragePxT, 3)}</td>
+                      <td>
+                        {isPer90Minutes ? formatValuePer90(player.receiverXT, player.actualMinutes, 3) : formatValue(player.receiverXT, 3)}
+                        <small style={{color: '#666', marginLeft: '4px'}}>
+                          ({isPer90Minutes ? formatValuePer90(player.receiverPassCount, player.actualMinutes, 0) : player.receiverPassCount})
+                        </small>
+                      </td>
+                      <td>{formatValue(player.receiverAveragePxT, 3)}</td>
+                    </>
+                  )}
                   {/* Drybling */}
-                  <td>{isPer90Minutes ? formatValuePer90(player.totalDribbling, player.actualMinutes, 1) : formatValue(player.totalDribbling, 0)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.totalDribblingPxT, player.actualMinutes, 2) : formatValue(player.totalDribblingPxT, 2)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.totalDribblingXT, player.actualMinutes, 3) : formatValue(player.totalDribblingXT, 3)}</td>
-                  {/* Przejęcie */}
-                  <td>{isPer90Minutes ? formatValuePer90(player.senderP3, player.actualMinutes, 1) : formatValue(player.senderP3, 0)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.senderPenaltyArea, player.actualMinutes, 1) : formatValue(player.senderPenaltyArea, 0)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.senderShots, player.actualMinutes, 1) : formatValue(player.senderShots, 0)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.senderGoals, player.actualMinutes, 1) : formatValue(player.senderGoals, 0)}</td>
-                  {/* Podanie */}
-                  <td>{isPer90Minutes ? formatValuePer90(player.receiverP3, player.actualMinutes, 1) : formatValue(player.receiverP3, 0)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.receiverPenaltyArea, player.actualMinutes, 1) : formatValue(player.receiverPenaltyArea, 0)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.receiverShots, player.actualMinutes, 1) : formatValue(player.receiverShots, 0)}</td>
-                  <td>{isPer90Minutes ? formatValuePer90(player.receiverGoals, player.actualMinutes, 1) : formatValue(player.receiverGoals, 0)}</td>
+                  {tableMetric === 'packing' && (
+                    <td>
+                      {isPer90Minutes ? formatValuePer90(player.totalDribbling, player.actualMinutes, 1) : formatValue(player.totalDribbling, 0)}
+                      <small style={{color: '#666', marginLeft: '4px'}}>
+                        ({isPer90Minutes ? formatValuePer90((player as any).dribblingCount, player.actualMinutes, 0) : (player as any).dribblingCount})
+                      </small>
+                    </td>
+                  )}
+                  {tableMetric === 'pxt' && (
+                    <>
+                      <td>
+                        {isPer90Minutes ? formatValuePer90(player.totalDribblingPxT, player.actualMinutes, 2) : formatValue(player.totalDribblingPxT, 2)}
+                        <small style={{color: '#666', marginLeft: '4px'}}>
+                          ({isPer90Minutes ? formatValuePer90((player as any).dribblingCount, player.actualMinutes, 0) : (player as any).dribblingCount})
+                        </small>
+                      </td>
+                      <td>{formatValue((player as any).dribblingAveragePxT, 3)}</td>
+                    </>
+                  )}
+                  {tableMetric === 'xt' && (
+                    <>
+                      <td>
+                        {isPer90Minutes ? formatValuePer90(player.totalDribblingXT, player.actualMinutes, 3) : formatValue(player.totalDribblingXT, 3)}
+                        <small style={{color: '#666', marginLeft: '4px'}}>
+                          ({isPer90Minutes ? formatValuePer90((player as any).dribblingCount, player.actualMinutes, 0) : (player as any).dribblingCount})
+                        </small>
+                      </td>
+                      <td>{formatValue((player as any).dribblingAverageXT, 3)}</td>
+                    </>
+                  )}
+                  {/* Aktywność */}
+                  <td>{formatValuePer90((player as any).passCount, player.actualMinutes, 1)}</td>
+                  <td>{formatValuePer90((player as any).dribblingCount, player.actualMinutes, 1)}</td>
+                  {/* Dodatkowe akcje - dynamiczne w zależności od roli */}
+                  <td>
+                    {additionalActionsRole === 'sender' 
+                      ? (isPer90Minutes ? formatValuePer90(player.senderP3, player.actualMinutes, 1) : formatValue(player.senderP3, 0))
+                      : (isPer90Minutes ? formatValuePer90(player.receiverP3, player.actualMinutes, 1) : formatValue(player.receiverP3, 0))
+                    }
+                  </td>
+                  <td>
+                    {additionalActionsRole === 'sender' 
+                      ? (isPer90Minutes ? formatValuePer90(player.senderPenaltyArea, player.actualMinutes, 1) : formatValue(player.senderPenaltyArea, 0))
+                      : (isPer90Minutes ? formatValuePer90(player.receiverPenaltyArea, player.actualMinutes, 1) : formatValue(player.receiverPenaltyArea, 0))
+                    }
+                  </td>
+                  <td>
+                    {additionalActionsRole === 'sender' 
+                      ? (isPer90Minutes ? formatValuePer90(player.senderShots, player.actualMinutes, 1) : formatValue(player.senderShots, 0))
+                      : (isPer90Minutes ? formatValuePer90(player.receiverShots, player.actualMinutes, 1) : formatValue(player.receiverShots, 0))
+                    }
+                  </td>
+                  <td>
+                    {additionalActionsRole === 'sender' 
+                      ? (isPer90Minutes ? formatValuePer90(player.senderGoals, player.actualMinutes, 1) : formatValue(player.senderGoals, 0))
+                      : (isPer90Minutes ? formatValuePer90(player.receiverGoals, player.actualMinutes, 1) : formatValue(player.receiverGoals, 0))
+                    }
+                  </td>
                   <td>{formatValue(player.minutesPercentage, 0)}</td>
+                  <td>{formatValue(player.actualMinutes, 0)}</td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>
+
+        {/* Szczegółowe statystyki wybranego zawodnika */}
+        {selectedPlayerId && getPlayerMatchStats.length > 0 && (
+          <div className={styles.playerDetails}>
+            <div className={styles.playerDetailsHeader}>
+              <h5>Szczegóły meczów - {tableData.find(p => p.id === selectedPlayerId)?.name}</h5>
+              <div className={styles.roleToggle}>
+                <button
+                  className={`${styles.roleButton} ${playerDetailsRole === 'sender' ? styles.active : ''}`}
+                  onClick={() => setPlayerDetailsRole('sender')}
+                >
+                  Podający
+                </button>
+                <button
+                  className={`${styles.roleButton} ${playerDetailsRole === 'receiver' ? styles.active : ''}`}
+                  onClick={() => setPlayerDetailsRole('receiver')}
+                >
+                  Przyjmujący
+                </button>
+                <button
+                  className={`${styles.roleButton} ${playerDetailsRole === 'dribbling' ? styles.active : ''}`}
+                  onClick={() => setPlayerDetailsRole('dribbling')}
+                >
+                  Drybling
+                </button>
+              </div>
+            </div>
+            
+            <div className={styles.matchStatsTable}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Mecz</th>
+                    <th>Minuty</th>
+                    <th>Packing</th>
+                    <th>PxT</th>
+                    <th>xT</th>
+                    <th>Akcje</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getPlayerMatchStats.map((stat, index) => (
+                    <tr key={stat.match.matchId}>
+                      <td>{new Date(stat.match.date).toLocaleDateString('pl-PL')}</td>
+                      <td>{getTeamName(stat.match.team)} vs {stat.match.opponent}</td>
+                      <td>{stat.minutesPlayed}'</td>
+                      <td>
+                        {playerDetailsRole === 'sender' 
+                          ? formatValue(stat.senderPacking, 0)
+                          : playerDetailsRole === 'receiver'
+                          ? formatValue(stat.receiverPacking, 0)
+                          : formatValue(stat.dribblingPacking, 0)
+                        }
+                      </td>
+                      <td>
+                        {playerDetailsRole === 'sender' 
+                          ? formatValue(stat.senderPxT, 2)
+                          : playerDetailsRole === 'receiver'
+                          ? formatValue(stat.receiverPxT, 2)
+                          : formatValue(stat.dribblingPxT, 2)
+                        }
+                      </td>
+                      <td>
+                        {playerDetailsRole === 'sender' 
+                          ? formatValue(stat.senderXT, 3)
+                          : playerDetailsRole === 'receiver'
+                          ? formatValue(stat.receiverXT, 3)
+                          : formatValue(stat.dribblingXT, 3)
+                        }
+                      </td>
+                      <td>
+                        {playerDetailsRole === 'sender' 
+                          ? actions.filter(a => a.matchId === stat.match.matchId && a.senderId === selectedPlayerId && a.actionType === 'pass').length
+                          : playerDetailsRole === 'receiver'
+                          ? actions.filter(a => a.matchId === stat.match.matchId && a.receiverId === selectedPlayerId && a.actionType === 'pass').length
+                          : actions.filter(a => a.matchId === stat.match.matchId && a.senderId === selectedPlayerId && a.actionType === 'dribble').length
+                        }
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

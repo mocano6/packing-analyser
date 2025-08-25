@@ -53,11 +53,13 @@ const ActionRow = ({
   onDelete,
   onEdit,
   onVideoTimeClick,
+  selectedMetric,
 }: {
   action: ActionsTableProps["actions"][0];
   onDelete: (id: string) => void;
   onEdit?: (action: ActionsTableProps["actions"][0]) => void;
   onVideoTimeClick?: (videoTimestamp?: number) => void;
+  selectedMetric: 'packing' | 'pxt' | 'xt';
 }) => {
   const getEvents = () => {
     const events = [];
@@ -121,17 +123,27 @@ const ActionRow = ({
       <div className={styles.cell}>
         {senderDisplay}
       </div>
-      <div className={styles.cell}>{typeof action.xTValueStart === 'number' ? action.xTValueStart.toFixed(3) : '0.000'}</div>
+      {selectedMetric === 'xt' && (
+        <div className={styles.cell}>{typeof action.xTValueStart === 'number' ? action.xTValueStart.toFixed(3) : '0.000'}</div>
+      )}
       <div className={styles.cell}>
         {receiverDisplay}
       </div>
-      <div className={styles.cell}>{typeof action.xTValueEnd === 'number' ? action.xTValueEnd.toFixed(3) : '0.000'}</div>
+      {selectedMetric === 'xt' && (
+        <div className={styles.cell}>{typeof action.xTValueEnd === 'number' ? action.xTValueEnd.toFixed(3) : '0.000'}</div>
+      )}
       <div className={styles.cell}>
         <span className={action.actionType === "pass" ? styles.pass : styles.dribble}>
           {action.actionType === "pass" ? "Podanie" : "Drybling"}
         </span>
       </div>
-      <div className={styles.cell}>{action.packingPoints ? Math.round(action.packingPoints) : "-"}</div>
+      <div className={styles.cell}>
+        {selectedMetric === 'packing' && (action.packingPoints ? Math.round(action.packingPoints) : "-")}
+        {selectedMetric === 'pxt' && (action.PxT ? action.PxT.toFixed(3) : "-")}
+        {selectedMetric === 'xt' && (typeof action.xTValueEnd === 'number' && typeof action.xTValueStart === 'number' 
+          ? (action.xTValueEnd - action.xTValueStart).toFixed(3) 
+          : "-")}
+      </div>
       <div className={styles.cell}>{getEvents()}</div>
       <div className={styles.cellActions}>
         {onEdit && (
@@ -167,6 +179,9 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
     key: "minute",
     direction: "asc",
   });
+
+  // State dla wyboru typu metryki w tabeli
+  const [selectedMetric, setSelectedMetric] = useState<'packing' | 'pxt' | 'xt'>('packing');
 
   // Dodajemy state do śledzenia, czy jakieś akcje mają brakujące dane graczy
   const [hasMissingPlayerData, setHasMissingPlayerData] = useState(false);
@@ -289,6 +304,28 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
       <div className={styles.headerControls}>
         <h3>Lista akcji ({actions.length})</h3>
         <div className={styles.headerButtons}>
+          {/* Przełącznik metryk */}
+          <div className={styles.metricToggle}>
+            <button
+              className={`${styles.metricButton} ${selectedMetric === 'packing' ? styles.active : ''}`}
+              onClick={() => setSelectedMetric('packing')}
+            >
+              Packing
+            </button>
+            <button
+              className={`${styles.metricButton} ${selectedMetric === 'pxt' ? styles.active : ''}`}
+              onClick={() => setSelectedMetric('pxt')}
+            >
+              PxT
+            </button>
+            <button
+              className={`${styles.metricButton} ${selectedMetric === 'xt' ? styles.active : ''}`}
+              onClick={() => setSelectedMetric('xt')}
+            >
+              xT
+            </button>
+          </div>
+          
           {hasMissingPlayerData && onRefreshPlayersData && (
             <button
               className={styles.refreshButton}
@@ -324,13 +361,15 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             sortDirection={sortConfig.direction}
             onSort={handleSort}
           />
-          <HeaderCell
-            label="xT start"
-            sortKey="senderXT"
-            currentSortKey={sortConfig.key}
-            sortDirection={sortConfig.direction}
-            onSort={handleSort}
-          />
+          {selectedMetric === 'xt' && (
+            <HeaderCell
+              label="xT start"
+              sortKey="senderXT"
+              currentSortKey={sortConfig.key}
+              sortDirection={sortConfig.direction}
+              onSort={handleSort}
+            />
+          )}
           <HeaderCell
             label="Zawodnik koniec"
             sortKey="receiver"
@@ -338,13 +377,15 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             sortDirection={sortConfig.direction}
             onSort={handleSort}
           />
-          <HeaderCell
-            label="xT koniec"
-            sortKey="receiverXT"
-            currentSortKey={sortConfig.key}
-            sortDirection={sortConfig.direction}
-            onSort={handleSort}
-          />
+          {selectedMetric === 'xt' && (
+            <HeaderCell
+              label="xT koniec"
+              sortKey="receiverXT"
+              currentSortKey={sortConfig.key}
+              sortDirection={sortConfig.direction}
+              onSort={handleSort}
+            />
+          )}
           <HeaderCell
             label="Rodzaj"
             sortKey="type"
@@ -353,8 +394,8 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             onSort={handleSort}
           />
           <HeaderCell
-            label="Packing"
-            sortKey="packing"
+            label={selectedMetric === 'packing' ? 'Packing' : selectedMetric === 'pxt' ? 'PxT' : 'xT'}
+            sortKey={selectedMetric === 'packing' ? 'packing' : selectedMetric === 'pxt' ? 'pxt' : 'xt'}
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}
             onSort={handleSort}
@@ -379,6 +420,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
                 onDelete={onDeleteAction || (() => {})}
                 onEdit={onEditAction}
                 onVideoTimeClick={handleVideoTimeClick}
+                selectedMetric={selectedMetric}
               />
             ))
           )}

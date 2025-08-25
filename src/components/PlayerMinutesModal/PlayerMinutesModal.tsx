@@ -11,10 +11,38 @@ const POSITIONS = [
   { value: "CB", label: "Środkowy obrońca (CB)" },
   { value: "DM", label: "Defensywny pomocnik (DM)" },
   { value: "AM", label: "Ofensywny pomocnik (AM)" },
-  { value: "RS", label: "Prawy skrzydłowy (RW)" },
-  { value: "LS", label: "Lewy skrzydłowy (LW)" },
+  { value: "LW", label: "Lewy skrzydłowy (LW)" },
+  { value: "RW", label: "Prawy skrzydłowy (RW)" },
   { value: "ST", label: "Napastnik (ST)" },
 ];
+
+// Mapowanie starych pozycji na nowe (dla kompatybilności wstecznej)
+const mapOldPositionToNew = (position: string): string => {
+  const mapping: { [key: string]: string } = {
+    'LS': 'LW',  // Left Side -> Left Wing
+    'RS': 'RW',  // Right Side -> Right Wing
+    'CF': 'ST',  // Center Forward -> Striker
+    'CAM': 'AM', // Central Attacking Midfielder -> Attacking Midfielder
+    'CDM': 'DM', // Central Defensive Midfielder -> Defensive Midfielder
+  };
+  
+  return mapping[position] || position;
+};
+
+// Funkcja do określenia domyślnej pozycji w zależności od naturalnej pozycji zawodnika
+const getDefaultPosition = (playerPosition: string | undefined): string => {
+  if (!playerPosition) return "CB"; // Jeśli brak pozycji, domyślnie CB
+  
+  const normalizedPosition = mapOldPositionToNew(playerPosition);
+  
+  // Jeśli pozycja jest prawidłowa, zwróć ją
+  if (POSITIONS.some(pos => pos.value === normalizedPosition)) {
+    return normalizedPosition;
+  }
+  
+  // Fallback na CB jeśli pozycja nie została rozpoznana
+  return "CB";
+};
 
 const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
   isOpen,
@@ -60,7 +88,8 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
             playerId: player.id,
           startMinute: 0,
           endMinute: 0,
-          position: player.position || "CB"
+          position: getDefaultPosition(player.position),
+          status: 'dostepny' as const
         }));
 
         setPlayerMinutes([...filteredMinutes, ...missingPlayers]);
@@ -70,7 +99,8 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
           playerId: player.id,
           startMinute: 0,
           endMinute: 0,
-          position: player.position || "CB"
+          position: getDefaultPosition(player.position),
+          status: 'dostepny' as const
           }));
       setPlayerMinutes(initialPlayerMinutes);
       }
@@ -106,6 +136,23 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
       prev.map(pm => 
         pm.playerId === playerId 
           ? { ...pm, position } 
+          : pm
+      )
+    );
+  };
+
+  // Aktualizacja statusu zawodnika (z automatycznym zerowaniem minut)
+  const handleStatusChange = (playerId: string, status: 'dostepny' | 'kontuzja' | 'brak_powolania' | 'inny_zespol') => {
+    setPlayerMinutes(prev => 
+      prev.map(pm => 
+        pm.playerId === playerId 
+          ? { 
+              ...pm, 
+              status,
+              // Automatycznie zeruj minuty jeśli zawodnik nie jest dostępny
+              startMinute: status !== 'dostepny' ? 0 : pm.startMinute,
+              endMinute: status !== 'dostepny' ? 0 : pm.endMinute
+            }
           : pm
       )
     );
@@ -168,6 +215,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
             <div className={styles.headerCell}>Od (min)</div>
             <div className={styles.headerCell}>Do (min)</div>
             <div className={styles.headerCell}>Pozycja</div>
+            <div className={styles.headerCell}>Status</div>
             <div className={styles.headerCell}>Łączny czas</div>
           </div>
 
@@ -178,7 +226,8 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
                 playerId: player.id,
                 startMinute: 0,
                 endMinute: 0,
-                position: player.position || "CB" // Domyślna pozycja z danych zawodnika
+                position: player.position || "CB", // Domyślna pozycja z danych zawodnika
+                status: 'dostepny' as const
               };
               
               const playTime = calculatePlayTime(minutes.startMinute, minutes.endMinute);
@@ -201,6 +250,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
                         parseInt(e.target.value) || 0
                       )}
                       className={styles.numberInput}
+                      disabled={minutes.status === 'kontuzja' || minutes.status === 'brak_powolania'}
                     />
                   </div>
                   <div className={styles.timeInput}>
@@ -215,11 +265,12 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
                         parseInt(e.target.value) || 0
                       )}
                       className={styles.numberInput}
+                      disabled={minutes.status === 'kontuzja' || minutes.status === 'brak_powolania'}
                     />
                   </div>
                   <div className={styles.positionInput}>
                     <select
-                      value={minutes.position || "CB"}
+                      value={minutes.position || getDefaultPosition(player.position)}
                       onChange={(e) => handlePositionChange(
                         player.id,
                         e.target.value
@@ -231,6 +282,21 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
                           {pos.label}
                         </option>
                       ))}
+                    </select>
+                  </div>
+                  <div className={styles.statusInput}>
+                    <select
+                      value={minutes.status || 'dostepny'}
+                      onChange={(e) => handleStatusChange(
+                        player.id,
+                        e.target.value as 'dostepny' | 'kontuzja' | 'brak_powolania' | 'inny_zespol'
+                      )}
+                      className={styles.statusSelect}
+                    >
+                      <option value="dostepny">Dostępny</option>
+                      <option value="kontuzja">Kontuzja</option>
+                      <option value="brak_powolania">Brak powołania</option>
+                      <option value="inny_zespol">Inny zespół</option>
                     </select>
                   </div>
                   <div className={styles.playTime}>

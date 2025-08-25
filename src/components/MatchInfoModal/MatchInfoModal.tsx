@@ -164,6 +164,21 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
           </div>
 
           <div className={styles.formGroup}>
+            <label htmlFor="matchType">Typ meczu:</label>
+            <select
+              id="matchType"
+              name="matchType"
+              value={formData.matchType || 'liga'}
+              onChange={handleChange}
+              className={styles.formSelect}
+            >
+              <option value="liga">Liga</option>
+              <option value="puchar">Puchar</option>
+              <option value="towarzyski">Towarzyski</option>
+            </select>
+          </div>
+
+          <div className={styles.formGroup}>
             <label htmlFor="date">Data:</label>
             <input
               id="date"

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Player, Action, TeamInfo } from "@/types";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
@@ -14,6 +14,7 @@ import { sortPlayersByLastName, getPlayerFullName } from "@/utils/playerUtils";
 import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
+import SidePanel from "@/components/SidePanel/SidePanel";
 import styles from "./zawodnicy.module.css";
 
 export default function ZawodnicyPage() {
@@ -22,6 +23,39 @@ export default function ZawodnicyPage() {
   const [isLoadingActions, setIsLoadingActions] = useState(false);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [isMergingDuplicates, setIsMergingDuplicates] = useState(false);
+  const [birthYearFilter, setBirthYearFilter] = useState<{from: string; to: string}>({from: '', to: ''});
+  const [showTeamsDropdown, setShowTeamsDropdown] = useState(false);
+  const [showPositionsDropdown, setShowPositionsDropdown] = useState(false);
+  const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
+
+  // Funkcja do obsługi zaznaczania/odznaczania zespołów
+  const handleTeamToggle = (teamId: string) => {
+    setSelectedTeams(prev => {
+      if (prev.includes(teamId)) {
+        // Jeśli zespół jest zaznaczony, odznacz go
+        return prev.filter(id => id !== teamId);
+      } else {
+        // Jeśli zespół nie jest zaznaczony, zaznacz go
+        return [...prev, teamId];
+      }
+    });
+  };
+
+  // Funkcja do zaznaczania/odznaczania wszystkich zespołów
+  const handleSelectAllTeams = () => {
+    if (selectedTeams.length === availableTeams.length) {
+      // Jeśli wszystkie są zaznaczone, odznacz wszystkie
+      setSelectedTeams([]);
+    } else {
+      // Jeśli nie wszystkie są zaznaczone, zaznacz wszystkie
+      setSelectedTeams(availableTeams.map(team => team.id));
+    }
+  };
+
+  // Stabilne callback dla wyboru zawodnika
+  const handlePlayerSelect = useCallback((playerId: string | null) => {
+    setSelectedPlayerId(playerId);
+  }, []);
 
   const {
     players,
@@ -35,9 +69,72 @@ export default function ZawodnicyPage() {
     closeModal,
   } = usePlayersState();
 
+  // Ref dla aktualnych players żeby uniknąć dependency w useEffect
+  const playersRef = useRef<Player[]>([]);
+  playersRef.current = players;
+
   const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
   const { teams, isLoading: isTeamsLoading } = useTeams();
   const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, logout } = useAuth();
+
+  // Funkcja do mapowania pozycji na etykiety
+  const getPositionLabel = (position: string): string => {
+    const labels: { [key: string]: string } = {
+      'GK': 'Bramkarz (GK)',
+      'CB': 'Środkowy obrońca (CB)',
+      'DM': 'Defensywny pomocnik (DM)',
+      'AM': 'Ofensywny pomocnik (AM)',
+      'LW': 'Lewy skrzydłowy (LW)',
+      'RW': 'Prawy skrzydłowy (RW)',
+      'ST': 'Napastnik (ST)',
+    };
+    return labels[position] || position;
+  };
+
+  // Dostępne pozycje
+  const availablePositions = useMemo(() => {
+    const positions = ['GK', 'CB', 'DM', 'AM', 'LW', 'RW', 'ST'];
+    return positions.map(pos => ({
+      value: pos,
+      label: getPositionLabel(pos)
+    }));
+  }, []);
+
+  // Funkcje obsługi dropdown pozycji
+  const handlePositionToggle = (position: string) => {
+    setSelectedPositions(prev => {
+      if (prev.includes(position)) {
+        return prev.filter(pos => pos !== position);
+      } else {
+        return [...prev, position];
+      }
+    });
+  };
+
+  const handleSelectAllPositions = () => {
+    const allPositions = availablePositions.map(pos => pos.value);
+    if (selectedPositions.length === allPositions.length) {
+      setSelectedPositions([]);
+    } else {
+      setSelectedPositions(allPositions);
+    }
+  };
+
+  // Zamknij dropdown'y przy kliknięciu poza nimi
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.dropdownContainer')) {
+        setShowTeamsDropdown(false);
+        setShowPositionsDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Usunięto stabilne funkcje - nie są już potrzebne
 
@@ -65,29 +162,30 @@ export default function ZawodnicyPage() {
     return obj;
   }, [availableTeams]);
 
-  // Inicjalizuj selectedTeam z localStorage lub pustym stringiem
-  const [selectedTeam, setSelectedTeam] = useState<string>(() => {
+  // Inicjalizuj selectedTeams z localStorage lub pustą tablicą
+  const [selectedTeams, setSelectedTeams] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('selectedTeam') || "";
+      const saved = localStorage.getItem('selectedTeams');
+      return saved ? JSON.parse(saved) : [];
     }
-    return "";
+    return [];
   });
   
   // Ustaw domyślny zespół gdy teams się załadują i zapisz w localStorage
   useEffect(() => {
-    if (availableTeams.length > 0 && !selectedTeam) {
+    if (availableTeams.length > 0 && selectedTeams.length === 0) {
       const firstTeamId = availableTeams[0].id;
-      setSelectedTeam(firstTeamId);
-      localStorage.setItem('selectedTeam', firstTeamId);
+      setSelectedTeams([firstTeamId]);
+      localStorage.setItem('selectedTeams', JSON.stringify([firstTeamId]));
     }
-  }, [availableTeams, selectedTeam]);
+  }, [availableTeams, selectedTeams]);
 
-  // Zapisuj wybrany zespół w localStorage przy każdej zmianie
+  // Zapisuj wybrane zespoły w localStorage przy każdej zmianie
   useEffect(() => {
-    if (selectedTeam) {
-      localStorage.setItem('selectedTeam', selectedTeam);
+    if (selectedTeams.length > 0) {
+      localStorage.setItem('selectedTeams', JSON.stringify(selectedTeams));
     }
-  }, [selectedTeam]);
+  }, [selectedTeams]);
 
   // Stan dla wybranego sezonu
   const [selectedSeason, setSelectedSeason] = useState<string>("");
@@ -105,27 +203,31 @@ export default function ZawodnicyPage() {
     }
   }, [selectedSeason, allMatches]);
 
-  // Pobierz mecze dla wybranego zespołu - tylko przy zmianie zespołu
+  // Pobierz mecze dla wybranych zespołów - tylko przy zmianie zespołów
   useEffect(() => {
-    if (selectedTeam) {
-      // Nie wymuszaj odświeżenia przy każdej zmianie - używaj normalnego fetchMatches
-      fetchMatches(selectedTeam).catch(error => {
+    if (selectedTeams.length > 0) {
+      // Dla wielu zespołów, użyj forceRefreshFromFirebase bez teamId (pobierze wszystkie)
+      forceRefreshFromFirebase().catch(error => {
         console.error('❌ Błąd podczas pobierania meczów:', error);
       });
     }
-  }, [selectedTeam]); // Tylko selectedTeam w dependency - bez funkcji żeby uniknąć infinite loop
+  }, [selectedTeams]); // Tylko selectedTeams w dependency
 
-  // Filtruj mecze według wybranego zespołu i sezonu
+  // Filtruj mecze według wybranych zespołów i sezonu
   const teamMatches = useMemo(() => {
-    const teamFiltered = allMatches.filter(match => match.team === selectedTeam);
+    const teamFiltered = allMatches.filter(match => 
+      selectedTeams.includes(match.team)
+    );
     return selectedSeason ? filterMatchesBySeason(teamFiltered, selectedSeason) : teamFiltered;
-  }, [allMatches, selectedTeam, selectedSeason]);
+  }, [allMatches, selectedTeams, selectedSeason]);
 
-  // Oblicz dostępne sezony na podstawie meczów wybranego zespołu
+  // Oblicz dostępne sezony na podstawie meczów wybranych zespołów
   const availableSeasons = useMemo(() => {
-    const teamFiltered = allMatches.filter(match => match.team === selectedTeam);
+    const teamFiltered = allMatches.filter(match => 
+      selectedTeams.includes(match.team)
+    );
     return getAvailableSeasonsFromMatches(teamFiltered);
-  }, [allMatches, selectedTeam]);
+  }, [allMatches, selectedTeams]);
 
   // Zaznacz wszystkie mecze domyślnie przy zmianie zespołu
   useEffect(() => {
@@ -141,13 +243,22 @@ export default function ZawodnicyPage() {
   useEffect(() => {
     const loadAllActionsForTeam = async () => {
       if (teamMatches.length === 0) {
+        console.log("🔄 Resetowanie akcji - brak meczów", { 
+          teamMatchesLength: teamMatches.length, 
+          selectedTeams, 
+          selectedSeason,
+          allMatchesLength: allMatches.length 
+        });
+        // Tylko resetuj jeśli rzeczywiście nie ma meczów dla zespołów, nie podczas ładowania
+        if (selectedTeams.length > 0 && allMatches.length > 0) {
         setAllActions([]);
+        }
         return;
       }
 
       // Sprawdź czy Firebase jest dostępne
       if (!db) {
-        console.error("Firebase nie jest zainicjalizowane");
+        console.error("🔄 Resetowanie akcji - Firebase nie zainicjalizowane");
         setAllActions([]);
         return;
       }
@@ -202,10 +313,15 @@ export default function ZawodnicyPage() {
           }
         }
 
-        // Filtruj tylko akcje zawodników z wybranego zespołu
-        const teamPlayers = players.filter(player => {
-          const hasTeams = player.teams && player.teams.includes(selectedTeam);
-          return hasTeams;
+        // Filtruj tylko akcje zawodników z wybranych zespołów
+        console.log("🔍 Filtrowanie zawodników", { 
+          playersLength: playersRef.current.length, 
+          selectedTeams,
+          allActionsDataLength: allActionsData.length 
+        });
+        const teamPlayers = playersRef.current.filter(player => {
+          if (!player.teams) return false;
+          return player.teams.some(playerTeam => selectedTeams.includes(playerTeam));
         });
         
         const teamPlayersIds = teamPlayers.map(player => player.id);
@@ -215,6 +331,7 @@ export default function ZawodnicyPage() {
           (action.receiverId && teamPlayersIds.includes(action.receiverId))
         );
 
+        console.log("✅ Ustawienie akcji", { filteredActionsLength: filteredActions.length });
         setAllActions(filteredActions);
       } catch (error) {
         console.error("Błąd podczas pobierania akcji:", error);
@@ -225,18 +342,25 @@ export default function ZawodnicyPage() {
     };
 
     loadAllActionsForTeam();
-  }, [teamMatches, players, selectedTeam]);
+  }, [teamMatches, selectedTeams]);
 
-  // Filtruj zawodników według wybranego zespołu
+  // Filtruj zawodników według wybranych zespołów i pozycji (rocznik filtrowany w PackingChart)
   const filteredPlayers = useMemo(() => {
-    const teamFiltered = players.filter(player => {
-      const hasTeams = player.teams && player.teams.includes(selectedTeam);
-      return hasTeams;
+    let teamFiltered = players.filter(player => {
+      if (!player.teams) return false;
+      return player.teams.some(playerTeam => selectedTeams.includes(playerTeam));
     });
+    
+    // Filtruj według pozycji jeśli wybrane
+    if (selectedPositions.length > 0) {
+      teamFiltered = teamFiltered.filter(player => 
+        selectedPositions.includes(player.position)
+      );
+    }
     
     // Sortowanie alfabetyczne po nazwisku
     return sortPlayersByLastName(teamFiltered);
-  }, [players, selectedTeam]);
+  }, [players, selectedTeams, selectedPositions]);
 
   // Filtruj akcje według zaznaczonych meczów
   const filteredActions = useMemo(() => {
@@ -246,6 +370,13 @@ export default function ZawodnicyPage() {
       action.matchId && selectedMatches.includes(action.matchId)
     );
   }, [allActions, selectedMatches]);
+
+  // Filtruj mecze według zaznaczonych - WAŻNE: stabilna referencja dla PackingChart
+  const selectedMatchesData = useMemo(() => {
+    return teamMatches.filter(match => 
+      match.matchId && selectedMatches.includes(match.matchId)
+    );
+  }, [teamMatches, selectedMatches]);
 
   // TERAZ sprawdź czy aplikacja się ładuje - WSZYSTKIE HOOKI MUSZĄ BYĆ POWYŻEJ!
   if (authLoading || isTeamsLoading) {
@@ -569,29 +700,60 @@ export default function ZawodnicyPage() {
       {/* Sekcja wyboru zespołu i sezonu */}
       <div className={styles.selectorsContainer}>
         <div className={styles.teamSelector}>
-          <label htmlFor="team-select" className={styles.label}>
-            Wybierz zespół:
-          </label>
+          <div className={styles.label}>
+            Wybierz zespoły ({selectedTeams.length}/{availableTeams.length}):
+          </div>
           {isTeamsLoading ? (
             <p>Ładowanie zespołów...</p>
           ) : (
-          <select
-            id="team-select"
-            value={selectedTeam}
-            onChange={(e) => setSelectedTeam(e.target.value)}
-            className={styles.teamSelect}
-              disabled={availableTeams.length === 0}
-          >
+            <div className={styles.teamsSelectContainer}>
               {availableTeams.length === 0 ? (
-                <option value="">Brak dostępnych zespołów</option>
+                <p>Brak dostępnych zespołów</p>
               ) : (
-                Object.values(teamsObject).map(team => (
-              <option key={team.id} value={team.id}>
-                {team.name}
-              </option>
-                ))
+                <div className={`${styles.dropdownContainer} dropdownContainer`}>
+                  <div 
+                    className={styles.dropdownToggle}
+                    onClick={() => setShowTeamsDropdown(!showTeamsDropdown)}
+                  >
+                    <span>
+                      {selectedTeams.length === 0 ? 'Brak wybranych zespołów' : 
+                       selectedTeams.length === availableTeams.length ? 'Wszystkie zespoły' :
+                       `${selectedTeams.length} zespołów`}
+                    </span>
+                    <span className={styles.dropdownArrow}>{showTeamsDropdown ? '▲' : '▼'}</span>
+                  </div>
+                  {showTeamsDropdown && (
+                    <div className={styles.dropdownMenu}>
+                      <div 
+                        className={styles.dropdownItem}
+                        onClick={handleSelectAllTeams}
+                      >
+                        <input 
+                          type="checkbox" 
+                          checked={selectedTeams.length === availableTeams.length}
+                          onChange={() => {}}
+                        />
+                        <span>Wszystkie zespoły</span>
+                      </div>
+                      {Object.values(teamsObject).map(team => (
+                        <div 
+                          key={team.id}
+                          className={styles.dropdownItem}
+                          onClick={() => handleTeamToggle(team.id)}
+                        >
+                          <input 
+                            type="checkbox" 
+                            checked={selectedTeams.includes(team.id)}
+                            onChange={() => {}}
+                          />
+                          <span>{team.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
-          </select>
+            </div>
           )}
         </div>
 
@@ -601,10 +763,12 @@ export default function ZawodnicyPage() {
             onChange={setSelectedSeason}
             showLabel={true}
             availableSeasons={availableSeasons}
-            className={styles.teamSelect}
+            className={styles.seasonSelect}
           />
         </div>
       </div>
+
+
 
       {/* Sekcja wyboru meczów - tabela */}
       <div className={styles.matchSelector}>
@@ -687,7 +851,7 @@ export default function ZawodnicyPage() {
                   return (
                     <div key={player.id} className={styles.duplicateItem}>
                       <div className={styles.playerInfo}>
-                        <span className={styles.playerName}>{getPlayerFullName(player)}</span>
+                        <span className={styles.playerName}>{getPlayerFullName(player)} ({player.id})</span>
                         <span className={styles.playerNumber}>#{player.number}</span>
                         <span className={styles.playerBirthYear}>
                           {player.birthYear ? `ur. ${player.birthYear}` : 'Brak roku urodzenia'}
@@ -711,18 +875,28 @@ export default function ZawodnicyPage() {
         ) : selectedMatches.length === 0 ? (
           <p>Wybierz co najmniej jeden mecz, aby zobaczyć statystyki zawodników.</p>
         ) : filteredPlayers.length === 0 ? (
-          <p>Brak zawodników w wybranym zespole.</p>
+          <p>Brak zawodników spełniających kryteria filtrowania (zespół/pozycja).</p>
         ) : (
           <div>
-            <p>Pokazano statystyki z {filteredActions.length} akcji z {selectedMatches.length} meczów</p>
+            <div className={styles.tableControls}>
+              <p>Pokazano statystyki z {filteredActions.length} akcji z {selectedMatches.length} meczów</p>
+            </div>
             <PackingChart
               actions={filteredActions}
               players={filteredPlayers}
               selectedPlayerId={selectedPlayerId}
-              onPlayerSelect={setSelectedPlayerId}
-              matches={teamMatches.filter(match => 
-                match.matchId && selectedMatches.includes(match.matchId)
-              )}
+              onPlayerSelect={handlePlayerSelect}
+              matches={selectedMatchesData}
+              teams={teams}
+              birthYearFilter={birthYearFilter}
+              onBirthYearFilterChange={setBirthYearFilter}
+              selectedPositions={selectedPositions}
+              onSelectedPositionsChange={setSelectedPositions}
+              availablePositions={availablePositions}
+              showPositionsDropdown={showPositionsDropdown}
+              setShowPositionsDropdown={setShowPositionsDropdown}
+              handlePositionToggle={handlePositionToggle}
+              handleSelectAllPositions={handleSelectAllPositions}
             />
           </div>
         )}
@@ -733,9 +907,22 @@ export default function ZawodnicyPage() {
         onClose={closeModal}
         onSave={handleSavePlayerWithTeams}
         editingPlayer={editingPlayer || undefined} // Użyj editingPlayer z usePlayersState (ze świeżymi danymi z Firebase)
-        currentTeam={selectedTeam}
+        currentTeam={selectedTeams.length > 0 ? selectedTeams[0] : ''}
         allTeams={Object.values(teamsObject)}
         existingPlayers={players}
+      />
+
+      {/* Panel boczny z menu */}
+      <SidePanel
+        players={players}
+        actions={allActions}
+        matchInfo={null}
+        isAdmin={isAdmin}
+        selectedTeam={selectedTeams.length > 0 ? selectedTeams[0] : ''}
+        onRefreshData={() => forceRefreshFromFirebase().then(() => {})}
+        onImportSuccess={() => {}}
+        onImportError={() => {}}
+        onLogout={logout}
       />
     </div>
   );

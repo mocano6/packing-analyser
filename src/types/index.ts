@@ -130,6 +130,7 @@ export interface TeamInfo {
   isHome: boolean;
   competition: string;
   date: string;
+  matchType?: 'liga' | 'puchar' | 'towarzyski'; // Typ meczu
   videoUrl?: string; // URL wideo z YouTube dla tego meczu
   playerMinutes?: PlayerMinutes[];
   actions_packing?: Action[]; // Tablica akcji packing związanych z tym meczem
@@ -140,6 +141,7 @@ export interface PlayerMinutes {
   startMinute: number;
   endMinute: number;
   position?: string;
+  status?: 'dostepny' | 'kontuzja' | 'brak_powolania' | 'inny_zespol'; // Status zawodnika
 }
 
 export interface PlayerMinutesModalProps {

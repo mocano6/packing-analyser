@@ -5,8 +5,9 @@ import Link from "next/link";
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { TeamInfo, Action } from '@/types';
-import { TEAMS } from '@/constants/teamsLoader';
+import { fetchTeams, Team } from '@/constants/teamsLoader';
 import { useAuth } from "@/hooks/useAuth";
+import SidePanel from "@/components/SidePanel/SidePanel";
 import styles from './weryfikacja-meczow.module.css';
 
 interface MatchWithActions extends TeamInfo {
@@ -21,52 +22,44 @@ interface MatchWithActions extends TeamInfo {
 
 export default function WeryfikacjaMeczow() {
   const [matches, setMatches] = useState<MatchWithActions[]>([]);
+  const [teams, setTeams] = useState<Record<string, Team>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
+  const [showTeamsDropdown, setShowTeamsDropdown] = useState(false);
   const [sortBy, setSortBy] = useState<'date' | 'total' | 'verified'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const { isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
 
-  // Sprawdź uprawnienia administratora
-  if (authLoading) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.loading}>
-          <div className={styles.spinner}></div>
-          <p>Sprawdzanie uprawnień...</p>
-        </div>
-      </div>
-    );
-  }
+  // Zamknij dropdown przy kliknięciu poza nim
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.dropdownContainer')) {
+        setShowTeamsDropdown(false);
+      }
+    };
 
-  if (!isAuthenticated) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.accessDenied}>
-          <h2>🔒 Brak dostępu</h2>
-          <p>Musisz być zalogowany, aby uzyskać dostęp do tej strony.</p>
-          <Link href="/login" className={styles.loginButton}>
-            Przejdź do logowania
-          </Link>
-        </div>
-      </div>
-    );
-  }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
-  if (!isAdmin) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.accessDenied}>
-          <h2>🔒 Brak uprawnień</h2>
-          <p>Tylko administratorzy mają dostęp do weryfikacji meczów.</p>
-          <Link href="/" className={styles.backButton}>
-            Powrót do aplikacji
-          </Link>
-        </div>
-      </div>
-    );
-  }
+
+  // Pobierz zespoły z Firebase
+  useEffect(() => {
+    const loadTeams = async () => {
+      try {
+        const teamsData = await fetchTeams();
+        setTeams(teamsData);
+      } catch (error) {
+        console.error('Błąd podczas pobierania zespołów:', error);
+      }
+    };
+
+    loadTeams();
+  }, []);
 
   // Pobierz wszystkie mecze z Firebase
   useEffect(() => {
@@ -124,7 +117,7 @@ export default function WeryfikacjaMeczow() {
   const filteredAndSortedMatches = useMemo(() => {
     let filtered = matches;
 
-    // Filtruj po zespole
+    // Filtruj po zespołach
     if (selectedTeam !== 'all') {
       filtered = matches.filter(match => match.team === selectedTeam);
     }
@@ -169,7 +162,7 @@ export default function WeryfikacjaMeczow() {
   };
 
   const getTeamName = (teamId: string) => {
-    const team = Object.values(TEAMS).find(t => t.id === teamId);
+    const team = Object.values(teams).find(t => t.id === teamId);
     return team ? team.name : teamId;
   };
 
@@ -196,6 +189,62 @@ export default function WeryfikacjaMeczow() {
       verificationRate
     };
   }, [filteredAndSortedMatches]);
+
+  const getSelectedTeamName = () => {
+    if (selectedTeam === 'all') return 'Wszystkie zespoły';
+    const team = Object.values(teams).find(t => t.id === selectedTeam);
+    return team ? team.name : 'Nieznany zespół';
+  };
+
+
+
+  // Dodaj teams do zależności w useMemo dla getTeamName
+  const memoizedGetTeamName = useMemo(() => {
+    return (teamId: string) => {
+      const team = Object.values(teams).find(t => t.id === teamId);
+      return team ? team.name : teamId;
+    };
+  }, [teams]);
+
+  // Sprawdź uprawnienia administratora
+  if (authLoading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loading}>
+          <div className={styles.spinner}></div>
+          <p>Sprawdzanie uprawnień...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.accessDenied}>
+          <h2>🔒 Brak dostępu</h2>
+          <p>Musisz być zalogowany, aby uzyskać dostęp do tej strony.</p>
+          <Link href="/login" className={styles.loginButton}>
+            Przejdź do logowania
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.accessDenied}>
+          <h2>🔒 Brak uprawnień</h2>
+          <p>Tylko administratorzy mają dostęp do weryfikacji meczów.</p>
+          <Link href="/" className={styles.backButton}>
+            Powrót do aplikacji
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -246,22 +295,45 @@ export default function WeryfikacjaMeczow() {
       {/* Filtry */}
       <div className={styles.filters}>
         <div className={styles.filterGroup}>
-          <label htmlFor="team-filter">Zespół:</label>
-          <select
-            id="team-filter"
-            value={selectedTeam}
-            onChange={(e) => setSelectedTeam(e.target.value)}
-            className={styles.select}
-          >
-            <option value="all">Wszystkie zespoły</option>
-            {Object.values(TEAMS).map(team => (
-              <option key={team.id} value={team.id}>
-                {team.name}
-              </option>
-            ))}
-          </select>
+          <label>Wybierz zespół:</label>
+          <div className={`${styles.dropdownContainer} dropdownContainer`}>
+            <div 
+              className={styles.dropdownToggle}
+              onClick={() => setShowTeamsDropdown(!showTeamsDropdown)}
+            >
+              <span>{getSelectedTeamName()}</span>
+              <span className={styles.dropdownArrow}>{showTeamsDropdown ? '▲' : '▼'}</span>
+            </div>
+            {showTeamsDropdown && (
+              <div className={styles.dropdownMenu}>
+                <div 
+                  className={`${styles.dropdownItem} ${selectedTeam === 'all' ? styles.active : ''}`}
+                  onClick={() => {
+                    setSelectedTeam('all');
+                    setShowTeamsDropdown(false);
+                  }}
+                >
+                  <span>Wszystkie zespoły</span>
+                </div>
+                {Object.values(teams).map(team => (
+                  <div 
+                    key={team.id}
+                    className={`${styles.dropdownItem} ${selectedTeam === team.id ? styles.active : ''}`}
+                    onClick={() => {
+                      setSelectedTeam(team.id);
+                      setShowTeamsDropdown(false);
+                    }}
+                  >
+                    <span>{team.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+
 
       {/* Tabela meczów */}
       <div className={styles.tableContainer}>
@@ -300,7 +372,7 @@ export default function WeryfikacjaMeczow() {
                 className={!match.isVerified ? styles.unverifiedRow : ''}
               >
                 <td>{formatDate(match.date)}</td>
-                <td>{getTeamName(match.team)}</td>
+                <td>{memoizedGetTeamName(match.team)}</td>
                 <td>{match.opponent}</td>
                 <td>
                   <span className={styles.matchType}>
@@ -352,6 +424,19 @@ export default function WeryfikacjaMeczow() {
            </div>
          </div>
       </div>
+
+      {/* Panel boczny z menu */}
+      <SidePanel
+        players={[]}
+        actions={[]}
+        matchInfo={null}
+        isAdmin={isAdmin}
+        selectedTeam={selectedTeam}
+        onRefreshData={async () => {}}
+        onImportSuccess={() => {}}
+        onImportError={() => {}}
+        onLogout={() => {}}
+      />
     </div>
   );
 } 

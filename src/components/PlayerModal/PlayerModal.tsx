@@ -36,7 +36,7 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
     position: "",
     birthYear: undefined,
     imageUrl: "",
-    teams: [currentTeam],
+    teams: [],
     isTestPlayer: false,
   });
 
@@ -248,10 +248,7 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
       newErrors.number = "Numer musi być między 1 a 99";
     }
 
-    // Walidacja zespołów
-    if (!formData.teams || formData.teams.length === 0) {
-      newErrors.general = "Zawodnik musi należeć do przynajmniej jednego zespołu";
-    }
+
 
     // Walidacja duplikatów
     const duplicateErrors = validateForDuplicates(formData);

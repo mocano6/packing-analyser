@@ -133,18 +133,23 @@
   border-radius: 12px;
   margin-bottom: 25px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
 }
 
 .filterGroup {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 250px;
 }
 
 .filterGroup label {
   font-weight: 500;
   color: #4a5568;
-  min-width: 60px;
+  font-size: 14px;
 }
 
 .select {
@@ -161,6 +166,129 @@
   outline: none;
   border-color: #3182ce;
   box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
+}
+
+.dropdownContainer {
+  position: relative;
+  width: 100%;
+}
+
+.dropdownToggle {
+  width: 100%;
+  padding: 8px 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 6px;
+  background: white;
+  font-size: 14px;
+  color: #2d3748;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: border-color 0.2s ease;
+}
+
+.dropdownToggle:hover {
+  border-color: #3182ce;
+}
+
+.dropdownArrow {
+  font-size: 12px;
+  color: #666;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.dropdownItem:hover {
+  background-color: #f7fafc;
+}
+
+.dropdownItem.active {
+  background-color: #e6fffa;
+  color: #2b6cb0;
+  font-weight: 500;
+}
+
+.dropdownItem input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.dropdownItem span {
+  flex: 1;
+  cursor: pointer;
+}
+
+.birthYearInput {
+  width: 150px;
+  padding: 8px 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 6px;
+  background: white;
+  font-size: 14px;
+  color: #2d3748;
+  transition: border-color 0.2s ease;
+}
+
+.birthYearInput:focus {
+  outline: none;
+  border-color: #3182ce;
+  box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
+}
+
+.birthYearInput::placeholder {
+  color: #a0aec0;
+}
+
+.tableControls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  padding: 15px 20px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.tableControls p {
+  margin: 0;
+  color: #4a5568;
+  font-weight: 500;
+}
+
+.birthYearFilter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.birthYearFilter .label {
+  font-weight: 500;
+  color: #4a5568;
+  font-size: 14px;
 }
 
 /* Tabela */

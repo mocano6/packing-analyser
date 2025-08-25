@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Player } from "../types";
 import { getDB } from "../lib/firebase";
 import { getPlayerFullName } from '@/utils/playerUtils';

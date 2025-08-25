@@ -50,24 +50,24 @@ const nextConfig = {
       },
     });
 
-    // Konfiguracja cache
-    if (dev) {
-      config.cache = {
-        type: 'filesystem',
-        version: '1.0.0',
-        buildDependencies: {
-          config: [__filename],
-        },
-        cacheDirectory: path.resolve(__dirname, '.next/cache'),
-        maxAge: 172800000, // 2 dni
-        compression: 'gzip',
-        allowCollectingMemory: true,
-        idleTimeout: 60000,
-        idleTimeoutForInitialStore: 5000,
-        store: 'pack',
-        name: 'next-cache',
-      };
-    }
+    // Konfiguracja cache - tymczasowo wyłączona
+    // if (dev) {
+    //   config.cache = {
+    //     type: 'filesystem',
+    //     version: '1.0.0',
+    //     buildDependencies: {
+    //       config: [__filename],
+    //     },
+    //     cacheDirectory: path.resolve(__dirname, '.next/cache'),
+    //     maxAge: 172800000, // 2 dni
+    //     compression: 'gzip',
+    //     allowCollectingMemory: true,
+    //     idleTimeout: 60000,
+    //     idleTimeoutForInitialStore: 5000,
+    //     store: 'pack',
+    //     name: 'next-cache',
+    //   };
+    // }
 
     return config;
   },

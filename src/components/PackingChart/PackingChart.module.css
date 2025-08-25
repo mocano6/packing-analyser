@@ -1,29 +1,77 @@
 .chartContainer {
-  padding: 20px;
+  padding: 24px;
   background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin: 24px 0;
+  border: 1px solid #e5e7eb;
+}
+
+/* Kontener główny dla wszystkich kontrolek */
+.controlsContainer {
+  background-color: #f8fafc;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin: 20px 0;
+  padding: 20px;
+  margin-bottom: 24px;
+  border: 1px solid #e2e8f0;
+}
+
+.controlsTitle {
+  text-align: center;
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.controlsRow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.controlsRow:last-child {
+  margin-bottom: 0;
+}
+
+.controlGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.controlGroupLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .actionTypeControls {
   display: flex;
   justify-content: center;
-  gap: 20px;
-  margin-bottom: 20px;
+  gap: 16px;
 }
 
 .actionTypeButton {
-  padding: 12px 24px;
-  border: 3px solid #ddd;
-  border-radius: 10px;
+  padding: 10px 20px;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
   background-color: #fff;
-  color: #333;
+  color: #374151;
   cursor: pointer;
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   transition: all 0.2s ease;
-  min-width: 100px;
+  min-width: 90px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .actionTypeButton:hover {
@@ -55,21 +103,21 @@
 .metricControls {
   display: flex;
   justify-content: center;
-  gap: 15px;
-  margin-bottom: 15px;
+  gap: 12px;
 }
 
 .metricButton {
-  padding: 10px 20px;
-  border: 3px solid #ddd;
-  border-radius: 8px;
+  padding: 8px 16px;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
   background-color: #fff;
-  color: #333;
+  color: #374151;
   cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   transition: all 0.2s ease;
-  min-width: 80px;
+  min-width: 70px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .metricButton:hover {
@@ -164,8 +212,9 @@
 
 .chart {
   width: 100%;
-  height: 400px;
+  height: 550px; /* Zwiększone dla legendy */
   position: relative;
+  margin-bottom: 20px; /* Odstęp od tabeli */
 }
 
 .noData {
@@ -178,9 +227,7 @@
 .selectedPlayer {
   margin-top: 20px;
   padding: 15px;
-  background-color: #f8f9fa;
   border-radius: 6px;
-  border-left: 4px solid #0088FE;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -215,18 +262,95 @@
 /* Tabela statystyk */
 .statsTable {
   margin-top: 30px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
 }
 
 .tableHeader {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-bottom: 2px solid #e5e7eb;
+  padding: 20px 24px;
+}
+
+.tableHeader h4 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  text-align: center;
+}
+
+.tableControls {
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   gap: 20px;
-  margin-bottom: 15px;
+  flex-wrap: wrap;
+  padding: 16px 0;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.metricToggle {
+  display: flex;
+  background: #f3f4f6;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.metricButton {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.metricButton:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.metricButton.active {
+  background: #3b82f6;
+  color: white;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.5);
+}
+
+.minutesFilter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.minutesInput {
+  width: 60px;
+  padding: 4px 6px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.minutesInput:focus {
+  outline: none;
+  border-color: #0088FE;
+  box-shadow: 0 0 0 2px rgba(0, 136, 254, 0.2);
 }
 
 .statsTable h4 {
-  margin: 0;
+  margin: 12px 0;
   color: #333;
   font-size: 18px;
 }
@@ -240,7 +364,6 @@
   color: #495057;
   cursor: pointer;
   padding: 6px 12px;
-  border: 2px solid #dee2e6;
   border-radius: 6px;
   background-color: #f8f9fa;
   transition: all 0.2s ease;
@@ -257,6 +380,108 @@
   cursor: pointer;
 }
 
+.tableControls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+
+
+.minutesFilter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.minutesFilter label {
+  white-space: nowrap;
+}
+
+.minutesInput {
+  width: 60px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: center;
+  transition: border-color 0.2s ease;
+}
+
+.minutesInput:focus {
+  outline: none;
+  border-color: #0088FE;
+  box-shadow: 0 0 0 3px rgba(0, 136, 254, 0.1);
+}
+
+.positionFilter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.positionFilter label {
+  white-space: nowrap;
+}
+
+.positionSelect {
+  min-width: 120px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: white;
+  transition: border-color 0.2s ease;
+  cursor: pointer;
+}
+
+.positionSelect:focus {
+  outline: none;
+  border-color: #0088FE;
+  box-shadow: 0 0 0 3px rgba(0, 136, 254, 0.1);
+}
+
+.positionSelect:hover {
+  border-color: #adb5bd;
+}
+
+.multiSelectWrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.multiSelectWrapper select[multiple] {
+  min-height: 120px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.multiSelectWrapper select[multiple] option {
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.multiSelectWrapper select[multiple] option:hover {
+  background-color: #f0f8ff !important;
+}
+
+.multiSelectHelper {
+  font-size: 11px;
+  color: #666;
+  text-align: center;
+  padding: 2px 4px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
 .tableContainer {
   overflow-x: auto;
   border-radius: 6px;
@@ -271,14 +496,14 @@
 }
 
 .table th {
-  background-color: #f8f9fa;
-  padding: 10px 6px;
-  text-align: center;
+  background: #f8fafc;
   font-weight: 600;
-  color: #495057;
-  border-bottom: 2px solid #dee2e6;
-  border-right: 1px solid #dee2e6;
-  font-size: 12px;
+  font-size: 13px;
+  color: #374151;
+  padding: 12px 16px;
+  border-bottom: 2px solid #e5e7eb;
+  text-align: center;
+  border-right: 1px solid #e5e7eb;
 }
 
 .table th:last-child {
@@ -307,7 +532,7 @@
 }
 
 .tableRow:hover {
-  background-color: #f8f9fa;
+  background: #f8fafc;
 }
 
 .tableRow.selectedRow {
@@ -316,11 +541,12 @@
 }
 
 .table td {
-  padding: 8px 6px;
+  padding: 12px 16px;
   text-align: center;
-  border-bottom: 1px solid #dee2e6;
-  border-right: 1px solid #dee2e6;
-  font-size: 12px;
+  font-size: 14px;
+  color: #4b5563;
+  border-bottom: 1px solid #f3f4f6;
+  border-right: 1px solid #e5e7eb;
 }
 
 .table td:last-child {
@@ -335,8 +561,24 @@
   min-width: 120px;
   position: sticky;
   left: 0;
-  background-color: inherit;
-  z-index: 1;
+  background-color: white;
+  border-right: 2px solid #e5e7eb;
+  z-index: 10;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+}
+
+.tableRow:hover .playerName {
+  background: #f8fafc;
+}
+
+.tableRow.selectedRow .playerName {
+  background-color: #e3f2fd;
+}
+
+.birthYear {
+  font-weight: 400;
+  color: #666;
+  font-size: 0.9em;
 }
 
 .metricInfo {
@@ -376,4 +618,442 @@
 
 .legendItem:hover {
   background-color: #f5f5f5;
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.filterGroup:hover {
+  border-color: #3b82f6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.filterGroup label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+  margin: 0;
+}
+
+.filterItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.filterItem label,
+.filterItem .label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+  margin: 0;
+}
+
+.yearRangeContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.yearRangeContainer input {
+  flex: 1;
+  min-width: 60px;
+}
+
+.yearRangeSeparator {
+  font-weight: 500;
+  color: #6b7280;
+  margin: 0 4px;
+}
+
+.filterInput {
+  width: 80px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  background-color: #f9fafb;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.filterInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background-color: white;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.filterSelect {
+  min-width: 140px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: white;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.filterSelect:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.tableControls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+}
+
+.metricToggle {
+  display: flex;
+  gap: 8px;
+}
+
+.metricButton {
+  padding: 6px 12px;
+  background-color: white;
+  color: #374151;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.metricButton:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.metricButton.active {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+.per90Checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  background: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.per90Checkbox:hover {
+  border-color: #3b82f6;
+  background: #f8fafc;
+}
+
+.per90Checkbox input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.positionFilterMoved {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.positionFilterMoved:hover {
+  border-color: #3b82f6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.positionFilterMoved .label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+  margin: 0;
+}
+
+.dropdownContainer {
+  position: relative;
+  width: 200px;
+}
+
+.dropdownToggle {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f9fafb;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.dropdownToggle:hover {
+  border-color: #3b82f6;
+  background: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.dropdownArrow {
+  font-size: 12px;
+  color: #666;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.dropdownItem:hover {
+  background-color: #f7fafc;
+}
+
+.dropdownItem input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.dropdownItem span {
+  flex: 1;
+  cursor: pointer;
+}
+
+/* Szczegóły meczów zawodnika */
+.playerDetails {
+  margin-top: 30px;
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.playerDetailsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f3f4f6;
+}
+
+.playerDetailsHeader h5 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.roleToggle {
+  display: flex;
+  background: #f3f4f6;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.roleButton {
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+  text-align: center;
+}
+
+.roleButton:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.roleButton.active {
+  background: #3b82f6;
+  color: white;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.5);
+}
+
+.matchStatsTable {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.matchStatsTable .table {
+  margin: 0;
+  box-shadow: none;
+  border: none;
+}
+
+.matchStatsTable .table th {
+  background: #f8fafc;
+  font-weight: 600;
+  font-size: 13px;
+  color: #374151;
+  padding: 12px 16px;
+  border-bottom: 2px solid #e5e7eb;
+  text-align: center;
+}
+
+.matchStatsTable .table td {
+  padding: 12px 16px;
+  text-align: center;
+  font-size: 14px;
+  color: #4b5563;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.matchStatsTable .table tbody tr:hover {
+  background: #f8fafc;
+}
+
+/* Nowoczesne ikony sortowania */
+.sortIcon {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.sortAsc {
+  opacity: 1;
+  color: #3b82f6;
+  transform: scale(1.1);
+}
+
+.sortDesc {
+  opacity: 1;
+  color: #3b82f6;
+  transform: scale(1.1);
+}
+
+/* Style dla wykresu sieciowego */
+.networkChart {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+  margin: 0 auto;
+  display: block;
+}
+
+.networkLegend {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 15px;
+  padding: 15px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.networkLegend .legendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.legendCircle {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid #fff;
+}
+
+.legendLine {
+  width: 20px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+
+
+/* Style dla etykiet na wykresie sieciowym */
+.networkChart text {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  user-select: none;
+  pointer-events: none;
+}
+
+.networkChart .node-label {
+  font-weight: 600;
+  font-size: 12px;
+  fill: #333;
+}
+
+.networkChart .node-stats {
+  font-weight: 500;
+  font-size: 10px;
+  fill: #333;
+}
+
+.networkChart .edge-label {
+  font-weight: bold;
+  font-size: 9px;
+  fill: #2d7a2d;
+  text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
 } 
