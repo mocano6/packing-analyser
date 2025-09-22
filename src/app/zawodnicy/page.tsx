@@ -82,6 +82,8 @@ export default function ZawodnicyPage() {
     const labels: { [key: string]: string } = {
       'GK': 'Bramkarz (GK)',
       'CB': 'Środkowy obrońca (CB)',
+      'RB': 'Prawy obrońca (RB)',
+      'LB': 'Lewy obrońca (LB)',
       'DM': 'Defensywny pomocnik (DM)',
       'AM': 'Ofensywny pomocnik (AM)',
       'LW': 'Lewy skrzydłowy (LW)',

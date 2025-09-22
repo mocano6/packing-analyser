@@ -122,6 +122,31 @@ export interface PlayerModalProps {
   allTeams: { id: string, name: string }[]; // Lista wszystkich dostępnych zespołów
 }
 
+export interface Shot {
+  id: string;
+  x: number; // Pozycja X w procentach (0-100)
+  y: number; // Pozycja Y w procentach (0-100)
+  playerId?: string;
+  playerName?: string;
+  minute: number;
+  xG: number; // Wartość expected goals
+  isGoal: boolean;
+  bodyPart?: 'foot' | 'head' | 'other';
+  matchId: string;
+  timestamp: number;
+  // Nowe pola dla strzałów
+  shotType: 'on_target' | 'off_target' | 'blocked' | 'goal'; // Typ strzału: celny, niecelny, zablokowany, gol
+  teamContext: 'attack' | 'defense'; // Kontekst zespołu: atak czy obrona
+  teamId: string; // ID zespołu, który wykonał strzał
+  actionType?: 'open_play' | 'counter' | 'corner' | 'free_kick' | 'direct_free_kick' | 'penalty' | 'throw_in' | 'regain'; // Rodzaj akcji
+  sfgSubtype?: 'direct' | 'combination'; // Podrodzaj SFG: bezpośredni, kombinacyjny
+  actionPhase?: 'phase1' | 'phase2' | 'under8s' | 'over8s'; // Faza akcji: I faza, II faza (SFG) lub Do 8s, Powyżej 8s (Otwarta gra)
+  blockingPlayers?: string[]; // ID zawodników blokujących strzał
+  linePlayers?: string[]; // ID zawodników na linii strzału (obrona)
+  linePlayersCount?: number; // Liczba zawodników na linii strzału (atak)
+  pkPlayersCount?: number; // Liczba zawodników w polu karnym (nie wpływa na xG)
+}
+
 export interface TeamInfo {
   matchId?: string;
   team: string;
@@ -134,6 +159,7 @@ export interface TeamInfo {
   videoUrl?: string; // URL wideo z YouTube dla tego meczu
   playerMinutes?: PlayerMinutes[];
   actions_packing?: Action[]; // Tablica akcji packing związanych z tym meczem
+  shots?: Shot[]; // Tablica strzałów z mapą xG
 }
 
 export interface PlayerMinutes {

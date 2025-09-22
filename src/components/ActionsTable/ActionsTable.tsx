@@ -15,6 +15,8 @@ type SortKey =
   | "endZone"
   | "type"
   | "packing"
+  | "pxt"
+  | "xt"
   | "events"
   | "videoTimestamp";
 

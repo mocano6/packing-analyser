@@ -3,7 +3,7 @@
 
 import React, { useMemo, useEffect, useState, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { Tab, Player, TeamInfo, PlayerMinutes, Action } from "@/types";
+import { Tab, Player, TeamInfo, PlayerMinutes, Action, Shot } from "@/types";
 import Instructions from "@/components/Instructions/Instructions";
 import PlayersGrid from "@/components/PlayersGrid/PlayersGrid";
 import Tabs from "@/components/Tabs/Tabs";
@@ -34,6 +34,10 @@ import SidePanel from "@/components/SidePanel/SidePanel";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import XGPitch from "@/components/XGPitch/XGPitch";
+import ShotModal from "@/components/ShotModal/ShotModal";
+import ShotsTable from "@/components/ShotsTable/ShotsTable";
+import ShotFilter from "@/components/ShotFilter/ShotFilter";
+import { useShots } from "@/hooks/useShots";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 
 
@@ -215,6 +219,109 @@ export default function Page() {
   
   // Wyciągnij funkcję resetActionPoints z hooka
   const { resetActionPoints } = packingActions;
+
+  // Hook do zarządzania strzałami
+  const { shots, addShot, updateShot, deleteShot } = useShots(matchInfo?.matchId || "");
+
+  // Stan dla filtrowania strzałów
+  const [selectedShotCategories, setSelectedShotCategories] = useState<string[]>([
+    'open_play', 'sfg', 'zablokowany', 'celny', 'gol', 'niecelny'
+  ]);
+
+  // Funkcja do obsługi filtrowania kategorii strzałów
+  const handleShotCategoryToggle = (category: string) => {
+    setSelectedShotCategories(prev => 
+      prev.includes(category) 
+        ? prev.filter(cat => cat !== category)
+        : [...prev, category]
+    );
+  };
+
+  // Filtrowane strzały na podstawie wybranych kategorii
+  const filteredShots = useMemo(() => {
+    return shots.filter(shot => {
+      // Sprawdź czy strzał pasuje do wybranych kategorii
+      return selectedShotCategories.some(category => {
+        switch (category) {
+          // Kategoria akcji
+          case 'open_play':
+            return shot.actionType === 'open_play' || 
+                   shot.actionType === 'counter' || 
+                   shot.actionType === 'regain';
+          case 'sfg':
+            return shot.actionType === 'corner' || 
+                   shot.actionType === 'free_kick' || 
+                   shot.actionType === 'direct_free_kick' || 
+                   shot.actionType === 'penalty' || 
+                   shot.actionType === 'throw_in';
+          
+          // Typ strzału
+          case 'zablokowany':
+            return shot.shotType === 'blocked';
+          case 'celny':
+            return shot.shotType === 'on_target' && !shot.isGoal;
+          case 'gol':
+            return shot.isGoal;
+          case 'niecelny':
+            return shot.shotType === 'off_target';
+          
+          default:
+            return false;
+        }
+      });
+    });
+  }, [shots, selectedShotCategories]);
+
+  // Stan dla modalki strzałów
+  const [isShotModalOpen, setIsShotModalOpen] = useState(false);
+  const [shotModalData, setShotModalData] = useState<{
+    x: number;
+    y: number;
+    xG: number;
+    editingShot?: Shot;
+  } | null>(null);
+  const [selectedShotId, setSelectedShotId] = useState<string | undefined>();
+
+  // Funkcje obsługi strzałów
+  const handleShotAdd = (x: number, y: number, xG: number) => {
+    setShotModalData({ x, y, xG });
+    setIsShotModalOpen(true);
+  };
+
+  const handleShotClick = (shot: Shot) => {
+    setShotModalData({
+      x: shot.x,
+      y: shot.y,
+      xG: shot.xG,
+      editingShot: shot
+    });
+    setSelectedShotId(shot.id);
+    setIsShotModalOpen(true);
+  };
+
+  const handleShotSave = async (shotData: Omit<Shot, "id" | "timestamp">) => {
+    if (shotModalData?.editingShot) {
+      await updateShot(shotModalData.editingShot.id, shotData);
+    } else {
+      await addShot(shotData);
+    }
+    setIsShotModalOpen(false);
+    setShotModalData(null);
+    setSelectedShotId(undefined);
+  };
+
+  const handleShotDelete = async (shotId: string) => {
+    await deleteShot(shotId);
+    setIsShotModalOpen(false);
+    setShotModalData(null);
+    setSelectedShotId(undefined);
+  };
+
+  const handleShotModalClose = () => {
+    setIsShotModalOpen(false);
+    setShotModalData(null);
+    setSelectedShotId(undefined);
+  };
   
   const {
     actions,
@@ -1418,22 +1525,53 @@ export default function Page() {
         )}
 
         {activeTab === "xg" && (
-          <XGPitch
-            onShotAdd={(x, y) => {
-              console.log(`Strzał dodany na pozycji: ${x.toFixed(1)}%, ${y.toFixed(1)}%`);
-              // Tutaj można dodać logikę zapisywania strzałów
+          <>
+            <ShotFilter
+              selectedCategories={selectedShotCategories}
+              onCategoryToggle={handleShotCategoryToggle}
+              shots={shots}
+            />
+            <XGPitch
+              shots={filteredShots}
+              onShotAdd={handleShotAdd}
+              onShotClick={handleShotClick}
+              selectedShotId={selectedShotId}
+              matchInfo={matchInfo || undefined}
+              allTeams={allTeams}
+            />
+          </>
+        )}
+
+        {activeTab === "packing" ? (
+          <ActionsTable
+            actions={actions}
+            players={players}
+            onDeleteAction={handleDeleteAction}
+            onEditAction={handleEditAction}
+            onRefreshPlayersData={handleRefreshPlayersData}
+            youtubeVideoRef={youtubeVideoRef}
+          />
+        ) : (
+          <ShotsTable
+            shots={filteredShots}
+            players={players}
+            onDeleteShot={handleShotDelete}
+            onEditShot={(shot) => {
+              setShotModalData({
+                x: shot.x,
+                y: shot.y,
+                xG: shot.xG,
+                editingShot: shot
+              });
+              setIsShotModalOpen(true);
+            }}
+            onVideoTimeClick={(timestamp) => {
+              if (youtubeVideoRef.current) {
+                youtubeVideoRef.current.seekTo(timestamp);
+              }
             }}
           />
         )}
-
-        <ActionsTable
-          actions={actions}
-          players={players}
-          onDeleteAction={handleDeleteAction}
-          onEditAction={handleEditAction}
-          onRefreshPlayersData={handleRefreshPlayersData}
-          youtubeVideoRef={youtubeVideoRef}
-        />
 
         <PlayerModal
           isOpen={isModalOpen}
@@ -1641,6 +1779,23 @@ export default function Page() {
           onImportError={handleImportError}
           onLogout={handleLogout}
         />
+
+        {/* Modal dla strzałów */}
+        {shotModalData && (
+          <ShotModal
+            isOpen={isShotModalOpen}
+            onClose={handleShotModalClose}
+            onSave={handleShotSave}
+            onDelete={handleShotDelete}
+            editingShot={shotModalData.editingShot}
+            x={shotModalData.x}
+            y={shotModalData.y}
+            xG={shotModalData.xG}
+            matchId={matchInfo?.matchId || ""}
+            players={players}
+            matchInfo={matchInfo}
+          />
+        )}
 
         <OfflineStatus />
       </main>

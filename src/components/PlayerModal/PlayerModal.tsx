@@ -50,7 +50,10 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
   const positions = [
     { value: "GK", label: "Bramkarz (GK)" },
     { value: "CB", label: "Środkowy obrońca (CB)" },
+    { value: "RB", label: "Prawy obrońca (RB)" },
+    { value: "LB", label: "Lewy obrońca (LB)" },
     { value: "DM", label: "Defensywny pomocnik (DM)" },
+    { value: "CM", label: "Środkowy pomocnik (CM)" },
     { value: "AM", label: "Ofensywny pomocnik (AM)" },
     { value: "LW", label: "Lewy skrzydłowy (LW)" },
     { value: "RW", label: "Prawy skrzydłowy (RW)" },

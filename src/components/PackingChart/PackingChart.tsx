@@ -713,9 +713,6 @@ export default function PackingChart({
         
         const currentValue = selectedChart === 'sender' ? connection.senderValue : connection.receiverValue;
         
-        // Debug: sprawdź czy wartości się zmieniają
-        console.log(`Partner ${partnerId}: sender=${connection.senderValue}, receiver=${connection.receiverValue}, current=${currentValue}, chart=${selectedChart}`);
-        
         // Policz liczbę podań między zawodnikami
         const actionCount = actions.filter(a => 
           a.actionType === 'pass' && 

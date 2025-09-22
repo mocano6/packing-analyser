@@ -69,6 +69,7 @@ export default function StatystykiZespoluPage() {
   const [allActions, setAllActions] = useState<Action[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState<string>("");
+  const [selectedMetric, setSelectedMetric] = useState<'pxt' | 'xt' | 'packing'>('pxt');
 
   const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
 
@@ -153,25 +154,65 @@ export default function StatystykiZespoluPage() {
     loadActionsForMatch();
   }, [selectedMatch]);
 
-  // Przygotuj dane dla wykresu
-  const chartData = useMemo(() => {
+  // Przygotuj dane dla wykresów zespołowych
+  const teamChartData = useMemo(() => {
     if (allActions.length === 0) return [];
 
-    // Grupuj akcje po minutach
-    const actionsPerMinute: Record<number, number> = {};
+    // Oblicz skumulowane wartości dla zespołu
+    const data: any[] = [];
+    let cumulativePacking = 0;
+    let cumulativePxT = 0;
+    let cumulativeXT = 0;
     
-    allActions.forEach(action => {
-      const minute = Math.floor(action.minute);
-      actionsPerMinute[minute] = (actionsPerMinute[minute] || 0) + 1;
+    // Sortuj akcje po minutach
+    const sortedActions = [...allActions].sort((a, b) => a.minute - b.minute);
+    
+    sortedActions.forEach((action, index) => {
+      const packingPoints = action.packingPoints || 0;
+      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+      const pxtValue = xTDifference * packingPoints;
+      
+      cumulativePacking += packingPoints;
+      cumulativePxT += pxtValue;
+      cumulativeXT += xTDifference;
+      
+      // Dodaj punkt co akcję dla płynnego wykresu
+      data.push({
+        minute: action.minute,
+        actionIndex: index + 1,
+        packing: cumulativePacking,
+        pxt: cumulativePxT,
+        xt: cumulativeXT
       });
+    });
 
-    // Konwertuj na format dla wykresu
-    return Object.entries(actionsPerMinute)
-      .map(([minute, count]) => ({
-        minute: parseInt(minute),
-        actions: count
-      }))
-      .sort((a, b) => a.minute - b.minute);
+    return data;
+  }, [allActions]);
+
+  // Przygotuj podsumowanie połówek
+  const halfTimeStats = useMemo(() => {
+    if (allActions.length === 0) return { firstHalf: { packing: 0, pxt: 0, xt: 0 }, secondHalf: { packing: 0, pxt: 0, xt: 0 } };
+
+    let firstHalf = { packing: 0, pxt: 0, xt: 0 };
+    let secondHalf = { packing: 0, pxt: 0, xt: 0 };
+
+    allActions.forEach(action => {
+      const packingPoints = action.packingPoints || 0;
+      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+      const pxtValue = xTDifference * packingPoints;
+      
+      if (action.minute <= 45) {
+        firstHalf.packing += packingPoints;
+        firstHalf.pxt += pxtValue;
+        firstHalf.xt += xTDifference;
+      } else {
+        secondHalf.packing += packingPoints;
+        secondHalf.pxt += pxtValue;
+        secondHalf.xt += xTDifference;
+      }
+    });
+
+    return { firstHalf, secondHalf };
   }, [allActions]);
 
   // Znajdź wybrany mecz dla wyświetlenia informacji
@@ -185,13 +226,12 @@ export default function StatystykiZespoluPage() {
       const data = payload[0].payload;
       return (
         <div className={styles.tooltip}>
-          <p className={styles.tooltipLabel}>{`Minuty: ${label}`}</p>
-          <p>Akcji w przedziale: {data.actions}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} style={{ color: entry.color }}>
-              {`${entry.dataKey}: ${entry.value}`}
-            </p>
-          ))}
+          <p className={styles.tooltipLabel}>{`Minuta: ${data.minute?.toFixed(1)}`}</p>
+          <p>Akcja: #{data.actionIndex}</p>
+          <hr style={{margin: '8px 0', border: 'none', borderTop: '1px solid #ddd'}} />
+          <p style={{ color: '#8884d8' }}>Packing: {data.packing?.toFixed(0)}</p>
+          <p style={{ color: '#82ca9d' }}>PxT: {data.pxt?.toFixed(2)}</p>
+          <p style={{ color: '#ffc658' }}>xT: {data.xt?.toFixed(3)}</p>
         </div>
       );
     }
@@ -341,72 +381,138 @@ export default function StatystykiZespoluPage() {
         )}
       </div>
 
-      {/* Wykres meczu */}
+      {/* Statystyki połówek */}
+      {selectedMatch && allActions.length > 0 && (
+        <div className={styles.halfTimeStats}>
+          <h2>Statystyki połówek</h2>
+          <div className={styles.metricSelector}>
+            <button 
+              className={`${styles.metricButton} ${selectedMetric === 'pxt' ? styles.active : ''}`}
+              onClick={() => setSelectedMetric('pxt')}
+            >
+              PxT
+            </button>
+            <button 
+              className={`${styles.metricButton} ${selectedMetric === 'xt' ? styles.active : ''}`}
+              onClick={() => setSelectedMetric('xt')}
+            >
+              xT
+            </button>
+            <button 
+              className={`${styles.metricButton} ${selectedMetric === 'packing' ? styles.active : ''}`}
+              onClick={() => setSelectedMetric('packing')}
+            >
+              Packing
+            </button>
+          </div>
+          
+          <div className={styles.halfTimeContainer}>
+            <div className={styles.halfTimeCard}>
+              <h3>1. połowa</h3>
+              <div className={styles.statValue}>
+                {selectedMetric === 'pxt' && halfTimeStats.firstHalf.pxt.toFixed(2)}
+                {selectedMetric === 'xt' && halfTimeStats.firstHalf.xt.toFixed(3)}
+                {selectedMetric === 'packing' && halfTimeStats.firstHalf.packing.toFixed(0)}
+              </div>
+              <div className={styles.statLabel}>
+                {selectedMetric === 'pxt' && 'PxT'}
+                {selectedMetric === 'xt' && 'xT'}
+                {selectedMetric === 'packing' && 'Packing'}
+              </div>
+            </div>
+            
+            <div className={styles.halfTimeCard}>
+              <h3>2. połowa</h3>
+              <div className={styles.statValue}>
+                {selectedMetric === 'pxt' && halfTimeStats.secondHalf.pxt.toFixed(2)}
+                {selectedMetric === 'xt' && halfTimeStats.secondHalf.xt.toFixed(3)}
+                {selectedMetric === 'packing' && halfTimeStats.secondHalf.packing.toFixed(0)}
+              </div>
+              <div className={styles.statLabel}>
+                {selectedMetric === 'pxt' && 'PxT'}
+                {selectedMetric === 'xt' && 'xT'}
+                {selectedMetric === 'packing' && 'Packing'}
+              </div>
+            </div>
+            
+            <div className={styles.halfTimeCard}>
+              <h3>Łącznie</h3>
+              <div className={styles.statValue}>
+                {selectedMetric === 'pxt' && (halfTimeStats.firstHalf.pxt + halfTimeStats.secondHalf.pxt).toFixed(2)}
+                {selectedMetric === 'xt' && (halfTimeStats.firstHalf.xt + halfTimeStats.secondHalf.xt).toFixed(3)}
+                {selectedMetric === 'packing' && (halfTimeStats.firstHalf.packing + halfTimeStats.secondHalf.packing).toFixed(0)}
+              </div>
+              <div className={styles.statLabel}>
+                {selectedMetric === 'pxt' && 'PxT'}
+                {selectedMetric === 'xt' && 'xT'}
+                {selectedMetric === 'packing' && 'Packing'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Wykres zespołowy */}
       <div className={styles.chartPanel}>
-        <h2>Przyrost statystyk w czasie meczu</h2>
+        <h2>Przyrost statystyk zespołu w czasie meczu</h2>
         {isLoadingActions ? (
           <p>Ładowanie akcji...</p>
         ) : !selectedMatch ? (
           <p>Wybierz mecz, aby zobaczyć statystyki.</p>
-        ) : chartData.length === 0 ? (
+        ) : teamChartData.length === 0 ? (
           <p>Brak danych dla wybranego meczu.</p>
         ) : (
           <div>
-            <p>Pokazano statystyki z {allActions.length} akcji</p>
-            <p className={styles.chartInfo}>
-              <strong>Uwaga:</strong> Wykres używa podwójnych osi Y - lewa oś dla xT/PxT, prawa oś dla Packing
-            </p>
+            <p>Pokazano statystyki z {allActions.length} akcji zespołu</p>
             <div className={styles.chartContainer}>
               <ResponsiveContainer width="100%" height={500}>
-                <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <LineChart data={teamChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis 
                     dataKey="minute" 
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                    interval={0}
+                    label={{ value: 'Minuta', position: 'insideBottom', offset: -5 }}
                   />
                   <YAxis 
                     yAxisId="left" 
                     orientation="left"
-                    label={{ value: 'Akcje', angle: -90, position: 'insideLeft' }}
+                    label={{ value: 'xT / PxT', angle: -90, position: 'insideLeft' }}
+                  />
+                  <YAxis 
+                    yAxisId="right" 
+                    orientation="right"
+                    label={{ value: 'Packing', angle: 90, position: 'insideRight' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend />
                   <Line 
                     yAxisId="left"
                     type="monotone" 
-                    dataKey="actions" 
+                    dataKey="xt" 
                     stroke="#8884d8" 
                     strokeWidth={2}
-                    name="Akcje"
+                    name="xT (skumulowane)"
+                    connectNulls={true}
+                  />
+                  <Line 
+                    yAxisId="left"
+                    type="monotone" 
+                    dataKey="pxt" 
+                    stroke="#82ca9d" 
+                    strokeWidth={2}
+                    name="PxT (skumulowane)"
+                    connectNulls={true}
+                  />
+                  <Line 
+                    yAxisId="right"
+                    type="monotone" 
+                    dataKey="packing" 
+                    stroke="#ffc658" 
+                    strokeWidth={2}
+                    name="Packing (skumulowane)"
+                    connectNulls={true}
                   />
                 </LineChart>
               </ResponsiveContainer>
-            </div>
-
-            {/* Tabela z danymi liczbowymi */}
-            <div className={styles.dataTable}>
-              <h3>Szczegółowe dane - co 5 minut</h3>
-              <div className={styles.tableContainer}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>Czas</th>
-                      <th>Akcje</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {chartData.map((interval, index) => (
-                      <tr key={index}>
-                        <td>{interval.minute}</td>
-                        <td>{interval.actions}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             </div>
           </div>
         )}
