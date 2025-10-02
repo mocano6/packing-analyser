@@ -191,6 +191,9 @@ export default function ZawodnicyPage() {
 
   // Stan dla wybranego sezonu
   const [selectedSeason, setSelectedSeason] = useState<string>("");
+  
+  // Stan dla aktywnej zakładki
+  const [activeTab, setActiveTab] = useState<'packing' | 'xg' | 'unpacking'>('packing');
 
   // Inicjalizuj selectedSeason na najnowszy sezon na podstawie meczów
   useEffect(() => {
@@ -772,6 +775,30 @@ export default function ZawodnicyPage() {
 
 
 
+      {/* Zakładki */}
+      <div className={styles.tabsContainer}>
+        <div className={styles.tabs}>
+          <button 
+            className={`${styles.tab} ${activeTab === 'packing' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('packing')}
+          >
+            Packing
+          </button>
+          <button 
+            className={`${styles.tab} ${activeTab === 'xg' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('xg')}
+          >
+            xG
+          </button>
+          <button 
+            className={`${styles.tab} ${activeTab === 'unpacking' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('unpacking')}
+          >
+            Unpacking
+          </button>
+        </div>
+      </div>
+
       {/* Sekcja wyboru meczów - tabela */}
       <div className={styles.matchSelector}>
         <div className={styles.matchSelectorHeader}>
@@ -883,23 +910,54 @@ export default function ZawodnicyPage() {
             <div className={styles.tableControls}>
               <p>Pokazano statystyki z {filteredActions.length} akcji z {selectedMatches.length} meczów</p>
             </div>
-            <PackingChart
-              actions={filteredActions}
-              players={filteredPlayers}
-              selectedPlayerId={selectedPlayerId}
-              onPlayerSelect={handlePlayerSelect}
-              matches={selectedMatchesData}
-              teams={teams}
-              birthYearFilter={birthYearFilter}
-              onBirthYearFilterChange={setBirthYearFilter}
-              selectedPositions={selectedPositions}
-              onSelectedPositionsChange={setSelectedPositions}
-              availablePositions={availablePositions}
-              showPositionsDropdown={showPositionsDropdown}
-              setShowPositionsDropdown={setShowPositionsDropdown}
-              handlePositionToggle={handlePositionToggle}
-              handleSelectAllPositions={handleSelectAllPositions}
-            />
+            
+            {/* Wyświetl odpowiedni komponent w zależności od aktywnej zakładki */}
+            {activeTab === 'packing' && (
+              <PackingChart
+                actions={filteredActions}
+                players={filteredPlayers}
+                selectedPlayerId={selectedPlayerId}
+                onPlayerSelect={handlePlayerSelect}
+                matches={selectedMatchesData}
+                teams={teams}
+                birthYearFilter={birthYearFilter}
+                onBirthYearFilterChange={setBirthYearFilter}
+                selectedPositions={selectedPositions}
+                onSelectedPositionsChange={setSelectedPositions}
+                availablePositions={availablePositions}
+                showPositionsDropdown={showPositionsDropdown}
+                setShowPositionsDropdown={setShowPositionsDropdown}
+                handlePositionToggle={handlePositionToggle}
+                handleSelectAllPositions={handleSelectAllPositions}
+              />
+            )}
+            
+            {activeTab === 'xg' && (
+              <div className={styles.placeholder}>
+                <h3>xG Analysis</h3>
+                <p>Funkcja xG będzie dostępna wkrótce...</p>
+              </div>
+            )}
+            
+            {activeTab === 'unpacking' && (
+              <PackingChart
+                actions={filteredActions}
+                players={filteredPlayers}
+                selectedPlayerId={selectedPlayerId}
+                onPlayerSelect={handlePlayerSelect}
+                matches={selectedMatchesData}
+                teams={teams}
+                birthYearFilter={birthYearFilter}
+                onBirthYearFilterChange={setBirthYearFilter}
+                selectedPositions={selectedPositions}
+                onSelectedPositionsChange={setSelectedPositions}
+                availablePositions={availablePositions}
+                showPositionsDropdown={showPositionsDropdown}
+                setShowPositionsDropdown={setShowPositionsDropdown}
+                handlePositionToggle={handlePositionToggle}
+                handleSelectAllPositions={handleSelectAllPositions}
+              />
+            )}
           </div>
         )}
       </div>

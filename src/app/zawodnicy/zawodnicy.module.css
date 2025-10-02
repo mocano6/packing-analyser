@@ -659,3 +659,61 @@
 .logoutButton:hover {
   background-color: #c82333;
 }
+
+/* Style dla zakładek */
+.tabsContainer {
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+  background-color: #f8f9fa;
+  border-radius: 8px 8px 0 0;
+  overflow: hidden;
+}
+
+.tab {
+  flex: 1;
+  padding: 12px 20px;
+  background-color: #f8f9fa;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #666;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.tab:hover {
+  background-color: #e9ecef;
+  color: #333;
+}
+
+.activeTab {
+  background-color: #fff;
+  color: #1976d2;
+  border-bottom-color: #1976d2;
+  font-weight: 600;
+}
+
+.placeholder {
+  padding: 40px;
+  text-align: center;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.placeholder h3 {
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.placeholder p {
+  color: #666;
+  font-size: 16px;
+}
