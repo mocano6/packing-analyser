@@ -48,6 +48,11 @@ export interface ActionSectionProps {
   isActionModalOpen: boolean;
   setIsActionModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
   matchInfo?: TeamInfo | null;
+  // Nowe propsy dla trybu unpacking
+  mode?: "attack" | "defense";
+  onModeChange?: (mode: "attack" | "defense") => void;
+  selectedDefensePlayers?: string[];
+  onDefensePlayersChange?: (playerIds: string[]) => void;
 }
 
 const ActionSection = memo(function ActionSection({
@@ -86,6 +91,11 @@ const ActionSection = memo(function ActionSection({
   isActionModalOpen,
   setIsActionModalOpen,
   matchInfo,
+  // Nowe propsy dla trybu unpacking
+  mode = "attack",
+  onModeChange,
+  selectedDefensePlayers = [],
+  onDefensePlayersChange,
 }: ActionSectionProps) {
   // Dodajemy efekt, który będzie monitorował wartości stref
   useEffect(() => {
@@ -178,6 +188,11 @@ const ActionSection = memo(function ActionSection({
         onReset={resetActionState}
         onResetPoints={resetActionPoints}
         matchInfo={matchInfo}
+        // Nowe propsy dla trybu unpacking
+        mode={mode}
+        onModeChange={onModeChange}
+        selectedDefensePlayers={selectedDefensePlayers}
+        onDefensePlayersChange={onDefensePlayersChange}
       />
     </section>
   );

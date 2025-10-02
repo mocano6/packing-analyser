@@ -10,6 +10,7 @@ interface PlayerCardProps {
   isSender: boolean;
   isReceiver: boolean;
   isDribbler?: boolean;
+  isDefensePlayer?: boolean;
   onSelect: (playerId: string) => void;
 }
 
@@ -18,6 +19,7 @@ const PlayerCard: React.FC<PlayerCardProps> = memo(function PlayerCard({
   isSender,
   isReceiver,
   isDribbler = false,
+  isDefensePlayer = false,
   onSelect,
 }) {
   const hasImage = !!player.imageUrl;
@@ -28,11 +30,12 @@ const PlayerCard: React.FC<PlayerCardProps> = memo(function PlayerCard({
         ${isSender ? styles.playerSenderTile : ''} 
         ${isReceiver ? styles.playerReceiverTile : ''} 
         ${isDribbler ? styles.playerDribblerTile : ''}
+        ${isDefensePlayer ? styles.playerDefenseTile : ''}
         ${hasImage ? styles.withImage : ''}`}
       onClick={() => onSelect(player.id)}
       role="button"
       tabIndex={0}
-      aria-pressed={isSender || isReceiver || isDribbler}
+      aria-pressed={isSender || isReceiver || isDribbler || isDefensePlayer}
     >
       {hasImage && (
         <>

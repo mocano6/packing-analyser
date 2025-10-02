@@ -282,6 +282,10 @@ export default function Page() {
   } | null>(null);
   const [selectedShotId, setSelectedShotId] = useState<string | undefined>();
 
+  // Stany dla trybu unpacking
+  const [actionMode, setActionMode] = useState<"attack" | "defense">("attack");
+  const [selectedDefensePlayers, setSelectedDefensePlayers] = useState<string[]>([]);
+
   // Funkcje obsługi strzałów
   const handleShotAdd = (x: number, y: number, xG: number) => {
     setShotModalData({ x, y, xG });
@@ -1178,6 +1182,10 @@ export default function Page() {
     setEndZone(null);
     setSelectedZone(null);
     
+    // Resetujemy stan obrony
+    setActionMode("attack");
+    setSelectedDefensePlayers([]);
+    
     // Czyścimy również localStorage ze stref
     localStorage.removeItem('tempStartZone');
     localStorage.removeItem('tempEndZone');
@@ -1521,6 +1529,11 @@ export default function Page() {
             isActionModalOpen={isActionModalOpen}
             setIsActionModalOpen={setIsActionModalOpen}
             matchInfo={matchInfo}
+            // Nowe propsy dla trybu unpacking
+            mode={actionMode}
+            onModeChange={setActionMode}
+            selectedDefensePlayers={selectedDefensePlayers}
+            onDefensePlayersChange={setSelectedDefensePlayers}
           />
         )}
 

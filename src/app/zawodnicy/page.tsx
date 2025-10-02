@@ -8,6 +8,7 @@ import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
 import PackingChart from '@/components/PackingChart/PackingChart';
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
+import ActionSection from "@/components/ActionSection/ActionSection";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, getDocs, updateDoc, deleteDoc } from "firebase/firestore";
 import { sortPlayersByLastName, getPlayerFullName } from "@/utils/playerUtils";
@@ -194,6 +195,71 @@ export default function ZawodnicyPage() {
   
   // Stan dla aktywnej zakładki
   const [activeTab, setActiveTab] = useState<'packing' | 'xg' | 'unpacking'>('packing');
+  
+  // Stany dla ActionSection (tylko dla zakładki unpacking)
+  const [selectedZone, setSelectedZone] = useState<string | number | null>(null);
+  const [selectedReceiverId, setSelectedReceiverId] = useState<string | null>(null);
+  const [actionMinute, setActionMinute] = useState<number>(0);
+  const [actionType, setActionType] = useState<"pass" | "dribble">("pass");
+  const [currentPoints, setCurrentPoints] = useState<number>(0);
+  const [isP1Active, setIsP1Active] = useState<boolean>(false);
+  const [isP2Active, setIsP2Active] = useState<boolean>(false);
+  const [isP3Active, setIsP3Active] = useState<boolean>(false);
+  const [isShot, setIsShot] = useState<boolean>(false);
+  const [isGoal, setIsGoal] = useState<boolean>(false);
+  const [isPenaltyAreaEntry, setIsPenaltyAreaEntry] = useState<boolean>(false);
+  const [isSecondHalf, setIsSecondHalf] = useState<boolean>(false);
+  const [isActionModalOpen, setIsActionModalOpen] = useState<boolean>(false);
+  const [startZone, setStartZone] = useState<number | null>(null);
+  const [endZone, setEndZone] = useState<number | null>(null);
+  const [actionMode, setActionMode] = useState<"attack" | "defense">("attack");
+  const [selectedDefensePlayers, setSelectedDefensePlayers] = useState<string[]>([]);
+
+  // Funkcje obsługi dla ActionSection
+  const handleZoneSelection = (zone: number, xT?: number, value1?: number, value2?: number) => {
+    setSelectedZone(zone);
+    // Logika dla stref - można rozszerzyć w przyszłości
+  };
+
+  const handleSaveAction = () => {
+    // Logika zapisywania akcji - można rozszerzyć w przyszłości
+    console.log("Zapisywanie akcji unpacking...");
+  };
+
+  const resetActionState = () => {
+    setSelectedPlayerId(null);
+    setSelectedReceiverId(null);
+    setActionMinute(0);
+    setActionType("pass");
+    setCurrentPoints(0);
+    setIsP1Active(false);
+    setIsP2Active(false);
+    setIsP3Active(false);
+    setIsShot(false);
+    setIsGoal(false);
+    setIsPenaltyAreaEntry(false);
+    setIsSecondHalf(false);
+    setStartZone(null);
+    setEndZone(null);
+    setSelectedZone(null);
+    setActionMode("attack");
+    setSelectedDefensePlayers([]);
+  };
+
+  const resetActionPoints = () => {
+    setCurrentPoints(0);
+    setIsP1Active(false);
+    setIsP2Active(false);
+    setIsP3Active(false);
+  };
+
+  const handleP3Toggle = () => {
+    setIsP3Active(!isP3Active);
+  };
+
+  const handleSecondHalfToggle = () => {
+    setIsSecondHalf(!isSecondHalf);
+  };
 
   // Inicjalizuj selectedSeason na najnowszy sezon na podstawie meczów
   useEffect(() => {
@@ -940,22 +1006,47 @@ export default function ZawodnicyPage() {
             )}
             
             {activeTab === 'unpacking' && (
-              <PackingChart
-                actions={filteredActions}
+              <ActionSection
+                selectedZone={selectedZone}
+                handleZoneSelect={handleZoneSelection}
                 players={filteredPlayers}
                 selectedPlayerId={selectedPlayerId}
-                onPlayerSelect={handlePlayerSelect}
-                matches={selectedMatchesData}
-                teams={teams}
-                birthYearFilter={birthYearFilter}
-                onBirthYearFilterChange={setBirthYearFilter}
-                selectedPositions={selectedPositions}
-                onSelectedPositionsChange={setSelectedPositions}
-                availablePositions={availablePositions}
-                showPositionsDropdown={showPositionsDropdown}
-                setShowPositionsDropdown={setShowPositionsDropdown}
-                handlePositionToggle={handlePositionToggle}
-                handleSelectAllPositions={handleSelectAllPositions}
+                setSelectedPlayerId={setSelectedPlayerId}
+                selectedReceiverId={selectedReceiverId}
+                setSelectedReceiverId={setSelectedReceiverId}
+                actionMinute={actionMinute}
+                setActionMinute={setActionMinute}
+                actionType={actionType}
+                setActionType={setActionType}
+                currentPoints={currentPoints}
+                setCurrentPoints={setCurrentPoints}
+                isP1Active={isP1Active}
+                setIsP1Active={setIsP1Active}
+                isP2Active={isP2Active}
+                setIsP2Active={setIsP2Active}
+                isP3Active={isP3Active}
+                setIsP3Active={setIsP3Active}
+                isShot={isShot}
+                setIsShot={setIsShot}
+                isGoal={isGoal}
+                setIsGoal={setIsGoal}
+                isPenaltyAreaEntry={isPenaltyAreaEntry}
+                setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
+                isSecondHalf={isSecondHalf}
+                setIsSecondHalf={handleSecondHalfToggle}
+                handleSaveAction={handleSaveAction}
+                resetActionState={resetActionState}
+                resetActionPoints={resetActionPoints}
+                startZone={startZone}
+                endZone={endZone}
+                isActionModalOpen={isActionModalOpen}
+                setIsActionModalOpen={setIsActionModalOpen}
+                matchInfo={selectedMatchesData[0] || null}
+                // Nowe propsy dla trybu unpacking
+                mode={actionMode}
+                onModeChange={setActionMode}
+                selectedDefensePlayers={selectedDefensePlayers}
+                onDefensePlayersChange={setSelectedDefensePlayers}
               />
             )}
           </div>

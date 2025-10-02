@@ -45,6 +45,11 @@ interface ActionModalProps {
   selectedMatchId?: string | null;
   onMatchSelect?: (matchId: string) => void;
   matchInfo?: TeamInfo | null;
+  // Nowe propsy dla trybu unpacking
+  mode?: "attack" | "defense";
+  onModeChange?: (mode: "attack" | "defense") => void;
+  selectedDefensePlayers?: string[];
+  onDefensePlayersChange?: (playerIds: string[]) => void;
 }
 
 const ActionModal: React.FC<ActionModalProps> = ({
@@ -83,6 +88,11 @@ const ActionModal: React.FC<ActionModalProps> = ({
   selectedMatchId,
   onMatchSelect,
   matchInfo,
+  // Nowe propsy dla trybu unpacking
+  mode = "attack",
+  onModeChange,
+  selectedDefensePlayers = [],
+  onDefensePlayersChange,
 }) => {
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
 
@@ -180,6 +190,21 @@ const ActionModal: React.FC<ActionModalProps> = ({
   };
 
   const handlePlayerClick = (playerId: string) => {
+    // Obsługa trybu obrony - wielokrotny wybór zawodników
+    if (mode === "defense") {
+      if (onDefensePlayersChange) {
+        const currentDefensePlayers = selectedDefensePlayers || [];
+        if (currentDefensePlayers.includes(playerId)) {
+          // Usuń zawodnika z listy
+          onDefensePlayersChange(currentDefensePlayers.filter(id => id !== playerId));
+        } else {
+          // Dodaj zawodnika do listy
+          onDefensePlayersChange([...currentDefensePlayers, playerId]);
+        }
+      }
+      return;
+    }
+    
     // Cykliczny wybór: zawodnik podający -> zawodnik przyjmujący -> usunięcie wyboru
     
     if (actionType === "dribble") {
@@ -310,6 +335,25 @@ const ActionModal: React.FC<ActionModalProps> = ({
     <div className={styles.modalOverlay} onClick={handleCancel}>
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <h2>{isEditMode ? "Edytuj akcję" : "Dodaj akcję"}</h2>
+        
+        {/* Przełącznik trybu Atak/Obrona */}
+        {onModeChange && (
+          <div className={styles.modeToggle}>
+            <button
+              className={`${styles.modeButton} ${mode === "attack" ? styles.activeMode : ""}`}
+              onClick={() => onModeChange("attack")}
+            >
+              Atak
+            </button>
+            <button
+              className={`${styles.modeButton} ${mode === "defense" ? styles.activeMode : ""}`}
+              onClick={() => onModeChange("defense")}
+            >
+              Obrona
+            </button>
+          </div>
+        )}
+        
         <div className={styles.form}>
           {/* Wybór meczu - tylko w trybie edycji */}
           {isEditMode && allMatches && allMatches.length > 0 && (
@@ -366,10 +410,17 @@ const ActionModal: React.FC<ActionModalProps> = ({
           {/* Lista zawodników */}
           <div className={styles.formGroup}>
             <label className={styles.playerTitle}>
-              {actionType === "dribble" ? "Wybierz zawodnika dryblującego:" : "Wybierz zawodników:"}
+              {mode === "defense" 
+                ? "Wybierz zawodników miniętych przez przeciwnika:" 
+                : actionType === "dribble" 
+                  ? "Wybierz zawodnika dryblującego:" 
+                  : "Wybierz zawodników:"
+              }
             </label>
             <div className={styles.playerSelectionInfo}>
-              {actionType === "pass" ? (
+              {mode === "defense" ? (
+                <p>Kliknij, aby wybrać zawodników naszego zespołu, którzy zostali minięci przez przeciwnika. Możesz wybrać wielu zawodników.</p>
+              ) : actionType === "pass" ? (
                 <p>Kliknij, aby wybrać zawodnika rozpoczynającego, a następnie kliknij na innego zawodnika, aby wybrać kończącego.</p>
               ) : (
                 <p>Kliknij, aby wybrać zawodnika wykonującego drybling.</p>
@@ -387,9 +438,10 @@ const ActionModal: React.FC<ActionModalProps> = ({
                   <PlayerCard
                     key={player.id}
                     player={player}
-                    isSender={actionType === "pass" ? player.id === selectedPlayerId : false}
-                    isReceiver={actionType === "pass" ? player.id === selectedReceiverId : false}
-                    isDribbler={actionType === "dribble" ? player.id === selectedPlayerId : false}
+                    isSender={mode === "defense" ? false : actionType === "pass" ? player.id === selectedPlayerId : false}
+                    isReceiver={mode === "defense" ? false : actionType === "pass" ? player.id === selectedReceiverId : false}
+                    isDribbler={mode === "defense" ? false : actionType === "dribble" ? player.id === selectedPlayerId : false}
+                    isDefensePlayer={mode === "defense" ? (selectedDefensePlayers || []).includes(player.id) : false}
                     onSelect={handlePlayerClick}
                   />
                   ))}
