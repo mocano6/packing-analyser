@@ -40,7 +40,7 @@ function removeUndefinedFields<T extends object>(obj: T): T {
   return result;
 }
 
-export function usePackingActions(players: Player[], matchInfo: TeamInfo | null) {
+export function usePackingActions(players: Player[], matchInfo: TeamInfo | null, actionMode?: "attack" | "defense", selectedDefensePlayers?: string[]) {
   // Stany dla wybranego zawodnika
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedReceiverId, setSelectedReceiverId] = useState<string | null>(null);
@@ -199,9 +199,19 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null)
       return false;
     }
 
-    if (!selectedPlayerId) {
-      console.error("Brak ID zawodnika (selectedPlayerId jest null/undefined)");
-      return false;
+    // Walidacja w zależności od trybu
+    if (actionMode === "defense") {
+      // W trybie obrony sprawdzamy czy są wybrani zawodnicy obrony
+      if (!selectedDefensePlayers || selectedDefensePlayers.length === 0) {
+        console.error("Brak wybranych zawodników obrony (selectedDefensePlayers jest puste)");
+        return false;
+      }
+    } else {
+      // W trybie ataku sprawdzamy standardowe warunki
+      if (!selectedPlayerId) {
+        console.error("Brak ID zawodnika (selectedPlayerId jest null/undefined)");
+        return false;
+      }
     }
     
     try {
