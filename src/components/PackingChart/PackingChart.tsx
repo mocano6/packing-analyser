@@ -187,7 +187,13 @@ export default function PackingChart({
         // Jeśli mamy filtr pozycji, sprawdź czy grał na tej pozycji
         if (selectedPositions.length > 0) {
           const normalizedPosition = normalizePosition(playerMinutesInMatch.position || '');
-          if (!selectedPositions.includes(normalizedPosition)) return; // Pomiń ten mecz
+          const matchesPosition = selectedPositions.some(pos => {
+            // Mapowanie pozycji z filtrów na pozycje w danych
+            if (pos === 'LW' && normalizedPosition === 'LS') return true;
+            if (pos === 'RW' && normalizedPosition === 'RS') return true;
+            return pos === normalizedPosition;
+          });
+          if (!matchesPosition) return; // Pomiń ten mecz
         }
 
         const playerMinutesCount = playerMinutesInMatch.endMinute - playerMinutesInMatch.startMinute;
@@ -220,7 +226,13 @@ export default function PackingChart({
         // Jeśli mamy filtr pozycji, sprawdź czy grał na tej pozycji
         if (selectedPositions.length > 0) {
           const normalizedPosition = normalizePosition(playerMinutesInMatch.position || '');
-          if (!selectedPositions.includes(normalizedPosition)) return; // Pomiń ten mecz
+          const matchesPosition = selectedPositions.some(pos => {
+            // Mapowanie pozycji z filtrów na pozycje w danych
+            if (pos === 'LW' && normalizedPosition === 'LS') return true;
+            if (pos === 'RW' && normalizedPosition === 'RS') return true;
+            return pos === normalizedPosition;
+          });
+          if (!matchesPosition) return; // Pomiń ten mecz
         }
 
         const playerMinutesCount = playerMinutesInMatch.endMinute - playerMinutesInMatch.startMinute;
@@ -245,7 +257,12 @@ export default function PackingChart({
 
       // Sprawdź czy pozycja pasuje (z normalizacją)
       const normalizedPosition = normalizePosition(playerInMatch.position);
-      return selectedPositions.includes(normalizedPosition);
+      return selectedPositions.some(pos => {
+        // Mapowanie pozycji z filtrów na pozycje w danych
+        if (pos === 'LW' && normalizedPosition === 'LS') return true;
+        if (pos === 'RW' && normalizedPosition === 'RS') return true;
+        return pos === normalizedPosition;
+      });
     };
 
     actions.forEach(action => {
@@ -430,7 +447,13 @@ export default function PackingChart({
             const playerInMatch = match.playerMinutes.find(pm => pm.playerId === id);
             if (!playerInMatch || !playerInMatch.position) return;
             const normalizedPosition = normalizePosition(playerInMatch.position);
-            if (selectedPositions.includes(normalizedPosition) && !playedPositions.includes(normalizedPosition)) {
+            const matchesPosition = selectedPositions.some(pos => {
+              // Mapowanie pozycji z filtrów na pozycje w danych
+              if (pos === 'LW' && normalizedPosition === 'LS') return true;
+              if (pos === 'RW' && normalizedPosition === 'RS') return true;
+              return pos === normalizedPosition;
+            });
+            if (matchesPosition && !playedPositions.includes(normalizedPosition)) {
               playedPositions.push(normalizedPosition);
             }
           });
@@ -504,18 +527,54 @@ export default function PackingChart({
         } as any;
       });
 
+    // Debug: sprawdź wybrane pozycje
+    console.log('🔍 Wybrane pozycje w filtrach:', selectedPositions);
+    console.log('🔍 Liczba zawodników przed filtrowaniem:', unsortedTableData.length);
+
     // Filtruj zawodników - pokaż tylko tych z akcjami lub z minutami gry
-    const filteredTableData = unsortedTableData.filter(item => 
-        (item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01 ||
+    const filteredTableData = unsortedTableData.filter(item => {
+      // Debug: sprawdź każdego zawodnika
+      console.log('🔍 Sprawdzanie zawodnika:', {
+        name: item.name,
+        position: item.position,
+        selectedPositions,
+        hasActions: item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01 || item.totalDribbling > 0 || Math.abs(item.totalDribblingPxT) > 0.01 || item.actualMinutes > 0,
+        minMinutes: item.actualMinutes >= minMinutesFilter
+      });
+      
+      return (item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01 ||
         item.totalDribbling > 0 || Math.abs(item.totalDribblingPxT) > 0.01 ||
         item.actualMinutes > 0) && 
         item.actualMinutes >= minMinutesFilter &&
-        (selectedPositions.length === 0 || selectedPositions.some(pos => item.position.includes(pos))) &&
+        (selectedPositions.length === 0 || selectedPositions.some(pos => {
+          // Mapowanie pozycji z filtrów na pozycje w danych
+          const matches = (() => {
+            if (pos === 'LW' && item.position.includes('LS')) return true;
+            if (pos === 'RW' && item.position.includes('RS')) return true;
+            return item.position.includes(pos);
+          })();
+          
+          // Debug log
+          if (selectedPositions.length > 0) {
+            console.log('🔍 Filtrowanie pozycji w tabeli:', {
+              playerName: item.name,
+              playerPosition: item.position,
+              selectedPos: pos,
+              matches,
+              willShow: matches
+            });
+          }
+          
+          return matches;
+        })) &&
         (!birthYearFilter.from.trim() && !birthYearFilter.to.trim() || 
          (item.birthYear && 
           (!birthYearFilter.from.trim() || item.birthYear >= parseInt(birthYearFilter.from.trim())) &&
-          (!birthYearFilter.to.trim() || item.birthYear <= parseInt(birthYearFilter.to.trim()))))
-      );
+          (!birthYearFilter.to.trim() || item.birthYear <= parseInt(birthYearFilter.to.trim()))));
+    });
+
+    console.log('🔍 Liczba zawodników po filtrowaniu:', filteredTableData.length);
+    console.log('🔍 Zawodnicy po filtrowaniu:', filteredTableData.map(p => ({ name: p.name, position: p.position })));
 
     unsortedTableData = filteredTableData;
 

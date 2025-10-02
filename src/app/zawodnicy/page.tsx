@@ -86,8 +86,8 @@ export default function ZawodnicyPage() {
       'LB': 'Lewy obrońca (LB)',
       'DM': 'Defensywny pomocnik (DM)',
       'AM': 'Ofensywny pomocnik (AM)',
-      'LW': 'Lewy skrzydłowy (LW)',
-      'RW': 'Prawy skrzydłowy (RW)',
+      'LW': 'Lewy skrzydłowy (LS)',
+      'RW': 'Prawy skrzydłowy (RS)',
       'ST': 'Napastnik (ST)',
     };
     return labels[position] || position;
