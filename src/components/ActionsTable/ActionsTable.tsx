@@ -13,7 +13,6 @@ type SortKey =
   | "receiverXT"
   | "startZone"
   | "endZone"
-  | "mode"
   | "type"
   | "packing"
   | "pxt"
@@ -136,11 +135,6 @@ const ActionRow = ({
         <div className={styles.cell}>{typeof action.xTValueEnd === 'number' ? action.xTValueEnd.toFixed(3) : '0.000'}</div>
       )}
       <div className={styles.cell}>
-        <span className={action.mode === "defense" ? styles.defense : styles.attack}>
-          {action.mode === "defense" ? "Obrona" : "Atak"}
-        </span>
-      </div>
-      <div className={styles.cell}>
         <span className={action.actionType === "pass" ? styles.pass : styles.dribble}>
           {action.actionType === "pass" ? "Podanie" : "Drybling"}
         </span>
@@ -190,6 +184,9 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
 
   // State dla wyboru typu metryki w tabeli
   const [selectedMetric, setSelectedMetric] = useState<'packing' | 'pxt' | 'xt'>('packing');
+  
+  // State dla filtrowania trybu akcji
+  const [actionModeFilter, setActionModeFilter] = useState<'all' | 'attack' | 'defense'>('all');
 
   // Dodajemy state do śledzenia, czy jakieś akcje mają brakujące dane graczy
   const [hasMissingPlayerData, setHasMissingPlayerData] = useState(false);
@@ -239,10 +236,16 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
 
   // Posortowane akcje z wykorzystaniem useMemo dla optymalizacji wydajności
   const sortedActions = useMemo(() => {
-    const result = [...actions];
+    // Filtrujemy akcje według trybu
+    let filteredActions = [...actions];
+    if (actionModeFilter !== 'all') {
+      filteredActions = actions.filter(action => {
+        const actionMode = action.mode || 'attack';
+        return actionMode === actionModeFilter;
+      });
+    }
     
-
-    
+    const result = [...filteredActions];
     const { key, direction } = sortConfig;
     const multiplier = direction === "asc" ? 1 : -1;
 
@@ -279,9 +282,6 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         case "endZone":
           comparison = (a.endZone || "").localeCompare(b.endZone || "");
           break;
-        case "mode":
-          comparison = (a.mode || "attack").localeCompare(b.mode || "attack");
-          break;
         case "type":
           comparison = a.actionType.localeCompare(b.actionType);
           break;
@@ -308,7 +308,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
 
       return comparison * multiplier;
     });
-  }, [actions, sortConfig]);
+  }, [actions, sortConfig, actionModeFilter]);
 
   return (
     <div className={styles.tableContainer}>
@@ -334,6 +334,28 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
               onClick={() => setSelectedMetric('xt')}
             >
               xT
+            </button>
+          </div>
+          
+          {/* Przełącznik trybu akcji */}
+          <div className={styles.modeToggle}>
+            <button
+              className={`${styles.modeButton} ${actionModeFilter === 'all' ? styles.active : ''}`}
+              onClick={() => setActionModeFilter('all')}
+            >
+              Wszystkie
+            </button>
+            <button
+              className={`${styles.modeButton} ${actionModeFilter === 'attack' ? styles.active : ''}`}
+              onClick={() => setActionModeFilter('attack')}
+            >
+              Atak
+            </button>
+            <button
+              className={`${styles.modeButton} ${actionModeFilter === 'defense' ? styles.active : ''}`}
+              onClick={() => setActionModeFilter('defense')}
+            >
+              Obrona
             </button>
           </div>
           
@@ -397,13 +419,6 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
               onSort={handleSort}
             />
           )}
-          <HeaderCell
-            label="Tryb"
-            sortKey="mode"
-            currentSortKey={sortConfig.key}
-            sortDirection={sortConfig.direction}
-            onSort={handleSort}
-          />
           <HeaderCell
             label="Typ"
             sortKey="type"

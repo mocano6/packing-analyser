@@ -53,6 +53,42 @@
   font-weight: 600;
 }
 
+/* Style dla przełącznika trybu akcji */
+.modeToggle {
+  display: flex;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #d1d5db;
+  background-color: #f9fafb;
+}
+
+.modeButton {
+  padding: 8px 16px;
+  border: none;
+  background-color: transparent;
+  color: #374151;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border-right: 1px solid #d1d5db;
+}
+
+.modeButton:last-child {
+  border-right: none;
+}
+
+.modeButton:hover {
+  background-color: #e5e7eb;
+  color: #111827;
+}
+
+.modeButton.active {
+  background-color: #dc2626;
+  color: white;
+  font-weight: 600;
+}
+
 .matchesTable {
   background: white;
   border-radius: 8px;
@@ -63,7 +99,7 @@
 
 .tableHeader {
   display: grid;
-  grid-template-columns: 1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px;
+  grid-template-columns: 1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px;
   background-color: #fafafa;
   font-weight: 600;
   border-bottom: 1px solid #eaeaea;
@@ -94,7 +130,7 @@
 
 .actionRow {
   display: grid;
-  grid-template-columns: 1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px;
+  grid-template-columns: 1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
@@ -484,7 +520,6 @@
       minmax(60px, 0.8fr)  /* xT start */
       minmax(100px, 1fr)   /* Zawodnik koniec */
       minmax(60px, 0.8fr)  /* xT koniec */
-      minmax(60px, 0.8fr)  /* Tryb */
       minmax(60px, 0.8fr)  /* Typ */
       minmax(60px, 0.8fr)  /* Packing */
       minmax(80px, 0.8fr)  /* Wydarzenia */
