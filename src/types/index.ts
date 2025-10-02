@@ -80,6 +80,8 @@ export interface Action {
   isGoal?: boolean;
   isPenaltyAreaEntry?: boolean;
   isSecondHalf: boolean;
+  mode?: "attack" | "defense"; // Tryb akcji: Atak lub Obrona
+  defensePlayers?: string[]; // Lista zawodników obrony (tylko dla trybu obrona)
 }
 
 // Dla zachowania kompatybilności

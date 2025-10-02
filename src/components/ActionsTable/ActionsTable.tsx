@@ -136,7 +136,7 @@ const ActionRow = ({
       )}
       <div className={styles.cell}>
         <span className={action.actionType === "pass" ? styles.pass : styles.dribble}>
-          {action.actionType === "pass" ? "Podanie" : "Drybling"}
+          {action.mode === "defense" ? "Obrona" : "Atak"} - {action.actionType === "pass" ? "Podanie" : "Drybling"}
         </span>
       </div>
       <div className={styles.cell}>

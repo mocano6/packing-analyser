@@ -257,7 +257,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         isGoal: isGoal,
         isPenaltyAreaEntry: isPenaltyAreaEntry,
         // Zawsze zapisujemy informację o połowie meczu (nie jako opcjonalną)
-        isSecondHalf: isSecondHalfParam !== undefined ? isSecondHalfParam : isSecondHalf
+        isSecondHalf: isSecondHalfParam !== undefined ? isSecondHalfParam : isSecondHalf,
+        // Dodajemy tryb akcji i zawodników obrony
+        mode: actionMode,
+        ...(actionMode === "defense" && selectedDefensePlayers && { defensePlayers: selectedDefensePlayers })
       };
       
       // Dodajemy dane graczy do akcji

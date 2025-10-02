@@ -1014,6 +1014,7 @@ export default function Page() {
           setIsActionModalOpen(false);
           setSelectedPlayerId(null);
           setSelectedReceiverId(null);
+          setSelectedDefensePlayers([]);
           
           // DODANO: Przenieś focus do okna z wideo po zapisaniu akcji (tylko jeśli jest otwarte)
           const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
