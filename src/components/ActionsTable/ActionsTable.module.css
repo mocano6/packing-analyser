@@ -63,7 +63,7 @@
 
 .tableHeader {
   display: grid;
-  grid-template-columns: 1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px;
+  grid-template-columns: 1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px;
   background-color: #fafafa;
   font-weight: 600;
   border-bottom: 1px solid #eaeaea;
@@ -94,7 +94,7 @@
 
 .actionRow {
   display: grid;
-  grid-template-columns: 1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px;
+  grid-template-columns: 1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
@@ -484,7 +484,8 @@
       minmax(60px, 0.8fr)  /* xT start */
       minmax(100px, 1fr)   /* Zawodnik koniec */
       minmax(60px, 0.8fr)  /* xT koniec */
-      minmax(80px, 0.8fr)  /* Rodzaj */
+      minmax(60px, 0.8fr)  /* Tryb */
+      minmax(60px, 0.8fr)  /* Typ */
       minmax(60px, 0.8fr)  /* Packing */
       minmax(80px, 0.8fr)  /* Wydarzenia */
       minmax(60px, 80px);  /* Akcje */
