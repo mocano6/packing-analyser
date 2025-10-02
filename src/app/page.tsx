@@ -215,6 +215,10 @@ export default function Page() {
     isOfflineMode
   } = useMatchInfo();
 
+  // Stany dla trybu unpacking - muszą być przed usePackingActions
+  const [actionMode, setActionMode] = useState<"attack" | "defense">("attack");
+  const [selectedDefensePlayers, setSelectedDefensePlayers] = useState<string[]>([]);
+
   const packingActions = usePackingActions(players, matchInfo, actionMode, selectedDefensePlayers);
   
   // Wyciągnij funkcję resetActionPoints z hooka
@@ -281,10 +285,6 @@ export default function Page() {
     editingShot?: Shot;
   } | null>(null);
   const [selectedShotId, setSelectedShotId] = useState<string | undefined>();
-
-  // Stany dla trybu unpacking
-  const [actionMode, setActionMode] = useState<"attack" | "defense">("attack");
-  const [selectedDefensePlayers, setSelectedDefensePlayers] = useState<string[]>([]);
 
   // Funkcje obsługi strzałów
   const handleShotAdd = (x: number, y: number, xG: number) => {
