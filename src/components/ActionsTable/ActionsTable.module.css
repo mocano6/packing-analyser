@@ -233,6 +233,27 @@
   font-weight: 500;
 }
 
+/* Style dla trybów akcji */
+.attack {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #dcfce7; /* Zielony kolor dla ataku */
+  color: #166534;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.defense {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #fef2f2; /* Czerwony kolor dla obrony */
+  color: #dc2626;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .noMatches {
   padding: 24px;
   text-align: center;

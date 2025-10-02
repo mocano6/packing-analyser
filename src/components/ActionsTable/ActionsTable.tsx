@@ -13,6 +13,7 @@ type SortKey =
   | "receiverXT"
   | "startZone"
   | "endZone"
+  | "mode"
   | "type"
   | "packing"
   | "pxt"
@@ -135,8 +136,13 @@ const ActionRow = ({
         <div className={styles.cell}>{typeof action.xTValueEnd === 'number' ? action.xTValueEnd.toFixed(3) : '0.000'}</div>
       )}
       <div className={styles.cell}>
+        <span className={action.mode === "defense" ? styles.defense : styles.attack}>
+          {action.mode === "defense" ? "Obrona" : "Atak"}
+        </span>
+      </div>
+      <div className={styles.cell}>
         <span className={action.actionType === "pass" ? styles.pass : styles.dribble}>
-          {action.mode === "defense" ? "Obrona" : "Atak"} - {action.actionType === "pass" ? "Podanie" : "Drybling"}
+          {action.actionType === "pass" ? "Podanie" : "Drybling"}
         </span>
       </div>
       <div className={styles.cell}>
@@ -273,6 +279,9 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         case "endZone":
           comparison = (a.endZone || "").localeCompare(b.endZone || "");
           break;
+        case "mode":
+          comparison = (a.mode || "attack").localeCompare(b.mode || "attack");
+          break;
         case "type":
           comparison = a.actionType.localeCompare(b.actionType);
           break;
@@ -389,7 +398,14 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             />
           )}
           <HeaderCell
-            label="Rodzaj"
+            label="Tryb"
+            sortKey="mode"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <HeaderCell
+            label="Typ"
             sortKey="type"
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}
