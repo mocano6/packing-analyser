@@ -285,16 +285,25 @@ const ActionModal: React.FC<ActionModalProps> = ({
   };
 
   const handleSave = async () => {
-    // Najpierw sprawdźmy czy wszystkie wymagane pola są wypełnione
-    if (!selectedPlayerId) {
-      alert("Wybierz zawodnika rozpoczynającego akcję!");
-      return;
-    }
-    
-    // W przypadku podania sprawdzamy, czy wybrany jest odbiorca
-    if (actionType === "pass" && !selectedReceiverId) {
-      alert("Wybierz zawodnika kończącego podanie!");
-      return;
+    // Walidacja w zależności od trybu
+    if (mode === "defense") {
+      // W trybie obrony sprawdzamy czy są wybrani zawodnicy obrony
+      if (!selectedDefensePlayers || selectedDefensePlayers.length === 0) {
+        alert("Wybierz co najmniej jednego zawodnika miniętego przez przeciwnika!");
+        return;
+      }
+    } else {
+      // W trybie ataku sprawdzamy standardowe warunki
+      if (!selectedPlayerId) {
+        alert("Wybierz zawodnika rozpoczynającego akcję!");
+        return;
+      }
+      
+      // W przypadku podania sprawdzamy, czy wybrany jest odbiorca
+      if (actionType === "pass" && !selectedReceiverId) {
+        alert("Wybierz zawodnika kończącego podanie!");
+        return;
+      }
     }
 
     // W trybie edycji nie sprawdzamy stref z localStorage
