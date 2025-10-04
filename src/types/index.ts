@@ -72,7 +72,7 @@ export interface Action {
   packingPoints?: number;
   xTValueStart?: number;
   xTValueEnd?: number;
-  PxT?: number;
+  // PxT jest obliczane dynamicznie na froncie
   isP1?: boolean;
   isP2?: boolean;
   isP3?: boolean;

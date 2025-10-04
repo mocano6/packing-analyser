@@ -37,6 +37,7 @@ function removeUndefinedFields<T extends object>(obj: T): T {
     }
   });
   
+  
   return result;
 }
 
@@ -98,6 +99,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         const packingActions = matchData.actions_packing || [];
         const unpackingActions = matchData.actions_unpacking || [];
         const loadedActions = [...packingActions, ...unpackingActions];
+        
         
 
         
@@ -236,9 +238,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       const parsedVideoTimestamp = videoTimestamp ? parseInt(videoTimestamp) : undefined;
       const isValidTimestamp = parsedVideoTimestamp && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp > 0;
       
-      // Obliczamy PxT (xT różnica * packing points)
-      const xTDifference = (xTEnd || 0) - (xTStart || 0);
-      const pxtValue = xTDifference > 0 ? xTDifference * (packingValue || currentPoints) : 0;
+      // PxT będzie obliczane dynamicznie na froncie
       
       // Tworzymy nową akcję
       const newAction: Action = {
@@ -256,8 +256,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         // Przypisujemy wartości xT tylko jeśli są zdefiniowane
         ...(xTStart !== undefined && { xTValueStart: xTStart }),
         ...(xTEnd !== undefined && { xTValueEnd: xTEnd }),
-        // Dodajemy PxT
-        PxT: pxtValue,
+        // PxT będzie obliczane dynamicznie na froncie
         isP1: isP1Active,
       isP2: isP2Active,
       isP3: isP3Active,
@@ -291,6 +290,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       // Usuwamy pola undefined z obiektu akcji przed zapisem
       const cleanedAction = removeUndefinedFields(newAction);
+      
       
       // Dodajemy akcję do lokalnego stanu
       setActions(prevActions => [...prevActions, cleanedAction]);

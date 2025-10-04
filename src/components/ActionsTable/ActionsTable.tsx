@@ -151,15 +151,14 @@ const ActionRow = ({
       </div>
       <div className={styles.cell}>
         {(() => {
-          console.log('🔍 PxT Debug:', { 
-            actionId: action.id, 
-            PxT: action.PxT, 
-            type: typeof action.PxT,
-            xTStart: action.xTValueStart,
-            xTEnd: action.xTValueEnd,
-            packingPoints: action.packingPoints
-          });
-          return typeof action.PxT === 'number' ? action.PxT.toFixed(3) : "-";
+          // Obliczamy PxT dynamicznie: (xTEnd - xTStart) * packingPoints
+          const xTStart = action.xTValueStart || 0;
+          const xTEnd = action.xTValueEnd || 0;
+          const packingPoints = action.packingPoints || 0;
+          const pxtValue = (xTEnd - xTStart) * packingPoints;
+          
+          
+          return typeof pxtValue === 'number' ? pxtValue.toFixed(3) : "-";
         })()}
       </div>
       <div className={styles.cell}>{getEvents()}</div>
