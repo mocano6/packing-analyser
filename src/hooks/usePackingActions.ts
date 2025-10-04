@@ -55,8 +55,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   const [currentPoints, setCurrentPoints] = useState<number>(0);
   const [isP1Active, setIsP1Active] = useState<boolean>(false);
   const [isP2Active, setIsP2Active] = useState<boolean>(false);
-  const [isP3BoxActive, setIsP3BoxActive] = useState<boolean>(false);
-  const [isP3SiteActive, setIsP3SiteActive] = useState<boolean>(false);
+  const [isP3Active, setIsP3Active] = useState<boolean>(false);
   const [isContact1Active, setIsContact1Active] = useState<boolean>(false);
   const [isContact2Active, setIsContact2Active] = useState<boolean>(false);
   const [isContact3PlusActive, setIsContact3PlusActive] = useState<boolean>(false);
@@ -263,8 +262,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         // PxT będzie obliczane dynamicznie na froncie
         isP1: isP1Active,
         isP2: isP2Active,
-        isP3Box: isP3BoxActive,
-        isP3Site: isP3SiteActive,
+        isP3: isP3Active,
         isContact1: isContact1Active,
         isContact2: isContact2Active,
         isContact3Plus: isContact3PlusActive,
@@ -310,8 +308,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       console.log("  - Punkty packing:", cleanedAction.packingPoints);
       console.log("  - P1:", cleanedAction.isP1);
       console.log("  - P2:", cleanedAction.isP2);
-      console.log("  - P3-Box:", cleanedAction.isP3Box);
-      console.log("  - P3-Site:", cleanedAction.isP3Site);
+      console.log("  - P3:", cleanedAction.isP3);
       console.log("  - 1T:", cleanedAction.isContact1);
       console.log("  - 2T:", cleanedAction.isContact2);
       console.log("  - 3T+:", cleanedAction.isContact3Plus);
@@ -371,7 +368,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       return false;
     }
-  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP1Active, isP2Active, isP3BoxActive, isP3SiteActive, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf]);
+  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf]);
 
   // Usuwanie akcji
   const handleDeleteAction = useCallback(async (actionId: string) => {
@@ -495,8 +492,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setCurrentPoints(0);
     setIsP1Active(false);
     setIsP2Active(false);
-    setIsP3BoxActive(false);
-    setIsP3SiteActive(false);
+    setIsP3Active(false);
     setIsContact1Active(false);
     setIsContact2Active(false);
     setIsContact3PlusActive(false);
@@ -516,8 +512,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setCurrentPoints(0);
     setIsP1Active(false);
     setIsP2Active(false);
-    setIsP3BoxActive(false);
-    setIsP3SiteActive(false);
+    setIsP3Active(false);
     setIsContact1Active(false);
     setIsContact2Active(false);
     setIsContact3PlusActive(false);
@@ -560,8 +555,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     actionType,
     isP1Active,
     isP2Active,
-    isP3BoxActive,
-    isP3SiteActive,
+    isP3Active,
     isContact1Active,
     isContact2Active,
     isContact3PlusActive,
@@ -579,8 +573,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setActionType,
     setIsP1Active,
     setIsP2Active,
-    setIsP3BoxActive,
-    setIsP3SiteActive,
+    setIsP3Active,
     setIsContact1Active,
     setIsContact2Active,
     setIsContact3PlusActive,

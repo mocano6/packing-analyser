@@ -30,10 +30,8 @@ export interface ActionSectionProps {
   setIsP1Active: React.Dispatch<React.SetStateAction<boolean>>;
   isP2Active: boolean;
   setIsP2Active: React.Dispatch<React.SetStateAction<boolean>>;
-  isP3BoxActive: boolean;
-  setIsP3BoxActive: React.Dispatch<React.SetStateAction<boolean>>;
-  isP3SiteActive: boolean;
-  setIsP3SiteActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isP3Active: boolean;
+  setIsP3Active: React.Dispatch<React.SetStateAction<boolean>>;
   isContact1Active: boolean;
   setIsContact1Active: React.Dispatch<React.SetStateAction<boolean>>;
   isContact2Active: boolean;
@@ -81,10 +79,8 @@ const ActionSection = memo(function ActionSection({
   setIsP1Active,
   isP2Active,
   setIsP2Active,
-  isP3BoxActive,
-  setIsP3BoxActive,
-  isP3SiteActive,
-  setIsP3SiteActive,
+  isP3Active,
+  setIsP3Active,
   isContact1Active,
   setIsContact1Active,
   isContact2Active,
@@ -187,10 +183,8 @@ const ActionSection = memo(function ActionSection({
         onP1Toggle={() => setIsP1Active(!isP1Active)}
         isP2Active={isP2Active}
         onP2Toggle={() => setIsP2Active(!isP2Active)}
-        isP3BoxActive={isP3BoxActive}
-        onP3BoxToggle={() => setIsP3BoxActive(!isP3BoxActive)}
-        isP3SiteActive={isP3SiteActive}
-        onP3SiteToggle={() => setIsP3SiteActive(!isP3SiteActive)}
+        isP3Active={isP3Active}
+        onP3Toggle={() => setIsP3Active(!isP3Active)}
         isContact1Active={isContact1Active}
         onContact1Toggle={() => setIsContact1Active(!isContact1Active)}
         isContact2Active={isContact2Active}

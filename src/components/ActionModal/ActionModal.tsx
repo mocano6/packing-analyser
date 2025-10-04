@@ -27,10 +27,8 @@ interface ActionModalProps {
   onP1Toggle: () => void;
   isP2Active: boolean;
   onP2Toggle: () => void;
-  isP3BoxActive: boolean;
-  onP3BoxToggle: () => void;
-  isP3SiteActive: boolean;
-  onP3SiteToggle: () => void;
+  isP3Active: boolean;
+  onP3Toggle: () => void;
   isContact1Active: boolean;
   onContact1Toggle: () => void;
   isContact2Active: boolean;
@@ -78,10 +76,8 @@ const ActionModal: React.FC<ActionModalProps> = ({
   onP1Toggle,
   isP2Active,
   onP2Toggle,
-  isP3BoxActive,
-  onP3BoxToggle,
-  isP3SiteActive,
-  onP3SiteToggle,
+  isP3Active,
+  onP3Toggle,
   isContact1Active,
   onContact1Toggle,
   isContact2Active,
@@ -554,31 +550,17 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 </button>
               </div>
               
-              <div className={styles.pBottomRow}>
-                <button
-                  className={`${styles.compactButton} ${
-                    isP3BoxActive ? styles.activeButton : ""
-                  }`}
-                  onClick={onP3BoxToggle}
-                  title="Aktywuj/Dezaktywuj P3-Box"
-                  aria-pressed={isP3BoxActive}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>P3-Box</span>
-                </button>
-                
-                <button
-                  className={`${styles.compactButton} ${
-                    isP3SiteActive ? styles.activeButton : ""
-                  }`}
-                  onClick={onP3SiteToggle}
-                  title="Aktywuj/Dezaktywuj P3-Site"
-                  aria-pressed={isP3SiteActive}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>P3-Site</span>
-                </button>
-              </div>
+              <button
+                className={`${styles.compactButton} ${styles.pButtonBottom} ${
+                  isP3Active ? styles.activeButton : ""
+                }`}
+                onClick={onP3Toggle}
+                title="Aktywuj/Dezaktywuj P3"
+                aria-pressed={isP3Active}
+                type="button"
+              >
+                <span className={styles.compactLabel}>P3</span>
+              </button>
             </div>
 
             {/* Grupa przycisków kontaktów */}

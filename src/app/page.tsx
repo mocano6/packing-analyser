@@ -337,8 +337,7 @@ export default function Page() {
     actionType,
     isP1Active,
     isP2Active,
-    isP3BoxActive,
-    isP3SiteActive,
+    isP3Active,
     isContact1Active,
     isContact2Active,
     isContact3PlusActive,
@@ -352,8 +351,7 @@ export default function Page() {
     setActionType,
     setIsP1Active,
     setIsP2Active,
-    setIsP3BoxActive,
-    setIsP3SiteActive,
+    setIsP3Active,
     setIsContact1Active,
     setIsContact2Active,
     setIsContact3PlusActive,
@@ -1520,10 +1518,8 @@ export default function Page() {
             setIsP1Active={setIsP1Active}
             isP2Active={isP2Active}
             setIsP2Active={setIsP2Active}
-            isP3BoxActive={isP3BoxActive}
-            setIsP3BoxActive={setIsP3BoxActive}
-            isP3SiteActive={isP3SiteActive}
-            setIsP3SiteActive={setIsP3SiteActive}
+            isP3Active={isP3Active}
+            setIsP3Active={setIsP3Active}
             isContact1Active={isContact1Active}
             setIsContact1Active={setIsContact1Active}
             isContact2Active={isContact2Active}
@@ -1723,21 +1719,12 @@ export default function Page() {
               });
             }
           }}
-          isP3BoxActive={editingAction?.isP3Box || false}
-          onP3BoxToggle={() => {
+          isP3Active={editingAction?.isP3 || false}
+          onP3Toggle={() => {
             if (editingAction) {
               setEditingAction({
                 ...editingAction,
-                isP3Box: !editingAction.isP3Box
-              });
-            }
-          }}
-          isP3SiteActive={editingAction?.isP3Site || false}
-          onP3SiteToggle={() => {
-            if (editingAction) {
-              setEditingAction({
-                ...editingAction,
-                isP3Site: !editingAction.isP3Site
+                isP3: !editingAction.isP3
               });
             }
           }}

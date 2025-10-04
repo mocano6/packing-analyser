@@ -29,14 +29,8 @@ export const ACTION_BUTTONS: ActionButton[] = [
   },
   {
     points: 0,
-    label: "P3-Box",
-    description: "Aktywuj/Dezaktywuj P3-Box",
-    type: "toggle",
-  },
-  {
-    points: 0,
-    label: "P3-Site",
-    description: "Aktywuj/Dezaktywuj P3-Site",
+    label: "P3",
+    description: "Aktywuj/Dezaktywuj P3",
     type: "toggle",
   },
   {
