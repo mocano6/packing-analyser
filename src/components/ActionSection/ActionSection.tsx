@@ -30,8 +30,16 @@ export interface ActionSectionProps {
   setIsP1Active: React.Dispatch<React.SetStateAction<boolean>>;
   isP2Active: boolean;
   setIsP2Active: React.Dispatch<React.SetStateAction<boolean>>;
-  isP3Active: boolean;
-  setIsP3Active: React.Dispatch<React.SetStateAction<boolean>>;
+  isP3BoxActive: boolean;
+  setIsP3BoxActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isP3SiteActive: boolean;
+  setIsP3SiteActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isContact1Active: boolean;
+  setIsContact1Active: React.Dispatch<React.SetStateAction<boolean>>;
+  isContact2Active: boolean;
+  setIsContact2Active: React.Dispatch<React.SetStateAction<boolean>>;
+  isContact3PlusActive: boolean;
+  setIsContact3PlusActive: React.Dispatch<React.SetStateAction<boolean>>;
   isShot: boolean;
   setIsShot: React.Dispatch<React.SetStateAction<boolean>>;
   isGoal: boolean;
@@ -73,8 +81,16 @@ const ActionSection = memo(function ActionSection({
   setIsP1Active,
   isP2Active,
   setIsP2Active,
-  isP3Active,
-  setIsP3Active,
+  isP3BoxActive,
+  setIsP3BoxActive,
+  isP3SiteActive,
+  setIsP3SiteActive,
+  isContact1Active,
+  setIsContact1Active,
+  isContact2Active,
+  setIsContact2Active,
+  isContact3PlusActive,
+  setIsContact3PlusActive,
   isShot,
   setIsShot,
   isGoal,
@@ -108,9 +124,6 @@ const ActionSection = memo(function ActionSection({
     setCurrentPoints((prev) => prev + points);
   };
 
-  const handleP3Toggle = () => {
-    setIsP3Active((prevState) => !prevState);
-  };
 
   const handleSecondHalfToggle = (value: boolean) => {
     // Zapisujemy również w localStorage dla spójności w całej aplikacji
@@ -174,8 +187,16 @@ const ActionSection = memo(function ActionSection({
         onP1Toggle={() => setIsP1Active(!isP1Active)}
         isP2Active={isP2Active}
         onP2Toggle={() => setIsP2Active(!isP2Active)}
-        isP3Active={isP3Active}
-        onP3Toggle={handleP3Toggle}
+        isP3BoxActive={isP3BoxActive}
+        onP3BoxToggle={() => setIsP3BoxActive(!isP3BoxActive)}
+        isP3SiteActive={isP3SiteActive}
+        onP3SiteToggle={() => setIsP3SiteActive(!isP3SiteActive)}
+        isContact1Active={isContact1Active}
+        onContact1Toggle={() => setIsContact1Active(!isContact1Active)}
+        isContact2Active={isContact2Active}
+        onContact2Toggle={() => setIsContact2Active(!isContact2Active)}
+        isContact3PlusActive={isContact3PlusActive}
+        onContact3PlusToggle={() => setIsContact3PlusActive(!isContact3PlusActive)}
         isShot={isShot}
         onShotToggle={setIsShot}
         isGoal={isGoal}

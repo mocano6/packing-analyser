@@ -574,7 +574,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                   isP3SiteActive ? styles.activeButton : ""
                 }`}
                 onClick={onP3SiteToggle}
-                title="Aktywuj/Dezaktywuj P3-site"
+                title="Aktywuj/Dezaktywuj P3-Site"
                 aria-pressed={isP3SiteActive}
                 type="button"
               >
