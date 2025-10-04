@@ -106,15 +106,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
     }
   }, [onModeChange, mode]);
 
-  // W trybie unpacking automatycznie aktywujemy P3 dla każdego zaznaczonego zawodnika
-  useEffect(() => {
-    if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
-      // Sprawdzamy, czy P3 jest już aktywny - jeśli nie, aktywujemy go
-      if (!isP3Active) {
-        onP3Toggle(); // Aktywuj P3
-      }
-    }
-  }, [selectedDefensePlayers, mode, isP3Active, onP3Toggle]);
 
   // Określamy czy jesteśmy w trybie edycji
   const isEditMode = !!editingAction;
@@ -277,6 +268,19 @@ const ActionModal: React.FC<ActionModalProps> = ({
   const handlePointsAdd = (points: number) => {
     onAddPoints(points);
   };
+
+  // W trybie unpacking automatycznie dodajemy punkty za "Minięty przeciwnik" dla każdego zaznaczonego zawodnika
+  useEffect(() => {
+    if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
+      // Dodajemy 1 punkt za każdego zaznaczonego zawodnika (Minięty przeciwnik)
+      const additionalPoints = selectedDefensePlayers.length;
+      // Sprawdzamy, czy już dodaliśmy punkty - jeśli nie, dodajemy
+      if (currentPoints < additionalPoints) {
+        const pointsToAdd = additionalPoints - currentPoints;
+        handlePointsAdd(pointsToAdd);
+      }
+    }
+  }, [selectedDefensePlayers, mode, currentPoints, handlePointsAdd]);
 
   const handleShotToggle = () => {
     onShotToggle(!isShot);
@@ -540,7 +544,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 title="Aktywuj/Dezaktywuj P3"
                 aria-pressed={isP3Active}
                 type="button"
-                disabled={mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0}
               >
                 <span className={styles.compactLabel}>P3</span>
               </button>
@@ -553,8 +556,19 @@ const ActionModal: React.FC<ActionModalProps> = ({
                   <div 
                     key={index} 
                     className={styles.compactPointsButton}
-                    onClick={() => handlePointsAdd(button.points)}
+                    onClick={() => {
+                      // W trybie unpacking wyłączamy przycisk "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
+                      if (mode === "defense" && button.label === "Minięty przeciwnik" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
+                        return; // Nie wykonuj kliknięcia
+                      }
+                      handlePointsAdd(button.points);
+                    }}
                     title={button.description}
+                    style={{
+                      // W trybie unpacking wyłączamy przycisk "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
+                      pointerEvents: mode === "defense" && button.label === "Minięty przeciwnik" && selectedDefensePlayers && selectedDefensePlayers.length > 0 ? 'none' : 'auto',
+                      opacity: mode === "defense" && button.label === "Minięty przeciwnik" && selectedDefensePlayers && selectedDefensePlayers.length > 0 ? 0.6 : 1
+                    }}
                   >
                     <span className={styles.compactLabel}>{button.label}</span>
                     <span className={styles.pointsValue}><b>{currentPoints}</b></span>
@@ -562,11 +576,15 @@ const ActionModal: React.FC<ActionModalProps> = ({
                       className={styles.compactSubtractButton}
                       onClick={(e) => {
                         e.stopPropagation();
+                        // W trybie unpacking wyłączamy przycisk odejmowania dla "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
+                        if (mode === "defense" && button.label === "Minięty przeciwnik" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
+                          return; // Nie wykonuj kliknięcia
+                        }
                         handlePointsAdd(-button.points);
                       }}
                       title={`Odejmij ${button.points} pkt`}
                       type="button"
-                      disabled={currentPoints < button.points}
+                      disabled={currentPoints < button.points || (mode === "defense" && button.label === "Minięty przeciwnik" && selectedDefensePlayers && selectedDefensePlayers.length > 0)}
                     >
                       −
                     </button>
