@@ -106,6 +106,20 @@ const ActionModal: React.FC<ActionModalProps> = ({
     }
   }, [onModeChange, mode]);
 
+  // W trybie unpacking automatycznie synchronizujemy punkty za "Minięty przeciwnik" z liczbą zaznaczonych zawodników
+  useEffect(() => {
+    if (mode === "defense") {
+      const expectedPoints = selectedDefensePlayers ? selectedDefensePlayers.length : 0;
+      
+      // Jeśli punkty nie odpowiadają liczbie zaznaczonych zawodników, synchronizujemy
+      if (currentPoints !== expectedPoints) {
+        const pointsDifference = expectedPoints - currentPoints;
+        if (pointsDifference !== 0) {
+          onAddPoints(pointsDifference);
+        }
+      }
+    }
+  }, [selectedDefensePlayers, mode, currentPoints, onAddPoints]);
 
   // Określamy czy jesteśmy w trybie edycji
   const isEditMode = !!editingAction;
@@ -269,20 +283,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
     onAddPoints(points);
   };
 
-  // W trybie unpacking automatycznie synchronizujemy punkty za "Minięty przeciwnik" z liczbą zaznaczonych zawodników
-  useEffect(() => {
-    if (mode === "defense") {
-      const expectedPoints = selectedDefensePlayers ? selectedDefensePlayers.length : 0;
-      
-      // Jeśli punkty nie odpowiadają liczbie zaznaczonych zawodników, synchronizujemy
-      if (currentPoints !== expectedPoints) {
-        const pointsDifference = expectedPoints - currentPoints;
-        if (pointsDifference !== 0) {
-          handlePointsAdd(pointsDifference);
-        }
-      }
-    }
-  }, [selectedDefensePlayers, mode, currentPoints, handlePointsAdd]);
 
   const handleShotToggle = () => {
     onShotToggle(!isShot);
