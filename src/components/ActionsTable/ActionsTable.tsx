@@ -15,9 +15,9 @@ type SortKey =
   | "startZone"
   | "endZone"
   | "type"
+  | "xt"
   | "packing"
   | "pxt"
-  | "xt"
   | "events"
   | "videoTimestamp";
 
@@ -151,12 +151,24 @@ const ActionRow = ({
       </div>
       <div className={styles.cell}>
         {(() => {
+          // Obliczamy xT różnicę: xTEnd - xTStart
+          const xTStart = action.xTValueStart || 0;
+          const xTEnd = action.xTValueEnd || 0;
+          const xTDifference = xTEnd - xTStart;
+          
+          return typeof xTDifference === 'number' ? xTDifference.toFixed(3) : "-";
+        })()}
+      </div>
+      <div className={styles.cell}>
+        {action.packingPoints || 0}
+      </div>
+      <div className={styles.cell}>
+        {(() => {
           // Obliczamy PxT dynamicznie: (xTEnd - xTStart) * packingPoints
           const xTStart = action.xTValueStart || 0;
           const xTEnd = action.xTValueEnd || 0;
           const packingPoints = action.packingPoints || 0;
           const pxtValue = (xTEnd - xTStart) * packingPoints;
-          
           
           return typeof pxtValue === 'number' ? pxtValue.toFixed(3) : "-";
         })()}
@@ -297,6 +309,16 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         case "type":
           comparison = a.actionType.localeCompare(b.actionType);
           break;
+        case "xt": {
+          // Sortowanie według różnicy xT (xTEnd - xTStart)
+          const getXTDifference = (action: any) => {
+            const xTStart = action.xTValueStart || 0;
+            const xTEnd = action.xTValueEnd || 0;
+            return xTEnd - xTStart;
+          };
+          comparison = getXTDifference(a) - getXTDifference(b);
+          break;
+        }
         case "packing":
           comparison = (a.packingPoints || 0) - (b.packingPoints || 0);
           break;
@@ -391,6 +413,20 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           <HeaderCell
             label="Typ"
             sortKey="type"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <HeaderCell
+            label="xT"
+            sortKey="xt"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <HeaderCell
+            label="Punkty"
+            sortKey="packing"
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}
             onSort={handleSort}
