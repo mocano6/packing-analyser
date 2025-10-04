@@ -269,15 +269,17 @@ const ActionModal: React.FC<ActionModalProps> = ({
     onAddPoints(points);
   };
 
-  // W trybie unpacking automatycznie dodajemy punkty za "Minięty przeciwnik" dla każdego zaznaczonego zawodnika
+  // W trybie unpacking automatycznie synchronizujemy punkty za "Minięty przeciwnik" z liczbą zaznaczonych zawodników
   useEffect(() => {
-    if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
-      // Dodajemy 1 punkt za każdego zaznaczonego zawodnika (Minięty przeciwnik)
-      const additionalPoints = selectedDefensePlayers.length;
-      // Sprawdzamy, czy już dodaliśmy punkty - jeśli nie, dodajemy
-      if (currentPoints < additionalPoints) {
-        const pointsToAdd = additionalPoints - currentPoints;
-        handlePointsAdd(pointsToAdd);
+    if (mode === "defense") {
+      const expectedPoints = selectedDefensePlayers ? selectedDefensePlayers.length : 0;
+      
+      // Jeśli punkty nie odpowiadają liczbie zaznaczonych zawodników, synchronizujemy
+      if (currentPoints !== expectedPoints) {
+        const pointsDifference = expectedPoints - currentPoints;
+        if (pointsDifference !== 0) {
+          handlePointsAdd(pointsDifference);
+        }
       }
     }
   }, [selectedDefensePlayers, mode, currentPoints, handlePointsAdd]);
