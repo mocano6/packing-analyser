@@ -150,7 +150,17 @@ const ActionRow = ({
         </span>
       </div>
       <div className={styles.cell}>
-        {action.PxT ? action.PxT.toFixed(3) : "-"}
+        {(() => {
+          console.log('🔍 PxT Debug:', { 
+            actionId: action.id, 
+            PxT: action.PxT, 
+            type: typeof action.PxT,
+            xTStart: action.xTValueStart,
+            xTEnd: action.xTValueEnd,
+            packingPoints: action.packingPoints
+          });
+          return typeof action.PxT === 'number' ? action.PxT.toFixed(3) : "-";
+        })()}
       </div>
       <div className={styles.cell}>{getEvents()}</div>
       <div className={styles.cellActions}>
