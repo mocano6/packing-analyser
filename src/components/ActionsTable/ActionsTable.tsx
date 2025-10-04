@@ -139,16 +139,10 @@ const ActionRow = ({
       <div className={styles.cell}>
         {senderDisplay}
       </div>
-      {selectedMetric === 'xt' && (
-        <div className={styles.cell}>{typeof action.xTValueStart === 'number' ? action.xTValueStart.toFixed(3) : '0.000'}</div>
-      )}
       {actionModeFilter === 'attack' && (
         <div className={styles.cell}>
           {receiverDisplay}
         </div>
-      )}
-      {selectedMetric === 'xt' && (
-        <div className={styles.cell}>{typeof action.xTValueEnd === 'number' ? action.xTValueEnd.toFixed(3) : '0.000'}</div>
       )}
       <div className={styles.cell}>
         <span className={action.actionType === "pass" ? styles.pass : styles.dribble}>
@@ -156,11 +150,7 @@ const ActionRow = ({
         </span>
       </div>
       <div className={styles.cell}>
-        {selectedMetric === 'packing' && (action.packingPoints ? Math.round(action.packingPoints) : "-")}
-        {selectedMetric === 'pxt' && (action.PxT ? action.PxT.toFixed(3) : "-")}
-        {selectedMetric === 'xt' && (typeof action.xTValueEnd === 'number' && typeof action.xTValueStart === 'number' 
-          ? (action.xTValueEnd - action.xTValueStart).toFixed(3) 
-          : "-")}
+        {action.PxT ? action.PxT.toFixed(3) : "-"}
       </div>
       <div className={styles.cell}>{getEvents()}</div>
       <div className={styles.cellActions}>
@@ -198,8 +188,8 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
     direction: "asc",
   });
 
-  // State dla wyboru typu metryki w tabeli
-  const [selectedMetric, setSelectedMetric] = useState<'packing' | 'pxt' | 'xt'>('packing');
+  // Używamy PxT na stałe
+  const selectedMetric = 'pxt';
   
   // State dla filtrowania trybu akcji
   const [actionModeFilter, setActionModeFilter] = useState<'attack' | 'defense'>('attack');
@@ -328,27 +318,6 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
       <div className={styles.headerControls}>
         <h3>Lista akcji ({actions.length})</h3>
         <div className={styles.headerButtons}>
-          {/* Przełącznik metryk */}
-          <div className={styles.metricToggle}>
-            <button
-              className={`${styles.metricButton} ${selectedMetric === 'packing' ? styles.active : ''}`}
-              onClick={() => setSelectedMetric('packing')}
-            >
-              Packing
-            </button>
-            <button
-              className={`${styles.metricButton} ${selectedMetric === 'pxt' ? styles.active : ''}`}
-              onClick={() => setSelectedMetric('pxt')}
-            >
-              PxT
-            </button>
-            <button
-              className={`${styles.metricButton} ${selectedMetric === 'xt' ? styles.active : ''}`}
-              onClick={() => setSelectedMetric('xt')}
-            >
-              xT
-            </button>
-          </div>
           
           {/* Przełącznik trybu akcji */}
           <div className={styles.modeToggle}>
@@ -401,28 +370,10 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             sortDirection={sortConfig.direction}
             onSort={handleSort}
           />
-          {selectedMetric === 'xt' && (
-            <HeaderCell
-              label="xT start"
-              sortKey="senderXT"
-              currentSortKey={sortConfig.key}
-              sortDirection={sortConfig.direction}
-              onSort={handleSort}
-            />
-          )}
           {actionModeFilter === 'attack' && (
             <HeaderCell
               label="Zawodnik koniec"
               sortKey="receiver"
-              currentSortKey={sortConfig.key}
-              sortDirection={sortConfig.direction}
-              onSort={handleSort}
-            />
-          )}
-          {selectedMetric === 'xt' && (
-            <HeaderCell
-              label="xT koniec"
-              sortKey="receiverXT"
               currentSortKey={sortConfig.key}
               sortDirection={sortConfig.direction}
               onSort={handleSort}
@@ -436,8 +387,8 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             onSort={handleSort}
           />
           <HeaderCell
-            label={selectedMetric === 'packing' ? 'Packing' : selectedMetric === 'pxt' ? 'PxT' : 'xT'}
-            sortKey={selectedMetric === 'packing' ? 'packing' : selectedMetric === 'pxt' ? 'pxt' : 'xt'}
+            label="PxT"
+            sortKey="pxt"
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}
             onSort={handleSort}
