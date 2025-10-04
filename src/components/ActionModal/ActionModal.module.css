@@ -767,6 +767,11 @@
   height: 44px; /* Dokładna wysokość górnego rzędu */
 }
 
+.pBottomRow {
+  display: flex;
+  height: 44px; /* Dokładna wysokość dolnego rzędu */
+}
+
 .pButtonBottom {
   border-top: 1px solid rgba(33, 150, 243, 0.3);
   height: 44px; /* Dokładna wysokość dolnego rzędu */

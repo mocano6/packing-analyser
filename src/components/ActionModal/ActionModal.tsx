@@ -554,70 +554,74 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 </button>
               </div>
               
-              <button
-                className={`${styles.compactButton} ${styles.pButtonBottom} ${
-                  isP3BoxActive ? styles.activeButton : ""
-                }`}
-                onClick={onP3BoxToggle}
-                title="Aktywuj/Dezaktywuj P3-Box"
-                aria-pressed={isP3BoxActive}
-                type="button"
-              >
-                <span className={styles.compactLabel}>P3-Box</span>
-              </button>
+              <div className={styles.pBottomRow}>
+                <button
+                  className={`${styles.compactButton} ${
+                    isP3BoxActive ? styles.activeButton : ""
+                  }`}
+                  onClick={onP3BoxToggle}
+                  title="Aktywuj/Dezaktywuj P3-Box"
+                  aria-pressed={isP3BoxActive}
+                  type="button"
+                >
+                  <span className={styles.compactLabel}>P3-Box</span>
+                </button>
+                
+                <button
+                  className={`${styles.compactButton} ${
+                    isP3SiteActive ? styles.activeButton : ""
+                  }`}
+                  onClick={onP3SiteToggle}
+                  title="Aktywuj/Dezaktywuj P3-Site"
+                  aria-pressed={isP3SiteActive}
+                  type="button"
+                >
+                  <span className={styles.compactLabel}>P3-Site</span>
+                </button>
+              </div>
             </div>
 
-            {/* Nowe przyciski P3-site i kontakty */}
-            <div className={styles.compactButtonsRow}>
-              <button
-                className={`${styles.compactButton} ${
-                  isP3SiteActive ? styles.activeButton : ""
-                }`}
-                onClick={onP3SiteToggle}
-                title="Aktywuj/Dezaktywuj P3-Site"
-                aria-pressed={isP3SiteActive}
-                type="button"
-              >
-                <span className={styles.compactLabel}>P3-site</span>
-              </button>
-            </div>
-
-            <div className={styles.compactButtonsRow}>
-              <button
-                className={`${styles.compactButton} ${
-                  isContact1Active ? styles.activeButton : ""
-                }`}
-                onClick={onContact1Toggle}
-                title="Aktywuj/Dezaktywuj 1 kontakt z piłką"
-                aria-pressed={isContact1Active}
-                type="button"
-              >
-                <span className={styles.compactLabel}>1 kontakt</span>
-              </button>
+            {/* Grupa przycisków kontaktów */}
+            <div className={styles.pButtonsGroup}>
+              <div className={styles.pTopRow}>
+                <button
+                  className={`${styles.compactButton} ${
+                    isContact1Active ? styles.activeButton : ""
+                  }`}
+                  onClick={onContact1Toggle}
+                  title="Aktywuj/Dezaktywuj 1T"
+                  aria-pressed={isContact1Active}
+                  type="button"
+                >
+                  <span className={styles.compactLabel}>1T</span>
+                </button>
+                
+                <button
+                  className={`${styles.compactButton} ${
+                    isContact2Active ? styles.activeButton : ""
+                  }`}
+                  onClick={onContact2Toggle}
+                  title="Aktywuj/Dezaktywuj 2T"
+                  aria-pressed={isContact2Active}
+                  type="button"
+                >
+                  <span className={styles.compactLabel}>2T</span>
+                </button>
+              </div>
               
-              <button
-                className={`${styles.compactButton} ${
-                  isContact2Active ? styles.activeButton : ""
-                }`}
-                onClick={onContact2Toggle}
-                title="Aktywuj/Dezaktywuj 2 kontakty z piłką"
-                aria-pressed={isContact2Active}
-                type="button"
-              >
-                <span className={styles.compactLabel}>2 kontakty</span>
-              </button>
-              
-              <button
-                className={`${styles.compactButton} ${
-                  isContact3PlusActive ? styles.activeButton : ""
-                }`}
-                onClick={onContact3PlusToggle}
-                title="Aktywuj/Dezaktywuj 3+ kontakty z piłką"
-                aria-pressed={isContact3PlusActive}
-                type="button"
-              >
-                <span className={styles.compactLabel}>3+ kontakty</span>
-              </button>
+              <div className={styles.pBottomRow}>
+                <button
+                  className={`${styles.compactButton} ${
+                    isContact3PlusActive ? styles.activeButton : ""
+                  }`}
+                  onClick={onContact3PlusToggle}
+                  title="Aktywuj/Dezaktywuj 3T+"
+                  aria-pressed={isContact3PlusActive}
+                  type="button"
+                >
+                  <span className={styles.compactLabel}>3T+</span>
+                </button>
+              </div>
             </div>
 
             {/* Pozostałe przyciski punktów */}

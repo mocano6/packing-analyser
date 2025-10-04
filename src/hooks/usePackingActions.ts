@@ -299,6 +299,23 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       // Usuwamy pola undefined z obiektu akcji przed zapisem
       const cleanedAction = removeUndefinedFields(newAction);
       
+      // DEBUG: Wypisujemy strukturę obiektu akcji do konsoli
+      console.log("🔍 DEBUG - Struktura obiektu akcji przed zapisem do Firebase:");
+      console.log("📋 Pełny obiekt akcji:", JSON.stringify(cleanedAction, null, 2));
+      console.log("📊 Szczegóły akcji:");
+      console.log("  - ID akcji:", cleanedAction.id);
+      console.log("  - Tryb:", cleanedAction.mode);
+      console.log("  - Zawodnik start:", cleanedAction.senderName);
+      console.log("  - Zawodnik koniec:", cleanedAction.receiverName);
+      console.log("  - Punkty packing:", cleanedAction.packingPoints);
+      console.log("  - P1:", cleanedAction.isP1);
+      console.log("  - P2:", cleanedAction.isP2);
+      console.log("  - P3-Box:", cleanedAction.isP3Box);
+      console.log("  - P3-Site:", cleanedAction.isP3Site);
+      console.log("  - 1T:", cleanedAction.isContact1);
+      console.log("  - 2T:", cleanedAction.isContact2);
+      console.log("  - 3T+:", cleanedAction.isContact3Plus);
+      console.log("  - Zawodnicy obrony:", cleanedAction.defensePlayers);
       
       // Dodajemy akcję do lokalnego stanu
       setActions(prevActions => [...prevActions, cleanedAction]);

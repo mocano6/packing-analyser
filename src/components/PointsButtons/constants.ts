@@ -41,20 +41,20 @@ export const ACTION_BUTTONS: ActionButton[] = [
   },
   {
     points: 0,
-    label: "1 kontakt",
-    description: "Aktywuj/Dezaktywuj 1 kontakt z piłką",
+    label: "1T",
+    description: "Aktywuj/Dezaktywuj 1T",
     type: "toggle",
   },
   {
     points: 0,
-    label: "2 kontakty",
-    description: "Aktywuj/Dezaktywuj 2 kontakty z piłką",
+    label: "2T",
+    description: "Aktywuj/Dezaktywuj 2T",
     type: "toggle",
   },
   {
     points: 0,
-    label: "3+ kontakty",
-    description: "Aktywuj/Dezaktywuj 3+ kontakty z piłką",
+    label: "3T+",
+    description: "Aktywuj/Dezaktywuj 3T+",
     type: "toggle",
   },
 ];
