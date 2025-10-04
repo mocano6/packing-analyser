@@ -96,6 +96,16 @@ const ActionModal: React.FC<ActionModalProps> = ({
 }) => {
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
 
+  // Ładujemy ostatnio wybraną opcję trybu
+  useEffect(() => {
+    if (onModeChange) {
+      const lastMode = localStorage.getItem('lastActionMode');
+      if (lastMode === 'defense' && mode !== 'defense') {
+        onModeChange('defense');
+      }
+    }
+  }, [onModeChange, mode]);
+
   // Określamy czy jesteśmy w trybie edycji
   const isEditMode = !!editingAction;
 
@@ -319,6 +329,13 @@ const ActionModal: React.FC<ActionModalProps> = ({
       }
     }
 
+    // W trybie unpacking automatycznie zwiększamy packing o 1 dla każdego zaznaczonego zawodnika
+    if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
+      // Zwiększamy packing o liczbę zaznaczonych zawodników
+      const additionalPoints = selectedDefensePlayers.length;
+      onAddPoints(additionalPoints);
+    }
+
     // Wywołaj funkcję zapisującą akcję, ale nie zamykaj modalu od razu
     // Komponent nadrzędny sam zadecyduje czy i kiedy zamknąć modal
     onSaveAction();
@@ -350,15 +367,21 @@ const ActionModal: React.FC<ActionModalProps> = ({
           <div className={styles.modeToggle}>
             <button
               className={`${styles.modeButton} ${mode === "attack" ? styles.activeMode : ""}`}
-              onClick={() => onModeChange("attack")}
+              onClick={() => {
+                onModeChange("attack");
+                localStorage.setItem('lastActionMode', 'attack');
+              }}
             >
-              Atak
+              Packing
             </button>
             <button
               className={`${styles.modeButton} ${mode === "defense" ? styles.activeMode : ""}`}
-              onClick={() => onModeChange("defense")}
+              onClick={() => {
+                onModeChange("defense");
+                localStorage.setItem('lastActionMode', 'defense');
+              }}
             >
-              Obrona
+              Unpacking
             </button>
           </div>
         )}
@@ -513,6 +536,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 title="Aktywuj/Dezaktywuj P3"
                 aria-pressed={isP3Active}
                 type="button"
+                disabled={mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0}
               >
                 <span className={styles.compactLabel}>P3</span>
               </button>
