@@ -322,6 +322,17 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         case "packing":
           comparison = (a.packingPoints || 0) - (b.packingPoints || 0);
           break;
+        case "pxt": {
+          // Sortowanie według obliczonej wartości PxT
+          const getPxTValue = (action: any) => {
+            const xTStart = action.xTValueStart || 0;
+            const xTEnd = action.xTValueEnd || 0;
+            const packingPoints = action.packingPoints || 0;
+            return (xTEnd - xTStart) * packingPoints;
+          };
+          comparison = getPxTValue(a) - getPxTValue(b);
+          break;
+        }
         case "events": {
           // Sortowanie według ważności zdarzeń: Goal > Shot > PK > P3
           const getEventPriority = (action: any) => {
@@ -425,7 +436,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             onSort={handleSort}
           />
           <HeaderCell
-            label="Punkty"
+            label="Packing"
             sortKey="packing"
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}

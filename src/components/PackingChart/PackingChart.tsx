@@ -528,19 +528,10 @@ export default function PackingChart({
       });
 
     // Debug: sprawdź wybrane pozycje
-    console.log('🔍 Wybrane pozycje w filtrach:', selectedPositions);
-    console.log('🔍 Liczba zawodników przed filtrowaniem:', unsortedTableData.length);
 
     // Filtruj zawodników - pokaż tylko tych z akcjami lub z minutami gry
     const filteredTableData = unsortedTableData.filter(item => {
       // Debug: sprawdź każdego zawodnika
-      console.log('🔍 Sprawdzanie zawodnika:', {
-        name: item.name,
-        position: item.position,
-        selectedPositions,
-        hasActions: item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01 || item.totalDribbling > 0 || Math.abs(item.totalDribblingPxT) > 0.01 || item.actualMinutes > 0,
-        minMinutes: item.actualMinutes >= minMinutesFilter
-      });
       
       return (item.totalPacking > 0 || Math.abs(item.totalPxT) > 0.01 ||
         item.totalDribbling > 0 || Math.abs(item.totalDribblingPxT) > 0.01 ||
@@ -554,16 +545,6 @@ export default function PackingChart({
             return item.position.includes(pos);
           })();
           
-          // Debug log
-          if (selectedPositions.length > 0) {
-            console.log('🔍 Filtrowanie pozycji w tabeli:', {
-              playerName: item.name,
-              playerPosition: item.position,
-              selectedPos: pos,
-              matches,
-              willShow: matches
-            });
-          }
           
           return matches;
         })) &&
@@ -573,8 +554,6 @@ export default function PackingChart({
           (!birthYearFilter.to.trim() || item.birthYear <= parseInt(birthYearFilter.to.trim()))));
     });
 
-    console.log('🔍 Liczba zawodników po filtrowaniu:', filteredTableData.length);
-    console.log('🔍 Zawodnicy po filtrowaniu:', filteredTableData.map(p => ({ name: p.name, position: p.position })));
 
     unsortedTableData = filteredTableData;
 

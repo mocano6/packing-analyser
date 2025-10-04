@@ -25,11 +25,9 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
 
   // Pobieranie zespołów z Firebase (tylko jeśli availableTeams nie jest przekazane)
   useEffect(() => {
-    console.log('DEBUG TeamsSelector - availableTeams:', availableTeams);
     
     if (availableTeams !== undefined) {
       // Jeśli dostępne zespoły są przekazane jako props, użyj ich
-      console.log('DEBUG TeamsSelector - używam przekazanych zespołów:', availableTeams.map(t => t.name));
       const teamsRecord: Record<string, Team> = {};
       availableTeams.forEach(team => {
         teamsRecord[team.id] = team;

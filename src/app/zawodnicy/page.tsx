@@ -223,7 +223,6 @@ export default function ZawodnicyPage() {
 
   const handleSaveAction = () => {
     // Logika zapisywania akcji - można rozszerzyć w przyszłości
-    console.log("Zapisywanie akcji unpacking...");
   };
 
   const resetActionState = () => {
@@ -314,12 +313,6 @@ export default function ZawodnicyPage() {
   useEffect(() => {
     const loadAllActionsForTeam = async () => {
       if (teamMatches.length === 0) {
-        console.log("🔄 Resetowanie akcji - brak meczów", { 
-          teamMatchesLength: teamMatches.length, 
-          selectedTeams, 
-          selectedSeason,
-          allMatchesLength: allMatches.length 
-        });
         // Tylko resetuj jeśli rzeczywiście nie ma meczów dla zespołów, nie podczas ładowania
         if (selectedTeams.length > 0 && allMatches.length > 0) {
         setAllActions([]);
@@ -385,11 +378,6 @@ export default function ZawodnicyPage() {
         }
 
         // Filtruj tylko akcje zawodników z wybranych zespołów
-        console.log("🔍 Filtrowanie zawodników", { 
-          playersLength: playersRef.current.length, 
-          selectedTeams,
-          allActionsDataLength: allActionsData.length 
-        });
         const teamPlayers = playersRef.current.filter(player => {
           if (!player.teams) return false;
           return player.teams.some(playerTeam => selectedTeams.includes(playerTeam));
@@ -402,7 +390,6 @@ export default function ZawodnicyPage() {
           (action.receiverId && teamPlayersIds.includes(action.receiverId))
         );
 
-        console.log("✅ Ustawienie akcji", { filteredActionsLength: filteredActions.length });
         setAllActions(filteredActions);
       } catch (error) {
         console.error("Błąd podczas pobierania akcji:", error);
