@@ -106,6 +106,16 @@ const ActionModal: React.FC<ActionModalProps> = ({
     }
   }, [onModeChange, mode]);
 
+  // W trybie unpacking automatycznie aktywujemy P3 dla każdego zaznaczonego zawodnika
+  useEffect(() => {
+    if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
+      // Sprawdzamy, czy P3 jest już aktywny - jeśli nie, aktywujemy go
+      if (!isP3Active) {
+        onP3Toggle(); // Aktywuj P3
+      }
+    }
+  }, [selectedDefensePlayers, mode, isP3Active, onP3Toggle]);
+
   // Określamy czy jesteśmy w trybie edycji
   const isEditMode = !!editingAction;
 
@@ -329,13 +339,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
       }
     }
 
-    // W trybie unpacking automatycznie aktywujemy P3 (minięty przeciwnik) dla każdego zaznaczonego zawodnika
-    if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
-      // Aktywujemy P3 tyle razy, ile jest zaznaczonych zawodników
-      for (let i = 0; i < selectedDefensePlayers.length; i++) {
-        onP3Toggle(); // Aktywuj P3
-      }
-    }
 
     // Wywołaj funkcję zapisującą akcję, ale nie zamykaj modalu od razu
     // Komponent nadrzędny sam zadecyduje czy i kiedy zamknąć modal
@@ -537,7 +540,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 title="Aktywuj/Dezaktywuj P3"
                 aria-pressed={isP3Active}
                 type="button"
-                disabled={mode === "defense" && isP3Active}
+                disabled={mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0}
               >
                 <span className={styles.compactLabel}>P3</span>
               </button>
