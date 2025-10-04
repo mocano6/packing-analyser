@@ -75,7 +75,11 @@ export interface Action {
   // PxT jest obliczane dynamicznie na froncie
   isP1?: boolean;
   isP2?: boolean;
-  isP3?: boolean;
+  isP3Box?: boolean;
+  isP3Site?: boolean;
+  isContact1?: boolean;
+  isContact2?: boolean;
+  isContact3Plus?: boolean;
   isShot?: boolean;
   isGoal?: boolean;
   isPenaltyAreaEntry?: boolean;

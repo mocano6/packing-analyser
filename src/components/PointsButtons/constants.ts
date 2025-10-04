@@ -29,8 +29,32 @@ export const ACTION_BUTTONS: ActionButton[] = [
   },
   {
     points: 0,
-    label: "P3",
-    description: "Aktywuj/Dezaktywuj P3",
+    label: "P3-Box",
+    description: "Aktywuj/Dezaktywuj P3-Box",
+    type: "toggle",
+  },
+  {
+    points: 0,
+    label: "P3-Site",
+    description: "Aktywuj/Dezaktywuj P3-Site",
+    type: "toggle",
+  },
+  {
+    points: 0,
+    label: "1 kontakt",
+    description: "Aktywuj/Dezaktywuj 1 kontakt z piłką",
+    type: "toggle",
+  },
+  {
+    points: 0,
+    label: "2 kontakty",
+    description: "Aktywuj/Dezaktywuj 2 kontakty z piłką",
+    type: "toggle",
+  },
+  {
+    points: 0,
+    label: "3+ kontakty",
+    description: "Aktywuj/Dezaktywuj 3+ kontakty z piłką",
     type: "toggle",
   },
 ];

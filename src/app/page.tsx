@@ -337,7 +337,11 @@ export default function Page() {
     actionType,
     isP1Active,
     isP2Active,
-    isP3Active,
+    isP3BoxActive,
+    isP3SiteActive,
+    isContact1Active,
+    isContact2Active,
+    isContact3PlusActive,
     isShot,
     isGoal,
     isPenaltyAreaEntry,
@@ -348,7 +352,11 @@ export default function Page() {
     setActionType,
     setIsP1Active,
     setIsP2Active,
-    setIsP3Active,
+    setIsP3BoxActive,
+    setIsP3SiteActive,
+    setIsContact1Active,
+    setIsContact2Active,
+    setIsContact3PlusActive,
     setIsShot,
     setIsGoal,
     setIsPenaltyAreaEntry,
@@ -1707,12 +1715,48 @@ export default function Page() {
               });
             }
           }}
-          isP3Active={editingAction?.isP3 || false}
-          onP3Toggle={() => {
+          isP3BoxActive={editingAction?.isP3Box || false}
+          onP3BoxToggle={() => {
             if (editingAction) {
               setEditingAction({
                 ...editingAction,
-                isP3: !editingAction.isP3
+                isP3Box: !editingAction.isP3Box
+              });
+            }
+          }}
+          isP3SiteActive={editingAction?.isP3Site || false}
+          onP3SiteToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP3Site: !editingAction.isP3Site
+              });
+            }
+          }}
+          isContact1Active={editingAction?.isContact1 || false}
+          onContact1Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isContact1: !editingAction.isContact1
+              });
+            }
+          }}
+          isContact2Active={editingAction?.isContact2 || false}
+          onContact2Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isContact2: !editingAction.isContact2
+              });
+            }
+          }}
+          isContact3PlusActive={editingAction?.isContact3Plus || false}
+          onContact3PlusToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isContact3Plus: !editingAction.isContact3Plus
               });
             }
           }}

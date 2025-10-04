@@ -27,8 +27,16 @@ interface ActionModalProps {
   onP1Toggle: () => void;
   isP2Active: boolean;
   onP2Toggle: () => void;
-  isP3Active: boolean;
-  onP3Toggle: () => void;
+  isP3BoxActive: boolean;
+  onP3BoxToggle: () => void;
+  isP3SiteActive: boolean;
+  onP3SiteToggle: () => void;
+  isContact1Active: boolean;
+  onContact1Toggle: () => void;
+  isContact2Active: boolean;
+  onContact2Toggle: () => void;
+  isContact3PlusActive: boolean;
+  onContact3PlusToggle: () => void;
   isShot: boolean;
   onShotToggle: (checked: boolean) => void;
   isGoal: boolean;
@@ -70,8 +78,16 @@ const ActionModal: React.FC<ActionModalProps> = ({
   onP1Toggle,
   isP2Active,
   onP2Toggle,
-  isP3Active,
-  onP3Toggle,
+  isP3BoxActive,
+  onP3BoxToggle,
+  isP3SiteActive,
+  onP3SiteToggle,
+  isContact1Active,
+  onContact1Toggle,
+  isContact2Active,
+  onContact2Toggle,
+  isContact3PlusActive,
+  onContact3PlusToggle,
   isShot,
   onShotToggle,
   isGoal,
@@ -540,14 +556,67 @@ const ActionModal: React.FC<ActionModalProps> = ({
               
               <button
                 className={`${styles.compactButton} ${styles.pButtonBottom} ${
-                  isP3Active ? styles.activeButton : ""
+                  isP3BoxActive ? styles.activeButton : ""
                 }`}
-                onClick={onP3Toggle}
-                title="Aktywuj/Dezaktywuj P3"
-                aria-pressed={isP3Active}
+                onClick={onP3BoxToggle}
+                title="Aktywuj/Dezaktywuj P3-Box"
+                aria-pressed={isP3BoxActive}
                 type="button"
               >
-                <span className={styles.compactLabel}>P3</span>
+                <span className={styles.compactLabel}>P3-Box</span>
+              </button>
+            </div>
+
+            {/* Nowe przyciski P3-site i kontakty */}
+            <div className={styles.compactButtonsRow}>
+              <button
+                className={`${styles.compactButton} ${
+                  isP3SiteActive ? styles.activeButton : ""
+                }`}
+                onClick={onP3SiteToggle}
+                title="Aktywuj/Dezaktywuj P3-site"
+                aria-pressed={isP3SiteActive}
+                type="button"
+              >
+                <span className={styles.compactLabel}>P3-site</span>
+              </button>
+            </div>
+
+            <div className={styles.compactButtonsRow}>
+              <button
+                className={`${styles.compactButton} ${
+                  isContact1Active ? styles.activeButton : ""
+                }`}
+                onClick={onContact1Toggle}
+                title="Aktywuj/Dezaktywuj 1 kontakt z piłką"
+                aria-pressed={isContact1Active}
+                type="button"
+              >
+                <span className={styles.compactLabel}>1 kontakt</span>
+              </button>
+              
+              <button
+                className={`${styles.compactButton} ${
+                  isContact2Active ? styles.activeButton : ""
+                }`}
+                onClick={onContact2Toggle}
+                title="Aktywuj/Dezaktywuj 2 kontakty z piłką"
+                aria-pressed={isContact2Active}
+                type="button"
+              >
+                <span className={styles.compactLabel}>2 kontakty</span>
+              </button>
+              
+              <button
+                className={`${styles.compactButton} ${
+                  isContact3PlusActive ? styles.activeButton : ""
+                }`}
+                onClick={onContact3PlusToggle}
+                title="Aktywuj/Dezaktywuj 3+ kontakty z piłką"
+                aria-pressed={isContact3PlusActive}
+                type="button"
+              >
+                <span className={styles.compactLabel}>3+ kontakty</span>
               </button>
             </div>
 
