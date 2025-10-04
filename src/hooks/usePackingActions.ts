@@ -94,8 +94,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       if (matchDoc.exists()) {
         const matchData = matchDoc.data() as TeamInfo;
-        // Sprawdź czy istnieje tablica akcji
-        const loadedActions = matchData.actions_packing || [];
+        // Ładujemy akcje z obu kolekcji
+        const packingActions = matchData.actions_packing || [];
+        const unpackingActions = matchData.actions_unpacking || [];
+        const loadedActions = [...packingActions, ...unpackingActions];
         
 
         
@@ -301,15 +303,17 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         
         if (matchDoc.exists()) {
           const matchData = matchDoc.data() as TeamInfo;
-          // Upewniamy się, że tablica akcji istnieje
-          const currentActions = matchData.actions_packing || [];
+          
+          // Wybieramy kolekcję w zależności od trybu
+          const collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
+          const currentActions = matchData[collectionField] || [];
           
           // Upewniamy się, że wszystkie akcje są oczyszczone z undefined
           const cleanedActions = currentActions.map(action => removeUndefinedFields(action));
           
           // Dodaj nową (oczyszczoną) akcję i aktualizuj dokument
           await updateDoc(matchRef, {
-            actions_packing: [...cleanedActions, cleanedAction]
+            [collectionField]: [...cleanedActions, cleanedAction]
           });
           
           // Akcje są teraz przechowywane tylko w matches - nie duplikujemy w players

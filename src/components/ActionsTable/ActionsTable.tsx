@@ -4,6 +4,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import styles from "./ActionsTable.module.css";
 import { ActionsTableProps } from "@/components/ActionsTable/ActionsTable.types";
+import { Player } from "@/types";
 
 type SortKey =
   | "minute"
@@ -57,6 +58,7 @@ const ActionRow = ({
   onVideoTimeClick,
   selectedMetric,
   actionModeFilter,
+  players,
 }: {
   action: ActionsTableProps["actions"][0];
   onDelete: (id: string) => void;
@@ -64,6 +66,7 @@ const ActionRow = ({
   onVideoTimeClick?: (videoTimestamp?: number) => void;
   selectedMetric: 'packing' | 'pxt' | 'xt';
   actionModeFilter: 'attack' | 'defense';
+  players: Player[];
 }) => {
   const getEvents = () => {
     const events = [];
@@ -84,9 +87,18 @@ const ActionRow = ({
   const isSecondHalf = action.isSecondHalf === true;
 
   // Przygotuj dane zawodników w bezpieczny sposób
-  const senderDisplay = action.senderName 
+  let senderDisplay = action.senderName 
     ? `${action.senderNumber || '?'} ${action.senderName}`
     : (action.senderId ? `ID: ${action.senderId.substring(0, 6)}...` : '-');
+    
+  // W trybie obrony wyświetlaj zawodników miniętych
+  if (actionModeFilter === 'defense' && action.defensePlayers && action.defensePlayers.length > 0) {
+    const defensePlayerNames = action.defensePlayers.map(playerId => {
+      const player = players.find(p => p.id === playerId);
+      return player ? `${player.number || '?'} ${player.name}` : `ID: ${playerId.substring(0, 6)}...`;
+    });
+    senderDisplay = defensePlayerNames.join(', ');
+  }
     
   const receiverDisplay = action.receiverName 
     ? `${action.receiverNumber || '?'} ${action.receiverName}`
@@ -344,13 +356,13 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
               className={`${styles.modeButton} ${actionModeFilter === 'attack' ? styles.active : ''}`}
               onClick={() => setActionModeFilter('attack')}
             >
-              Atak
+              Packing
             </button>
             <button
               className={`${styles.modeButton} ${actionModeFilter === 'defense' ? styles.active : ''}`}
               onClick={() => setActionModeFilter('defense')}
             >
-              Obrona
+              Unpacking
             </button>
           </div>
           
@@ -452,6 +464,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
                 onVideoTimeClick={handleVideoTimeClick}
                 selectedMetric={selectedMetric}
                 actionModeFilter={actionModeFilter}
+                players={players || []}
               />
             ))
           )}
