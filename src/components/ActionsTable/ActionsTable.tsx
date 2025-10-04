@@ -56,12 +56,14 @@ const ActionRow = ({
   onEdit,
   onVideoTimeClick,
   selectedMetric,
+  actionModeFilter,
 }: {
   action: ActionsTableProps["actions"][0];
   onDelete: (id: string) => void;
   onEdit?: (action: ActionsTableProps["actions"][0]) => void;
   onVideoTimeClick?: (videoTimestamp?: number) => void;
   selectedMetric: 'packing' | 'pxt' | 'xt';
+  actionModeFilter: 'attack' | 'defense';
 }) => {
   const getEvents = () => {
     const events = [];
@@ -128,9 +130,11 @@ const ActionRow = ({
       {selectedMetric === 'xt' && (
         <div className={styles.cell}>{typeof action.xTValueStart === 'number' ? action.xTValueStart.toFixed(3) : '0.000'}</div>
       )}
-      <div className={styles.cell}>
-        {receiverDisplay}
-      </div>
+      {actionModeFilter === 'attack' && (
+        <div className={styles.cell}>
+          {receiverDisplay}
+        </div>
+      )}
       {selectedMetric === 'xt' && (
         <div className={styles.cell}>{typeof action.xTValueEnd === 'number' ? action.xTValueEnd.toFixed(3) : '0.000'}</div>
       )}
@@ -186,7 +190,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   const [selectedMetric, setSelectedMetric] = useState<'packing' | 'pxt' | 'xt'>('packing');
   
   // State dla filtrowania trybu akcji
-  const [actionModeFilter, setActionModeFilter] = useState<'all' | 'attack' | 'defense'>('all');
+  const [actionModeFilter, setActionModeFilter] = useState<'attack' | 'defense'>('attack');
 
   // Dodajemy state do śledzenia, czy jakieś akcje mają brakujące dane graczy
   const [hasMissingPlayerData, setHasMissingPlayerData] = useState(false);
@@ -237,13 +241,10 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   // Posortowane akcje z wykorzystaniem useMemo dla optymalizacji wydajności
   const sortedActions = useMemo(() => {
     // Filtrujemy akcje według trybu
-    let filteredActions = [...actions];
-    if (actionModeFilter !== 'all') {
-      filteredActions = actions.filter(action => {
-        const actionMode = action.mode || 'attack';
-        return actionMode === actionModeFilter;
-      });
-    }
+    const filteredActions = actions.filter(action => {
+      const actionMode = action.mode || 'attack';
+      return actionMode === actionModeFilter;
+    });
     
     const result = [...filteredActions];
     const { key, direction } = sortConfig;
@@ -340,12 +341,6 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           {/* Przełącznik trybu akcji */}
           <div className={styles.modeToggle}>
             <button
-              className={`${styles.modeButton} ${actionModeFilter === 'all' ? styles.active : ''}`}
-              onClick={() => setActionModeFilter('all')}
-            >
-              Wszystkie
-            </button>
-            <button
               className={`${styles.modeButton} ${actionModeFilter === 'attack' ? styles.active : ''}`}
               onClick={() => setActionModeFilter('attack')}
             >
@@ -388,7 +383,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             onSort={handleSort}
           />
           <HeaderCell
-            label="Zawodnik start"
+            label={actionModeFilter === 'defense' ? "Zawodnicy minięci" : "Zawodnik start"}
             sortKey="sender"
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}
@@ -403,13 +398,15 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
               onSort={handleSort}
             />
           )}
-          <HeaderCell
-            label="Zawodnik koniec"
-            sortKey="receiver"
-            currentSortKey={sortConfig.key}
-            sortDirection={sortConfig.direction}
-            onSort={handleSort}
-          />
+          {actionModeFilter === 'attack' && (
+            <HeaderCell
+              label="Zawodnik koniec"
+              sortKey="receiver"
+              currentSortKey={sortConfig.key}
+              sortDirection={sortConfig.direction}
+              onSort={handleSort}
+            />
+          )}
           {selectedMetric === 'xt' && (
             <HeaderCell
               label="xT koniec"
@@ -454,6 +451,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
                 onEdit={onEditAction}
                 onVideoTimeClick={handleVideoTimeClick}
                 selectedMetric={selectedMetric}
+                actionModeFilter={actionModeFilter}
               />
             ))
           )}

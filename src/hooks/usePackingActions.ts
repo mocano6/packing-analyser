@@ -234,6 +234,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       const parsedVideoTimestamp = videoTimestamp ? parseInt(videoTimestamp) : undefined;
       const isValidTimestamp = parsedVideoTimestamp && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp > 0;
       
+      // Obliczamy PxT (xT różnica * packing points)
+      const xTDifference = (xTEnd || 0) - (xTStart || 0);
+      const pxtValue = xTDifference > 0 ? xTDifference * (packingValue || currentPoints) : 0;
+      
       // Tworzymy nową akcję
       const newAction: Action = {
         id: uuidv4(), // Generujemy unikalny identyfikator
@@ -250,6 +254,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         // Przypisujemy wartości xT tylko jeśli są zdefiniowane
         ...(xTStart !== undefined && { xTValueStart: xTStart }),
         ...(xTEnd !== undefined && { xTValueEnd: xTEnd }),
+        // Dodajemy PxT
+        PxT: pxtValue,
         isP1: isP1Active,
       isP2: isP2Active,
       isP3: isP3Active,
