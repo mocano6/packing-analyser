@@ -180,17 +180,53 @@ const ActionSection = memo(function ActionSection({
         currentPoints={currentPoints}
         onAddPoints={handleAddPoints}
         isP1Active={isP1Active}
-        onP1Toggle={() => setIsP1Active(!isP1Active)}
+        onP1Toggle={() => {
+          setIsP1Active(!isP1Active);
+          if (!isP1Active) {
+            setIsP2Active(false);
+            setIsP3Active(false);
+          }
+        }}
         isP2Active={isP2Active}
-        onP2Toggle={() => setIsP2Active(!isP2Active)}
+        onP2Toggle={() => {
+          setIsP2Active(!isP2Active);
+          if (!isP2Active) {
+            setIsP1Active(false);
+            setIsP3Active(false);
+          }
+        }}
         isP3Active={isP3Active}
-        onP3Toggle={() => setIsP3Active(!isP3Active)}
+        onP3Toggle={() => {
+          setIsP3Active(!isP3Active);
+          if (!isP3Active) {
+            setIsP1Active(false);
+            setIsP2Active(false);
+          }
+        }}
         isContact1Active={isContact1Active}
-        onContact1Toggle={() => setIsContact1Active(!isContact1Active)}
+        onContact1Toggle={() => {
+          setIsContact1Active(!isContact1Active);
+          if (!isContact1Active) {
+            setIsContact2Active(false);
+            setIsContact3PlusActive(false);
+          }
+        }}
         isContact2Active={isContact2Active}
-        onContact2Toggle={() => setIsContact2Active(!isContact2Active)}
+        onContact2Toggle={() => {
+          setIsContact2Active(!isContact2Active);
+          if (!isContact2Active) {
+            setIsContact1Active(false);
+            setIsContact3PlusActive(false);
+          }
+        }}
         isContact3PlusActive={isContact3PlusActive}
-        onContact3PlusToggle={() => setIsContact3PlusActive(!isContact3PlusActive)}
+        onContact3PlusToggle={() => {
+          setIsContact3PlusActive(!isContact3PlusActive);
+          if (!isContact3PlusActive) {
+            setIsContact1Active(false);
+            setIsContact2Active(false);
+          }
+        }}
         isShot={isShot}
         onShotToggle={setIsShot}
         isGoal={isGoal}

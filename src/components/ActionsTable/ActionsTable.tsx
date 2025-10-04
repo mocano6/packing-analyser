@@ -18,6 +18,8 @@ type SortKey =
   | "xt"
   | "packing"
   | "pxt"
+  | "p1p2p3"
+  | "contacts"
   | "events"
   | "videoTimestamp";
 
@@ -171,6 +173,24 @@ const ActionRow = ({
           const pxtValue = (xTEnd - xTStart) * packingPoints;
           
           return typeof pxtValue === 'number' ? pxtValue.toFixed(3) : "-";
+        })()}
+      </div>
+      <div className={styles.cell}>
+        {(() => {
+          const pButtons = [];
+          if (action.isP1) pButtons.push("P1");
+          if (action.isP2) pButtons.push("P2");
+          if (action.isP3) pButtons.push("P3");
+          return pButtons.length > 0 ? pButtons.join(", ") : "-";
+        })()}
+      </div>
+      <div className={styles.cell}>
+        {(() => {
+          const contactButtons = [];
+          if (action.isContact1) contactButtons.push("1T");
+          if (action.isContact2) contactButtons.push("2T");
+          if (action.isContact3Plus) contactButtons.push("3T+");
+          return contactButtons.length > 0 ? contactButtons.join(", ") : "-";
         })()}
       </div>
       <div className={styles.cell}>{getEvents()}</div>
@@ -333,6 +353,30 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           comparison = getPxTValue(a) - getPxTValue(b);
           break;
         }
+        case "p1p2p3": {
+          // Sortowanie według P1, P2, P3
+          const getPButtonsPriority = (action: any) => {
+            let priority = 0;
+            if (action.isP1) priority += 1;
+            if (action.isP2) priority += 2;
+            if (action.isP3) priority += 4;
+            return priority;
+          };
+          comparison = getPButtonsPriority(a) - getPButtonsPriority(b);
+          break;
+        }
+        case "contacts": {
+          // Sortowanie według 1T, 2T, 3T+
+          const getContactsPriority = (action: any) => {
+            let priority = 0;
+            if (action.isContact1) priority += 1;
+            if (action.isContact2) priority += 2;
+            if (action.isContact3Plus) priority += 4;
+            return priority;
+          };
+          comparison = getContactsPriority(a) - getContactsPriority(b);
+          break;
+        }
         case "events": {
           // Sortowanie według ważności zdarzeń: Goal > Shot > PK > P3
           const getEventPriority = (action: any) => {
@@ -445,6 +489,20 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           <HeaderCell
             label="PxT"
             sortKey="pxt"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <HeaderCell
+            label="P1/P2/P3"
+            sortKey="p1p2p3"
+            currentSortKey={sortConfig.key}
+            sortDirection={sortConfig.direction}
+            onSort={handleSort}
+          />
+          <HeaderCell
+            label="1T/2T/3T+"
+            sortKey="contacts"
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}
             onSort={handleSort}
