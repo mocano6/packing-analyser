@@ -329,11 +329,12 @@ const ActionModal: React.FC<ActionModalProps> = ({
       }
     }
 
-    // W trybie unpacking automatycznie zwiększamy packing o 1 dla każdego zaznaczonego zawodnika
+    // W trybie unpacking automatycznie aktywujemy P3 (minięty przeciwnik) dla każdego zaznaczonego zawodnika
     if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
-      // Zwiększamy packing o liczbę zaznaczonych zawodników
-      const additionalPoints = selectedDefensePlayers.length;
-      onAddPoints(additionalPoints);
+      // Aktywujemy P3 tyle razy, ile jest zaznaczonych zawodników
+      for (let i = 0; i < selectedDefensePlayers.length; i++) {
+        onP3Toggle(); // Aktywuj P3
+      }
     }
 
     // Wywołaj funkcję zapisującą akcję, ale nie zamykaj modalu od razu
@@ -536,7 +537,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 title="Aktywuj/Dezaktywuj P3"
                 aria-pressed={isP3Active}
                 type="button"
-                disabled={mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0}
+                disabled={mode === "defense" && isP3Active}
               >
                 <span className={styles.compactLabel}>P3</span>
               </button>
