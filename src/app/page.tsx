@@ -77,7 +77,7 @@ function removeUndefinedFields<T extends object>(obj: T): T {
 }
 
 export default function Page() {
-  const [activeTab, setActiveTab] = React.useState<"packing" | "xg">("packing");
+  const [activeTab, setActiveTab] = React.useState<"packing" | "xg" | "regain" | "loses">("packing");
   // Inicjalizuj selectedTeam z localStorage lub pustym stringiem
   const [selectedTeam, setSelectedTeam] = React.useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -219,9 +219,11 @@ export default function Page() {
   const [actionMode, setActionMode] = useState<"attack" | "defense">("attack");
   const [selectedDefensePlayers, setSelectedDefensePlayers] = useState<string[]>([]);
 
-  const packingActions = usePackingActions(players, matchInfo, actionMode, selectedDefensePlayers);
+  // Określamy kategorię akcji na podstawie aktywnej zakładki
+  const actionCategory = activeTab === "regain" ? "regain" : activeTab === "loses" ? "loses" : "packing";
+  const packingActions = usePackingActions(players, matchInfo, actionMode, selectedDefensePlayers, actionCategory);
   
-  // Wyciągnij funkcję resetActionPoints z hooka
+  // Wyciągnij funkcje z hooka
   const { resetActionPoints } = packingActions;
 
   // Hook do zarządzania strzałami
@@ -358,6 +360,10 @@ export default function Page() {
     setIsShot,
     setIsGoal,
     setIsPenaltyAreaEntry,
+    isBelow8sActive,
+    setIsBelow8sActive,
+    playersBehindBall,
+    setPlayersBehindBall,
     handleZoneSelect,
     handleSaveAction,
     handleDeleteAction,
@@ -916,8 +922,20 @@ export default function Page() {
       return;
     }
     
-    // Walidacja w zależności od trybu
-    if (actionMode === "defense") {
+    // Walidacja w zależności od kategorii i trybu
+    if (actionCategory === "regain") {
+      // W akcjach regain sprawdzamy tylko jednego zawodnika (odbiorcę piłki)
+      if (!selectedPlayerId) {
+        alert("Wybierz zawodnika odbierającego piłkę!");
+        return;
+      }
+    } else if (actionCategory === "loses") {
+      // W akcjach loses sprawdzamy tylko jednego zawodnika (zawodnika, który stracił piłkę)
+      if (!selectedPlayerId) {
+        alert("Wybierz zawodnika, który stracił piłkę!");
+        return;
+      }
+    } else if (actionMode === "defense") {
       // W trybie obrony sprawdzamy czy są wybrani zawodnicy obrony
       if (!selectedDefensePlayers || selectedDefensePlayers.length === 0) {
         alert("Wybierz co najmniej jednego zawodnika miniętego przez przeciwnika!");
@@ -1122,9 +1140,46 @@ export default function Page() {
     alert(`Błąd importu: ${error}`);
   };
 
-  // Nowa funkcja do obsługi wyboru strefy
-  const handleZoneSelection = (zoneId: number, xT?: number) => {
+  // Funkcja do obsługi wyboru strefy dla zakładki regain (pojedynczy klik)
+  const handleRegainZoneSelection = (zoneId: number, xT?: number) => {
+    if (zoneId === null || zoneId === undefined) {
+      return;
+    }
     
+    // W regain ustawiamy strefę i od razu otwieramy modal
+    setStartZone(zoneId);
+    setEndZone(zoneId); // Dla regain używamy tej samej strefy jako start i end
+    localStorage.setItem('tempStartZone', String(zoneId));
+    localStorage.setItem('tempEndZone', String(zoneId));
+    setActionType("pass"); // Domyślnie pass, ale można zmienić w modalu
+    
+    // Odczekaj chwilę przed otwarciem modalu, aby stan się zaktualizował
+    setTimeout(() => {
+      openActionModalWithVideoTime();
+    }, 100);
+  };
+
+  // Funkcja do obsługi wyboru strefy dla zakładki loses (pojedynczy klik)
+  const handleLosesZoneSelection = (zoneId: number, xT?: number) => {
+    if (zoneId === null || zoneId === undefined) {
+      return;
+    }
+    
+    // W loses ustawiamy strefę i od razu otwieramy modal
+    setStartZone(zoneId);
+    setEndZone(zoneId); // Dla loses używamy tej samej strefy jako start i end
+    localStorage.setItem('tempStartZone', String(zoneId));
+    localStorage.setItem('tempEndZone', String(zoneId));
+    setActionType("pass"); // Domyślnie pass, ale można zmienić w modalu
+    
+    // Odczekaj chwilę przed otwarciem modalu, aby stan się zaktualizował
+    setTimeout(() => {
+      openActionModalWithVideoTime();
+    }, 100);
+  };
+
+  // Funkcja do obsługi wyboru strefy dla zakładki packing (podwójny klik)
+  const handlePackingZoneSelection = (zoneId: number, xT?: number) => {
     if (zoneId === null || zoneId === undefined) {
       return;
     }
@@ -1176,6 +1231,17 @@ export default function Page() {
       setStartZone(zoneId);
       localStorage.setItem('tempStartZone', String(zoneId));
     }, 50);
+  };
+
+  // Funkcja wyboru strefy - wybiera odpowiednią logikę na podstawie aktywnej zakładki
+  const handleZoneSelection = (zoneId: number, xT?: number) => {
+    if (activeTab === "regain") {
+      return handleRegainZoneSelection(zoneId, xT);
+    } else if (activeTab === "loses") {
+      return handleLosesZoneSelection(zoneId, xT);
+    } else {
+      return handlePackingZoneSelection(zoneId, xT);
+    }
   };
 
   // Modyfikujemy funkcję resetActionState, aby nie odwoływała się do hookResetActionState
@@ -1534,6 +1600,10 @@ export default function Page() {
             setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
             isSecondHalf={isSecondHalf}
             setIsSecondHalf={handleSecondHalfToggle}
+            isBelow8sActive={isBelow8sActive}
+            setIsBelow8sActive={setIsBelow8sActive}
+            playersBehindBall={playersBehindBall}
+            setPlayersBehindBall={setPlayersBehindBall}
             handleSaveAction={onSaveAction}
             resetActionState={resetCustomActionState}
             resetActionPoints={resetActionPoints}
@@ -1547,6 +1617,121 @@ export default function Page() {
             onModeChange={setActionMode}
             selectedDefensePlayers={selectedDefensePlayers}
             onDefensePlayersChange={setSelectedDefensePlayers}
+            // Kategoria akcji
+            actionCategory="packing"
+          />
+        )}
+
+        {activeTab === "regain" && (
+          <ActionSection
+            selectedZone={selectedZone}
+            handleZoneSelect={handleZoneSelection}
+            players={filteredPlayers}
+            selectedPlayerId={selectedPlayerId}
+            setSelectedPlayerId={setSelectedPlayerId}
+            selectedReceiverId={selectedReceiverId}
+            setSelectedReceiverId={setSelectedReceiverId}
+            actionMinute={actionMinute}
+            setActionMinute={setActionMinute}
+            actionType={actionType}
+            setActionType={setActionType}
+            currentPoints={currentPoints}
+            setCurrentPoints={setCurrentPoints}
+            isP1Active={isP1Active}
+            setIsP1Active={setIsP1Active}
+            isP2Active={isP2Active}
+            setIsP2Active={setIsP2Active}
+            isP3Active={isP3Active}
+            setIsP3Active={setIsP3Active}
+            isContact1Active={isContact1Active}
+            setIsContact1Active={setIsContact1Active}
+            isContact2Active={isContact2Active}
+            setIsContact2Active={setIsContact2Active}
+            isContact3PlusActive={isContact3PlusActive}
+            setIsContact3PlusActive={setIsContact3PlusActive}
+            isShot={isShot}
+            setIsShot={setIsShot}
+            isGoal={isGoal}
+            setIsGoal={setIsGoal}
+            isPenaltyAreaEntry={isPenaltyAreaEntry}
+            setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
+            isSecondHalf={isSecondHalf}
+            setIsSecondHalf={handleSecondHalfToggle}
+            isBelow8sActive={isBelow8sActive}
+            setIsBelow8sActive={setIsBelow8sActive}
+            playersBehindBall={playersBehindBall}
+            setPlayersBehindBall={setPlayersBehindBall}
+            handleSaveAction={onSaveAction}
+            resetActionState={resetCustomActionState}
+            resetActionPoints={resetActionPoints}
+            startZone={startZone}
+            endZone={endZone}
+            isActionModalOpen={isActionModalOpen}
+            setIsActionModalOpen={setIsActionModalOpen}
+            matchInfo={matchInfo}
+            // Nowe propsy dla trybu regain
+            mode={actionMode}
+            onModeChange={setActionMode}
+            selectedDefensePlayers={selectedDefensePlayers}
+            onDefensePlayersChange={setSelectedDefensePlayers}
+            // Kategoria akcji
+            actionCategory="regain"
+          />
+        )}
+
+        {activeTab === "loses" && (
+          <ActionSection
+            selectedZone={selectedZone}
+            handleZoneSelect={handleZoneSelection}
+            players={filteredPlayers}
+            selectedPlayerId={selectedPlayerId}
+            setSelectedPlayerId={setSelectedPlayerId}
+            selectedReceiverId={selectedReceiverId}
+            setSelectedReceiverId={setSelectedReceiverId}
+            actionMinute={actionMinute}
+            setActionMinute={setActionMinute}
+            actionType={actionType}
+            setActionType={setActionType}
+            currentPoints={currentPoints}
+            setCurrentPoints={setCurrentPoints}
+            isP1Active={isP1Active}
+            setIsP1Active={setIsP1Active}
+            isP2Active={isP2Active}
+            setIsP2Active={setIsP2Active}
+            isP3Active={isP3Active}
+            setIsP3Active={setIsP3Active}
+            isContact1Active={isContact1Active}
+            setIsContact1Active={setIsContact1Active}
+            isContact2Active={isContact2Active}
+            setIsContact2Active={setIsContact2Active}
+            isContact3PlusActive={isContact3PlusActive}
+            setIsContact3PlusActive={setIsContact3PlusActive}
+            isShot={isShot}
+            setIsShot={setIsShot}
+            isGoal={isGoal}
+            setIsGoal={setIsGoal}
+            isPenaltyAreaEntry={isPenaltyAreaEntry}
+            setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
+            isSecondHalf={isSecondHalf}
+            setIsSecondHalf={handleSecondHalfToggle}
+            isBelow8sActive={isBelow8sActive}
+            setIsBelow8sActive={setIsBelow8sActive}
+            playersBehindBall={playersBehindBall}
+            setPlayersBehindBall={setPlayersBehindBall}
+            handleSaveAction={onSaveAction}
+            resetActionState={resetCustomActionState}
+            resetActionPoints={resetActionPoints}
+            startZone={startZone}
+            endZone={endZone}
+            isActionModalOpen={isActionModalOpen}
+            setIsActionModalOpen={setIsActionModalOpen}
+            matchInfo={matchInfo}
+            mode={actionMode}
+            onModeChange={setActionMode}
+            selectedDefensePlayers={selectedDefensePlayers}
+            onDefensePlayersChange={setSelectedDefensePlayers}
+            // Kategoria akcji
+            actionCategory="loses"
           />
         )}
 
@@ -1568,7 +1753,7 @@ export default function Page() {
           </>
         )}
 
-        {activeTab === "packing" ? (
+        {activeTab === "packing" || activeTab === "regain" || activeTab === "loses" ? (
           <ActionsTable
             actions={actions}
             players={players}

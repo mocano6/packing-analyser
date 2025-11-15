@@ -164,6 +164,9 @@ export interface TeamInfo {
   videoUrl?: string; // URL wideo z YouTube dla tego meczu
   playerMinutes?: PlayerMinutes[];
   actions_packing?: Action[]; // Tablica akcji packing związanych z tym meczem
+  actions_unpacking?: Action[]; // Tablica akcji unpacking związanych z tym meczem
+  actions_regain?: Action[]; // Tablica akcji regain związanych z tym meczem
+  actions_loses?: Action[]; // Tablica akcji loses związanych z tym meczem
   shots?: Shot[]; // Tablica strzałów z mapą xG
 }
 

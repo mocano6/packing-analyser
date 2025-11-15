@@ -16,6 +16,7 @@ export interface FootballPitchProps {
   ) => void;
   startZone: number | null;
   endZone: number | null;
+  actionCategory?: "packing" | "regain" | "loses";
 }
 
 const FootballPitch = memo(function FootballPitch({
@@ -23,6 +24,7 @@ const FootballPitch = memo(function FootballPitch({
   onZoneSelect,
   startZone,
   endZone,
+  actionCategory = "packing",
 }: FootballPitchProps) {
   // Stan przełącznika orientacji boiska
   const [isFlipped, setIsFlipped] = useState(false);
@@ -127,6 +129,7 @@ const FootballPitch = memo(function FootballPitch({
             isFirstSelection={isFirstSelection}
             isSecondSelection={isSecondSelection}
             onSelect={handleZoneClick}
+            actionCategory={actionCategory}
           />
         );
               }),

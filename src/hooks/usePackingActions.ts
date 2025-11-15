@@ -41,7 +41,7 @@ function removeUndefinedFields<T extends object>(obj: T): T {
   return result;
 }
 
-export function usePackingActions(players: Player[], matchInfo: TeamInfo | null, actionMode?: "attack" | "defense", selectedDefensePlayers?: string[]) {
+export function usePackingActions(players: Player[], matchInfo: TeamInfo | null, actionMode?: "attack" | "defense", selectedDefensePlayers?: string[], actionCategory?: "packing" | "regain" | "loses") {
   // Stany dla wybranego zawodnika
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedReceiverId, setSelectedReceiverId] = useState<string | null>(null);
@@ -65,6 +65,12 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   
   // Dodaj stan isSecondHalf
   const [isSecondHalf, setIsSecondHalf] = useState<boolean>(false);
+  
+  // Dodaj stan isBelow8sActive dla regain
+  const [isBelow8sActive, setIsBelow8sActive] = useState<boolean>(false);
+  
+  // Dodaj stan playersBehindBall dla regain
+  const [playersBehindBall, setPlayersBehindBall] = useState<number>(0);
   
   // Dane o akcjach
   const [actions, setActions] = useState<Action[]>([]);
@@ -98,10 +104,18 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       if (matchDoc.exists()) {
         const matchData = matchDoc.data() as TeamInfo;
-        // Ładujemy akcje z obu kolekcji
-        const packingActions = matchData.actions_packing || [];
-        const unpackingActions = matchData.actions_unpacking || [];
-        const loadedActions = [...packingActions, ...unpackingActions];
+        // Ładujemy akcje z odpowiedniej kolekcji w zależności od kategorii
+        let loadedActions: Action[];
+        if (actionCategory === "regain") {
+          loadedActions = matchData.actions_regain || [];
+        } else if (actionCategory === "loses") {
+          loadedActions = matchData.actions_loses || [];
+        } else {
+          // Ładujemy akcje z obu kolekcji (packing i unpacking)
+          const packingActions = matchData.actions_packing || [];
+          const unpackingActions = matchData.actions_unpacking || [];
+          loadedActions = [...packingActions, ...unpackingActions];
+        }
         
         
 
@@ -206,8 +220,20 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       return false;
     }
 
-    // Walidacja w zależności od trybu
-    if (actionMode === "defense") {
+    // Walidacja w zależności od kategorii i trybu
+    if (actionCategory === "regain") {
+      // W akcjach regain sprawdzamy tylko jednego zawodnika (odbiorcę piłki)
+      if (!selectedPlayerId) {
+        console.error("Brak ID zawodnika odbierającego piłkę (selectedPlayerId jest null/undefined)");
+        return false;
+      }
+    } else if (actionCategory === "loses") {
+      // W akcjach loses sprawdzamy tylko jednego zawodnika (zawodnika, który stracił piłkę)
+      if (!selectedPlayerId) {
+        console.error("Brak ID zawodnika, który stracił piłkę (selectedPlayerId jest null/undefined)");
+        return false;
+      }
+    } else if (actionMode === "defense") {
       // W trybie obrony sprawdzamy czy są wybrani zawodnicy obrony
       if (!selectedDefensePlayers || selectedDefensePlayers.length === 0) {
         console.error("Brak wybranych zawodników obrony (selectedDefensePlayers jest puste)");
@@ -248,8 +274,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         id: uuidv4(), // Generujemy unikalny identyfikator
         matchId: matchInfoArg.matchId,
         teamId: matchInfoArg.team, // Używamy team zamiast teamId dla spójności
-        senderId: selectedPlayerId,
-        receiverId: actionType === "pass" ? selectedReceiverId || undefined : undefined,
+        senderId: (actionCategory === "regain" || actionCategory === "loses") ? selectedPlayerId : selectedPlayerId,
+        receiverId: (actionCategory === "regain" || actionCategory === "loses") ? undefined : (actionType === "pass" ? selectedReceiverId || undefined : undefined),
         fromZone: formattedStartZone,
         toZone: formattedEndZone,
         actionType: actionType,
@@ -326,8 +352,15 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         if (matchDoc.exists()) {
           const matchData = matchDoc.data() as TeamInfo;
           
-          // Wybieramy kolekcję w zależności od trybu
-          const collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
+          // Wybieramy kolekcję w zależności od kategorii i trybu
+          let collectionField: string;
+          if (actionCategory === "regain") {
+            collectionField = "actions_regain";
+          } else if (actionCategory === "loses") {
+            collectionField = "actions_loses";
+          } else {
+            collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
+          }
           const currentActions = matchData[collectionField] || [];
           
           // Upewniamy się, że wszystkie akcje są oczyszczone z undefined
@@ -398,18 +431,28 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       if (matchDoc.exists()) {
         const matchData = matchDoc.data() as TeamInfo;
         
+        // Wybieramy kolekcję w zależności od kategorii i trybu
+        let collectionField: string;
+        if (actionCategory === "regain") {
+          collectionField = "actions_regain";
+        } else if (actionCategory === "loses") {
+          collectionField = "actions_loses";
+        } else {
+          collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
+        }
+        
         // Znajdź akcję, którą chcemy usunąć, aby uzyskać senderId i receiverId
-        const actionToDelete = (matchData.actions_packing || []).find(action => action.id === actionId);
+        const actionToDelete = (matchData[collectionField] || []).find(action => action.id === actionId);
         
         // Filtrujemy akcje, aby usunąć tę o podanym ID
-        const updatedActions = (matchData.actions_packing || []).filter(action => action.id !== actionId);
+        const updatedActions = (matchData[collectionField] || []).filter(action => action.id !== actionId);
         
         // Oczyszczamy wszystkie akcje z wartości undefined
         const cleanedActions = updatedActions.map(action => removeUndefinedFields(action));
         
         // Aktualizujemy dokument z oczyszczonymi akcjami
         await updateDoc(matchRef, {
-          actions_packing: cleanedActions
+          [collectionField]: cleanedActions
         });
         
         // Akcje są teraz przechowywane tylko w matches - nie duplikujemy w players
@@ -519,6 +562,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsShot(false);
     setIsGoal(false);
     setIsPenaltyAreaEntry(false);
+    setIsBelow8sActive(false);
+    setPlayersBehindBall(0);
     // NIE resetujemy: selectedPlayerId, selectedReceiverId, actionMinute, isSecondHalf, selectedZone
   }, []);
 
@@ -581,6 +626,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsGoal,
     setIsPenaltyAreaEntry,
     setIsSecondHalf: setCurrentHalf,
+    isBelow8sActive,
+    setIsBelow8sActive,
+    playersBehindBall,
+    setPlayersBehindBall,
     setActions,
     
     // Funkcje

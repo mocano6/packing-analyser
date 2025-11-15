@@ -826,32 +826,6 @@ export default function ZawodnicyPage() {
         </div>
       </div>
 
-
-
-      {/* Zakładki */}
-      <div className={styles.tabsContainer}>
-        <div className={styles.tabs}>
-          <button 
-            className={`${styles.tab} ${activeTab === 'packing' ? styles.activeTab : ''}`}
-            onClick={() => setActiveTab('packing')}
-          >
-            Packing
-          </button>
-          <button 
-            className={`${styles.tab} ${activeTab === 'xg' ? styles.activeTab : ''}`}
-            onClick={() => setActiveTab('xg')}
-          >
-            xG
-          </button>
-          <button 
-            className={`${styles.tab} ${activeTab === 'unpacking' ? styles.activeTab : ''}`}
-            onClick={() => setActiveTab('unpacking')}
-          >
-            Unpacking
-          </button>
-        </div>
-      </div>
-
       {/* Sekcja wyboru meczów - tabela */}
       <div className={styles.matchSelector}>
         <div className={styles.matchSelectorHeader}>

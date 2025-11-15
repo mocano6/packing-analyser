@@ -133,6 +133,39 @@
   box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
 }
 
+.viewControls {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.viewButton {
+  padding: 8px 16px;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  background-color: #fff;
+  color: #374151;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  min-width: 100px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.viewButton:hover {
+  border-color: #10b981;
+  color: #10b981;
+  transform: translateY(-1px);
+}
+
+.viewButton.active {
+  background-color: #10b981;
+  border-color: #10b981;
+  color: white;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
 .chartControls {
   display: flex;
   justify-content: center;
@@ -558,13 +591,42 @@
   font-weight: 500;
   color: #333;
   white-space: nowrap;
-  min-width: 120px;
+  min-width: 140px;
   position: sticky;
   left: 0;
   background-color: white;
   border-right: 2px solid #e5e7eb;
   z-index: 10;
   box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+}
+
+.playerInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.playerNameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.playerPositions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.positionBadge {
+  font-size: 10px;
+  font-weight: 500;
+  color: #2196f3;
+  background-color: rgba(33, 150, 243, 0.2);
+  padding: 2px 6px;
+  border-radius: 10px;
+  display: inline-block;
 }
 
 .tableRow:hover .playerName {
@@ -599,9 +661,138 @@
 /* Style dla tooltipa */
 .tooltip {
   background-color: white;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  padding: 8px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  max-width: 250px;
+}
+
+/* Nowoczesny tooltip */
+.modernTooltip {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 12px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  max-width: 280px;
+  overflow: hidden;
+}
+
+.tooltipHeader {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  padding: 12px 16px;
+  margin: 0;
+}
+
+.tooltipHeader h4 {
+  margin: 0;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.tooltipContent {
+  padding: 16px;
+}
+
+.tooltipValue,
+.tooltipPercentage {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.tooltipValue:last-child,
+.tooltipPercentage:last-child {
+  margin-bottom: 0;
+}
+
+.tooltipLabel {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.tooltipNumber {
+  font-size: 14px;
+  color: #1f2937;
+  font-weight: 700;
+}
+
+/* Minimalistyczny tooltip */
+.simpleTooltip {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(8px);
+  font-size: 13px;
+  min-width: 180px;
+}
+
+.tooltipName {
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f3f4f6;
+  text-align: center;
+}
+
+.tooltipRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  color: #4b5563;
+}
+
+.tooltipRow:last-child {
+  margin-bottom: 0;
+}
+
+.tooltipRow span:first-child {
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.tooltipValue {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.tooltipTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tooltipValue {
+  font-size: 16px;
+  font-weight: 700;
+  color: #3b82f6;
+  margin: 0 0 6px 0;
+}
+
+.tooltipPercentage {
+  font-size: 13px;
+  font-weight: 500;
+  color: #059669;
+  margin: 0 0 4px 0;
+}
+
+.tooltipMinutes {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+  font-style: italic;
 }
 
 /* Style dla legendy */
@@ -618,6 +809,46 @@
 
 .legendItem:hover {
   background-color: #f5f5f5;
+}
+
+/* Style dla wykresu słupkowego */
+.recharts-bar-rectangle {
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.recharts-bar-rectangle:hover {
+  opacity: 0.8 !important;
+  transform: scale(1.02) !important;
+}
+
+.recharts-xAxis .recharts-text {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  fill: #374151 !important;
+}
+
+.recharts-yAxis .recharts-text {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  fill: #374151 !important;
+}
+
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #e5e7eb !important;
+  opacity: 0.6 !important;
+}
+
+/* Style dla tooltipa obok wykresu */
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}
+
+.recharts-tooltip-content {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .filterGroup {
@@ -1056,4 +1287,154 @@
   font-size: 9px;
   fill: #2d7a2d;
   text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+}
+
+/* Nowoczesne style dla słupków */
+.recharts-bar-rectangle {
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.1));
+}
+
+.recharts-bar-rectangle:hover {
+  opacity: 0.85 !important;
+  transform: scale(1.05) !important;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+/* Style dla osi wykresu słupkowego */
+.recharts-cartesian-axis-tick-value {
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  fill: #374151 !important;
+}
+
+.recharts-cartesian-axis-line {
+  stroke: #d1d5db !important;
+}
+
+.recharts-cartesian-axis-tick-line {
+  stroke: #d1d5db !important;
+}
+
+/* Style dla siatki wykresu słupkowego */
+.recharts-cartesian-grid-horizontal line {
+  stroke: #f3f4f6 !important;
+  opacity: 0.8 !important;
+}
+
+.recharts-cartesian-grid-vertical line {
+  stroke: #f3f4f6 !important;
+  opacity: 0.8 !important;
+}
+
+/* Style dla suwaka wykresu */
+.chartSlider {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.sliderInfo {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.sliderControls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sliderButton {
+  padding: 6px 12px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sliderButton:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.sliderButton:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.sliderRange {
+  width: 120px;
+  height: 6px;
+  border-radius: 3px;
+  background: #e5e7eb;
+  outline: none;
+  cursor: pointer;
+}
+
+.sliderRange::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.sliderRange::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Style dla przewijalnego wykresu */
+.scrollableChart {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: white;
+}
+
+.scrollableChart::-webkit-scrollbar {
+  height: 8px;
+}
+
+.scrollableChart::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.scrollableChart::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.scrollableChart::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Zwiększ szerokość wykresu dla lepszego przewijania */
+.scrollableChart .recharts-wrapper {
+  min-width: max-content;
 } 

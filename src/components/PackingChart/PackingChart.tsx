@@ -12,7 +12,9 @@ import {
   XAxis, 
   YAxis, 
   CartesianGrid, 
-  Legend 
+  Legend,
+  BarChart,
+  Bar
 } from 'recharts';
 import { Player, Action, TeamInfo } from '@/types';
 import styles from './PackingChart.module.css';
@@ -112,6 +114,7 @@ export default function PackingChart({
   const [showMatchChart, setShowMatchChart] = useState<boolean>(false);
   const [showNetworkChart, setShowNetworkChart] = useState<boolean>(false);
   const [isPer90Minutes, setIsPer90Minutes] = useState<boolean>(false);
+  const [chartStartIndex, setChartStartIndex] = useState<number>(0);
   const [minMinutesFilter, setMinMinutesFilter] = useState<number>(0);
   const [tableMetric, setTableMetric] = useState<'packing' | 'pxt' | 'xt'>('pxt');
   const [additionalActionsRole, setAdditionalActionsRole] = useState<'sender' | 'receiver'>('sender');
@@ -123,6 +126,24 @@ export default function PackingChart({
     if (position === 'LW') return 'LS';
     if (position === 'RW') return 'RS';
     return position;
+  };
+
+  // Funkcja do zbierania wszystkich pozycji na jakich grał zawodnik
+  const getAllPlayerPositions = (playerId: string): string[] => {
+    if (!matches || matches.length === 0) return [];
+    
+    const positions = new Set<string>();
+    
+    matches.forEach(match => {
+      if (!match.playerMinutes) return;
+      
+      const playerMinutesInMatch = match.playerMinutes.find(pm => pm.playerId === playerId);
+      if (playerMinutesInMatch && playerMinutesInMatch.position) {
+        positions.add(playerMinutesInMatch.position);
+      }
+    });
+    
+    return Array.from(positions).sort();
   };
 
   // Automatycznie przełącz na 'sender' gdy wybieramy drybling
@@ -389,7 +410,7 @@ export default function PackingChart({
       }
     });
 
-    // Dane dla diagramu
+    // Dane dla diagramu - sortowane od największej do najmniejszej wartości
     const chartData = Array.from(playerStats.entries())
       .map(([id, data]) => {
         let value = 0;
@@ -413,10 +434,55 @@ export default function PackingChart({
         return {
           id,
           name: data.name,
-          value: value
+          value: value,
+          totalPacking: data.totalPacking,
+          totalPxT: data.totalPxT,
+          totalXT: data.totalXT,
+          totalDribbling: data.totalDribbling,
+          totalDribblingPxT: data.totalDribblingPxT,
+          totalDribblingXT: data.totalDribblingXT,
+          actualMinutes: data.actualMinutes,
+          passCount: (data as any).passCount || 0,
+          senderPassCount: (data as any).senderPassCount || 0,
+          receiverPassCount: (data as any).receiverPassCount || 0,
+          dribblingCount: (data as any).dribblingCount || 0
         };
       })
-      .filter(item => Math.abs(item.value) > 0.001 || item.value > 0); // Złagodzone filtrowanie
+      .filter(item => Math.abs(item.value) > 0.001 || item.value > 0) // Złagodzone filtrowanie
+      .sort((a, b) => b.value - a.value); // Sortowanie od największej do najmniejszej
+
+    // Oblicz całkowite wartości zespołu dla procentów
+    const teamTotals = {
+      totalPacking: chartData.reduce((sum, player) => sum + player.totalPacking, 0),
+      totalPxT: chartData.reduce((sum, player) => sum + player.totalPxT, 0),
+      totalXT: chartData.reduce((sum, player) => sum + player.totalXT, 0),
+      totalDribbling: chartData.reduce((sum, player) => sum + player.totalDribbling, 0),
+      totalDribblingPxT: chartData.reduce((sum, player) => sum + player.totalDribblingPxT, 0),
+      totalDribblingXT: chartData.reduce((sum, player) => sum + player.totalDribblingXT, 0)
+    };
+
+    // Dodaj procenty do danych wykresu
+    const chartDataWithPercentages = chartData.map(player => {
+      let percentage = 0;
+      if (selectedActionType === 'pass') {
+        if (selectedMetric === 'packing') {
+          percentage = teamTotals.totalPacking > 0 ? (player.value / teamTotals.totalPacking) * 100 : 0;
+        } else {
+          percentage = teamTotals.totalPxT > 0 ? (player.value / teamTotals.totalPxT) * 100 : 0;
+        }
+      } else {
+        if (selectedMetric === 'packing') {
+          percentage = teamTotals.totalDribbling > 0 ? (player.value / teamTotals.totalDribbling) * 100 : 0;
+        } else {
+          percentage = teamTotals.totalDribblingPxT > 0 ? (player.value / teamTotals.totalDribblingPxT) * 100 : 0;
+        }
+      }
+      
+      return {
+        ...player,
+        percentage: percentage
+      };
+    });
       
     // Jeśli brak danych z akcjami, pokaż zawodników z minutami
     if (chartData.length === 0) {
@@ -788,7 +854,7 @@ export default function PackingChart({
       edges: networkEdges
     };
 
-    return { chartData, tableData, matchChartData, networkData };
+    return { chartData: chartDataWithPercentages, tableData, matchChartData, networkData };
   }, [actions, players, selectedChart, selectedMetric, selectedActionType, sortField, sortDirection, selectedPlayerId, matches, isPer90Minutes, minMinutesFilter, tableMetric, additionalActionsRole, selectedPositions, birthYearFilter]);
 
   // availablePositions są przekazywane jako prop
@@ -1007,6 +1073,26 @@ export default function PackingChart({
               </button>
             </div>
           </div>
+
+          {selectedActionType === 'pass' && (
+            <div className={styles.controlGroup}>
+              <span className={styles.controlGroupLabel}>Widok</span>
+              <div className={styles.viewControls}>
+                <button 
+                  className={`${styles.viewButton} ${selectedChart === 'sender' ? styles.active : ''}`}
+                  onClick={() => setSelectedChart('sender')}
+                >
+                  📤 Podający
+                </button>
+                <button 
+                  className={`${styles.viewButton} ${selectedChart === 'receiver' ? styles.active : ''}`}
+                  onClick={() => setSelectedChart('receiver')}
+                >
+                  📥 Przyjmujący
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className={styles.controlGroup}>
             <span className={styles.controlGroupLabel}>Rola</span>
@@ -1234,50 +1320,105 @@ export default function PackingChart({
           </div>
         )
       ) : !showMatchChart ? (
-        // Oryginalny wykres kołowy
+        // Wykres słupkowy pionowy zamiast kołowego
         chartData.length > 0 ? (
           <div className={styles.chart}>
-            <ResponsiveContainer width="100%" height={500}>
-              <PieChart>
-                <Pie
-                  data={chartData.slice(0, 10)}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={180}
-                  innerRadius={60}
-                  fill="#8884d8"
-                  onClick={handleClick}
-                  paddingAngle={2}
+            {/* Informacja o przewijalnym wykresie */}
+            {chartData.length > 10 && (
+              <div className={styles.chartInfo}>
+                <span>📊 Przewijalny wykres - {chartData.length} zawodników (przewiń w prawo/lewo)</span>
+              </div>
+            )}
+            <div className={styles.scrollableChart}>
+              <ResponsiveContainer width="100%" height={500}>
+                <BarChart
+                  data={chartData}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                  barCategoryGap="10%"
                 >
-                  {chartData.slice(0, 10).map((entry, index) => (
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis 
+                  dataKey="name" 
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                  interval={0}
+                  tick={{ fontSize: 12, fill: '#666' }}
+                  axisLine={{ stroke: '#ddd' }}
+                  tickLine={{ stroke: '#ddd' }}
+                />
+                <YAxis 
+                  tick={{ fontSize: 12, fill: '#666' }}
+                  axisLine={{ stroke: '#ddd' }}
+                  tickLine={{ stroke: '#ddd' }}
+                />
+                <Tooltip 
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      const passesCount = selectedActionType === 'pass' 
+                        ? (selectedChart === 'sender' ? data.senderPassCount : data.receiverPassCount)
+                        : data.dribblingCount;
+                      const valuePerAction = passesCount > 0 ? (data.value / passesCount) : 0;
+                      const passesPer90 = data.actualMinutes > 0 ? (passesCount / data.actualMinutes) * 90 : 0;
+                      const pxtPer90 = data.actualMinutes > 0 ? (data.value / data.actualMinutes) * 90 : 0;
+                      
+                      return (
+                        <div className={styles.simpleTooltip}>
+                          <div className={styles.tooltipName}>{label}</div>
+                          <div className={styles.tooltipRow}>
+                            <span>{selectedMetric === 'packing' ? 'Packing' : 'PxT'}:</span>
+                            <span className={styles.tooltipValue}>{getValueLabel(data.value)}</span>
+                          </div>
+                          <div className={styles.tooltipRow}>
+                            <span>Udział:</span>
+                            <span className={styles.tooltipValue}>{data.percentage.toFixed(1)}%</span>
+                          </div>
+                          <div className={styles.tooltipRow}>
+                            <span>Minuty:</span>
+                            <span className={styles.tooltipValue}>{data.actualMinutes}</span>
+                          </div>
+                          <div className={styles.tooltipRow}>
+                            <span>{selectedActionType === 'pass' ? 'Podań' : 'Dryblingów'}:</span>
+                            <span className={styles.tooltipValue}>{passesCount}</span>
+                          </div>
+                          <div className={styles.tooltipRow}>
+                            <span>PxT/podanie:</span>
+                            <span className={styles.tooltipValue}>{getValueLabel(valuePerAction)}</span>
+                          </div>
+                          <div className={styles.tooltipRow}>
+                            <span>Podania/90min:</span>
+                            <span className={styles.tooltipValue}>{passesPer90.toFixed(1)}</span>
+                          </div>
+                          <div className={styles.tooltipRow}>
+                            <span>PxT/90min:</span>
+                            <span className={styles.tooltipValue}>{getValueLabel(pxtPer90)}</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Bar 
+                  dataKey="value" 
+                  fill="#3b82f6"
+                  radius={[4, 4, 0, 0]}
+                  onClick={handleClick}
+                >
+                  {chartData.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={COLORS[index % COLORS.length]}
+                      fill={selectedPlayerId === entry.id ? '#ef4444' : COLORS[index % COLORS.length]}
                       stroke={selectedPlayerId === entry.id ? '#000' : 'none'}
-                      strokeWidth={selectedPlayerId === entry.id ? 3 : 0}
+                      strokeWidth={selectedPlayerId === entry.id ? 2 : 0}
                       style={{ cursor: 'pointer' }}
                     />
                   ))}
-                </Pie>
-                <Tooltip 
-                  formatter={(value: number) => [getValueLabel(value), selectedMetric === 'packing' ? 'Packing' : 'PxT']}
-                  labelStyle={{ fontSize: '14px', fontWeight: 'bold' }}
-                />
-                <Legend 
-                  verticalAlign="bottom" 
-                  height={80}
-                  iconType="circle"
-                  wrapperStyle={{ 
-                    fontSize: '11px', 
-                    paddingTop: '15px', 
-                    maxHeight: '80px',
-                    overflow: 'hidden'
-                  }}
-                />
-              </PieChart>
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
+            </div>
           </div>
         ) : (
           <div className={styles.noData}>
@@ -1507,7 +1648,7 @@ export default function PackingChart({
                 <th colSpan={tableMetric === 'packing' ? 1 : 2}>
                   Drybling - {tableMetric === 'packing' ? 'Packing' : tableMetric === 'pxt' ? 'PxT' : 'xT'}
                 </th>
-                <th colSpan={2}>Aktywność</th>
+                <th colSpan={3}>Aktywność</th>
                 <th colSpan={4}>
                   <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'}}>
                     <span>Dodatkowe akcje -</span>
@@ -1603,6 +1744,9 @@ export default function PackingChart({
                 <th onClick={() => handleSort('dribblingCount')} className={styles.sortableHeader}>
                   Drybling/90 {getSortIcon('dribblingCount')}
                 </th>
+                <th onClick={() => handleSort('receiverPassCount')} className={styles.sortableHeader}>
+                  Przyjęć/90 {getSortIcon('receiverPassCount')}
+                </th>
                 <th onClick={() => handleSort(additionalActionsRole === 'sender' ? 'senderP3' : 'receiverP3')} className={styles.sortableHeader}>
                   P3 {getSortIcon(additionalActionsRole === 'sender' ? 'senderP3' : 'receiverP3')}
                 </th>
@@ -1621,7 +1765,7 @@ export default function PackingChart({
             <tbody>
               {tableData.length === 0 ? (
                 <tr>
-                  <td colSpan={tableMetric === 'packing' ? 11 : 13} style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                  <td colSpan={tableMetric === 'packing' ? 12 : 14} style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
                     Brak danych do wyświetlenia
                   </td>
                 </tr>
@@ -1633,10 +1777,21 @@ export default function PackingChart({
                   onClick={() => handleTableRowClick(player.id)}
                 >
                   <td className={styles.playerName}>
-                    {player.name}
-                    {(player as any).birthYear && (
-                      <span className={styles.birthYear}> ({(player as any).birthYear})</span>
-                    )}
+                    <div className={styles.playerInfo}>
+                      <div className={styles.playerNameRow}>
+                        {player.name}
+                        {(player as any).birthYear && (
+                          <span className={styles.birthYear}> ({(player as any).birthYear})</span>
+                        )}
+                      </div>
+                      <div className={styles.playerPositions}>
+                        {getAllPlayerPositions(player.id).map((position, idx) => (
+                          <span key={idx} className={styles.positionBadge}>
+                            {position}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </td>
                   {/* Podania - dynamiczne w zależności od wybranej metryki */}
                   {tableMetric === 'packing' && (
@@ -1725,6 +1880,7 @@ export default function PackingChart({
                   {/* Aktywność */}
                   <td>{formatValuePer90((player as any).passCount, player.actualMinutes, 1)}</td>
                   <td>{formatValuePer90((player as any).dribblingCount, player.actualMinutes, 1)}</td>
+                  <td>{formatValuePer90((player as any).receiverPassCount, player.actualMinutes, 1)}</td>
                   {/* Dodatkowe akcje - dynamiczne w zależności od roli */}
                   <td>
                     {additionalActionsRole === 'sender' 

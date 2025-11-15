@@ -4,6 +4,8 @@
 import React, { memo, useEffect } from "react";
 import FootballPitch from "../FootballPitch/FootballPitch";
 import ActionModal from "../ActionModal/ActionModal";
+import RegainActionModal from "../RegainActionModal/RegainActionModal";
+import LosesActionModal from "../LosesActionModal/LosesActionModal";
 import styles from "./ActionSection.module.css";
 import { Player, TeamInfo } from "@/types";
 
@@ -46,6 +48,10 @@ export interface ActionSectionProps {
   setIsPenaltyAreaEntry: React.Dispatch<React.SetStateAction<boolean>>;
   isSecondHalf: boolean;
   setIsSecondHalf: React.Dispatch<React.SetStateAction<boolean>>;
+  isBelow8sActive: boolean;
+  setIsBelow8sActive: React.Dispatch<React.SetStateAction<boolean>>;
+  playersBehindBall: number;
+  setPlayersBehindBall: React.Dispatch<React.SetStateAction<number>>;
   handleSaveAction: () => void;
   resetActionState: () => void;
   resetActionPoints: () => void;
@@ -59,6 +65,8 @@ export interface ActionSectionProps {
   onModeChange?: (mode: "attack" | "defense") => void;
   selectedDefensePlayers?: string[];
   onDefensePlayersChange?: (playerIds: string[]) => void;
+  // Prop dla kategorii akcji
+  actionCategory?: "packing" | "regain" | "loses";
 }
 
 const ActionSection = memo(function ActionSection({
@@ -95,6 +103,10 @@ const ActionSection = memo(function ActionSection({
   setIsPenaltyAreaEntry,
   isSecondHalf,
   setIsSecondHalf,
+  isBelow8sActive,
+  setIsBelow8sActive,
+  playersBehindBall,
+  setPlayersBehindBall,
   handleSaveAction,
   resetActionState,
   resetActionPoints,
@@ -108,6 +120,8 @@ const ActionSection = memo(function ActionSection({
   onModeChange,
   selectedDefensePlayers = [],
   onDefensePlayersChange,
+  // Prop dla kategorii akcji
+  actionCategory = "packing",
 }: ActionSectionProps) {
   // Dodajemy efekt, który będzie monitorował wartości stref
   useEffect(() => {
@@ -160,91 +174,264 @@ const ActionSection = memo(function ActionSection({
         onZoneSelect={handlePitchZoneSelect}
         startZone={startZone}
         endZone={endZone}
+        actionCategory={actionCategory}
       />
       
-      <ActionModal
-        isOpen={isActionModalOpen}
-        onClose={() => {
-          setIsActionModalOpen(false);
-          resetActionState();
-        }}
-        players={players}
-        selectedPlayerId={selectedPlayerId}
-        selectedReceiverId={selectedReceiverId}
-        onSenderSelect={setSelectedPlayerId}
-        onReceiverSelect={setSelectedReceiverId}
-        actionMinute={actionMinute}
-        onMinuteChange={setActionMinute}
-        actionType={actionType}
-        onActionTypeChange={setActionType}
-        currentPoints={currentPoints}
-        onAddPoints={handleAddPoints}
-        isP1Active={isP1Active}
-        onP1Toggle={() => {
-          setIsP1Active(!isP1Active);
-          if (!isP1Active) {
-            setIsP2Active(false);
-            setIsP3Active(false);
-          }
-        }}
-        isP2Active={isP2Active}
-        onP2Toggle={() => {
-          setIsP2Active(!isP2Active);
-          if (!isP2Active) {
-            setIsP1Active(false);
-            setIsP3Active(false);
-          }
-        }}
-        isP3Active={isP3Active}
-        onP3Toggle={() => {
-          setIsP3Active(!isP3Active);
-          if (!isP3Active) {
-            setIsP1Active(false);
-            setIsP2Active(false);
-          }
-        }}
-        isContact1Active={isContact1Active}
-        onContact1Toggle={() => {
-          setIsContact1Active(!isContact1Active);
-          if (!isContact1Active) {
-            setIsContact2Active(false);
-            setIsContact3PlusActive(false);
-          }
-        }}
-        isContact2Active={isContact2Active}
-        onContact2Toggle={() => {
-          setIsContact2Active(!isContact2Active);
-          if (!isContact2Active) {
-            setIsContact1Active(false);
-            setIsContact3PlusActive(false);
-          }
-        }}
-        isContact3PlusActive={isContact3PlusActive}
-        onContact3PlusToggle={() => {
-          setIsContact3PlusActive(!isContact3PlusActive);
-          if (!isContact3PlusActive) {
-            setIsContact1Active(false);
-            setIsContact2Active(false);
-          }
-        }}
-        isShot={isShot}
-        onShotToggle={setIsShot}
-        isGoal={isGoal}
-        onGoalToggle={setIsGoal}
-        isPenaltyAreaEntry={isPenaltyAreaEntry}
-        onPenaltyAreaEntryToggle={setIsPenaltyAreaEntry}
-        isSecondHalf={isSecondHalf}
-        onSecondHalfToggle={handleSecondHalfToggle}
-        onSaveAction={handleSaveActionWrapper}
-        onReset={resetActionState}
-        onResetPoints={resetActionPoints}
-        matchInfo={matchInfo}
-        // Nowe propsy dla trybu unpacking
-        mode={mode}
-        onModeChange={onModeChange}
-        selectedDefensePlayers={selectedDefensePlayers}
-        onDefensePlayersChange={onDefensePlayersChange}
-      />
+      {actionCategory === "regain" ? (
+        <RegainActionModal
+          isOpen={isActionModalOpen}
+          onClose={() => {
+            setIsActionModalOpen(false);
+            resetActionState();
+          }}
+          players={players}
+          selectedPlayerId={selectedPlayerId}
+          selectedReceiverId={selectedReceiverId}
+          onSenderSelect={setSelectedPlayerId}
+          onReceiverSelect={setSelectedReceiverId}
+          actionMinute={actionMinute}
+          onMinuteChange={setActionMinute}
+          actionType={actionType}
+          onActionTypeChange={setActionType}
+          currentPoints={currentPoints}
+          onAddPoints={handleAddPoints}
+          isP1Active={isP1Active}
+          onP1Toggle={() => {
+            setIsP1Active(!isP1Active);
+            if (!isP1Active) {
+              setIsP2Active(false);
+              setIsP3Active(false);
+            }
+          }}
+          isP2Active={isP2Active}
+          onP2Toggle={() => {
+            setIsP2Active(!isP2Active);
+            if (!isP2Active) {
+              setIsP1Active(false);
+              setIsP3Active(false);
+            }
+          }}
+          isP3Active={isP3Active}
+          onP3Toggle={() => {
+            setIsP3Active(!isP3Active);
+            if (!isP3Active) {
+              setIsP1Active(false);
+              setIsP2Active(false);
+            }
+          }}
+          isContact1Active={isContact1Active}
+          onContact1Toggle={() => {
+            setIsContact1Active(!isContact1Active);
+            if (!isContact1Active) {
+              setIsContact2Active(false);
+              setIsContact3PlusActive(false);
+            }
+          }}
+          isContact2Active={isContact2Active}
+          onContact2Toggle={() => {
+            setIsContact2Active(!isContact2Active);
+            if (!isContact2Active) {
+              setIsContact1Active(false);
+              setIsContact3PlusActive(false);
+            }
+          }}
+          isContact3PlusActive={isContact3PlusActive}
+          onContact3PlusToggle={() => {
+            setIsContact3PlusActive(!isContact3PlusActive);
+            if (!isContact3PlusActive) {
+              setIsContact1Active(false);
+              setIsContact2Active(false);
+            }
+          }}
+          isShot={isShot}
+          onShotToggle={setIsShot}
+          isGoal={isGoal}
+          onGoalToggle={setIsGoal}
+          isPenaltyAreaEntry={isPenaltyAreaEntry}
+          onPenaltyAreaEntryToggle={setIsPenaltyAreaEntry}
+          isSecondHalf={isSecondHalf}
+          onSecondHalfToggle={handleSecondHalfToggle}
+          onSaveAction={handleSaveAction}
+          onReset={resetActionState}
+          onResetPoints={resetActionPoints}
+          matchInfo={matchInfo}
+          // Nowy prop dla przycisku "Poniżej 8s"
+          isBelow8sActive={isBelow8sActive}
+          onBelow8sToggle={() => setIsBelow8sActive(!isBelow8sActive)}
+          // Nowy prop dla liczby zawodników za piłką
+          playersBehindBall={playersBehindBall}
+          onPlayersBehindBallChange={setPlayersBehindBall}
+        />
+      ) : actionCategory === "loses" ? (
+        <LosesActionModal
+          isOpen={isActionModalOpen}
+          onClose={() => {
+            setIsActionModalOpen(false);
+            resetActionState();
+          }}
+          players={players}
+          selectedPlayerId={selectedPlayerId}
+          selectedReceiverId={selectedReceiverId}
+          onSenderSelect={setSelectedPlayerId}
+          onReceiverSelect={setSelectedReceiverId}
+          actionMinute={actionMinute}
+          onMinuteChange={setActionMinute}
+          actionType={actionType}
+          onActionTypeChange={setActionType}
+          currentPoints={currentPoints}
+          onAddPoints={handleAddPoints}
+          isP1Active={isP1Active}
+          onP1Toggle={() => {
+            setIsP1Active(!isP1Active);
+            if (!isP1Active) {
+              setIsP2Active(false);
+              setIsP3Active(false);
+            }
+          }}
+          isP2Active={isP2Active}
+          onP2Toggle={() => {
+            setIsP2Active(!isP2Active);
+            if (!isP2Active) {
+              setIsP1Active(false);
+              setIsP3Active(false);
+            }
+          }}
+          isP3Active={isP3Active}
+          onP3Toggle={() => {
+            setIsP3Active(!isP3Active);
+            if (!isP3Active) {
+              setIsP1Active(false);
+              setIsP2Active(false);
+            }
+          }}
+          isContact1Active={isContact1Active}
+          onContact1Toggle={() => {
+            setIsContact1Active(!isContact1Active);
+            if (!isContact1Active) {
+              setIsContact2Active(false);
+              setIsContact3PlusActive(false);
+            }
+          }}
+          isContact2Active={isContact2Active}
+          onContact2Toggle={() => {
+            setIsContact2Active(!isContact2Active);
+            if (!isContact2Active) {
+              setIsContact1Active(false);
+              setIsContact3PlusActive(false);
+            }
+          }}
+          isContact3PlusActive={isContact3PlusActive}
+          onContact3PlusToggle={() => {
+            setIsContact3PlusActive(!isContact3PlusActive);
+            if (!isContact3PlusActive) {
+              setIsContact1Active(false);
+              setIsContact2Active(false);
+            }
+          }}
+          isShot={isShot}
+          onShotToggle={setIsShot}
+          isGoal={isGoal}
+          onGoalToggle={setIsGoal}
+          isPenaltyAreaEntry={isPenaltyAreaEntry}
+          onPenaltyAreaEntryToggle={setIsPenaltyAreaEntry}
+          isSecondHalf={isSecondHalf}
+          onSecondHalfToggle={handleSecondHalfToggle}
+          onSaveAction={handleSaveAction}
+          onReset={resetActionState}
+          onResetPoints={resetActionPoints}
+          matchInfo={matchInfo}
+          // Nowy prop dla przycisku "Poniżej 8s"
+          isBelow8sActive={isBelow8sActive}
+          onBelow8sToggle={() => setIsBelow8sActive(!isBelow8sActive)}
+          // Nowy prop dla liczby zawodników za piłką
+          playersBehindBall={playersBehindBall}
+          onPlayersBehindBallChange={setPlayersBehindBall}
+        />
+      ) : (
+        <ActionModal
+          isOpen={isActionModalOpen}
+          onClose={() => {
+            setIsActionModalOpen(false);
+            resetActionState();
+          }}
+          players={players}
+          selectedPlayerId={selectedPlayerId}
+          selectedReceiverId={selectedReceiverId}
+          onSenderSelect={setSelectedPlayerId}
+          onReceiverSelect={setSelectedReceiverId}
+          actionMinute={actionMinute}
+          onMinuteChange={setActionMinute}
+          actionType={actionType}
+          onActionTypeChange={setActionType}
+          currentPoints={currentPoints}
+          onAddPoints={handleAddPoints}
+          isP1Active={isP1Active}
+          onP1Toggle={() => {
+            setIsP1Active(!isP1Active);
+            if (!isP1Active) {
+              setIsP2Active(false);
+              setIsP3Active(false);
+            }
+          }}
+          isP2Active={isP2Active}
+          onP2Toggle={() => {
+            setIsP2Active(!isP2Active);
+            if (!isP2Active) {
+              setIsP1Active(false);
+              setIsP3Active(false);
+            }
+          }}
+          isP3Active={isP3Active}
+          onP3Toggle={() => {
+            setIsP3Active(!isP3Active);
+            if (!isP3Active) {
+              setIsP1Active(false);
+              setIsP2Active(false);
+            }
+          }}
+          isContact1Active={isContact1Active}
+          onContact1Toggle={() => {
+            setIsContact1Active(!isContact1Active);
+            if (!isContact1Active) {
+              setIsContact2Active(false);
+              setIsContact3PlusActive(false);
+            }
+          }}
+          isContact2Active={isContact2Active}
+          onContact2Toggle={() => {
+            setIsContact2Active(!isContact2Active);
+            if (!isContact2Active) {
+              setIsContact1Active(false);
+              setIsContact3PlusActive(false);
+            }
+          }}
+          isContact3PlusActive={isContact3PlusActive}
+          onContact3PlusToggle={() => {
+            setIsContact3PlusActive(!isContact3PlusActive);
+            if (!isContact3PlusActive) {
+              setIsContact1Active(false);
+              setIsContact2Active(false);
+            }
+          }}
+          isShot={isShot}
+          onShotToggle={setIsShot}
+          isGoal={isGoal}
+          onGoalToggle={setIsGoal}
+          isPenaltyAreaEntry={isPenaltyAreaEntry}
+          onPenaltyAreaEntryToggle={setIsPenaltyAreaEntry}
+          isSecondHalf={isSecondHalf}
+          onSecondHalfToggle={handleSecondHalfToggle}
+          onSaveAction={handleSaveAction}
+          onReset={resetActionState}
+          onResetPoints={resetActionPoints}
+          matchInfo={matchInfo}
+          // Nowe propsy dla trybu unpacking
+          mode={mode}
+          onModeChange={onModeChange}
+          selectedDefensePlayers={selectedDefensePlayers}
+          onDefensePlayersChange={onDefensePlayersChange}
+        />
+      )}
     </section>
   );
 });

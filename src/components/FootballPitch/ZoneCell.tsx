@@ -13,6 +13,7 @@ export interface ZoneCellProps {
   isFirstSelection: boolean;
   isSecondSelection: boolean;
   onSelect: (zoneIndex: number) => void;
+  actionCategory?: "packing" | "regain" | "loses";
 }
 
 const ZoneCell = memo(function ZoneCell({
@@ -23,6 +24,7 @@ const ZoneCell = memo(function ZoneCell({
   isFirstSelection,
   isSecondSelection,
   onSelect,
+  actionCategory = "packing",
 }: ZoneCellProps) {
   // Pomocnicza funkcja do określenia klasy CSS na podstawie stanu selekcji
   const getSelectionClass = () => {
@@ -66,8 +68,10 @@ const ZoneCell = memo(function ZoneCell({
           <span className={styles.zoneName}>{zoneName}</span>
         </div>
       )}
-      {isFirstSelection && <span className={styles.actionText}>PASS</span>}
-      {isSecondSelection && <span className={styles.actionText}>RECEIVE</span>}
+      {isFirstSelection && actionCategory === "packing" && <span className={styles.actionText}>PASS</span>}
+      {isSecondSelection && actionCategory === "packing" && <span className={styles.actionText}>RECEIVE</span>}
+      {isFirstSelection && actionCategory === "regain" && <span className={styles.actionText}>REGAIN</span>}
+      {isFirstSelection && actionCategory === "loses" && <span className={styles.actionText}>LOSES</span>}
     </div>
   );
 });
