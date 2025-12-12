@@ -53,6 +53,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   const [actionMinute, setActionMinute] = useState<number>(1);
   const [actionType, setActionType] = useState<"pass" | "dribble">("pass");
   const [currentPoints, setCurrentPoints] = useState<number>(0);
+  const [isP0StartActive, setIsP0StartActive] = useState<boolean>(false);
+  const [isP1StartActive, setIsP1StartActive] = useState<boolean>(false);
+  const [isP2StartActive, setIsP2StartActive] = useState<boolean>(false);
+  const [isP3StartActive, setIsP3StartActive] = useState<boolean>(false);
+  const [isP0Active, setIsP0Active] = useState<boolean>(false);
   const [isP1Active, setIsP1Active] = useState<boolean>(false);
   const [isP2Active, setIsP2Active] = useState<boolean>(false);
   const [isP3Active, setIsP3Active] = useState<boolean>(false);
@@ -69,32 +74,55 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   // Dodaj stan isBelow8sActive dla regain
   const [isBelow8sActive, setIsBelow8sActive] = useState<boolean>(false);
   
-  // Dodaj stan playersBehindBall dla regain
+  // Dodaj stan isReaction5sActive dla loses
+  const [isReaction5sActive, setIsReaction5sActive] = useState<boolean>(false);
+  
+  // Dodaj stan isPMAreaActive dla loses
+  const [isPMAreaActive, setIsPMAreaActive] = useState<boolean>(false);
+  
+  // Dodaj stan playersBehindBall dla regain (liczba partnerów przed piłką)
   const [playersBehindBall, setPlayersBehindBall] = useState<number>(0);
+  
+  // Dodaj stan opponentsBeforeBall dla regain (liczba przeciwników przed piłką)
+  const [opponentsBeforeBall, setOpponentsBeforeBall] = useState<number>(0);
   
   // Dane o akcjach
   const [actions, setActions] = useState<Action[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Pobieranie akcji przy zmianie meczu
-  useEffect(() => {
-    if (matchInfo?.matchId) {
-      loadActionsForMatch(matchInfo.matchId);
+  // Funkcja synchronizująca wzbogacone akcje z bazą Firebase
+  const syncEnrichedActions = useCallback(async (matchId: string, enrichedActions: Action[]) => {
+    // Sprawdzamy, czy mamy jakieś akcje do synchronizacji
+    if (!matchId || !enrichedActions.length) return;
+
+    try {
+      // Pobierz aktualny dokument meczu
+      const matchRef = doc(getDB(), "matches", matchId);
       
-      // Sprawdź, czy jest zapisana wartość połowy w localStorage
-      const savedHalf = localStorage.getItem('currentHalf');
-      if (savedHalf) {
-        const isP2 = savedHalf === 'P2';
-        setIsSecondHalf(isP2);
+      // Określamy kolekcję na podstawie kategorii akcji
+      let collectionField: string;
+      if (actionCategory === "regain") {
+        collectionField = "actions_regain";
+      } else if (actionCategory === "loses") {
+        collectionField = "actions_loses";
+      } else {
+        collectionField = "actions_packing";
       }
-    } else {
-      // Resetuj akcje jeśli nie ma wybranego meczu
-      setActions([]);
+      
+      // Aktualizuj dokument z wzbogaconymi akcjami
+      await updateDoc(matchRef, {
+        [collectionField]: enrichedActions.map(action => removeUndefinedFields(action))
+      });
+
+    } catch (error) {
+      console.error("❌ Błąd podczas synchronizacji uzupełnionych akcji:", error);
+      // Obsługa błędu wewnętrznego stanu Firestore
+      await handleFirestoreError(error, getDB());
     }
-  }, [matchInfo?.matchId]);
+  }, [actionCategory]);
 
   // Funkcja ładująca akcje dla danego meczu
-  const loadActionsForMatch = async (matchId: string) => {
+  const loadActionsForMatch = useCallback(async (matchId: string) => {
     try {
       setIsLoading(true);
       
@@ -173,7 +201,24 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [actionCategory, players, syncEnrichedActions]);
+
+  // Pobieranie akcji przy zmianie meczu lub kategorii akcji
+  useEffect(() => {
+    if (matchInfo?.matchId) {
+      loadActionsForMatch(matchInfo.matchId);
+      
+      // Sprawdź, czy jest zapisana wartość połowy w localStorage
+      const savedHalf = localStorage.getItem('currentHalf');
+      if (savedHalf) {
+        const isP2 = savedHalf === 'P2';
+        setIsSecondHalf(isP2);
+      }
+    } else {
+      // Resetuj akcje jeśli nie ma wybranego meczu
+      setActions([]);
+    }
+  }, [matchInfo?.matchId, actionCategory, loadActionsForMatch]);
 
   // Obsługa wyboru strefy - może przyjmować różną liczbę argumentów
   const handleZoneSelect = useCallback((
@@ -274,7 +319,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         id: uuidv4(), // Generujemy unikalny identyfikator
         matchId: matchInfoArg.matchId,
         teamId: matchInfoArg.team, // Używamy team zamiast teamId dla spójności
-        senderId: (actionCategory === "regain" || actionCategory === "loses") ? selectedPlayerId : selectedPlayerId,
+        senderId: selectedPlayerId || '',
         receiverId: (actionCategory === "regain" || actionCategory === "loses") ? undefined : (actionType === "pass" ? selectedReceiverId || undefined : undefined),
         fromZone: formattedStartZone,
         toZone: formattedEndZone,
@@ -286,6 +331,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         ...(xTStart !== undefined && { xTValueStart: xTStart }),
         ...(xTEnd !== undefined && { xTValueEnd: xTEnd }),
         // PxT będzie obliczane dynamicznie na froncie
+        isP0Start: isP0StartActive,
+        isP1Start: isP1StartActive,
+        isP2Start: isP2StartActive,
+        isP3Start: isP3StartActive,
+        isP0: isP0Active,
         isP1: isP1Active,
         isP2: isP2Active,
         isP3: isP3Active,
@@ -299,7 +349,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         isSecondHalf: isSecondHalfParam !== undefined ? isSecondHalfParam : isSecondHalf,
         // Dodajemy tryb akcji i zawodników obrony
         mode: actionMode,
-        ...(actionMode === "defense" && selectedDefensePlayers && { defensePlayers: selectedDefensePlayers })
+        ...(actionMode === "defense" && selectedDefensePlayers && { defensePlayers: selectedDefensePlayers }),
+        // Dodajemy pola dla regain i loses
+        ...(actionCategory === "regain" && { isBelow8s: isBelow8sActive, playersBehindBall: playersBehindBall, opponentsBeforeBall: opponentsBeforeBall }),
+        ...(actionCategory === "loses" && { isBelow8s: isBelow8sActive, isReaction5s: isReaction5sActive, playersBehindBall: playersBehindBall, opponentsBeforeBall: opponentsBeforeBall })
       };
       
       // Dodajemy dane graczy do akcji
@@ -361,10 +414,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           } else {
             collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
           }
-          const currentActions = matchData[collectionField] || [];
+          const currentActions = (matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
           
           // Upewniamy się, że wszystkie akcje są oczyszczone z undefined
-          const cleanedActions = currentActions.map(action => removeUndefinedFields(action));
+          const cleanedActions = currentActions.map((action: Action) => removeUndefinedFields(action));
           
           // Dodaj nową (oczyszczoną) akcję i aktualizuj dokument
           await updateDoc(matchRef, {
@@ -401,7 +454,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       return false;
     }
-  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf]);
+  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP0StartActive, isP1StartActive, isP2StartActive, isP3StartActive, isP0Active, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf]);
 
   // Usuwanie akcji
   const handleDeleteAction = useCallback(async (actionId: string) => {
@@ -442,13 +495,14 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         }
         
         // Znajdź akcję, którą chcemy usunąć, aby uzyskać senderId i receiverId
-        const actionToDelete = (matchData[collectionField] || []).find(action => action.id === actionId);
+        const currentActions = (matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
+        const actionToDelete = currentActions.find((action: Action) => action.id === actionId);
         
         // Filtrujemy akcje, aby usunąć tę o podanym ID
-        const updatedActions = (matchData[collectionField] || []).filter(action => action.id !== actionId);
+        const updatedActions = currentActions.filter((action: Action) => action.id !== actionId);
         
         // Oczyszczamy wszystkie akcje z wartości undefined
-        const cleanedActions = updatedActions.map(action => removeUndefinedFields(action));
+        const cleanedActions = updatedActions.map((action: Action) => removeUndefinedFields(action));
         
         // Aktualizujemy dokument z oczyszczonymi akcjami
         await updateDoc(matchRef, {
@@ -533,6 +587,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   const resetActionState = useCallback(() => {
     setSelectedZone(null);
     setCurrentPoints(0);
+    setIsP0StartActive(false);
+    setIsP1StartActive(false);
+    setIsP2StartActive(false);
+    setIsP3StartActive(false);
+    setIsP0Active(false);
     setIsP1Active(false);
     setIsP2Active(false);
     setIsP3Active(false);
@@ -553,6 +612,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   // Reset tylko punktów i przełączników (zachowuje zawodników, minutę, połowę)
   const resetActionPoints = useCallback(() => {
     setCurrentPoints(0);
+    setIsP0StartActive(false);
+    setIsP1StartActive(false);
+    setIsP2StartActive(false);
+    setIsP3StartActive(false);
+    setIsP0Active(false);
     setIsP1Active(false);
     setIsP2Active(false);
     setIsP3Active(false);
@@ -563,31 +627,13 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsGoal(false);
     setIsPenaltyAreaEntry(false);
     setIsBelow8sActive(false);
+    setIsReaction5sActive(false);
+    setIsPMAreaActive(false);
     setPlayersBehindBall(0);
+    setOpponentsBeforeBall(0);
     // NIE resetujemy: selectedPlayerId, selectedReceiverId, actionMinute, isSecondHalf, selectedZone
   }, []);
 
-  // Funkcja synchronizująca wzbogacone akcje z bazą Firebase
-  const syncEnrichedActions = useCallback(async (matchId: string, enrichedActions: Action[]) => {
-    // Sprawdzamy, czy mamy jakieś akcje do synchronizacji
-    if (!matchId || !enrichedActions.length) return;
-
-    try {
-      // Pobierz aktualny dokument meczu
-      const matchRef = doc(getDB(), "matches", matchId);
-      
-      // Aktualizuj dokument z wzbogaconymi akcjami
-      await updateDoc(matchRef, {
-        actions_packing: enrichedActions.map(action => removeUndefinedFields(action))
-      });
-      
-
-    } catch (error) {
-      console.error("❌ Błąd podczas synchronizacji uzupełnionych akcji:", error);
-      // Obsługa błędu wewnętrznego stanu Firestore
-      await handleFirestoreError(error, getDB());
-    }
-  }, []);
 
   return {
     // Stany
@@ -598,6 +644,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     currentPoints,
     actionMinute,
     actionType,
+    isP0StartActive,
+    isP1StartActive,
+    isP2StartActive,
+    isP3StartActive,
+    isP0Active,
     isP1Active,
     isP2Active,
     isP3Active,
@@ -616,6 +667,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setCurrentPoints,
     setActionMinute,
     setActionType,
+    setIsP0StartActive,
+    setIsP1StartActive,
+    setIsP2StartActive,
+    setIsP3StartActive,
+    setIsP0Active,
     setIsP1Active,
     setIsP2Active,
     setIsP3Active,
@@ -628,8 +684,14 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsSecondHalf: setCurrentHalf,
     isBelow8sActive,
     setIsBelow8sActive,
+    isReaction5sActive,
+    setIsReaction5sActive,
+    isPMAreaActive,
+    setIsPMAreaActive,
     playersBehindBall,
     setPlayersBehindBall,
+    opponentsBeforeBall,
+    setOpponentsBeforeBall,
     setActions,
     
     // Funkcje

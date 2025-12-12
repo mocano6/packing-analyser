@@ -28,6 +28,16 @@ export interface ActionSectionProps {
   setActionType: (type: "pass" | "dribble") => void;
   currentPoints: number;
   setCurrentPoints: React.Dispatch<React.SetStateAction<number>>;
+  isP0StartActive: boolean;
+  setIsP0StartActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isP1StartActive: boolean;
+  setIsP1StartActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isP2StartActive: boolean;
+  setIsP2StartActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isP3StartActive: boolean;
+  setIsP3StartActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isP0Active: boolean;
+  setIsP0Active: React.Dispatch<React.SetStateAction<boolean>>;
   isP1Active: boolean;
   setIsP1Active: React.Dispatch<React.SetStateAction<boolean>>;
   isP2Active: boolean;
@@ -50,8 +60,14 @@ export interface ActionSectionProps {
   setIsSecondHalf: React.Dispatch<React.SetStateAction<boolean>>;
   isBelow8sActive: boolean;
   setIsBelow8sActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isReaction5sActive: boolean;
+  setIsReaction5sActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isPMAreaActive: boolean;
+  setIsPMAreaActive: React.Dispatch<React.SetStateAction<boolean>>;
   playersBehindBall: number;
   setPlayersBehindBall: React.Dispatch<React.SetStateAction<number>>;
+  opponentsBeforeBall: number;
+  setOpponentsBeforeBall: React.Dispatch<React.SetStateAction<number>>;
   handleSaveAction: () => void;
   resetActionState: () => void;
   resetActionPoints: () => void;
@@ -83,6 +99,16 @@ const ActionSection = memo(function ActionSection({
   setActionType,
   currentPoints,
   setCurrentPoints,
+  isP0StartActive,
+  setIsP0StartActive,
+  isP1StartActive,
+  setIsP1StartActive,
+  isP2StartActive,
+  setIsP2StartActive,
+  isP3StartActive,
+  setIsP3StartActive,
+  isP0Active,
+  setIsP0Active,
   isP1Active,
   setIsP1Active,
   isP2Active,
@@ -105,8 +131,14 @@ const ActionSection = memo(function ActionSection({
   setIsSecondHalf,
   isBelow8sActive,
   setIsBelow8sActive,
+  isReaction5sActive,
+  setIsReaction5sActive,
+  isPMAreaActive,
+  setIsPMAreaActive,
   playersBehindBall,
   setPlayersBehindBall,
+  opponentsBeforeBall,
+  setOpponentsBeforeBall,
   handleSaveAction,
   resetActionState,
   resetActionPoints,
@@ -258,9 +290,12 @@ const ActionSection = memo(function ActionSection({
           // Nowy prop dla przycisku "Poniżej 8s"
           isBelow8sActive={isBelow8sActive}
           onBelow8sToggle={() => setIsBelow8sActive(!isBelow8sActive)}
-          // Nowy prop dla liczby zawodników za piłką
+          // Nowy prop dla liczby partnerów przed piłką
           playersBehindBall={playersBehindBall}
           onPlayersBehindBallChange={setPlayersBehindBall}
+          // Nowy prop dla liczby przeciwników przed piłką
+          opponentsBeforeBall={opponentsBeforeBall}
+          onOpponentsBeforeBallChange={setOpponentsBeforeBall}
         />
       ) : actionCategory === "loses" ? (
         <LosesActionModal
@@ -343,9 +378,15 @@ const ActionSection = memo(function ActionSection({
           // Nowy prop dla przycisku "Poniżej 8s"
           isBelow8sActive={isBelow8sActive}
           onBelow8sToggle={() => setIsBelow8sActive(!isBelow8sActive)}
-          // Nowy prop dla liczby zawodników za piłką
+          // Nowy prop dla przycisku "Reakcja 5s"
+          isReaction5sActive={isReaction5sActive}
+          onReaction5sToggle={() => setIsReaction5sActive(!isReaction5sActive)}
+          // Nowy prop dla liczby partnerów przed piłką
           playersBehindBall={playersBehindBall}
           onPlayersBehindBallChange={setPlayersBehindBall}
+          // Nowy prop dla liczby przeciwników przed piłką
+          opponentsBeforeBall={opponentsBeforeBall}
+          onOpponentsBeforeBallChange={setOpponentsBeforeBall}
         />
       ) : (
         <ActionModal
@@ -365,10 +406,56 @@ const ActionSection = memo(function ActionSection({
           onActionTypeChange={setActionType}
           currentPoints={currentPoints}
           onAddPoints={handleAddPoints}
+          isP0StartActive={isP0StartActive}
+          onP0StartToggle={() => {
+            setIsP0StartActive(!isP0StartActive);
+            if (!isP0StartActive) {
+              setIsP1StartActive(false);
+              setIsP2StartActive(false);
+              setIsP3StartActive(false);
+            }
+          }}
+          isP1StartActive={isP1StartActive}
+          onP1StartToggle={() => {
+            setIsP1StartActive(!isP1StartActive);
+            if (!isP1StartActive) {
+              setIsP0StartActive(false);
+              setIsP2StartActive(false);
+              setIsP3StartActive(false);
+            }
+          }}
+          isP2StartActive={isP2StartActive}
+          onP2StartToggle={() => {
+            setIsP2StartActive(!isP2StartActive);
+            if (!isP2StartActive) {
+              setIsP0StartActive(false);
+              setIsP1StartActive(false);
+              setIsP3StartActive(false);
+            }
+          }}
+          isP3StartActive={isP3StartActive}
+          onP3StartToggle={() => {
+            setIsP3StartActive(!isP3StartActive);
+            if (!isP3StartActive) {
+              setIsP0StartActive(false);
+              setIsP1StartActive(false);
+              setIsP2StartActive(false);
+            }
+          }}
+          isP0Active={isP0Active}
+          onP0Toggle={() => {
+            setIsP0Active(!isP0Active);
+            if (!isP0Active) {
+              setIsP1Active(false);
+              setIsP2Active(false);
+              setIsP3Active(false);
+            }
+          }}
           isP1Active={isP1Active}
           onP1Toggle={() => {
             setIsP1Active(!isP1Active);
             if (!isP1Active) {
+              setIsP0Active(false);
               setIsP2Active(false);
               setIsP3Active(false);
             }
@@ -377,6 +464,7 @@ const ActionSection = memo(function ActionSection({
           onP2Toggle={() => {
             setIsP2Active(!isP2Active);
             if (!isP2Active) {
+              setIsP0Active(false);
               setIsP1Active(false);
               setIsP3Active(false);
             }
@@ -385,6 +473,7 @@ const ActionSection = memo(function ActionSection({
           onP3Toggle={() => {
             setIsP3Active(!isP3Active);
             if (!isP3Active) {
+              setIsP0Active(false);
               setIsP1Active(false);
               setIsP2Active(false);
             }

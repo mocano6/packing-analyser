@@ -1,0 +1,329 @@
+/* src/components/PKEntriesPitch/PKEntriesPitch.module.css */
+
+.pitchContainer {
+  width: 95%;
+  margin: 0 auto;
+  aspect-ratio: 1.544;  /* 105m/68m - realne proporcje FIFA */
+  position: relative;
+}
+
+/* Loga zespołów */
+.teamLogos {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 8px 16px;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(4px);
+}
+
+.teamLogo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.teamLogoImage {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  border-radius: 2px;
+}
+
+.teamName {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.vs {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+/* Przycisk przełączania orientacji */
+.flipButton {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 20;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(33, 150, 243, 0.9);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(4px);
+}
+
+.flipButton:hover {
+  background: rgba(33, 150, 243, 1);
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.flipButton:active {
+  transform: scale(0.95);
+}
+
+.flipButton svg {
+  transition: transform 0.3s ease;
+}
+
+/* Instrukcja */
+.instruction {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  background: rgba(33, 150, 243, 0.9);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(4px);
+}
+
+.pitch {
+  width: 100%;
+  height: 100%;
+  background: #bcbcbc;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+  transition: transform 0.4s ease;
+  cursor: crosshair;
+}
+
+/* Klasa dla odbitej orientacji */
+.pitch.flipped {
+  /* Logiczne odbicie - bez wizualnych zmian */
+}
+
+.pitchLines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* LINIA ŚRODKOWA */
+.centerLine {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: rgba(255, 255, 255, 1);
+  transform: translateX(-50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+/* KOŁO ŚRODKOWE */
+.centerCircle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 17.4%;
+  height: 26.9%;
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+/* PUNKT ŚRODKOWY */
+.centerSpot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 10;
+}
+
+/* POLE KARNE LEWE */
+.penaltyAreaLeft {
+  position: absolute;
+  left: 0;
+  top: 20.3%;
+  width: 15.7%;
+  height: 59.4%;
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-left: none;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+/* POLE KARNE PRAWE */
+.penaltyAreaRight {
+  position: absolute;
+  right: 0;
+  top: 20.3%;
+  width: 15.7%;
+  height: 59.4%;
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-right: none;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+/* POLE BRAMKOWE LEWE */
+.goalAreaLeft {
+  position: absolute;
+  left: 0;
+  top: 36.5%;
+  width: 5.2%;
+  height: 26.9%;
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-left: none;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+/* POLE BRAMKOWE PRAWE */
+.goalAreaRight {
+  position: absolute;
+  right: 0;
+  top: 36.5%;
+  width: 5.2%;
+  height: 26.9%;
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-right: none;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+/* ŁUK KARNY LEWY */
+.penaltyArcLeft {
+  position: absolute;
+  left: 10.5%;
+  top: 50%;
+  width: 17.4%;
+  height: 26.9%;
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 15;
+  clip-path: polygon(45% 10%, 100% 10%, 100% 90%, 45% 90%);
+}
+
+/* ŁUK KARNY PRAWY */
+.penaltyArcRight {
+  position: absolute;
+  right: 10.5%;
+  top: 50%;
+  width: 17.4%;
+  height: 26.9%;
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 15;
+  clip-path: polygon(0% 10%, 55% 10%, 55% 90%, 0% 90%);
+}
+
+/* PUNKT KARNY LEWY */
+.penaltySpotLeft {
+  position: absolute;
+  left: 10.5%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 10;
+}
+
+/* PUNKT KARNY PRAWY */
+.penaltySpotRight {
+  position: absolute;
+  right: 10.5%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  transform: translate(50%, -50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  z-index: 10;
+}
+
+/* BRAMKA LEWA */
+.goalLeft {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 0.8%;
+  height: 10.8%;
+  background: rgba(255, 255, 255, 1);
+  transform: translateY(-50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 1);
+}
+
+/* BRAMKA PRAWA */
+.goalRight {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 0.8%;
+  height: 10.8%;
+  background: rgba(255, 255, 255, 1);
+  transform: translateY(-50%);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 1);
+}
+
+/* SVG strzałki - absolutne pozycjonowanie */
+.arrowSvgAbsolute {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+@media (max-width: 600px) {
+  .flipButton {
+    width: 36px;
+    height: 36px;
+    top: 8px;
+    right: 8px;
+  }
+  
+  .flipButton svg {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .instruction {
+    font-size: 11px;
+    padding: 6px 12px;
+  }
+}
+

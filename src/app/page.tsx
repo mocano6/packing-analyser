@@ -39,6 +39,11 @@ import ShotsTable from "@/components/ShotsTable/ShotsTable";
 import ShotFilter from "@/components/ShotFilter/ShotFilter";
 import { useShots } from "@/hooks/useShots";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
+import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
+import { usePKEntries } from "@/hooks/usePKEntries";
+import { PKEntry } from "@/types";
+import PKEntryModal from "@/components/PKEntryModal/PKEntryModal";
+import PKEntriesTable from "@/components/PKEntriesTable/PKEntriesTable";
 
 
 // Rozszerzenie interfejsu Window
@@ -77,7 +82,7 @@ function removeUndefinedFields<T extends object>(obj: T): T {
 }
 
 export default function Page() {
-  const [activeTab, setActiveTab] = React.useState<"packing" | "xg" | "regain" | "loses">("packing");
+  const [activeTab, setActiveTab] = React.useState<"packing" | "xg" | "regain" | "loses" | "pk_entries">("packing");
   // Inicjalizuj selectedTeam z localStorage lub pustym stringiem
   const [selectedTeam, setSelectedTeam] = React.useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -228,6 +233,9 @@ export default function Page() {
 
   // Hook do zarządzania strzałami
   const { shots, addShot, updateShot, deleteShot } = useShots(matchInfo?.matchId || "");
+  
+  // Hook do zarządzania wejściami PK
+  const { pkEntries, addPKEntry, updatePKEntry, deletePKEntry } = usePKEntries(matchInfo?.matchId || "");
 
   // Stan dla filtrowania strzałów
   const [selectedShotCategories, setSelectedShotCategories] = useState<string[]>([
@@ -287,6 +295,17 @@ export default function Page() {
     editingShot?: Shot;
   } | null>(null);
   const [selectedShotId, setSelectedShotId] = useState<string | undefined>();
+  
+  // Stan dla wejść PK
+  const [selectedPKEntryId, setSelectedPKEntryId] = useState<string | undefined>();
+  const [isPKEntryModalOpen, setIsPKEntryModalOpen] = useState(false);
+  const [pkEntryModalData, setPkEntryModalData] = useState<{
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    editingEntry?: PKEntry;
+  } | null>(null);
 
   // Funkcje obsługi strzałów
   const handleShotAdd = (x: number, y: number, xG: number) => {
@@ -337,6 +356,11 @@ export default function Page() {
     currentPoints,
     actionMinute,
     actionType,
+    isP0StartActive,
+    isP1StartActive,
+    isP2StartActive,
+    isP3StartActive,
+    isP0Active,
     isP1Active,
     isP2Active,
     isP3Active,
@@ -351,6 +375,11 @@ export default function Page() {
     setCurrentPoints,
     setActionMinute,
     setActionType,
+    setIsP0StartActive,
+    setIsP1StartActive,
+    setIsP2StartActive,
+    setIsP3StartActive,
+    setIsP0Active,
     setIsP1Active,
     setIsP2Active,
     setIsP3Active,
@@ -362,8 +391,14 @@ export default function Page() {
     setIsPenaltyAreaEntry,
     isBelow8sActive,
     setIsBelow8sActive,
+    isReaction5sActive,
+    setIsReaction5sActive,
+    isPMAreaActive,
+    setIsPMAreaActive,
     playersBehindBall,
     setPlayersBehindBall,
+    opponentsBeforeBall,
+    setOpponentsBeforeBall,
     handleZoneSelect,
     handleSaveAction,
     handleDeleteAction,
@@ -1580,6 +1615,16 @@ export default function Page() {
             setActionType={setActionType}
             currentPoints={currentPoints}
             setCurrentPoints={setCurrentPoints}
+            isP0StartActive={isP0StartActive}
+            setIsP0StartActive={setIsP0StartActive}
+            isP1StartActive={isP1StartActive}
+            setIsP1StartActive={setIsP1StartActive}
+            isP2StartActive={isP2StartActive}
+            setIsP2StartActive={setIsP2StartActive}
+            isP3StartActive={isP3StartActive}
+            setIsP3StartActive={setIsP3StartActive}
+            isP0Active={isP0Active}
+            setIsP0Active={setIsP0Active}
             isP1Active={isP1Active}
             setIsP1Active={setIsP1Active}
             isP2Active={isP2Active}
@@ -1602,8 +1647,14 @@ export default function Page() {
             setIsSecondHalf={handleSecondHalfToggle}
             isBelow8sActive={isBelow8sActive}
             setIsBelow8sActive={setIsBelow8sActive}
+            isReaction5sActive={isReaction5sActive}
+            setIsReaction5sActive={setIsReaction5sActive}
+            isPMAreaActive={isPMAreaActive}
+            setIsPMAreaActive={setIsPMAreaActive}
             playersBehindBall={playersBehindBall}
             setPlayersBehindBall={setPlayersBehindBall}
+            opponentsBeforeBall={opponentsBeforeBall}
+            setOpponentsBeforeBall={setOpponentsBeforeBall}
             handleSaveAction={onSaveAction}
             resetActionState={resetCustomActionState}
             resetActionPoints={resetActionPoints}
@@ -1659,8 +1710,14 @@ export default function Page() {
             setIsSecondHalf={handleSecondHalfToggle}
             isBelow8sActive={isBelow8sActive}
             setIsBelow8sActive={setIsBelow8sActive}
+            isReaction5sActive={isReaction5sActive}
+            setIsReaction5sActive={setIsReaction5sActive}
+            isPMAreaActive={isPMAreaActive}
+            setIsPMAreaActive={setIsPMAreaActive}
             playersBehindBall={playersBehindBall}
             setPlayersBehindBall={setPlayersBehindBall}
+            opponentsBeforeBall={opponentsBeforeBall}
+            setOpponentsBeforeBall={setOpponentsBeforeBall}
             handleSaveAction={onSaveAction}
             resetActionState={resetCustomActionState}
             resetActionPoints={resetActionPoints}
@@ -1716,8 +1773,14 @@ export default function Page() {
             setIsSecondHalf={handleSecondHalfToggle}
             isBelow8sActive={isBelow8sActive}
             setIsBelow8sActive={setIsBelow8sActive}
+            isReaction5sActive={isReaction5sActive}
+            setIsReaction5sActive={setIsReaction5sActive}
+            isPMAreaActive={isPMAreaActive}
+            setIsPMAreaActive={setIsPMAreaActive}
             playersBehindBall={playersBehindBall}
             setPlayersBehindBall={setPlayersBehindBall}
+            opponentsBeforeBall={opponentsBeforeBall}
+            setOpponentsBeforeBall={setOpponentsBeforeBall}
             handleSaveAction={onSaveAction}
             resetActionState={resetCustomActionState}
             resetActionPoints={resetActionPoints}
@@ -1753,6 +1816,71 @@ export default function Page() {
           </>
         )}
 
+        {activeTab === "pk_entries" && (
+          <PKEntriesPitch
+            pkEntries={pkEntries}
+            onEntryAdd={(startX, startY, endX, endY) => {
+              if (!matchInfo?.matchId || !matchInfo?.team) {
+                alert("Wybierz mecz, aby dodać wejście PK!");
+                return;
+              }
+              
+              // Otwórz modal z danymi wejścia PK
+              setPkEntryModalData({ startX, startY, endX, endY });
+              setIsPKEntryModalOpen(true);
+            }}
+            onEntryClick={(entry) => {
+              setSelectedPKEntryId(entry.id);
+              setPkEntryModalData({
+                startX: entry.startX,
+                startY: entry.startY,
+                endX: entry.endX,
+                endY: entry.endY,
+                editingEntry: entry,
+              });
+              setIsPKEntryModalOpen(true);
+            }}
+            selectedEntryId={selectedPKEntryId}
+            matchInfo={matchInfo || undefined}
+            allTeams={allTeams}
+          />
+        )}
+
+        {activeTab === "pk_entries" && pkEntryModalData && (
+          <PKEntryModal
+            isOpen={isPKEntryModalOpen}
+            onClose={() => {
+              setIsPKEntryModalOpen(false);
+              setPkEntryModalData(null);
+              setSelectedPKEntryId(undefined);
+            }}
+            onSave={async (entryData) => {
+              if (pkEntryModalData.editingEntry) {
+                await updatePKEntry(pkEntryModalData.editingEntry.id, entryData);
+              } else {
+                await addPKEntry(entryData);
+              }
+              setIsPKEntryModalOpen(false);
+              setPkEntryModalData(null);
+              setSelectedPKEntryId(undefined);
+            }}
+            onDelete={async (entryId) => {
+              await deletePKEntry(entryId);
+              setIsPKEntryModalOpen(false);
+              setPkEntryModalData(null);
+              setSelectedPKEntryId(undefined);
+            }}
+            editingEntry={pkEntryModalData.editingEntry}
+            startX={pkEntryModalData.startX}
+            startY={pkEntryModalData.startY}
+            endX={pkEntryModalData.endX}
+            endY={pkEntryModalData.endY}
+            matchId={matchInfo?.matchId || ""}
+            players={players}
+            matchInfo={matchInfo}
+          />
+        )}
+
         {activeTab === "packing" || activeTab === "regain" || activeTab === "loses" ? (
           <ActionsTable
             actions={actions}
@@ -1761,6 +1889,30 @@ export default function Page() {
             onEditAction={handleEditAction}
             onRefreshPlayersData={handleRefreshPlayersData}
             youtubeVideoRef={youtubeVideoRef}
+          />
+        ) : activeTab === "pk_entries" ? (
+          <PKEntriesTable
+            pkEntries={pkEntries}
+            players={players}
+            onDeleteEntry={async (entryId) => {
+              await deletePKEntry(entryId);
+            }}
+            onEditEntry={(entry) => {
+              setSelectedPKEntryId(entry.id);
+              setPkEntryModalData({
+                startX: entry.startX,
+                startY: entry.startY,
+                endX: entry.endX,
+                endY: entry.endY,
+                editingEntry: entry,
+              });
+              setIsPKEntryModalOpen(true);
+            }}
+            onVideoTimeClick={(timestamp) => {
+              if (youtubeVideoRef.current) {
+                youtubeVideoRef.current.seekTo(timestamp, true);
+              }
+            }}
           />
         ) : (
           <ShotsTable

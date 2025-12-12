@@ -4,7 +4,7 @@
 import React from "react";
 import styles from "./Tabs.module.css";
 
-export type Tab = "packing" | "xg" | "regain" | "loses";
+export type Tab = "packing" | "xg" | "regain" | "loses" | "pk_entries";
 
 export interface TabsProps {
   activeTab: Tab;
@@ -71,6 +71,18 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
           id="loses-tab"
         >
           Loses
+        </button>
+        <button
+          className={`${styles.tab} ${
+            activeTab === "pk_entries" ? styles.active : ""
+          }`}
+          onClick={handleTabChange("pk_entries")}
+          role="tab"
+          aria-selected={activeTab === "pk_entries"}
+          aria-controls="pk_entries-panel"
+          id="pk_entries-tab"
+        >
+          Wejścia PK
         </button>
       </div>
     </div>

@@ -49,6 +49,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
     linePlayers: [] as string[],
     linePlayersCount: 0,
     pkPlayersCount: 0,
+    isContact1: false,
+    isContact2: false,
+    isContact3Plus: false,
   });
 
   // Filtrowanie zawodników grających w danym meczu (podobnie jak w ActionModal)
@@ -131,6 +134,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
         linePlayers: (editingShot as any)?.linePlayers || [],
         linePlayersCount: (editingShot as any)?.linePlayersCount || 0,
         pkPlayersCount: (editingShot as any)?.pkPlayersCount || 0,
+        isContact1: editingShot.isContact1 || false,
+        isContact2: editingShot.isContact2 || false,
+        isContact3Plus: editingShot.isContact3Plus || false,
       });
     } else {
       // Automatyczne wykrywanie kontekstu zespołu na podstawie pozycji
@@ -155,6 +161,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
         linePlayers: [],
         linePlayersCount: 0,
         pkPlayersCount: 0,
+        isContact1: false,
+        isContact2: false,
+        isContact3Plus: false,
       });
     }
   }, [editingShot, isOpen, matchInfo, xG, x]);
@@ -180,14 +189,14 @@ const ShotModal: React.FC<ShotModalProps> = ({
   };
 
   const handleShotTypeSelect = (shotType: "on_target" | "off_target" | "blocked" | "goal") => {
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       shotType,
-      blockingPlayers: shotType === "blocked" ? formData.blockingPlayers : [], // Reset jeśli nie zablokowany
-      linePlayers: shotType === "blocked" ? formData.linePlayers : [], // Reset jeśli nie zablokowany
-      linePlayersCount: shotType === "blocked" ? formData.linePlayersCount : 0, // Reset jeśli nie zablokowany
-      pkPlayersCount: shotType === "blocked" ? formData.pkPlayersCount : 0, // Reset jeśli nie zablokowany
-    });
+      blockingPlayers: shotType === "blocked" ? prev.blockingPlayers : [], // Reset jeśli nie zablokowany
+      linePlayers: shotType === "blocked" ? prev.linePlayers : [], // Reset jeśli nie zablokowany
+      linePlayersCount: shotType === "blocked" ? prev.linePlayersCount : 0, // Reset jeśli nie zablokowany
+      pkPlayersCount: shotType === "blocked" ? prev.pkPlayersCount : 0, // Reset jeśli nie zablokowany
+    }));
   };
 
   const handleTeamContextChange = (teamContext: "attack" | "defense") => {
@@ -317,6 +326,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
       linePlayers: formData.linePlayers,
       linePlayersCount: formData.linePlayersCount,
       pkPlayersCount: formData.pkPlayersCount,
+      isContact1: formData.isContact1,
+      isContact2: formData.isContact2,
+      isContact3Plus: formData.isContact3Plus,
       matchId,
     });
 
@@ -585,30 +597,113 @@ const ShotModal: React.FC<ShotModalProps> = ({
               <button
                 type="button"
                 className={`${styles.shotTypeButton} ${formData.shotType === "on_target" ? styles.active : ""}`}
-                onClick={() => handleShotTypeSelect("on_target")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleShotTypeSelect("on_target");
+                }}
               >
                 Celny
               </button>
               <button
                 type="button"
                 className={`${styles.shotTypeButton} ${formData.shotType === "off_target" ? styles.active : ""}`}
-                onClick={() => handleShotTypeSelect("off_target")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleShotTypeSelect("off_target");
+                }}
               >
                 Niecelny
               </button>
               <button
                 type="button"
                 className={`${styles.shotTypeButton} ${formData.shotType === "blocked" ? styles.active : ""}`}
-                onClick={() => handleShotTypeSelect("blocked")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleShotTypeSelect("blocked");
+                }}
               >
                 Zablokowany
               </button>
               <button
                 type="button"
                 className={`${styles.shotTypeButton} ${styles.goalButton} ${formData.shotType === "goal" ? styles.active : ""}`}
-                onClick={() => handleShotTypeSelect("goal")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleShotTypeSelect("goal");
+                }}
               >
                 Gol ⚽
+              </button>
+            </div>
+          </div>
+
+          {/* Liczba kontaktów */}
+          <div className={styles.fieldGroup}>
+            <label>Liczba kontaktów:</label>
+            <div className={styles.actionTypeButtons}>
+              <button
+                type="button"
+                className={`${styles.actionTypeButton} ${formData.isContact1 ? styles.active : ""}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setFormData(prev => {
+                    const newIsContact1 = !prev.isContact1;
+                    return {
+                      ...prev,
+                      isContact1: newIsContact1,
+                      // Wyłącz inne opcje kontaktów gdy włączamy 1T
+                      isContact2: newIsContact1 ? false : prev.isContact2,
+                      isContact3Plus: newIsContact1 ? false : prev.isContact3Plus,
+                    };
+                  });
+                }}
+              >
+                1T
+              </button>
+              <button
+                type="button"
+                className={`${styles.actionTypeButton} ${formData.isContact2 ? styles.active : ""}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setFormData(prev => {
+                    const newIsContact2 = !prev.isContact2;
+                    return {
+                      ...prev,
+                      isContact2: newIsContact2,
+                      // Wyłącz inne opcje kontaktów gdy włączamy 2T
+                      isContact1: newIsContact2 ? false : prev.isContact1,
+                      isContact3Plus: newIsContact2 ? false : prev.isContact3Plus,
+                    };
+                  });
+                }}
+              >
+                2T
+              </button>
+              <button
+                type="button"
+                className={`${styles.actionTypeButton} ${formData.isContact3Plus ? styles.active : ""}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setFormData(prev => {
+                    const newIsContact3Plus = !prev.isContact3Plus;
+                    return {
+                      ...prev,
+                      isContact3Plus: newIsContact3Plus,
+                      // Wyłącz inne opcje kontaktów gdy włączamy 3T+
+                      isContact1: newIsContact3Plus ? false : prev.isContact1,
+                      isContact2: newIsContact3Plus ? false : prev.isContact2,
+                    };
+                  });
+                }}
+              >
+                3T+
               </button>
             </div>
           </div>

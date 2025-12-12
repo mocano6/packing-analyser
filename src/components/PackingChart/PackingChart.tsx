@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useEffect } from 'react';
+import Link from 'next/link';
 import { 
   PieChart,
   Pie,
@@ -1779,7 +1780,16 @@ export default function PackingChart({
                   <td className={styles.playerName}>
                     <div className={styles.playerInfo}>
                       <div className={styles.playerNameRow}>
-                        {player.name}
+                        <Link
+                          href={`/zawodnicy/${player.id}`}
+                          className={styles.playerNameLink}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                          }}
+                          title="Zobacz szczegóły zawodnika"
+                        >
+                          {player.name}
+                        </Link>
                         {(player as any).birthYear && (
                           <span className={styles.birthYear}> ({(player as any).birthYear})</span>
                         )}

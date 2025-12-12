@@ -23,6 +23,16 @@ interface ActionModalProps {
   onActionTypeChange: (type: "pass" | "dribble") => void;
   currentPoints: number;
   onAddPoints: (points: number) => void;
+  isP0StartActive: boolean;
+  onP0StartToggle: () => void;
+  isP1StartActive: boolean;
+  onP1StartToggle: () => void;
+  isP2StartActive: boolean;
+  onP2StartToggle: () => void;
+  isP3StartActive: boolean;
+  onP3StartToggle: () => void;
+  isP0Active: boolean;
+  onP0Toggle: () => void;
   isP1Active: boolean;
   onP1Toggle: () => void;
   isP2Active: boolean;
@@ -72,6 +82,16 @@ const ActionModal: React.FC<ActionModalProps> = ({
   onActionTypeChange,
   currentPoints,
   onAddPoints,
+  isP0StartActive,
+  onP0StartToggle,
+  isP1StartActive,
+  onP1StartToggle,
+  isP2StartActive,
+  onP2StartToggle,
+  isP3StartActive,
+  onP3StartToggle,
+  isP0Active,
+  onP0Toggle,
   isP1Active,
   onP1Toggle,
   isP2Active,
@@ -120,18 +140,22 @@ const ActionModal: React.FC<ActionModalProps> = ({
 
   // W trybie unpacking automatycznie synchronizujemy punkty za "Minięty przeciwnik" z liczbą zaznaczonych zawodników
   useEffect(() => {
-    if (mode === "defense") {
-      const expectedPoints = selectedDefensePlayers ? selectedDefensePlayers.length : 0;
-      
-      // Jeśli punkty nie odpowiadają liczbie zaznaczonych zawodników, synchronizujemy
-      if (currentPoints !== expectedPoints) {
-        const pointsDifference = expectedPoints - currentPoints;
-        if (pointsDifference !== 0) {
-          onAddPoints(pointsDifference);
-        }
+    // Działamy tylko w trybie defense
+    if (mode !== "defense") {
+      return;
+    }
+    
+    const expectedPoints = selectedDefensePlayers ? selectedDefensePlayers.length : 0;
+    
+    // Jeśli punkty nie odpowiadają liczbie zaznaczonych zawodników, synchronizujemy
+    if (currentPoints !== expectedPoints) {
+      const pointsDifference = expectedPoints - currentPoints;
+      if (pointsDifference !== 0) {
+        onAddPoints(pointsDifference);
       }
     }
-  }, [selectedDefensePlayers, mode, currentPoints, onAddPoints]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDefensePlayers?.length, mode]);
 
   // Określamy czy jesteśmy w trybie edycji
   const isEditMode = !!editingAction;
@@ -380,9 +404,12 @@ const ActionModal: React.FC<ActionModalProps> = ({
   };
 
   return (
-    <div className={styles.modalOverlay} onClick={handleCancel}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <h2>{isEditMode ? "Edytuj akcję" : "Dodaj akcję"}</h2>
+    <div className={styles.overlay} onClick={handleCancel}>
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.header}>
+          <h3>{isEditMode ? "Edytuj akcję" : "Dodaj akcję"}</h3>
+          <button className={styles.closeButton} onClick={handleCancel}>×</button>
+        </div>
         
         {/* Przełącznik trybu Atak/Obrona */}
         {onModeChange && (
@@ -408,7 +435,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
           </div>
         )}
         
-        <div className={styles.form}>
+        <form className={styles.form} onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
           {/* Wybór meczu - tylko w trybie edycji */}
           {isEditMode && allMatches && allMatches.length > 0 && (
             <div className={styles.formGroup}>
@@ -522,9 +549,81 @@ const ActionModal: React.FC<ActionModalProps> = ({
 
           {/* Wszystkie przyciski w jednym rzędzie */}
           <div className={styles.compactButtonsRow}>
-            {/* Połączony element P1, P2, P3 */}
-            <div className={styles.pButtonsGroup}>
-              <div className={styles.pTopRow}>
+            {/* Sekcja "Początek działania:" z przyciskami P0-P3 */}
+            <div className={styles.pSectionContainer}>
+              <div className={styles.pSectionLabel}>Początek działania:</div>
+              <div className={styles.pButtonsGroup}>
+                <div className={styles.pTopRow}>
+                <button
+                  className={`${styles.compactButton} ${
+                    isP0StartActive ? styles.activeButton : ""
+                  }`}
+                  onClick={onP0StartToggle}
+                  title="Aktywuj/Dezaktywuj P0"
+                  aria-pressed={isP0StartActive}
+                  type="button"
+                >
+                  <span className={styles.compactLabel}>P0</span>
+                </button>
+                
+                <button
+                  className={`${styles.compactButton} ${
+                    isP1StartActive ? styles.activeButton : ""
+                  }`}
+                  onClick={onP1StartToggle}
+                  title="Aktywuj/Dezaktywuj P1"
+                  aria-pressed={isP1StartActive}
+                  type="button"
+                >
+                  <span className={styles.compactLabel}>P1</span>
+                </button>
+              </div>
+              
+              <div className={styles.pBottomRow}>
+                <button
+                  className={`${styles.compactButton} ${
+                    isP2StartActive ? styles.activeButton : ""
+                  }`}
+                  onClick={onP2StartToggle}
+                  title="Aktywuj/Dezaktywuj P2"
+                  aria-pressed={isP2StartActive}
+                  type="button"
+                >
+                  <span className={styles.compactLabel}>P2</span>
+                </button>
+                
+                <button
+                  className={`${styles.compactButton} ${
+                    isP3StartActive ? styles.activeButton : ""
+                  }`}
+                  onClick={onP3StartToggle}
+                  title="Aktywuj/Dezaktywuj P3"
+                  aria-pressed={isP3StartActive}
+                  type="button"
+                >
+                  <span className={styles.compactLabel}>P3</span>
+                </button>
+              </div>
+              </div>
+            </div>
+
+            {/* Sekcja "koniec działania:" z przyciskami P0-P3 */}
+            <div className={styles.pSectionContainer}>
+              <div className={styles.pSectionLabel}>Koniec działania:</div>
+              <div className={styles.pButtonsGroup}>
+                <div className={styles.pTopRow}>
+                <button
+                  className={`${styles.compactButton} ${
+                    isP0Active ? styles.activeButton : ""
+                  }`}
+                  onClick={onP0Toggle}
+                  title="Aktywuj/Dezaktywuj P0"
+                  aria-pressed={isP0Active}
+                  type="button"
+                >
+                  <span className={styles.compactLabel}>P0</span>
+                </button>
+                
                 <button
                   className={`${styles.compactButton} ${
                     isP1Active ? styles.activeButton : ""
@@ -536,7 +635,9 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 >
                   <span className={styles.compactLabel}>P1</span>
                 </button>
-                
+              </div>
+              
+              <div className={styles.pBottomRow}>
                 <button
                   className={`${styles.compactButton} ${
                     isP2Active ? styles.activeButton : ""
@@ -548,24 +649,27 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 >
                   <span className={styles.compactLabel}>P2</span>
                 </button>
+                
+                <button
+                  className={`${styles.compactButton} ${
+                    isP3Active ? styles.activeButton : ""
+                  }`}
+                  onClick={onP3Toggle}
+                  title="Aktywuj/Dezaktywuj P3"
+                  aria-pressed={isP3Active}
+                  type="button"
+                >
+                  <span className={styles.compactLabel}>P3</span>
+                </button>
               </div>
-              
-              <button
-                className={`${styles.compactButton} ${styles.pButtonBottom} ${
-                  isP3Active ? styles.activeButton : ""
-                }`}
-                onClick={onP3Toggle}
-                title="Aktywuj/Dezaktywuj P3"
-                aria-pressed={isP3Active}
-                type="button"
-              >
-                <span className={styles.compactLabel}>P3</span>
-              </button>
+              </div>
             </div>
 
             {/* Grupa przycisków kontaktów */}
-            <div className={styles.pButtonsGroup}>
-              <div className={styles.pTopRow}>
+            <div className={styles.pSectionContainer}>
+              <div className={styles.pSectionLabel}>Liczba kontaktów:</div>
+              <div className={styles.pButtonsGroupNoBorder}>
+                <div className={styles.pTopRow}>
                 <button
                   className={`${styles.compactButton} ${
                     isContact1Active ? styles.activeButton : ""
@@ -604,44 +708,35 @@ const ActionModal: React.FC<ActionModalProps> = ({
                   <span className={styles.compactLabel}>3T+</span>
                 </button>
               </div>
+              </div>
             </div>
 
-            {/* Pozostałe przyciski punktów */}
+            {/* Pozostałe przyciski punktów (bez "Minięty przeciwnik") */}
             {ACTION_BUTTONS.map((button, index) => {
-              if (button.type === "points") {
+              if (button.type === "points" && button.label !== "Minięty przeciwnik") {
                 return (
                   <div 
                     key={index} 
                     className={styles.compactPointsButton}
-                    onClick={() => {
-                      // W trybie unpacking wyłączamy przycisk "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
-                      if (mode === "defense" && button.label === "Minięty przeciwnik" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
-                        return; // Nie wykonuj kliknięcia
-                      }
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       handlePointsAdd(button.points);
                     }}
                     title={button.description}
-                    style={{
-                      // W trybie unpacking wyłączamy przycisk "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
-                      pointerEvents: mode === "defense" && button.label === "Minięty przeciwnik" && selectedDefensePlayers && selectedDefensePlayers.length > 0 ? 'none' : 'auto',
-                      opacity: mode === "defense" && button.label === "Minięty przeciwnik" && selectedDefensePlayers && selectedDefensePlayers.length > 0 ? 0.6 : 1
-                    }}
                   >
                     <span className={styles.compactLabel}>{button.label}</span>
                     <span className={styles.pointsValue}><b>{currentPoints}</b></span>
                     <button
                       className={styles.compactSubtractButton}
                       onClick={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
-                        // W trybie unpacking wyłączamy przycisk odejmowania dla "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
-                        if (mode === "defense" && button.label === "Minięty przeciwnik" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
-                          return; // Nie wykonuj kliknięcia
-                        }
                         handlePointsAdd(-button.points);
                       }}
                       title={`Odejmij ${button.points} pkt`}
                       type="button"
-                      disabled={currentPoints < button.points || (mode === "defense" && button.label === "Minięty przeciwnik" && selectedDefensePlayers && selectedDefensePlayers.length > 0)}
+                      disabled={currentPoints < button.points}
                     >
                       −
                     </button>
@@ -651,62 +746,115 @@ const ActionModal: React.FC<ActionModalProps> = ({
               return null;
             })}
 
-            {/* Pozostałe przyciski toggle */}
-            <button
-              className={`${styles.compactButton} ${
-                isPenaltyAreaEntry ? styles.activeButton : ""
-              }`}
-              onClick={handlePenaltyAreaEntryToggle}
-              aria-pressed={isPenaltyAreaEntry}
-              type="button"
-              title="Wejście w pole karne"
-            >
-              <span className={styles.compactLabel}>Wejście PK</span>
-            </button>
+            {/* Przyciski ułożone pionowo: Minięty przeciwnik, Wejście PK, Strzał, Gol */}
+            <div className={styles.verticalButtonsContainer}>
+              {/* Przycisk "Minięty przeciwnik" */}
+              {ACTION_BUTTONS.map((button, index) => {
+                if (button.type === "points" && button.label === "Minięty przeciwnik") {
+                  return (
+                    <div 
+                      key={index} 
+                      className={styles.compactPointsButton}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // W trybie unpacking wyłączamy przycisk "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
+                        if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
+                          return; // Nie wykonuj kliknięcia
+                        }
+                        handlePointsAdd(button.points);
+                      }}
+                      title={button.description}
+                      style={{
+                        // W trybie unpacking wyłączamy przycisk "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
+                        pointerEvents: mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0 ? 'none' : 'auto',
+                        opacity: mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0 ? 0.6 : 1
+                      }}
+                    >
+                      <span className={styles.compactLabel}>{button.label}</span>
+                      <span className={styles.pointsValue}><b>{currentPoints}</b></span>
+                      <button
+                        className={styles.compactSubtractButton}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          // W trybie unpacking wyłączamy przycisk odejmowania dla "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
+                          if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
+                            return; // Nie wykonuj kliknięcia
+                          }
+                          handlePointsAdd(-button.points);
+                        }}
+                        title={`Odejmij ${button.points} pkt`}
+                        type="button"
+                        disabled={currentPoints < button.points || (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0)}
+                      >
+                        −
+                      </button>
+                    </div>
+                  );
+                }
+                return null;
+              })}
 
-            <button
-              className={`${styles.compactButton} ${
-                isShot ? styles.activeButton : ""
-              }`}
-              onClick={handleShotToggle}
-              aria-pressed={isShot}
-              type="button"
-              title="Strzał"
-            >
-              <span className={styles.compactLabel}>Strzał</span>
-            </button>
+              {/* Przycisk "Wejście PK" */}
+              <button
+                className={`${styles.compactButton} ${
+                  isPenaltyAreaEntry ? styles.activeButton : ""
+                }`}
+                onClick={handlePenaltyAreaEntryToggle}
+                aria-pressed={isPenaltyAreaEntry}
+                type="button"
+                title="Wejście w pole karne"
+              >
+                <span className={styles.compactLabel}>Wejście PK</span>
+              </button>
 
-            <button
-              className={`${styles.compactButton} ${
-                isGoal ? styles.activeButton : ""
-              } ${!isShot ? styles.disabledButton : ""}`}
-              onClick={handleGoalToggle}
-              disabled={!isShot}
-              aria-pressed={isGoal}
-              aria-disabled={!isShot}
-              type="button"
-              title={!isShot ? "Musisz najpierw zaznaczyć Strzał" : "Gol"}
-            >
-              <span className={styles.compactLabel}>Gol</span>
-            </button>
+              {/* Przycisk "Strzał" */}
+              <button
+                className={`${styles.compactButton} ${
+                  isShot ? styles.activeButton : ""
+                }`}
+                onClick={handleShotToggle}
+                aria-pressed={isShot}
+                type="button"
+                title="Strzał"
+              >
+                <span className={styles.compactLabel}>Strzał</span>
+              </button>
+
+              {/* Przycisk "Gol" */}
+              <button
+                className={`${styles.compactButton} ${
+                  isGoal ? styles.activeButton : ""
+                } ${!isShot ? styles.disabledButton : ""}`}
+                onClick={handleGoalToggle}
+                disabled={!isShot}
+                aria-pressed={isGoal}
+                aria-disabled={!isShot}
+                type="button"
+                title={!isShot ? "Musisz najpierw zaznaczyć Strzał" : "Gol"}
+              >
+                <span className={styles.compactLabel}>Gol</span>
+              </button>
+            </div>
           </div>
           
           {/* Przyciski kontrolne z polem minuty pomiędzy */}
-          <div className={styles.controlButtons}>
-            <button
-              className={`${styles.controlButton} ${styles.resetButton}`}
-              onClick={handleCancel}
-              type="button"
-            >
-              Anuluj
-            </button>
-            
+          <div className={styles.buttonGroup}>
             <button
               className={`${styles.controlButton} ${styles.clearButton}`}
               onClick={handleReset}
               type="button"
             >
               ⌫ Resetuj
+            </button>
+            
+            <button
+              className={`${styles.controlButton} ${styles.resetButton}`}
+              onClick={handleCancel}
+              type="button"
+            >
+              Anuluj
             </button>
             
             <div className={styles.minuteInput}>
@@ -753,14 +901,14 @@ const ActionModal: React.FC<ActionModalProps> = ({
             </div>
             
             <button
-              className={`${styles.controlButton} ${styles.saveButton}`}
+              className={styles.saveButton}
               onClick={handleSave}
-              type="button"
+              type="submit"
             >
               Zapisz akcję
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

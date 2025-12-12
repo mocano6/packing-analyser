@@ -1,0 +1,278 @@
+/* src/components/PKEntriesTable/PKEntriesTable.module.css */
+/* Styl identyczny z ActionsTable.module.css */
+
+.tableContainer {
+  margin-bottom: 20px;
+}
+
+.matchesTable {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #eaeaea;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: 1fr 80px 0.8fr 1fr 0.8fr 0.8fr 80px;
+  background-color: #fafafa;
+  font-weight: 600;
+  border-bottom: 1px solid #eaeaea;
+  color: #444;
+}
+
+.headerCell {
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  font-family: Arial, sans-serif;
+  font-style: normal;
+  font-weight: 600;
+  color: rgb(68, 68, 68);
+}
+
+.headerCell:hover {
+  background-color: #f0f0f0;
+}
+
+.tableBody {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.actionRow {
+  display: grid;
+  grid-template-columns: 1fr 80px 0.8fr 1fr 0.8fr 0.8fr 80px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.actionRow:last-child {
+  border-bottom: none;
+}
+
+.actionRow:hover {
+  background-color: #f5f9ff;
+}
+
+/* Style dla wierszy połów */
+.firstHalfRow {
+  position: relative;
+  box-shadow: inset 6px 0 0 0 #16a34a;
+}
+
+.secondHalfRow {
+  position: relative;
+  box-shadow: inset 6px 0 0 0 #ea580c;
+}
+
+.cell {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #333;
+  font-family: Arial, sans-serif;
+}
+
+.cellActions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  padding: 14px 8px;
+}
+
+.deleteBtn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  color: #f44336;
+  opacity: 0;
+}
+
+.editBtn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  color: #2196f3;
+  opacity: 0;
+}
+
+.actionRow:hover .deleteBtn,
+.actionRow:hover .editBtn {
+  opacity: 1;
+}
+
+.deleteBtn:hover {
+  background-color: #ffebee;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.editBtn:hover {
+  background-color: #e3f2fd;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+/* Style dla oznaczeń połów */
+.firstHalf {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #dcfce7;
+  color: #166534;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.secondHalf {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #ffedd5;
+  color: #9a3412;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Style dla typów akcji */
+.pass {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #fee2e2;
+  color: #991b1b;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.dribble {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #dbeafe;
+  color: #1e3a8a;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.sfg {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #d1fae5;
+  color: #065f46;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.regain {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #fed7aa;
+  color: #92400e;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Style dla trybów akcji */
+.attack {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #dcfce7; /* Zielony kolor dla ataku */
+  color: #166534;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.defense {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #fef2f2; /* Czerwony kolor dla obrony */
+  color: #dc2626;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.videoTimeLink {
+  color: #2196f3;
+  cursor: pointer;
+  text-decoration: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.videoTimeLink:hover {
+  background-color: #e3f2fd;
+  text-decoration: underline;
+}
+
+.videoTimeLink:active {
+  background-color: #bbdefb;
+}
+
+.noEntries {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+  font-style: italic;
+  background-color: #fafafa;
+}
+
+@media (max-width: 768px) {
+  .tableHeader, .actionRow {
+    grid-template-columns: 
+      minmax(80px, 1fr)    /* Połowa/Min */
+      minmax(60px, 80px)   /* Czas wideo */
+      minmax(100px, 0.8fr) /* Zawodnik podający */
+      minmax(100px, 1fr)   /* Zawodnik otrzymujący */
+      minmax(60px, 0.8fr)  /* Kontekst */
+      minmax(60px, 0.8fr)  /* Typ akcji */
+      minmax(60px, 80px);  /* Akcje */
+  }
+
+  .headerCell, .cell, .cellActions {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+
+  .cellActions {
+    padding: 10px 4px;
+  }
+}

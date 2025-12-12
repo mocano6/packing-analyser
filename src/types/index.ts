@@ -73,6 +73,11 @@ export interface Action {
   xTValueStart?: number;
   xTValueEnd?: number;
   // PxT jest obliczane dynamicznie na froncie
+  isP0Start?: boolean;
+  isP1Start?: boolean;
+  isP2Start?: boolean;
+  isP3Start?: boolean;
+  isP0?: boolean;
   isP1?: boolean;
   isP2?: boolean;
   isP3?: boolean;
@@ -85,6 +90,10 @@ export interface Action {
   isSecondHalf: boolean;
   mode?: "attack" | "defense"; // Tryb akcji: Atak lub Obrona
   defensePlayers?: string[]; // Lista zawodników obrony (tylko dla trybu obrona)
+  isBelow8s?: boolean; // Poniżej 8 sekund (dla regain i loses)
+  playersBehindBall?: number; // Liczba partnerów przed piłką (dla regain i loses)
+  opponentsBeforeBall?: number; // Liczba przeciwników przed piłką (dla regain i loses)
+  isReaction5s?: boolean; // Reakcja 5s (dla loses)
 }
 
 // Dla zachowania kompatybilności
@@ -150,6 +159,29 @@ export interface Shot {
   linePlayers?: string[]; // ID zawodników na linii strzału (obrona)
   linePlayersCount?: number; // Liczba zawodników na linii strzału (atak)
   pkPlayersCount?: number; // Liczba zawodników w polu karnym (nie wpływa na xG)
+  isContact1?: boolean; // Liczba kontaktów: 1T
+  isContact2?: boolean; // Liczba kontaktów: 2T
+  isContact3Plus?: boolean; // Liczba kontaktów: 3T+
+}
+
+export interface PKEntry {
+  id: string;
+  matchId: string;
+  teamId: string;
+  startX: number; // Pozycja X punktu startu w procentach (0-100)
+  startY: number; // Pozycja Y punktu startu w procentach (0-100)
+  endX: number; // Pozycja X punktu końca w procentach (0-100)
+  endY: number; // Pozycja Y punktu końca w procentach (0-100)
+  minute: number;
+  isSecondHalf: boolean;
+  senderId?: string; // ID zawodnika podającego
+  senderName?: string; // Nazwa zawodnika podającego
+  receiverId?: string; // ID zawodnika otrzymującego (opcjonalne dla dryblingu i regain)
+  receiverName?: string; // Nazwa zawodnika otrzymującego (opcjonalne dla dryblingu i regain)
+  entryType?: "pass" | "dribble" | "sfg" | "regain"; // Typ akcji definiujący kolor strzałki
+  teamContext?: "attack" | "defense"; // Kontekst zespołu
+  videoTimestamp?: number; // Czas wideo w milisekundach
+  timestamp: number;
 }
 
 export interface TeamInfo {
@@ -168,6 +200,7 @@ export interface TeamInfo {
   actions_regain?: Action[]; // Tablica akcji regain związanych z tym meczem
   actions_loses?: Action[]; // Tablica akcji loses związanych z tym meczem
   shots?: Shot[]; // Tablica strzałów z mapą xG
+  pkEntries?: PKEntry[]; // Tablica wejść w pole karne
 }
 
 export interface PlayerMinutes {

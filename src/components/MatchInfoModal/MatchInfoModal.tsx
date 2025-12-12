@@ -115,107 +115,124 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className={styles.modal}>
-      <div className={styles.modalContent}>
+    <div className={styles.modal} onClick={onClose}>
+      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <h2>{currentInfo ? "Edytuj mecz" : "Dodaj nowy mecz"}</h2>
         <form onSubmit={handleSubmit}>
-          <div className={styles.formGroup}>
-            <label htmlFor="team">Zespół:</label>
-            <TeamsSelector
-              selectedTeam={formData.team}
-              onChange={(teamId) => 
-                setFormData(prev => ({ ...prev, team: teamId }))
-              }
-              availableTeams={availableTeams}
-            />
-          </div>
-
-          <div className={styles.formGroup}>
-            <label htmlFor="opponent">Przeciwnik:</label>
-            <input
-              id="opponent"
-              name="opponent"
-              type="text"
-              value={formData.opponent}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className={styles.formGroup}>
-            <label>Logo przeciwnika (opcjonalne):</label>
-            <OpponentLogoInput
-              value={formData.opponentLogo}
-              onChange={(logoUrl) => setFormData(prev => ({ ...prev, opponentLogo: logoUrl }))}
-              onRemove={() => setFormData(prev => ({ ...prev, opponentLogo: undefined }))}
-            />
-          </div>
-
-          <div className={styles.formGroup}>
-            <label htmlFor="competition">Rozgrywki:</label>
-            <input
-              id="competition"
-              name="competition"
-              type="text"
-              value={formData.competition}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className={styles.formGroup}>
-            <label htmlFor="matchType">Typ meczu:</label>
-            <select
-              id="matchType"
-              name="matchType"
-              value={formData.matchType || 'liga'}
-              onChange={handleChange}
-              className={styles.formSelect}
-            >
-              <option value="liga">Liga</option>
-              <option value="puchar">Puchar</option>
-              <option value="towarzyski">Towarzyski</option>
-            </select>
-          </div>
-
-          <div className={styles.formGroup}>
-            <label htmlFor="date">Data:</label>
-            <input
-              id="date"
-              name="date"
-              type="date"
-              value={formData.date}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className={styles.formGroup}>
-            <label htmlFor="videoUrl">URL wideo z YouTube (opcjonalne):</label>
-            <input
-              id="videoUrl"
-              name="videoUrl"
-              type="text"
-              value={formData.videoUrl || ""}
-              onChange={handleChange}
-              placeholder="https://www.youtube.com/watch?v=... lub https://youtu.be/..."
-              className={styles.formInput}
-            />
-            <small className={styles.helpText}>
-              Obsługiwane formaty: youtube.com/watch?v=..., youtu.be/..., youtube.com/embed/...
-            </small>
-          </div>
-
-          <div className={styles.formGroup}>
-            <label className={`${styles.checkboxLabel} ${formData.isHome ? styles.active : ''}`}>
-              <input
-                type="checkbox"
-                name="isHome"
-                checked={formData.isHome}
-                onChange={() => setFormData({ ...formData, isHome: !formData.isHome })}
+          {/* Sekcja podstawowych informacji */}
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>Podstawowe informacje</h3>
+            
+            <div className={styles.formGroup}>
+              <label htmlFor="team">Zespół:</label>
+              <TeamsSelector
+                selectedTeam={formData.team}
+                onChange={(teamId) => 
+                  setFormData(prev => ({ ...prev, team: teamId }))
+                }
+                availableTeams={availableTeams}
               />
-              <span>Mecz u siebie</span>
-            </label>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="opponent">Przeciwnik:</label>
+              <input
+                id="opponent"
+                name="opponent"
+                type="text"
+                value={formData.opponent}
+                onChange={handleChange}
+                placeholder="Nazwa przeciwnika"
+                required
+              />
+            </div>
+
+            <div className={styles.formGroup}>
+              <label>Logo przeciwnika (opcjonalne):</label>
+              <OpponentLogoInput
+                value={formData.opponentLogo}
+                onChange={(logoUrl) => setFormData(prev => ({ ...prev, opponentLogo: logoUrl }))}
+                onRemove={() => setFormData(prev => ({ ...prev, opponentLogo: undefined }))}
+              />
+            </div>
+          </div>
+
+          {/* Sekcja szczegółów meczu */}
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>Szczegóły meczu</h3>
+            
+            <div className={styles.formGroup}>
+              <label htmlFor="competition">Rozgrywki:</label>
+              <input
+                id="competition"
+                name="competition"
+                type="text"
+                value={formData.competition}
+                onChange={handleChange}
+                placeholder="Nazwa rozgrywek"
+                required
+              />
+            </div>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="matchType">Typ meczu:</label>
+              <select
+                id="matchType"
+                name="matchType"
+                value={formData.matchType || 'liga'}
+                onChange={handleChange}
+                className={styles.formSelect}
+              >
+                <option value="liga">Liga</option>
+                <option value="puchar">Puchar</option>
+                <option value="towarzyski">Towarzyski</option>
+              </select>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="date">Data:</label>
+              <input
+                id="date"
+                name="date"
+                type="date"
+                value={formData.date}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={`${styles.checkboxLabel} ${formData.isHome ? styles.active : ''}`}>
+                <input
+                  type="checkbox"
+                  name="isHome"
+                  checked={formData.isHome}
+                  onChange={() => setFormData({ ...formData, isHome: !formData.isHome })}
+                />
+                <span>Mecz u siebie</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Sekcja wideo */}
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>Wideo (opcjonalne)</h3>
+            
+            <div className={styles.formGroup}>
+              <label htmlFor="videoUrl">URL wideo z YouTube:</label>
+              <input
+                id="videoUrl"
+                name="videoUrl"
+                type="text"
+                value={formData.videoUrl || ""}
+                onChange={handleChange}
+                placeholder="https://www.youtube.com/watch?v=... lub https://youtu.be/..."
+                className={styles.formInput}
+              />
+              <small className={styles.helpText}>
+                Obsługiwane formaty: youtube.com/watch?v=..., youtu.be/..., youtube.com/embed/...
+              </small>
+            </div>
           </div>
 
           <div className={styles.buttonGroup}>
@@ -227,7 +244,7 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
               Anuluj
             </button>
             <button type="submit" className={styles.saveButton}>
-              Zapisz
+              {currentInfo ? "Zapisz zmiany" : "Dodaj mecz"}
             </button>
           </div>
         </form>

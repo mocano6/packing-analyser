@@ -54,9 +54,15 @@ interface LosesActionModalProps {
   // Nowy prop dla przycisku "Poniżej 8s"
   isBelow8sActive: boolean;
   onBelow8sToggle: () => void;
-  // Nowy prop dla liczby zawodników za piłką
+  // Nowy prop dla przycisku "Reakcja 5s"
+  isReaction5sActive: boolean;
+  onReaction5sToggle: () => void;
+  // Nowy prop dla liczby partnerów przed piłką
   playersBehindBall: number;
   onPlayersBehindBallChange: (count: number) => void;
+  // Nowy prop dla liczby przeciwników przed piłką
+  opponentsBeforeBall: number;
+  onOpponentsBeforeBallChange: (count: number) => void;
 }
 
 const LosesActionModal: React.FC<LosesActionModalProps> = ({
@@ -104,9 +110,15 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   // Nowy prop dla przycisku "Poniżej 8s"
   isBelow8sActive,
   onBelow8sToggle,
-  // Nowy prop dla liczby zawodników za piłką
+  // Nowy prop dla przycisku "Reakcja 5s"
+  isReaction5sActive,
+  onReaction5sToggle,
+  // Nowy prop dla liczby partnerów przed piłką
   playersBehindBall,
   onPlayersBehindBallChange,
+  // Nowy prop dla liczby przeciwników przed piłką
+  opponentsBeforeBall,
+  onOpponentsBeforeBallChange,
 }) => {
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
 
@@ -403,49 +415,49 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
           {/* Wszystkie przyciski w jednym rzędzie */}
           <div className={styles.compactButtonsRow}>
             {/* Grupa przycisków kontaktów */}
-            <div className={styles.pButtonsGroup}>
+            <div className={styles.pButtonsGroupNoBorder}>
               <div className={styles.pTopRow}>
-                <button
-                  className={`${styles.compactButton} ${
-                    isContact1Active ? styles.activeButton : ""
-                  }`}
-                  onClick={onContact1Toggle}
-                  title="Aktywuj/Dezaktywuj 1T"
-                  aria-pressed={isContact1Active}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>1T</span>
-                </button>
-                
-                <button
-                  className={`${styles.compactButton} ${
-                    isContact2Active ? styles.activeButton : ""
-                  }`}
-                  onClick={onContact2Toggle}
-                  title="Aktywuj/Dezaktywuj 2T"
-                  aria-pressed={isContact2Active}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>2T</span>
-                </button>
-              </div>
+              <button
+                className={`${styles.compactButton} ${
+                  isContact1Active ? styles.activeButton : ""
+                }`}
+                onClick={onContact1Toggle}
+                title="Aktywuj/Dezaktywuj 1T"
+                aria-pressed={isContact1Active}
+                type="button"
+              >
+                <span className={styles.compactLabel}>1T</span>
+              </button>
               
-              <div className={styles.pBottomRow}>
-                <button
-                  className={`${styles.compactButton} ${
-                    isContact3PlusActive ? styles.activeButton : ""
-                  }`}
-                  onClick={onContact3PlusToggle}
-                  title="Aktywuj/Dezaktywuj 3T+"
-                  aria-pressed={isContact3PlusActive}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>3T+</span>
-                </button>
-              </div>
+              <button
+                className={`${styles.compactButton} ${
+                  isContact2Active ? styles.activeButton : ""
+                }`}
+                onClick={onContact2Toggle}
+                title="Aktywuj/Dezaktywuj 2T"
+                aria-pressed={isContact2Active}
+                type="button"
+              >
+                <span className={styles.compactLabel}>2T</span>
+              </button>
+            </div>
+            
+            <div className={styles.pBottomRow}>
+              <button
+                className={`${styles.compactButton} ${
+                  isContact3PlusActive ? styles.activeButton : ""
+                }`}
+                onClick={onContact3PlusToggle}
+                title="Aktywuj/Dezaktywuj 3T+"
+                aria-pressed={isContact3PlusActive}
+                type="button"
+              >
+                <span className={styles.compactLabel}>3T+</span>
+              </button>
+            </div>
             </div>
 
-            {/* Nowy przycisk "Poniżej 8s" */}
+            {/* Przycisk "Poniżej 8s" */}
             <button
               className={`${styles.compactButton} ${
                 isBelow8sActive ? styles.activeButton : ""
@@ -458,29 +470,76 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
               <span className={styles.compactLabel}>Poniżej 8s</span>
             </button>
 
-            {/* Przycisk "Liczba zawodników za piłką" */}
-            <div 
-              className={styles.compactPointsButton}
-              onClick={() => {
-                onPlayersBehindBallChange(playersBehindBall + 1);
-              }}
-              title="Kliknij, aby dodać 1 zawodnika"
-              style={{ cursor: 'pointer' }}
+            {/* Przycisk "Reakcja 5s" */}
+            <button
+              className={`${styles.compactButton} ${
+                isReaction5sActive ? styles.activeButton : ""
+              }`}
+              onClick={onReaction5sToggle}
+              aria-pressed={isReaction5sActive}
+              type="button"
+              title="Reakcja 5 sekund"
             >
-              <span className={styles.compactLabel}>Liczba zawodników za piłką</span>
-              <span className={styles.pointsValue}><b>{playersBehindBall}</b></span>
-              <button
-                className={styles.compactSubtractButton}
+              <span className={styles.compactLabel}>Reakcja 5s</span>
+            </button>
+
+            {/* Sekcja z przyciskami "przed piłką" - ułożone pionowo */}
+            <div className={styles.verticalButtonsContainer}>
+              {/* Przycisk "Partner przed piłką" */}
+              <div 
+                className={styles.compactPointsButton}
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
-                  onPlayersBehindBallChange(Math.max(0, playersBehindBall - 1));
+                  onPlayersBehindBallChange(playersBehindBall + 1);
                 }}
-                title="Odejmij 1 zawodnika"
-                type="button"
-                disabled={playersBehindBall <= 0}
+                title="Kliknij, aby dodać 1 partnera"
+                style={{ cursor: 'pointer' }}
               >
-                −
-              </button>
+                <span className={styles.compactLabel}>Partner przed piłką</span>
+                <span className={styles.pointsValue}><b>{playersBehindBall}</b></span>
+                <button
+                  className={styles.compactSubtractButton}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onPlayersBehindBallChange(Math.max(0, playersBehindBall - 1));
+                  }}
+                  title="Odejmij 1 partnera"
+                  type="button"
+                  disabled={playersBehindBall <= 0}
+                >
+                  −
+                </button>
+              </div>
+
+              {/* Przycisk "Przeciwnik przed piłką" */}
+              <div 
+                className={styles.compactPointsButton}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpponentsBeforeBallChange(opponentsBeforeBall + 1);
+                }}
+                title="Kliknij, aby dodać 1 przeciwnika"
+                style={{ cursor: 'pointer' }}
+              >
+                <span className={styles.compactLabel}>Przeciwnik przed piłką</span>
+                <span className={styles.pointsValue}><b>{opponentsBeforeBall}</b></span>
+                <button
+                  className={styles.compactSubtractButton}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onOpponentsBeforeBallChange(Math.max(0, opponentsBeforeBall - 1));
+                  }}
+                  title="Odejmij 1 przeciwnika"
+                  type="button"
+                  disabled={opponentsBeforeBall <= 0}
+                >
+                  −
+                </button>
+              </div>
             </div>
 
             {/* Pozostałe przyciski punktów (bez "Minięty przeciwnik") */}
@@ -490,7 +549,9 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   <div 
                     key={index} 
                     className={styles.compactPointsButton}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       handlePointsAdd(button.points);
                     }}
                     title={button.description}
@@ -500,6 +561,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                     <button
                       className={styles.compactSubtractButton}
                       onClick={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
                         handlePointsAdd(-button.points);
                       }}
@@ -515,44 +577,46 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
               return null;
             })}
 
-            {/* Pozostałe przyciski toggle */}
-            <button
-              className={`${styles.compactButton} ${
-                isPenaltyAreaEntry ? styles.activeButton : ""
-              }`}
-              onClick={handlePenaltyAreaEntryToggle}
-              aria-pressed={isPenaltyAreaEntry}
-              type="button"
-              title="Wejście w pole karne"
-            >
-              <span className={styles.compactLabel}>Wejście PK</span>
-            </button>
+            {/* Przyciski ułożone pionowo: Wejście PK, Strzał, Gol */}
+            <div className={styles.verticalButtonsContainer}>
+              <button
+                className={`${styles.compactButton} ${
+                  isPenaltyAreaEntry ? styles.activeButton : ""
+                }`}
+                onClick={handlePenaltyAreaEntryToggle}
+                aria-pressed={isPenaltyAreaEntry}
+                type="button"
+                title="Wejście w pole karne"
+              >
+                <span className={styles.compactLabel}>Wejście PK</span>
+              </button>
 
-            <button
-              className={`${styles.compactButton} ${
-                isShot ? styles.activeButton : ""
-              }`}
-              onClick={handleShotToggle}
-              aria-pressed={isShot}
-              type="button"
-              title="Strzał"
-            >
-              <span className={styles.compactLabel}>Strzał</span>
-            </button>
+              <button
+                className={`${styles.compactButton} ${
+                  isShot ? styles.activeButton : ""
+                }`}
+                onClick={handleShotToggle}
+                aria-pressed={isShot}
+                type="button"
+                title="Strzał"
+              >
+                <span className={styles.compactLabel}>Strzał</span>
+              </button>
 
-            <button
-              className={`${styles.compactButton} ${
-                isGoal ? styles.activeButton : ""
-              } ${!isShot ? styles.disabledButton : ""}`}
-              onClick={handleGoalToggle}
-              disabled={!isShot}
-              aria-pressed={isGoal}
-              aria-disabled={!isShot}
-              type="button"
-              title={!isShot ? "Musisz najpierw zaznaczyć Strzał" : "Gol"}
-            >
-              <span className={styles.compactLabel}>Gol</span>
-            </button>
+              <button
+                className={`${styles.compactButton} ${
+                  isGoal ? styles.activeButton : ""
+                } ${!isShot ? styles.disabledButton : ""}`}
+                onClick={handleGoalToggle}
+                disabled={!isShot}
+                aria-pressed={isGoal}
+                aria-disabled={!isShot}
+                type="button"
+                title={!isShot ? "Musisz najpierw zaznaczyć Strzał" : "Gol"}
+              >
+                <span className={styles.compactLabel}>Gol</span>
+              </button>
+            </div>
           </div>
           
           {/* Przyciski kontrolne z polem minuty pomiędzy */}
