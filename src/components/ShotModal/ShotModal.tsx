@@ -52,6 +52,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
     isContact1: false,
     isContact2: false,
     isContact3Plus: false,
+    assistantId: "",
+    assistantName: "",
   });
 
   // Filtrowanie zawodników grających w danym meczu (podobnie jak w ActionModal)
@@ -137,6 +139,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
         isContact1: editingShot.isContact1 || false,
         isContact2: editingShot.isContact2 || false,
         isContact3Plus: editingShot.isContact3Plus || false,
+        assistantId: (editingShot as any)?.assistantId || "",
+        assistantName: (editingShot as any)?.assistantName || "",
       });
     } else {
       // Automatyczne wykrywanie kontekstu zespołu na podstawie pozycji
@@ -164,6 +168,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
         isContact1: false,
         isContact2: false,
         isContact3Plus: false,
+        assistantId: "",
+        assistantName: "",
       });
     }
   }, [editingShot, isOpen, matchInfo, xG, x]);
@@ -185,6 +191,15 @@ const ShotModal: React.FC<ShotModalProps> = ({
       ...formData,
       playerId,
       playerName: player ? `${player.firstName} ${player.lastName}` : "",
+    });
+  };
+
+  const handleAssistantSelect = (playerId: string) => {
+    const player = filteredPlayers.find(p => p.id === playerId);
+    setFormData({
+      ...formData,
+      assistantId: playerId,
+      assistantName: player ? `${player.firstName} ${player.lastName}` : "",
     });
   };
 
@@ -329,6 +344,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
       isContact1: formData.isContact1,
       isContact2: formData.isContact2,
       isContact3Plus: formData.isContact3Plus,
+      assistantId: formData.assistantId || undefined,
+      assistantName: formData.assistantName || undefined,
       matchId,
     });
 
@@ -640,6 +657,63 @@ const ShotModal: React.FC<ShotModalProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Wybór asystenta (tylko gdy gol) */}
+          {formData.shotType === "goal" && formData.teamContext === "attack" && (
+            <div className={styles.fieldGroup}>
+              <label>Asystent:</label>
+              <div className={styles.playersGrid}>
+                <div
+                  className={`${styles.playerTile} ${
+                    formData.assistantId === "" ? styles.playerAttackerTile : ''
+                  }`}
+                  onClick={() => handleAssistantSelect("")}
+                >
+                  <div className={styles.playerContent}>
+                    <div className={styles.playerInfo}>
+                      <div className={styles.name}>Brak asysty</div>
+                    </div>
+                  </div>
+                </div>
+                {filteredPlayers.filter(player => player.id !== formData.playerId).map(player => (
+                  <div
+                    key={player.id}
+                    className={`${styles.playerTile} ${
+                      formData.assistantId === player.id 
+                        ? styles.playerAttackerTile
+                        : ''
+                    } ${player.imageUrl ? styles.withImage : ''}`}
+                    onClick={() => handleAssistantSelect(player.id)}
+                  >
+                    {player.imageUrl && (
+                      <>
+                        <img
+                          src={player.imageUrl}
+                          alt=""
+                          className={styles.playerTileImage}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                        <div className={styles.playerTileOverlay}></div>
+                      </>
+                    )}
+                    <div className={styles.playerContent}>
+                      <div className={styles.number}>{player.number}</div>
+                      <div className={styles.playerInfo}>
+                        <div className={styles.name}>{getPlayerFullName(player)}</div>
+                        <div className={styles.details}>
+                          {player.position && (
+                            <span className={styles.position}>{player.position}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Liczba kontaktów */}
           <div className={styles.fieldGroup}>

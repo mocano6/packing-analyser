@@ -7,6 +7,9 @@ import { TEAMS } from "@/constants/teams";
 import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
+import MatchDataModal from "@/components/MatchDataModal/MatchDataModal";
+import { getDB } from "@/lib/firebase";
+import { doc, updateDoc } from "firebase/firestore";
 import styles from "./MatchInfoHeader.module.css";
 
 // Nowy komponent do wyświetlania informacji o bieżącym meczu
@@ -162,6 +165,8 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [isMatchesTableExpanded, setIsMatchesTableExpanded] = useState(false);
   const [deletingMatchIds, setDeletingMatchIds] = useState<Set<string>>(new Set());
+  const [isMatchDataModalOpen, setIsMatchDataModalOpen] = useState(false);
+  const [selectedMatchForData, setSelectedMatchForData] = useState<TeamInfo | null>(null);
 
   // Automatycznie aktywuj tryb deweloperski (obejście uwierzytelniania)
   React.useEffect(() => {
@@ -269,6 +274,43 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
     } else {
       setSortKey(key);
       setSortDirection("asc");
+    }
+  };
+
+  // Funkcja otwierania modala z danymi meczu
+  const handleOpenMatchDataModal = (e: React.MouseEvent, match: TeamInfo) => {
+    e.stopPropagation();
+    setSelectedMatchForData(match);
+    setIsMatchDataModalOpen(true);
+  };
+
+  // Funkcja zapisywania danych meczu
+  const handleSaveMatchData = async (matchData: TeamInfo['matchData']) => {
+    if (!selectedMatchForData?.matchId) return;
+
+    try {
+      const db = getDB();
+      const matchRef = doc(db, "matches", selectedMatchForData.matchId);
+      await updateDoc(matchRef, {
+        matchData: matchData
+      });
+      
+      // Aktualizuj lokalny stan
+      const updatedMatch = {
+        ...selectedMatchForData,
+        matchData: matchData
+      };
+      
+      // Aktualizuj matchInfo jeśli to jest aktualnie wybrany mecz
+      if (matchInfo?.matchId === selectedMatchForData.matchId) {
+        // Wywołaj callback do odświeżenia danych (jeśli istnieje)
+        // Możesz dodać callback do props jeśli potrzebujesz odświeżenia
+      }
+      
+      alert("Dane meczu zostały zapisane pomyślnie!");
+    } catch (error) {
+      console.error("Błąd podczas zapisywania danych meczu:", error);
+      alert("Wystąpił błąd podczas zapisywania danych meczu. Spróbuj ponownie.");
     }
   };
 
@@ -431,6 +473,15 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           ⌚
                         </button>
                         <button
+                          className={`${styles.editBtn} ${styles.dataBtn}`}
+                          onClick={(e) => handleOpenMatchDataModal(e, match)}
+                          title="Dane meczu"
+                          aria-label={`Dane meczu: ${getTeamName(match.team)} vs ${match.opponent}`}
+                          disabled={isBeingDeleted}
+                        >
+                          📊
+                        </button>
+                        <button
                           className={styles.deleteBtn}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -482,6 +533,15 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           ⌚
                         </button>
                         <button
+                          className={`${styles.editBtn} ${styles.dataBtn}`}
+                          onClick={(e) => handleOpenMatchDataModal(e, match)}
+                          title="Dane meczu"
+                          aria-label={`Dane meczu: ${getTeamName(match.team)} vs ${match.opponent}`}
+                          disabled={isBeingDeleted}
+                        >
+                          📊
+                        </button>
+                        <button
                           className={styles.deleteBtn}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -514,6 +574,20 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
             </div>
           )}
         </div>
+        
+        {/* Modal z danymi meczu */}
+        {isMatchDataModalOpen && selectedMatchForData && (
+          <MatchDataModal
+            isOpen={isMatchDataModalOpen}
+            onClose={() => {
+              setIsMatchDataModalOpen(false);
+              setSelectedMatchForData(null);
+            }}
+            onSave={handleSaveMatchData}
+            currentMatch={selectedMatchForData}
+            allAvailableTeams={allAvailableTeams}
+          />
+        )}
         
         {/* Przycisk rozwijania/zwijania tabeli meczów */}
         {(hasMoreMatches || isMatchesTableExpanded) && (

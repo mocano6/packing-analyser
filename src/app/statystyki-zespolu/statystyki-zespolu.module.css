@@ -1,45 +1,137 @@
 /* src/app/statystyki-zespolu/statystyki-zespolu.module.css */
 
 .container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-  background-color: #f9f9f9;
   min-height: 100vh;
+  padding: 20px;
+  background-color: #f5f5f5;
 }
 
 .header {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  margin-bottom: 30px;
-  padding-bottom: 20px;
-  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 24px;
+  position: relative;
 }
 
 .backButton {
+  position: absolute;
+  top: 0;
+  right: 0;
   display: inline-flex;
   align-items: center;
-  padding: 10px 15px;
-  background-color: #e3f2fd;
-  color: #1976d2;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  color: #6b7280;
   text-decoration: none;
+  border: 1px solid #e5e7eb;
   border-radius: 6px;
-  font-weight: 500;
-  transition: background-color 0.2s;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .backButton:hover {
-  background-color: #bbdefb;
+  color: #3b82f6;
+  border-color: #3b82f6;
+  background-color: #f8fafc;
+  text-decoration: none;
 }
 
 .header h1 {
-  color: #333;
-  font-size: 2rem;
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+/* Kompaktowa sekcja wyboru */
+.compactSelectorsContainer {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.compactSelectorGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 180px;
+}
+
+.compactSelectorGroup.seasonGroup {
+  flex: 0 0 auto;
+  min-width: 140px;
+  max-width: 180px;
+}
+
+.compactSelectorGroup.teamGroup {
+  flex: 0 0 auto;
+  min-width: 180px;
+  max-width: 220px;
+}
+
+.compactLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.compactSelect {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  color: #1f2937;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.compactSelect:hover {
+  border-color: #3b82f6;
+}
+
+.compactSelect:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.compactSelect:disabled {
+  background-color: #f9fafb;
+  cursor: not-allowed;
+  color: #9ca3af;
+}
+
+.noMatchesCompact {
+  padding: 8px 10px;
+  color: #9ca3af;
+  font-size: 13px;
+  font-style: italic;
   margin: 0;
 }
 
-/* Style dla wyboru zespołu i sezonu */
+.loadingText {
+  padding: 8px 10px;
+  color: #9ca3af;
+  font-size: 13px;
+  margin: 0;
+}
+
+
+/* Stare style - zachowane dla kompatybilności */
 .selectorsContainer {
   display: flex;
   gap: 20px;
@@ -246,17 +338,259 @@
 /* Style dla panelu wykresów */
 .chartPanel {
   background: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  border: 1px solid #eaeaea;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  margin-bottom: 20px;
 }
 
-.chartPanel h2 {
-  margin-top: 0;
+.chartPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.chartPanelHeader h3 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.chartInfo {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.loadingText,
+.noDataText {
+  color: #6b7280;
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+  margin: 0;
+}
+
+/* Heatmapa zespołu */
+.teamHeatmapSection {
   margin-bottom: 20px;
-  color: #333;
-  font-size: 1.5rem;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.heatmapHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.heatmapHeader h4 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.heatmapControls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.categoryToggle {
+  display: flex;
+  gap: 8px;
+  background-color: #f3f4f6;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.categoryButton {
+  padding: 8px 16px;
+  border: none;
+  background-color: transparent;
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  flex: 1;
+}
+
+.categoryButton:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.categoryButton.active {
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.heatmapDirectionToggle,
+.heatmapModeToggle {
+  display: flex;
+  gap: 8px;
+  background-color: #f3f4f6;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.heatmapDirectionButton,
+.heatmapModeButton {
+  padding: 8px 16px;
+  border: none;
+  background-color: transparent;
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.heatmapDirectionButton:hover,
+.heatmapModeButton:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.heatmapDirectionButton.active,
+.heatmapModeButton.active {
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.heatmapWrapper {
+  display: flex;
+  gap: 24px;
+  margin-top: 16px;
+  align-items: flex-start;
+}
+
+.heatmapContainer {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 600px;
+  position: relative;
+}
+
+.zoneDetailsPanel {
+  flex: 1;
+  min-width: 300px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+.zoneDetailsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.zoneDetailsHeader h4 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.zoneDetailsClose {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.zoneDetailsClose:hover {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+.zoneDetailsBody {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.zoneDetailsSubtitle {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.zonePlayersList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.zonePlayerItem {
+  padding: 12px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 8px;
+}
+
+.zonePlayerName {
+  font-weight: 600;
+  font-size: 15px;
+  color: #1f2937;
+  margin-bottom: 8px;
+}
+
+.zonePlayerStats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.zonePlayerStat {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.zonePlayerStat strong {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.zoneLabel {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.zoneValue {
+  font-size: 13px;
+  color: #1f2937;
+  font-weight: 600;
 }
 
 .chartPanel p {
@@ -266,25 +600,33 @@
 }
 
 .chartInfo {
-  background-color: #e3f2fd;
-  padding: 12px 16px;
-  border-radius: 6px;
-  border-left: 4px solid #2196f3;
-  margin-bottom: 20px;
-  font-size: 14px;
-  color: #1565c0;
-}
-
-.chartInfo strong {
-  color: #0d47a1;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+  padding: 4px 8px;
+  background-color: #f3f4f6;
+  border-radius: 4px;
 }
 
 .chartContainer {
-  margin: 20px 0;
-  background: white;
+  margin: 12px 0 0 0;
+  background: #f9fafb;
   border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+}
+
+.chartHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.chartHeader h4 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
 }
 
 /* Style dla tooltipa */
@@ -374,6 +716,15 @@
     width: 100%;
   }
 
+  .compactSelectorsContainer {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .compactSelectorGroup {
+    min-width: 100%;
+  }
+
   .matchSelectorHeader {
     margin-bottom: 12px;
   }
@@ -458,6 +809,417 @@
 }
 
 .loginButton,
+/* Zakładki z metrykami */
+.statsContainer {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e7eb;
+}
+
+.statsLayout {
+  display: flex;
+  gap: 24px;
+}
+
+.categoriesList {
+  flex: 0 0 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.categoryItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.categoryItem:hover {
+  border-color: #3b82f6;
+  background-color: #f8fafc;
+}
+
+.categoryItem.active {
+  border-color: #3b82f6;
+  background-color: #eff6ff;
+}
+
+.categoryName {
+  font-weight: 600;
+  color: #374151;
+  font-size: 15px;
+}
+
+.categoryValue {
+  font-weight: 700;
+  color: #3b82f6;
+  font-size: 16px;
+}
+
+.detailsPanel {
+  flex: 1;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  min-height: 200px;
+}
+
+.detailsPanel h3 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.detailsRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 14px;
+}
+
+.detailsLabel {
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.detailsValue {
+  font-weight: 600;
+  color: #1f2937;
+  text-align: right;
+}
+
+.detailsSection {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.detailsSection:last-child {
+  border-bottom: none;
+}
+
+.detailsSection h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.categoryControls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.categoryControls .categoryButton {
+  padding: 10px 20px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  color: #374151;
+  transition: all 0.2s ease;
+  flex: 1;
+}
+
+.categoryControls .categoryButton:hover {
+  border-color: #3b82f6;
+  background-color: #f8fafc;
+}
+
+.categoryControls .categoryButton.active {
+  border-color: #3b82f6;
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.actionCounts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.countItem {
+  padding: 12px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.countLabel {
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+  margin-right: 8px;
+}
+
+.countValue {
+  font-weight: 700;
+  color: #3b82f6;
+  font-size: 16px;
+}
+
+.zoneBreakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.zoneLabel {
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.zoneValue {
+  font-size: 12px;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+/* Statystyki połówek w panelu */
+.halfTimeStatsInPanel {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.halfTimeHeaderWithType {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.halfTimeStatsInPanel h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.actionTypeSelector {
+  display: flex;
+  gap: 6px;
+  background-color: #f3f4f6;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.actionTypeButton {
+  padding: 6px 12px;
+  border: none;
+  background-color: transparent;
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.actionTypeButton:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.actionTypeButton.active {
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.2);
+}
+
+.metricSelector {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  background-color: #f3f4f6;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.metricButton {
+  padding: 6px 12px;
+  border: none;
+  background-color: transparent;
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  flex: 1;
+}
+
+.metricButton:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.metricButton.active {
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.2);
+}
+
+.halfTimeContainerInPanel {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.halfTimeCardInPanel {
+  flex: 1;
+  padding: 12px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.halfTimeLabel {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.halfTimeCardInPanel .statValue {
+  font-size: 18px;
+  font-weight: 700;
+  color: #3b82f6;
+  margin-bottom: 4px;
+}
+
+.halfTimeCardInPanel .statLabel {
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.statSubValue {
+  font-size: 12px;
+  font-weight: 600;
+  color: #3b82f6;
+  margin-top: 8px;
+}
+
+.statSubLabel {
+  font-size: 10px;
+  color: #6b7280;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+/* Informacje o heatmapie w panelu */
+.heatmapInfoInPanel {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.heatmapInfoInPanel h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.heatmapInfoRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 14px;
+}
+
+.heatmapInfoLabel {
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.heatmapInfoValue {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+/* Heatmapa w panelu */
+.teamHeatmapSectionInPanel {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.heatmapHeaderInPanel {
+  margin-bottom: 12px;
+}
+
+.heatmapHeaderInPanel h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.heatmapControlsInPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.heatmapWrapperInPanel {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-top: 12px;
+}
+
+.heatmapContainerInPanel {
+  flex: 1;
+}
+
+/* Wykresy w panelu */
+.chartContainerInPanel {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.chartContainerInPanel .chartHeader {
+  margin-bottom: 16px;
+}
+
+.chartContainerInPanel .chartHeader h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
 .logoutButton {
   padding: 12px 24px;
   background-color: #dc3545;
@@ -480,97 +1242,95 @@
 /* Style dla statystyk połówek */
 .halfTimeStats {
   background: white;
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  border: 1px solid #eaeaea;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e7eb;
 }
 
-.halfTimeStats h2 {
-  margin-top: 0;
-  margin-bottom: 20px;
-  color: #333;
-  font-size: 1.5rem;
+.halfTimeHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.halfTimeHeader h3 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .metricSelector {
   display: flex;
-  gap: 10px;
-  margin-bottom: 25px;
-  justify-content: center;
-  flex-wrap: wrap;
+  gap: 6px;
+  background-color: #f3f4f6;
+  padding: 4px;
+  border-radius: 6px;
 }
 
 .metricButton {
-  padding: 10px 20px;
-  border: 2px solid #d1d5db;
-  border-radius: 8px;
-  background-color: #fff;
-  color: #374151;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  background-color: transparent;
+  color: #6b7280;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.2s ease;
-  min-width: 80px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
 }
 
 .metricButton:hover {
-  border-color: #3b82f6;
   color: #3b82f6;
-  transform: translateY(-1px);
+  background-color: rgba(59, 130, 246, 0.1);
 }
 
 .metricButton.active {
   background-color: #3b82f6;
-  border-color: #3b82f6;
   color: white;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.2);
 }
 
 .halfTimeContainer {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  max-width: 800px;
-  margin: 0 auto;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
 .halfTimeCard {
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  background: #f9fafb;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 25px;
+  border-radius: 6px;
+  padding: 8px;
   text-align: center;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.halfTimeCard:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.halfTimeCard h3 {
-  margin: 0 0 15px 0;
-  color: #374151;
-  font-size: 1.1rem;
-  font-weight: 600;
+.halfTimeLabel {
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
 }
 
 .statValue {
-  font-size: 2.5rem;
+  font-size: 1.4rem;
   font-weight: 700;
   color: #1f2937;
-  margin-bottom: 8px;
+  margin-bottom: 2px;
   line-height: 1;
 }
 
 .statLabel {
-  font-size: 0.9rem;
+  font-size: 10px;
   color: #6b7280;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 /* Specjalne kolory dla każdej metryki */
@@ -603,6 +1363,19 @@
   
   .metricSelector {
     gap: 8px;
+  }
+  
+  .heatmapWrapper {
+    flex-direction: column;
+  }
+  
+  .heatmapContainer {
+    max-width: 100%;
+  }
+  
+  .zoneDetailsPanel {
+    min-width: 100%;
+    max-height: 400px;
   }
   
   .metricButton {

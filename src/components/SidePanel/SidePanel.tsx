@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import styles from './SidePanel.module.css';
 import ExportButton from '../ExportButton/ExportButton';
 import ImportButton from '../ImportButton/ImportButton';
@@ -32,6 +33,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
   onLogout
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname();
 
   const handleRefreshClick = async () => {
     try {
@@ -66,6 +68,9 @@ const SidePanel: React.FC<SidePanelProps> = ({
         className={`${styles.panel} ${isOpen ? styles.panelOpen : ''}`}
       >
         <div className={styles.header}>
+          <Link href="/" className={styles.homeButton}>
+            <span className={styles.homeIcon}>🏠</span>
+          </Link>
           <h3>Menu aplikacji</h3>
           <button 
             className={styles.closeButton}
@@ -86,6 +91,10 @@ const SidePanel: React.FC<SidePanelProps> = ({
             <Link href="/statystyki-zespolu" className={styles.menuItem}>
               <span className={styles.icon}>📊</span>
               <span>Statystyki zespołu</span>
+            </Link>
+            <Link href={players.length > 0 ? `/profile/${players[0].id}` : '/zawodnicy'} className={styles.menuItem}>
+              <span className={styles.icon}>👤</span>
+              <span>Profil zawodnika</span>
             </Link>
           </div>
 

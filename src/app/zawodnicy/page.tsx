@@ -28,6 +28,7 @@ export default function ZawodnicyPage() {
   const [showTeamsDropdown, setShowTeamsDropdown] = useState(false);
   const [showPositionsDropdown, setShowPositionsDropdown] = useState(false);
   const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
+  const [showMatchSelector, setShowMatchSelector] = useState<boolean>(false);
 
   // Funkcja do obsługi zaznaczania/odznaczania zespołów
   const handleTeamToggle = (teamId: string) => {
@@ -749,24 +750,24 @@ export default function ZawodnicyPage() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <Link href="/" className={styles.backButton}>
-          ← Powrót do głównej
+        <Link href="/" className={styles.backButton} title="Powrót do głównej">
+          ←
         </Link>
         <h1>Statystyki zawodników</h1>
       </div>
 
-      {/* Sekcja wyboru zespołu i sezonu */}
+      {/* Sekcja wyboru zespołu i sezonu - minimalistyczna */}
       <div className={styles.selectorsContainer}>
         <div className={styles.teamSelector}>
-          <div className={styles.label}>
+          <label className={styles.label}>
             Wybierz zespoły ({selectedTeams.length}/{availableTeams.length}):
-          </div>
+          </label>
           {isTeamsLoading ? (
-            <p>Ładowanie zespołów...</p>
+            <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Ładowanie zespołów...</p>
           ) : (
             <div className={styles.teamsSelectContainer}>
               {availableTeams.length === 0 ? (
-                <p>Brak dostępnych zespołów</p>
+                <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Brak dostępnych zespołów</p>
               ) : (
                 <div className={`${styles.dropdownContainer} dropdownContainer`}>
                   <div 
@@ -816,70 +817,75 @@ export default function ZawodnicyPage() {
         </div>
 
         <div className={styles.seasonSelector}>
+          <label className={styles.label}>
+            Wybierz sezon:
+          </label>
           <SeasonSelector
             selectedSeason={selectedSeason}
             onChange={setSelectedSeason}
-            showLabel={true}
+            showLabel={false}
             availableSeasons={availableSeasons}
             className={styles.seasonSelect}
           />
         </div>
-      </div>
-
-      {/* Sekcja wyboru meczów - tabela */}
-      <div className={styles.matchSelector}>
-        <div className={styles.matchSelectorHeader}>
-          <h3>Wybierz mecze do analizy ({selectedMatches.length}/{teamMatches.length})</h3>
-          <button 
-            onClick={handleSelectAllMatches}
-            className={styles.selectAllButton}
+        <div className={styles.matchToggleGroup}>
+          <button
+            className={styles.matchToggleButton}
+            onClick={() => setShowMatchSelector(!showMatchSelector)}
           >
-            {selectedMatches.length === teamMatches.length ? 'Odznacz wszystkie' : 'Zaznacz wszystkie'}
+            {showMatchSelector ? "Ukryj" : "Pokaż"} wybór meczów ({selectedMatches.length}/{teamMatches.length})
           </button>
         </div>
-        
-        <div className={styles.matchesTable}>
-          {teamMatches.length === 0 ? (
-            <p className={styles.noMatches}>Brak meczów dla wybranego zespołu</p>
-          ) : (
-            <>
-              <div className={styles.tableHeader}>
-                <div className={styles.headerCell}>Wybierz</div>
-                <div className={styles.headerCell}>Przeciwnik</div>
-                <div className={styles.headerCell}>Data</div>
-                <div className={styles.headerCell}>Rozgrywki</div>
-                <div className={styles.headerCell}>Dom/Wyjazd</div>
-              </div>
-              <div className={styles.tableBody}>
-                {teamMatches.map(match => (
-                  <div key={match.matchId || match.opponent} className={styles.tableRow}>
-                    <div className={styles.tableCell}>
-                      <input
-                        type="checkbox"
-                        checked={match.matchId ? selectedMatches.includes(match.matchId) : false}
-                        onChange={() => match.matchId && handleMatchToggle(match.matchId)}
-                        className={styles.matchCheckbox}
-                      />
-                    </div>
-                    <div className={styles.tableCell}>
-                      <strong>{match.opponent}</strong>
-                    </div>
-                    <div className={styles.tableCell}>
-                      {match.date}
-                    </div>
-                    <div className={styles.tableCell}>
-                      {match.competition}
-                    </div>
-                    <div className={styles.tableCell}>
-                      {match.isHome ? 'Dom' : 'Wyjazd'}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
       </div>
+
+      {/* Lista meczów do wyboru */}
+      {showMatchSelector && (
+        <div className={styles.matchesListContainer}>
+          <div className={styles.matchListHeader}>
+            <button
+              className={styles.selectAllButton}
+              onClick={() => {
+                const allIds = teamMatches
+                  .filter(m => m.matchId)
+                  .map(m => m.matchId!);
+                setSelectedMatches(allIds);
+              }}
+            >
+              Zaznacz wszystkie
+            </button>
+            <button
+              className={styles.deselectAllButton}
+              onClick={() => setSelectedMatches([])}
+            >
+              Odznacz wszystkie
+            </button>
+          </div>
+          <div className={styles.matchesCheckboxes}>
+            {teamMatches.length === 0 ? (
+              <p className={styles.noMatchesCompact}>Brak meczów dla wybranego zespołu</p>
+            ) : (
+              teamMatches.map((match) => (
+                <label key={match.matchId} className={styles.matchCheckbox}>
+                  <input
+                    type="checkbox"
+                    checked={selectedMatches.includes(match.matchId || "")}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedMatches([...selectedMatches, match.matchId!]);
+                      } else {
+                        setSelectedMatches(selectedMatches.filter(id => id !== match.matchId));
+                      }
+                    }}
+                  />
+                  <span>
+                    {match.opponent} ({typeof match.date === 'string' ? match.date : new Date(match.date).toLocaleDateString('pl-PL')}) - {match.competition}
+                  </span>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Sekcja duplikatów */}
       {duplicates.length > 0 && (

@@ -162,6 +162,8 @@ export interface Shot {
   isContact1?: boolean; // Liczba kontaktów: 1T
   isContact2?: boolean; // Liczba kontaktów: 2T
   isContact3Plus?: boolean; // Liczba kontaktów: 3T+
+  assistantId?: string; // ID asystenta (tylko dla goli)
+  assistantName?: string; // Nazwa asystenta (tylko dla goli)
 }
 
 export interface PKEntry {
@@ -201,6 +203,37 @@ export interface TeamInfo {
   actions_loses?: Action[]; // Tablica akcji loses związanych z tym meczem
   shots?: Shot[]; // Tablica strzałów z mapą xG
   pkEntries?: PKEntry[]; // Tablica wejść w pole karne
+  // Dane meczu
+  matchData?: {
+    // Czas posiadania (w minutach)
+    possession?: {
+      teamFirstHalf?: number; // Czas posiadania naszego zespołu w 1 połowie (min)
+      opponentFirstHalf?: number; // Czas posiadania przeciwnika w 1 połowie (min)
+      teamSecondHalf?: number; // Czas posiadania naszego zespołu w 2 połowie (min)
+      opponentSecondHalf?: number; // Czas posiadania przeciwnika w 2 połowie (min)
+    };
+    // Liczba podań
+    passes?: {
+      teamFirstHalf?: number; // Liczba podań naszego zespołu w 1 połowie
+      opponentFirstHalf?: number; // Liczba podań przeciwnika w 1 połowie
+      teamSecondHalf?: number; // Liczba podań naszego zespołu w 2 połowie
+      opponentSecondHalf?: number; // Liczba podań przeciwnika w 2 połowie
+    };
+    // Liczba podań na połowie przeciwnika
+    passesInOpponentHalf?: {
+      teamFirstHalf?: number; // Liczba podań naszego zespołu na połowie przeciwnika w 1 połowie
+      opponentFirstHalf?: number; // Liczba podań przeciwnika na naszej połowie w 1 połowie
+      teamSecondHalf?: number; // Liczba podań naszego zespołu na połowie przeciwnika w 2 połowie
+      opponentSecondHalf?: number; // Liczba podań przeciwnika na naszej połowie w 2 połowie
+    };
+    // Liczba skutecznych akcji 8s ACC
+    successful8sActions?: {
+      teamFirstHalf?: number; // Liczba skutecznych akcji 8s ACC naszego zespołu w 1 połowie
+      opponentFirstHalf?: number; // Liczba skutecznych akcji 8s ACC przeciwnika w 1 połowie
+      teamSecondHalf?: number; // Liczba skutecznych akcji 8s ACC naszego zespołu w 2 połowie
+      opponentSecondHalf?: number; // Liczba skutecznych akcji 8s ACC przeciwnika w 2 połowie
+    };
+  };
 }
 
 export interface PlayerMinutes {

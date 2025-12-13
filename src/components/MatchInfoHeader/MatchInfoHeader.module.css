@@ -187,7 +187,7 @@
 
 .matchRow {
   display: grid;
-  grid-template-columns: 1fr 0.8fr 1fr 1fr 0.8fr 120px;
+  grid-template-columns: 1fr 0.8fr 1fr 1fr 0.5fr 160px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
@@ -355,6 +355,16 @@
 
 .minutesBtn:hover {
   background-color: #e8f5e9;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.dataBtn {
+  color: #9c27b0;
+}
+
+.dataBtn:hover {
+  background-color: #f3e5f5;
   transform: translateY(-1px);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }

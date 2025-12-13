@@ -1781,7 +1781,7 @@ export default function PackingChart({
                     <div className={styles.playerInfo}>
                       <div className={styles.playerNameRow}>
                         <Link
-                          href={`/zawodnicy/${player.id}`}
+                          href={`/profile/${player.id}`}
                           className={styles.playerNameLink}
                           onClick={(e) => {
                             e.stopPropagation();
