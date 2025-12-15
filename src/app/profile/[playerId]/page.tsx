@@ -921,7 +921,7 @@ export default function PlayerDetailsPage() {
       }
 
       // PxT z dryblingu
-      if ((action as any).playerId === targetPlayerId && action.actionType === 'dribble') {
+      if (action.senderId === targetPlayerId && action.actionType === 'dribble') {
         pxtAsDribbler += pxtValue;
         totalPxT += pxtValue;
         totalXT += xTDifference;
@@ -2378,14 +2378,14 @@ export default function PlayerDetailsPage() {
                       </div>
                     )}
 
-                    {selectedPxtCategory === 'dribbler' && (
+                    {selectedPxtCategory === 'dribbler' && playerStats && (
                       <div className={`${styles.detailsSection} ${styles.detailsSectionWithTiles}`}>
                         <div className={styles.detailsSectionContent}>
                           <h4>Drybling</h4>
                           <div className={styles.detailsRow}>
                             <span className={styles.detailsLabel}>PxT:</span>
                             <span className={styles.detailsValue}>
-                              {playerStats.pxtAsDribbler.toFixed(2)} ({playerStats.pxtDribblingPer90.toFixed(2)} / 90 min)
+                              {(playerStats.pxtAsDribbler ?? 0).toFixed(2)} ({(playerStats.pxtDribblingPer90 ?? 0).toFixed(2)} / 90 min)
                               {teamRanking && (
                                 <>
                                   <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem całkowitego PxT z dryblingu">
@@ -2401,7 +2401,7 @@ export default function PlayerDetailsPage() {
                           <div className={styles.detailsRow}>
                             <span className={styles.detailsLabel}>Akcje / 90 min:</span>
                             <span className={styles.detailsValue}>
-                              {playerStats.dribblingActionsPer90.toFixed(1)} ({playerStats.dribblingActionsCount} dryblingów)
+                              {(playerStats.dribblingActionsPer90 ?? 0).toFixed(1)} ({(playerStats.dribblingActionsCount ?? 0)} dryblingów)
                               {teamRanking && (
                                 <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem liczby dryblingów/90min">
                                   #{teamRanking.dribblerActionsPer90Rank}/{teamRanking.totalPlayers}
@@ -2412,7 +2412,7 @@ export default function PlayerDetailsPage() {
                           <div className={styles.detailsRow}>
                             <span className={styles.detailsLabel}>PxT / drybling:</span>
                             <span className={styles.detailsValue}>
-                              {playerStats.pxtDribblingPerAction.toFixed(2)}
+                              {(playerStats.pxtDribblingPerAction ?? 0).toFixed(2)}
                               {teamRanking && (
                                 <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem PxT/drybling">
                                   #{teamRanking.pxtDribblerPerActionRank}/{teamRanking.totalPlayers}
@@ -2428,12 +2428,12 @@ export default function PlayerDetailsPage() {
                               onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1' ? null : 'p1')}
                             >
                               <span className={styles.countLabel}>P1:</span>
-                              <span className={styles.countValue}>{playerStats.dribblingP1Count}</span>
+                              <span className={styles.countValue}>{playerStats.dribblingP1Count ?? 0}</span>
                               <div className={styles.zoneBreakdown}>
                                 <span className={styles.zoneLabel}>Strefy boczne:</span>
-                                <span className={styles.zoneValue}>{playerStats.dribblingP1CountLateral}</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingP1CountLateral ?? 0}</span>
                                 <span className={styles.zoneLabel}>Strefy centralne:</span>
-                                <span className={styles.zoneValue}>{playerStats.dribblingP1CountCentral}</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingP1CountCentral ?? 0}</span>
                               </div>
                             </div>
                             <div 
@@ -2441,12 +2441,12 @@ export default function PlayerDetailsPage() {
                               onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2' ? null : 'p2')}
                             >
                               <span className={styles.countLabel}>P2:</span>
-                              <span className={styles.countValue}>{playerStats.dribblingP2Count}</span>
+                              <span className={styles.countValue}>{playerStats.dribblingP2Count ?? 0}</span>
                               <div className={styles.zoneBreakdown}>
                                 <span className={styles.zoneLabel}>Strefy boczne:</span>
-                                <span className={styles.zoneValue}>{playerStats.dribblingP2CountLateral}</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingP2CountLateral ?? 0}</span>
                                 <span className={styles.zoneLabel}>Strefy centralne:</span>
-                                <span className={styles.zoneValue}>{playerStats.dribblingP2CountCentral}</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingP2CountCentral ?? 0}</span>
                               </div>
                             </div>
                             <div 
@@ -2454,22 +2454,22 @@ export default function PlayerDetailsPage() {
                               onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3' ? null : 'p3')}
                             >
                               <span className={styles.countLabel}>P3:</span>
-                              <span className={styles.countValue}>{playerStats.dribblingP3Count}</span>
+                              <span className={styles.countValue}>{playerStats.dribblingP3Count ?? 0}</span>
                               <div className={styles.zoneBreakdown}>
                                 <span className={styles.zoneLabel}>Strefy boczne:</span>
-                                <span className={styles.zoneValue}>{playerStats.dribblingP3CountLateral}</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingP3CountLateral ?? 0}</span>
                                 <span className={styles.zoneLabel}>Strefy centralne:</span>
-                                <span className={styles.zoneValue}>{playerStats.dribblingP3CountCentral}</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingP3CountCentral ?? 0}</span>
                               </div>
                             </div>
                             <div className={styles.countItem}>
                               <span className={styles.countLabel}>PK:</span>
-                              <span className={styles.countValue}>{playerStats.dribblingPKCount}</span>
+                              <span className={styles.countValue}>{playerStats.dribblingPKCount ?? 0}</span>
                               <div className={styles.zoneBreakdown}>
                                 <span className={styles.zoneLabel}>Strefy boczne:</span>
-                                <span className={styles.zoneValue}>{playerStats.dribblingPKCountLateral}</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingPKCountLateral ?? 0}</span>
                                 <span className={styles.zoneLabel}>Strefy centralne:</span>
-                                <span className={styles.zoneValue}>{playerStats.dribblingPKCountCentral}</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingPKCountCentral ?? 0}</span>
                               </div>
                             </div>
                             <div 
@@ -2477,12 +2477,12 @@ export default function PlayerDetailsPage() {
                               onClick={() => setSelectedActionFilter(selectedActionFilter === 'shot' ? null : 'shot')}
                             >
                               <span className={styles.countLabel}>Strzał:</span>
-                              <span className={styles.countValue}>{playerStats.dribblingShotCount}</span>
+                              <span className={styles.countValue}>{playerStats.dribblingShotCount ?? 0}</span>
                               <div className={styles.zoneBreakdown}>
                                 <span className={styles.zoneLabel}>Strefy boczne:</span>
-                                <span className={styles.zoneValue}>{playerStats.dribblingShotCountLateral}</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingShotCountLateral ?? 0}</span>
                                 <span className={styles.zoneLabel}>Strefy centralne:</span>
-                                <span className={styles.zoneValue}>{playerStats.dribblingShotCountCentral}</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingShotCountCentral ?? 0}</span>
                               </div>
                             </div>
                             <div 
@@ -2490,12 +2490,12 @@ export default function PlayerDetailsPage() {
                               onClick={() => setSelectedActionFilter(selectedActionFilter === 'goal' ? null : 'goal')}
                             >
                               <span className={styles.countLabel}>Gol:</span>
-                              <span className={styles.countValue}>{playerStats.dribblingGoalCount}</span>
+                              <span className={styles.countValue}>{playerStats.dribblingGoalCount ?? 0}</span>
                               <div className={styles.zoneBreakdown}>
                                 <span className={styles.zoneLabel}>Strefy boczne:</span>
-                                <span className={styles.zoneValue}>{playerStats.dribblingGoalCountLateral}</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingGoalCountLateral ?? 0}</span>
                                 <span className={styles.zoneLabel}>Strefy centralne:</span>
-                                <span className={styles.zoneValue}>{playerStats.dribblingGoalCountCentral}</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingGoalCountCentral ?? 0}</span>
                               </div>
                             </div>
                           </div>
