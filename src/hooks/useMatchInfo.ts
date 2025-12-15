@@ -156,13 +156,48 @@ export function useMatchInfo() {
     };
   }, []);
 
-  // Funkcja do zapisywania cache'u do localStorage
+  // Funkcja do zapisywania cache'u do localStorage z obsługą QuotaExceededError
   const saveLocalCache = () => {
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(LOCAL_MATCHES_CACHE_KEY, JSON.stringify(localCacheRef.current));
-      } catch (err) {
-        console.error('Błąd podczas zapisywania cache do localStorage:', err);
+        const cacheString = JSON.stringify(localCacheRef.current);
+        localStorage.setItem(LOCAL_MATCHES_CACHE_KEY, cacheString);
+      } catch (err: any) {
+        if (err?.name === 'QuotaExceededError' || err?.message?.includes('quota')) {
+          console.warn('localStorage quota przekroczony, próba zmniejszenia cache...');
+          // Próbuj zmniejszyć cache - zostaw tylko ostatnie 50 meczów
+          try {
+            const reducedData = localCacheRef.current.data.slice(-50);
+            const reducedCache = {
+              data: reducedData,
+              timestamp: localCacheRef.current.timestamp,
+              lastTeamId: localCacheRef.current.lastTeamId
+            };
+            localStorage.setItem(LOCAL_MATCHES_CACHE_KEY, JSON.stringify(reducedCache));
+            localCacheRef.current = reducedCache;
+            console.info('Cache zmniejszony do 50 ostatnich meczów');
+          } catch (reduceErr) {
+            // Jeśli nadal nie działa, wyczyść cache całkowicie
+            console.warn('Nie można zapisać cache, czyszczenie localStorage...');
+            try {
+              localStorage.removeItem(LOCAL_MATCHES_CACHE_KEY);
+              // Wyczyść też inne potencjalnie duże klucze
+              const keysToCheck = ['packing_matches_cache', 'firestore_offline_mode'];
+              keysToCheck.forEach(key => {
+                try {
+                  const item = localStorage.getItem(key);
+                  if (item && item.length > 100000) { // Jeśli większe niż 100KB
+                    localStorage.removeItem(key);
+                  }
+                } catch {}
+              });
+            } catch (clearErr) {
+              console.error('Nie można wyczyścić localStorage:', clearErr);
+            }
+          }
+        } else {
+          console.error('Błąd podczas zapisywania cache do localStorage:', err);
+        }
       }
     }
   };
@@ -185,8 +220,14 @@ export function useMatchInfo() {
 
   // Funkcja do aktualizacji lokalnego cache'u
   const updateLocalCache = (newData: TeamInfo[], teamId?: string) => {
+    // Ogranicz cache do maksymalnie 100 meczów, aby uniknąć problemów z localStorage
+    const maxCacheSize = 100;
+    const limitedData = newData.length > maxCacheSize 
+      ? newData.slice(-maxCacheSize) 
+      : newData;
+    
     localCacheRef.current = {
-      data: newData,
+      data: limitedData,
       timestamp: Date.now(),
       lastTeamId: teamId || localCacheRef.current.lastTeamId
     };

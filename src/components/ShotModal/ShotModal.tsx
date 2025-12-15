@@ -49,6 +49,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
     linePlayers: [] as string[],
     linePlayersCount: 0,
     pkPlayersCount: 0,
+    isP1Active: true,
+    isP2Active: false,
     isContact1: false,
     isContact2: false,
     isContact3Plus: false,
@@ -135,7 +137,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
         blockingPlayers: editingShot.blockingPlayers || [],
         linePlayers: (editingShot as any)?.linePlayers || [],
         linePlayersCount: (editingShot as any)?.linePlayersCount || 0,
-        pkPlayersCount: (editingShot as any)?.pkPlayersCount || 0,
+        pkPlayersCount: (editingShot as any)?.pkPlayersCount || 1,
+        isP1Active: (editingShot as any)?.pkPlayersCount === 1 || (editingShot as any)?.pkPlayersCount === 2 ? false : true,
+        isP2Active: (editingShot as any)?.pkPlayersCount === 2 || false,
         isContact1: editingShot.isContact1 || false,
         isContact2: editingShot.isContact2 || false,
         isContact3Plus: editingShot.isContact3Plus || false,
@@ -164,7 +168,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
         blockingPlayers: [],
         linePlayers: [],
         linePlayersCount: 0,
-        pkPlayersCount: 0,
+        pkPlayersCount: 1,
+        isP1Active: true,
+        isP2Active: false,
         isContact1: false,
         isContact2: false,
         isContact3Plus: false,
@@ -210,7 +216,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
       blockingPlayers: shotType === "blocked" ? prev.blockingPlayers : [], // Reset jeśli nie zablokowany
       linePlayers: shotType === "blocked" ? prev.linePlayers : [], // Reset jeśli nie zablokowany
       linePlayersCount: shotType === "blocked" ? prev.linePlayersCount : 0, // Reset jeśli nie zablokowany
-      pkPlayersCount: shotType === "blocked" ? prev.pkPlayersCount : 0, // Reset jeśli nie zablokowany
+      pkPlayersCount: shotType === "blocked" ? prev.pkPlayersCount : 1, // Reset jeśli nie zablokowany
+      isP1Active: shotType === "blocked" ? prev.isP1Active : true,
+      isP2Active: shotType === "blocked" ? prev.isP2Active : false,
     }));
   };
 
@@ -223,7 +231,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
       blockingPlayers: [], // Reset zawodników blokujących
       linePlayers: [], // Reset zawodników na linii
       linePlayersCount: 0, // Reset liczby zawodników na linii
-      pkPlayersCount: 0, // Reset liczby zawodników w PK
+      pkPlayersCount: 1, // Reset liczby zawodników w PK
+      isP1Active: true,
+      isP2Active: false,
     });
   };
 
@@ -340,7 +350,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       blockingPlayers: formData.blockingPlayers,
       linePlayers: formData.linePlayers,
       linePlayersCount: formData.linePlayersCount,
-      pkPlayersCount: formData.pkPlayersCount,
+      pkPlayersCount: formData.isP1Active ? 1 : formData.isP2Active ? 2 : 0,
       isContact1: formData.isContact1,
       isContact2: formData.isContact2,
       isContact3Plus: formData.isContact3Plus,
@@ -403,17 +413,30 @@ const ShotModal: React.FC<ShotModalProps> = ({
                 </div>
               )}
               <div className={styles.pkPlayersCountInput}>
-                <label htmlFor="pk-players-count">Zawodnicy w PK:</label>
-                <input
-                  type="number"
-                  id="pk-players-count"
-                  step="1"
-                  min="0"
-                  max="11"
-                  value={formData.pkPlayersCount}
-                  onChange={(e) => setFormData({...formData, pkPlayersCount: parseInt(e.target.value) || 0})}
-                  className={styles.input}
-                />
+                <div className={styles.pkToggle}>
+                  <button
+                    type="button"
+                    className={`${styles.pkButton} ${formData.isP1Active ? styles.activeP1 : ''}`}
+                    onClick={() => setFormData({
+                      ...formData,
+                      isP1Active: true,
+                      isP2Active: false,
+                    })}
+                  >
+                    1P
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.pkButton} ${formData.isP2Active ? styles.activeP2 : ''}`}
+                    onClick={() => setFormData({
+                      ...formData,
+                      isP1Active: false,
+                      isP2Active: true,
+                    })}
+                  >
+                    2P
+                  </button>
+                </div>
               </div>
               <div className={styles.finalXG}>
                 Finalny xG: {calculateFinalXG()}%

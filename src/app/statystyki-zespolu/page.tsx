@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Action, TeamInfo } from "@/types";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { useTeams } from "@/hooks/useTeams";
@@ -13,6 +13,7 @@ import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPitch";
+import XGPitch from "@/components/XGPitch/XGPitch";
 import { getPlayerFullName } from "@/utils/playerUtils";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import styles from "./statystyki-zespolu.module.css";
@@ -75,7 +76,27 @@ export default function StatystykiZespoluPage() {
   const [allShots, setAllShots] = useState<any[]>([]);
   const [allPKEntries, setAllPKEntries] = useState<any[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
-  const [expandedCategory, setExpandedCategory] = useState<string | null>('pxt');
+  const [expandedCategory, setExpandedCategory] = useState<'pxt' | 'matchData' | 'xg' | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('statystykiZespolu_expandedCategory');
+      if (saved && ['pxt', 'matchData', 'xg'].includes(saved)) {
+        return saved as 'pxt' | 'matchData' | 'xg';
+      }
+      return 'pxt';
+    }
+    return 'pxt';
+  });
+
+  // Zapisuj wybraną kategorię w localStorage przy każdej zmianie
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (expandedCategory) {
+        localStorage.setItem('statystykiZespolu_expandedCategory', expandedCategory);
+      } else {
+        localStorage.removeItem('statystykiZespolu_expandedCategory');
+      }
+    }
+  }, [expandedCategory]);
   const [selectedSeason, setSelectedSeason] = useState<string>("");
   const [selectedMetric, setSelectedMetric] = useState<'pxt' | 'xt' | 'packing'>('pxt');
   const [selectedActionType, setSelectedActionType] = useState<'pass' | 'dribble' | 'all'>('all');
@@ -83,6 +104,13 @@ export default function StatystykiZespoluPage() {
   const [heatmapDirection, setHeatmapDirection] = useState<"from" | "to">("from");
   const [selectedPxtCategory, setSelectedPxtCategory] = useState<"sender" | "receiver" | "dribbler">("sender");
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
+  const [selectedActionFilter, setSelectedActionFilter] = useState<'p1' | 'p2' | 'p3' | 'pk' | 'shot' | 'goal' | null>(null);
+  const [actionsModalOpen, setActionsModalOpen] = useState(false);
+  const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<{ playerId: string; playerName: string; zoneName: string } | null>(null);
+  const [matchDataPeriod, setMatchDataPeriod] = useState<'total' | 'firstHalf' | 'secondHalf'>('total');
+  const [passesExpanded, setPassesExpanded] = useState(false);
+  const [xgExpanded, setXgExpanded] = useState(false);
+  const [shotsExpanded, setShotsExpanded] = useState(false);
   const [zoneDetails, setZoneDetails] = useState<{
     zoneName: string;
     players: Array<{
@@ -254,18 +282,35 @@ export default function StatystykiZespoluPage() {
       });
     }
 
+    // Oblicz linię trendu dla PxT (regresja liniowa)
+    if (data.length > 1) {
+      const n = data.length;
+      const sumX = data.reduce((sum, d, i) => sum + i, 0);
+      const sumY = data.reduce((sum, d) => sum + d.pxt, 0);
+      const sumXY = data.reduce((sum, d, i) => sum + i * d.pxt, 0);
+      const sumXX = data.reduce((sum, d, i) => sum + i * i, 0);
+      
+      const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+      const intercept = (sumY - slope * sumX) / n;
+      
+      return data.map((d, i) => ({
+        ...d,
+        trendLine: slope * i + intercept,
+      }));
+    }
+    
     return data;
   }, [allActions]);
 
   // Przygotuj podsumowanie połówek
   const halfTimeStats = useMemo(() => {
     if (allActions.length === 0) return { 
-      firstHalf: { packing: 0, pxt: 0, xt: 0, passCount: 0, dribbleCount: 0, pxtPerPass: 0, pxtPerDribble: 0 }, 
-      secondHalf: { packing: 0, pxt: 0, xt: 0, passCount: 0, dribbleCount: 0, pxtPerPass: 0, pxtPerDribble: 0 } 
+      firstHalf: { packing: 0, pxt: 0, xt: 0, passCount: 0, dribbleCount: 0, pxtPerPass: 0, pxtPerDribble: 0, xtPerPass: 0, xtPerDribble: 0, packingPerPass: 0, packingPerDribble: 0 }, 
+      secondHalf: { packing: 0, pxt: 0, xt: 0, passCount: 0, dribbleCount: 0, pxtPerPass: 0, pxtPerDribble: 0, xtPerPass: 0, xtPerDribble: 0, packingPerPass: 0, packingPerDribble: 0 } 
     };
 
-    let firstHalf = { packing: 0, pxt: 0, xt: 0, passCount: 0, dribbleCount: 0, pxtPerPass: 0, pxtPerDribble: 0 };
-    let secondHalf = { packing: 0, pxt: 0, xt: 0, passCount: 0, dribbleCount: 0, pxtPerPass: 0, pxtPerDribble: 0 };
+    let firstHalf = { packing: 0, pxt: 0, xt: 0, passCount: 0, dribbleCount: 0, pxtPerPass: 0, pxtPerDribble: 0, xtPerPass: 0, xtPerDribble: 0, packingPerPass: 0, packingPerDribble: 0 };
+    let secondHalf = { packing: 0, pxt: 0, xt: 0, passCount: 0, dribbleCount: 0, pxtPerPass: 0, pxtPerDribble: 0, xtPerPass: 0, xtPerDribble: 0, packingPerPass: 0, packingPerDribble: 0 };
 
     // Filtruj akcje według wybranego typu
     const filteredActions = allActions.filter(action => {
@@ -302,6 +347,18 @@ export default function StatystykiZespoluPage() {
     secondHalf.pxtPerPass = secondHalf.passCount > 0 ? secondHalf.pxt / secondHalf.passCount : 0;
     firstHalf.pxtPerDribble = firstHalf.dribbleCount > 0 ? firstHalf.pxt / firstHalf.dribbleCount : 0;
     secondHalf.pxtPerDribble = secondHalf.dribbleCount > 0 ? secondHalf.pxt / secondHalf.dribbleCount : 0;
+    
+    // Oblicz xT/podanie i xT/drybling dla każdej połowy
+    firstHalf.xtPerPass = firstHalf.passCount > 0 ? firstHalf.xt / firstHalf.passCount : 0;
+    secondHalf.xtPerPass = secondHalf.passCount > 0 ? secondHalf.xt / secondHalf.passCount : 0;
+    firstHalf.xtPerDribble = firstHalf.dribbleCount > 0 ? firstHalf.xt / firstHalf.dribbleCount : 0;
+    secondHalf.xtPerDribble = secondHalf.dribbleCount > 0 ? secondHalf.xt / secondHalf.dribbleCount : 0;
+    
+    // Oblicz Packing/podanie i Packing/drybling dla każdej połowy
+    firstHalf.packingPerPass = firstHalf.passCount > 0 ? firstHalf.packing / firstHalf.passCount : 0;
+    secondHalf.packingPerPass = secondHalf.passCount > 0 ? secondHalf.packing / secondHalf.passCount : 0;
+    firstHalf.packingPerDribble = firstHalf.dribbleCount > 0 ? firstHalf.packing / firstHalf.dribbleCount : 0;
+    secondHalf.packingPerDribble = secondHalf.dribbleCount > 0 ? secondHalf.packing / secondHalf.dribbleCount : 0;
 
     return { firstHalf, secondHalf };
   }, [allActions, selectedActionType]);
@@ -491,122 +548,179 @@ export default function StatystykiZespoluPage() {
     let dribblingGoalCountCentral = 0;
 
     // Oblicz PxT z akcji
+    // WAŻNE: Liczniki są obliczane tylko dla akcji z wybranej kategorii (selectedPxtCategory),
+    // aby zgadzały się z heatmapą
     allActions.forEach(action => {
+      // Filtruj akcje według kategorii (tak jak w heatmapie)
+      if (selectedPxtCategory === 'dribbler' && action.actionType !== 'dribble') return;
+      if (selectedPxtCategory !== 'dribbler' && action.actionType === 'dribble') return;
+      
       const packingPoints = action.packingPoints || 0;
       const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
       const pxtValue = xTDifference * packingPoints;
-      totalPxT += pxtValue;
 
       const isDribble = action.actionType === 'dribble';
       const isPass = action.actionType === 'pass';
 
-      // PxT jako podający (sender)
-      if (isPass && action.senderId) {
+      // PxT jako podający (sender) - tylko jeśli selectedPxtCategory === 'sender'
+      if (selectedPxtCategory === 'sender' && isPass && action.senderId) {
         pxtAsSender += pxtValue;
+        totalPxT += pxtValue; // Zwiększ totalPxT tylko dla akcji sender
         senderActionsCount += 1;
         senderPassCount += 1;
 
-        const senderToZoneName = convertZoneToName(action.toZone ?? action.endZone ?? undefined);
-        const senderIsLateral = isLateralZone(senderToZoneName);
+        // Użyj tej samej strefy co heatmapa - jeśli heatmapDirection === 'from', użyj strefy źródłowej, w przeciwnym razie docelowej
+        const senderZoneName = heatmapDirection === "from" 
+          ? convertZoneToName(action.fromZone || action.startZone)
+          : convertZoneToName(action.toZone ?? action.endZone ?? undefined);
+        
+        // Licz tylko akcje, które mają strefę (tak jak heatmapa)
+        if (senderZoneName) {
+          const senderIsLateral = isLateralZone(senderZoneName);
 
-        if (action.isPenaltyAreaEntry) {
-          senderPKCount += 1;
-          if (senderIsLateral) senderPKCountLateral += 1;
-          else senderPKCountCentral += 1;
-        } else if (action.isShot) {
-          senderShotCount += 1;
-          if (senderIsLateral) senderShotCountLateral += 1;
-          else senderShotCountCentral += 1;
-          if (action.isGoal) {
-            senderGoalCount += 1;
-            if (senderIsLateral) senderGoalCountLateral += 1;
-            else senderGoalCountCentral += 1;
+          // PK może być jednocześnie strzałem, więc sprawdzamy oba warunki niezależnie
+          if (action.isPenaltyAreaEntry) {
+            senderPKCount += 1;
+            if (senderIsLateral) senderPKCountLateral += 1;
+            else senderPKCountCentral += 1;
           }
-        } else if (action.isP3 || action.isP3Start) {
-          senderP3Count += 1;
-          if (senderIsLateral) senderP3CountLateral += 1;
-          else senderP3CountCentral += 1;
-        } else if (action.isP2 || action.isP2Start) {
-          senderP2Count += 1;
-          if (senderIsLateral) senderP2CountLateral += 1;
-          else senderP2CountCentral += 1;
-        } else if (action.isP1 || action.isP1Start) {
-          senderP1Count += 1;
-          if (senderIsLateral) senderP1CountLateral += 1;
-          else senderP1CountCentral += 1;
+          
+          // Strzał może być jednocześnie PK, więc sprawdzamy niezależnie
+          if (action.isShot) {
+            senderShotCount += 1;
+            if (senderIsLateral) senderShotCountLateral += 1;
+            else senderShotCountCentral += 1;
+            if (action.isGoal) {
+              senderGoalCount += 1;
+              if (senderIsLateral) senderGoalCountLateral += 1;
+              else senderGoalCountCentral += 1;
+            }
+          }
+          
+          // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
+          // Użyj tej samej logiki co w profilu zawodnika (action.isP1 || action.isP1Start)
+          if (action.isP3 || action.isP3Start) {
+            senderP3Count += 1;
+            if (senderIsLateral) senderP3CountLateral += 1;
+            else senderP3CountCentral += 1;
+          }
+          if (action.isP2 || action.isP2Start) {
+            senderP2Count += 1;
+            if (senderIsLateral) senderP2CountLateral += 1;
+            else senderP2CountCentral += 1;
+          }
+          if (action.isP1 || action.isP1Start) {
+            senderP1Count += 1;
+            if (senderIsLateral) senderP1CountLateral += 1;
+            else senderP1CountCentral += 1;
+          }
         }
       }
 
-      // PxT jako przyjmujący (receiver)
-      if (isPass && action.receiverId) {
+      // PxT jako przyjmujący (receiver) - tylko jeśli selectedPxtCategory === 'receiver'
+      if (selectedPxtCategory === 'receiver' && isPass && action.receiverId) {
         pxtAsReceiver += pxtValue;
+        totalPxT += pxtValue; // Zwiększ totalPxT tylko dla akcji receiver
         receiverActionsCount += 1;
         receiverPassCount += 1;
 
-        const receiverToZoneName = convertZoneToName(action.toZone ?? action.endZone ?? undefined);
-        const receiverIsLateral = isLateralZone(receiverToZoneName);
+        // Użyj tej samej strefy co heatmapa - jeśli heatmapDirection === 'to', użyj strefy docelowej, w przeciwnym razie źródłowej
+        const receiverZoneName = heatmapDirection === "to" 
+          ? convertZoneToName(action.toZone ?? action.endZone ?? undefined)
+          : convertZoneToName(action.fromZone ?? action.startZone ?? undefined);
+        
+        // Licz tylko akcje, które mają strefę (tak jak heatmapa)
+        if (receiverZoneName) {
+          const receiverIsLateral = isLateralZone(receiverZoneName);
 
-        if (action.isPenaltyAreaEntry) {
-          receiverPKCount += 1;
-          if (receiverIsLateral) receiverPKCountLateral += 1;
-          else receiverPKCountCentral += 1;
-        } else if (action.isShot) {
-          receiverShotCount += 1;
-          if (receiverIsLateral) receiverShotCountLateral += 1;
-          else receiverShotCountCentral += 1;
-          if (action.isGoal) {
-            receiverGoalCount += 1;
-            if (receiverIsLateral) receiverGoalCountLateral += 1;
-            else receiverGoalCountCentral += 1;
+          // PK może być jednocześnie strzałem, więc sprawdzamy oba warunki niezależnie
+          if (action.isPenaltyAreaEntry) {
+            receiverPKCount += 1;
+            if (receiverIsLateral) receiverPKCountLateral += 1;
+            else receiverPKCountCentral += 1;
           }
-        } else if (action.isP3 || action.isP3Start) {
-          receiverP3Count += 1;
-          if (receiverIsLateral) receiverP3CountLateral += 1;
-          else receiverP3CountCentral += 1;
-        } else if (action.isP2 || action.isP2Start) {
-          receiverP2Count += 1;
-          if (receiverIsLateral) receiverP2CountLateral += 1;
-          else receiverP2CountCentral += 1;
-        } else if (action.isP1 || action.isP1Start) {
-          receiverP1Count += 1;
-          if (receiverIsLateral) receiverP1CountLateral += 1;
-          else receiverP1CountCentral += 1;
+          
+          // Strzał może być jednocześnie PK, więc sprawdzamy niezależnie
+          if (action.isShot) {
+            receiverShotCount += 1;
+            if (receiverIsLateral) receiverShotCountLateral += 1;
+            else receiverShotCountCentral += 1;
+            if (action.isGoal) {
+              receiverGoalCount += 1;
+              if (receiverIsLateral) receiverGoalCountLateral += 1;
+              else receiverGoalCountCentral += 1;
+            }
+          }
+          
+          // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
+          // Użyj tej samej logiki co w profilu zawodnika (action.isP1 || action.isP1Start)
+          if (action.isP3 || action.isP3Start) {
+            receiverP3Count += 1;
+            if (receiverIsLateral) receiverP3CountLateral += 1;
+            else receiverP3CountCentral += 1;
+          }
+          if (action.isP2 || action.isP2Start) {
+            receiverP2Count += 1;
+            if (receiverIsLateral) receiverP2CountLateral += 1;
+            else receiverP2CountCentral += 1;
+          }
+          if (action.isP1 || action.isP1Start) {
+            receiverP1Count += 1;
+            if (receiverIsLateral) receiverP1CountLateral += 1;
+            else receiverP1CountCentral += 1;
+          }
         }
       }
 
-      // PxT z dryblingu
-      if (isDribble && action.senderId) {
+      // PxT z dryblingu - tylko jeśli selectedPxtCategory === 'dribbler'
+      if (selectedPxtCategory === 'dribbler' && isDribble && action.senderId) {
         pxtAsDribbler += pxtValue;
+        totalPxT += pxtValue; // Zwiększ totalPxT tylko dla akcji dribbler
         dribblingActionsCount += 1;
 
-        const dribblingToZoneName = convertZoneToName(action.toZone ?? action.endZone ?? undefined);
-        const dribblingIsLateral = isLateralZone(dribblingToZoneName);
+        // Użyj tej samej strefy co heatmapa - dla dryblingu zawsze używamy startZone/fromZone
+        const dribblingZoneName = convertZoneToName(action.startZone || action.fromZone);
+        
+        // Licz tylko akcje, które mają strefę (tak jak heatmapa)
+        if (dribblingZoneName) {
+          const dribblingIsLateral = isLateralZone(dribblingZoneName);
 
-        if (action.isPenaltyAreaEntry) {
-          dribblingPKCount += 1;
-          if (dribblingIsLateral) dribblingPKCountLateral += 1;
-          else dribblingPKCountCentral += 1;
-        } else if (action.isShot) {
-          dribblingShotCount += 1;
-          if (dribblingIsLateral) dribblingShotCountLateral += 1;
-          else dribblingShotCountCentral += 1;
-          if (action.isGoal) {
-            dribblingGoalCount += 1;
-            if (dribblingIsLateral) dribblingGoalCountLateral += 1;
-            else dribblingGoalCountCentral += 1;
+          // PK może być jednocześnie strzałem, więc sprawdzamy oba warunki niezależnie
+          if (action.isPenaltyAreaEntry) {
+            dribblingPKCount += 1;
+            if (dribblingIsLateral) dribblingPKCountLateral += 1;
+            else dribblingPKCountCentral += 1;
           }
-        } else if (action.isP3 || action.isP3Start) {
-          dribblingP3Count += 1;
-          if (dribblingIsLateral) dribblingP3CountLateral += 1;
-          else dribblingP3CountCentral += 1;
-        } else if (action.isP2 || action.isP2Start) {
-          dribblingP2Count += 1;
-          if (dribblingIsLateral) dribblingP2CountLateral += 1;
-          else dribblingP2CountCentral += 1;
-        } else if (action.isP1 || action.isP1Start) {
-          dribblingP1Count += 1;
-          if (dribblingIsLateral) dribblingP1CountLateral += 1;
-          else dribblingP1CountCentral += 1;
+          
+          // Strzał może być jednocześnie PK, więc sprawdzamy niezależnie
+          if (action.isShot) {
+            dribblingShotCount += 1;
+            if (dribblingIsLateral) dribblingShotCountLateral += 1;
+            else dribblingShotCountCentral += 1;
+            if (action.isGoal) {
+              dribblingGoalCount += 1;
+              if (dribblingIsLateral) dribblingGoalCountLateral += 1;
+              else dribblingGoalCountCentral += 1;
+            }
+          }
+          
+          // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
+          // Użyj tej samej logiki co w profilu zawodnika (action.isP1 || action.isP1Start)
+          if (action.isP3 || action.isP3Start) {
+            dribblingP3Count += 1;
+            if (dribblingIsLateral) dribblingP3CountLateral += 1;
+            else dribblingP3CountCentral += 1;
+          }
+          if (action.isP2 || action.isP2Start) {
+            dribblingP2Count += 1;
+            if (dribblingIsLateral) dribblingP2CountLateral += 1;
+            else dribblingP2CountCentral += 1;
+          }
+          if (action.isP1 || action.isP1Start) {
+            dribblingP1Count += 1;
+            if (dribblingIsLateral) dribblingP1CountLateral += 1;
+            else dribblingP1CountCentral += 1;
+          }
         }
       }
 
@@ -742,7 +856,7 @@ export default function StatystykiZespoluPage() {
       dribblingGoalCountLateral,
       dribblingGoalCountCentral,
     };
-  }, [allActions, allShots, allPKEntries, selectedTeam]);
+  }, [allActions, allShots, allPKEntries, selectedTeam, heatmapDirection, selectedPxtCategory]);
 
   // Przygotuj dane dla heatmapy zespołu i agregacja danych zawodników
   const teamHeatmapData = useMemo(() => {
@@ -754,6 +868,24 @@ export default function StatystykiZespoluPage() {
       // Filtruj akcje według kategorii
       if (selectedPxtCategory === 'dribbler' && action.actionType !== 'dribble') return;
       if (selectedPxtCategory !== 'dribbler' && action.actionType === 'dribble') return;
+
+      // Filtruj akcje według wybranego typu akcji (P1, P2, P3, PK, Strzał, Gol)
+      if (selectedActionFilter) {
+        // Użyj tej samej logiki co w profilu zawodnika (action.isP1 || action.isP1Start)
+        const isP1 = action.isP1 || action.isP1Start || false;
+        const isP2 = action.isP2 || action.isP2Start || false;
+        const isP3 = action.isP3 || action.isP3Start || false;
+        const isPK = action.isPenaltyAreaEntry || false;
+        const isShot = action.isShot || false;
+        const isGoal = action.isGoal || false;
+
+        if (selectedActionFilter === 'p1' && !isP1) return;
+        if (selectedActionFilter === 'p2' && !isP2) return;
+        if (selectedActionFilter === 'p3' && !isP3) return;
+        if (selectedActionFilter === 'pk' && !isPK) return;
+        if (selectedActionFilter === 'shot' && !isShot) return;
+        if (selectedActionFilter === 'goal' && !isGoal) return;
+      }
 
       let zone: string | undefined;
       if (selectedPxtCategory === 'dribbler') {
@@ -791,7 +923,7 @@ export default function StatystykiZespoluPage() {
     });
 
     return heatmap;
-  }, [allActions, heatmapMode, heatmapDirection, selectedPxtCategory]);
+  }, [allActions, heatmapMode, heatmapDirection, selectedPxtCategory, selectedActionFilter]);
 
   // Agregacja danych zawodników dla każdej strefy
   const zonePlayerStats = useMemo(() => {
@@ -800,6 +932,25 @@ export default function StatystykiZespoluPage() {
     allActions.forEach(action => {
       // Filtruj akcje według kategorii
       if (selectedPxtCategory === 'dribbler' && action.actionType !== 'dribble') return;
+      
+      // Filtruj akcje według wybranego typu akcji (P1, P2, P3, PK, Strzał, Gol)
+      if (selectedActionFilter) {
+        // Użyj tej samej logiki co w profilu zawodnika (action.isP1 || action.isP1Start)
+        const isP1 = action.isP1 || action.isP1Start || false;
+        const isP2 = action.isP2 || action.isP2Start || false;
+        const isP3 = action.isP3 || action.isP3Start || false;
+        const isPK = action.isPenaltyAreaEntry || false;
+        const isShot = action.isShot || false;
+        const isGoal = action.isGoal || false;
+
+        if (selectedActionFilter === 'p1' && !isP1) return;
+        if (selectedActionFilter === 'p2' && !isP2) return;
+        if (selectedActionFilter === 'p3' && !isP3) return;
+        if (selectedActionFilter === 'pk' && !isPK) return;
+        if (selectedActionFilter === 'shot' && !isShot) return;
+        if (selectedActionFilter === 'goal' && !isGoal) return;
+      }
+      
       if (selectedPxtCategory === 'dribbler' && action.actionType === 'dribble') {
         // Dla dryblingu zawsze używamy startZone i senderId
         const zone = action.startZone || action.fromZone;
@@ -876,7 +1027,7 @@ export default function StatystykiZespoluPage() {
     });
 
     return stats;
-  }, [allActions, heatmapMode, heatmapDirection, selectedPxtCategory]);
+  }, [allActions, heatmapMode, heatmapDirection, selectedPxtCategory, selectedActionFilter]);
 
   // Automatyczne odświeżanie szczegółów strefy przy zmianie kategorii lub kierunku
   useEffect(() => {
@@ -1069,13 +1220,23 @@ export default function StatystykiZespoluPage() {
             {/* Lista kategorii po lewej */}
             <div className={styles.categoriesList}>
               <div
+                className={`${styles.categoryItem} ${expandedCategory === 'matchData' ? styles.active : ''}`}
+                onClick={() => setExpandedCategory(expandedCategory === 'matchData' ? null : 'matchData')}
+              >
+                <span className={styles.categoryName}>Dane meczu</span>
+                <span className={styles.categoryValue}>-</span>
+              </div>
+              <div
                 className={`${styles.categoryItem} ${expandedCategory === 'pxt' ? styles.active : ''}`}
                 onClick={() => setExpandedCategory(expandedCategory === 'pxt' ? null : 'pxt')}
               >
                 <span className={styles.categoryName}>PxT</span>
                 <span className={styles.categoryValue}>{teamStats.pxtPer90.toFixed(2)}</span>
           </div>
-              <div className={styles.categoryItem}>
+              <div
+                className={`${styles.categoryItem} ${expandedCategory === 'xg' ? styles.active : ''}`}
+                onClick={() => setExpandedCategory(expandedCategory === 'xg' ? null : 'xg')}
+              >
                 <span className={styles.categoryName}>xG</span>
                 <span className={styles.categoryValue}>{teamStats.xgPer90.toFixed(2)}</span>
               </div>
@@ -1094,6 +1255,635 @@ export default function StatystykiZespoluPage() {
       </div>
 
             {/* Szczegóły po prawej */}
+            {expandedCategory === 'matchData' && selectedMatchInfo && (
+              <div className={styles.detailsPanel}>
+                <h3>Dane meczu</h3>
+                
+                {selectedMatchInfo.matchData ? (
+                  <div className={styles.matchDataDetails}>
+                    {/* Przełącznik połowy */}
+                    <div className={styles.matchDataPeriodSelector}>
+                      <button
+                        className={`${styles.periodButton} ${matchDataPeriod === 'total' ? styles.active : ''}`}
+                        onClick={() => setMatchDataPeriod('total')}
+                      >
+                        Suma
+                      </button>
+                      <button
+                        className={`${styles.periodButton} ${matchDataPeriod === 'firstHalf' ? styles.active : ''}`}
+                        onClick={() => setMatchDataPeriod('firstHalf')}
+                      >
+                        1. połowa
+                      </button>
+                      <button
+                        className={`${styles.periodButton} ${matchDataPeriod === 'secondHalf' ? styles.active : ''}`}
+                        onClick={() => setMatchDataPeriod('secondHalf')}
+                      >
+                        2. połowa
+                      </button>
+                    </div>
+                    {(() => {
+                      const isHome = selectedMatchInfo.isHome;
+                      const teamName = selectedMatchInfo.team ? (availableTeams.find(t => t.id === selectedMatchInfo.team)?.name || 'Nasz zespół') : 'Nasz zespół';
+                      const opponentName = selectedMatchInfo.opponent || 'Przeciwnik';
+                      
+                      // Określ, który zespół jest gospodarzem, a który gościem
+                      const homeTeamName = isHome ? teamName : opponentName;
+                      const awayTeamName = isHome ? opponentName : teamName;
+                      
+                      // Funkcja pomocnicza do pobierania danych w zależności od wybranego okresu
+                      const getData = (field: 'team' | 'opponent', half: 'FirstHalf' | 'SecondHalf' | null = null) => {
+                        const period = matchDataPeriod === 'firstHalf' ? 'FirstHalf' : matchDataPeriod === 'secondHalf' ? 'SecondHalf' : null;
+                        const useHalf = half || period;
+                        
+                        if (field === 'team') {
+                          if (useHalf === 'FirstHalf') {
+                            return {
+                              accurate: selectedMatchInfo.matchData?.passes?.[`team${useHalf}`] || 0,
+                              inaccurate: selectedMatchInfo.matchData?.passesInaccurate?.[`team${useHalf}`] || 0,
+                            };
+                          } else if (useHalf === 'SecondHalf') {
+                            return {
+                              accurate: selectedMatchInfo.matchData?.passes?.[`team${useHalf}`] || 0,
+                              inaccurate: selectedMatchInfo.matchData?.passesInaccurate?.[`team${useHalf}`] || 0,
+                            };
+                          } else {
+                            return {
+                              accurate: (selectedMatchInfo.matchData?.passes?.teamFirstHalf || 0) + (selectedMatchInfo.matchData?.passes?.teamSecondHalf || 0),
+                              inaccurate: (selectedMatchInfo.matchData?.passesInaccurate?.teamFirstHalf || 0) + (selectedMatchInfo.matchData?.passesInaccurate?.teamSecondHalf || 0),
+                            };
+                          }
+                        } else {
+                          if (useHalf === 'FirstHalf') {
+                            return {
+                              accurate: selectedMatchInfo.matchData?.passes?.[`opponent${useHalf}`] || 0,
+                              inaccurate: selectedMatchInfo.matchData?.passesInaccurate?.[`opponent${useHalf}`] || 0,
+                            };
+                          } else if (useHalf === 'SecondHalf') {
+                            return {
+                              accurate: selectedMatchInfo.matchData?.passes?.[`opponent${useHalf}`] || 0,
+                              inaccurate: selectedMatchInfo.matchData?.passesInaccurate?.[`opponent${useHalf}`] || 0,
+                            };
+                          } else {
+                            return {
+                              accurate: (selectedMatchInfo.matchData?.passes?.opponentFirstHalf || 0) + (selectedMatchInfo.matchData?.passes?.opponentSecondHalf || 0),
+                              inaccurate: (selectedMatchInfo.matchData?.passesInaccurate?.opponentFirstHalf || 0) + (selectedMatchInfo.matchData?.passesInaccurate?.opponentSecondHalf || 0),
+                            };
+                          }
+                        }
+                      };
+                      
+                      const getOpponentHalfData = (field: 'team' | 'opponent', half: 'FirstHalf' | 'SecondHalf' | null = null) => {
+                        const period = matchDataPeriod === 'firstHalf' ? 'FirstHalf' : matchDataPeriod === 'secondHalf' ? 'SecondHalf' : null;
+                        const useHalf = half || period;
+                        
+                        if (field === 'team') {
+                          if (useHalf === 'FirstHalf') {
+                            return {
+                              accurate: selectedMatchInfo.matchData?.passesInOpponentHalf?.[`team${useHalf}`] || 0,
+                              inaccurate: selectedMatchInfo.matchData?.passesInOpponentHalfInaccurate?.[`team${useHalf}`] || 0,
+                            };
+                          } else if (useHalf === 'SecondHalf') {
+                            return {
+                              accurate: selectedMatchInfo.matchData?.passesInOpponentHalf?.[`team${useHalf}`] || 0,
+                              inaccurate: selectedMatchInfo.matchData?.passesInOpponentHalfInaccurate?.[`team${useHalf}`] || 0,
+                            };
+                          } else {
+                            return {
+                              accurate: (selectedMatchInfo.matchData?.passesInOpponentHalf?.teamFirstHalf || 0) + (selectedMatchInfo.matchData?.passesInOpponentHalf?.teamSecondHalf || 0),
+                              inaccurate: (selectedMatchInfo.matchData?.passesInOpponentHalfInaccurate?.teamFirstHalf || 0) + (selectedMatchInfo.matchData?.passesInOpponentHalfInaccurate?.teamSecondHalf || 0),
+                            };
+                          }
+                        } else {
+                          if (useHalf === 'FirstHalf') {
+                            return {
+                              accurate: selectedMatchInfo.matchData?.passesInOpponentHalf?.[`opponent${useHalf}`] || 0,
+                              inaccurate: selectedMatchInfo.matchData?.passesInOpponentHalfInaccurate?.[`opponent${useHalf}`] || 0,
+                            };
+                          } else if (useHalf === 'SecondHalf') {
+                            return {
+                              accurate: selectedMatchInfo.matchData?.passesInOpponentHalf?.[`opponent${useHalf}`] || 0,
+                              inaccurate: selectedMatchInfo.matchData?.passesInOpponentHalfInaccurate?.[`opponent${useHalf}`] || 0,
+                            };
+                          } else {
+                            return {
+                              accurate: (selectedMatchInfo.matchData?.passesInOpponentHalf?.opponentFirstHalf || 0) + (selectedMatchInfo.matchData?.passesInOpponentHalf?.opponentSecondHalf || 0),
+                              inaccurate: (selectedMatchInfo.matchData?.passesInOpponentHalfInaccurate?.opponentFirstHalf || 0) + (selectedMatchInfo.matchData?.passesInOpponentHalfInaccurate?.opponentSecondHalf || 0),
+                            };
+                          }
+                        }
+                      };
+                      
+                      const get8sActions = (field: 'team' | 'opponent', type: 'successful' | 'unsuccessful') => {
+                        const dataField = type === 'successful' ? 'successful8sActions' : 'unsuccessful8sActions';
+                        if (matchDataPeriod === 'firstHalf') {
+                          return selectedMatchInfo.matchData?.[dataField]?.[`${field}FirstHalf`] || 0;
+                        } else if (matchDataPeriod === 'secondHalf') {
+                          return selectedMatchInfo.matchData?.[dataField]?.[`${field}SecondHalf`] || 0;
+                        } else {
+                          return (selectedMatchInfo.matchData?.[dataField]?.[`${field}FirstHalf`] || 0) + (selectedMatchInfo.matchData?.[dataField]?.[`${field}SecondHalf`] || 0);
+                        }
+                      };
+                      
+                      const getPossession = (field: 'team' | 'opponent') => {
+                        if (matchDataPeriod === 'firstHalf') {
+                          return selectedMatchInfo.matchData?.possession?.[`${field}FirstHalf`] || 0;
+                        } else if (matchDataPeriod === 'secondHalf') {
+                          return selectedMatchInfo.matchData?.possession?.[`${field}SecondHalf`] || 0;
+                        } else {
+                          return (selectedMatchInfo.matchData?.possession?.[`${field}FirstHalf`] || 0) + (selectedMatchInfo.matchData?.possession?.[`${field}SecondHalf`] || 0);
+                        }
+                      };
+                      
+                      // Dane dla gospodarza i gościa
+                      const homeOwnHalf = isHome ? getData('team') : getData('opponent');
+                      const awayOwnHalf = isHome ? getData('opponent') : getData('team');
+                      const homeOpponentHalf = isHome ? getOpponentHalfData('team') : getOpponentHalfData('opponent');
+                      const awayOpponentHalf = isHome ? getOpponentHalfData('opponent') : getOpponentHalfData('team');
+                      const home8s = isHome ? get8sActions('team', 'successful') : get8sActions('opponent', 'successful');
+                      const away8s = isHome ? get8sActions('opponent', 'successful') : get8sActions('team', 'successful');
+                      const home8sUnsuccessful = isHome ? get8sActions('team', 'unsuccessful') : get8sActions('opponent', 'unsuccessful');
+                      const away8sUnsuccessful = isHome ? get8sActions('opponent', 'unsuccessful') : get8sActions('team', 'unsuccessful');
+                      const homePossession = isHome ? getPossession('team') : getPossession('opponent');
+                      const awayPossession = isHome ? getPossession('opponent') : getPossession('team');
+                      const totalPossession = homePossession + awayPossession;
+                      const homePossessionPercent = totalPossession > 0 ? ((homePossession / totalPossession) * 100).toFixed(1) : '0.0';
+                      const awayPossessionPercent = totalPossession > 0 ? ((awayPossession / totalPossession) * 100).toFixed(1) : '0.0';
+                      
+                      // Oblicz sumy podań
+                      const homeTotalPasses = (homeOwnHalf.accurate + homeOwnHalf.inaccurate) + (homeOpponentHalf.accurate + homeOpponentHalf.inaccurate);
+                      const homeTotalAccurate = homeOwnHalf.accurate + homeOpponentHalf.accurate;
+                      const homeTotalInaccurate = homeOwnHalf.inaccurate + homeOpponentHalf.inaccurate;
+                      const homeTotalPercent = homeTotalPasses > 0 ? ((homeTotalAccurate / homeTotalPasses) * 100).toFixed(1) : '0.0';
+                      
+                      const awayTotalPasses = (awayOwnHalf.accurate + awayOwnHalf.inaccurate) + (awayOpponentHalf.accurate + awayOpponentHalf.inaccurate);
+                      const awayTotalAccurate = awayOwnHalf.accurate + awayOpponentHalf.accurate;
+                      const awayTotalInaccurate = awayOwnHalf.inaccurate + awayOpponentHalf.inaccurate;
+                      const awayTotalPercent = awayTotalPasses > 0 ? ((awayTotalAccurate / awayTotalPasses) * 100).toFixed(1) : '0.0';
+                      
+                      const homeOwnTotal = homeOwnHalf.accurate + homeOwnHalf.inaccurate;
+                      const homeOwnPercent = homeOwnTotal > 0 ? ((homeOwnHalf.accurate / homeOwnTotal) * 100).toFixed(1) : '0.0';
+                      const awayOwnTotal = awayOwnHalf.accurate + awayOwnHalf.inaccurate;
+                      const awayOwnPercent = awayOwnTotal > 0 ? ((awayOwnHalf.accurate / awayOwnTotal) * 100).toFixed(1) : '0.0';
+                      
+                      const homeOppTotal = homeOpponentHalf.accurate + homeOpponentHalf.inaccurate;
+                      const homeOppPercent = homeOppTotal > 0 ? ((homeOpponentHalf.accurate / homeOppTotal) * 100).toFixed(1) : '0.0';
+                      const awayOppTotal = awayOpponentHalf.accurate + awayOpponentHalf.inaccurate;
+                      const awayOppPercent = awayOppTotal > 0 ? ((awayOpponentHalf.accurate / awayOppTotal) * 100).toFixed(1) : '0.0';
+                      
+                      
+                      return (
+                        <div className={styles.matchDataTable}>
+                          {/* Nagłówek tabeli */}
+                          <div className={styles.matchDataTableHeader}>
+                            <div className={styles.matchDataTableHeaderCell}>
+                              {(() => {
+                                const homeTeam = isHome 
+                                  ? availableTeams.find(t => t.id === selectedMatchInfo.team)
+                                  : null;
+                                const homeLogo = isHome 
+                                  ? ((homeTeam as any)?.logo || null)
+                                  : (selectedMatchInfo.opponentLogo || null);
+                                return (
+                                  <>
+                                    {homeLogo && (
+                                      <img 
+                                        src={homeLogo} 
+                                        alt={homeTeamName}
+                                        className={styles.teamLogoInHeader}
+                                      />
+                                    )}
+                                    <span>{homeTeamName}</span>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                            <div className={styles.matchDataTableHeaderCell}></div>
+                            <div className={styles.matchDataTableHeaderCell}>
+                              {(() => {
+                                const awayTeam = isHome 
+                                  ? null
+                                  : availableTeams.find(t => t.id === selectedMatchInfo.team);
+                                const awayLogo = isHome 
+                                  ? (selectedMatchInfo.opponentLogo || null)
+                                  : ((awayTeam as any)?.logo || null);
+                                return (
+                                  <>
+                                    {awayLogo && (
+                                      <img 
+                                        src={awayLogo} 
+                                        alt={awayTeamName}
+                                        className={styles.teamLogoInHeader}
+                                      />
+                                    )}
+                                    <span>{awayTeamName}</span>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                          
+                          {/* Wynik meczu */}
+                          {(() => {
+                            // Filtruj strzały według wybranego okresu
+                            const filteredShots = allShots.filter(shot => {
+                              if (matchDataPeriod === 'firstHalf') {
+                                return shot.minute <= 45;
+                              } else if (matchDataPeriod === 'secondHalf') {
+                                return shot.minute > 45;
+                              }
+                              return true; // total - wszystkie strzały
+                            });
+                            
+                            // Oblicz gole dla gospodarza i gościa
+                            const homeShots = filteredShots.filter(shot => {
+                              const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
+                                ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                                : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                              return shotTeamId === (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent);
+                            });
+                            const awayShots = filteredShots.filter(shot => {
+                              const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
+                                ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                                : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                              return shotTeamId === (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team);
+                            });
+                            
+                            const homeGoals = homeShots.filter(shot => shot.isGoal || shot.shotType === 'goal').length;
+                            const awayGoals = awayShots.filter(shot => shot.isGoal || shot.shotType === 'goal').length;
+                            
+                            // Statystyki strzałów
+                            const homeShotsTotal = homeShots.length;
+                            const awayShotsTotal = awayShots.length;
+                            const homeShotsOnTarget = homeShots.filter(shot => 
+                              shot.shotType === 'on_target' || shot.shotType === 'goal' || shot.isGoal
+                            ).length;
+                            const awayShotsOnTarget = awayShots.filter(shot => 
+                              shot.shotType === 'on_target' || shot.shotType === 'goal' || shot.isGoal
+                            ).length;
+                            const homeShotsOffTarget = homeShots.filter(shot => 
+                              shot.shotType === 'off_target'
+                            ).length;
+                            const awayShotsOffTarget = awayShots.filter(shot => 
+                              shot.shotType === 'off_target'
+                            ).length;
+                            const homeAccuracy = homeShotsTotal > 0 
+                              ? ((homeShotsOnTarget / homeShotsTotal) * 100).toFixed(1) 
+                              : '0.0';
+                            const awayAccuracy = awayShotsTotal > 0 
+                              ? ((awayShotsOnTarget / awayShotsTotal) * 100).toFixed(1) 
+                              : '0.0';
+                            
+                            return (
+                              <>
+                                <div className={styles.matchDataTableRow}>
+                                  <div className={styles.matchDataTableCell}>
+                                    {homeGoals}
+                                  </div>
+                                  <div className={styles.matchDataTableLabel}>Wynik</div>
+                                  <div className={styles.matchDataTableCell}>
+                                    {awayGoals}
+                                  </div>
+                                </div>
+                              </>
+                            );
+                          })()}
+                          
+                          {/* xG - wynik - PRZED strzałami */}
+                          {(() => {
+                            // Filtruj strzały według wybranego okresu
+                            const filteredShots = allShots.filter(shot => {
+                              if (matchDataPeriod === 'firstHalf') {
+                                return shot.minute <= 45;
+                              } else if (matchDataPeriod === 'secondHalf') {
+                                return shot.minute > 45;
+                              }
+                              return true; // total - wszystkie strzały
+                            });
+                            
+                            // Oblicz xG dla gospodarza i gościa
+                            const homeShots = filteredShots.filter(shot => {
+                              // Określ zespół strzału na podstawie teamId lub teamContext
+                              const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
+                                ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                                : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                              return shotTeamId === (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent);
+                            });
+                            const awayShots = filteredShots.filter(shot => {
+                              const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
+                                ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                                : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                              return shotTeamId === (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team);
+                            });
+                            
+                            const homeXG = homeShots.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                            const awayXG = awayShots.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                            const homeShotsCount = homeShots.length;
+                            const awayShotsCount = awayShots.length;
+                            
+                            // Oblicz NPxG (non-penalty xG) - bez rzutów karnych
+                            const homeShotsNonPenalty = homeShots.filter(shot => 
+                              shot.actionType !== 'penalty'
+                            );
+                            const awayShotsNonPenalty = awayShots.filter(shot => 
+                              shot.actionType !== 'penalty'
+                            );
+                            const homeNPxG = homeShotsNonPenalty.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                            const awayNPxG = awayShotsNonPenalty.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                            const homeNPxGPerShot = homeShotsNonPenalty.length > 0 ? (homeNPxG / homeShotsNonPenalty.length).toFixed(2) : '0.00';
+                            const awayNPxGPerShot = awayShotsNonPenalty.length > 0 ? (awayNPxG / awayShotsNonPenalty.length).toFixed(2) : '0.00';
+                            
+                            // Oblicz xG SFG - strzały z akcji SFG
+                            const homeShotsSFG = homeShots.filter(shot => 
+                              (shot as any).actionCategory === 'sfg' || 
+                              shot.actionType === 'corner' || 
+                              shot.actionType === 'free_kick' || 
+                              shot.actionType === 'direct_free_kick' || 
+                              shot.actionType === 'penalty' || 
+                              shot.actionType === 'throw_in'
+                            );
+                            const awayShotsSFG = awayShots.filter(shot => 
+                              (shot as any).actionCategory === 'sfg' || 
+                              shot.actionType === 'corner' || 
+                              shot.actionType === 'free_kick' || 
+                              shot.actionType === 'direct_free_kick' || 
+                              shot.actionType === 'penalty' || 
+                              shot.actionType === 'throw_in'
+                            );
+                            const homeXGSFG = homeShotsSFG.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                            const awayXGSFG = awayShotsSFG.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                            
+                            return (
+                              <>
+                                <div className={styles.matchDataTableRow}>
+                                  <div className={styles.matchDataTableCell}>
+                                    {homeXG.toFixed(2)}
+                                  </div>
+                                  <div 
+                                    className={`${styles.matchDataTableLabel} ${styles.clickable}`}
+                                    onClick={() => setXgExpanded(!xgExpanded)}
+                                  >
+                                    xG
+                                    <span className={`${styles.expandIcon} ${xgExpanded ? styles.expanded : ''}`}>
+                                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                      </svg>
+                                    </span>
+                                  </div>
+                                  <div className={styles.matchDataTableCell}>
+                                    {awayXG.toFixed(2)}
+                                  </div>
+                                </div>
+                                
+                                {/* xG - szczegóły - zwijane */}
+                                {xgExpanded && (
+                                  <>
+                                    <div className={styles.matchDataTableRow}>
+                                      <div className={styles.matchDataTableCell}>
+                                        {homeNPxG.toFixed(2)}
+                                      </div>
+                                      <div className={styles.matchDataTableSubLabel}>NPxG</div>
+                                      <div className={styles.matchDataTableCell}>
+                                        {awayNPxG.toFixed(2)}
+                                      </div>
+                                    </div>
+                                    <div className={styles.matchDataTableRow}>
+                                      <div className={styles.matchDataTableCell}>
+                                        {homeNPxGPerShot}
+                                      </div>
+                                      <div className={styles.matchDataTableSubLabel}>NPxG/strzał</div>
+                                      <div className={styles.matchDataTableCell}>
+                                        {awayNPxGPerShot}
+                                      </div>
+                                    </div>
+                                    <div className={styles.matchDataTableRow}>
+                                      <div className={styles.matchDataTableCell}>
+                                        {homeXGSFG.toFixed(2)}
+                                      </div>
+                                      <div className={styles.matchDataTableSubLabel}>xG SFG</div>
+                                      <div className={styles.matchDataTableCell}>
+                                        {awayXGSFG.toFixed(2)}
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                              </>
+                            );
+                          })()}
+                          
+                          {/* Strzały - PO xG */}
+                          {(() => {
+                            // Filtruj strzały według wybranego okresu
+                            const filteredShots = allShots.filter(shot => {
+                              if (matchDataPeriod === 'firstHalf') {
+                                return shot.minute <= 45;
+                              } else if (matchDataPeriod === 'secondHalf') {
+                                return shot.minute > 45;
+                              }
+                              return true; // total - wszystkie strzały
+                            });
+                            
+                            // Oblicz gole dla gospodarza i gościa
+                            const homeShots = filteredShots.filter(shot => {
+                              const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
+                                ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                                : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                              return shotTeamId === (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent);
+                            });
+                            const awayShots = filteredShots.filter(shot => {
+                              const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
+                                ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                                : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                              return shotTeamId === (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team);
+                            });
+                            
+                            // Statystyki strzałów
+                            const homeShotsTotal = homeShots.length;
+                            const awayShotsTotal = awayShots.length;
+                            const homeShotsOnTarget = homeShots.filter(shot => 
+                              shot.shotType === 'on_target' || shot.shotType === 'goal' || shot.isGoal
+                            ).length;
+                            const awayShotsOnTarget = awayShots.filter(shot => 
+                              shot.shotType === 'on_target' || shot.shotType === 'goal' || shot.isGoal
+                            ).length;
+                            const homeShotsOffTarget = homeShots.filter(shot => 
+                              shot.shotType === 'off_target'
+                            ).length;
+                            const awayShotsOffTarget = awayShots.filter(shot => 
+                              shot.shotType === 'off_target'
+                            ).length;
+                            const homeAccuracy = homeShotsTotal > 0 
+                              ? ((homeShotsOnTarget / homeShotsTotal) * 100).toFixed(1) 
+                              : '0.0';
+                            const awayAccuracy = awayShotsTotal > 0 
+                              ? ((awayShotsOnTarget / awayShotsTotal) * 100).toFixed(1) 
+                              : '0.0';
+                            
+                            return (
+                              <>
+                                {/* Strzały */}
+                                <div className={styles.matchDataTableRow}>
+                                  <div className={styles.matchDataTableCell}>
+                                    {homeShotsTotal}
+                                  </div>
+                                  <div 
+                                    className={`${styles.matchDataTableLabel} ${styles.clickable}`}
+                                    onClick={() => setShotsExpanded(!shotsExpanded)}
+                                  >
+                                    Strzały
+                                    <span className={`${styles.expandIcon} ${shotsExpanded ? styles.expanded : ''}`}>
+                                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                      </svg>
+                                    </span>
+                                  </div>
+                                  <div className={styles.matchDataTableCell}>
+                                    {awayShotsTotal}
+                                  </div>
+                                </div>
+                                
+                                {/* % celności - zwijane */}
+                                {shotsExpanded && (
+                                  <div className={styles.matchDataTableRow}>
+                                    <div className={styles.matchDataTableCell} style={{ textAlign: 'right' }}>
+                                      <span style={{ fontSize: '0.85em', color: '#6b7280' }}>({homeShotsOnTarget}/{homeShotsTotal})</span> <span>{homeAccuracy}%</span>
+                                    </div>
+                                    <div className={styles.matchDataTableSubLabel}>% celności</div>
+                                    <div className={styles.matchDataTableCell} style={{ textAlign: 'left' }}>
+                                      <span>{awayAccuracy}%</span> <span style={{ fontSize: '0.85em', color: '#6b7280' }}>({awayShotsOnTarget}/{awayShotsTotal})</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
+                          
+                          {/* Podań - suma */}
+                          <div className={styles.matchDataTableRow}>
+                            <div className={styles.matchDataTableCell} style={{ textAlign: 'right' }}>
+                              <span style={{ fontSize: '0.85em', color: '#6b7280' }}>({homeTotalAccurate}/{homeTotalPasses})</span> <span>{homeTotalPercent}%</span>
+                            </div>
+                            <div 
+                              className={`${styles.matchDataTableLabel} ${styles.clickable}`}
+                              onClick={() => setPassesExpanded(!passesExpanded)}
+                            >
+                              Podania
+                              <span className={`${styles.expandIcon} ${passesExpanded ? styles.expanded : ''}`}>
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </span>
+                            </div>
+                            <div className={styles.matchDataTableCell} style={{ textAlign: 'left' }}>
+                              <span>{awayTotalPercent}%</span> <span style={{ fontSize: '0.85em', color: '#6b7280' }}>({awayTotalAccurate}/{awayTotalPasses})</span>
+                            </div>
+                          </div>
+                          
+                          {/* Podań - na swojej połowie - zwijane */}
+                          {passesExpanded && (
+                            <div className={styles.matchDataTableRow}>
+                              <div className={styles.matchDataTableCell} style={{ textAlign: 'right' }}>
+                                <span style={{ fontSize: '0.85em', color: '#6b7280' }}>({homeOwnHalf.accurate}/{homeOwnTotal})</span> <span>{homeOwnPercent}%</span>
+                              </div>
+                              <div className={styles.matchDataTableSubLabel}>Własna poł.</div>
+                              <div className={styles.matchDataTableCell} style={{ textAlign: 'left' }}>
+                                <span>{awayOwnPercent}%</span> <span style={{ fontSize: '0.85em', color: '#6b7280' }}>({awayOwnHalf.accurate}/{awayOwnTotal})</span>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Podań - na połowie przeciwnika - zwijane */}
+                          {passesExpanded && (
+                            <div className={styles.matchDataTableRow}>
+                              <div className={styles.matchDataTableCell} style={{ textAlign: 'right' }}>
+                                <span style={{ fontSize: '0.85em', color: '#6b7280' }}>({homeOpponentHalf.accurate}/{homeOppTotal})</span> <span>{homeOppPercent}%</span>
+                              </div>
+                              <div className={styles.matchDataTableSubLabel}>Poł. przeciwnika</div>
+                              <div className={styles.matchDataTableCell} style={{ textAlign: 'left' }}>
+                                <span>{awayOppPercent}%</span> <span style={{ fontSize: '0.85em', color: '#6b7280' }}>({awayOpponentHalf.accurate}/{awayOppTotal})</span>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Przewaga terytorialna (Field tilt) */}
+                          {(() => {
+                            const totalOpponentHalfPasses = homeOppTotal + awayOppTotal;
+                            const homeFieldTilt = totalOpponentHalfPasses > 0 
+                              ? ((homeOppTotal / totalOpponentHalfPasses) * 100).toFixed(1) 
+                              : '0.0';
+                            const awayFieldTilt = totalOpponentHalfPasses > 0 
+                              ? ((awayOppTotal / totalOpponentHalfPasses) * 100).toFixed(1) 
+                              : '0.0';
+                            
+                            return (
+                              <div className={styles.matchDataTableRow}>
+                                <div className={styles.matchDataTableCell}>
+                                  {homeFieldTilt}%
+                                </div>
+                                <div className={styles.matchDataTableLabel}>Przewaga terytorialna (Field tilt)</div>
+                                <div className={styles.matchDataTableCell}>
+                                  {awayFieldTilt}%
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          
+                          {/* Akcje 8s ACC */}
+                          {(() => {
+                            const homeTotal8s = home8s + home8sUnsuccessful;
+                            const awayTotal8s = away8s + away8sUnsuccessful;
+                            const home8sPercent = homeTotal8s > 0 ? ((home8s / homeTotal8s) * 100).toFixed(1) : '0.0';
+                            const away8sPercent = awayTotal8s > 0 ? ((away8s / awayTotal8s) * 100).toFixed(1) : '0.0';
+                            
+                            const hasHome8sData = home8s > 0 || home8sUnsuccessful > 0;
+                            const hasAway8sData = away8s > 0 || away8sUnsuccessful > 0;
+                            
+                            return (
+                              <div className={styles.matchDataTableRow}>
+                                <div className={styles.matchDataTableCell} style={{ textAlign: 'right' }}>
+                                  {hasHome8sData ? (
+                                    <>
+                                      <span style={{ fontSize: '0.85em', color: '#6b7280' }}>({home8s}/{homeTotal8s})</span> <span>{home8sPercent}%</span>
+                                    </>
+                                  ) : (
+                                    <span>-</span>
+                                  )}
+                                </div>
+                                <div className={styles.matchDataTableLabel}>Akcje 8s ACC</div>
+                                <div className={styles.matchDataTableCell} style={{ textAlign: 'left' }}>
+                                  {hasAway8sData ? (
+                                    <>
+                                      <span>{away8sPercent}%</span> <span style={{ fontSize: '0.85em', color: '#6b7280' }}>({away8s}/{awayTotal8s})</span>
+                                    </>
+                                  ) : (
+                                    <span>-</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          
+                          {/* Czas posiadania */}
+                          <div className={styles.matchDataTableRow}>
+                            <div className={styles.matchDataTableCell}>
+                              <div className={styles.possessionValue}>{homePossessionPercent}%</div>
+                              <div className={styles.possessionTime}>{homePossession.toFixed(1)} min</div>
+                            </div>
+                            <div className={styles.matchDataTableLabel}>Czas posiadania</div>
+                            <div className={styles.matchDataTableCell}>
+                              <div className={styles.possessionValue}>{awayPossessionPercent}%</div>
+                              <div className={styles.possessionTime}>{awayPossession.toFixed(1)} min</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <p className={styles.noDataText}>Brak danych meczu dla wybranego meczu.</p>
+                )}
+              </div>
+            )}
             {expandedCategory === 'pxt' && (
               <div className={styles.detailsPanel}>
                 <h3>Szczegóły PxT</h3>
@@ -1106,19 +1896,28 @@ export default function StatystykiZespoluPage() {
                       <div className={styles.actionTypeSelector}>
                         <button
                           className={`${styles.actionTypeButton} ${selectedActionType === 'all' ? styles.active : ''}`}
-                          onClick={() => setSelectedActionType('all')}
+                          onClick={() => {
+                            setSelectedActionType('all');
+                            setSelectedActionFilter(null);
+                          }}
                         >
                           Wszystkie
                         </button>
                         <button
                           className={`${styles.actionTypeButton} ${selectedActionType === 'pass' ? styles.active : ''}`}
-                          onClick={() => setSelectedActionType('pass')}
+                          onClick={() => {
+                            setSelectedActionType('pass');
+                            setSelectedActionFilter(null);
+                          }}
                         >
                           Podanie
                         </button>
                         <button
                           className={`${styles.actionTypeButton} ${selectedActionType === 'dribble' ? styles.active : ''}`}
-                          onClick={() => setSelectedActionType('dribble')}
+                          onClick={() => {
+                            setSelectedActionType('dribble');
+                            setSelectedActionFilter(null);
+                          }}
                         >
                           Drybling
                         </button>
@@ -1158,28 +1957,28 @@ export default function StatystykiZespoluPage() {
                 {selectedMetric === 'xt' && 'xT'}
                 {selectedMetric === 'packing' && 'Packing'}
               </div>
-              {selectedMetric === 'pxt' && (
+              {halfTimeStats.firstHalf.passCount > 0 && (
                 <>
-                  {halfTimeStats.firstHalf.passCount > 0 && (
-                    <>
-                      <div className={styles.statSubValue}>
-                        {halfTimeStats.firstHalf.pxtPerPass.toFixed(2)} PxT/podanie
-                      </div>
-                      <div className={styles.statSubLabel}>
-                        {halfTimeStats.firstHalf.passCount} podań
-                      </div>
-                    </>
-                  )}
-                  {halfTimeStats.firstHalf.dribbleCount > 0 && (
-                    <>
-                      <div className={styles.statSubValue}>
-                        {halfTimeStats.firstHalf.pxtPerDribble.toFixed(2)} PxT/drybling
-                      </div>
-                      <div className={styles.statSubLabel}>
-                        {halfTimeStats.firstHalf.dribbleCount} dryblingów
-                      </div>
-                    </>
-                  )}
+                  <div className={styles.statSubValue}>
+                    {selectedMetric === 'pxt' && `${halfTimeStats.firstHalf.pxtPerPass.toFixed(2)} PxT/podanie`}
+                    {selectedMetric === 'xt' && `${halfTimeStats.firstHalf.xtPerPass.toFixed(3)} xT/podanie`}
+                    {selectedMetric === 'packing' && `${halfTimeStats.firstHalf.packingPerPass.toFixed(1)} Packing/podanie`}
+                  </div>
+                  <div className={styles.statSubLabel}>
+                    {halfTimeStats.firstHalf.passCount} podań
+                  </div>
+                </>
+              )}
+              {halfTimeStats.firstHalf.dribbleCount > 0 && (
+                <>
+                  <div className={styles.statSubValue}>
+                    {selectedMetric === 'pxt' && `${halfTimeStats.firstHalf.pxtPerDribble.toFixed(2)} PxT/drybling`}
+                    {selectedMetric === 'xt' && `${halfTimeStats.firstHalf.xtPerDribble.toFixed(3)} xT/drybling`}
+                    {selectedMetric === 'packing' && `${halfTimeStats.firstHalf.packingPerDribble.toFixed(1)} Packing/drybling`}
+                  </div>
+                  <div className={styles.statSubLabel}>
+                    {halfTimeStats.firstHalf.dribbleCount} dryblingów
+                  </div>
                 </>
               )}
             </div>
@@ -1196,28 +1995,28 @@ export default function StatystykiZespoluPage() {
                 {selectedMetric === 'xt' && 'xT'}
                 {selectedMetric === 'packing' && 'Packing'}
               </div>
-              {selectedMetric === 'pxt' && (
+              {halfTimeStats.secondHalf.passCount > 0 && (
                 <>
-                  {halfTimeStats.secondHalf.passCount > 0 && (
-                    <>
-                      <div className={styles.statSubValue}>
-                        {halfTimeStats.secondHalf.pxtPerPass.toFixed(2)} PxT/podanie
-                      </div>
-                      <div className={styles.statSubLabel}>
-                        {halfTimeStats.secondHalf.passCount} podań
-                      </div>
-                    </>
-                  )}
-                  {halfTimeStats.secondHalf.dribbleCount > 0 && (
-                    <>
-                      <div className={styles.statSubValue}>
-                        {halfTimeStats.secondHalf.pxtPerDribble.toFixed(2)} PxT/drybling
-                      </div>
-                      <div className={styles.statSubLabel}>
-                        {halfTimeStats.secondHalf.dribbleCount} dryblingów
-                      </div>
-                    </>
-                  )}
+                  <div className={styles.statSubValue}>
+                    {selectedMetric === 'pxt' && `${halfTimeStats.secondHalf.pxtPerPass.toFixed(2)} PxT/podanie`}
+                    {selectedMetric === 'xt' && `${halfTimeStats.secondHalf.xtPerPass.toFixed(3)} xT/podanie`}
+                    {selectedMetric === 'packing' && `${halfTimeStats.secondHalf.packingPerPass.toFixed(1)} Packing/podanie`}
+                  </div>
+                  <div className={styles.statSubLabel}>
+                    {halfTimeStats.secondHalf.passCount} podań
+                  </div>
+                </>
+              )}
+              {halfTimeStats.secondHalf.dribbleCount > 0 && (
+                <>
+                  <div className={styles.statSubValue}>
+                    {selectedMetric === 'pxt' && `${halfTimeStats.secondHalf.pxtPerDribble.toFixed(2)} PxT/drybling`}
+                    {selectedMetric === 'xt' && `${halfTimeStats.secondHalf.xtPerDribble.toFixed(3)} xT/drybling`}
+                    {selectedMetric === 'packing' && `${halfTimeStats.secondHalf.packingPerDribble.toFixed(1)} Packing/drybling`}
+                  </div>
+                  <div className={styles.statSubLabel}>
+                    {halfTimeStats.secondHalf.dribbleCount} dryblingów
+                  </div>
                 </>
               )}
             </div>
@@ -1234,36 +2033,48 @@ export default function StatystykiZespoluPage() {
                 {selectedMetric === 'xt' && 'xT'}
                 {selectedMetric === 'packing' && 'Packing'}
               </div>
-              {selectedMetric === 'pxt' && (
+              {(halfTimeStats.firstHalf.passCount + halfTimeStats.secondHalf.passCount) > 0 && (
                 <>
-                  {(halfTimeStats.firstHalf.passCount + halfTimeStats.secondHalf.passCount) > 0 && (
-                    <>
-                      <div className={styles.statSubValue}>
-                        {(() => {
-                          const totalPxt = halfTimeStats.firstHalf.pxt + halfTimeStats.secondHalf.pxt;
-                          const totalPasses = halfTimeStats.firstHalf.passCount + halfTimeStats.secondHalf.passCount;
-                          return totalPasses > 0 ? (totalPxt / totalPasses).toFixed(2) : '0.00';
-                        })()} PxT/podanie
-            </div>
-                      <div className={styles.statSubLabel}>
-                        {halfTimeStats.firstHalf.passCount + halfTimeStats.secondHalf.passCount} podań
-          </div>
-                    </>
-                  )}
-                  {(halfTimeStats.firstHalf.dribbleCount + halfTimeStats.secondHalf.dribbleCount) > 0 && (
-                    <>
-                      <div className={styles.statSubValue}>
-                        {(() => {
-                          const totalPxt = halfTimeStats.firstHalf.pxt + halfTimeStats.secondHalf.pxt;
-                          const totalDribbles = halfTimeStats.firstHalf.dribbleCount + halfTimeStats.secondHalf.dribbleCount;
-                          return totalDribbles > 0 ? (totalPxt / totalDribbles).toFixed(2) : '0.00';
-                        })()} PxT/drybling
-        </div>
-                      <div className={styles.statSubLabel}>
-                        {halfTimeStats.firstHalf.dribbleCount + halfTimeStats.secondHalf.dribbleCount} dryblingów
-                      </div>
-                    </>
-                  )}
+                  <div className={styles.statSubValue}>
+                    {(() => {
+                      const totalPasses = halfTimeStats.firstHalf.passCount + halfTimeStats.secondHalf.passCount;
+                      if (selectedMetric === 'pxt') {
+                        const totalPxt = halfTimeStats.firstHalf.pxt + halfTimeStats.secondHalf.pxt;
+                        return totalPasses > 0 ? `${(totalPxt / totalPasses).toFixed(2)} PxT/podanie` : '0.00 PxT/podanie';
+                      } else if (selectedMetric === 'xt') {
+                        const totalXt = halfTimeStats.firstHalf.xt + halfTimeStats.secondHalf.xt;
+                        return totalPasses > 0 ? `${(totalXt / totalPasses).toFixed(3)} xT/podanie` : '0.000 xT/podanie';
+                      } else {
+                        const totalPacking = halfTimeStats.firstHalf.packing + halfTimeStats.secondHalf.packing;
+                        return totalPasses > 0 ? `${(totalPacking / totalPasses).toFixed(1)} Packing/podanie` : '0.0 Packing/podanie';
+                      }
+                    })()}
+                  </div>
+                  <div className={styles.statSubLabel}>
+                    {halfTimeStats.firstHalf.passCount + halfTimeStats.secondHalf.passCount} podań
+                  </div>
+                </>
+              )}
+              {(halfTimeStats.firstHalf.dribbleCount + halfTimeStats.secondHalf.dribbleCount) > 0 && (
+                <>
+                  <div className={styles.statSubValue}>
+                    {(() => {
+                      const totalDribbles = halfTimeStats.firstHalf.dribbleCount + halfTimeStats.secondHalf.dribbleCount;
+                      if (selectedMetric === 'pxt') {
+                        const totalPxt = halfTimeStats.firstHalf.pxt + halfTimeStats.secondHalf.pxt;
+                        return totalDribbles > 0 ? `${(totalPxt / totalDribbles).toFixed(2)} PxT/drybling` : '0.00 PxT/drybling';
+                      } else if (selectedMetric === 'xt') {
+                        const totalXt = halfTimeStats.firstHalf.xt + halfTimeStats.secondHalf.xt;
+                        return totalDribbles > 0 ? `${(totalXt / totalDribbles).toFixed(3)} xT/drybling` : '0.000 xT/drybling';
+                      } else {
+                        const totalPacking = halfTimeStats.firstHalf.packing + halfTimeStats.secondHalf.packing;
+                        return totalDribbles > 0 ? `${(totalPacking / totalDribbles).toFixed(1)} Packing/drybling` : '0.0 Packing/drybling';
+                      }
+                    })()}
+                  </div>
+                  <div className={styles.statSubLabel}>
+                    {halfTimeStats.firstHalf.dribbleCount + halfTimeStats.secondHalf.dribbleCount} dryblingów
+                  </div>
                 </>
               )}
             </div>
@@ -1283,7 +2094,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.senderP1CountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'p2' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2' ? null : 'p2')}
+                >
                   <span className={styles.countLabel}>P2:</span>
                   <span className={styles.countValue}>{teamStats.senderP2Count}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1293,7 +2107,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.senderP2CountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'p3' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3' ? null : 'p3')}
+                >
                   <span className={styles.countLabel}>P3:</span>
                   <span className={styles.countValue}>{teamStats.senderP3Count}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1303,7 +2120,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.senderP3CountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'pk' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'pk' ? null : 'pk')}
+                >
                   <span className={styles.countLabel}>PK:</span>
                   <span className={styles.countValue}>{teamStats.senderPKCount}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1313,7 +2133,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.senderPKCountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'shot' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'shot' ? null : 'shot')}
+                >
                   <span className={styles.countLabel}>Strzał:</span>
                   <span className={styles.countValue}>{teamStats.senderShotCount}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1323,7 +2146,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.senderShotCountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'goal' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'goal' ? null : 'goal')}
+                >
                   <span className={styles.countLabel}>Gol:</span>
                   <span className={styles.countValue}>{teamStats.senderGoalCount}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1337,7 +2163,10 @@ export default function StatystykiZespoluPage() {
             )}
             {selectedActionType === 'dribble' && (
               <>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'p1' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1' ? null : 'p1')}
+                >
                   <span className={styles.countLabel}>P1:</span>
                   <span className={styles.countValue}>{teamStats.dribblingP1Count}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1347,7 +2176,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.dribblingP1CountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'p2' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2' ? null : 'p2')}
+                >
                   <span className={styles.countLabel}>P2:</span>
                   <span className={styles.countValue}>{teamStats.dribblingP2Count}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1357,7 +2189,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.dribblingP2CountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'p3' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3' ? null : 'p3')}
+                >
                   <span className={styles.countLabel}>P3:</span>
                   <span className={styles.countValue}>{teamStats.dribblingP3Count}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1367,7 +2202,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.dribblingP3CountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'pk' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'pk' ? null : 'pk')}
+                >
                   <span className={styles.countLabel}>PK:</span>
                   <span className={styles.countValue}>{teamStats.dribblingPKCount}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1377,7 +2215,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.dribblingPKCountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'shot' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'shot' ? null : 'shot')}
+                >
                   <span className={styles.countLabel}>Strzał:</span>
                   <span className={styles.countValue}>{teamStats.dribblingShotCount}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1387,7 +2228,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.dribblingShotCountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'goal' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'goal' ? null : 'goal')}
+                >
                   <span className={styles.countLabel}>Gol:</span>
                   <span className={styles.countValue}>{teamStats.dribblingGoalCount}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1401,7 +2245,10 @@ export default function StatystykiZespoluPage() {
             )}
             {selectedActionType === 'all' && (
               <>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'p1' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1' ? null : 'p1')}
+                >
                   <span className={styles.countLabel}>P1:</span>
                   <span className={styles.countValue}>{teamStats.senderP1Count + teamStats.dribblingP1Count}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1411,7 +2258,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.senderP1CountCentral + teamStats.dribblingP1CountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'p2' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2' ? null : 'p2')}
+                >
                   <span className={styles.countLabel}>P2:</span>
                   <span className={styles.countValue}>{teamStats.senderP2Count + teamStats.dribblingP2Count}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1421,7 +2271,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.senderP2CountCentral + teamStats.dribblingP2CountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'p3' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3' ? null : 'p3')}
+                >
                   <span className={styles.countLabel}>P3:</span>
                   <span className={styles.countValue}>{teamStats.senderP3Count + teamStats.dribblingP3Count}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1431,7 +2284,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.senderP3CountCentral + teamStats.dribblingP3CountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'pk' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'pk' ? null : 'pk')}
+                >
                   <span className={styles.countLabel}>PK:</span>
                   <span className={styles.countValue}>{teamStats.senderPKCount + teamStats.dribblingPKCount}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1441,7 +2297,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.senderPKCountCentral + teamStats.dribblingPKCountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'shot' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'shot' ? null : 'shot')}
+                >
                   <span className={styles.countLabel}>Strzał:</span>
                   <span className={styles.countValue}>{teamStats.senderShotCount + teamStats.dribblingShotCount}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1451,7 +2310,10 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.senderShotCountCentral + teamStats.dribblingShotCountCentral}</span>
                   </div>
                 </div>
-                <div className={styles.countItem}>
+                <div 
+                  className={`${styles.countItem} ${selectedActionFilter === 'goal' ? styles.countItemSelected : ''}`}
+                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'goal' ? null : 'goal')}
+                >
                   <span className={styles.countLabel}>Gol:</span>
                   <span className={styles.countValue}>{teamStats.senderGoalCount + teamStats.dribblingGoalCount}</span>
                   <div className={styles.zoneBreakdown}>
@@ -1567,49 +2429,214 @@ export default function StatystykiZespoluPage() {
                           }}
                         />
                       </div>
-                      {zoneDetails && (
-                        <div className={styles.zoneDetailsPanel}>
-                          <div className={styles.zoneDetailsHeader}>
-                            <h4>Strefa {zoneDetails.zoneName}</h4>
-                            <button
-                              onClick={() => {
-                                setZoneDetails(null);
-                                setSelectedZone(null);
-                              }}
-                              className={styles.zoneDetailsClose}
-                            >
-                              ×
-                            </button>
-                          </div>
-                          <div className={styles.zoneDetailsBody}>
-                            <p className={styles.zoneDetailsSubtitle}>
-                              {selectedPxtCategory === 'dribbler' && 'Zawodnicy, którzy wykonali drybling z tej strefy:'}
-                              {selectedPxtCategory === 'sender' && `Zawodnicy, którzy ${heatmapDirection === 'from' ? 'zagrali z' : 'zagrali do'} tej strefy jako podający:`}
-                              {selectedPxtCategory === 'receiver' && `Zawodnicy, którzy ${heatmapDirection === 'to' ? 'przyjęli podanie w' : 'przyjęli podanie z'} tej strefy:`}
-                            </p>
-                            <div className={styles.zonePlayersList}>
-                              {zoneDetails.players.map((player) => (
-                                <div key={player.playerId} className={styles.zonePlayerItem}>
-                                  <div className={styles.zonePlayerName}>{player.playerName}</div>
-                                  <div className={styles.zonePlayerStats}>
-                                    <div className={styles.zonePlayerStat}>
-                                      <span className={styles.zoneLabel}>PxT:</span>
-                                      <span className={styles.zoneValue}>{player.pxt.toFixed(2)}</span>
-                                    </div>
-                                    <div className={styles.zonePlayerStat}>
-                                      <span className={styles.zoneLabel}>Podań:</span>
-                                      <span className={styles.zoneValue}>{player.passes}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
+                      <div className={styles.zoneDetailsPanel}>
+                        {zoneDetails ? (
+                          <>
+                            <div className={styles.zoneDetailsHeader}>
+                              <h4>Strefa {zoneDetails.zoneName}</h4>
+                              <button
+                                onClick={() => {
+                                  setZoneDetails(null);
+                                  setSelectedZone(null);
+                                }}
+                                className={styles.zoneDetailsClose}
+                              >
+                                ×
+                              </button>
                             </div>
+                            <div className={styles.zoneDetailsBody}>
+                              <p className={styles.zoneDetailsSubtitle}>
+                                {selectedPxtCategory === 'dribbler' && 'Zawodnicy, którzy wykonali drybling z tej strefy:'}
+                                {selectedPxtCategory === 'sender' && `Zawodnicy, którzy ${heatmapDirection === 'from' ? 'zagrali z' : 'zagrali do'} tej strefy jako podający:`}
+                                {selectedPxtCategory === 'receiver' && `Zawodnicy, którzy ${heatmapDirection === 'to' ? 'przyjęli podanie w' : 'przyjęli podanie z'} tej strefy:`}
+                              </p>
+                              <div className={styles.zonePlayersList}>
+                                {zoneDetails.players.map((player) => (
+                                  <div key={player.playerId} className={styles.zonePlayerItem}>
+                                    <div className={styles.zonePlayerName}>{player.playerName}</div>
+                                    <div className={styles.zonePlayerStats}>
+                                      <div className={styles.zonePlayerStat}>
+                                        <span className={styles.zoneLabel}>PxT:</span>
+                                        <span className={styles.zoneValue}>{player.pxt.toFixed(2)}</span>
+                                      </div>
+                                      <div className={styles.zonePlayerStat}>
+                                        <span className={styles.zoneLabel}>Podań:</span>
+                                        <span className={styles.zoneValue}>{player.passes}</span>
+                                      </div>
+                                    </div>
+                                    <button
+                                      className={styles.viewActionsButton}
+                                      onClick={() => {
+                                        setSelectedPlayerForModal({
+                                          playerId: player.playerId,
+                                          playerName: player.playerName,
+                                          zoneName: zoneDetails.zoneName
+                                        });
+                                        setActionsModalOpen(true);
+                                      }}
+                                      title="Zobacz szczegóły akcji"
+                                    >
+                                      Zobacz akcje
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className={styles.zoneDetailsPlaceholder}>
+                            <p>Kliknij na strefę, aby zobaczyć szczegóły</p>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
+
+            {/* Sekcja xG */}
+            {expandedCategory === 'xg' && selectedMatchInfo && (
+              <div className={styles.detailsPanel}>
+                <h3>Szczegóły xG</h3>
+                
+                {/* Boisko z otagowanymi strzałami */}
+                {selectedMatch && allShots.length > 0 && (
+                  <div className={styles.xgPitchSection}>
+                    <h4>Boisko z otagowanymi strzałami</h4>
+                    <div className={styles.xgPitchWrapper}>
+                      <XGPitch
+                        shots={allShots}
+                        onShotAdd={() => {}}
+                        onShotClick={() => {}}
+                        selectedShotId={undefined}
+                        matchInfo={selectedMatchInfo}
+                        allTeams={availableTeams}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Statystyki xG */}
+                {selectedMatch && allShots.length > 0 && (
+                  <div className={styles.xgStatsSection}>
+                    <h4>Statystyki xG</h4>
+                    {(() => {
+                      // Filtruj strzały dla wybranego zespołu
+                      const teamShots = allShots.filter(shot => {
+                        const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
+                          ? (selectedMatchInfo.isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                          : (selectedMatchInfo.isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                        return shotTeamId === selectedMatchInfo.team;
+                      });
+                      
+                      const totalXG = teamShots.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                      const totalShots = teamShots.length;
+                      const goals = teamShots.filter(shot => shot.isGoal || shot.shotType === 'goal').length;
+                      const shotsOnTarget = teamShots.filter(shot => 
+                        shot.shotType === 'on_target' || shot.shotType === 'goal' || shot.isGoal
+                      ).length;
+                      const shotsOffTarget = teamShots.filter(shot => 
+                        shot.shotType === 'off_target'
+                      ).length;
+                      const shotsBlocked = teamShots.filter(shot => 
+                        shot.shotType === 'blocked'
+                      ).length;
+                      
+                      // NPxG (non-penalty xG)
+                      const nonPenaltyShots = teamShots.filter(shot => shot.actionType !== 'penalty');
+                      const npXG = nonPenaltyShots.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                      
+                      // xG SFG
+                      const sfgShots = teamShots.filter(shot => 
+                        (shot as any).actionCategory === 'sfg' || 
+                        shot.actionType === 'corner' || 
+                        shot.actionType === 'free_kick' || 
+                        shot.actionType === 'direct_free_kick' || 
+                        shot.actionType === 'penalty' || 
+                        shot.actionType === 'throw_in'
+                      );
+                      const xGSFG = sfgShots.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                      
+                      // xG z otwartej gry
+                      const openPlayShots = teamShots.filter(shot => 
+                        shot.actionType === 'open_play' || 
+                        shot.actionType === 'counter' || 
+                        shot.actionType === 'regain'
+                      );
+                      const xGOpenPlay = openPlayShots.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                      
+                      // xG/strzał
+                      const xgPerShot = totalShots > 0 ? (totalXG / totalShots) : 0;
+                      const npXgPerShot = nonPenaltyShots.length > 0 ? (npXG / nonPenaltyShots.length) : 0;
+                      
+                      // Skuteczność
+                      const accuracy = totalShots > 0 ? ((shotsOnTarget / totalShots) * 100) : 0;
+                      const conversionRate = totalShots > 0 ? ((goals / totalShots) * 100) : 0;
+                      
+                      return (
+                        <div className={styles.xgStatsGrid}>
+                          <div className={styles.xgStatCard}>
+                            <div className={styles.xgStatLabel}>Łączne xG</div>
+                            <div className={styles.xgStatValue}>{totalXG.toFixed(2)}</div>
+                          </div>
+                          <div className={styles.xgStatCard}>
+                            <div className={styles.xgStatLabel}>NPxG</div>
+                            <div className={styles.xgStatValue}>{npXG.toFixed(2)}</div>
+                          </div>
+                          <div className={styles.xgStatCard}>
+                            <div className={styles.xgStatLabel}>xG SFG</div>
+                            <div className={styles.xgStatValue}>{xGSFG.toFixed(2)}</div>
+                          </div>
+                          <div className={styles.xgStatCard}>
+                            <div className={styles.xgStatLabel}>xG Otwarta gra</div>
+                            <div className={styles.xgStatValue}>{xGOpenPlay.toFixed(2)}</div>
+                          </div>
+                          <div className={styles.xgStatCard}>
+                            <div className={styles.xgStatLabel}>Strzały</div>
+                            <div className={styles.xgStatValue}>{totalShots}</div>
+                          </div>
+                          <div className={styles.xgStatCard}>
+                            <div className={styles.xgStatLabel}>Gole</div>
+                            <div className={styles.xgStatValue}>{goals}</div>
+                          </div>
+                          <div className={styles.xgStatCard}>
+                            <div className={styles.xgStatLabel}>Celne</div>
+                            <div className={styles.xgStatValue}>{shotsOnTarget}</div>
+                          </div>
+                          <div className={styles.xgStatCard}>
+                            <div className={styles.xgStatLabel}>Niecelne</div>
+                            <div className={styles.xgStatValue}>{shotsOffTarget}</div>
+                          </div>
+                          <div className={styles.xgStatCard}>
+                            <div className={styles.xgStatLabel}>Zablokowane</div>
+                            <div className={styles.xgStatValue}>{shotsBlocked}</div>
+                          </div>
+                          <div className={styles.xgStatCard}>
+                            <div className={styles.xgStatLabel}>xG/strzał</div>
+                            <div className={styles.xgStatValue}>{xgPerShot.toFixed(3)}</div>
+                          </div>
+                          <div className={styles.xgStatCard}>
+                            <div className={styles.xgStatLabel}>NPxG/strzał</div>
+                            <div className={styles.xgStatValue}>{npXgPerShot.toFixed(3)}</div>
+                          </div>
+                          <div className={styles.xgStatCard}>
+                            <div className={styles.xgStatLabel}>% celności</div>
+                            <div className={styles.xgStatValue}>{accuracy.toFixed(1)}%</div>
+                          </div>
+                          <div className={styles.xgStatCard}>
+                            <div className={styles.xgStatLabel}>% konwersji</div>
+                            <div className={styles.xgStatValue}>{conversionRate.toFixed(1)}%</div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+                
+                {selectedMatch && allShots.length === 0 && (
+                  <p className={styles.noDataText}>Brak strzałów dla wybranego meczu.</p>
+                )}
+              </div>
+            )}
 
                 {/* Wykresy */}
         {isLoadingActions ? (
@@ -1689,8 +2716,8 @@ export default function StatystykiZespoluPage() {
                         <h3>Przyrost statystyk co 5 minut</h3>
           </div>
                       <ResponsiveContainer width="100%" height={250}>
-                        <BarChart data={teamChartData5Min} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
-                          <CartesianGrid strokeDasharray="3 3" />
+                        <ComposedChart data={teamChartData5Min} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
                           <XAxis 
                             dataKey="minute" 
                             label={{ value: 'Przedział minutowy', position: 'insideBottom', offset: -5 }}
@@ -1731,25 +2758,28 @@ export default function StatystykiZespoluPage() {
                           <Bar 
                             yAxisId="left"
                             dataKey="pxt" 
-                            fill="#82ca9d" 
+                            fill="#3b82f6" 
                             name="PxT"
                             radius={[4, 4, 0, 0]}
+                            opacity={0.8}
                           />
                           <Bar 
                             yAxisId="left"
                             dataKey="xt" 
-                            fill="#8884d8" 
+                            fill="#8b5cf6" 
                             name="xT"
                             radius={[4, 4, 0, 0]}
+                            opacity={0.8}
                           />
                           <Bar 
                             yAxisId="right"
                             dataKey="packing" 
-                            fill="#ffc658" 
+                            fill="#ec4899" 
                             name="Packing"
                             radius={[4, 4, 0, 0]}
+                            opacity={0.8}
                           />
-                        </BarChart>
+                        </ComposedChart>
                       </ResponsiveContainer>
                     </div>
                   </>
@@ -1760,6 +2790,143 @@ export default function StatystykiZespoluPage() {
         </div>
       )}
 
+      {/* Modal z akcjami zawodnika */}
+      {actionsModalOpen && selectedPlayerForModal && (
+        <div className={styles.modalOverlay} onClick={() => setActionsModalOpen(false)}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Akcje: {selectedPlayerForModal.playerName}</h3>
+              <p className={styles.modalSubtitle}>Strefa: {selectedPlayerForModal.zoneName}</p>
+              <button
+                className={styles.modalCloseButton}
+                onClick={() => setActionsModalOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              {(() => {
+                // Filtruj akcje dla wybranego zawodnika w wybranej strefie
+                const filteredActions = allActions.filter(action => {
+                  // Filtruj według kategorii
+                  if (selectedPxtCategory === 'dribbler' && action.actionType !== 'dribble') return false;
+                  if (selectedPxtCategory !== 'dribbler' && action.actionType === 'dribble') return false;
+                  
+                  // Filtruj według zawodnika
+                  let matchesPlayer = false;
+                  if (selectedPxtCategory === 'dribbler') {
+                    matchesPlayer = action.senderId === selectedPlayerForModal.playerId;
+                  } else if (selectedPxtCategory === 'sender') {
+                    matchesPlayer = action.senderId === selectedPlayerForModal.playerId;
+                  } else if (selectedPxtCategory === 'receiver') {
+                    matchesPlayer = action.receiverId === selectedPlayerForModal.playerId;
+                  }
+                  
+                  if (!matchesPlayer) return false;
+                  
+                  // Filtruj według strefy
+                  let zone: string | undefined;
+                  if (selectedPxtCategory === 'dribbler') {
+                    zone = action.startZone || action.fromZone;
+                  } else if (selectedPxtCategory === 'sender') {
+                    zone = heatmapDirection === "from" 
+                      ? (action.fromZone || action.startZone) 
+                      : (action.toZone || action.endZone);
+                  } else if (selectedPxtCategory === 'receiver') {
+                    zone = heatmapDirection === "to" 
+                      ? (action.toZone || action.endZone) 
+                      : (action.fromZone || action.startZone);
+                  }
+                  
+                  if (!zone) return false;
+                  
+                  const normalizedZone = typeof zone === 'string' 
+                    ? zone.toUpperCase().replace(/\s+/g, '') 
+                    : String(zone).toUpperCase().replace(/\s+/g, '');
+                  
+                  return normalizedZone === selectedPlayerForModal.zoneName;
+                });
+                
+                if (filteredActions.length === 0) {
+                  return <p className={styles.noActionsText}>Brak akcji dla tego zawodnika w tej strefie.</p>;
+                }
+                
+                return (
+                  <div className={styles.actionsList}>
+                    {filteredActions.map((action, index) => {
+                      const match = teamMatches.find(m => m.matchId === action.matchId);
+                      const matchName = match 
+                        ? `${match.opponent} (${new Date(match.date).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })})`
+                        : `Mecz ${action.matchId || 'nieznany'}`;
+                      
+                      const packingPoints = action.packingPoints || 0;
+                      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+                      const pxtValue = xTDifference * packingPoints;
+                      
+                      return (
+                        <div key={index} className={styles.actionItem}>
+                          <div className={styles.actionHeader}>
+                            <span className={styles.actionMatch}>{matchName}</span>
+                            <span className={styles.actionMinute}>{action.minute}'</span>
+                          </div>
+                          <div className={styles.actionDetails}>
+                            <span className={styles.actionDetailRow}>
+                              <span className={styles.actionLabel}>Typ:</span>
+                              <span className={styles.actionValue}>{action.actionType === 'pass' ? 'Podanie' : 'Drybling'}</span>
+                            </span>
+                            <span className={styles.actionDetailRow}>
+                              <span className={styles.actionLabel}>Packing:</span>
+                              <span className={styles.actionValue}>{packingPoints.toFixed(1)}</span>
+                            </span>
+                            <span className={styles.actionDetailRow}>
+                              <span className={styles.actionLabel}>PxT:</span>
+                              <span className={styles.actionValue}>{pxtValue.toFixed(2)}</span>
+                            </span>
+                            <span className={styles.actionDetailRow}>
+                              <span className={styles.actionLabel}>xT:</span>
+                              <span className={styles.actionValue}>{xTDifference.toFixed(3)}</span>
+                            </span>
+                            {action.isPenaltyAreaEntry && (
+                              <span className={styles.actionDetailRow}>
+                                <span className={styles.actionLabel}>PK:</span>
+                                <span className={styles.actionValue}>Tak</span>
+                              </span>
+                            )}
+                            {action.isShot && (
+                              <span className={styles.actionDetailRow}>
+                                <span className={styles.actionLabel}>Strzał:</span>
+                                <span className={styles.actionValue}>Tak</span>
+                              </span>
+                            )}
+                            {action.isGoal && (
+                              <span className={styles.actionDetailRow}>
+                                <span className={styles.actionLabel}>Gol:</span>
+                                <span className={styles.actionValue}>Tak</span>
+                              </span>
+                            )}
+                            {action.fromZone && (
+                              <span className={styles.actionDetailRow}>
+                                <span className={styles.actionLabel}>Z:</span>
+                                <span className={styles.actionValue}>{action.fromZone}</span>
+                              </span>
+                            )}
+                            {action.toZone && (
+                              <span className={styles.actionDetailRow}>
+                                <span className={styles.actionLabel}>Do:</span>
+                                <span className={styles.actionValue}>{action.toZone}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Panel boczny z menu */}
       <SidePanel

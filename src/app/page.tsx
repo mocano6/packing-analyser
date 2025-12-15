@@ -36,7 +36,6 @@ import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTube
 import XGPitch from "@/components/XGPitch/XGPitch";
 import ShotModal from "@/components/ShotModal/ShotModal";
 import ShotsTable from "@/components/ShotsTable/ShotsTable";
-import ShotFilter from "@/components/ShotFilter/ShotFilter";
 import { useShots } from "@/hooks/useShots";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
@@ -82,7 +81,22 @@ function removeUndefinedFields<T extends object>(obj: T): T {
 }
 
 export default function Page() {
-  const [activeTab, setActiveTab] = React.useState<"packing" | "xg" | "regain" | "loses" | "pk_entries">("packing");
+  const [activeTab, setActiveTab] = React.useState<"packing" | "xg" | "regain" | "loses" | "pk_entries">(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('activeTab');
+      if (saved && ['packing', 'xg', 'regain', 'loses', 'pk_entries'].includes(saved)) {
+        return saved as "packing" | "xg" | "regain" | "loses" | "pk_entries";
+      }
+    }
+    return "packing";
+  });
+  
+  // Zapisz aktywną kartę do localStorage przy każdej zmianie
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('activeTab', activeTab);
+    }
+  }, [activeTab]);
   // Inicjalizuj selectedTeam z localStorage lub pustym stringiem
   const [selectedTeam, setSelectedTeam] = React.useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -232,59 +246,12 @@ export default function Page() {
   const { resetActionPoints } = packingActions;
 
   // Hook do zarządzania strzałami
-  const { shots, addShot, updateShot, deleteShot } = useShots(matchInfo?.matchId || "");
+  const { shots, addShot, updateShot, deleteShot, refetch: refetchShots } = useShots(matchInfo?.matchId || "");
   
   // Hook do zarządzania wejściami PK
   const { pkEntries, addPKEntry, updatePKEntry, deletePKEntry } = usePKEntries(matchInfo?.matchId || "");
 
   // Stan dla filtrowania strzałów
-  const [selectedShotCategories, setSelectedShotCategories] = useState<string[]>([
-    'open_play', 'sfg', 'zablokowany', 'celny', 'gol', 'niecelny'
-  ]);
-
-  // Funkcja do obsługi filtrowania kategorii strzałów
-  const handleShotCategoryToggle = (category: string) => {
-    setSelectedShotCategories(prev => 
-      prev.includes(category) 
-        ? prev.filter(cat => cat !== category)
-        : [...prev, category]
-    );
-  };
-
-  // Filtrowane strzały na podstawie wybranych kategorii
-  const filteredShots = useMemo(() => {
-    return shots.filter(shot => {
-      // Sprawdź czy strzał pasuje do wybranych kategorii
-      return selectedShotCategories.some(category => {
-        switch (category) {
-          // Kategoria akcji
-          case 'open_play':
-            return shot.actionType === 'open_play' || 
-                   shot.actionType === 'counter' || 
-                   shot.actionType === 'regain';
-          case 'sfg':
-            return shot.actionType === 'corner' || 
-                   shot.actionType === 'free_kick' || 
-                   shot.actionType === 'direct_free_kick' || 
-                   shot.actionType === 'penalty' || 
-                   shot.actionType === 'throw_in';
-          
-          // Typ strzału
-          case 'zablokowany':
-            return shot.shotType === 'blocked';
-          case 'celny':
-            return shot.shotType === 'on_target' && !shot.isGoal;
-          case 'gol':
-            return shot.isGoal;
-          case 'niecelny':
-            return shot.shotType === 'off_target';
-          
-          default:
-            return false;
-        }
-      });
-    });
-  }, [shots, selectedShotCategories]);
 
   // Stan dla modalki strzałów
   const [isShotModalOpen, setIsShotModalOpen] = useState(false);
@@ -325,21 +292,61 @@ export default function Page() {
   };
 
   const handleShotSave = async (shotData: Omit<Shot, "id" | "timestamp">) => {
-    if (shotModalData?.editingShot) {
-      await updateShot(shotModalData.editingShot.id, shotData);
-    } else {
-      await addShot(shotData);
+    if (!matchInfo?.matchId) {
+      alert("Brak ID meczu. Nie można zapisać strzału.");
+      return;
     }
-    setIsShotModalOpen(false);
-    setShotModalData(null);
-    setSelectedShotId(undefined);
+
+    try {
+      if (shotModalData?.editingShot) {
+        const success = await updateShot(shotModalData.editingShot.id, shotData);
+        if (!success) {
+          alert("Nie udało się zaktualizować strzału. Spróbuj ponownie.");
+          return;
+        }
+      } else {
+        const newShot = await addShot(shotData);
+        if (!newShot) {
+          alert("Nie udało się dodać strzału. Spróbuj ponownie.");
+          return;
+        }
+      }
+      
+      // Odśwież listę strzałów
+      await refetchShots();
+      
+      setIsShotModalOpen(false);
+      setShotModalData(null);
+      setSelectedShotId(undefined);
+    } catch (error) {
+      console.error("Błąd podczas zapisywania strzału:", error);
+      alert("Wystąpił błąd podczas zapisywania strzału. Spróbuj ponownie.");
+    }
   };
 
   const handleShotDelete = async (shotId: string) => {
-    await deleteShot(shotId);
-    setIsShotModalOpen(false);
-    setShotModalData(null);
-    setSelectedShotId(undefined);
+    if (!matchInfo?.matchId) {
+      alert("Brak ID meczu. Nie można usunąć strzału.");
+      return;
+    }
+
+    try {
+      const success = await deleteShot(shotId);
+      if (!success) {
+        alert("Nie udało się usunąć strzału. Spróbuj ponownie.");
+        return;
+      }
+      
+      // Odśwież listę strzałów
+      await refetchShots();
+      
+      setIsShotModalOpen(false);
+      setShotModalData(null);
+      setSelectedShotId(undefined);
+    } catch (error) {
+      console.error("Błąd podczas usuwania strzału:", error);
+      alert("Wystąpił błąd podczas usuwania strzału. Spróbuj ponownie.");
+    }
   };
 
   const handleShotModalClose = () => {
@@ -1799,21 +1806,14 @@ export default function Page() {
         )}
 
         {activeTab === "xg" && (
-          <>
-            <ShotFilter
-              selectedCategories={selectedShotCategories}
-              onCategoryToggle={handleShotCategoryToggle}
-              shots={shots}
-            />
-            <XGPitch
-              shots={filteredShots}
-              onShotAdd={handleShotAdd}
-              onShotClick={handleShotClick}
-              selectedShotId={selectedShotId}
-              matchInfo={matchInfo || undefined}
-              allTeams={allTeams}
-            />
-          </>
+          <XGPitch
+            shots={shots}
+            onShotAdd={handleShotAdd}
+            onShotClick={handleShotClick}
+            selectedShotId={selectedShotId}
+            matchInfo={matchInfo || undefined}
+            allTeams={allTeams}
+          />
         )}
 
         {activeTab === "pk_entries" && (
@@ -1916,7 +1916,7 @@ export default function Page() {
           />
         ) : (
           <ShotsTable
-            shots={filteredShots}
+            shots={shots}
             players={players}
             onDeleteShot={handleShotDelete}
             onEditShot={(shot) => {

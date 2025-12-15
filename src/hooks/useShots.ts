@@ -44,14 +44,46 @@ export const useShots = (matchId: string) => {
     }
   }, [matchId]);
 
+  // Funkcja do usuwania wartości undefined z obiektu (Firestore nie akceptuje undefined)
+  const removeUndefinedValues = (obj: any): any => {
+    if (obj === null || obj === undefined) {
+      return null;
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => removeUndefinedValues(item));
+    }
+    
+    if (typeof obj === 'object') {
+      const cleaned: any = {};
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          const value = obj[key];
+          if (value !== undefined) {
+            cleaned[key] = removeUndefinedValues(value);
+          }
+        }
+      }
+      return cleaned;
+    }
+    
+    return obj;
+  };
+
   // Zapisz strzały do Firebase
   const saveShots = useCallback(async (updatedShots: Shot[]) => {
-    if (!matchId || !db) return false;
+    if (!matchId || !db) {
+      console.error("Brak matchId lub db podczas zapisywania strzałów");
+      return false;
+    }
     
     try {
+      // Usuń wszystkie wartości undefined przed zapisem
+      const cleanedShots = removeUndefinedValues(updatedShots);
+      
       const matchRef = doc(db, "matches", matchId);
       await updateDoc(matchRef, {
-        shots: updatedShots
+        shots: cleanedShots
       });
       setShots(updatedShots);
       return true;

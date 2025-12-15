@@ -212,19 +212,33 @@ export interface TeamInfo {
       teamSecondHalf?: number; // Czas posiadania naszego zespołu w 2 połowie (min)
       opponentSecondHalf?: number; // Czas posiadania przeciwnika w 2 połowie (min)
     };
-    // Liczba podań
+    // Liczba podań celnych na własnej połowie
     passes?: {
-      teamFirstHalf?: number; // Liczba podań naszego zespołu w 1 połowie
-      opponentFirstHalf?: number; // Liczba podań przeciwnika w 1 połowie
-      teamSecondHalf?: number; // Liczba podań naszego zespołu w 2 połowie
-      opponentSecondHalf?: number; // Liczba podań przeciwnika w 2 połowie
+      teamFirstHalf?: number; // Liczba podań celnych naszego zespołu na własnej połowie w 1 połowie
+      opponentFirstHalf?: number; // Liczba podań celnych przeciwnika na własnej połowie w 1 połowie
+      teamSecondHalf?: number; // Liczba podań celnych naszego zespołu na własnej połowie w 2 połowie
+      opponentSecondHalf?: number; // Liczba podań celnych przeciwnika na własnej połowie w 2 połowie
     };
-    // Liczba podań na połowie przeciwnika
+    // Liczba podań niecelnych na własnej połowie
+    passesInaccurate?: {
+      teamFirstHalf?: number; // Liczba podań niecelnych naszego zespołu na własnej połowie w 1 połowie
+      opponentFirstHalf?: number; // Liczba podań niecelnych przeciwnika na własnej połowie w 1 połowie
+      teamSecondHalf?: number; // Liczba podań niecelnych naszego zespołu na własnej połowie w 2 połowie
+      opponentSecondHalf?: number; // Liczba podań niecelnych przeciwnika na własnej połowie w 2 połowie
+    };
+    // Liczba podań celnych na połowie przeciwnika
     passesInOpponentHalf?: {
-      teamFirstHalf?: number; // Liczba podań naszego zespołu na połowie przeciwnika w 1 połowie
-      opponentFirstHalf?: number; // Liczba podań przeciwnika na naszej połowie w 1 połowie
-      teamSecondHalf?: number; // Liczba podań naszego zespołu na połowie przeciwnika w 2 połowie
-      opponentSecondHalf?: number; // Liczba podań przeciwnika na naszej połowie w 2 połowie
+      teamFirstHalf?: number; // Liczba podań celnych naszego zespołu na połowie przeciwnika w 1 połowie
+      opponentFirstHalf?: number; // Liczba podań celnych przeciwnika na naszej połowie w 1 połowie
+      teamSecondHalf?: number; // Liczba podań celnych naszego zespołu na połowie przeciwnika w 2 połowie
+      opponentSecondHalf?: number; // Liczba podań celnych przeciwnika na naszej połowie w 2 połowie
+    };
+    // Liczba podań niecelnych na połowie przeciwnika
+    passesInOpponentHalfInaccurate?: {
+      teamFirstHalf?: number; // Liczba podań niecelnych naszego zespołu na połowie przeciwnika w 1 połowie
+      opponentFirstHalf?: number; // Liczba podań niecelnych przeciwnika na naszej połowie w 1 połowie
+      teamSecondHalf?: number; // Liczba podań niecelnych naszego zespołu na połowie przeciwnika w 2 połowie
+      opponentSecondHalf?: number; // Liczba podań niecelnych przeciwnika na naszej połowie w 2 połowie
     };
     // Liczba skutecznych akcji 8s ACC
     successful8sActions?: {
@@ -232,6 +246,13 @@ export interface TeamInfo {
       opponentFirstHalf?: number; // Liczba skutecznych akcji 8s ACC przeciwnika w 1 połowie
       teamSecondHalf?: number; // Liczba skutecznych akcji 8s ACC naszego zespołu w 2 połowie
       opponentSecondHalf?: number; // Liczba skutecznych akcji 8s ACC przeciwnika w 2 połowie
+    };
+    // Liczba nieskutecznych akcji 8s ACC
+    unsuccessful8sActions?: {
+      teamFirstHalf?: number; // Liczba nieskutecznych akcji 8s ACC naszego zespołu w 1 połowie
+      opponentFirstHalf?: number; // Liczba nieskutecznych akcji 8s ACC przeciwnika w 1 połowie
+      teamSecondHalf?: number; // Liczba nieskutecznych akcji 8s ACC naszego zespołu w 2 połowie
+      opponentSecondHalf?: number; // Liczba nieskutecznych akcji 8s ACC przeciwnika w 2 połowie
     };
   };
 }

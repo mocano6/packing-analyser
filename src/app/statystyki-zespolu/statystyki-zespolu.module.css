@@ -482,17 +482,6 @@
   position: relative;
 }
 
-.zoneDetailsPanel {
-  flex: 1;
-  min-width: 300px;
-  background: white;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  max-height: 600px;
-  display: flex;
-  flex-direction: column;
-}
 
 .zoneDetailsHeader {
   display: flex;
@@ -555,6 +544,9 @@
   border-radius: 8px;
   border: 1px solid #e5e7eb;
   margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .zonePlayerName {
@@ -589,6 +581,173 @@
 
 .zoneValue {
   font-size: 13px;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.viewActionsButton {
+  padding: 6px 12px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-start;
+}
+
+.viewActionsButton:hover {
+  background-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modalContent {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modalHeader {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  position: relative;
+  padding-right: 60px;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.modalSubtitle {
+  margin: 4px 0 0 0;
+  font-size: 14px;
+  color: #6b7280;
+  flex: 1;
+}
+
+.modalCloseButton {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.modalCloseButton:hover {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+.modalBody {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.noActionsText {
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+  padding: 40px 20px;
+}
+
+.actionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.actionItem {
+  padding: 16px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.actionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.actionMatch {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1f2937;
+}
+
+.actionMinute {
+  font-weight: 600;
+  font-size: 14px;
+  color: #3b82f6;
+  background-color: #dbeafe;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.actionDetails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 12px;
+}
+
+.actionDetailRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.actionLabel {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.actionValue {
   color: #1f2937;
   font-weight: 600;
 }
@@ -910,6 +1069,166 @@
   border-bottom: none;
 }
 
+/* Style dla danych meczu */
+.matchDataDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.matchDataPeriodSelector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  background-color: #f3f4f6;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.periodButton {
+  padding: 8px 16px;
+  border: none;
+  background-color: transparent;
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  flex: 1;
+}
+
+.periodButton:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.periodButton.active {
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.matchDataTable {
+  width: 100%;
+  font-size: 12px;
+}
+
+.matchDataTableHeader {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  margin-bottom: 8px;
+}
+
+.matchDataTableHeaderCell {
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: 16px;
+  color: #1f2937;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.teamLogoInHeader {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+}
+
+.matchDataTableHeaderCell:nth-child(2) {
+  /* Pusta komórka środkowa */
+}
+
+.matchDataTableRow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  margin-bottom: 4px;
+}
+
+.matchDataTableLabel {
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: 12px;
+  color: #374151;
+  text-align: center;
+}
+
+.matchDataTableLabel.clickable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.matchDataTableLabel.clickable:hover {
+  background-color: #f3f4f6;
+}
+
+.expandIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #3b82f6;
+  transition: transform 0.2s ease;
+  margin-left: 4px;
+}
+
+.expandIcon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.expandIcon.expanded {
+  transform: rotate(180deg);
+}
+
+.matchDataTableSubLabel {
+  padding: 6px 12px;
+  font-weight: 500;
+  font-size: 11px;
+  color: #6b7280;
+  text-align: center;
+  font-style: italic;
+}
+
+.matchDataTableCell {
+  position: relative;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #1f2937;
+  text-align: center;
+}
+
+.matchDataTableCell:first-child {
+  text-align: right;
+}
+
+.matchDataTableCell:last-child {
+  border-right: none;
+  text-align: left;
+}
+
+.possessionValue {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.possessionTime {
+  font-size: 10px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
 .detailsSection h4 {
   margin: 0 0 12px 0;
   font-size: 16px;
@@ -962,6 +1281,25 @@
   background-color: #f9fafb;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.countItem:hover {
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.countItemSelected {
+  background-color: #dbeafe !important;
+  border-color: #3b82f6 !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.countItemSelected:hover {
+  background-color: #bfdbfe !important;
+  border-color: #2563eb !important;
 }
 
 .countLabel {
@@ -1194,19 +1532,117 @@
   gap: 16px;
   align-items: flex-start;
   margin-top: 12px;
+  flex-direction: row; /* Heatmapa po lewej, lista zawodników po prawej */
+}
+
+/* Sekcja xG */
+.xgPitchSection {
+  margin-bottom: 30px;
+}
+
+.xgPitchSection h4 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.xgPitchWrapper {
+  width: 100%;
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.xgStatsSection {
+  margin-top: 30px;
+}
+
+.xgStatsSection h4 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.xgStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.xgStatCard {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.xgStatLabel {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.xgStatValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
 }
 
 .heatmapContainerInPanel {
   flex: 1;
+  min-width: 0; /* Pozwala na responsywność */
+}
+
+.zoneDetailsPanel {
+  flex: 0 0 320px; /* Szersza lista */
+  min-width: 300px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+.zoneDetailsPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #9ca3af;
+  font-size: 14px;
+  text-align: center;
+  min-height: 200px;
+}
+
+@media (max-width: 900px) {
+  .heatmapWrapperInPanel {
+    flex-direction: column; /* Na mniejszych ekranach lista nad heatmapą */
+  }
+  
+  .zoneDetailsPanel {
+    width: 100%;
+    max-height: 300px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 }
 
 /* Wykresy w panelu */
 .chartContainerInPanel {
   margin-bottom: 24px;
-  padding: 16px;
+  padding: 20px;
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .chartContainerInPanel .chartHeader {

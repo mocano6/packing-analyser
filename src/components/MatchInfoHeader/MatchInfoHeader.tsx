@@ -284,21 +284,56 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
     setIsMatchDataModalOpen(true);
   };
 
+  // Funkcja do usuwania wartości undefined z obiektu (Firestore nie akceptuje undefined)
+  const removeUndefinedValues = (obj: any): any => {
+    if (obj === null || obj === undefined) {
+      return null;
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => removeUndefinedValues(item));
+    }
+    
+    if (typeof obj === 'object') {
+      const cleaned: any = {};
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          const value = obj[key];
+          if (value !== undefined) {
+            cleaned[key] = removeUndefinedValues(value);
+          }
+        }
+      }
+      return cleaned;
+    }
+    
+    return obj;
+  };
+
   // Funkcja zapisywania danych meczu
   const handleSaveMatchData = async (matchData: TeamInfo['matchData']) => {
-    if (!selectedMatchForData?.matchId) return;
+    if (!selectedMatchForData?.matchId) {
+      throw new Error("Brak ID meczu. Nie można zapisać danych.");
+    }
 
     try {
       const db = getDB();
+      if (!db) {
+        throw new Error("Brak połączenia z bazą danych. Sprawdź połączenie internetowe.");
+      }
+      
+      // Usuń wszystkie wartości undefined przed zapisem
+      const cleanedMatchData = removeUndefinedValues(matchData);
+      
       const matchRef = doc(db, "matches", selectedMatchForData.matchId);
       await updateDoc(matchRef, {
-        matchData: matchData
+        matchData: cleanedMatchData
       });
       
-      // Aktualizuj lokalny stan
+      // Aktualizuj lokalny stan (używamy wyczyszczonych danych)
       const updatedMatch = {
         ...selectedMatchForData,
-        matchData: matchData
+        matchData: cleanedMatchData
       };
       
       // Aktualizuj matchInfo jeśli to jest aktualnie wybrany mecz
@@ -306,11 +341,14 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
         // Wywołaj callback do odświeżenia danych (jeśli istnieje)
         // Możesz dodać callback do props jeśli potrzebujesz odświeżenia
       }
-      
-      alert("Dane meczu zostały zapisane pomyślnie!");
     } catch (error) {
       console.error("Błąd podczas zapisywania danych meczu:", error);
-      alert("Wystąpił błąd podczas zapisywania danych meczu. Spróbuj ponownie.");
+      
+      // Rzucamy błąd dalej, aby MatchDataModal mógł go obsłużyć
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Wystąpił błąd podczas zapisywania danych meczu. Spróbuj ponownie.";
+      throw new Error(errorMessage);
     }
   };
 

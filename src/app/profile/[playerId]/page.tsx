@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Player, Action, TeamInfo } from "@/types";
 import { usePlayersState } from "@/hooks/usePlayersState";
@@ -31,6 +31,7 @@ export default function PlayerDetailsPage() {
   const [allActions, setAllActions] = useState<Action[]>([]);
   const [allShots, setAllShots] = useState<any[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
+  const [allTeamActions, setAllTeamActions] = useState<Action[]>([]); // Wszystkie akcje zespołu dla rankingu
   const [selectedMatchIds, setSelectedMatchIds] = useState<string[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<string>("all");
   const [showMatchSelector, setShowMatchSelector] = useState<boolean>(false);
@@ -55,30 +56,116 @@ export default function PlayerDetailsPage() {
   const [heatmapMode, setHeatmapMode] = useState<"pxt" | "count">("pxt");
   const [heatmapDirection, setHeatmapDirection] = useState<"from" | "to">("from"); // Domyślnie "from" dla sender
   const [chartMode, setChartMode] = useState<"pxt" | "pxtPerMinute">("pxt"); // Tryb wykresu: PxT lub PxT/minutę
+  const [chartCategory, setChartCategory] = useState<"sender" | "receiver" | "dribbler">("sender"); // Kategoria wykresu: Podający, Przyjmujący, Drybling
   const [isPositionStatsExpanded, setIsPositionStatsExpanded] = useState(false);
+  const [isPartnerStatsExpanded, setIsPartnerStatsExpanded] = useState(false);
+  const [expandedPositionMatches, setExpandedPositionMatches] = useState<string | null>(null);
+  const [partnerStatsMode, setPartnerStatsMode] = useState<"sender" | "receiver">("sender");
+  const [partnerSortMode, setPartnerSortMode] = useState<"passes" | "pxt">("passes");
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
+  const [selectedActionFilter, setSelectedActionFilter] = useState<'p1' | 'p2' | 'p3' | 'pk' | 'shot' | 'goal' | null>(null);
   const [zoneDetails, setZoneDetails] = useState<{
     zoneName: string;
     players: Array<{ playerId: string; playerName: string; passes: number; pxt: number; p1Count: number; p2Count: number; p3Count: number; pkCount: number; shotCount: number; goalCount: number }>;
   } | null>(null);
+  const [actionsModalOpen, setActionsModalOpen] = useState(false);
+  const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<{ playerId: string; playerName: string; zoneName: string } | null>(null);
 
-  // Znajdź zawodnika
+  // Ref do śledzenia, czy już załadowaliśmy mecze dla danego zespołu
+  const lastLoadedTeamRef = useRef<string | null>(null);
+  const isLoadingMatchesRef = useRef(false);
+
+  // Znajdź zawodnika - użyj selectedPlayerForView jeśli jest ustawiony, w przeciwnym razie playerId z URL
   const player = useMemo(() => {
-    return players.find(p => p.id === playerId);
-  }, [players, playerId]);
+    const targetPlayerId = selectedPlayerForView || playerId;
+    return players.find(p => p.id === targetPlayerId);
+  }, [players, playerId, selectedPlayerForView]);
+
+  // Filtruj mecze według sezonu i zespołu
+  const filteredMatchesBySeason = useMemo(() => {
+    let matches = allMatches;
+    
+    // Filtruj po zespole
+    if (selectedTeam) {
+      matches = matches.filter(match => match.team === selectedTeam);
+    }
+    
+    // Filtruj po sezonie
+    if (selectedSeason && selectedSeason !== "all") {
+      matches = filterMatchesBySeason(matches, selectedSeason);
+    }
+    
+    return matches;
+  }, [allMatches, selectedSeason, selectedTeam]);
+
+  // Filtrowani zawodnicy według wybranego zespołu
+  const filteredPlayers = useMemo(() => {
+    if (!selectedTeam) return players;
+    return players.filter(player => {
+      let playerTeams = player.teams;
+      if (typeof playerTeams === 'string') {
+        playerTeams = [playerTeams];
+      } else if (!Array.isArray(playerTeams)) {
+        playerTeams = [];
+      }
+      return playerTeams.includes(selectedTeam);
+    });
+  }, [players, selectedTeam]);
 
   // Pobierz wszystkie akcje dla zawodnika
   useEffect(() => {
     const loadPlayerActions = async () => {
-      if (!playerId || !db) return;
+      // Poczekaj aż filteredPlayers się zaktualizuje po zmianie zespołu
+      if (filteredPlayers.length === 0) {
+        setAllActions([]);
+        setAllShots([]);
+        setSelectedMatchIds([]);
+        setIsLoadingActions(false);
+        return;
+      }
+      
+      // Jeśli nie ma wybranego zawodnika, poczekaj aż zostanie ustawiony przez useEffect
+      if (!selectedPlayerForView) {
+        setAllActions([]);
+        setAllShots([]);
+        setSelectedMatchIds([]);
+        setIsLoadingActions(false);
+        return;
+      }
+      
+      const targetPlayerId = selectedPlayerForView;
+      if (!targetPlayerId || !db) {
+        setAllActions([]);
+        setAllShots([]);
+        setSelectedMatchIds([]);
+        setIsLoadingActions(false);
+        return;
+      }
+      
+      // Sprawdź czy zawodnik jest dostępny w przefiltrowanych zawodnikach
+      if (!filteredPlayers.some(p => p.id === targetPlayerId)) {
+        // Jeśli zawodnik nie jest dostępny, wyczyść dane i poczekaj na ustawienie nowego zawodnika
+        setAllActions([]);
+        setAllShots([]);
+        setSelectedMatchIds([]);
+        setIsLoadingActions(false);
+        return;
+      }
+      
+      // Sprawdź czy są mecze do załadowania
+      // Jeśli nie ma meczów, to też OK - po prostu nie ma danych dla tego zespołu/sezonu
+      // Ale musimy załadować dane (nawet jeśli będzie puste), aby pokazać że dane zostały załadowane
 
       setIsLoadingActions(true);
       try {
         const allActionsData: Action[] = [];
         const allShotsData: any[] = [];
 
+        // Użyj już przefiltrowanych meczów
+        const matchesToLoad = filteredMatchesBySeason;
+
         // Pobierz akcje ze wszystkich meczów
-        for (const match of allMatches) {
+        for (const match of matchesToLoad) {
           if (!match.matchId) continue;
 
           try {
@@ -103,16 +190,16 @@ export default function PlayerDetailsPage() {
               // Filtruj akcje dla wybranego zawodnika
               const playerActions = allMatchActions.filter(
                 action =>
-                  action.senderId === playerId ||
-                  action.receiverId === playerId ||
-                  (action as any).playerId === playerId
+                  action.senderId === targetPlayerId ||
+                  action.receiverId === targetPlayerId ||
+                  (action as any).playerId === targetPlayerId
               );
 
               allActionsData.push(...playerActions);
               
               // Pobierz strzały dla zawodnika
               const matchShots = matchData.shots || [];
-              const playerShots = matchShots.filter((shot: any) => shot.playerId === playerId);
+              const playerShots = matchShots.filter((shot: any) => shot.playerId === targetPlayerId);
               allShotsData.push(...playerShots.map((shot: any) => ({ ...shot, matchId: match.matchId! })));
             }
           } catch (error) {
@@ -123,8 +210,8 @@ export default function PlayerDetailsPage() {
         setAllActions(allActionsData);
         setAllShots(allShotsData);
         
-        // Zaznacz wszystkie mecze domyślnie
-        const matchIds = allMatches
+        // Zaznacz wszystkie mecze domyślnie (tylko z wyfiltrowanych)
+        const matchIds = matchesToLoad
           .filter(m => m.matchId)
           .map(m => m.matchId!);
         setSelectedMatchIds(matchIds);
@@ -137,15 +224,7 @@ export default function PlayerDetailsPage() {
     };
 
     loadPlayerActions();
-  }, [playerId, allMatches]);
-
-  // Filtruj mecze według sezonu
-  const filteredMatchesBySeason = useMemo(() => {
-    if (!selectedSeason || selectedSeason === "all") {
-      return allMatches;
-    }
-    return filterMatchesBySeason(allMatches, selectedSeason);
-  }, [allMatches, selectedSeason]);
+  }, [playerId, selectedPlayerForView, filteredMatchesBySeason, filteredPlayers, db]);
 
   // Oblicz dostępne sezony
   const availableSeasons = useMemo(() => {
@@ -169,19 +248,106 @@ export default function PlayerDetailsPage() {
     return teams || [];
   }, [teams]);
 
-  // Filtrowani zawodnicy według wybranego zespołu
-  const filteredPlayers = useMemo(() => {
-    if (!selectedTeam) return players;
-    return players.filter(player => {
-      let playerTeams = player.teams;
-      if (typeof playerTeams === 'string') {
-        playerTeams = [playerTeams];
-      } else if (!Array.isArray(playerTeams)) {
-        playerTeams = [];
+  // Załaduj mecze dla wszystkich zespołów, jeśli allMatches nie zawiera meczów dla aktualnego zespołu
+  useEffect(() => {
+    const loadMatchesIfNeeded = async () => {
+      if (!selectedTeam || isLoadingMatchesRef.current) return;
+      
+      // Jeśli już załadowaliśmy mecze dla tego zespołu, nie ładuj ponownie
+      if (lastLoadedTeamRef.current === selectedTeam) {
+        return;
       }
-      return playerTeams.includes(selectedTeam);
-    });
-  }, [players, selectedTeam]);
+      
+      // Sprawdź czy allMatches zawiera mecze dla aktualnego zespołu
+      const hasMatchesForTeam = allMatches.some(match => match.team === selectedTeam);
+      
+      if (!hasMatchesForTeam) {
+        // Jeśli allMatches nie ma meczów dla tego zespołu, pobierz wszystkie mecze
+        isLoadingMatchesRef.current = true;
+        try {
+          await forceRefreshFromFirebase();
+          lastLoadedTeamRef.current = selectedTeam;
+        } catch (error) {
+          console.error("Błąd podczas przeładowywania meczów:", error);
+        } finally {
+          isLoadingMatchesRef.current = false;
+        }
+      } else {
+        // Jeśli mecze już są, oznacz że załadowaliśmy dla tego zespołu
+        lastLoadedTeamRef.current = selectedTeam;
+      }
+    };
+    
+    // Uruchom tylko raz przy zmianie zespołu, z małym opóźnieniem, aby uniknąć konfliktów
+    const timeoutId = setTimeout(() => {
+      loadMatchesIfNeeded();
+    }, 200);
+    
+    return () => clearTimeout(timeoutId);
+  }, [selectedTeam]); // Tylko selectedTeam w zależnościach
+
+  // Pobierz wszystkie akcje zespołu dla rankingu
+  useEffect(() => {
+    const loadAllTeamActions = async () => {
+      if (!selectedTeam || !db || filteredPlayers.length === 0) {
+        setAllTeamActions([]);
+        return;
+      }
+
+      try {
+        const allTeamActionsData: Action[] = [];
+
+        // Użyj filteredMatchesBySeason zamiast allMatches, żeby uwzględnić filtr sezonu
+        const matchesToLoad = filteredMatchesBySeason;
+
+        // Pobierz akcje ze wszystkich meczów dla wszystkich zawodników
+        for (const match of matchesToLoad) {
+          if (!match.matchId) continue;
+
+          try {
+            const matchDoc = await getDoc(doc(db, "matches", match.matchId));
+            if (matchDoc.exists()) {
+              const matchData = matchDoc.data() as TeamInfo;
+              
+              // Pobierz akcje z różnych kolekcji
+              const packingActions = matchData.actions_packing || [];
+              const unpackingActions = matchData.actions_unpacking || [];
+              const regainActions = matchData.actions_regain || [];
+              const losesActions = matchData.actions_loses || [];
+
+              // Dodaj matchId do każdej akcji - NIE filtruj po zawodniku!
+              const allMatchActions = [
+                ...packingActions.map(a => ({ ...a, matchId: match.matchId! })),
+                ...unpackingActions.map(a => ({ ...a, matchId: match.matchId! })),
+                ...regainActions.map(a => ({ ...a, matchId: match.matchId! })),
+                ...losesActions.map(a => ({ ...a, matchId: match.matchId! }))
+              ];
+
+              // Filtruj tylko akcje zawodników z wybranego zespołu
+              const teamPlayersIds = filteredPlayers.map(p => p.id);
+              const teamMatchActions = allMatchActions.filter(
+                action =>
+                  (action.senderId && teamPlayersIds.includes(action.senderId)) ||
+                  (action.receiverId && teamPlayersIds.includes(action.receiverId)) ||
+                  ((action as any).playerId && teamPlayersIds.includes((action as any).playerId))
+              );
+
+              allTeamActionsData.push(...teamMatchActions);
+            }
+          } catch (error) {
+            console.error(`Błąd podczas pobierania akcji zespołu dla meczu ${match.matchId}:`, error);
+          }
+        }
+
+        setAllTeamActions(allTeamActionsData);
+      } catch (error) {
+        console.error("Błąd podczas pobierania akcji zespołu:", error);
+        setAllTeamActions([]);
+      }
+    };
+
+    loadAllTeamActions();
+  }, [selectedTeam, filteredMatchesBySeason, filteredPlayers, db]);
 
   // Inicjalizuj selectedTeam - sprawdź czy wybrany zespół jest dostępny, jeśli nie - ustaw pierwszy dostępny
   useEffect(() => {
@@ -199,32 +365,53 @@ export default function PlayerDetailsPage() {
 
   // Inicjalizuj selectedPlayerForView - priorytet ma playerId z URL
   useEffect(() => {
-    if (filteredPlayers.length > 0) {
-      // Sprawdź czy aktualny playerId z URL jest w filteredPlayers
-      if (filteredPlayers.some(p => p.id === playerId)) {
-        // Jeśli aktualny zawodnik jest w filteredPlayers, użyj go (priorytet nad localStorage)
-        if (selectedPlayerForView !== playerId) {
-          setSelectedPlayerForView(playerId);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('selectedPlayerForView', playerId);
-          }
+    if (filteredPlayers.length === 0) {
+      // Jeśli nie ma zawodników, wyczyść selectedPlayerForView
+      if (selectedPlayerForView) {
+        setSelectedPlayerForView("");
+      }
+      return;
+    }
+    
+    // Jeśli selectedPlayerForView jest pusty, zawsze ustaw pierwszego dostępnego zawodnika
+    if (!selectedPlayerForView) {
+      const firstPlayerId = filteredPlayers[0]?.id;
+      if (firstPlayerId) {
+        setSelectedPlayerForView(firstPlayerId);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('selectedPlayerForView', firstPlayerId);
         }
-      } else if (!selectedPlayerForView || !filteredPlayers.some(p => p.id === selectedPlayerForView)) {
-        // Jeśli aktualny zawodnik nie jest dostępny, sprawdź localStorage
-        const savedPlayerId = typeof window !== 'undefined' ? localStorage.getItem('selectedPlayerForView') : null;
-        if (savedPlayerId && filteredPlayers.some(p => p.id === savedPlayerId)) {
-          // Jeśli zapisany zawodnik jest dostępny, użyj go
-          setSelectedPlayerForView(savedPlayerId);
-        } else {
-          // Jeśli zapisany zawodnik nie jest dostępny, ustaw pierwszego dostępnego
-          setSelectedPlayerForView(filteredPlayers[0].id);
+      }
+      return;
+    }
+    
+    // Sprawdź czy aktualny selectedPlayerForView jest dostępny w filteredPlayers
+    if (!filteredPlayers.some(p => p.id === selectedPlayerForView)) {
+      // Jeśli aktualny zawodnik nie jest dostępny w filteredPlayers
+      // Sprawdź czy playerId z URL jest dostępny
+      if (filteredPlayers.some(p => p.id === playerId)) {
+        setSelectedPlayerForView(playerId);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('selectedPlayerForView', playerId);
+        }
+      } else {
+        // Jeśli playerId też nie jest dostępny, ustaw pierwszego dostępnego
+        const firstPlayerId = filteredPlayers[0]?.id;
+        if (firstPlayerId) {
+          setSelectedPlayerForView(firstPlayerId);
           if (typeof window !== 'undefined') {
-            localStorage.setItem('selectedPlayerForView', filteredPlayers[0].id);
+            localStorage.setItem('selectedPlayerForView', firstPlayerId);
           }
         }
       }
+    } else if (filteredPlayers.some(p => p.id === playerId) && selectedPlayerForView !== playerId) {
+      // Jeśli playerId z URL jest dostępny i różny od aktualnego, użyj go (priorytet)
+      setSelectedPlayerForView(playerId);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('selectedPlayerForView', playerId);
+      }
     }
-  }, [filteredPlayers, playerId]); // Usunięto selectedPlayerForView z zależności, aby uniknąć nieskończonej pętli
+  }, [filteredPlayers, playerId]);
 
   // Zaznacz wszystkie mecze domyślnie przy zmianie sezonu
   useEffect(() => {
@@ -243,9 +430,11 @@ export default function PlayerDetailsPage() {
       ? filteredMatchesBySeason.filter(m => selectedMatchIds.includes(m.matchId || ""))
       : filteredMatchesBySeason;
 
+    const targetPlayerId = selectedPlayerForView || playerId;
+    
     matchesToCheck.forEach((match) => {
       if (match.playerMinutes) {
-        const playerMinute = match.playerMinutes.find((pm: any) => pm.playerId === playerId);
+        const playerMinute = match.playerMinutes.find((pm: any) => pm.playerId === targetPlayerId);
         if (playerMinute) {
           const playTime = playerMinute.startMinute === 0 && playerMinute.endMinute === 0
             ? 0
@@ -260,7 +449,7 @@ export default function PlayerDetailsPage() {
     });
 
     return { totalMinutes: minutes, positionMinutes: posMinutes };
-  }, [playerId, filteredMatchesBySeason, selectedMatchIds]);
+  }, [playerId, selectedPlayerForView, filteredMatchesBySeason, selectedMatchIds]);
 
   // Oblicz dane mecz po meczu dla wykresu
   const matchByMatchData = useMemo(() => {
@@ -270,19 +459,23 @@ export default function PlayerDetailsPage() {
       ? filteredMatchesBySeason.filter(m => selectedMatchIds.includes(m.matchId || ""))
       : filteredMatchesBySeason;
 
-    return matchesToCheck.map((match) => {
-      // Oblicz minuty dla tego meczu
+    const targetPlayerId = selectedPlayerForView || player.id;
+    
+    const data = matchesToCheck.map((match) => {
+      // Oblicz minuty dla tego meczu i pobierz pozycję
       let minutes = 0;
+      let position = null;
       if (match.playerMinutes) {
-        const playerMinute = match.playerMinutes.find((pm: any) => pm.playerId === player.id);
+        const playerMinute = match.playerMinutes.find((pm: any) => pm.playerId === targetPlayerId);
         if (playerMinute) {
           minutes = playerMinute.startMinute === 0 && playerMinute.endMinute === 0
             ? 0
             : playerMinute.endMinute - playerMinute.startMinute + 1;
+          position = playerMinute.position || null;
         }
       }
 
-      // Oblicz PxT dla tego meczu
+      // Oblicz PxT dla tego meczu według wybranej kategorii
       let matchPxt = 0;
       const matchActions = allActions.filter(a => a.matchId === match.matchId);
       
@@ -291,16 +484,14 @@ export default function PlayerDetailsPage() {
         const packingPoints = action.packingPoints || 0;
         const pxtValue = xTDifference * packingPoints;
 
-        // PxT jako podający
-        if (action.senderId === player.id && action.actionType === 'pass') {
+        // PxT według wybranej kategorii
+        if (chartCategory === 'sender' && action.senderId === targetPlayerId && action.actionType === 'pass') {
           matchPxt += pxtValue;
         }
-        // PxT jako przyjmujący
-        else if (action.receiverId === player.id && action.actionType === 'pass') {
+        else if (chartCategory === 'receiver' && action.receiverId === targetPlayerId && action.actionType === 'pass') {
           matchPxt += pxtValue;
         }
-        // PxT jako drybling
-        else if (action.senderId === player.id && action.actionType === 'dribble') {
+        else if (chartCategory === 'dribbler' && action.senderId === targetPlayerId && action.actionType === 'dribble') {
           matchPxt += pxtValue;
         }
       });
@@ -318,6 +509,11 @@ export default function PlayerDetailsPage() {
         pxt: matchPxt,
         minutes: minutes,
         pxtPerMinute: minutes > 0 ? matchPxt / minutes : 0,
+        position: position,
+        opponent: match.opponent,
+        isHome: match.isHome,
+        date: match.date,
+        competition: match.competition,
       };
     }).filter(m => m.minutes > 0).sort((a, b) => {
       // Sortuj według daty meczu
@@ -326,11 +522,33 @@ export default function PlayerDetailsPage() {
       if (!matchA || !matchB) return 0;
       return new Date(matchA.date).getTime() - new Date(matchB.date).getTime();
     });
-  }, [player, allActions, filteredMatchesBySeason, selectedMatchIds]);
+
+    // Oblicz linię trendu (regresja liniowa) po sortowaniu
+    if (data.length > 1) {
+      const n = data.length;
+      const sumX = data.reduce((sum, d, i) => sum + i, 0);
+      const sumY = data.reduce((sum, d) => sum + (chartMode === 'pxt' ? d.pxt : d.pxtPerMinute), 0);
+      const sumXY = data.reduce((sum, d, i) => sum + i * (chartMode === 'pxt' ? d.pxt : d.pxtPerMinute), 0);
+      const sumXX = data.reduce((sum, d, i) => sum + i * i, 0);
+      
+      const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+      const intercept = (sumY - slope * sumX) / n;
+      
+      return data.map((d, i) => ({
+        ...d,
+        trendLine: slope * i + intercept,
+      }));
+    }
+    
+    return data.map(d => ({ ...d, trendLine: chartMode === 'pxt' ? d.pxt : d.pxtPerMinute }));
+  }, [player, allActions, filteredMatchesBySeason, selectedMatchIds, chartMode, chartCategory, selectedPlayerForView, playerId]);
 
   // Oblicz statystyki zawodnika
   const playerStats = useMemo(() => {
     if (!player) return null;
+    
+    // Użyj selectedPlayerForView jeśli jest ustawiony, w przeciwnym razie player.id
+    const targetPlayerId = selectedPlayerForView || player.id;
 
     // Filtruj akcje dla wybranych meczów
     let filteredActions = allActions;
@@ -385,13 +603,14 @@ export default function PlayerDetailsPage() {
       receiverPassCount: number;
       dribblingCount: number;
       minutes: number;
+      matchIds: Set<string>; // Dodajemy matchIds dla każdej pozycji
     }>();
     
     // Funkcja do pobrania pozycji zawodnika w meczu
-    const getPlayerPositionInMatch = (matchId: string): string | null => {
+    const getPlayerPositionInMatch = (matchId: string, targetId: string): string | null => {
       const match = filteredMatchesBySeason.find(m => m.matchId === matchId);
       if (!match || !match.playerMinutes) return null;
-      const playerMinute = match.playerMinutes.find((pm: any) => pm.playerId === playerId);
+      const playerMinute = match.playerMinutes.find((pm: any) => pm.playerId === targetId);
       return playerMinute?.position || null;
     };
 
@@ -505,15 +724,19 @@ export default function PlayerDetailsPage() {
     // Przyjmujący: to (do której strefy) i from (z której strefy były podania)
     const receiverToHeatmap = new Map<string, number>();
     const receiverFromHeatmap = new Map<string, number>();
-    // Drybling: tylko from (z której strefy)
-    const dribblerHeatmap = new Map<string, number>();
+    // Drybling: from (z której strefy) i to (do której strefy)
+    const dribblerFromHeatmap = new Map<string, number>();
+    const dribblerToHeatmap = new Map<string, number>();
+    const dribblerHeatmap = new Map<string, number>(); // Backward compatibility - używa from
     
     // Heatmapy liczby akcji dla każdej kategorii - Map<zoneName, count>
     const senderFromActionCountHeatmap = new Map<string, number>();
     const senderToActionCountHeatmap = new Map<string, number>();
     const receiverToActionCountHeatmap = new Map<string, number>();
     const receiverFromActionCountHeatmap = new Map<string, number>();
-    const dribblerActionCountHeatmap = new Map<string, number>();
+    const dribblerFromActionCountHeatmap = new Map<string, number>();
+    const dribblerToActionCountHeatmap = new Map<string, number>();
+    const dribblerActionCountHeatmap = new Map<string, number>(); // Backward compatibility - używa from
     
     // Statystyki dla każdej strefy - kto podawał do wybranego zawodnika (tylko dla receiver)
     // Map<zoneName, Map<playerId, { passes: number, pxt: number, p1Count: number, p2Count: number, p3Count: number, pkCount: number, shotCount: number, goalCount: number }>>
@@ -528,7 +751,30 @@ export default function PlayerDetailsPage() {
     // Dla kierunku "to": zawodnicy, którzy przyjmowali podania DO tej strefy (gdzie wybrany zawodnik podawał)
     const senderZonePlayerStatsFrom = new Map<string, Map<string, { passes: number; pxt: number; p1Count: number; p2Count: number; p3Count: number; pkCount: number; shotCount: number; goalCount: number }>>();
     const senderZonePlayerStatsTo = new Map<string, Map<string, { passes: number; pxt: number; p1Count: number; p2Count: number; p3Count: number; pkCount: number; shotCount: number; goalCount: number }>>();
+    
+    // Statystyki partnerów - top 5 podających/przyjmujących
+    // Map<playerId, { passes: number, pxt: number }>
+    const partnerStatsAsSender = new Map<string, { passes: number; pxt: number }>(); // Do kogo zawodnik podaje
+    const partnerStatsAsReceiver = new Map<string, { passes: number; pxt: number }>(); // Od kogo zawodnik otrzymuje
 
+    // Funkcja pomocnicza do konwersji strefy na format "A1" - używana w obu pętlach
+    const convertZoneToName = (zone: string | number | undefined): string | null => {
+      if (!zone) return null;
+      let zoneName = zone;
+      if (typeof zoneName === 'number') {
+        const rowLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+        const row = Math.floor(zoneName / 12);
+        const col = (zoneName % 12) + 1;
+        zoneName = `${rowLetters[row].toUpperCase()}${col}`;
+      }
+      if (typeof zoneName === 'string') {
+        return zoneName.trim().toUpperCase();
+      }
+      return null;
+    };
+
+    // PIERWSZA PĘTLA: Oblicz liczniki i podstawowe statystyki dla WSZYSTKICH akcji (bez filtrowania)
+    // Liczniki powinny pokazywać wszystkie akcje danego typu, niezależnie od filtra
     filteredActions.forEach((action) => {
       // PxT i xT
       const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
@@ -536,32 +782,246 @@ export default function PlayerDetailsPage() {
       const pxtValue = xTDifference * packingPoints;
 
       // PxT jako podający (sender) - tylko dla podań
-      if (action.senderId === player.id && action.actionType === 'pass') {
+      if (action.senderId === targetPlayerId && action.actionType === 'pass') {
         pxtAsSender += pxtValue;
         totalPxT += pxtValue;
         totalXT += xTDifference;
         senderActionsCount += 1;
         senderPassCount += 1;
+        // Strefa źródłowa (z której podawał)
+        const fromZoneName = convertZoneToName(action.fromZone || action.startZone);
+        // Strefa docelowa (do której podawał)
+        const toZoneName = convertZoneToName(action.toZone ?? action.endZone ?? undefined);
+        
+        // Breakdown PxT jako podający według typu akcji
+        // Użyj tej samej strefy co heatmapa - jeśli heatmapDirection === 'from', użyj strefy źródłowej, w przeciwnym razie docelowej
+        const zoneForBreakdown = heatmapDirection === 'from' 
+          ? fromZoneName
+          : toZoneName;
+        
+        // Licz tylko akcje, które mają strefę (tak jak heatmapa)
+        if (zoneForBreakdown) {
+          const senderIsLateral = isLateralZone(zoneForBreakdown);
 
-        // Funkcja pomocnicza do konwersji strefy na format "A1"
-        const convertZoneToName = (zone: string | number | undefined): string | null => {
-          if (!zone) return null;
-          let zoneName = zone;
-          if (typeof zoneName === 'number') {
-            const rowLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-            const row = Math.floor(zoneName / 12);
-            const col = (zoneName % 12) + 1;
-            zoneName = `${rowLetters[row].toUpperCase()}${col}`;
+          // PK może być jednocześnie strzałem, więc sprawdzamy oba warunki niezależnie
+          if (action.isPenaltyAreaEntry) {
+            pxtSenderFromPK += pxtValue;
+            senderPKCount += 1;
+            if (senderIsLateral) senderPKCountLateral += 1;
+            else senderPKCountCentral += 1;
           }
-          if (typeof zoneName === 'string') {
-            return zoneName.trim().toUpperCase();
+          
+          // Strzał może być jednocześnie PK, więc sprawdzamy niezależnie
+          if (action.isShot) {
+            pxtSenderFromShot += pxtValue;
+            senderShotCount += 1;
+            if (senderIsLateral) senderShotCountLateral += 1;
+            else senderShotCountCentral += 1;
+            if (action.isGoal) {
+              senderGoalCount += 1;
+              if (senderIsLateral) senderGoalCountLateral += 1;
+              else senderGoalCountCentral += 1;
+            }
           }
-          return null;
-        };
+          
+          // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
+          if (action.isP3 || action.isP3Start) {
+            pxtSenderFromP3 += pxtValue;
+            senderP3Count += 1;
+            if (senderIsLateral) senderP3CountLateral += 1;
+            else senderP3CountCentral += 1;
+          }
+          if (action.isP2 || action.isP2Start) {
+            pxtSenderFromP2 += pxtValue;
+            senderP2Count += 1;
+            if (senderIsLateral) senderP2CountLateral += 1;
+            else senderP2CountCentral += 1;
+          }
+          if (action.isP1 || action.isP1Start) {
+            pxtSenderFromP1 += pxtValue;
+            senderP1Count += 1;
+            if (senderIsLateral) senderP1CountLateral += 1;
+            else senderP1CountCentral += 1;
+          }
+          
+          // Inne akcje (które nie są PK, strzałem, P1, P2, P3)
+          if (!action.isPenaltyAreaEntry && !action.isShot && !(action.isP3 || action.isP3Start) && !(action.isP2 || action.isP2Start) && !(action.isP1 || action.isP1Start)) {
+            pxtSenderFromOther += pxtValue;
+          }
+        }
+      }
+
+      // PxT jako przyjmujący (receiver) - tylko dla podań
+      if (action.receiverId === targetPlayerId && action.actionType === 'pass') {
+        pxtAsReceiver += pxtValue;
+        totalPxT += pxtValue;
+        totalXT += xTDifference;
+        receiverActionsCount += 1;
+        receiverPassCount += 1;
+        
+        // Strefa docelowa (do której przyjmował)
+        const toZoneName = convertZoneToName(action.toZone ?? action.endZone ?? undefined);
+        // Strefa źródłowa (z której były podania do niego)
+        const fromZoneName = convertZoneToName(action.fromZone ?? action.startZone ?? undefined);
+        
+        // Breakdown PxT jako przyjmujący według typu akcji
+        const zoneForBreakdown = heatmapDirection === 'to' 
+          ? toZoneName
+          : fromZoneName;
+        
+        if (zoneForBreakdown) {
+          const receiverIsLateral = isLateralZone(zoneForBreakdown);
+
+          // PK może być jednocześnie strzałem, więc sprawdzamy oba warunki niezależnie
+          if (action.isPenaltyAreaEntry) {
+            pxtReceiverFromPK += pxtValue;
+            receiverPKCount += 1;
+            if (receiverIsLateral) receiverPKCountLateral += 1;
+            else receiverPKCountCentral += 1;
+          }
+          
+          // Strzał może być jednocześnie PK, więc sprawdzamy niezależnie
+          if (action.isShot) {
+            pxtReceiverFromShot += pxtValue;
+            receiverShotCount += 1;
+            if (receiverIsLateral) receiverShotCountLateral += 1;
+            else receiverShotCountCentral += 1;
+            if (action.isGoal) {
+              receiverGoalCount += 1;
+              if (receiverIsLateral) receiverGoalCountLateral += 1;
+              else receiverGoalCountCentral += 1;
+            }
+          }
+          
+          // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
+          if (action.isP3 || action.isP3Start) {
+            pxtReceiverFromP3 += pxtValue;
+            receiverP3Count += 1;
+            if (receiverIsLateral) receiverP3CountLateral += 1;
+            else receiverP3CountCentral += 1;
+          }
+          if (action.isP2 || action.isP2Start) {
+            pxtReceiverFromP2 += pxtValue;
+            receiverP2Count += 1;
+            if (receiverIsLateral) receiverP2CountLateral += 1;
+            else receiverP2CountCentral += 1;
+          }
+          if (action.isP1 || action.isP1Start) {
+            pxtReceiverFromP1 += pxtValue;
+            receiverP1Count += 1;
+            if (receiverIsLateral) receiverP1CountLateral += 1;
+            else receiverP1CountCentral += 1;
+          }
+          
+          // Inne akcje (które nie są PK, strzałem, P1, P2, P3)
+          if (!action.isPenaltyAreaEntry && !action.isShot && !(action.isP3 || action.isP3Start) && !(action.isP2 || action.isP2Start) && !(action.isP1 || action.isP1Start)) {
+            pxtReceiverFromOther += pxtValue;
+          }
+        }
+      }
+
+      // PxT z dryblingu
+      if ((action as any).playerId === targetPlayerId && action.actionType === 'dribble') {
+        pxtAsDribbler += pxtValue;
+        totalPxT += pxtValue;
+        totalXT += xTDifference;
+        dribblingActionsCount += 1;
+        // Strefa źródłowa (z której dryblował)
+        const fromZoneName = convertZoneToName(action.fromZone ?? action.startZone ?? undefined);
+        // Strefa docelowa (do której dryblował)
+        const toZoneName = convertZoneToName(action.toZone ?? action.endZone ?? undefined);
+        
+        // Sprawdź czy strefa jest boczna czy centralna - użyj tej samej strefy co heatmapa
+        const zoneForBreakdown = heatmapDirection === 'from' 
+          ? fromZoneName
+          : toZoneName;
+        const dribblingIsLateral = isLateralZone(zoneForBreakdown);
+
+        // Breakdown PxT z dryblingu według typu akcji z podziałem na strefy boczne/centralne
+        if (zoneForBreakdown) {
+          // PK może być jednocześnie strzałem, więc sprawdzamy oba warunki niezależnie
+          if (action.isPenaltyAreaEntry) {
+            pxtDribblingFromPK += pxtValue;
+            dribblingPKCount += 1;
+            if (dribblingIsLateral) dribblingPKCountLateral += 1;
+            else dribblingPKCountCentral += 1;
+          }
+          
+          // Strzał może być jednocześnie PK, więc sprawdzamy niezależnie
+          if (action.isShot) {
+            pxtDribblingFromShot += pxtValue;
+            dribblingShotCount += 1;
+            if (dribblingIsLateral) dribblingShotCountLateral += 1;
+            else dribblingShotCountCentral += 1;
+            if (action.isGoal) {
+              dribblingGoalCount += 1;
+              if (dribblingIsLateral) dribblingGoalCountLateral += 1;
+              else dribblingGoalCountCentral += 1;
+            }
+          }
+          
+          // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
+          if (action.isP3 || action.isP3Start) {
+            pxtDribblingFromP3 += pxtValue;
+            dribblingP3Count += 1;
+            if (dribblingIsLateral) dribblingP3CountLateral += 1;
+            else dribblingP3CountCentral += 1;
+          }
+          if (action.isP2 || action.isP2Start) {
+            pxtDribblingFromP2 += pxtValue;
+            dribblingP2Count += 1;
+            if (dribblingIsLateral) dribblingP2CountLateral += 1;
+            else dribblingP2CountCentral += 1;
+          }
+          if (action.isP1 || action.isP1Start) {
+            pxtDribblingFromP1 += pxtValue;
+            dribblingP1Count += 1;
+            if (dribblingIsLateral) dribblingP1CountLateral += 1;
+            else dribblingP1CountCentral += 1;
+          }
+          
+          // Inne akcje (które nie są PK, strzałem, P1, P2, P3)
+          if (!action.isPenaltyAreaEntry && !action.isShot && !(action.isP3 || action.isP3Start) && !(action.isP2 || action.isP2Start) && !(action.isP1 || action.isP1Start)) {
+            pxtDribblingFromOther += pxtValue;
+          }
+        }
+      }
+    });
+
+    // DRUGA PĘTLA: Wypełnij heatmapę i statystyki partnerów (z filtrowaniem)
+    filteredActions.forEach((action) => {
+      // Filtruj akcje według wybranego typu akcji (P1, P2, P3, PK, Strzał, Gol)
+      // Filtr wpływa tylko na heatmapę, nie na liczniki (które są już obliczone powyżej)
+      if (selectedActionFilter) {
+        // Użyj tej samej logiki co w licznikach - sprawdź isP1, isP2, isP3, isP1Start, isP2Start, isP3Start
+        const isP1 = action.isP1 || action.isP1Start || false;
+        const isP2 = action.isP2 || action.isP2Start || false;
+        const isP3 = action.isP3 || action.isP3Start || false;
+        const isPK = action.isPenaltyAreaEntry || false;
+        const isShot = action.isShot || false;
+        const isGoal = action.isGoal || false;
+
+        if (selectedActionFilter === 'p1' && !isP1) return;
+        if (selectedActionFilter === 'p2' && !isP2) return;
+        if (selectedActionFilter === 'p3' && !isP3) return;
+        if (selectedActionFilter === 'pk' && !isPK) return;
+        if (selectedActionFilter === 'shot' && !isShot) return;
+        if (selectedActionFilter === 'goal' && !isGoal) return;
+      }
+
+      // PxT i xT
+      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+      const packingPoints = action.packingPoints || 0;
+      const pxtValue = xTDifference * packingPoints;
+
+      // PxT jako podający (sender) - tylko dla podań
+      // Podstawowe statystyki (pxtAsSender, totalPxT, etc.) są już obliczone w pierwszej pętli
+      if (action.senderId === targetPlayerId && action.actionType === 'pass') {
 
         // Strefa źródłowa (z której podawał)
         const fromZoneName = convertZoneToName(action.fromZone || action.startZone);
-        if (fromZoneName) {
+        // Wypełnij heatmapę tylko jeśli heatmapDirection === 'from' (aby zgadzało się z licznikami)
+        if (fromZoneName && heatmapDirection === 'from') {
           const currentValue = senderFromHeatmap.get(fromZoneName) || 0;
           senderFromHeatmap.set(fromZoneName, currentValue + pxtValue);
           const currentCount = senderFromActionCountHeatmap.get(fromZoneName) || 0;
@@ -569,6 +1029,14 @@ export default function PlayerDetailsPage() {
           
           // Zbierz statystyki o zawodniku, który przyjmował podania z tej strefy
           if (action.receiverId) {
+            // Statystyki partnerów - jako podający
+            if (!partnerStatsAsSender.has(action.receiverId)) {
+              partnerStatsAsSender.set(action.receiverId, { passes: 0, pxt: 0 });
+            }
+            const partnerStats = partnerStatsAsSender.get(action.receiverId)!;
+            partnerStats.passes += 1;
+            partnerStats.pxt += pxtValue;
+            
             if (!senderZonePlayerStatsFrom.has(fromZoneName)) {
               senderZonePlayerStatsFrom.set(fromZoneName, new Map());
             }
@@ -598,7 +1066,8 @@ export default function PlayerDetailsPage() {
 
         // Strefa docelowa (do której podawał)
         const toZoneName = convertZoneToName(action.toZone ?? action.endZone ?? undefined);
-        if (toZoneName) {
+        // Wypełnij heatmapę tylko jeśli heatmapDirection === 'to' (aby zgadzało się z licznikami)
+        if (toZoneName && heatmapDirection === 'to') {
           const currentValue = senderToHeatmap.get(toZoneName) || 0;
           senderToHeatmap.set(toZoneName, currentValue + pxtValue);
           const currentCount = senderToActionCountHeatmap.get(toZoneName) || 0;
@@ -634,7 +1103,7 @@ export default function PlayerDetailsPage() {
         }
 
         // Statystyki według pozycji
-        const position = getPlayerPositionInMatch(action.matchId || '');
+        const position = getPlayerPositionInMatch(action.matchId || '', targetPlayerId);
         if (position) {
           if (!positionStatsMap.has(position)) {
             positionStatsMap.set(position, {
@@ -648,81 +1117,33 @@ export default function PlayerDetailsPage() {
               receiverPassCount: 0,
               dribblingCount: 0,
               minutes: 0,
+              matchIds: new Set<string>(),
             });
           }
           const posStats = positionStatsMap.get(position)!;
           posStats.pxtAsSender += pxtValue;
           posStats.senderActionsCount += 1;
           posStats.senderPassCount += 1;
-        }
-
-        // Breakdown PxT jako podający według typu akcji
-        // Sprawdź strefę docelową (do której podawał) dla podziału na boczne/centralne
-        const senderToZoneName = convertZoneToName(action.toZone ?? action.endZone ?? undefined);
-        const senderIsLateral = isLateralZone(senderToZoneName);
-
-        if (action.isPenaltyAreaEntry) {
-          pxtSenderFromPK += pxtValue;
-          senderPKCount += 1;
-          if (senderIsLateral) senderPKCountLateral += 1;
-          else senderPKCountCentral += 1;
-        } else if (action.isShot) {
-          pxtSenderFromShot += pxtValue;
-          senderShotCount += 1;
-          if (senderIsLateral) senderShotCountLateral += 1;
-          else senderShotCountCentral += 1;
-          if (action.isGoal) {
-            senderGoalCount += 1;
-            if (senderIsLateral) senderGoalCountLateral += 1;
-            else senderGoalCountCentral += 1;
+          if (action.matchId) {
+            posStats.matchIds.add(action.matchId);
           }
-        } else if (action.isP3 || action.isP3Start) {
-          pxtSenderFromP3 += pxtValue;
-          senderP3Count += 1;
-          if (senderIsLateral) senderP3CountLateral += 1;
-          else senderP3CountCentral += 1;
-        } else if (action.isP2 || action.isP2Start) {
-          pxtSenderFromP2 += pxtValue;
-          senderP2Count += 1;
-          if (senderIsLateral) senderP2CountLateral += 1;
-          else senderP2CountCentral += 1;
-        } else if (action.isP1 || action.isP1Start) {
-          pxtSenderFromP1 += pxtValue;
-          senderP1Count += 1;
-          if (senderIsLateral) senderP1CountLateral += 1;
-          else senderP1CountCentral += 1;
-        } else {
-          pxtSenderFromOther += pxtValue;
         }
+
+        // Liczniki są już obliczone w pierwszej pętli - tutaj tylko wypełniamy heatmapę i statystyki partnerów
       }
 
       // PxT jako przyjmujący (receiver) - tylko dla podań
-      if (action.receiverId === player.id && action.actionType === 'pass') {
+      if (action.receiverId === targetPlayerId && action.actionType === 'pass') {
         pxtAsReceiver += pxtValue;
         totalPxT += pxtValue;
         totalXT += xTDifference;
         receiverActionsCount += 1;
         receiverPassCount += 1;
 
-        // Funkcja pomocnicza do konwersji strefy na format "A1"
-        const convertZoneToName = (zone: string | number | undefined): string | null => {
-          if (!zone) return null;
-          let zoneName = zone;
-          if (typeof zoneName === 'number') {
-            const rowLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-            const row = Math.floor(zoneName / 12);
-            const col = (zoneName % 12) + 1;
-            zoneName = `${rowLetters[row].toUpperCase()}${col}`;
-          }
-          if (typeof zoneName === 'string') {
-            return zoneName.trim().toUpperCase();
-          }
-          return null;
-        };
-
         // Strefa docelowa (do której przyjmował)
         const toZoneName = convertZoneToName(action.toZone ?? action.endZone ?? undefined);
-        if (toZoneName) {
+        // Wypełnij heatmapę tylko jeśli heatmapDirection === 'to' (aby zgadzało się z licznikami)
+        if (toZoneName && heatmapDirection === 'to') {
           const currentValue = receiverToHeatmap.get(toZoneName) || 0;
           receiverToHeatmap.set(toZoneName, currentValue + pxtValue);
           const currentCount = receiverToActionCountHeatmap.get(toZoneName) || 0;
@@ -759,7 +1180,8 @@ export default function PlayerDetailsPage() {
 
         // Strefa źródłowa (z której były podania do niego)
         const fromZoneName = convertZoneToName(action.fromZone ?? action.startZone ?? undefined);
-        if (fromZoneName) {
+        // Wypełnij heatmapę tylko jeśli heatmapDirection === 'from' (aby zgadzało się z licznikami)
+        if (fromZoneName && heatmapDirection === 'from') {
           const currentValue = receiverFromHeatmap.get(fromZoneName) || 0;
           receiverFromHeatmap.set(fromZoneName, currentValue + pxtValue);
           const currentCount = receiverFromActionCountHeatmap.get(fromZoneName) || 0;
@@ -767,6 +1189,14 @@ export default function PlayerDetailsPage() {
           
           // Zbierz statystyki o zawodniku, który podawał z tej strefy
           if (action.senderId) {
+            // Statystyki partnerów - jako przyjmujący
+            if (!partnerStatsAsReceiver.has(action.senderId)) {
+              partnerStatsAsReceiver.set(action.senderId, { passes: 0, pxt: 0 });
+            }
+            const partnerStats = partnerStatsAsReceiver.get(action.senderId)!;
+            partnerStats.passes += 1;
+            partnerStats.pxt += pxtValue;
+            
             if (!zonePlayerStatsFrom.has(fromZoneName)) {
               zonePlayerStatsFrom.set(fromZoneName, new Map());
             }
@@ -795,7 +1225,7 @@ export default function PlayerDetailsPage() {
         }
 
         // Statystyki według pozycji
-        const position = getPlayerPositionInMatch(action.matchId || '');
+        const position = getPlayerPositionInMatch(action.matchId || '', targetPlayerId);
         if (position) {
           if (!positionStatsMap.has(position)) {
             positionStatsMap.set(position, {
@@ -809,82 +1239,56 @@ export default function PlayerDetailsPage() {
               receiverPassCount: 0,
               dribblingCount: 0,
               minutes: 0,
+              matchIds: new Set<string>(),
             });
           }
           const posStats = positionStatsMap.get(position)!;
           posStats.pxtAsReceiver += pxtValue;
           posStats.receiverActionsCount += 1;
           posStats.receiverPassCount += 1;
-        }
-
-        // Breakdown PxT jako przyjmujący według typu akcji
-        // Sprawdź strefę docelową (do której przyjmował) dla podziału na boczne/centralne
-        const receiverToZoneName = convertZoneToName(action.toZone ?? action.endZone ?? undefined);
-        const receiverIsLateral = isLateralZone(receiverToZoneName);
-
-        if (action.isPenaltyAreaEntry) {
-          pxtReceiverFromPK += pxtValue;
-          receiverPKCount += 1;
-          if (receiverIsLateral) receiverPKCountLateral += 1;
-          else receiverPKCountCentral += 1;
-        } else if (action.isShot) {
-          pxtReceiverFromShot += pxtValue;
-          receiverShotCount += 1;
-          if (receiverIsLateral) receiverShotCountLateral += 1;
-          else receiverShotCountCentral += 1;
-          if (action.isGoal) {
-            receiverGoalCount += 1;
-            if (receiverIsLateral) receiverGoalCountLateral += 1;
-            else receiverGoalCountCentral += 1;
+          if (action.matchId) {
+            posStats.matchIds.add(action.matchId);
           }
-        } else if (action.isP3 || action.isP3Start) {
-          pxtReceiverFromP3 += pxtValue;
-          receiverP3Count += 1;
-          if (receiverIsLateral) receiverP3CountLateral += 1;
-          else receiverP3CountCentral += 1;
-        } else if (action.isP2 || action.isP2Start) {
-          pxtReceiverFromP2 += pxtValue;
-          receiverP2Count += 1;
-          if (receiverIsLateral) receiverP2CountLateral += 1;
-          else receiverP2CountCentral += 1;
-        } else if (action.isP1 || action.isP1Start) {
-          pxtReceiverFromP1 += pxtValue;
-          receiverP1Count += 1;
-          if (receiverIsLateral) receiverP1CountLateral += 1;
-          else receiverP1CountCentral += 1;
-        } else {
-          pxtReceiverFromOther += pxtValue;
         }
+
+        // Liczniki są już obliczone w pierwszej pętli - tutaj tylko wypełniamy heatmapę i statystyki partnerów
       }
 
       // PxT z dryblingu (dribble)
-      if ((action.senderId === player.id) && action.actionType === 'dribble') {
-        pxtAsDribbler += pxtValue;
-        totalPxT += pxtValue;
-        totalXT += xTDifference;
-        dribblingActionsCount += 1;
+      // Podstawowe statystyki (pxtAsDribbler, totalPxT, etc.) są już obliczone w pierwszej pętli
+      if ((action.senderId === targetPlayerId) && action.actionType === 'dribble') {
 
-        // Dodaj do heatmapy dryblingu (używamy fromZone lub startZone) - używamy pxtValue, nie xTDifference
-        let zoneName = action.fromZone || action.startZone || '';
-        // Konwertuj numer strefy na format "A1" jeśli potrzeba
-        if (zoneName && typeof zoneName === 'number') {
-          const rowLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-          const row = Math.floor(zoneName / 12);
-          const col = (zoneName % 12) + 1;
-          zoneName = `${rowLetters[row].toUpperCase()}${col}`;
+        // Strefa źródłowa (z której dryblował)
+        const fromZoneName = convertZoneToName(action.fromZone ?? action.startZone ?? undefined);
+        // Wypełnij heatmapę tylko jeśli heatmapDirection === 'from' (aby zgadzało się z licznikami)
+        if (fromZoneName && heatmapDirection === 'from') {
+          const currentValue = dribblerFromHeatmap.get(fromZoneName) || 0;
+          dribblerFromHeatmap.set(fromZoneName, currentValue + pxtValue);
+          const currentCount = dribblerFromActionCountHeatmap.get(fromZoneName) || 0;
+          dribblerFromActionCountHeatmap.set(fromZoneName, currentCount + 1);
         }
-        if (zoneName && typeof zoneName === 'string') {
-          // Normalizuj format - upewnij się, że jest w formacie "A1"
-          zoneName = zoneName.trim().toUpperCase();
+
+        // Strefa docelowa (do której dryblował)
+        const toZoneName = convertZoneToName(action.toZone ?? action.endZone ?? undefined);
+        // Wypełnij heatmapę tylko jeśli heatmapDirection === 'to' (aby zgadzało się z licznikami)
+        if (toZoneName && heatmapDirection === 'to') {
+          const currentValue = dribblerToHeatmap.get(toZoneName) || 0;
+          dribblerToHeatmap.set(toZoneName, currentValue + pxtValue);
+          const currentCount = dribblerToActionCountHeatmap.get(toZoneName) || 0;
+          dribblerToActionCountHeatmap.set(toZoneName, currentCount + 1);
+        }
+
+        // Użyj strefy źródłowej dla głównej heatmapy (backward compatibility)
+        const zoneName = fromZoneName;
+        if (zoneName) {
           const currentValue = dribblerHeatmap.get(zoneName) || 0;
           dribblerHeatmap.set(zoneName, currentValue + pxtValue);
-          // Dodaj do heatmapy liczby akcji
           const currentCount = dribblerActionCountHeatmap.get(zoneName) || 0;
           dribblerActionCountHeatmap.set(zoneName, currentCount + 1);
         }
 
         // Statystyki według pozycji
-        const position = getPlayerPositionInMatch(action.matchId || '');
+        const position = getPlayerPositionInMatch(action.matchId || '', targetPlayerId);
         if (position) {
           if (!positionStatsMap.has(position)) {
             positionStatsMap.set(position, {
@@ -898,36 +1302,19 @@ export default function PlayerDetailsPage() {
               receiverPassCount: 0,
               dribblingCount: 0,
               minutes: 0,
+              matchIds: new Set<string>(),
             });
           }
           const posStats = positionStatsMap.get(position)!;
           posStats.pxtAsDribbler += pxtValue;
           posStats.dribblingActionsCount += 1;
           posStats.dribblingCount += 1;
+          if (action.matchId) {
+            posStats.matchIds.add(action.matchId);
+          }
         }
 
-        // Breakdown PxT z dryblingu według typu akcji
-        if (action.isPenaltyAreaEntry) {
-          pxtDribblingFromPK += pxtValue;
-          dribblingPKCount += 1;
-        } else if (action.isShot) {
-          pxtDribblingFromShot += pxtValue;
-          dribblingShotCount += 1;
-          if (action.isGoal) {
-            dribblingGoalCount += 1;
-          }
-        } else if (action.isP3 || action.isP3Start) {
-          pxtDribblingFromP3 += pxtValue;
-          dribblingP3Count += 1;
-        } else if (action.isP2 || action.isP2Start) {
-          pxtDribblingFromP2 += pxtValue;
-          dribblingP2Count += 1;
-        } else if (action.isP1 || action.isP1Start) {
-          pxtDribblingFromP1 += pxtValue;
-          dribblingP1Count += 1;
-        } else {
-          pxtDribblingFromOther += pxtValue;
-        }
+        // Liczniki są już obliczone w pierwszej pętli - tutaj tylko wypełniamy heatmapę
       }
 
       // xG będzie obliczane z osobnej kolekcji shots
@@ -937,7 +1324,7 @@ export default function PlayerDetailsPage() {
         (action.isBelow8s !== undefined ||
          action.playersBehindBall !== undefined ||
          action.opponentsBeforeBall !== undefined) &&
-        action.senderId === player.id &&
+        action.senderId === targetPlayerId &&
         !action.isReaction5s
       ) {
         totalRegains += 1;
@@ -949,13 +1336,13 @@ export default function PlayerDetailsPage() {
          (action.isBelow8s !== undefined &&
           action.playersBehindBall === undefined &&
           action.opponentsBeforeBall === undefined)) &&
-        action.senderId === player.id
+        action.senderId === targetPlayerId
       ) {
         totalLoses += 1;
       }
 
       // Wejścia w PK
-      if (action.isPenaltyAreaEntry && (action.senderId === player.id || action.receiverId === player.id)) {
+      if (action.isPenaltyAreaEntry && (action.senderId === targetPlayerId || action.receiverId === targetPlayerId)) {
         totalPKEntries += 1;
       }
     });
@@ -974,10 +1361,19 @@ export default function PlayerDetailsPage() {
           receiverPassCount: 0,
           dribblingCount: 0,
           minutes: 0,
+          matchIds: new Set<string>(),
         });
       }
       const posStats = positionStatsMap.get(position)!;
       posStats.minutes = minutes;
+      // Dodaj matchIds dla tej pozycji z meczów, gdzie zawodnik grał w tej pozycji
+      filteredMatchesBySeason.forEach(match => {
+        if (selectedMatchIds.length > 0 && !selectedMatchIds.includes(match.matchId || "")) return;
+        const playerMinute = match.playerMinutes?.find((pm: any) => pm.playerId === targetPlayerId && pm.position === position);
+        if (playerMinute && match.matchId) {
+          posStats.matchIds.add(match.matchId);
+        }
+      });
     });
 
     // Oblicz wartości per 90 minut
@@ -995,6 +1391,7 @@ export default function PlayerDetailsPage() {
       receiverPassCount: number;
       dribblingCount: number;
       minutes: number;
+      matchIds: Set<string>;
       pxtSenderPer90: number;
       pxtReceiverPer90: number;
       pxtDribblingPer90: number;
@@ -1007,6 +1404,7 @@ export default function PlayerDetailsPage() {
       pxtSenderPerPass: number;
       pxtReceiverPerPass: number;
       pxtDribblingPerDribble: number;
+      matchIds: Set<string>;
     } } = {};
     
     positionStatsMap.forEach((stats, position) => {
@@ -1201,7 +1599,9 @@ export default function PlayerDetailsPage() {
       receiverToHeatmap: new Map(receiverToHeatmap),
       receiverFromHeatmap: new Map(receiverFromHeatmap),
       // Heatmapy - Drybling
-      dribblerHeatmap: new Map(dribblerHeatmap),
+      dribblerFromHeatmap: new Map(dribblerFromHeatmap),
+      dribblerToHeatmap: new Map(dribblerToHeatmap),
+      dribblerHeatmap: new Map(dribblerHeatmap), // Backward compatibility
       // Heatmapy liczby akcji - Podający
       senderFromActionCountHeatmap: new Map(senderFromActionCountHeatmap),
       senderToActionCountHeatmap: new Map(senderToActionCountHeatmap),
@@ -1209,7 +1609,9 @@ export default function PlayerDetailsPage() {
       receiverToActionCountHeatmap: new Map(receiverToActionCountHeatmap),
       receiverFromActionCountHeatmap: new Map(receiverFromActionCountHeatmap),
       // Heatmapy liczby akcji - Drybling
-      dribblerActionCountHeatmap: new Map(dribblerActionCountHeatmap),
+      dribblerFromActionCountHeatmap: new Map(dribblerFromActionCountHeatmap),
+      dribblerToActionCountHeatmap: new Map(dribblerToActionCountHeatmap),
+      dribblerActionCountHeatmap: new Map(dribblerActionCountHeatmap), // Backward compatibility
       // Statystyki zawodników dla każdej strefy (dla receiver)
       // Dla kierunku "from": zawodnicy, którzy podawali Z tej strefy
       zonePlayerStatsFrom: new Map(Array.from(zonePlayerStatsFrom.entries()).map(([zone, players]) => [
@@ -1232,8 +1634,200 @@ export default function PlayerDetailsPage() {
         zone,
         new Map(players)
       ])),
+      // Statystyki partnerów
+      partnerStatsAsSender: new Map(partnerStatsAsSender),
+      partnerStatsAsReceiver: new Map(partnerStatsAsReceiver),
     };
-  }, [player, allActions, filteredMatchesBySeason, selectedMatchIds, totalMinutes, positionMinutes]);
+  }, [player, allActions, filteredMatchesBySeason, selectedMatchIds, totalMinutes, positionMinutes, selectedPlayerForView, selectedActionFilter, heatmapDirection]);
+
+  // Oblicz ranking w zespole dla statystyk zawodnika
+  const teamRanking = useMemo(() => {
+    if (!playerStats || !selectedTeam || filteredPlayers.length === 0) return null;
+    
+    const targetPlayerId = selectedPlayerForView || playerId;
+    
+    // Oblicz statystyki dla wszystkich zawodników w zespole
+    const teamPlayerStats = filteredPlayers.map(teamPlayer => {
+      if (teamPlayer.id === targetPlayerId) {
+        return {
+          playerId: teamPlayer.id,
+          pxtAsSender: playerStats.pxtAsSender,
+          pxtSenderPer90: playerStats.pxtSenderPer90,
+          senderActionsPer90: playerStats.senderActionsPer90,
+          pxtSenderPerAction: playerStats.pxtSenderPerAction,
+          pxtAsReceiver: playerStats.pxtAsReceiver,
+          pxtReceiverPer90: playerStats.pxtReceiverPer90,
+          receiverActionsPer90: playerStats.receiverActionsPer90,
+          pxtReceiverPerAction: playerStats.pxtReceiverPerAction,
+          pxtAsDribbler: playerStats.pxtAsDribbler,
+          pxtDribblingPer90: playerStats.pxtDribblingPer90,
+          dribblingActionsPer90: playerStats.dribblingActionsPer90,
+          pxtDribblingPerAction: playerStats.pxtDribblingPerAction,
+        };
+      }
+      
+      // Oblicz statystyki dla innych zawodników - sender
+      // Użyj allTeamActions zamiast allActions (które zawiera tylko akcje aktualnego zawodnika)
+      const senderActions = allTeamActions.filter(action => {
+        if (selectedMatchIds.length > 0) {
+          if (!selectedMatchIds.includes(action.matchId || "")) return false;
+        }
+        return action.senderId === teamPlayer.id && action.actionType === 'pass';
+      });
+      
+      // Oblicz statystyki dla innych zawodników - receiver
+      const receiverActions = allTeamActions.filter(action => {
+        if (selectedMatchIds.length > 0) {
+          if (!selectedMatchIds.includes(action.matchId || "")) return false;
+        }
+        return action.receiverId === teamPlayer.id && action.actionType === 'pass';
+      });
+      
+      // Oblicz statystyki dla innych zawodników - dribbler
+      const dribblerActions = allTeamActions.filter(action => {
+        if (selectedMatchIds.length > 0) {
+          if (!selectedMatchIds.includes(action.matchId || "")) return false;
+        }
+        return action.senderId === teamPlayer.id && action.actionType === 'dribble';
+      });
+      
+      let pxtAsSender = 0;
+      let senderActionsCount = 0;
+      let senderPassCount = 0;
+      
+      senderActions.forEach(action => {
+        const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+        // Pomiń akcje z ujemną lub zerową wartością xT (tak jak w playerStats)
+        if (xTDifference <= 0) return;
+        const packingPoints = action.packingPoints || 0;
+        const pxtValue = xTDifference * packingPoints;
+        pxtAsSender += pxtValue;
+        senderActionsCount += 1;
+        senderPassCount += 1;
+      });
+      
+      let pxtAsReceiver = 0;
+      let receiverActionsCount = 0;
+      let receiverPassCount = 0;
+      
+      receiverActions.forEach(action => {
+        const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+        // Pomiń akcje z ujemną lub zerową wartością xT (tak jak w playerStats)
+        if (xTDifference <= 0) return;
+        const packingPoints = action.packingPoints || 0;
+        const pxtValue = xTDifference * packingPoints;
+        pxtAsReceiver += pxtValue;
+        receiverActionsCount += 1;
+        receiverPassCount += 1;
+      });
+      
+      let pxtAsDribbler = 0;
+      let dribblingActionsCount = 0;
+      
+      dribblerActions.forEach(action => {
+        const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+        // Pomiń akcje z ujemną lub zerową wartością xT (tak jak w playerStats)
+        if (xTDifference <= 0) return;
+        const packingPoints = action.packingPoints || 0;
+        const pxtValue = xTDifference * packingPoints;
+        pxtAsDribbler += pxtValue;
+        dribblingActionsCount += 1;
+      });
+      
+      // Oblicz minuty dla zawodnika
+      let playerMinutes = 0;
+      filteredMatchesBySeason.forEach(match => {
+        if (selectedMatchIds.length > 0 && !selectedMatchIds.includes(match.matchId || "")) return;
+        const playerMinute = match.playerMinutes?.find((pm: any) => pm.playerId === teamPlayer.id);
+        if (playerMinute) {
+          playerMinutes += Math.max(0, playerMinute.endMinute - playerMinute.startMinute);
+        }
+      });
+      
+      const per90Multiplier = playerMinutes > 0 ? 90 / playerMinutes : 0;
+      
+      return {
+        playerId: teamPlayer.id,
+        pxtAsSender,
+        pxtSenderPer90: pxtAsSender * per90Multiplier,
+        senderActionsPer90: senderActionsCount * per90Multiplier,
+        pxtSenderPerAction: senderPassCount > 0 ? pxtAsSender / senderPassCount : 0,
+        pxtAsReceiver,
+        pxtReceiverPer90: pxtAsReceiver * per90Multiplier,
+        receiverActionsPer90: receiverActionsCount * per90Multiplier,
+        pxtReceiverPerAction: receiverPassCount > 0 ? pxtAsReceiver / receiverPassCount : 0,
+        pxtAsDribbler,
+        pxtDribblingPer90: pxtAsDribbler * per90Multiplier,
+        dribblingActionsPer90: dribblingActionsCount * per90Multiplier,
+        pxtDribblingPerAction: dribblingActionsCount > 0 ? pxtAsDribbler / dribblingActionsCount : 0,
+      };
+    });
+    
+    // Sortuj i znajdź ranking dla sender
+    const sortedByPxtSender = [...teamPlayerStats].sort((a, b) => b.pxtAsSender - a.pxtAsSender);
+    const sortedByPxtPer90Sender = [...teamPlayerStats].sort((a, b) => b.pxtSenderPer90 - a.pxtSenderPer90);
+    const sortedByActionsPer90Sender = [...teamPlayerStats].sort((a, b) => b.senderActionsPer90 - a.senderActionsPer90);
+    const sortedByPxtPerActionSender = [...teamPlayerStats].sort((a, b) => b.pxtSenderPerAction - a.pxtSenderPerAction);
+    
+    // Sortuj i znajdź ranking dla receiver
+    const sortedByPxtReceiver = [...teamPlayerStats].sort((a, b) => b.pxtAsReceiver - a.pxtAsReceiver);
+    const sortedByPxtPer90Receiver = [...teamPlayerStats].sort((a, b) => b.pxtReceiverPer90 - a.pxtReceiverPer90);
+    const sortedByActionsPer90Receiver = [...teamPlayerStats].sort((a, b) => b.receiverActionsPer90 - a.receiverActionsPer90);
+    const sortedByPxtPerActionReceiver = [...teamPlayerStats].sort((a, b) => b.pxtReceiverPerAction - a.pxtReceiverPerAction);
+    
+    // Sortuj i znajdź ranking dla dribbler
+    const sortedByPxtDribbler = [...teamPlayerStats].sort((a, b) => b.pxtAsDribbler - a.pxtAsDribbler);
+    const sortedByPxtPer90Dribbler = [...teamPlayerStats].sort((a, b) => b.pxtDribblingPer90 - a.pxtDribblingPer90);
+    const sortedByActionsPer90Dribbler = [...teamPlayerStats].sort((a, b) => b.dribblingActionsPer90 - a.dribblingActionsPer90);
+    const sortedByPxtPerActionDribbler = [...teamPlayerStats].sort((a, b) => b.pxtDribblingPerAction - a.pxtDribblingPerAction);
+    
+    const currentPlayerStats = teamPlayerStats.find(p => p.playerId === targetPlayerId);
+    if (!currentPlayerStats) return null;
+    
+    // Oblicz całkowite PxT i podania zespołu dla procentów
+    const teamTotalPxtAsSender = teamPlayerStats.reduce((sum, p) => sum + p.pxtAsSender, 0);
+    const teamTotalPxtAsReceiver = teamPlayerStats.reduce((sum, p) => sum + p.pxtAsReceiver, 0);
+    const teamTotalPxtAsDribbler = teamPlayerStats.reduce((sum, p) => sum + p.pxtAsDribbler, 0);
+    
+    // Oblicz całkowite podania zespołu (sender - podania jako podający)
+    const teamTotalSenderPasses = allTeamActions.filter(action => {
+      if (selectedMatchIds.length > 0 && !selectedMatchIds.includes(action.matchId || "")) return false;
+      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+      return action.senderId && action.actionType === 'pass' && xTDifference > 0;
+    }).length;
+    
+    // Oblicz całkowite podania zespołu (receiver - podania jako przyjmujący)
+    const teamTotalReceiverPasses = allTeamActions.filter(action => {
+      if (selectedMatchIds.length > 0 && !selectedMatchIds.includes(action.matchId || "")) return false;
+      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+      return action.receiverId && action.actionType === 'pass' && xTDifference > 0;
+    }).length;
+    
+    return {
+      // Sender rankings
+      pxtRank: sortedByPxtSender.findIndex(p => p.playerId === targetPlayerId) + 1,
+      pxtPer90Rank: sortedByPxtPer90Sender.findIndex(p => p.playerId === targetPlayerId) + 1,
+      actionsPer90Rank: sortedByActionsPer90Sender.findIndex(p => p.playerId === targetPlayerId) + 1,
+      pxtPerActionRank: sortedByPxtPerActionSender.findIndex(p => p.playerId === targetPlayerId) + 1,
+      // Receiver rankings
+      pxtReceiverRank: sortedByPxtReceiver.findIndex(p => p.playerId === targetPlayerId) + 1,
+      pxtReceiverPer90Rank: sortedByPxtPer90Receiver.findIndex(p => p.playerId === targetPlayerId) + 1,
+      receiverActionsPer90Rank: sortedByActionsPer90Receiver.findIndex(p => p.playerId === targetPlayerId) + 1,
+      pxtReceiverPerActionRank: sortedByPxtPerActionReceiver.findIndex(p => p.playerId === targetPlayerId) + 1,
+      // Dribbler rankings
+      pxtDribblerRank: sortedByPxtDribbler.findIndex(p => p.playerId === targetPlayerId) + 1,
+      pxtDribblerPer90Rank: sortedByPxtPer90Dribbler.findIndex(p => p.playerId === targetPlayerId) + 1,
+      dribblerActionsPer90Rank: sortedByActionsPer90Dribbler.findIndex(p => p.playerId === targetPlayerId) + 1,
+      pxtDribblerPerActionRank: sortedByPxtPerActionDribbler.findIndex(p => p.playerId === targetPlayerId) + 1,
+      totalPlayers: teamPlayerStats.length,
+      // Procenty udziału w zespole
+      pxtSenderPercentage: teamTotalPxtAsSender > 0 ? (currentPlayerStats.pxtAsSender / teamTotalPxtAsSender) * 100 : 0,
+      pxtReceiverPercentage: teamTotalPxtAsReceiver > 0 ? (currentPlayerStats.pxtAsReceiver / teamTotalPxtAsReceiver) * 100 : 0,
+      pxtDribblerPercentage: teamTotalPxtAsDribbler > 0 ? (currentPlayerStats.pxtAsDribbler / teamTotalPxtAsDribbler) * 100 : 0,
+      senderPassesPercentage: teamTotalSenderPasses > 0 ? (playerStats.senderPassCount / teamTotalSenderPasses) * 100 : 0,
+      receiverPassesPercentage: teamTotalReceiverPasses > 0 ? (playerStats.receiverPassCount / teamTotalReceiverPasses) * 100 : 0,
+    };
+  }, [playerStats, selectedTeam, filteredPlayers, allTeamActions, selectedMatchIds, filteredMatchesBySeason, selectedPlayerForView, playerId, selectedActionFilter]);
 
   if (authLoading) {
     return (
@@ -1277,16 +1871,25 @@ export default function PlayerDetailsPage() {
           <select
             id="team-select"
             value={selectedTeam}
-            onChange={(e) => {
+            onChange={async (e) => {
               const newTeam = e.target.value;
               setSelectedTeam(newTeam);
               // Zapisz wybór zespołu w localStorage
               if (typeof window !== 'undefined') {
                 localStorage.setItem('selectedTeam', newTeam);
               }
-              // Resetuj wybór zawodnika przy zmianie zespołu, ale nie usuwaj z localStorage
-              // (zostanie zaktualizowany przez useEffect jeśli zawodnik nie będzie dostępny w nowym zespole)
+              // Resetuj wybór zawodnika przy zmianie zespołu - ustaw pusty string, aby useEffect mógł ustawić pierwszego dostępnego
               setSelectedPlayerForView("");
+              // Wyczyść akcje, aby wymusić przeładowanie
+              setAllActions([]);
+              setAllShots([]);
+              setSelectedMatchIds([]);
+              // Wyczyść localStorage dla selectedPlayerForView, aby wymusić wybór pierwszego zawodnika z nowego zespołu
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('selectedPlayerForView');
+              }
+              // Zresetuj lastLoadedTeamRef, aby umożliwić załadowanie meczów dla nowego zespołu
+              lastLoadedTeamRef.current = null;
             }}
             className={styles.selectorSelect}
           >
@@ -1308,7 +1911,12 @@ export default function PlayerDetailsPage() {
                 if (typeof window !== 'undefined') {
                   localStorage.setItem('selectedPlayerForView', newPlayerId);
                 }
-                router.push(`/profile/${newPlayerId}`);
+                // Wyczyść akcje, aby wymusić przeładowanie
+                setAllActions([]);
+                setAllShots([]);
+                setSelectedMatchIds([]);
+                // Nie używaj router.push() - tylko zmień stan, aby uniknąć przeładowania strony
+                // router.push(`/profile/${newPlayerId}`);
               }
             }}
             className={styles.selectorSelect}
@@ -1400,12 +2008,20 @@ export default function PlayerDetailsPage() {
             </div>
           )}
           <div className={styles.playerInfo}>
-            <h2 className={styles.playerName}>{getPlayerFullName(player)}</h2>
-            {player.number && (
-              <div className={styles.playerNumber}>#{player.number}</div>
-            )}
-            {player.position && (
-              <div className={styles.playerPosition}>{player.position}</div>
+            <div className={styles.playerNameRow}>
+              <h2 className={styles.playerName}>{getPlayerFullName(player)}</h2>
+              {player.number && (
+                <span className={styles.playerNumber}>#{player.number}</span>
+              )}
+              {player.position && (
+                <span className={styles.playerPosition}>{player.position}</span>
+              )}
+            </div>
+            {playerStats && (
+              <div className={styles.playerMinutes}>
+                <span className={styles.minutesLabel}>Minuty gry:</span>
+                <span className={styles.minutesValue}>{playerStats.totalMinutes} min</span>
+              </div>
             )}
           </div>
         </div>
@@ -1415,11 +2031,6 @@ export default function PlayerDetailsPage() {
           <div className={styles.loading}>Ładowanie statystyk...</div>
         ) : playerStats ? (
           <div className={styles.statsContainer}>
-            <div className={styles.minutesInfo}>
-              <p>
-                <strong>Minuty gry:</strong> {playerStats.totalMinutes} min
-              </p>
-            </div>
 
             <div className={styles.statsLayout}>
               {/* Lista kategorii po lewej */}
@@ -1477,7 +2088,10 @@ export default function PlayerDetailsPage() {
                       </button>
                       <button
                         className={`${styles.categoryButton} ${selectedPxtCategory === 'dribbler' ? styles.active : ''}`}
-                        onClick={() => setSelectedPxtCategory('dribbler')}
+                        onClick={() => {
+                          setSelectedPxtCategory('dribbler');
+                          setHeatmapDirection('from'); // Domyślnie pokazuj z której strefy
+                        }}
                       >
                         Drybling
                       </button>
@@ -1485,242 +2099,407 @@ export default function PlayerDetailsPage() {
 
                     {/* Wyświetlanie danych dla wybranej kategorii */}
                     {selectedPxtCategory === 'sender' && (
-                      <div className={styles.detailsSection}>
-                        <h4>Podanie</h4>
-                      <div className={styles.detailsRow}>
-                        <span className={styles.detailsLabel}>PxT:</span>
-                        <span className={styles.detailsValue}>{playerStats.pxtAsSender.toFixed(2)} ({playerStats.pxtSenderPer90.toFixed(2)} / 90 min)</span>
-                      </div>
-                      <div className={styles.detailsRow}>
-                        <span className={styles.detailsLabel}>Akcje / 90 min:</span>
-                        <span className={styles.detailsValue}>{playerStats.senderActionsPer90.toFixed(1)} ({playerStats.senderPassCount} podań)</span>
-                      </div>
-                      <div className={styles.detailsRow}>
-                        <span className={styles.detailsLabel}>PxT / podanie:</span>
-                        <span className={styles.detailsValue}>{playerStats.pxtSenderPerAction.toFixed(2)}</span>
-                      </div>
-                      <div className={styles.actionCounts}>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>P1:</span>
-                          <span className={styles.countValue}>{playerStats.senderP1Count}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.senderP1CountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.senderP1CountCentral}</span>
+                      <div className={`${styles.detailsSection} ${styles.detailsSectionWithTiles}`}>
+                        <div className={styles.detailsSectionContent}>
+                          <h4>Podanie</h4>
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>PxT:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}><strong>{playerStats.pxtAsSender.toFixed(2)}</strong> PxT</span>
+                              {teamRanking && teamRanking.pxtSenderPercentage > 0 && (
+                                <span className={styles.valueSecondary}>({teamRanking.pxtSenderPercentage.toFixed(1)}% zespołu)</span>
+                              )}
+                              <span className={styles.valueSecondary}>({playerStats.pxtSenderPer90.toFixed(2)} / 90 min)</span>
+                              {teamRanking && (
+                                <>
+                                  <span 
+                                    className={styles.rankingBadge} 
+                                    data-tooltip="Miejsce w zespole pod względem całkowitego PxT jako podający"
+                                  >
+                                    #{teamRanking.pxtRank}/{teamRanking.totalPlayers}
+                                  </span>
+                                  <span 
+                                    className={styles.rankingBadge} 
+                                    data-tooltip="Miejsce w zespole pod względem PxT/90min jako podający"
+                                  >
+                                    #{teamRanking.pxtPer90Rank}/{teamRanking.totalPlayers} (90min)
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          </div>
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Akcje / 90 min:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}>{playerStats.senderActionsPer90.toFixed(1)}</span>
+                              <span className={styles.valueSecondary}>({playerStats.senderPassCount} podań</span>
+                              {teamRanking && teamRanking.senderPassesPercentage > 0 && (
+                                <span className={styles.valueSecondary}> - {teamRanking.senderPassesPercentage.toFixed(1)}% zespołu</span>
+                              )}
+                              <span className={styles.valueSecondary}>)</span>
+                              {teamRanking && (
+                                <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem liczby akcji/90min jako podający">
+                                  #{teamRanking.actionsPer90Rank}/{teamRanking.totalPlayers}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>PxT / podanie:</span>
+                            <span className={styles.detailsValue}>
+                              {playerStats.pxtSenderPerAction.toFixed(2)}
+                              {teamRanking && (
+                                <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem PxT/podanie jako podający">
+                                  #{teamRanking.pxtPerActionRank}/{teamRanking.totalPlayers}
+                                </span>
+                              )}
+                            </span>
                           </div>
                         </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>P2:</span>
-                          <span className={styles.countValue}>{playerStats.senderP2Count}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.senderP2CountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.senderP2CountCentral}</span>
+                        <div className={styles.actionCounts}>
+                          <div className={styles.countItemsWrapper}>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'p1' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1' ? null : 'p1')}
+                            >
+                              <span className={styles.countLabel}>P1:</span>
+                              <span className={styles.countValue}>{playerStats.senderP1Count}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.senderP1CountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.senderP1CountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'p2' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2' ? null : 'p2')}
+                            >
+                              <span className={styles.countLabel}>P2:</span>
+                              <span className={styles.countValue}>{playerStats.senderP2Count}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.senderP2CountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.senderP2CountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'p3' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3' ? null : 'p3')}
+                            >
+                              <span className={styles.countLabel}>P3:</span>
+                              <span className={styles.countValue}>{playerStats.senderP3Count}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.senderP3CountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.senderP3CountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'pk' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'pk' ? null : 'pk')}
+                            >
+                              <span className={styles.countLabel}>PK:</span>
+                              <span className={styles.countValue}>{playerStats.senderPKCount}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.senderPKCountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.senderPKCountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'shot' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'shot' ? null : 'shot')}
+                            >
+                              <span className={styles.countLabel}>Strzał:</span>
+                              <span className={styles.countValue}>{playerStats.senderShotCount}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.senderShotCountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.senderShotCountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'goal' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'goal' ? null : 'goal')}
+                            >
+                              <span className={styles.countLabel}>Gol:</span>
+                              <span className={styles.countValue}>{playerStats.senderGoalCount}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.senderGoalCountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.senderGoalCountCentral}</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>P3:</span>
-                          <span className={styles.countValue}>{playerStats.senderP3Count}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.senderP3CountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.senderP3CountCentral}</span>
-                          </div>
-                        </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>PK:</span>
-                          <span className={styles.countValue}>{playerStats.senderPKCount}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.senderPKCountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.senderPKCountCentral}</span>
-                          </div>
-                        </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>Strzał:</span>
-                          <span className={styles.countValue}>{playerStats.senderShotCount}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.senderShotCountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.senderShotCountCentral}</span>
-                          </div>
-                        </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>Gol:</span>
-                          <span className={styles.countValue}>{playerStats.senderGoalCount}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.senderGoalCountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.senderGoalCountCentral}</span>
-                          </div>
-                        </div>
-                      </div>
                       </div>
                     )}
 
                     {selectedPxtCategory === 'receiver' && (
-                      <div className={styles.detailsSection}>
-                        <h4>Przyjęcie</h4>
-                      <div className={styles.detailsRow}>
-                        <span className={styles.detailsLabel}>PxT:</span>
-                        <span className={styles.detailsValue}>{playerStats.pxtAsReceiver.toFixed(2)} ({playerStats.pxtReceiverPer90.toFixed(2)} / 90 min)</span>
-                      </div>
-                      <div className={styles.detailsRow}>
-                        <span className={styles.detailsLabel}>Akcje / 90 min:</span>
-                        <span className={styles.detailsValue}>{playerStats.receiverActionsPer90.toFixed(1)} ({playerStats.receiverPassCount} podań)</span>
-                      </div>
-                      <div className={styles.detailsRow}>
-                        <span className={styles.detailsLabel}>PxT / podanie:</span>
-                        <span className={styles.detailsValue}>{playerStats.pxtReceiverPerAction.toFixed(2)}</span>
-                      </div>
-                      <div className={styles.actionCounts}>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>P1:</span>
-                          <span className={styles.countValue}>{playerStats.receiverP1Count}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.receiverP1CountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.receiverP1CountCentral}</span>
+                      <div className={`${styles.detailsSection} ${styles.detailsSectionWithTiles}`}>
+                        <div className={styles.detailsSectionContent}>
+                          <h4>Przyjęcie</h4>
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>PxT:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}><strong>{playerStats.pxtAsReceiver.toFixed(2)}</strong> PxT</span>
+                              {teamRanking && teamRanking.pxtReceiverPercentage > 0 && (
+                                <span className={styles.valueSecondary}>({teamRanking.pxtReceiverPercentage.toFixed(1)}% zespołu)</span>
+                              )}
+                              <span className={styles.valueSecondary}>({playerStats.pxtReceiverPer90.toFixed(2)} / 90 min)</span>
+                              {teamRanking && (
+                                <>
+                                  <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem całkowitego PxT jako przyjmujący">
+                                    #{teamRanking.pxtReceiverRank}/{teamRanking.totalPlayers}
+                                  </span>
+                                  <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem PxT/90min jako przyjmujący">
+                                    #{teamRanking.pxtReceiverPer90Rank}/{teamRanking.totalPlayers} (90min)
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          </div>
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Akcje / 90 min:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}>{playerStats.receiverActionsPer90.toFixed(1)}</span>
+                              <span className={styles.valueSecondary}>({playerStats.receiverPassCount} podań</span>
+                              {teamRanking && teamRanking.receiverPassesPercentage > 0 && (
+                                <span className={styles.valueSecondary}> - {teamRanking.receiverPassesPercentage.toFixed(1)}% zespołu</span>
+                              )}
+                              <span className={styles.valueSecondary}>)</span>
+                              {teamRanking && (
+                                <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem liczby akcji/90min jako przyjmujący">
+                                  #{teamRanking.receiverActionsPer90Rank}/{teamRanking.totalPlayers}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>PxT / podanie:</span>
+                            <span className={styles.detailsValue}>
+                              {playerStats.pxtReceiverPerAction.toFixed(2)}
+                              {teamRanking && (
+                                <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem PxT/podanie jako przyjmujący">
+                                  #{teamRanking.pxtReceiverPerActionRank}/{teamRanking.totalPlayers}
+                                </span>
+                              )}
+                            </span>
                           </div>
                         </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>P2:</span>
-                          <span className={styles.countValue}>{playerStats.receiverP2Count}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.receiverP2CountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.receiverP2CountCentral}</span>
+                        <div className={styles.actionCounts}>
+                          <div className={styles.countItemsWrapper}>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'p1' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1' ? null : 'p1')}
+                            >
+                              <span className={styles.countLabel}>P1:</span>
+                              <span className={styles.countValue}>{playerStats.receiverP1Count}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.receiverP1CountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.receiverP1CountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'p2' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2' ? null : 'p2')}
+                            >
+                              <span className={styles.countLabel}>P2:</span>
+                              <span className={styles.countValue}>{playerStats.receiverP2Count}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.receiverP2CountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.receiverP2CountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'p3' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3' ? null : 'p3')}
+                            >
+                              <span className={styles.countLabel}>P3:</span>
+                              <span className={styles.countValue}>{playerStats.receiverP3Count}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.receiverP3CountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.receiverP3CountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'pk' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'pk' ? null : 'pk')}
+                            >
+                              <span className={styles.countLabel}>PK:</span>
+                              <span className={styles.countValue}>{playerStats.receiverPKCount}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.receiverPKCountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.receiverPKCountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'shot' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'shot' ? null : 'shot')}
+                            >
+                              <span className={styles.countLabel}>Strzał:</span>
+                              <span className={styles.countValue}>{playerStats.receiverShotCount}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.receiverShotCountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.receiverShotCountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'goal' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'goal' ? null : 'goal')}
+                            >
+                              <span className={styles.countLabel}>Gol:</span>
+                              <span className={styles.countValue}>{playerStats.receiverGoalCount}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.receiverGoalCountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.receiverGoalCountCentral}</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>P3:</span>
-                          <span className={styles.countValue}>{playerStats.receiverP3Count}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.receiverP3CountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.receiverP3CountCentral}</span>
-                          </div>
-                        </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>PK:</span>
-                          <span className={styles.countValue}>{playerStats.receiverPKCount}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.receiverPKCountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.receiverPKCountCentral}</span>
-                          </div>
-                        </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>Strzał:</span>
-                          <span className={styles.countValue}>{playerStats.receiverShotCount}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.receiverShotCountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.receiverShotCountCentral}</span>
-                          </div>
-                        </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>Gol:</span>
-                          <span className={styles.countValue}>{playerStats.receiverGoalCount}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.receiverGoalCountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.receiverGoalCountCentral}</span>
-                          </div>
-                        </div>
-                      </div>
                       </div>
                     )}
 
                     {selectedPxtCategory === 'dribbler' && (
-                      <div className={styles.detailsSection}>
-                        <h4>Drybling</h4>
-                      <div className={styles.detailsRow}>
-                        <span className={styles.detailsLabel}>PxT:</span>
-                        <span className={styles.detailsValue}>{playerStats.pxtAsDribbler.toFixed(2)} ({playerStats.pxtDribblingPer90.toFixed(2)} / 90 min)</span>
-                      </div>
-                      <div className={styles.detailsRow}>
-                        <span className={styles.detailsLabel}>Akcje / 90 min:</span>
-                        <span className={styles.detailsValue}>{playerStats.dribblingActionsPer90.toFixed(1)} ({playerStats.dribblingActionsCount} dryblingów)</span>
-                      </div>
-                      <div className={styles.detailsRow}>
-                        <span className={styles.detailsLabel}>PxT / drybling:</span>
-                        <span className={styles.detailsValue}>{playerStats.pxtDribblingPerAction.toFixed(2)}</span>
-                      </div>
-                      <div className={styles.actionCounts}>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>P1:</span>
-                          <span className={styles.countValue}>{playerStats.dribblingP1Count}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.dribblingP1CountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.dribblingP1CountCentral}</span>
+                      <div className={`${styles.detailsSection} ${styles.detailsSectionWithTiles}`}>
+                        <div className={styles.detailsSectionContent}>
+                          <h4>Drybling</h4>
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>PxT:</span>
+                            <span className={styles.detailsValue}>
+                              {playerStats.pxtAsDribbler.toFixed(2)} ({playerStats.pxtDribblingPer90.toFixed(2)} / 90 min)
+                              {teamRanking && (
+                                <>
+                                  <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem całkowitego PxT z dryblingu">
+                                    #{teamRanking.pxtDribblerRank}/{teamRanking.totalPlayers}
+                                  </span>
+                                  <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem PxT/90min z dryblingu">
+                                    #{teamRanking.pxtDribblerPer90Rank}/{teamRanking.totalPlayers} (90min)
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          </div>
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Akcje / 90 min:</span>
+                            <span className={styles.detailsValue}>
+                              {playerStats.dribblingActionsPer90.toFixed(1)} ({playerStats.dribblingActionsCount} dryblingów)
+                              {teamRanking && (
+                                <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem liczby dryblingów/90min">
+                                  #{teamRanking.dribblerActionsPer90Rank}/{teamRanking.totalPlayers}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>PxT / drybling:</span>
+                            <span className={styles.detailsValue}>
+                              {playerStats.pxtDribblingPerAction.toFixed(2)}
+                              {teamRanking && (
+                                <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem PxT/drybling">
+                                  #{teamRanking.pxtDribblerPerActionRank}/{teamRanking.totalPlayers}
+                                </span>
+                              )}
+                            </span>
                           </div>
                         </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>P2:</span>
-                          <span className={styles.countValue}>{playerStats.dribblingP2Count}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.dribblingP2CountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.dribblingP2CountCentral}</span>
+                        <div className={styles.actionCounts}>
+                          <div className={styles.countItemsWrapper}>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'p1' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1' ? null : 'p1')}
+                            >
+                              <span className={styles.countLabel}>P1:</span>
+                              <span className={styles.countValue}>{playerStats.dribblingP1Count}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingP1CountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingP1CountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'p2' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2' ? null : 'p2')}
+                            >
+                              <span className={styles.countLabel}>P2:</span>
+                              <span className={styles.countValue}>{playerStats.dribblingP2Count}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingP2CountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingP2CountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'p3' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3' ? null : 'p3')}
+                            >
+                              <span className={styles.countLabel}>P3:</span>
+                              <span className={styles.countValue}>{playerStats.dribblingP3Count}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingP3CountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingP3CountCentral}</span>
+                              </div>
+                            </div>
+                            <div className={styles.countItem}>
+                              <span className={styles.countLabel}>PK:</span>
+                              <span className={styles.countValue}>{playerStats.dribblingPKCount}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingPKCountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingPKCountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'shot' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'shot' ? null : 'shot')}
+                            >
+                              <span className={styles.countLabel}>Strzał:</span>
+                              <span className={styles.countValue}>{playerStats.dribblingShotCount}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingShotCountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingShotCountCentral}</span>
+                              </div>
+                            </div>
+                            <div 
+                              className={`${styles.countItem} ${selectedActionFilter === 'goal' ? styles.countItemSelected : ''}`}
+                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'goal' ? null : 'goal')}
+                            >
+                              <span className={styles.countLabel}>Gol:</span>
+                              <span className={styles.countValue}>{playerStats.dribblingGoalCount}</span>
+                              <div className={styles.zoneBreakdown}>
+                                <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingGoalCountLateral}</span>
+                                <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                <span className={styles.zoneValue}>{playerStats.dribblingGoalCountCentral}</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>P3:</span>
-                          <span className={styles.countValue}>{playerStats.dribblingP3Count}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.dribblingP3CountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.dribblingP3CountCentral}</span>
-                          </div>
-                        </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>PK:</span>
-                          <span className={styles.countValue}>{playerStats.dribblingPKCount}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.dribblingPKCountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.dribblingPKCountCentral}</span>
-                          </div>
-                        </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>Strzał:</span>
-                          <span className={styles.countValue}>{playerStats.dribblingShotCount}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.dribblingShotCountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.dribblingShotCountCentral}</span>
-                          </div>
-                        </div>
-                        <div className={styles.countItem}>
-                          <span className={styles.countLabel}>Gol:</span>
-                          <span className={styles.countValue}>{playerStats.dribblingGoalCount}</span>
-                          <div className={styles.zoneBreakdown}>
-                            <span className={styles.zoneLabel}>Strefy boczne:</span>
-                            <span className={styles.zoneValue}>{playerStats.dribblingGoalCountLateral}</span>
-                            <span className={styles.zoneLabel}>Strefy centralne:</span>
-                            <span className={styles.zoneValue}>{playerStats.dribblingGoalCountCentral}</span>
-                          </div>
-                        </div>
-                      </div>
                       </div>
                     )}
 
@@ -1729,20 +2508,20 @@ export default function PlayerDetailsPage() {
                       <div className={styles.heatmapHeader}>
                         <h4>Heatmapa</h4>
                         <div className={styles.heatmapControls}>
-                          {/* Przełącznik kierunku (tylko dla sender i receiver) */}
-                          {(selectedPxtCategory === 'sender' || selectedPxtCategory === 'receiver') && (
+                          {/* Przełącznik kierunku (dla sender, receiver i dribbler) */}
+                          {(selectedPxtCategory === 'sender' || selectedPxtCategory === 'receiver' || selectedPxtCategory === 'dribbler') && (
                             <div className={styles.heatmapDirectionToggle}>
                               <button
                                 className={`${styles.heatmapDirectionButton} ${heatmapDirection === 'from' ? styles.active : ''}`}
                                 onClick={() => setHeatmapDirection('from')}
                               >
-                                {selectedPxtCategory === 'sender' ? 'Z której strefy' : 'Z której strefy'}
+                                Z której strefy
                               </button>
                               <button
                                 className={`${styles.heatmapDirectionButton} ${heatmapDirection === 'to' ? styles.active : ''}`}
                                 onClick={() => setHeatmapDirection('to')}
                               >
-                                {selectedPxtCategory === 'sender' ? 'Do której strefy' : 'Do której strefy'}
+                                Do której strefy
                               </button>
                             </div>
                           )}
@@ -1789,10 +2568,16 @@ export default function PlayerDetailsPage() {
                                       : playerStats.receiverFromActionCountHeatmap;
                                   }
                                 } else {
-                                  // Drybling - tylko from
-                                  return heatmapMode === 'pxt'
-                                    ? playerStats.dribblerHeatmap
-                                    : playerStats.dribblerActionCountHeatmap;
+                                  // Drybling - from (z której strefy) i to (do której strefy)
+                                  if (heatmapMode === 'pxt') {
+                                    return heatmapDirection === 'to'
+                                      ? playerStats.dribblerToHeatmap
+                                      : playerStats.dribblerFromHeatmap;
+                                  } else {
+                                    return heatmapDirection === 'to'
+                                      ? playerStats.dribblerToActionCountHeatmap
+                                      : playerStats.dribblerFromActionCountHeatmap;
+                                  }
                                 }
                               })()
                             }
@@ -1913,6 +2698,20 @@ export default function PlayerDetailsPage() {
                                         <strong>{(playerInfo.pxt / playerInfo.passes).toFixed(2)}</strong> PxT/podanie
                                       </span>
                                     </div>
+                                    <button
+                                      className={styles.viewActionsButton}
+                                      onClick={() => {
+                                        setSelectedPlayerForModal({
+                                          playerId: playerInfo.playerId,
+                                          playerName: playerInfo.playerName,
+                                          zoneName: zoneDetails.zoneName
+                                        });
+                                        setActionsModalOpen(true);
+                                      }}
+                                      title="Zobacz szczegóły akcji"
+                                    >
+                                      Zobacz akcje
+                                    </button>
                                     {(playerInfo.p1Count > 0 || playerInfo.p2Count > 0 || playerInfo.p3Count > 0 || playerInfo.pkCount > 0 || playerInfo.shotCount > 0 || playerInfo.goalCount > 0) && (
                                       <div className={styles.zonePlayerActionBreakdown}>
                                         {playerInfo.p1Count > 0 && (
@@ -1949,25 +2748,47 @@ export default function PlayerDetailsPage() {
                       <div className={styles.detailsSection}>
                         <div className={styles.chartHeader}>
                           <h4>Wykres mecz po meczu</h4>
-                          <div className={styles.chartModeToggle}>
-                            <button
-                              className={`${styles.chartModeButton} ${chartMode === 'pxt' ? styles.active : ''}`}
-                              onClick={() => setChartMode('pxt')}
-                            >
-                              PxT
-                            </button>
-                            <button
-                              className={`${styles.chartModeButton} ${chartMode === 'pxtPerMinute' ? styles.active : ''}`}
-                              onClick={() => setChartMode('pxtPerMinute')}
-                            >
-                              PxT/min
-                            </button>
+                          <div className={styles.chartControls}>
+                            <div className={styles.chartCategoryToggle}>
+                              <button
+                                className={`${styles.chartCategoryButton} ${chartCategory === 'sender' ? styles.active : ''}`}
+                                onClick={() => setChartCategory('sender')}
+                              >
+                                Podający
+                              </button>
+                              <button
+                                className={`${styles.chartCategoryButton} ${chartCategory === 'receiver' ? styles.active : ''}`}
+                                onClick={() => setChartCategory('receiver')}
+                              >
+                                Przyjmujący
+                              </button>
+                              <button
+                                className={`${styles.chartCategoryButton} ${chartCategory === 'dribbler' ? styles.active : ''}`}
+                                onClick={() => setChartCategory('dribbler')}
+                              >
+                                Drybling
+                              </button>
+                            </div>
+                            <div className={styles.chartModeToggle}>
+                              <button
+                                className={`${styles.chartModeButton} ${chartMode === 'pxt' ? styles.active : ''}`}
+                                onClick={() => setChartMode('pxt')}
+                              >
+                                PxT
+                              </button>
+                              <button
+                                className={`${styles.chartModeButton} ${chartMode === 'pxtPerMinute' ? styles.active : ''}`}
+                                onClick={() => setChartMode('pxtPerMinute')}
+                              >
+                                PxT/min
+                              </button>
+                            </div>
                           </div>
                         </div>
                         <div className={styles.matchChartContainer}>
                           <ResponsiveContainer width="100%" height={300}>
                             <LineChart data={matchByMatchData} margin={{ top: 10, right: 20, left: 10, bottom: 60 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
                               <XAxis 
                                 dataKey="matchName" 
                                 angle={-45}
@@ -1996,6 +2817,7 @@ export default function PlayerDetailsPage() {
                                         <p>PxT: {data.pxt.toFixed(2)}</p>
                                         <p>Minuty: {data.minutes}</p>
                                         <p>PxT/minutę: {data.pxtPerMinute.toFixed(3)}</p>
+                                        {data.position && <p>Pozycja: {data.position}</p>}
                                       </div>
                                     );
                                   }
@@ -2005,11 +2827,24 @@ export default function PlayerDetailsPage() {
                               <Line 
                                 type="monotone" 
                                 dataKey={chartMode === 'pxt' ? 'pxt' : 'pxtPerMinute'} 
-                                stroke="#2196f3" 
+                                stroke="#3b82f6" 
                                 strokeWidth={2}
-                                dot={{ fill: '#2196f3', strokeWidth: 2, r: 4 }}
-                                activeDot={{ r: 6 }}
+                                dot={{ fill: '#3b82f6', strokeWidth: 1, r: 4, stroke: '#fff' }}
+                                activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: '#3b82f6' }}
                                 name={chartMode === 'pxt' ? 'PxT' : 'PxT/min'}
+                                animationDuration={800}
+                                animationEasing="ease-out"
+                              />
+                              <Line 
+                                type="linear" 
+                                dataKey="trendLine" 
+                                stroke="#9ca3af" 
+                                strokeWidth={1.5}
+                                strokeDasharray="5 5"
+                                dot={false}
+                                activeDot={false}
+                                name="Trend"
+                                legendType="line"
                               />
                             </LineChart>
                           </ResponsiveContainer>
@@ -2031,27 +2866,192 @@ export default function PlayerDetailsPage() {
                         </div>
                         {isPositionStatsExpanded && (
                           <div className={styles.positionStatsContent}>
-                            {Object.entries(playerStats.positionStats).map(([position, stats]) => (
+                            {Object.entries(playerStats.positionStats).map(([position, stats]) => {
+                              const positionMatches = Array.from(stats.matchIds || new Set()).map(matchId => {
+                                const match = filteredMatchesBySeason.find(m => m.matchId === matchId);
+                                return match;
+                              }).filter(Boolean) as TeamInfo[];
+                              
+                              return (
                           <div key={position} className={styles.positionDetails}>
-                            <h5>{position} ({stats.minutes} min)</h5>
+                            <div className={styles.positionHeader}>
+                              <h5>{position} ({stats.minutes} min)</h5>
+                              {positionMatches.length > 0 && (
+                                <button
+                                  className={styles.matchesToggleButton}
+                                  onClick={() => setExpandedPositionMatches(expandedPositionMatches === position ? null : position)}
+                                >
+                                  {expandedPositionMatches === position ? 'Ukryj' : 'Pokaż'} mecze ({positionMatches.length})
+                                </button>
+                              )}
+                            </div>
+                            {expandedPositionMatches === position && positionMatches.length > 0 && (
+                              <div className={styles.positionMatchesList}>
+                                {positionMatches.map((match) => (
+                                  <div key={match.matchId} className={styles.positionMatchItem}>
+                                    <span className={styles.matchDate}>
+                                      {new Date(match.date).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                    </span>
+                                    <span className={styles.matchOpponent}>
+                                      {match.opponent} {match.isHome ? '(D)' : '(W)'}
+                                    </span>
+                                    <span className={styles.matchCompetition}>{match.competition}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             <div className={styles.detailsRow}>
-                              <span className={styles.detailsLabel}>PxT Podanie:</span>
-                              <span className={styles.detailsValue}>{stats.pxtAsSender.toFixed(2)} ({stats.pxtSenderPer90.toFixed(2)} / 90 min) - {stats.senderPassCount} podań - {stats.pxtSenderPerPass.toFixed(2)} PxT/podanie</span>
+                              <span className={styles.detailsLabel}>PxT Podanie</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueMain}><strong>{stats.pxtAsSender.toFixed(2)}</strong> PxT</span>
+                                <span className={styles.valueSecondary}>({stats.pxtSenderPer90.toFixed(2)} / 90 min)</span>
+                                <span className={styles.valueSeparator}>•</span>
+                                <span className={styles.valueSecondary}>{stats.senderPassCount} podań</span>
+                                <span className={styles.valueSeparator}>•</span>
+                                <span className={styles.valueSecondary}>{stats.pxtSenderPerPass.toFixed(2)} PxT/podanie</span>
+                              </span>
                             </div>
                             <div className={styles.detailsRow}>
-                              <span className={styles.detailsLabel}>PxT Przyjęcie:</span>
-                              <span className={styles.detailsValue}>{stats.pxtAsReceiver.toFixed(2)} ({stats.pxtReceiverPer90.toFixed(2)} / 90 min) - {stats.receiverPassCount} podań - {stats.pxtReceiverPerPass.toFixed(2)} PxT/podanie</span>
+                              <span className={styles.detailsLabel}>PxT Przyjęcie</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueMain}><strong>{stats.pxtAsReceiver.toFixed(2)}</strong> PxT</span>
+                                <span className={styles.valueSecondary}>({stats.pxtReceiverPer90.toFixed(2)} / 90 min)</span>
+                                <span className={styles.valueSeparator}>•</span>
+                                <span className={styles.valueSecondary}>{stats.receiverPassCount} podań</span>
+                                <span className={styles.valueSeparator}>•</span>
+                                <span className={styles.valueSecondary}>{stats.pxtReceiverPerPass.toFixed(2)} PxT/podanie</span>
+                              </span>
                             </div>
                             <div className={styles.detailsRow}>
-                              <span className={styles.detailsLabel}>PxT Drybling:</span>
-                              <span className={styles.detailsValue}>{stats.pxtAsDribbler.toFixed(2)} ({stats.pxtDribblingPer90.toFixed(2)} / 90 min) - {stats.dribblingCount} dryblingów - {stats.pxtDribblingPerDribble.toFixed(2)} PxT/drybling</span>
+                              <span className={styles.detailsLabel}>PxT Drybling</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueMain}><strong>{stats.pxtAsDribbler.toFixed(2)}</strong> PxT</span>
+                                <span className={styles.valueSecondary}>({stats.pxtDribblingPer90.toFixed(2)} / 90 min)</span>
+                                <span className={styles.valueSeparator}>•</span>
+                                <span className={styles.valueSecondary}>{stats.dribblingCount} dryblingów</span>
+                                <span className={styles.valueSeparator}>•</span>
+                                <span className={styles.valueSecondary}>{stats.pxtDribblingPerDribble.toFixed(2)} PxT/drybling</span>
+                              </span>
                             </div>
                             <div className={styles.detailsRow}>
-                              <span className={styles.detailsLabel}>Akcje / 90 min:</span>
-                              <span className={styles.detailsValue}>Podania: {stats.senderActionsPer90.toFixed(1)}, Przyjęcia: {stats.receiverActionsPer90.toFixed(1)}, Dryblingi: {stats.dribblingActionsPer90.toFixed(1)}</span>
+                              <span className={styles.detailsLabel}>Akcje / 90 min</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueSecondary}>Podania: {stats.senderActionsPer90.toFixed(1)}</span>
+                                <span className={styles.valueSeparator}>•</span>
+                                <span className={styles.valueSecondary}>Przyjęcia: {stats.receiverActionsPer90.toFixed(1)}</span>
+                                <span className={styles.valueSeparator}>•</span>
+                                <span className={styles.valueSecondary}>Dryblingi: {stats.dribblingActionsPer90.toFixed(1)}</span>
+                              </span>
                             </div>
                           </div>
-                            ))}
+                            );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Statystyki partnerów */}
+                    {playerStats && (
+                      <div className={styles.detailsSection}>
+                        <div 
+                          className={styles.expandableHeader}
+                          onClick={() => setIsPartnerStatsExpanded(!isPartnerStatsExpanded)}
+                        >
+                          <h4>Najczęstsze połączenia</h4>
+                          <span className={styles.expandIcon}>
+                            {isPartnerStatsExpanded ? '▼' : '▶'}
+                          </span>
+                        </div>
+                        {isPartnerStatsExpanded && (
+                          <div className={styles.partnerStatsContent}>
+                            {/* Przełącznik podający/przyjmujący */}
+                            <div className={styles.partnerModeToggle}>
+                              <button
+                                className={`${styles.partnerModeButton} ${partnerStatsMode === 'sender' ? styles.active : ''}`}
+                                onClick={() => setPartnerStatsMode('sender')}
+                              >
+                                Podający
+                              </button>
+                              <button
+                                className={`${styles.partnerModeButton} ${partnerStatsMode === 'receiver' ? styles.active : ''}`}
+                                onClick={() => setPartnerStatsMode('receiver')}
+                              >
+                                Przyjmujący
+                              </button>
+                            </div>
+                            
+                            {/* Przełącznik sortowania - Liczba podań / PxT */}
+                            <div className={styles.partnerSortToggle}>
+                              <button
+                                className={`${styles.partnerSortButton} ${partnerSortMode === 'passes' ? styles.active : ''}`}
+                                onClick={() => setPartnerSortMode('passes')}
+                              >
+                                Liczba podań
+                              </button>
+                              <button
+                                className={`${styles.partnerSortButton} ${partnerSortMode === 'pxt' ? styles.active : ''}`}
+                                onClick={() => setPartnerSortMode('pxt')}
+                              >
+                                PxT
+                              </button>
+                            </div>
+                            
+                            <div className={styles.partnerStatsList}>
+                              {partnerStatsMode === 'sender' ? (
+                                <>
+                                  <h5>{partnerSortMode === 'passes' ? 'Do kogo zawodnik podaje najczęściej' : 'Z kim na największe PxT'}</h5>
+                                  {Array.from(playerStats.partnerStatsAsSender.entries())
+                                    .map(([playerId, stats]) => {
+                                      const partner = players.find(p => p.id === playerId);
+                                      return {
+                                        playerId,
+                                        playerName: partner ? `${partner.firstName} ${partner.lastName}` : `Zawodnik ${playerId}`,
+                                        ...stats
+                                      };
+                                    })
+                                    .sort((a, b) => partnerSortMode === 'passes' ? b.passes - a.passes : b.pxt - a.pxt)
+                                    .slice(0, 5)
+                                    .map((partner, index) => (
+                                      <div key={partner.playerId} className={styles.partnerItem}>
+                                        <span className={styles.partnerRank}>{index + 1}.</span>
+                                        <span className={styles.partnerName}>{partner.playerName}</span>
+                                        <span className={styles.partnerValue}>
+                                          {partnerSortMode === 'passes' 
+                                            ? `${partner.passes} podań (${partner.pxt.toFixed(2)} PxT)` 
+                                            : `${partner.pxt.toFixed(2)} PxT (${partner.passes} podań)`}
+                                        </span>
+                                      </div>
+                                    ))}
+                                </>
+                              ) : (
+                                <>
+                                  <h5>{partnerSortMode === 'passes' ? 'Od kogo zawodnik otrzymuje najwięcej' : 'Od kogo największe PxT'}</h5>
+                                  {Array.from(playerStats.partnerStatsAsReceiver.entries())
+                                    .map(([playerId, stats]) => {
+                                      const partner = players.find(p => p.id === playerId);
+                                      return {
+                                        playerId,
+                                        playerName: partner ? `${partner.firstName} ${partner.lastName}` : `Zawodnik ${playerId}`,
+                                        ...stats
+                                      };
+                                    })
+                                    .sort((a, b) => partnerSortMode === 'passes' ? b.passes - a.passes : b.pxt - a.pxt)
+                                    .slice(0, 5)
+                                    .map((partner, index) => (
+                                      <div key={partner.playerId} className={styles.partnerItem}>
+                                        <span className={styles.partnerRank}>{index + 1}.</span>
+                                        <span className={styles.partnerName}>{partner.playerName}</span>
+                                        <span className={styles.partnerValue}>
+                                          {partnerSortMode === 'passes' 
+                                            ? `${partner.passes} podań (${partner.pxt.toFixed(2)} PxT)` 
+                                            : `${partner.pxt.toFixed(2)} PxT (${partner.passes} podań)`}
+                                        </span>
+                                      </div>
+                                    ))}
+                                </>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -2075,6 +3075,148 @@ export default function PlayerDetailsPage() {
       </div>
 
       {/* Panel boczny z menu */}
+      {/* Modal z akcjami zawodnika */}
+      {actionsModalOpen && selectedPlayerForModal && (
+        <div className={styles.modalOverlay} onClick={() => setActionsModalOpen(false)}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Akcje: {selectedPlayerForModal.playerName}</h3>
+              <p className={styles.modalSubtitle}>Strefa: {selectedPlayerForModal.zoneName}</p>
+              <button
+                className={styles.modalCloseButton}
+                onClick={() => setActionsModalOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              {(() => {
+                // Filtruj akcje między głównym zawodnikiem a wybranym zawodnikiem w wybranej strefie
+                const targetPlayerId = selectedPlayerForView || playerId;
+                const filteredActions = allActions.filter(action => {
+                  // Filtruj według kategorii
+                  if (selectedPxtCategory === 'dribbler' && action.actionType !== 'dribble') return false;
+                  if (selectedPxtCategory !== 'dribbler' && action.actionType === 'dribble') return false;
+                  
+                  // Filtruj według zawodników - akcje między głównym zawodnikiem a wybranym zawodnikiem
+                  let matchesPlayers = false;
+                  if (selectedPxtCategory === 'dribbler') {
+                    // Dla dryblingu: wybrany zawodnik wykonuje drybling
+                    matchesPlayers = action.senderId === selectedPlayerForModal.playerId;
+                  } else if (selectedPxtCategory === 'sender') {
+                    // Dla podającego: główny zawodnik podaje, wybrany zawodnik przyjmuje
+                    matchesPlayers = action.senderId === targetPlayerId && action.receiverId === selectedPlayerForModal.playerId;
+                  } else if (selectedPxtCategory === 'receiver') {
+                    // Dla przyjmującego: wybrany zawodnik podaje, główny zawodnik przyjmuje
+                    matchesPlayers = action.senderId === selectedPlayerForModal.playerId && action.receiverId === targetPlayerId;
+                  }
+                  
+                  if (!matchesPlayers) return false;
+                  
+                  // Filtruj według strefy
+                  let zone: string | undefined;
+                  if (selectedPxtCategory === 'dribbler') {
+                    zone = action.startZone || action.fromZone;
+                  } else if (selectedPxtCategory === 'sender') {
+                    zone = heatmapDirection === "from" 
+                      ? (action.fromZone || action.startZone) 
+                      : (action.toZone || action.endZone);
+                  } else if (selectedPxtCategory === 'receiver') {
+                    zone = heatmapDirection === "to" 
+                      ? (action.toZone || action.endZone) 
+                      : (action.fromZone || action.startZone);
+                  }
+                  
+                  if (!zone) return false;
+                  
+                  const normalizedZone = typeof zone === 'string' 
+                    ? zone.toUpperCase().replace(/\s+/g, '') 
+                    : String(zone).toUpperCase().replace(/\s+/g, '');
+                  
+                  return normalizedZone === selectedPlayerForModal.zoneName;
+                });
+                
+                if (filteredActions.length === 0) {
+                  return <p className={styles.noActionsText}>Brak akcji dla tego zawodnika w tej strefie.</p>;
+                }
+                
+                return (
+                  <div className={styles.actionsList}>
+                    {filteredActions.map((action, index) => {
+                      const match = filteredMatchesBySeason.find(m => m.matchId === action.matchId);
+                      const matchName = match 
+                        ? `${match.opponent} (${new Date(match.date).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })})`
+                        : `Mecz ${action.matchId || 'nieznany'}`;
+                      
+                      const packingPoints = action.packingPoints || 0;
+                      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+                      const pxtValue = xTDifference * packingPoints;
+                      
+                      return (
+                        <div key={index} className={styles.actionItem}>
+                          <div className={styles.actionHeader}>
+                            <span className={styles.actionMatch}>{matchName}</span>
+                            <span className={styles.actionMinute}>{action.minute}'</span>
+                          </div>
+                          <div className={styles.actionDetails}>
+                            <span className={styles.actionDetailRow}>
+                              <span className={styles.actionLabel}>Typ:</span>
+                              <span className={styles.actionValue}>{action.actionType === 'pass' ? 'Podanie' : 'Drybling'}</span>
+                            </span>
+                            <span className={styles.actionDetailRow}>
+                              <span className={styles.actionLabel}>Packing:</span>
+                              <span className={styles.actionValue}>{packingPoints.toFixed(1)}</span>
+                            </span>
+                            <span className={styles.actionDetailRow}>
+                              <span className={styles.actionLabel}>PxT:</span>
+                              <span className={styles.actionValue}>{pxtValue.toFixed(2)}</span>
+                            </span>
+                            <span className={styles.actionDetailRow}>
+                              <span className={styles.actionLabel}>xT:</span>
+                              <span className={styles.actionValue}>{xTDifference.toFixed(3)}</span>
+                            </span>
+                            {action.isPenaltyAreaEntry && (
+                              <span className={styles.actionDetailRow}>
+                                <span className={styles.actionLabel}>PK:</span>
+                                <span className={styles.actionValue}>Tak</span>
+                              </span>
+                            )}
+                            {action.isShot && (
+                              <span className={styles.actionDetailRow}>
+                                <span className={styles.actionLabel}>Strzał:</span>
+                                <span className={styles.actionValue}>Tak</span>
+                              </span>
+                            )}
+                            {action.isGoal && (
+                              <span className={styles.actionDetailRow}>
+                                <span className={styles.actionLabel}>Gol:</span>
+                                <span className={styles.actionValue}>Tak</span>
+                              </span>
+                            )}
+                            {action.fromZone && (
+                              <span className={styles.actionDetailRow}>
+                                <span className={styles.actionLabel}>Z:</span>
+                                <span className={styles.actionValue}>{action.fromZone}</span>
+                              </span>
+                            )}
+                            {action.toZone && (
+                              <span className={styles.actionDetailRow}>
+                                <span className={styles.actionLabel}>Do:</span>
+                                <span className={styles.actionValue}>{action.toZone}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       <SidePanel
         players={players}
         actions={allActions}

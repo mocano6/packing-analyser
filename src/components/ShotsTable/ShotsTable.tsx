@@ -97,16 +97,26 @@ const ShotRow = ({
         &nbsp;{shot.minute}'
       </div>
       <div className={styles.cell}>
-        {shot.timestamp ? (
+        {shot.timestamp && shot.timestamp > 0 ? (
           <span 
             className={styles.videoTimeLink}
             onClick={(e) => {
               e.stopPropagation();
-              onVideoTimeClick?.(shot.timestamp);
+              // Sprawdź czy timestamp jest w milisekundach (> 1000000) czy w sekundach
+              const timestampInSeconds = shot.timestamp > 1000000 ? shot.timestamp / 1000 : shot.timestamp;
+              onVideoTimeClick?.(timestampInSeconds * 1000);
             }}
             title="Kliknij aby przejść do tego momentu w wideo"
           >
-            {formatVideoTime(shot.timestamp / 1000)}
+            {(() => {
+              // Sprawdź czy timestamp jest w milisekundach (> 1000000) czy w sekundach
+              const timestampInSeconds = shot.timestamp > 1000000 ? shot.timestamp / 1000 : shot.timestamp;
+              // Sprawdź czy wartość jest rozsądna (mniej niż 2 godziny = 7200 sekund)
+              if (timestampInSeconds > 7200) {
+                return '-';
+              }
+              return formatVideoTime(timestampInSeconds);
+            })()}
           </span>
         ) : (
           <span>-</span>

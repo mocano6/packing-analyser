@@ -613,23 +613,9 @@
   flex-wrap: wrap;
 }
 
-.playerNameLink {
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  font: inherit;
-  color: #3b82f6;
-  text-decoration: underline;
-  cursor: pointer;
+.playerNameText {
   font-weight: 600;
-  transition: color 0.2s ease;
-  display: inline-block;
-}
-
-.playerNameLink:hover {
-  color: #2563eb;
-  text-decoration: none;
+  color: #1f2937;
 }
 
 .playerPositions {

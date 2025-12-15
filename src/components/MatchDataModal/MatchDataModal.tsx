@@ -9,7 +9,7 @@ import styles from "./MatchDataModal.module.css";
 interface MatchDataModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (matchData: TeamInfo['matchData']) => void;
+  onSave: (matchData: TeamInfo['matchData']) => Promise<void> | void;
   currentMatch: TeamInfo | null;
   allAvailableTeams?: { id: string; name: string }[];
 }
@@ -42,7 +42,19 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
       teamSecondHalf: undefined,
       opponentSecondHalf: undefined,
     },
+    passesInaccurate: {
+      teamFirstHalf: undefined,
+      opponentFirstHalf: undefined,
+      teamSecondHalf: undefined,
+      opponentSecondHalf: undefined,
+    },
     passesInOpponentHalf: {
+      teamFirstHalf: undefined,
+      opponentFirstHalf: undefined,
+      teamSecondHalf: undefined,
+      opponentSecondHalf: undefined,
+    },
+    passesInOpponentHalfInaccurate: {
       teamFirstHalf: undefined,
       opponentFirstHalf: undefined,
       teamSecondHalf: undefined,
@@ -54,7 +66,16 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
       teamSecondHalf: undefined,
       opponentSecondHalf: undefined,
     },
+    unsuccessful8sActions: {
+      teamFirstHalf: undefined,
+      opponentFirstHalf: undefined,
+      teamSecondHalf: undefined,
+      opponentSecondHalf: undefined,
+    },
   });
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Reset formularza przy otwarciu modalu
   useEffect(() => {
@@ -72,17 +93,35 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
           teamSecondHalf: currentMatch.matchData.passes?.teamSecondHalf,
           opponentSecondHalf: currentMatch.matchData.passes?.opponentSecondHalf,
         },
+        passesInaccurate: {
+          teamFirstHalf: currentMatch.matchData.passesInaccurate?.teamFirstHalf,
+          opponentFirstHalf: currentMatch.matchData.passesInaccurate?.opponentFirstHalf,
+          teamSecondHalf: currentMatch.matchData.passesInaccurate?.teamSecondHalf,
+          opponentSecondHalf: currentMatch.matchData.passesInaccurate?.opponentSecondHalf,
+        },
         passesInOpponentHalf: {
           teamFirstHalf: currentMatch.matchData.passesInOpponentHalf?.teamFirstHalf,
           opponentFirstHalf: currentMatch.matchData.passesInOpponentHalf?.opponentFirstHalf,
           teamSecondHalf: currentMatch.matchData.passesInOpponentHalf?.teamSecondHalf,
           opponentSecondHalf: currentMatch.matchData.passesInOpponentHalf?.opponentSecondHalf,
         },
+        passesInOpponentHalfInaccurate: {
+          teamFirstHalf: currentMatch.matchData.passesInOpponentHalfInaccurate?.teamFirstHalf,
+          opponentFirstHalf: currentMatch.matchData.passesInOpponentHalfInaccurate?.opponentFirstHalf,
+          teamSecondHalf: currentMatch.matchData.passesInOpponentHalfInaccurate?.teamSecondHalf,
+          opponentSecondHalf: currentMatch.matchData.passesInOpponentHalfInaccurate?.opponentSecondHalf,
+        },
         successful8sActions: {
           teamFirstHalf: currentMatch.matchData.successful8sActions?.teamFirstHalf,
           opponentFirstHalf: currentMatch.matchData.successful8sActions?.opponentFirstHalf,
           teamSecondHalf: currentMatch.matchData.successful8sActions?.teamSecondHalf,
           opponentSecondHalf: currentMatch.matchData.successful8sActions?.opponentSecondHalf,
+        },
+        unsuccessful8sActions: {
+          teamFirstHalf: currentMatch.matchData.unsuccessful8sActions?.teamFirstHalf,
+          opponentFirstHalf: currentMatch.matchData.unsuccessful8sActions?.opponentFirstHalf,
+          teamSecondHalf: currentMatch.matchData.unsuccessful8sActions?.teamSecondHalf,
+          opponentSecondHalf: currentMatch.matchData.unsuccessful8sActions?.opponentSecondHalf,
         },
       });
     } else {
@@ -99,13 +138,31 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
           teamSecondHalf: undefined,
           opponentSecondHalf: undefined,
         },
+        passesInaccurate: {
+          teamFirstHalf: undefined,
+          opponentFirstHalf: undefined,
+          teamSecondHalf: undefined,
+          opponentSecondHalf: undefined,
+        },
         passesInOpponentHalf: {
           teamFirstHalf: undefined,
           opponentFirstHalf: undefined,
           teamSecondHalf: undefined,
           opponentSecondHalf: undefined,
         },
+        passesInOpponentHalfInaccurate: {
+          teamFirstHalf: undefined,
+          opponentFirstHalf: undefined,
+          teamSecondHalf: undefined,
+          opponentSecondHalf: undefined,
+        },
         successful8sActions: {
+          teamFirstHalf: undefined,
+          opponentFirstHalf: undefined,
+          teamSecondHalf: undefined,
+          opponentSecondHalf: undefined,
+        },
+        unsuccessful8sActions: {
           teamFirstHalf: undefined,
           opponentFirstHalf: undefined,
           teamSecondHalf: undefined,
@@ -144,9 +201,24 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
           ...newData.passesInOpponentHalf,
           [field]: numValue,
         };
+      } else if (category === 'passesInaccurate' && field) {
+        newData.passesInaccurate = {
+          ...newData.passesInaccurate,
+          [field]: numValue,
+        };
+      } else if (category === 'passesInOpponentHalfInaccurate' && field) {
+        newData.passesInOpponentHalfInaccurate = {
+          ...newData.passesInOpponentHalfInaccurate,
+          [field]: numValue,
+        };
       } else if (category === 'successful8sActions' && field) {
         newData.successful8sActions = {
           ...newData.successful8sActions,
+          [field]: numValue,
+        };
+      } else if (category === 'unsuccessful8sActions' && field) {
+        newData.unsuccessful8sActions = {
+          ...newData.unsuccessful8sActions,
           [field]: numValue,
         };
       }
@@ -155,10 +227,30 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
-    onClose();
+    setError(null);
+    setIsSaving(true);
+
+    try {
+      const result = onSave(formData);
+      
+      // Jeśli onSave zwraca Promise, czekamy na jego zakończenie
+      if (result instanceof Promise) {
+        await result;
+      }
+      
+      // Zamykamy modal tylko jeśli zapis się powiódł
+      onClose();
+    } catch (error) {
+      console.error("Błąd podczas zapisywania danych meczu:", error);
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Wystąpił błąd podczas zapisywania danych meczu. Spróbuj ponownie.";
+      setError(errorMessage);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!isOpen) {
@@ -232,9 +324,9 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
               />
             </div>
 
-            {/* Liczba podań */}
+            {/* Liczba podań celnych na swojej połowie */}
             <div className={styles.tableRow}>
-              <div className={styles.rowLabel}>Liczba podań na swojej połowie</div>
+              <div className={styles.rowLabel}>Podań celnych na swojej połowie</div>
               <input
                 className={styles.tableInput}
                 name="passes.teamFirstHalf"
@@ -273,9 +365,50 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
               />
             </div>
 
-            {/* Podań na połowie przeciwnika */}
+            {/* Liczba podań niecelnych na swojej połowie */}
             <div className={styles.tableRow}>
-              <div className={styles.rowLabel}>Podań na połowie przeciwnika</div>
+              <div className={styles.rowLabel}>Podań niecelnych na swojej połowie</div>
+              <input
+                className={styles.tableInput}
+                name="passesInaccurate.teamFirstHalf"
+                type="number"
+                min="0"
+                value={formData.passesInaccurate?.teamFirstHalf || ''}
+                onChange={handleChange}
+                placeholder="0"
+              />
+              <input
+                className={styles.tableInput}
+                name="passesInaccurate.opponentFirstHalf"
+                type="number"
+                min="0"
+                value={formData.passesInaccurate?.opponentFirstHalf || ''}
+                onChange={handleChange}
+                placeholder="0"
+              />
+              <input
+                className={styles.tableInput}
+                name="passesInaccurate.teamSecondHalf"
+                type="number"
+                min="0"
+                value={formData.passesInaccurate?.teamSecondHalf || ''}
+                onChange={handleChange}
+                placeholder="0"
+              />
+              <input
+                className={styles.tableInput}
+                name="passesInaccurate.opponentSecondHalf"
+                type="number"
+                min="0"
+                value={formData.passesInaccurate?.opponentSecondHalf || ''}
+                onChange={handleChange}
+                placeholder="0"
+              />
+            </div>
+
+            {/* Podań celnych na połowie przeciwnika */}
+            <div className={styles.tableRow}>
+              <div className={styles.rowLabel}>Podań celnych na połowie przeciwnika</div>
               <input
                 className={styles.tableInput}
                 name="passesInOpponentHalf.teamFirstHalf"
@@ -314,6 +447,47 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
               />
             </div>
 
+            {/* Podań niecelnych na połowie przeciwnika */}
+            <div className={styles.tableRow}>
+              <div className={styles.rowLabel}>Podań niecelnych na połowie przeciwnika</div>
+              <input
+                className={styles.tableInput}
+                name="passesInOpponentHalfInaccurate.teamFirstHalf"
+                type="number"
+                min="0"
+                value={formData.passesInOpponentHalfInaccurate?.teamFirstHalf || ''}
+                onChange={handleChange}
+                placeholder="0"
+              />
+              <input
+                className={styles.tableInput}
+                name="passesInOpponentHalfInaccurate.opponentFirstHalf"
+                type="number"
+                min="0"
+                value={formData.passesInOpponentHalfInaccurate?.opponentFirstHalf || ''}
+                onChange={handleChange}
+                placeholder="0"
+              />
+              <input
+                className={styles.tableInput}
+                name="passesInOpponentHalfInaccurate.teamSecondHalf"
+                type="number"
+                min="0"
+                value={formData.passesInOpponentHalfInaccurate?.teamSecondHalf || ''}
+                onChange={handleChange}
+                placeholder="0"
+              />
+              <input
+                className={styles.tableInput}
+                name="passesInOpponentHalfInaccurate.opponentSecondHalf"
+                type="number"
+                min="0"
+                value={formData.passesInOpponentHalfInaccurate?.opponentSecondHalf || ''}
+                onChange={handleChange}
+                placeholder="0"
+              />
+            </div>
+
             {/* Skuteczne akcje 8s ACC */}
             <div className={styles.tableRow}>
               <div className={styles.rowLabel}>Skuteczne akcje 8s ACC</div>
@@ -338,18 +512,53 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
               />
               <div className={styles.emptyCell}></div>
             </div>
+
+            {/* Nieskuteczne akcje 8s ACC */}
+            <div className={styles.tableRow}>
+              <div className={styles.rowLabel}>Nieskuteczne akcje 8s ACC</div>
+              <input
+                className={styles.tableInput}
+                name="unsuccessful8sActions.teamFirstHalf"
+                type="number"
+                min="0"
+                value={formData.unsuccessful8sActions?.teamFirstHalf || ''}
+                onChange={handleChange}
+                placeholder="0"
+              />
+              <div className={styles.emptyCell}></div>
+              <input
+                className={styles.tableInput}
+                name="unsuccessful8sActions.teamSecondHalf"
+                type="number"
+                min="0"
+                value={formData.unsuccessful8sActions?.teamSecondHalf || ''}
+                onChange={handleChange}
+                placeholder="0"
+              />
+              <div className={styles.emptyCell}></div>
+            </div>
           </div>
 
+          {error && (
+            <div className={styles.errorMessage}>
+              {error}
+            </div>
+          )}
           <div className={styles.buttonGroup}>
             <button
               type="button"
               className={styles.cancelButton}
               onClick={onClose}
+              disabled={isSaving}
             >
               Anuluj
             </button>
-            <button type="submit" className={styles.saveButton}>
-              Zapisz
+            <button 
+              type="submit" 
+              className={styles.saveButton}
+              disabled={isSaving}
+            >
+              {isSaving ? 'Zapisywanie...' : 'Zapisz'}
             </button>
           </div>
         </form>

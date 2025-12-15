@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useMemo, useState, useEffect } from 'react';
-import Link from 'next/link';
 import { 
   PieChart,
   Pie,
@@ -955,9 +954,10 @@ export default function PackingChart({
       totalPxT = senderPxT + receiverPxT + dribblingPxT;
       totalXT = senderXT + receiverXT + dribblingXT;
 
-      // Znajdź minuty zawodnika w tym meczu
+      // Znajdź minuty zawodnika w tym meczu i pozycję
       const playerMinutes = match.playerMinutes?.find(pm => pm.playerId === selectedPlayerId);
       const minutesPlayed = playerMinutes ? Math.max(0, playerMinutes.endMinute - playerMinutes.startMinute) : 0;
+      const position = playerMinutes?.position || null;
 
       return {
         match,
@@ -974,7 +974,8 @@ export default function PackingChart({
         dribblingPxT,
         dribblingXT,
         actionsCount,
-        minutesPlayed
+        minutesPlayed,
+        position
       };
     }).filter(stat => stat.actionsCount > 0 || stat.minutesPlayed > 0); // Tylko mecze gdzie grał lub miał akcje
   }, [selectedPlayerId, actions, matches]);
@@ -1780,16 +1781,9 @@ export default function PackingChart({
                   <td className={styles.playerName}>
                     <div className={styles.playerInfo}>
                       <div className={styles.playerNameRow}>
-                        <Link
-                          href={`/profile/${player.id}`}
-                          className={styles.playerNameLink}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                          }}
-                          title="Zobacz szczegóły zawodnika"
-                        >
+                        <span className={styles.playerNameText}>
                           {player.name}
-                        </Link>
+                        </span>
                         {(player as any).birthYear && (
                           <span className={styles.birthYear}> ({(player as any).birthYear})</span>
                         )}
@@ -1957,6 +1951,7 @@ export default function PackingChart({
                   <tr>
                     <th>Data</th>
                     <th>Mecz</th>
+                    <th>Pozycja</th>
                     <th>Minuty</th>
                     <th>Packing</th>
                     <th>PxT</th>
@@ -1969,6 +1964,7 @@ export default function PackingChart({
                     <tr key={stat.match.matchId}>
                       <td>{new Date(stat.match.date).toLocaleDateString('pl-PL')}</td>
                       <td>{getTeamName(stat.match.team)} vs {stat.match.opponent}</td>
+                      <td>{stat.position || '-'}</td>
                       <td>{stat.minutesPlayed}'</td>
                       <td>
                         {playerDetailsRole === 'sender' 

@@ -68,6 +68,8 @@ const XGPitch = memo(function XGPitch({
 }: XGPitchProps) {
   // Stan przełącznika orientacji boiska
   const [isFlipped, setIsFlipped] = useState(false);
+  // Stan przełącznika widoczności kropek
+  const [showShots, setShowShots] = useState(true);
 
   // Obsługa przełączania orientacji
   const handleFlipToggle = () => {
@@ -136,6 +138,22 @@ const XGPitch = memo(function XGPitch({
         </div>
       </div>
       
+      {/* Przycisk ukrywania/pokazywania tagów */}
+      <button
+        className={styles.toggleShotsButton}
+        onClick={() => setShowShots(!showShots)}
+        title={showShots ? 'Ukryj tagi' : 'Pokaż tagi'}
+        type="button"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {showShots ? (
+            <path d="M8 2L2 8L8 14M14 2L8 8L14 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          ) : (
+            <path d="M2 2L8 8L2 14M14 2L8 8L14 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          )}
+        </svg>
+        <span>{showShots ? 'Ukryj tagi' : 'Pokaż tagi'}</span>
+      </button>
 
       <div
         className={`${styles.pitch} ${isFlipped ? styles.flipped : ''}`}
@@ -160,7 +178,7 @@ const XGPitch = memo(function XGPitch({
         </div>
 
         {/* Renderowanie strzałów */}
-        {shots.map((shot) => {
+        {showShots && shots.map((shot) => {
           let displayX = shot.x;
           let displayY = shot.y;
           
@@ -169,46 +187,81 @@ const XGPitch = memo(function XGPitch({
             displayX = 100 - shot.x;
           }
           
-          // Oblicz rozmiar kropki na podstawie xG (min 8px, max 24px)
-          const dotSize = Math.max(8, Math.min(24, 8 + (shot.xG * 16)));
+          // Oblicz rozmiar kropki na podstawie xG (min 12px, max 36px)
+          // Im wyższy xG, tym większa kropka
+          const dotSize = Math.max(12, Math.min(36, 12 + (shot.xG * 24)));
           
-          // Określ kolor na podstawie typu akcji
-          const getActionTypeColor = (actionType?: string) => {
-            switch (actionType) {
-              case 'open_play': return '#3b82f6'; // Niebieski - budowanie
-              case 'counter': return '#ef4444'; // Czerwony - kontra
-              case 'regain': return '#10b981'; // Zielony - regain
-              case 'corner': return '#f59e0b'; // Pomarańczowy - rożny
-              case 'free_kick': return '#8b5cf6'; // Fioletowy - wolny
-              case 'direct_free_kick': return '#ec4899'; // Różowy - bezpośredni wolny
-              case 'penalty': return '#dc2626'; // Ciemnoczerwony - karny
-              case 'throw_in': return '#06b6d4'; // Cyjan - rzut za autu
-              default: return '#6b7280'; // Szary - domyślny
+          // Oblicz kolor na podstawie xG - popularna skala kolorów
+          // xG 0.0-0.1: zielony (#10b981)
+          // xG 0.1-0.3: żółty (#fbbf24)
+          // xG 0.3-0.6: pomarańczowy do czerwonego (#f97316 -> #dc2626)
+          // xG 0.6-1.0: maksymalnie czerwony (#dc2626)
+          const getXGColor = (xG: number) => {
+            // Normalizuj xG do zakresu 0-1
+            const normalizedXG = Math.min(1, Math.max(0, xG));
+            
+            let r, g, b;
+            
+            if (normalizedXG <= 0.1) {
+              // Zielony dla niskich xG (0.0-0.1) - #10b981 = rgb(16, 185, 129)
+              const t = normalizedXG / 0.1;
+              r = Math.round(16 + (251 - 16) * t); // 16 -> 251 (zielony -> żółty R)
+              g = Math.round(185 + (191 - 185) * t); // 185 -> 191 (zielony -> żółty G)
+              b = Math.round(129 + (36 - 129) * t); // 129 -> 36 (zielony -> żółty B)
+            } else if (normalizedXG <= 0.3) {
+              // Żółty do pomarańczowego (0.1-0.3) - #fbbf24 -> #f97316
+              const t = (normalizedXG - 0.1) / 0.2;
+              r = Math.round(251 + (249 - 251) * t); // 251 -> 249
+              g = Math.round(191 + (115 - 191) * t); // 191 -> 115
+              b = Math.round(36 + (22 - 36) * t); // 36 -> 22
+            } else if (normalizedXG <= 0.6) {
+              // Pomarańczowy do czerwonego (0.3-0.6) - #f97316 -> #dc2626
+              const t = (normalizedXG - 0.3) / 0.3;
+              r = Math.round(249 + (220 - 249) * t); // 249 -> 220
+              g = Math.round(115 + (38 - 115) * t); // 115 -> 38
+              b = Math.round(22 + (38 - 22) * t); // 22 -> 38
+            } else {
+              // Maksymalnie czerwony dla xG >= 0.6 - #dc2626 = rgb(220, 38, 38)
+              r = 220;
+              g = 38;
+              b = 38;
             }
+            
+            return `rgb(${r}, ${g}, ${b})`;
           };
           
-          const actionColor = getActionTypeColor(shot.actionType);
+          const xGColor = getXGColor(shot.xG);
           
           return (
             <div
               key={shot.id}
-              className={`${styles.shotMarker} ${shot.isGoal ? styles.goalMarker : styles.missMarker} ${selectedShotId === shot.id ? styles.selected : ''}`}
+              className={`${styles.shotMarker} ${selectedShotId === shot.id ? styles.selected : ''}`}
               style={{
                 left: `${displayX}%`,
                 top: `${displayY}%`,
                 width: `${dotSize}px`,
                 height: `${dotSize}px`,
-                backgroundColor: actionColor,
-                opacity: 0.8,
-                border: shot.isGoal ? '2px solid #fbbf24' : '1px solid rgba(255,255,255,0.3)',
+                backgroundColor: xGColor,
+                background: xGColor,
+                opacity: 1,
+                border: 'none',
                 transform: 'translate(-50%, -50%)',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
               }}
               onClick={(e) => handleShotClick(e, shot)}
               title={`${shot.playerName || 'Nieznany'} - ${shot.minute}' - xG: ${shot.xG.toFixed(2)} ${shot.isGoal ? '⚽' : ''} - ${shot.actionType || 'open_play'}`}
             >
               <div className={styles.shotInner}>
-                <span className={styles.xgValue} style={{ fontSize: `${Math.max(5, dotSize - 8)}px` }}>
-                  {shot.xG.toFixed(2)}
+                <span 
+                  className={styles.xgValue} 
+                  style={{ 
+                    fontSize: `${Math.max(9, Math.min(14, dotSize * 0.4))}px`,
+                    fontWeight: '700',
+                    color: '#ffffff',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.5)'
+                  }}
+                >
+                  {Math.round(shot.xG * 100)}
                 </span>
               </div>
             </div>
