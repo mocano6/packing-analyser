@@ -21,6 +21,7 @@ export interface XGPitchProps {
     name: string;
     logo?: string;
   }>;
+  hideToggleButton?: boolean; // Ukryj przycisk przełączania widoczności tagów
 }
 
 // Funkcja obliczania xG na podstawie pozycji
@@ -65,6 +66,7 @@ const XGPitch = memo(function XGPitch({
   selectedShotId,
   matchInfo,
   allTeams = [],
+  hideToggleButton = false,
 }: XGPitchProps) {
   // Stan przełącznika orientacji boiska
   const [isFlipped, setIsFlipped] = useState(false);
@@ -139,21 +141,23 @@ const XGPitch = memo(function XGPitch({
       </div>
       
       {/* Przycisk ukrywania/pokazywania tagów */}
-      <button
-        className={styles.toggleShotsButton}
-        onClick={() => setShowShots(!showShots)}
-        title={showShots ? 'Ukryj tagi' : 'Pokaż tagi'}
-        type="button"
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          {showShots ? (
-            <path d="M8 2L2 8L8 14M14 2L8 8L14 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          ) : (
-            <path d="M2 2L8 8L2 14M14 2L8 8L14 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          )}
-        </svg>
-        <span>{showShots ? 'Ukryj tagi' : 'Pokaż tagi'}</span>
-      </button>
+      {!hideToggleButton && (
+        <button
+          className={styles.toggleShotsButton}
+          onClick={() => setShowShots(!showShots)}
+          title={showShots ? 'Ukryj tagi' : 'Pokaż tagi'}
+          type="button"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {showShots ? (
+              <path d="M8 2L2 8L8 14M14 2L8 8L14 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            ) : (
+              <path d="M2 2L8 8L2 14M14 2L8 8L14 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            )}
+          </svg>
+          <span>{showShots ? 'Ukryj tagi' : 'Pokaż tagi'}</span>
+        </button>
+      )}
 
       <div
         className={`${styles.pitch} ${isFlipped ? styles.flipped : ''}`}
