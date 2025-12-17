@@ -842,15 +842,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
           {/* Przyciski kontrolne z polem minuty pomiędzy */}
           <div className={styles.buttonGroup}>
             <button
-              className={`${styles.controlButton} ${styles.clearButton}`}
-              onClick={handleReset}
-              type="button"
-            >
-              ⌫ Resetuj
-            </button>
-            
-            <button
-              className={`${styles.controlButton} ${styles.resetButton}`}
+              className={styles.cancelButton}
               onClick={handleCancel}
               type="button"
             >

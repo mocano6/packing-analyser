@@ -168,6 +168,74 @@
   border: 2px solid #e5e7eb;
 }
 
+.toggleGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.toggleGroup label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 14px;
+}
+
+.halfToggle {
+  display: flex;
+  border-radius: 4px;
+  overflow: hidden;
+  width: 120px;
+  border: 1px solid #eaeaea;
+}
+
+.halfButton {
+  padding: 6px 12px;
+  border: none;
+  background-color: #fafafa;
+  color: #888;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+}
+
+.halfButton:first-child {
+  border-right: 1px solid #eaeaea;
+}
+
+.halfButton:hover {
+  background-color: #f2f2f2;
+  color: #666;
+}
+
+.activeHalf:first-child {
+  background-color: #dcfce7;
+  color: #166534;
+  font-weight: 500;
+  box-shadow: none;
+  border-bottom: 2px solid #16a34a;
+}
+
+.activeHalf:last-child {
+  background-color: #ffedd5;
+  color: #9a3412;
+  font-weight: 500;
+  box-shadow: none;
+  border-bottom: 2px solid #ea580c;
+}
+
+.compactButtonsRow {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: nowrap;
+  align-items: center;
+  width: 100%;
+}
+
 .toggleButton {
   flex: 1;
   padding: 12px 16px;
@@ -393,6 +461,156 @@
   color: white;
 }
 
+/* Style dla przycisków kompaktowych (jak w Acc8sModal) */
+.compactButton {
+  flex: 0 0 auto;
+  min-width: 160px;
+  padding: 8px 12px;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.compactButton:hover {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+.compactButton.activeButton {
+  border-color: #3b82f6;
+  background: #3b82f6;
+  color: white;
+}
+
+.compactLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.compactPointsButton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border: 1px solid rgba(33, 150, 243, 0.3);
+  border-radius: 6px;
+  background-color: #f5f5f5;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  min-width: 120px;
+  height: 44px;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  margin-bottom: 16px;
+}
+
+.compactPointsButton:hover {
+  background-color: #e3f2fd;
+  border-color: #2196f3;
+  transform: translateY(-1px);
+}
+
+.pointsValue {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 4px 0;
+}
+
+.compactSubtractButton {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background-color: #ff5722;
+  color: white;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.compactSubtractButton:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.compactPointsButtonSmall {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border: 1px solid rgba(33, 150, 243, 0.3);
+  border-radius: 6px;
+  background-color: #f5f5f5;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  min-width: 140px;
+  max-width: 180px;
+  height: 36px;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  flex: 0 0 auto;
+}
+
+.compactPointsButtonSmall:hover {
+  background-color: #e3f2fd;
+  border-color: #2196f3;
+  transform: translateY(-1px);
+}
+
+.compactPointsButtonSmall .pointsValue {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 2px 0;
+}
+
+.compactPointsButtonSmall .compactLabel {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.compactPointsButtonSmall .compactSubtractButton {
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+}
+
 /* Style dla minuty i przycisku zapisz */
 .minuteAndSave {
   display: flex;
@@ -404,6 +622,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  font-weight: 600;
 }
 
 .minuteInput label {
@@ -413,12 +632,61 @@
   white-space: nowrap;
 }
 
-.minuteInput input {
+.minuteControls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.minuteButton {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ced4da;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #495057;
+  transition: all 0.2s;
+}
+
+.minuteButton:hover {
+  background-color: #e9ecef;
+  border-color: #007bff;
+  color: #007bff;
+}
+
+.minuteButton:active {
+  background-color: #007bff;
+  color: white;
+  transform: scale(0.95);
+}
+
+.minuteField {
   width: 60px;
-  padding: 8px 12px;
-  border: 2px solid #d1d5db;
-  border-radius: 6px;
+  padding: 6px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: 600 !important;
   font-size: 14px;
+  -moz-appearance: textfield;
+}
+
+.minuteField::-webkit-inner-spin-button,
+.minuteField::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.minuteField:focus {
+  border-color: #007bff;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
 
 /* Responsywność */

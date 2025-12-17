@@ -1,0 +1,175 @@
+/* src/components/Acc8sTable/Acc8sTable.module.css */
+
+.tableContainer {
+  margin-bottom: 20px;
+}
+
+.emptyMessage {
+  text-align: center;
+  color: #6b7280;
+  padding: 40px;
+  font-size: 14px;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: 1fr 80px 0.8fr 0.8fr 1fr 80px;
+  background-color: #fafafa;
+  font-weight: 600;
+  border-bottom: 1px solid #eaeaea;
+  color: #444;
+}
+
+.headerCell {
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  font-family: Arial, sans-serif;
+  font-style: normal;
+  font-weight: 600;
+  color: rgb(68, 68, 68);
+}
+
+.headerCell:hover {
+  background-color: #f0f0f0;
+}
+
+.tableBody {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.tableRow {
+  display: grid;
+  grid-template-columns: 1fr 80px 0.8fr 0.8fr 1fr 80px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.tableRow:last-child {
+  border-bottom: none;
+}
+
+.tableRow:hover {
+  background-color: #f5f9ff;
+}
+
+/* Style dla wierszy połów */
+.firstHalfRow {
+  position: relative;
+  box-shadow: inset 6px 0 0 0 #16a34a;
+}
+
+.secondHalfRow {
+  position: relative;
+  box-shadow: inset 6px 0 0 0 #ea580c;
+}
+
+.cell {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #333;
+  font-family: Arial, sans-serif;
+}
+
+.cellActions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  padding: 14px 8px;
+}
+
+.deleteBtn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  color: #f44336;
+  opacity: 0;
+}
+
+.editBtn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  color: #2196f3;
+  opacity: 0;
+}
+
+.tableRow:hover .deleteBtn,
+.tableRow:hover .editBtn {
+  opacity: 1;
+}
+
+.deleteBtn:hover {
+  background-color: #ffebee;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.editBtn:hover {
+  background-color: #e3f2fd;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+/* Style dla oznaczeń połów */
+.firstHalf {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #dcfce7;
+  color: #166534;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.secondHalf {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #ffedd5;
+  color: #9a3412;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.videoTimeLink {
+  color: #3b82f6;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.videoTimeLink:hover {
+  color: #2563eb;
+}
+

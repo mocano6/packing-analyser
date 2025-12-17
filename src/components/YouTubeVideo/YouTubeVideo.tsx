@@ -23,6 +23,7 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
 }, ref) => {
   const playerRef = useRef<any>(null);
   const [playerError, setPlayerError] = useState<string | null>(null);
+  const [isExternalWindowOpen, setIsExternalWindowOpen] = useState<boolean>(false);
 
   // Funkcja do wyciągnięcia YouTube Video ID z URL
   const extractYouTubeId = (url: string): string | null => {
@@ -110,14 +111,29 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
             (window as any).externalVideoWindow = null;
             externalVideoWindowRef.current = null;
             localStorage.removeItem('externalVideoWindowOpen');
+            setIsExternalWindowOpen(false);
           }
         }, 1000);
+        
+        setIsExternalWindowOpen(true);
       }
     }
   };
 
   // State do przechowywania aktualnego czasu wideo
   const [currentVideoTime, setCurrentVideoTime] = React.useState<number>(0);
+
+  // Sprawdź czy zewnętrzne okno jest otwarte
+  React.useEffect(() => {
+    const checkExternalWindow = () => {
+      const isOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
+      setIsExternalWindowOpen(isOpen);
+    };
+    
+    checkExternalWindow();
+    const interval = setInterval(checkExternalWindow, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Nasłuchuj wiadomości z zewnętrznego okna
   React.useEffect(() => {
@@ -172,6 +188,11 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
       enablejsapi: 1,
     },
   };
+
+  // Ukryj nagłówek, jeśli zewnętrzne okno jest otwarte
+  if (isExternalWindowOpen) {
+    return null;
+  }
 
   return (
     <div className={styles.videoContainer}>

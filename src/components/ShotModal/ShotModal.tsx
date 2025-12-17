@@ -891,19 +891,46 @@ const ShotModal: React.FC<ShotModalProps> = ({
             <div className={styles.minuteAndSave}>
               <div className={styles.minuteInput}>
                 <label htmlFor="minute">Minuta:</label>
-                <input
-                  type="number"
-                  id="minute"
-                  min="1"
-                  max="120"
-                  value={formData.minute}
-                  onChange={(e) => setFormData({...formData, minute: parseInt(e.target.value)})}
-                  className={styles.input}
-                  required
-                />
+                <div className={styles.minuteControls}>
+                  <button
+                    type="button"
+                    className={styles.minuteButton}
+                    onClick={() => {
+                      const newMinute = Math.max(1, formData.minute - 1);
+                      setFormData({...formData, minute: newMinute});
+                    }}
+                    title="Zmniejsz minutę"
+                  >
+                    −
+                  </button>
+                  <input
+                    id="minute"
+                    type="number"
+                    value={formData.minute}
+                    onChange={(e) => {
+                      const newMinute = parseInt(e.target.value) || 1;
+                      setFormData({...formData, minute: Math.max(1, Math.min(120, newMinute))});
+                    }}
+                    min="1"
+                    max="120"
+                    className={styles.minuteField}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className={styles.minuteButton}
+                    onClick={() => {
+                      const newMinute = Math.min(120, formData.minute + 1);
+                      setFormData({...formData, minute: newMinute});
+                    }}
+                    title="Zwiększ minutę"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
               <button type="submit" className={styles.saveButton}>
-                {editingShot ? "Zapisz zmiany" : "Dodaj strzał"}
+                {editingShot ? "Zapisz zmiany" : "Zapisz akcję"}
               </button>
             </div>
           </div>

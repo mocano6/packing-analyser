@@ -30,6 +30,8 @@ export const useShots = (matchId: string) => {
           teamContext: shot.teamContext || 'attack',
           teamId: shot.teamId || matchData.team || '',
           pkPlayersCount: shot.pkPlayersCount || 0,
+          // Zachowaj videoTimestamp jeśli istnieje
+          videoTimestamp: shot.videoTimestamp !== undefined ? shot.videoTimestamp : undefined,
         }));
         
         setShots(shotsWithDefaults);

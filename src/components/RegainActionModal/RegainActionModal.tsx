@@ -300,10 +300,12 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   };
 
   return (
-    <div className={styles.modalOverlay} onClick={handleCancel}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <h2>{isEditMode ? "Edytuj akcję Regain" : "Dodaj akcję Regain"}</h2>
-        
+    <div className={styles.overlay} onClick={handleCancel}>
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.header}>
+          <h3>{isEditMode ? "Edytuj akcję Regain" : "Dodaj akcję Regain"}</h3>
+          <button className={styles.closeButton} onClick={handleCancel}>×</button>
+        </div>
         
         <div className={styles.form}>
           {/* Wybór meczu - tylko w trybie edycji */}
@@ -601,21 +603,13 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
           </div>
           
           {/* Przyciski kontrolne z polem minuty pomiędzy */}
-          <div className={styles.controlButtons}>
+          <div className={styles.buttonGroup}>
             <button
-              className={`${styles.controlButton} ${styles.resetButton}`}
+              className={styles.cancelButton}
               onClick={handleCancel}
               type="button"
             >
               Anuluj
-            </button>
-            
-            <button
-              className={`${styles.controlButton} ${styles.clearButton}`}
-              onClick={handleReset}
-              type="button"
-            >
-              ⌫ Resetuj
             </button>
             
             <div className={styles.minuteInput}>
@@ -662,9 +656,9 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
             </div>
             
             <button
-              className={`${styles.controlButton} ${styles.saveButton}`}
+              className={styles.saveButton}
               onClick={handleSave}
-              type="button"
+              type="submit"
             >
               Zapisz akcję
             </button>

@@ -43,6 +43,8 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     isSecondHalf: false,
     entryType: "pass" as "pass" | "dribble" | "sfg" | "regain",
     teamContext: "attack" as "attack" | "defense",
+    isPossible1T: false,
+    pkPlayersCount: 0,
   });
 
   // Filtrowanie zawodników grających w danym meczu (podobnie jak w ShotModal)
@@ -84,6 +86,8 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         isSecondHalf: editingEntry.isSecondHalf,
         entryType: editingEntry.entryType || "pass",
         teamContext: editingEntry.teamContext || "attack",
+        isPossible1T: editingEntry.isPossible1T || false,
+        pkPlayersCount: editingEntry.pkPlayersCount || 0,
       });
     } else {
       // Pobierz aktualną połowę z localStorage
@@ -103,6 +107,8 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         isSecondHalf: isP2,
         entryType: "pass",
         teamContext: autoTeamContext,
+        isPossible1T: false,
+        pkPlayersCount: 0,
       });
     }
   }, [editingEntry, isOpen, startX]);
@@ -241,6 +247,21 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     }
   };
 
+  // Funkcja do obsługi zmiany połowy
+  const handleSecondHalfToggle = (value: boolean) => {
+    setFormData((prev) => {
+      const newMinute = value 
+        ? Math.max(46, prev.minute) 
+        : Math.min(45, prev.minute);
+      
+      return {
+        ...prev,
+        isSecondHalf: value,
+        minute: newMinute,
+      };
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -284,6 +305,8 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         receiverName: undefined,
         entryType: formData.entryType,
         teamContext: formData.teamContext,
+        isPossible1T: formData.isPossible1T,
+        pkPlayersCount: formData.pkPlayersCount,
       });
     } else {
       // Dla pozostałych typów (pass, sfg, regain)
@@ -302,6 +325,8 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         receiverName: receiverName,
         entryType: formData.entryType,
         teamContext: formData.teamContext,
+        isPossible1T: formData.isPossible1T,
+        pkPlayersCount: formData.pkPlayersCount,
       });
     }
 
@@ -347,21 +372,24 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
           </div>
 
           {/* Przełącznik połowy */}
-          <div className={styles.teamContextToggle}>
-            <button
-              type="button"
-              className={`${styles.toggleButton} ${!formData.isSecondHalf ? styles.active : ""}`}
-              onClick={() => setFormData({...formData, isSecondHalf: false})}
-            >
-              P1
-            </button>
-            <button
-              type="button"
-              className={`${styles.toggleButton} ${formData.isSecondHalf ? styles.active : ""}`}
-              onClick={() => setFormData({...formData, isSecondHalf: true})}
-            >
-              P2
-            </button>
+          <div className={styles.toggleGroup}>
+            <label>Połowa:</label>
+            <div className={styles.halfToggle}>
+              <button
+                type="button"
+                className={`${styles.halfButton} ${!formData.isSecondHalf ? styles.activeHalf : ''}`}
+                onClick={() => handleSecondHalfToggle(false)}
+              >
+                P1
+              </button>
+              <button
+                type="button"
+                className={`${styles.halfButton} ${formData.isSecondHalf ? styles.activeHalf : ''}`}
+                onClick={() => handleSecondHalfToggle(true)}
+              >
+                P2
+              </button>
+            </div>
           </div>
 
           {/* Typ akcji - kolor strzałki */}
@@ -420,6 +448,45 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
               >
                 Regain
               </button>
+            </div>
+          </div>
+
+          {/* Niewykorzystane 1T i Liczba zawodników w PK */}
+          <div className={styles.fieldGroup}>
+            <div className={styles.compactButtonsRow}>
+              <button
+                type="button"
+                className={`${styles.compactButton} ${formData.isPossible1T ? styles.activeButton : ""}`}
+                onClick={() => setFormData({...formData, isPossible1T: !formData.isPossible1T})}
+                title="Niewykorzystane 1T"
+                aria-pressed={formData.isPossible1T}
+              >
+                <span className={styles.compactLabel}>Niewykorzystane 1T</span>
+              </button>
+              <div 
+                className={styles.compactPointsButtonSmall}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setFormData({...formData, pkPlayersCount: formData.pkPlayersCount + 1});
+                }}
+                title="Kliknij aby zwiększyć liczbę zawodników w PK"
+              >
+                <span className={styles.compactLabel}>Liczba zawodników w PK</span>
+                <span className={styles.pointsValue}><b>{formData.pkPlayersCount}</b></span>
+                <button
+                  type="button"
+                  className={styles.compactSubtractButton}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setFormData({...formData, pkPlayersCount: Math.max(0, formData.pkPlayersCount - 1)});
+                  }}
+                  title="Odejmij 1"
+                >
+                  −
+                </button>
+              </div>
             </div>
           </div>
 
@@ -500,19 +567,55 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
             <div className={styles.minuteAndSave}>
               <div className={styles.minuteInput}>
                 <label htmlFor="minute">Minuta:</label>
-                <input
-                  type="number"
-                  id="minute"
-                  min="1"
-                  max="120"
-                  value={formData.minute}
-                  onChange={(e) => setFormData({...formData, minute: parseInt(e.target.value) || 1})}
-                  className={styles.input}
-                  required
-                />
+                <div className={styles.minuteControls}>
+                  <button
+                    type="button"
+                    className={styles.minuteButton}
+                    onClick={() => {
+                      const newMinute = Math.max(
+                        formData.isSecondHalf ? 46 : 1,
+                        formData.minute - 1
+                      );
+                      setFormData({...formData, minute: newMinute});
+                    }}
+                    title="Zmniejsz minutę"
+                  >
+                    −
+                  </button>
+                  <input
+                    id="minute"
+                    type="number"
+                    value={formData.minute}
+                    onChange={(e) => {
+                      const newMinute = parseInt(e.target.value) || (formData.isSecondHalf ? 46 : 1);
+                      setFormData((prev) => ({
+                        ...prev,
+                        minute: formData.isSecondHalf ? Math.max(46, Math.min(120, newMinute)) : Math.min(45, Math.max(1, newMinute)),
+                      }));
+                    }}
+                    min={formData.isSecondHalf ? 46 : 1}
+                    max="120"
+                    className={styles.minuteField}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className={styles.minuteButton}
+                    onClick={() => {
+                      const newMinute = Math.min(
+                        formData.isSecondHalf ? 130 : 65,
+                        formData.minute + 1
+                      );
+                      setFormData({...formData, minute: newMinute});
+                    }}
+                    title="Zwiększ minutę"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
               <button type="submit" className={styles.saveButton}>
-                {editingEntry ? "Zapisz zmiany" : "Dodaj wejście"}
+                {editingEntry ? "Zapisz zmiany" : "Zapisz akcję"}
               </button>
             </div>
           </div>

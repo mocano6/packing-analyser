@@ -43,6 +43,10 @@ import { usePKEntries } from "@/hooks/usePKEntries";
 import { PKEntry } from "@/types";
 import PKEntryModal from "@/components/PKEntryModal/PKEntryModal";
 import PKEntriesTable from "@/components/PKEntriesTable/PKEntriesTable";
+import { useAcc8sEntries } from "@/hooks/useAcc8sEntries";
+import { Acc8sEntry } from "@/types";
+import Acc8sModal from "@/components/Acc8sModal/Acc8sModal";
+import Acc8sTable from "@/components/Acc8sTable/Acc8sTable";
 
 
 // Rozszerzenie interfejsu Window
@@ -81,11 +85,11 @@ function removeUndefinedFields<T extends object>(obj: T): T {
 }
 
 export default function Page() {
-  const [activeTab, setActiveTab] = React.useState<"packing" | "xg" | "regain" | "loses" | "pk_entries">(() => {
+  const [activeTab, setActiveTab] = React.useState<"packing" | "acc8s" | "xg" | "regain" | "loses" | "pk_entries">(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('activeTab');
-      if (saved && ['packing', 'xg', 'regain', 'loses', 'pk_entries'].includes(saved)) {
-        return saved as "packing" | "xg" | "regain" | "loses" | "pk_entries";
+      if (saved && ['packing', 'acc8s', 'xg', 'regain', 'loses', 'pk_entries'].includes(saved)) {
+        return saved as "packing" | "acc8s" | "xg" | "regain" | "loses" | "pk_entries";
       }
     }
     return "packing";
@@ -165,26 +169,32 @@ export default function Page() {
       });
       
       const time = await waitForTime;
+      
       if (time === null) {
         if (hasExternalVideoTime) {
-          // Użyj ostatniego znanego czasu z zewnętrznego okna
-          localStorage.setItem('tempVideoTimestamp', String(externalVideoTime));
+          // Użyj ostatniego znanego czasu z zewnętrznego okna, cofnij o 15s
+          const adjustedTime = Math.max(0, externalVideoTime - 15);
+          localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
         } else {
           const proceed = window.confirm('Nie udało się pobrać czasu z wideo. Czy zapisać akcję bez czasu?');
           if (!proceed) return;
           localStorage.setItem('tempVideoTimestamp', '0');
         }
       } else if (time > 0) {
-        localStorage.setItem('tempVideoTimestamp', String(time));
+        // Cofnij czas o 15 sekund
+        const adjustedTime = Math.max(0, time - 15);
+        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
       } else if (externalVideoTime > 0) {
-        // Fallback do ostatniego znanego czasu
-        localStorage.setItem('tempVideoTimestamp', String(externalVideoTime));
+        // Fallback do ostatniego znanego czasu, cofnij o 15s
+        const adjustedTime = Math.max(0, externalVideoTime - 15);
+        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
       }
     } else if (youtubeVideoRef.current) {
       try {
         const currentTime = await youtubeVideoRef.current.getCurrentTime();
-        // Zapisz czas do localStorage tymczasowo
-        localStorage.setItem('tempVideoTimestamp', String(Math.floor(currentTime)));
+        // Cofnij czas o 15 sekund przed zapisaniem
+        const adjustedTime = Math.max(0, currentTime - 15);
+        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
       } catch (error) {
         console.warn('Nie udało się pobrać czasu z YouTube:', error);
       }
@@ -192,11 +202,50 @@ export default function Page() {
     setIsActionModalOpen(true);
   };
 
+  const openAcc8sModalWithVideoTime = async () => {
+    // Sprawdź czy mamy otwarte zewnętrzne okno wideo
+    const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
+    const externalWindow = (window as any).externalVideoWindow;
+    
+    if (isExternalWindowOpen && externalWindow && !externalWindow.closed) {
+      // Wyślij wiadomość do zewnętrznego okna, aby pobrać aktualny czas
+      externalWindow.postMessage({ type: 'GET_CURRENT_TIME' }, '*');
+      
+      // Nasłuchuj odpowiedzi
+      const handleResponse = (event: MessageEvent) => {
+        if (event.data.type === 'CURRENT_TIME_RESPONSE') {
+          const currentTime = event.data.time;
+          // Cofnij czas o 15 sekund przed zapisaniem
+          const adjustedTime = Math.max(0, currentTime - 15);
+          localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+          window.removeEventListener('message', handleResponse);
+        }
+      };
+      
+      window.addEventListener('message', handleResponse);
+    } else if (youtubeVideoRef.current) {
+      try {
+        const currentTime = await youtubeVideoRef.current.getCurrentTime();
+        // Cofnij czas o 15 sekund przed zapisaniem
+        const adjustedTime = Math.max(0, currentTime - 15);
+        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+      } catch (error) {
+        console.warn('Nie udało się pobrać czasu z YouTube:', error);
+      }
+    }
+    setAcc8sModalData({});
+    setIsAcc8sModalOpen(true);
+  };
+
+  const [externalVideoState, setExternalVideoState] = useState<number>(-1); // -1 = unstarted, 1 = playing, 2 = paused, etc.
+
   // Nasłuchuj wiadomości z zewnętrznego wideo
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data.type === 'VIDEO_TIME_UPDATE') {
         setExternalVideoTime(event.data.time);
+      } else if (event.data.type === 'VIDEO_STATE_UPDATE') {
+        setExternalVideoState(event.data.state);
       } else if (event.data.type === 'CURRENT_TIME_RESPONSE') {
       }
     };
@@ -251,6 +300,9 @@ export default function Page() {
   // Hook do zarządzania wejściami PK
   const { pkEntries, addPKEntry, updatePKEntry, deletePKEntry } = usePKEntries(matchInfo?.matchId || "");
 
+  // Hook do zarządzania akcjami 8s ACC
+  const { acc8sEntries, addAcc8sEntry, updateAcc8sEntry, deleteAcc8sEntry } = useAcc8sEntries(matchInfo?.matchId || "");
+
   // Stan dla filtrowania strzałów
 
   // Stan dla modalki strzałów
@@ -274,8 +326,75 @@ export default function Page() {
     editingEntry?: PKEntry;
   } | null>(null);
 
+  // Stan dla akcji 8s ACC
+  const [isAcc8sModalOpen, setIsAcc8sModalOpen] = useState(false);
+  const [acc8sModalData, setAcc8sModalData] = useState<{
+    editingEntry?: Acc8sEntry;
+  } | null>(null);
+
   // Funkcje obsługi strzałów
-  const handleShotAdd = (x: number, y: number, xG: number) => {
+  const handleShotAdd = async (x: number, y: number, xG: number) => {
+    // Pobierz czas wideo przed otwarciem modala (podobnie jak w openActionModalWithVideoTime)
+    const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
+    const hasExternalVideoTime = externalVideoTime > 0;
+    
+    if (isExternalWindowOpen || hasExternalVideoTime) {
+      // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
+      const externalWindow = (window as any).externalVideoWindow;
+      if (externalWindow && !externalWindow.closed) {
+        externalWindow.postMessage({
+          type: 'GET_CURRENT_TIME'
+        }, '*');
+      } else {
+        window.postMessage({
+          type: 'GET_CURRENT_TIME'
+        }, '*');
+      }
+      
+      // Czekaj na odpowiedź z zewnętrznego okna
+      const waitForTime = new Promise<number | null>((resolve) => {
+        const handleTimeResponse = (event: MessageEvent) => {
+          if (event.data.type === 'CURRENT_TIME_RESPONSE') {
+            window.removeEventListener('message', handleTimeResponse);
+            resolve(event.data.time);
+          }
+        };
+        window.addEventListener('message', handleTimeResponse);
+        setTimeout(() => {
+          window.removeEventListener('message', handleTimeResponse);
+          resolve(null); // null oznacza timeout
+        }, 1000);
+      });
+      
+      const time = await waitForTime;
+      if (time === null) {
+        if (hasExternalVideoTime) {
+          // Użyj ostatniego znanego czasu z zewnętrznego okna, cofnij o 15s
+          const adjustedTime = Math.max(0, externalVideoTime - 15);
+          localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+        } else {
+          localStorage.setItem('tempVideoTimestamp', '0');
+        }
+      } else if (time > 0) {
+        // Cofnij czas o 15 sekund
+        const adjustedTime = Math.max(0, time - 15);
+        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+      } else if (externalVideoTime > 0) {
+        // Fallback do ostatniego znanego czasu, cofnij o 15s
+        const adjustedTime = Math.max(0, externalVideoTime - 15);
+        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+      }
+    } else if (youtubeVideoRef.current) {
+      try {
+        const currentTime = await youtubeVideoRef.current.getCurrentTime();
+        // Cofnij czas o 15 sekund przed zapisaniem
+        const adjustedTime = Math.max(0, currentTime - 15);
+        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+      } catch (error) {
+        console.warn('Nie udało się pobrać czasu z YouTube:', error);
+      }
+    }
+    
     setShotModalData({ x, y, xG });
     setIsShotModalOpen(true);
   };
@@ -298,14 +417,37 @@ export default function Page() {
     }
 
     try {
+      // Pobierz czas z YouTube z localStorage
+      const videoTimestamp = localStorage.getItem('tempVideoTimestamp');
+      const parsedVideoTimestamp = videoTimestamp ? parseInt(videoTimestamp) : undefined;
+      const isValidTimestamp = parsedVideoTimestamp !== undefined && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp > 0;
+      
+      // Dodaj videoTimestamp do danych strzału
+      // Przy edycji zachowaj istniejący videoTimestamp, jeśli nowy nie jest dostępny
+      const finalVideoTimestamp = isValidTimestamp 
+        ? parsedVideoTimestamp 
+        : (shotModalData?.editingShot?.videoTimestamp);
+      
+      const shotDataWithTimestamp = {
+        ...shotData,
+        ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
+      };
+      
+      // Debug: sprawdź czy videoTimestamp jest zapisywany
+      console.log('handleShotSave - videoTimestamp z localStorage:', videoTimestamp);
+      console.log('handleShotSave - parsedVideoTimestamp:', parsedVideoTimestamp);
+      console.log('handleShotSave - isValidTimestamp:', isValidTimestamp);
+      console.log('handleShotSave - finalVideoTimestamp:', finalVideoTimestamp);
+      console.log('handleShotSave - shotDataWithTimestamp:', shotDataWithTimestamp);
+
       if (shotModalData?.editingShot) {
-        const success = await updateShot(shotModalData.editingShot.id, shotData);
+        const success = await updateShot(shotModalData.editingShot.id, shotDataWithTimestamp);
         if (!success) {
           alert("Nie udało się zaktualizować strzału. Spróbuj ponownie.");
           return;
         }
       } else {
-        const newShot = await addShot(shotData);
+        const newShot = await addShot(shotDataWithTimestamp);
         if (!newShot) {
           alert("Nie udało się dodać strzału. Spróbuj ponownie.");
           return;
@@ -1805,6 +1947,40 @@ export default function Page() {
           />
         )}
 
+        {activeTab === "acc8s" && (
+          <div className={styles.acc8sSection}>
+            <div className={styles.acc8sHeader}>
+              <h3>Akcje 8s ACC</h3>
+              <button
+                onClick={async () => {
+                  if (!matchInfo?.matchId || !matchInfo?.team) {
+                    alert("Wybierz mecz, aby dodać akcję 8s ACC!");
+                    return;
+                  }
+                  await openAcc8sModalWithVideoTime();
+                }}
+                className={styles.addButton}
+                title="Dodaj akcję 8s ACC"
+              >
+                +
+              </button>
+            </div>
+            <Acc8sTable
+              entries={acc8sEntries}
+              onDeleteEntry={async (entryId) => {
+                if (confirm("Czy na pewno chcesz usunąć tę akcję 8s ACC?")) {
+                  await deleteAcc8sEntry(entryId);
+                }
+              }}
+              onEditEntry={(entry) => {
+                setAcc8sModalData({ editingEntry: entry });
+                setIsAcc8sModalOpen(true);
+              }}
+              youtubeVideoRef={youtubeVideoRef}
+            />
+          </div>
+        )}
+
         {activeTab === "xg" && (
           <XGPitch
             shots={shots}
@@ -1881,6 +2057,34 @@ export default function Page() {
           />
         )}
 
+        {activeTab === "acc8s" && acc8sModalData && (
+          <Acc8sModal
+            isOpen={isAcc8sModalOpen}
+            onClose={() => {
+              setIsAcc8sModalOpen(false);
+              setAcc8sModalData(null);
+            }}
+            onSave={async (entryData) => {
+              if (acc8sModalData.editingEntry) {
+                await updateAcc8sEntry(acc8sModalData.editingEntry.id, entryData);
+              } else {
+                await addAcc8sEntry(entryData);
+              }
+              setIsAcc8sModalOpen(false);
+              setAcc8sModalData(null);
+            }}
+            onDelete={async (entryId) => {
+              await deleteAcc8sEntry(entryId);
+              setIsAcc8sModalOpen(false);
+              setAcc8sModalData(null);
+            }}
+            editingEntry={acc8sModalData.editingEntry}
+            matchId={matchInfo?.matchId || ""}
+            matchInfo={matchInfo}
+            players={players}
+          />
+        )}
+
         {activeTab === "packing" || activeTab === "regain" || activeTab === "loses" ? (
           <ActionsTable
             actions={actions}
@@ -1914,7 +2118,7 @@ export default function Page() {
               }
             }}
           />
-        ) : (
+        ) : activeTab === "xg" ? (
           <ShotsTable
             shots={shots}
             players={players}
@@ -1928,13 +2132,28 @@ export default function Page() {
               });
               setIsShotModalOpen(true);
             }}
-            onVideoTimeClick={(timestamp) => {
-              if (youtubeVideoRef.current) {
-                youtubeVideoRef.current.seekTo(timestamp);
+            onVideoTimeClick={async (timestamp) => {
+              // Sprawdź czy mamy otwarte zewnętrzne okno wideo
+              const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
+              const externalWindow = (window as any).externalVideoWindow;
+              
+              if (isExternalWindowOpen && externalWindow && !externalWindow.closed) {
+                // Wyślij wiadomość do zewnętrznego okna
+                externalWindow.postMessage({
+                  type: 'SEEK_TO_TIME',
+                  time: timestamp
+                }, '*');
+              } else if (youtubeVideoRef.current) {
+                // Fallback do lokalnego playera
+                try {
+                  await youtubeVideoRef.current.seekTo(timestamp);
+                } catch (error) {
+                  console.warn('Nie udało się przewinąć wideo do czasu:', timestamp, error);
+                }
               }
             }}
           />
-        )}
+        ) : null}
 
         <PlayerModal
           isOpen={isModalOpen}

@@ -1,4 +1,4 @@
-/* src/components/ShotModal/ShotModal.module.css */
+/* src/components/Acc8sModal/Acc8sModal.module.css */
 
 .overlay {
   position: fixed;
@@ -19,7 +19,7 @@
   border-radius: 12px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
   width: 95%;
-  max-width: 700px;
+  max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
   animation: modalIn 0.3s ease-out;
@@ -74,27 +74,6 @@
   padding: 24px;
 }
 
-.positionInfo {
-  background: #f3f4f6;
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 14px;
-  color: #6b7280;
-}
-
-.xgValue {
-  background: #3b82f6;
-  color: white;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 12px;
-}
-
 .fieldGroup {
   margin-bottom: 16px;
 }
@@ -107,8 +86,7 @@
   font-size: 14px;
 }
 
-.input,
-.select {
+.input {
   width: 100%;
   padding: 10px 12px;
   border: 2px solid #d1d5db;
@@ -118,47 +96,19 @@
   background: white;
 }
 
-.input:focus,
-.select:focus {
+.input:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.checkboxGroup {
-  margin: 20px 0;
-  padding: 16px;
-  background: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
-.checkboxLabel {
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.checkbox {
-  width: 18px;
-  height: 18px;
-  margin-right: 10px;
-  cursor: pointer;
-  accent-color: #3b82f6;
-}
-
-.checkboxText {
-  color: #374151;
-  user-select: none;
-}
 
 .buttonGroup {
   display: flex;
   gap: 12px;
   margin-top: 24px;
   justify-content: flex-end;
+  align-items: center;
   flex-wrap: wrap;
 }
 
@@ -209,92 +159,20 @@
   box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
 }
 
-/* Nowy layout - górny rząd */
-.topRow {
+.toggleGroup {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 16px;
-  gap: 16px;
 }
 
-.xgInput {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.xgInput label {
+.toggleGroup label {
   font-weight: 500;
   color: #374151;
   font-size: 14px;
-  white-space: nowrap;
 }
 
-.xgInput input {
-  width: 80px;
-  padding: 8px 12px;
-  border: 2px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-.finalXG {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #2563eb;
-  background-color: rgba(37, 99, 235, 0.1);
-  padding: 0.5rem;
-  border-radius: 0.375rem;
-  border: 1px solid rgba(37, 99, 235, 0.2);
-  text-align: center;
-  margin-top: 0.5rem;
-}
-
-.linePlayersCountInput {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 0.5rem;
-}
-
-.linePlayersCountInput label {
-  font-weight: 500;
-  color: #374151;
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-.linePlayersCountInput input {
-  width: 60px;
-  padding: 8px 12px;
-  border: 2px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
-  text-align: center;
-  transition: border-color 0.2s;
-}
-
-.linePlayersCountInput input:focus {
-  outline: none;
-  border-color: #3b82f6;
-}
-
-.pkPlayersCountInput {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 0.5rem;
-}
-
-.pkPlayersCountInput label {
-  font-weight: 500;
-  color: #374151;
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-.pkToggle {
+.halfToggle {
   display: flex;
   border-radius: 4px;
   overflow: hidden;
@@ -302,7 +180,7 @@
   border: 1px solid #eaeaea;
 }
 
-.pkButton {
+.halfButton {
   padding: 6px 12px;
   border: none;
   background-color: #fafafa;
@@ -315,16 +193,16 @@
   font-size: 13px;
 }
 
-.pkButton:first-child {
+.halfButton:first-child {
   border-right: 1px solid #eaeaea;
 }
 
-.pkButton:hover {
+.halfButton:hover {
   background-color: #f2f2f2;
   color: #666;
 }
 
-.pkButton.activeP1 {
+.activeHalf:first-child {
   background-color: #dcfce7;
   color: #166534;
   font-weight: 500;
@@ -332,7 +210,7 @@
   border-bottom: 2px solid #16a34a;
 }
 
-.pkButton.activeP2 {
+.activeHalf:last-child {
   background-color: #ffedd5;
   color: #9a3412;
   font-weight: 500;
@@ -340,34 +218,111 @@
   border-bottom: 2px solid #ea580c;
 }
 
-/* Przełącznik atak/obrona */
-.teamContextToggle {
+.compactButtonsRow {
   display: flex;
+  gap: 8px;
   margin-bottom: 16px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid #e5e7eb;
+  flex-wrap: wrap;
 }
 
-.toggleButton {
+.compactButton {
   flex: 1;
-  padding: 12px 16px;
-  border: none;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
   background: white;
-  color: #6b7280;
-  font-size: 14px;
+  color: #374151;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  text-align: center;
+  white-space: nowrap;
 }
 
-.toggleButton:hover {
+.compactButton:hover {
+  border-color: #9ca3af;
   background: #f9fafb;
 }
 
-.toggleButton.active {
+.compactButton.activeButton {
+  border-color: #3b82f6;
   background: #3b82f6;
   color: white;
+}
+
+.compactLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.compactPointsButton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border: 1px solid rgba(33, 150, 243, 0.3);
+  border-radius: 6px;
+  background-color: #f5f5f5;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  min-width: 120px;
+  height: 44px;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  margin-bottom: 16px;
+}
+
+.compactPointsButton:hover {
+  background-color: #e3f2fd;
+  border-color: #2196f3;
+  transform: translateY(-1px);
+}
+
+.pointsValue {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 4px 0;
+}
+
+.compactSubtractButton {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background-color: #ff5722;
+  color: white;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.compactSubtractButton:hover {
+  opacity: 1;
+  transform: scale(1.1);
 }
 
 /* Style dla kafelków zawodników - identyczne jak w ActionModal */
@@ -401,24 +356,9 @@
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
-.playerAttackerTile {
-  border: 2px solid #4caf50 !important;
-  background-color: rgba(76, 175, 80, 0.1) !important;
-}
-
-.playerDefenderTile {
-  border: 2px solid #f44336 !important;
-  background-color: rgba(244, 67, 54, 0.1) !important;
-}
-
-.playerBlockingTile {
-  border: 2px solid #ff9800 !important;
-  background-color: rgba(255, 152, 0, 0.1) !important;
-}
-
-.playerLineTile {
-  border: 2px solid #2196f3 !important;
-  background-color: rgba(33, 150, 243, 0.1) !important;
+.playerSelectedTile {
+  border: 2px solid #3b82f6 !important;
+  background-color: rgba(59, 130, 246, 0.1) !important;
 }
 
 .playerTile.withImage {
@@ -481,12 +421,8 @@
   z-index: 3;
 }
 
-.playerAttackerTile:not(.withImage) .number {
-  color: #4caf50;
-}
-
-.playerDefenderTile:not(.withImage) .number {
-  color: #f44336;
+.playerSelectedTile:not(.withImage) .number {
+  color: #3b82f6;
 }
 
 .playerInfo {
@@ -529,132 +465,40 @@
   text-align: center;
 }
 
-/* Style dla przycisków typu strzału - w jednej linii */
-.shotTypeButtons {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-.shotTypeButton {
-  flex: 1;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 2px solid #d1d5db;
-  border-radius: 6px;
-  background: white;
-  color: #374151;
-  font-size: 13px;
+.playerTitle {
   font-weight: 600;
+  margin-top: 1rem;
+  color: #333;
+}
+
+.compactAddButton {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background-color: #4caf50;
+  color: white;
+  font-size: 11px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: center;
-  white-space: nowrap;
-}
-
-.shotTypeButton:hover {
-  border-color: #9ca3af;
-  background: #f9fafb;
-}
-
-.shotTypeButton.active {
-  border-color: #3b82f6;
-  background: #3b82f6;
-  color: white;
-}
-
-.goalButton {
-  border-color: #f59e0b;
-  color: #f59e0b;
-}
-
-.goalButton:hover {
-  border-color: #d97706;
-  background: #fef3c7;
-}
-
-.goalButton.active {
-  border-color: #f59e0b;
-  background: #f59e0b;
-  color: white;
-}
-
-/* Style dla przycisków rodzaju akcji */
-.actionTypeButtons {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-.actionTypeButton {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 2px solid #d1d5db;
-  border-radius: 6px;
-  background: white;
-  color: #374151;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: center;
-  white-space: nowrap;
-}
-
-.actionTypeButton:hover {
-  border-color: #9ca3af;
-  background: #f9fafb;
-}
-
-.actionTypeButton.active {
-  border-color: #3b82f6;
-  background: #3b82f6;
-  color: white;
-}
-
-/* Style dla przycisków części ciała */
-.bodyPartButtons {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-.bodyPartButton {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 2px solid #d1d5db;
-  border-radius: 6px;
-  background: white;
-  color: #374151;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: center;
-  white-space: nowrap;
-}
-
-.bodyPartButton:hover {
-  border-color: #9ca3af;
-  background: #f9fafb;
-}
-
-.bodyPartButton.active {
-  border-color: #3b82f6;
-  background: #3b82f6;
-  color: white;
-}
-
-/* Style dla minuty i przycisku zapisz */
-.minuteAndSave {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.compactAddButton:hover {
+  opacity: 1;
+  transform: scale(1.1);
 }
 
 .minuteInput {
@@ -756,34 +600,6 @@
   .deleteButton {
     margin-right: 0;
     order: -1;
-  }
-
-  .topRow {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .xgInput {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .xgInput input {
-    width: 100px;
-  }
-
-  .playersGrid {
-    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-    gap: 6px;
-  }
-
-  .shotTypeButtons {
-    flex-direction: column;
-  }
-
-  .shotTypeButton {
-    flex: none;
   }
 
   .minuteAndSave {

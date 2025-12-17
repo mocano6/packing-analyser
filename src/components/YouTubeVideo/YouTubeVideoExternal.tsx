@@ -159,6 +159,14 @@ const YouTubeVideoExternal: React.FC<YouTubeVideoExternalProps> = ({
 
   const onPlayerStateChange: YouTubeProps['onStateChange'] = (event) => {
     // YouTube player states: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (video cued)
+    const playerState = event.data;
+    // Wysyłaj stan playera do głównego okna
+    if (window.opener) {
+      window.opener.postMessage({
+        type: 'VIDEO_STATE_UPDATE',
+        state: playerState
+      }, '*');
+    }
   };
 
   if (!videoId) {

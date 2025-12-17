@@ -97,30 +97,30 @@ const ShotRow = ({
         &nbsp;{shot.minute}'
       </div>
       <div className={styles.cell}>
-        {shot.timestamp && shot.timestamp > 0 ? (
-          <span 
-            className={styles.videoTimeLink}
-            onClick={(e) => {
-              e.stopPropagation();
-              // Sprawdź czy timestamp jest w milisekundach (> 1000000) czy w sekundach
-              const timestampInSeconds = shot.timestamp > 1000000 ? shot.timestamp / 1000 : shot.timestamp;
-              onVideoTimeClick?.(timestampInSeconds * 1000);
-            }}
-            title="Kliknij aby przejść do tego momentu w wideo"
-          >
-            {(() => {
-              // Sprawdź czy timestamp jest w milisekundach (> 1000000) czy w sekundach
-              const timestampInSeconds = shot.timestamp > 1000000 ? shot.timestamp / 1000 : shot.timestamp;
-              // Sprawdź czy wartość jest rozsądna (mniej niż 2 godziny = 7200 sekund)
-              if (timestampInSeconds > 7200) {
-                return '-';
-              }
-              return formatVideoTime(timestampInSeconds);
-            })()}
-          </span>
-        ) : (
-          <span>-</span>
-        )}
+        {(() => {
+          // Sprawdź czy strzał ma videoTimestamp
+          const hasVideoTimestamp = shot.videoTimestamp !== undefined && 
+                                   shot.videoTimestamp !== null && 
+                                   shot.videoTimestamp > 0;
+          
+          if (hasVideoTimestamp) {
+            return (
+              <span 
+                className={styles.videoTimeLink}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // videoTimestamp jest w sekundach, przekazujemy bezpośrednio
+                  onVideoTimeClick?.(shot.videoTimestamp!);
+                }}
+                title="Kliknij aby przejść do tego momentu w wideo"
+              >
+                {formatVideoTime(shot.videoTimestamp)}
+              </span>
+            );
+          }
+          
+          return <span className={styles.noVideoTime}>-</span>;
+        })()}
       </div>
       <div className={styles.cell}>
         {shot.playerName || 'Nieznany zawodnik'}

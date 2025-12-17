@@ -148,6 +148,7 @@ export interface Shot {
   bodyPart?: 'foot' | 'head' | 'other';
   matchId: string;
   timestamp: number;
+  videoTimestamp?: number; // Czas wideo w sekundach z YouTube playera
   // Nowe pola dla strzałów
   shotType: 'on_target' | 'off_target' | 'blocked' | 'goal'; // Typ strzału: celny, niecelny, zablokowany, gol
   teamContext: 'attack' | 'defense'; // Kontekst zespołu: atak czy obrona
@@ -183,6 +184,22 @@ export interface PKEntry {
   entryType?: "pass" | "dribble" | "sfg" | "regain"; // Typ akcji definiujący kolor strzałki
   teamContext?: "attack" | "defense"; // Kontekst zespołu
   videoTimestamp?: number; // Czas wideo w milisekundach
+  isPossible1T?: boolean; // Możliwe 1T
+  pkPlayersCount?: number; // Liczba zawodników w PK
+  timestamp: number;
+}
+
+export interface Acc8sEntry {
+  id: string;
+  matchId: string;
+  teamId: string;
+  minute: number;
+  isSecondHalf: boolean;
+  teamContext: "attack" | "defense";
+  isShotUnder8s: boolean; // Strzał do 8s
+  isPKEntryUnder8s: boolean; // Wejście w PK do 8s
+  passingPlayerIds: string[]; // ID zawodników biorących udział w akcji (wielokrotny wybór)
+  videoTimestamp?: number; // Czas wideo w sekundach (nie milisekundach jak w PKEntry)
   timestamp: number;
 }
 
