@@ -1,0 +1,241 @@
+.videoContainer {
+  width: 100%;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.videoHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+}
+
+.videoHeader h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.headerButtons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.externalButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.externalButton:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.externalIcon {
+  font-size: 18px;
+}
+
+.collapseButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 14px;
+  color: #6b7280;
+  transition: color 0.2s;
+}
+
+.collapseButton:hover {
+  color: #374151;
+}
+
+.videoWrapper {
+  position: relative;
+  width: 100%;
+  background: #000;
+}
+
+.videoPlayer {
+  width: 100%;
+  height: auto;
+  display: block;
+  max-height: 500px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #1f2937;
+  color: white;
+}
+
+.playButton {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+}
+
+.playButton:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.timeInfo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 100px;
+  white-space: nowrap;
+}
+
+.seekBar {
+  flex: 1;
+  height: 6px;
+  background: #4b5563;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+}
+
+.seekBar::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.seekBar::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.volumeControl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.volumeBar {
+  flex: 1;
+  height: 4px;
+  background: #4b5563;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+}
+
+.volumeBar::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.volumeBar::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.speedControl {
+  display: flex;
+  gap: 4px;
+}
+
+.speedControl button {
+  background: #374151;
+  border: none;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.speedControl button:hover {
+  background: #4b5563;
+}
+
+.speedControl button.activeSpeed {
+  background: #3b82f6;
+  color: white;
+}
+
+.noVideo {
+  padding: 40px 20px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.noVideo p {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.hint {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+@media (max-width: 768px) {
+  .controls {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .speedControl {
+    order: -1;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .volumeControl {
+    min-width: 100px;
+  }
+}
+

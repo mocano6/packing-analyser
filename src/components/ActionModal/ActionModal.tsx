@@ -472,12 +472,14 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 <label>Połowa:</label>
                 <div className={styles.halfToggle}>
                   <button
+                    type="button"
                     className={`${styles.halfButton} ${!isSecondHalf ? styles.activeHalf : ''}`}
                     onClick={() => handleSecondHalfToggle(false)}
                   >
                     P1
                   </button>
                   <button
+                    type="button"
                     className={`${styles.halfButton} ${isSecondHalf ? styles.activeHalf : ''}`}
                     onClick={() => handleSecondHalfToggle(true)}
                   >

@@ -12,6 +12,19 @@
   gap: 20px;
 }
 
+.videoPlayersContainer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .videoPlayersContainer {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Usunięto stare style przycisków - teraz używany jest SidePanel */
 
 .actionButton {

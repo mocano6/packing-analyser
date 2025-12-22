@@ -116,14 +116,22 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Pobierz czas wideo z localStorage (jeśli istnieje)
-    const tempVideoTimestamp = typeof window !== 'undefined' 
+    // Pobierz czas wideo z localStorage (tak jak w packingu)
+    const videoTimestamp = typeof window !== 'undefined' 
       ? localStorage.getItem('tempVideoTimestamp') 
       : null;
+    const parsedVideoTimestamp = videoTimestamp ? parseInt(videoTimestamp, 10) : undefined;
+    const isValidTimestamp = parsedVideoTimestamp !== undefined && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp >= 0;
     
-    const videoTimestamp = tempVideoTimestamp 
-      ? parseFloat(tempVideoTimestamp) 
-      : undefined;
+    console.log('Acc8sModal handleSubmit - videoTimestamp z localStorage:', videoTimestamp);
+    console.log('Acc8sModal handleSubmit - parsedVideoTimestamp:', parsedVideoTimestamp);
+    console.log('Acc8sModal handleSubmit - isValidTimestamp:', isValidTimestamp);
+    console.log('Acc8sModal handleSubmit - editingEntry?.videoTimestamp:', editingEntry?.videoTimestamp);
+    
+    // Przy edycji zachowaj istniejący videoTimestamp, jeśli nowy nie jest dostępny
+    const finalVideoTimestamp = isValidTimestamp 
+      ? parsedVideoTimestamp 
+      : (editingEntry?.videoTimestamp);
 
     const entryData = {
       matchId,
@@ -134,11 +142,12 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
       isShotUnder8s: formData.isShotUnder8s,
       isPKEntryUnder8s: formData.isPKEntryUnder8s,
       passingPlayerIds: formData.passingPlayerIds,
-      videoTimestamp,
+      ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
     };
 
     console.log('Acc8sModal handleSubmit - entryData:', entryData);
     console.log('Acc8sModal handleSubmit - isSecondHalf:', entryData.isSecondHalf);
+    console.log('Acc8sModal handleSubmit - videoTimestamp w entryData:', entryData.videoTimestamp);
 
     onSave(entryData);
 

@@ -208,7 +208,8 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   onDeleteAction,
   onEditAction,
   onRefreshPlayersData,
-  youtubeVideoRef
+  youtubeVideoRef,
+  customVideoRef
 }) => {
   const [sortConfig, setSortConfig] = useState<{
     key: SortKey;
@@ -252,8 +253,13 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         type: 'SEEK_TO_TIME',
         time: videoTimestamp
       }, '*');
+    } else if (customVideoRef?.current) {
+      try {
+        await customVideoRef.current.seekTo(videoTimestamp);
+      } catch (error) {
+        console.warn('Nie udało się przewinąć własnego odtwarzacza do czasu:', videoTimestamp, error);
+      }
     } else if (youtubeVideoRef?.current) {
-      // Fallback do lokalnego wideo
       try {
         await youtubeVideoRef.current.seekTo(videoTimestamp);
       } catch (error) {

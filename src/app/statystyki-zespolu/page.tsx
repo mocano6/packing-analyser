@@ -380,34 +380,8 @@ export default function StatystykiZespoluPage() {
     const teamId = isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent;
     const opponentId = isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team;
 
-    // Filtruj strzały według połowy i kategorii
-    let filteredShots = allShots;
-    
-    // Filtruj według połowy
-    if (xgHalf === 'first') {
-      filteredShots = filteredShots.filter(shot => shot.minute <= 45);
-    } else if (xgHalf === 'second') {
-      filteredShots = filteredShots.filter(shot => shot.minute > 45);
-    }
-    
-    // Filtruj według kategorii
-    if (xgFilter === 'sfg') {
-      filteredShots = filteredShots.filter(shot => {
-        if ((shot as any).actionCategory === 'sfg') return true;
-        return shot.actionType === 'corner' || 
-               shot.actionType === 'free_kick' || 
-               shot.actionType === 'direct_free_kick' || 
-               shot.actionType === 'penalty' || 
-               shot.actionType === 'throw_in';
-      });
-    } else if (xgFilter === 'open_play') {
-      filteredShots = filteredShots.filter(shot => {
-        if ((shot as any).actionCategory === 'open_play') return true;
-        return shot.actionType === 'open_play' || 
-               shot.actionType === 'counter' || 
-               shot.actionType === 'regain';
-      });
-    }
+    // Wykresy nie są filtrowane - pokazują wszystkie strzały
+    const filteredShots = allShots;
 
     // Oblicz skumulowane wartości xG dla zespołu i przeciwnika
     const data: any[] = [];
@@ -450,34 +424,8 @@ export default function StatystykiZespoluPage() {
     const teamId = isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent;
     const opponentId = isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team;
 
-    // Filtruj strzały według połowy i kategorii
-    let filteredShots = allShots;
-    
-    // Filtruj według połowy
-    if (xgHalf === 'first') {
-      filteredShots = filteredShots.filter(shot => shot.minute <= 45);
-    } else if (xgHalf === 'second') {
-      filteredShots = filteredShots.filter(shot => shot.minute > 45);
-    }
-    
-    // Filtruj według kategorii
-    if (xgFilter === 'sfg') {
-      filteredShots = filteredShots.filter(shot => {
-        if ((shot as any).actionCategory === 'sfg') return true;
-        return shot.actionType === 'corner' || 
-               shot.actionType === 'free_kick' || 
-               shot.actionType === 'direct_free_kick' || 
-               shot.actionType === 'penalty' || 
-               shot.actionType === 'throw_in';
-      });
-    } else if (xgFilter === 'open_play') {
-      filteredShots = filteredShots.filter(shot => {
-        if ((shot as any).actionCategory === 'open_play') return true;
-        return shot.actionType === 'open_play' || 
-               shot.actionType === 'counter' || 
-               shot.actionType === 'regain';
-      });
-    }
+    // Wykresy nie są filtrowane - pokazują wszystkie strzały
+    const filteredShots = allShots;
 
     // Grupuj strzały w przedziały 5-minutowe
     const intervals: { [key: number]: { teamXG: number; opponentXG: number } } = {};
@@ -516,7 +464,7 @@ export default function StatystykiZespoluPage() {
     }
     
     return data;
-  }, [allShots, selectedMatch, selectedMatchInfo, xgHalf, xgFilter]);
+  }, [allShots, selectedMatch, selectedMatchInfo]);
 
   // Funkcja pomocnicza do klasyfikacji stref
   const isLateralZone = (zoneName: string | null | undefined): boolean => {
@@ -1547,6 +1495,55 @@ export default function StatystykiZespoluPage() {
                       const teamXGPerMinPossession = teamPossession > 0 ? (teamXG / teamPossession) : 0;
                       const opponentXGPerMinPossession = opponentPossession > 0 ? (opponentXG / opponentPossession) : 0;
                       
+                      // xG zablokowane - suma xG ze strzałów zablokowanych
+                      const teamShotsBlocked = teamShots.filter(shot => shot.shotType === 'blocked');
+                      const opponentShotsBlocked = opponentShots.filter(shot => shot.shotType === 'blocked');
+                      const teamXGBlocked = teamShotsBlocked.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                      const opponentXGBlocked = opponentShotsBlocked.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                      
+                      // Debug: sprawdź dane dla przeciwnika
+                      if (opponentShotsBlocked.length > 0) {
+                        console.log('Opponent blocked shots:', opponentShotsBlocked.map(s => ({
+                          xG: s.xG,
+                          shotType: s.shotType,
+                          teamContext: s.teamContext,
+                          linePlayers: (s as any).linePlayers,
+                          linePlayersCount: (s as any).linePlayersCount
+                        })));
+                      }
+                      if (opponentShots.length > 0) {
+                        console.log('Opponent shots with line players:', opponentShots.filter(s => 
+                          ((s as any).linePlayers?.length > 0) || ((s as any).linePlayersCount > 0)
+                        ).map(s => ({
+                          xG: s.xG,
+                          shotType: s.shotType,
+                          teamContext: s.teamContext,
+                          linePlayers: (s as any).linePlayers,
+                          linePlayersCount: (s as any).linePlayersCount
+                        })));
+                      }
+                      
+                      // Średnia liczba zawodników na linii strzału/strzał
+                      // Dla ataku używamy linePlayersCount, dla obrony używamy długości tablicy linePlayers
+                      const teamLinePlayersTotal = teamShots.reduce((sum, shot) => {
+                        if (shot.teamContext === 'attack') {
+                          return sum + ((shot as any).linePlayersCount || 0);
+                        } else {
+                          // Dla obrony - liczba przeciwników na linii to długość tablicy linePlayers
+                          return sum + ((shot as any).linePlayers?.length || 0);
+                        }
+                      }, 0);
+                      const opponentLinePlayersTotal = opponentShots.reduce((sum, shot) => {
+                        if (shot.teamContext === 'attack') {
+                          return sum + ((shot as any).linePlayersCount || 0);
+                        } else {
+                          // Dla obrony - liczba przeciwników na linii to długość tablicy linePlayers
+                          return sum + ((shot as any).linePlayers?.length || 0);
+                        }
+                      }, 0);
+                      const teamAvgLinePlayers = teamShotsCount > 0 ? (teamLinePlayersTotal / teamShotsCount) : 0;
+                      const opponentAvgLinePlayers = opponentShotsCount > 0 ? (opponentLinePlayersTotal / opponentShotsCount) : 0;
+                      
                       // KPI dla xG/strzał: 0.15
                       const XG_PER_SHOT_KPI = 0.15;
                       
@@ -1554,75 +1551,152 @@ export default function StatystykiZespoluPage() {
                         <>
                           {/* Statystyki xG */}
                           <div className={styles.xgStatsSummary}>
-                            <div className={styles.halfTimeContainerInPanel}>
-                              {/* Karta zespołu */}
-                              <div className={styles.halfTimeCardInPanel}>
-                                <div className={styles.halfTimeLabel}>ZESPÓŁ</div>
-                                <div className={styles.statValue}>{teamXG.toFixed(2)}</div>
-                                <div className={styles.statLabel}>xG</div>
-                                
+                            <div className={styles.xgComparisonTable}>
+                              {/* Nagłówek tabeli */}
+                              <div className={styles.xgTableHeaderRow}>
+                                <div className={styles.xgTableHeaderCell}></div>
+                                <div className={styles.xgTableHeaderCell}>xG</div>
                                 <div 
-                                  className={styles.statSubValue}
+                                  className={`${styles.xgTableHeaderCell} ${styles.tooltipTrigger}`}
+                                  data-tooltip={`KPI: ${XG_PER_SHOT_KPI.toFixed(2)}`}
+                                >
+                                  xG/strzał
+                                </div>
+                                <div className={styles.xgTableHeaderCell}>
+                                  xG OT
+                                  <div className={styles.xgTableHeaderSubtext}>
+                                    ({teamShotsOnTarget.length}/{teamShotsCount} / {opponentShotsOnTarget.length}/{opponentShotsCount})
+                                  </div>
+                                </div>
+                                <div className={styles.xgTableHeaderCell}>xG/min posiadania</div>
+                                <div className={styles.xgTableHeaderCell}>Różnica xG-Bramki</div>
+                                <div 
+                                  className={`${styles.xgTableHeaderCell} ${styles.tooltipTrigger}`}
+                                  data-tooltip="xG, które przeciwnik zablokował"
+                                >
+                                  xG zablokowane
+                                </div>
+                                <div 
+                                  className={`${styles.xgTableHeaderCell} ${styles.tooltipTrigger}`}
+                                  data-tooltip="Średnia liczba przeciwników na linii strzału"
+                                >
+                                  Zawodnicy na linii/strzał
+                                </div>
+                              </div>
+                              
+                              {/* Wiersz zespołu */}
+                              <div className={styles.xgTableDataRow}>
+                                <div className={styles.xgTableTeamCell}>
+                                  {availableTeams.find(t => t.id === selectedTeam)?.name || 'ZESPÓŁ'}
+                                </div>
+                                <div className={styles.xgTableValueCell}>{teamXG.toFixed(2)}</div>
+                                <div 
+                                  className={styles.xgTableValueCell}
                                   style={{
                                     color: teamXGPerShotValue >= XG_PER_SHOT_KPI ? '#10b981' : '#ef4444'
                                   }}
                                 >
                                   {teamXGPerShot}
                                 </div>
-                                <div className={styles.statSubLabel}>
-                                  xG/strzał
-                                </div>
-                                
-                                <div className={styles.statSubValue}>{teamXGOT.toFixed(2)}</div>
-                                <div className={styles.statSubLabel}>xG OT</div>
-                                
-                                <div className={styles.statSubValue}>{teamXGPerMinPossession.toFixed(3)}</div>
-                                <div className={styles.statSubLabel}>xG/min posiadania</div>
-                                
+                                <div className={styles.xgTableValueCell}>{teamXGOT.toFixed(2)}</div>
+                                <div className={styles.xgTableValueCell}>{teamXGPerMinPossession.toFixed(3)}</div>
                                 <div 
-                                  className={styles.statSubValue}
+                                  className={styles.xgTableValueCell}
                                   style={{
                                     color: teamXGDiff > 0 ? '#10b981' : teamXGDiff < 0 ? '#ef4444' : '#6b7280'
                                   }}
                                 >
                                   {teamXGDiff > 0 ? '+' : ''}{teamXGDiff.toFixed(2)}
                                 </div>
-                                <div className={styles.statSubLabel}>Różnica xG-Bramki</div>
+                                <div className={styles.xgTableValueCell}>{teamXGBlocked.toFixed(2)}</div>
+                                <div className={styles.xgTableValueCell}>{teamAvgLinePlayers.toFixed(1)}</div>
                               </div>
                               
-                              {/* Karta przeciwnika */}
-                              <div className={styles.halfTimeCardInPanel}>
-                                <div className={styles.halfTimeLabel}>PRZECIWNIK</div>
-                                <div className={styles.statValue}>{opponentXG.toFixed(2)}</div>
-                                <div className={styles.statLabel}>xG</div>
-                                
+                              {/* Wiersz przeciwnika */}
+                              <div className={styles.xgTableDataRow}>
+                                <div className={styles.xgTableTeamCell}>PRZECIWNIK</div>
+                                <div className={styles.xgTableValueCell}>{opponentXG.toFixed(2)}</div>
                                 <div 
-                                  className={styles.statSubValue}
+                                  className={styles.xgTableValueCell}
                                   style={{
                                     color: opponentXGPerShotValue >= XG_PER_SHOT_KPI ? '#10b981' : '#ef4444'
                                   }}
                                 >
                                   {opponentXGPerShot}
                                 </div>
-                                <div className={styles.statSubLabel}>
-                                  xG/strzał
-                                </div>
-                                
-                                <div className={styles.statSubValue}>{opponentXGOT.toFixed(2)}</div>
-                                <div className={styles.statSubLabel}>xG OT</div>
-                                
-                                <div className={styles.statSubValue}>{opponentXGPerMinPossession.toFixed(3)}</div>
-                                <div className={styles.statSubLabel}>xG/min posiadania</div>
-                                
+                                <div className={styles.xgTableValueCell}>{opponentXGOT.toFixed(2)}</div>
+                                <div className={styles.xgTableValueCell}>{opponentXGPerMinPossession.toFixed(3)}</div>
                                 <div 
-                                  className={styles.statSubValue}
+                                  className={styles.xgTableValueCell}
                                   style={{
                                     color: opponentXGDiff > 0 ? '#10b981' : opponentXGDiff < 0 ? '#ef4444' : '#6b7280'
                                   }}
                                 >
                                   {opponentXGDiff > 0 ? '+' : ''}{opponentXGDiff.toFixed(2)}
                                 </div>
-                                <div className={styles.statSubLabel}>Różnica xG-Bramki</div>
+                                <div className={styles.xgTableValueCell}>{opponentXGBlocked.toFixed(2)}</div>
+                                <div className={styles.xgTableValueCell}>{opponentAvgLinePlayers.toFixed(1)}</div>
+                              </div>
+                              
+                              {/* Wiersz różnic */}
+                              <div className={styles.xgTableDataRow}>
+                                <div className={styles.xgTableTeamCell}>RÓŻNICA</div>
+                                <div 
+                                  className={styles.xgTableValueCell}
+                                  style={{
+                                    color: teamXG > opponentXG ? '#10b981' : teamXG < opponentXG ? '#ef4444' : '#6b7280'
+                                  }}
+                                >
+                                  {teamXG > opponentXG ? '+' : ''}{(teamXG - opponentXG).toFixed(2)}
+                                </div>
+                                <div 
+                                  className={styles.xgTableValueCell}
+                                  style={{
+                                    color: teamXGPerShotValue > opponentXGPerShotValue ? '#10b981' : teamXGPerShotValue < opponentXGPerShotValue ? '#ef4444' : '#6b7280'
+                                  }}
+                                >
+                                  {teamXGPerShotValue > opponentXGPerShotValue ? '+' : ''}{(teamXGPerShotValue - opponentXGPerShotValue).toFixed(2)}
+                                </div>
+                                <div 
+                                  className={styles.xgTableValueCell}
+                                  style={{
+                                    color: teamXGOT > opponentXGOT ? '#10b981' : teamXGOT < opponentXGOT ? '#ef4444' : '#6b7280'
+                                  }}
+                                >
+                                  {teamXGOT > opponentXGOT ? '+' : ''}{(teamXGOT - opponentXGOT).toFixed(2)}
+                                </div>
+                                <div 
+                                  className={styles.xgTableValueCell}
+                                  style={{
+                                    color: teamXGPerMinPossession > opponentXGPerMinPossession ? '#10b981' : teamXGPerMinPossession < opponentXGPerMinPossession ? '#ef4444' : '#6b7280'
+                                  }}
+                                >
+                                  {teamXGPerMinPossession > opponentXGPerMinPossession ? '+' : ''}{(teamXGPerMinPossession - opponentXGPerMinPossession).toFixed(3)}
+                                </div>
+                                <div 
+                                  className={styles.xgTableValueCell}
+                                  style={{
+                                    color: teamXGDiff > opponentXGDiff ? '#10b981' : teamXGDiff < opponentXGDiff ? '#ef4444' : '#6b7280'
+                                  }}
+                                >
+                                  {teamXGDiff > opponentXGDiff ? '+' : ''}{(teamXGDiff - opponentXGDiff).toFixed(2)}
+                                </div>
+                                <div 
+                                  className={styles.xgTableValueCell}
+                                  style={{
+                                    color: teamXGBlocked > opponentXGBlocked ? '#10b981' : teamXGBlocked < opponentXGBlocked ? '#ef4444' : '#6b7280'
+                                  }}
+                                >
+                                  {teamXGBlocked > opponentXGBlocked ? '+' : ''}{(teamXGBlocked - opponentXGBlocked).toFixed(2)}
+                                </div>
+                                <div 
+                                  className={styles.xgTableValueCell}
+                                  style={{
+                                    color: teamAvgLinePlayers > opponentAvgLinePlayers ? '#10b981' : teamAvgLinePlayers < opponentAvgLinePlayers ? '#ef4444' : '#6b7280'
+                                  }}
+                                >
+                                  {teamAvgLinePlayers > opponentAvgLinePlayers ? '+' : ''}{(teamAvgLinePlayers - opponentAvgLinePlayers).toFixed(1)}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -2555,82 +2629,7 @@ export default function StatystykiZespoluPage() {
           </div>
           
                     <div className={styles.halfTimeContainerInPanel}>
-                      <div className={styles.halfTimeCardInPanel}>
-                        <div className={styles.halfTimeLabel}>1. połowa</div>
-              <div className={styles.statValue}>
-                {selectedMetric === 'pxt' && halfTimeStats.firstHalf.pxt.toFixed(2)}
-                {selectedMetric === 'xt' && halfTimeStats.firstHalf.xt.toFixed(3)}
-                {selectedMetric === 'packing' && halfTimeStats.firstHalf.packing.toFixed(0)}
-              </div>
-              <div className={styles.statLabel}>
-                {selectedMetric === 'pxt' && 'PxT'}
-                {selectedMetric === 'xt' && 'xT'}
-                {selectedMetric === 'packing' && 'Packing'}
-              </div>
-              {halfTimeStats.firstHalf.passCount > 0 && (
-                <>
-                  <div className={styles.statSubValue}>
-                    {selectedMetric === 'pxt' && `${halfTimeStats.firstHalf.pxtPerPass.toFixed(2)} PxT/podanie`}
-                    {selectedMetric === 'xt' && `${halfTimeStats.firstHalf.xtPerPass.toFixed(3)} xT/podanie`}
-                    {selectedMetric === 'packing' && `${halfTimeStats.firstHalf.packingPerPass.toFixed(1)} Packing/podanie`}
-                  </div>
-                  <div className={styles.statSubLabel}>
-                    {halfTimeStats.firstHalf.passCount} podań
-                  </div>
-                </>
-              )}
-              {halfTimeStats.firstHalf.dribbleCount > 0 && (
-                <>
-                  <div className={styles.statSubValue}>
-                    {selectedMetric === 'pxt' && `${halfTimeStats.firstHalf.pxtPerDribble.toFixed(2)} PxT/drybling`}
-                    {selectedMetric === 'xt' && `${halfTimeStats.firstHalf.xtPerDribble.toFixed(3)} xT/drybling`}
-                    {selectedMetric === 'packing' && `${halfTimeStats.firstHalf.packingPerDribble.toFixed(1)} Packing/drybling`}
-                  </div>
-                  <div className={styles.statSubLabel}>
-                    {halfTimeStats.firstHalf.dribbleCount} dryblingów
-                  </div>
-                </>
-              )}
-            </div>
-            
-                      <div className={styles.halfTimeCardInPanel}>
-                        <div className={styles.halfTimeLabel}>2. połowa</div>
-              <div className={styles.statValue}>
-                {selectedMetric === 'pxt' && halfTimeStats.secondHalf.pxt.toFixed(2)}
-                {selectedMetric === 'xt' && halfTimeStats.secondHalf.xt.toFixed(3)}
-                {selectedMetric === 'packing' && halfTimeStats.secondHalf.packing.toFixed(0)}
-              </div>
-              <div className={styles.statLabel}>
-                {selectedMetric === 'pxt' && 'PxT'}
-                {selectedMetric === 'xt' && 'xT'}
-                {selectedMetric === 'packing' && 'Packing'}
-              </div>
-              {halfTimeStats.secondHalf.passCount > 0 && (
-                <>
-                  <div className={styles.statSubValue}>
-                    {selectedMetric === 'pxt' && `${halfTimeStats.secondHalf.pxtPerPass.toFixed(2)} PxT/podanie`}
-                    {selectedMetric === 'xt' && `${halfTimeStats.secondHalf.xtPerPass.toFixed(3)} xT/podanie`}
-                    {selectedMetric === 'packing' && `${halfTimeStats.secondHalf.packingPerPass.toFixed(1)} Packing/podanie`}
-                  </div>
-                  <div className={styles.statSubLabel}>
-                    {halfTimeStats.secondHalf.passCount} podań
-                  </div>
-                </>
-              )}
-              {halfTimeStats.secondHalf.dribbleCount > 0 && (
-                <>
-                  <div className={styles.statSubValue}>
-                    {selectedMetric === 'pxt' && `${halfTimeStats.secondHalf.pxtPerDribble.toFixed(2)} PxT/drybling`}
-                    {selectedMetric === 'xt' && `${halfTimeStats.secondHalf.xtPerDribble.toFixed(3)} xT/drybling`}
-                    {selectedMetric === 'packing' && `${halfTimeStats.secondHalf.packingPerDribble.toFixed(1)} Packing/drybling`}
-                  </div>
-                  <div className={styles.statSubLabel}>
-                    {halfTimeStats.secondHalf.dribbleCount} dryblingów
-                  </div>
-                </>
-              )}
-            </div>
-            
+                      {/* Karta "Łącznie" - pierwsza */}
                       <div className={styles.halfTimeCardInPanel}>
                         <div className={styles.halfTimeLabel}>Łącznie</div>
               <div className={styles.statValue}>
@@ -2643,6 +2642,22 @@ export default function StatystykiZespoluPage() {
                 {selectedMetric === 'xt' && 'xT'}
                 {selectedMetric === 'packing' && 'Packing'}
               </div>
+              {/* PxT/min posiadania dla łącznie */}
+              {selectedMetric === 'pxt' && selectedMatchInfo?.matchData?.possession && (() => {
+                const isHome = selectedMatchInfo.isHome;
+                const teamPossession = isHome 
+                  ? ((selectedMatchInfo.matchData.possession.teamFirstHalf || 0) + (selectedMatchInfo.matchData.possession.teamSecondHalf || 0))
+                  : ((selectedMatchInfo.matchData.possession.opponentFirstHalf || 0) + (selectedMatchInfo.matchData.possession.opponentSecondHalf || 0));
+                const totalPxt = halfTimeStats.firstHalf.pxt + halfTimeStats.secondHalf.pxt;
+                if (teamPossession > 0) {
+                  return (
+                    <div className={styles.statSubValue}>
+                      {(totalPxt / teamPossession).toFixed(3)} PxT/min posiadania
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               {(halfTimeStats.firstHalf.passCount + halfTimeStats.secondHalf.passCount) > 0 && (
                 <>
                   <div className={styles.statSubValue}>
@@ -2650,7 +2665,7 @@ export default function StatystykiZespoluPage() {
                       const totalPasses = halfTimeStats.firstHalf.passCount + halfTimeStats.secondHalf.passCount;
                       if (selectedMetric === 'pxt') {
                         const totalPxt = halfTimeStats.firstHalf.pxt + halfTimeStats.secondHalf.pxt;
-                        return totalPasses > 0 ? `${(totalPxt / totalPasses).toFixed(2)} PxT/podanie` : '0.00 PxT/podanie';
+                        return totalPasses > 0 ? `${(totalPxt / totalPasses).toFixed(3)} PxT/podanie` : '0.000 PxT/podanie';
                       } else if (selectedMetric === 'xt') {
                         const totalXt = halfTimeStats.firstHalf.xt + halfTimeStats.secondHalf.xt;
                         return totalPasses > 0 ? `${(totalXt / totalPasses).toFixed(3)} xT/podanie` : '0.000 xT/podanie';
@@ -2672,7 +2687,7 @@ export default function StatystykiZespoluPage() {
                       const totalDribbles = halfTimeStats.firstHalf.dribbleCount + halfTimeStats.secondHalf.dribbleCount;
                       if (selectedMetric === 'pxt') {
                         const totalPxt = halfTimeStats.firstHalf.pxt + halfTimeStats.secondHalf.pxt;
-                        return totalDribbles > 0 ? `${(totalPxt / totalDribbles).toFixed(2)} PxT/drybling` : '0.00 PxT/drybling';
+                        return totalDribbles > 0 ? `${(totalPxt / totalDribbles).toFixed(3)} PxT/drybling` : '0.000 PxT/drybling';
                       } else if (selectedMetric === 'xt') {
                         const totalXt = halfTimeStats.firstHalf.xt + halfTimeStats.secondHalf.xt;
                         return totalDribbles > 0 ? `${(totalXt / totalDribbles).toFixed(3)} xT/drybling` : '0.000 xT/drybling';
@@ -2684,6 +2699,114 @@ export default function StatystykiZespoluPage() {
                   </div>
                   <div className={styles.statSubLabel}>
                     {halfTimeStats.firstHalf.dribbleCount + halfTimeStats.secondHalf.dribbleCount} dryblingów
+                  </div>
+                </>
+              )}
+            </div>
+            
+                      {/* Karta "1. połowa" - druga */}
+                      <div className={styles.halfTimeCardInPanel}>
+                        <div className={styles.halfTimeLabel}>1. połowa</div>
+              <div className={styles.statValue}>
+                {selectedMetric === 'pxt' && halfTimeStats.firstHalf.pxt.toFixed(2)}
+                {selectedMetric === 'xt' && halfTimeStats.firstHalf.xt.toFixed(3)}
+                {selectedMetric === 'packing' && halfTimeStats.firstHalf.packing.toFixed(0)}
+              </div>
+              <div className={styles.statLabel}>
+                {selectedMetric === 'pxt' && 'PxT'}
+                {selectedMetric === 'xt' && 'xT'}
+                {selectedMetric === 'packing' && 'Packing'}
+              </div>
+              {/* PxT/min posiadania dla 1. połowy */}
+              {selectedMetric === 'pxt' && selectedMatchInfo?.matchData?.possession && (() => {
+                const isHome = selectedMatchInfo.isHome;
+                const teamPossession = isHome 
+                  ? (selectedMatchInfo.matchData.possession.teamFirstHalf || 0)
+                  : (selectedMatchInfo.matchData.possession.opponentFirstHalf || 0);
+                if (teamPossession > 0) {
+                  return (
+                    <div className={styles.statSubValue}>
+                      {(halfTimeStats.firstHalf.pxt / teamPossession).toFixed(3)} PxT/min posiadania
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+              {halfTimeStats.firstHalf.passCount > 0 && (
+                <>
+                  <div className={styles.statSubValue}>
+                    {selectedMetric === 'pxt' && `${halfTimeStats.firstHalf.pxtPerPass.toFixed(3)} PxT/podanie`}
+                    {selectedMetric === 'xt' && `${halfTimeStats.firstHalf.xtPerPass.toFixed(3)} xT/podanie`}
+                    {selectedMetric === 'packing' && `${halfTimeStats.firstHalf.packingPerPass.toFixed(1)} Packing/podanie`}
+                  </div>
+                  <div className={styles.statSubLabel}>
+                    {halfTimeStats.firstHalf.passCount} podań
+                  </div>
+                </>
+              )}
+              {halfTimeStats.firstHalf.dribbleCount > 0 && (
+                <>
+                  <div className={styles.statSubValue}>
+                    {selectedMetric === 'pxt' && `${halfTimeStats.firstHalf.pxtPerDribble.toFixed(3)} PxT/drybling`}
+                    {selectedMetric === 'xt' && `${halfTimeStats.firstHalf.xtPerDribble.toFixed(3)} xT/drybling`}
+                    {selectedMetric === 'packing' && `${halfTimeStats.firstHalf.packingPerDribble.toFixed(1)} Packing/drybling`}
+                  </div>
+                  <div className={styles.statSubLabel}>
+                    {halfTimeStats.firstHalf.dribbleCount} dryblingów
+                  </div>
+                </>
+              )}
+            </div>
+            
+                      {/* Karta "2. połowa" - trzecia */}
+                      <div className={styles.halfTimeCardInPanel}>
+                        <div className={styles.halfTimeLabel}>2. połowa</div>
+              <div className={styles.statValue}>
+                {selectedMetric === 'pxt' && halfTimeStats.secondHalf.pxt.toFixed(2)}
+                {selectedMetric === 'xt' && halfTimeStats.secondHalf.xt.toFixed(3)}
+                {selectedMetric === 'packing' && halfTimeStats.secondHalf.packing.toFixed(0)}
+              </div>
+              <div className={styles.statLabel}>
+                {selectedMetric === 'pxt' && 'PxT'}
+                {selectedMetric === 'xt' && 'xT'}
+                {selectedMetric === 'packing' && 'Packing'}
+              </div>
+              {/* PxT/min posiadania dla 2. połowy */}
+              {selectedMetric === 'pxt' && selectedMatchInfo?.matchData?.possession && (() => {
+                const isHome = selectedMatchInfo.isHome;
+                const teamPossession = isHome 
+                  ? (selectedMatchInfo.matchData.possession.teamSecondHalf || 0)
+                  : (selectedMatchInfo.matchData.possession.opponentSecondHalf || 0);
+                if (teamPossession > 0) {
+                  return (
+                    <div className={styles.statSubValue}>
+                      {(halfTimeStats.secondHalf.pxt / teamPossession).toFixed(3)} PxT/min posiadania
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+              {halfTimeStats.secondHalf.passCount > 0 && (
+                <>
+                  <div className={styles.statSubValue}>
+                    {selectedMetric === 'pxt' && `${halfTimeStats.secondHalf.pxtPerPass.toFixed(3)} PxT/podanie`}
+                    {selectedMetric === 'xt' && `${halfTimeStats.secondHalf.xtPerPass.toFixed(3)} xT/podanie`}
+                    {selectedMetric === 'packing' && `${halfTimeStats.secondHalf.packingPerPass.toFixed(1)} Packing/podanie`}
+                  </div>
+                  <div className={styles.statSubLabel}>
+                    {halfTimeStats.secondHalf.passCount} podań
+                  </div>
+                </>
+              )}
+              {halfTimeStats.secondHalf.dribbleCount > 0 && (
+                <>
+                  <div className={styles.statSubValue}>
+                    {selectedMetric === 'pxt' && `${halfTimeStats.secondHalf.pxtPerDribble.toFixed(3)} PxT/drybling`}
+                    {selectedMetric === 'xt' && `${halfTimeStats.secondHalf.xtPerDribble.toFixed(3)} xT/drybling`}
+                    {selectedMetric === 'packing' && `${halfTimeStats.secondHalf.packingPerDribble.toFixed(1)} Packing/drybling`}
+                  </div>
+                  <div className={styles.statSubLabel}>
+                    {halfTimeStats.secondHalf.dribbleCount} dryblingów
                   </div>
                 </>
               )}

@@ -4,23 +4,28 @@ import React from "react";
 import styles from "./Acc8sTable.module.css";
 import { Acc8sEntry } from "@/types";
 import { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
+import { CustomVideoPlayerRef } from "@/components/CustomVideoPlayer/CustomVideoPlayer";
 
 export interface Acc8sTableProps {
   entries: Acc8sEntry[];
   onDeleteEntry: (entryId: string) => void;
   onEditEntry: (entry: Acc8sEntry) => void;
+  onVideoTimeClick?: (timestamp: number) => void;
   youtubeVideoRef?: React.RefObject<YouTubeVideoRef>;
+  customVideoRef?: React.RefObject<CustomVideoPlayerRef>;
 }
 
 const Acc8sTable: React.FC<Acc8sTableProps> = ({
   entries,
   onDeleteEntry,
   onEditEntry,
+  onVideoTimeClick,
   youtubeVideoRef,
+  customVideoRef,
 }) => {
-  // Funkcja formatująca czas wideo (sekundy -> mm:ss)
+  // Funkcja formatująca czas wideo (sekundy -> mm:ss) - tak jak w ActionsTable
   const formatVideoTime = (seconds?: number): string => {
-    if (!seconds) return '-';
+    if (!seconds && seconds !== 0) return '-';
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -38,8 +43,15 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
 
   // Funkcja do obsługi kliknięcia na czas wideo
   const handleVideoTimeClick = async (videoTimestamp?: number) => {
-    if (!videoTimestamp) return;
+    if (!videoTimestamp && videoTimestamp !== 0) return;
     
+    // Jeśli jest przekazana funkcja onVideoTimeClick, użyj jej (tak jak w ShotsTable)
+    if (onVideoTimeClick) {
+      await onVideoTimeClick(videoTimestamp);
+      return;
+    }
+    
+    // Fallback do lokalnej obsługi (jeśli nie ma onVideoTimeClick)
     // Sprawdź czy mamy otwarte zewnętrzne okno wideo
     const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
     const externalWindow = (window as any).externalVideoWindow;
@@ -50,8 +62,13 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
         type: 'SEEK_TO_TIME',
         time: videoTimestamp
       }, '*');
+    } else if (customVideoRef?.current) {
+      try {
+        await customVideoRef.current.seekTo(videoTimestamp);
+      } catch (error) {
+        console.warn('Nie udało się przewinąć własnego odtwarzacza do czasu:', videoTimestamp, error);
+      }
     } else if (youtubeVideoRef?.current) {
-      // Fallback do lokalnego playera
       try {
         await youtubeVideoRef.current.seekTo(videoTimestamp);
       } catch (error) {
@@ -93,20 +110,24 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
               {entry.minute}'
             </div>
             <div className={styles.cell}>
-              {entry.videoTimestamp ? (
-                <span 
-                  className={styles.videoTimeLink}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleVideoTimeClick(entry.videoTimestamp);
-                  }}
-                  title="Kliknij aby przejść do tego momentu w wideo"
-                >
-                  {formatVideoTime(entry.videoTimestamp)}
-                </span>
-              ) : (
-                <span>-</span>
-              )}
+              {(() => {
+                console.log('Acc8sTable render - entry:', entry.id, 'videoTimestamp:', entry.videoTimestamp, 'type:', typeof entry.videoTimestamp);
+                if (entry.videoTimestamp !== undefined && entry.videoTimestamp !== null) {
+                  return (
+                    <span 
+                      className={styles.videoTimeLink}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleVideoTimeClick(entry.videoTimestamp);
+                      }}
+                      title="Kliknij aby przejść do tego momentu w wideo"
+                    >
+                      {formatVideoTime(entry.videoTimestamp)}
+                    </span>
+                  );
+                }
+                return <span>-</span>;
+              })()}
             </div>
                 <div className={styles.cell}>
                   {entry.passingPlayerIds?.length || 0}

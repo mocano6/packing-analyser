@@ -7,6 +7,7 @@ import { TEAMS } from "@/constants/teams";
 import { Team } from "@/constants/teamsLoader";
 import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import OpponentLogoInput from "@/components/OpponentLogoInput/OpponentLogoInput";
+import VideoUploadInput from "@/components/VideoUploadInput/VideoUploadInput";
 import styles from "./MatchInfoModal.module.css";
 
 interface MatchInfoModalProps {
@@ -232,6 +233,29 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
               <small className={styles.helpText}>
                 Obsługiwane formaty: youtube.com/watch?v=..., youtu.be/..., youtube.com/embed/...
               </small>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="videoUpload">Lub wgraj wideo z komputera:</label>
+              <VideoUploadInput
+                matchId={formData.matchId}
+                currentVideoPath={formData.videoStoragePath}
+                currentVideoUrl={formData.videoStorageUrl}
+                onUploadComplete={(storagePath, storageUrl) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    videoStoragePath: storagePath,
+                    videoStorageUrl: storageUrl
+                  }));
+                }}
+                onRemove={() => {
+                  setFormData(prev => ({
+                    ...prev,
+                    videoStoragePath: undefined,
+                    videoStorageUrl: undefined
+                  }));
+                }}
+              />
             </div>
           </div>
 

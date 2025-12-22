@@ -33,6 +33,7 @@ import { sortPlayersByLastName, getPlayerFullName } from "@/utils/playerUtils";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
+import CustomVideoPlayer, { CustomVideoPlayerRef } from "@/components/CustomVideoPlayer/CustomVideoPlayer";
 import XGPitch from "@/components/XGPitch/XGPitch";
 import ShotModal from "@/components/ShotModal/ShotModal";
 import ShotsTable from "@/components/ShotsTable/ShotsTable";
@@ -125,6 +126,46 @@ export default function Page() {
 
   // Ref do YouTube Video
   const youtubeVideoRef = useRef<YouTubeVideoRef>(null);
+  // Ref do Custom Video Player
+  const customVideoRef = useRef<CustomVideoPlayerRef>(null);
+
+  // Funkcja pomocnicza do pobierania czasu z aktywnego odtwarzacza
+  const getActiveVideoTime = async (): Promise<number> => {
+    if (customVideoRef.current) {
+      try {
+        return await customVideoRef.current.getCurrentTime();
+      } catch (error) {
+        console.warn('Nie udało się pobrać czasu z własnego odtwarzacza:', error);
+      }
+    }
+    if (youtubeVideoRef.current) {
+      try {
+        return await youtubeVideoRef.current.getCurrentTime();
+      } catch (error) {
+        console.warn('Nie udało się pobrać czasu z YouTube:', error);
+      }
+    }
+    return 0;
+  };
+
+  // Funkcja pomocnicza do przewijania aktywnego odtwarzacza
+  const seekActiveVideo = async (seconds: number): Promise<void> => {
+    if (customVideoRef.current) {
+      try {
+        await customVideoRef.current.seekTo(seconds);
+        return;
+      } catch (error) {
+        console.warn('Nie udało się przewinąć własnego odtwarzacza:', error);
+      }
+    }
+    if (youtubeVideoRef.current) {
+      try {
+        await youtubeVideoRef.current.seekTo(seconds);
+      } catch (error) {
+        console.warn('Nie udało się przewinąć YouTube:', error);
+      }
+    }
+  };
 
   // State do przechowywania aktualnego czasu z zewnętrznego wideo
   const [externalVideoTime, setExternalVideoTime] = useState<number>(0);
@@ -189,48 +230,77 @@ export default function Page() {
         const adjustedTime = Math.max(0, externalVideoTime - 15);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
       }
-    } else if (youtubeVideoRef.current) {
-      try {
-        const currentTime = await youtubeVideoRef.current.getCurrentTime();
-        // Cofnij czas o 15 sekund przed zapisaniem
+    } else {
+      const currentTime = await getActiveVideoTime();
+      if (currentTime > 0) {
         const adjustedTime = Math.max(0, currentTime - 15);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
-      } catch (error) {
-        console.warn('Nie udało się pobrać czasu z YouTube:', error);
       }
     }
     setIsActionModalOpen(true);
   };
 
   const openAcc8sModalWithVideoTime = async () => {
-    // Sprawdź czy mamy otwarte zewnętrzne okno wideo
+    // Sprawdź czy mamy otwarte zewnętrzne okno wideo (dokładnie tak jak w openActionModalWithVideoTime)
     const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
-    const externalWindow = (window as any).externalVideoWindow;
     
-    if (isExternalWindowOpen && externalWindow && !externalWindow.closed) {
-      // Wyślij wiadomość do zewnętrznego okna, aby pobrać aktualny czas
-      externalWindow.postMessage({ type: 'GET_CURRENT_TIME' }, '*');
+    // Jeśli otrzymujemy czas z zewnętrznego okna (externalVideoTime > 0), to znaczy że okno jest faktycznie otwarte
+    const hasExternalVideoTime = externalVideoTime > 0;
+    
+    if (isExternalWindowOpen || hasExternalVideoTime) {
+      // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
+      const externalWindow = (window as any).externalVideoWindow;
+      if (externalWindow && !externalWindow.closed) {
+        externalWindow.postMessage({
+          type: 'GET_CURRENT_TIME'
+        }, '*');
+      } else {
+        window.postMessage({
+          type: 'GET_CURRENT_TIME'
+        }, '*');
+      }
       
-      // Nasłuchuj odpowiedzi
-      const handleResponse = (event: MessageEvent) => {
-        if (event.data.type === 'CURRENT_TIME_RESPONSE') {
-          const currentTime = event.data.time;
-          // Cofnij czas o 15 sekund przed zapisaniem
-          const adjustedTime = Math.max(0, currentTime - 15);
+      // Czekaj na odpowiedź z zewnętrznego okna
+      const waitForTime = new Promise<number | null>((resolve) => {
+        const handleTimeResponse = (event: MessageEvent) => {
+          if (event.data.type === 'CURRENT_TIME_RESPONSE') {
+            window.removeEventListener('message', handleTimeResponse);
+            resolve(event.data.time);
+          }
+        };
+        window.addEventListener('message', handleTimeResponse);
+        setTimeout(() => {
+          window.removeEventListener('message', handleTimeResponse);
+          resolve(null); // null oznacza timeout
+        }, 1000);
+      });
+      
+      const time = await waitForTime;
+      
+      if (time === null) {
+        if (hasExternalVideoTime) {
+          // Użyj ostatniego znanego czasu z zewnętrznego okna, cofnij o 15s
+          const adjustedTime = Math.max(0, externalVideoTime - 15);
           localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
-          window.removeEventListener('message', handleResponse);
+        } else {
+          const proceed = window.confirm('Nie udało się pobrać czasu z wideo. Czy zapisać akcję bez czasu?');
+          if (!proceed) return;
+          localStorage.setItem('tempVideoTimestamp', '0');
         }
-      };
-      
-      window.addEventListener('message', handleResponse);
-    } else if (youtubeVideoRef.current) {
-      try {
-        const currentTime = await youtubeVideoRef.current.getCurrentTime();
-        // Cofnij czas o 15 sekund przed zapisaniem
+      } else if (time > 0) {
+        // Cofnij czas o 15 sekund
+        const adjustedTime = Math.max(0, time - 15);
+        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+      } else if (externalVideoTime > 0) {
+        // Fallback do ostatniego znanego czasu, cofnij o 15s
+        const adjustedTime = Math.max(0, externalVideoTime - 15);
+        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+      }
+    } else {
+      const currentTime = await getActiveVideoTime();
+      if (currentTime > 0) {
         const adjustedTime = Math.max(0, currentTime - 15);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
-      } catch (error) {
-        console.warn('Nie udało się pobrać czasu z YouTube:', error);
       }
     }
     setAcc8sModalData({});
@@ -384,14 +454,11 @@ export default function Page() {
         const adjustedTime = Math.max(0, externalVideoTime - 15);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
       }
-    } else if (youtubeVideoRef.current) {
-      try {
-        const currentTime = await youtubeVideoRef.current.getCurrentTime();
-        // Cofnij czas o 15 sekund przed zapisaniem
+    } else {
+      const currentTime = await getActiveVideoTime();
+      if (currentTime > 0) {
         const adjustedTime = Math.max(0, currentTime - 15);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
-      } catch (error) {
-        console.warn('Nie udało się pobrać czasu z YouTube:', error);
       }
     }
     
@@ -1740,12 +1807,20 @@ export default function Page() {
           onEditPlayer={handleEditPlayer}
           onDeletePlayer={onDeletePlayer}
         />
-        <YouTubeVideo 
-          ref={youtubeVideoRef} 
-          matchInfo={matchInfo} 
-          isVisible={isVideoVisible}
-          onToggleVisibility={() => setIsVideoVisible(!isVideoVisible)}
-        />
+        <div className={styles.videoPlayersContainer}>
+          <YouTubeVideo 
+            ref={youtubeVideoRef} 
+            matchInfo={matchInfo} 
+            isVisible={isVideoVisible}
+            onToggleVisibility={() => setIsVideoVisible(!isVideoVisible)}
+          />
+          <CustomVideoPlayer 
+            ref={customVideoRef} 
+            matchInfo={matchInfo} 
+            isVisible={isVideoVisible}
+            onToggleVisibility={() => setIsVideoVisible(!isVideoVisible)}
+          />
+        </div>
 
         <Tabs activeTab={activeTab} onTabChange={setActiveTab} />
 
@@ -1976,7 +2051,23 @@ export default function Page() {
                 setAcc8sModalData({ editingEntry: entry });
                 setIsAcc8sModalOpen(true);
               }}
+              onVideoTimeClick={async (timestamp) => {
+                // Sprawdź czy mamy otwarte zewnętrzne okno wideo (tak jak w ShotsTable)
+                const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
+                const externalWindow = (window as any).externalVideoWindow;
+                
+                if (isExternalWindowOpen && externalWindow && !externalWindow.closed) {
+                  // Wyślij wiadomość do zewnętrznego okna
+                  externalWindow.postMessage({
+                    type: 'SEEK_TO_TIME',
+                    time: timestamp
+                  }, '*');
+                } else {
+                  await seekActiveVideo(timestamp);
+                }
+              }}
               youtubeVideoRef={youtubeVideoRef}
+              customVideoRef={customVideoRef}
             />
           </div>
         )}
@@ -2065,10 +2156,13 @@ export default function Page() {
               setAcc8sModalData(null);
             }}
             onSave={async (entryData) => {
+              console.log('Page onSave - entryData:', entryData);
               if (acc8sModalData.editingEntry) {
-                await updateAcc8sEntry(acc8sModalData.editingEntry.id, entryData);
+                const success = await updateAcc8sEntry(acc8sModalData.editingEntry.id, entryData);
+                console.log('Page onSave - updateAcc8sEntry success:', success);
               } else {
-                await addAcc8sEntry(entryData);
+                const result = await addAcc8sEntry(entryData);
+                console.log('Page onSave - addAcc8sEntry result:', result);
               }
               setIsAcc8sModalOpen(false);
               setAcc8sModalData(null);
@@ -2113,9 +2207,7 @@ export default function Page() {
               setIsPKEntryModalOpen(true);
             }}
             onVideoTimeClick={(timestamp) => {
-              if (youtubeVideoRef.current) {
-                youtubeVideoRef.current.seekTo(timestamp, true);
-              }
+              seekActiveVideo(timestamp);
             }}
           />
         ) : activeTab === "xg" ? (
@@ -2143,13 +2235,8 @@ export default function Page() {
                   type: 'SEEK_TO_TIME',
                   time: timestamp
                 }, '*');
-              } else if (youtubeVideoRef.current) {
-                // Fallback do lokalnego playera
-                try {
-                  await youtubeVideoRef.current.seekTo(timestamp);
-                } catch (error) {
-                  console.warn('Nie udało się przewinąć wideo do czasu:', timestamp, error);
-                }
+              } else {
+                await seekActiveVideo(timestamp);
               }
             }}
           />

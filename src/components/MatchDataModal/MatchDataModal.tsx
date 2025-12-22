@@ -60,18 +60,6 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
       teamSecondHalf: undefined,
       opponentSecondHalf: undefined,
     },
-    successful8sActions: {
-      teamFirstHalf: undefined,
-      opponentFirstHalf: undefined,
-      teamSecondHalf: undefined,
-      opponentSecondHalf: undefined,
-    },
-    unsuccessful8sActions: {
-      teamFirstHalf: undefined,
-      opponentFirstHalf: undefined,
-      teamSecondHalf: undefined,
-      opponentSecondHalf: undefined,
-    },
   });
 
   const [isSaving, setIsSaving] = useState(false);
@@ -111,18 +99,6 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
           teamSecondHalf: currentMatch.matchData.passesInOpponentHalfInaccurate?.teamSecondHalf,
           opponentSecondHalf: currentMatch.matchData.passesInOpponentHalfInaccurate?.opponentSecondHalf,
         },
-        successful8sActions: {
-          teamFirstHalf: currentMatch.matchData.successful8sActions?.teamFirstHalf,
-          opponentFirstHalf: currentMatch.matchData.successful8sActions?.opponentFirstHalf,
-          teamSecondHalf: currentMatch.matchData.successful8sActions?.teamSecondHalf,
-          opponentSecondHalf: currentMatch.matchData.successful8sActions?.opponentSecondHalf,
-        },
-        unsuccessful8sActions: {
-          teamFirstHalf: currentMatch.matchData.unsuccessful8sActions?.teamFirstHalf,
-          opponentFirstHalf: currentMatch.matchData.unsuccessful8sActions?.opponentFirstHalf,
-          teamSecondHalf: currentMatch.matchData.unsuccessful8sActions?.teamSecondHalf,
-          opponentSecondHalf: currentMatch.matchData.unsuccessful8sActions?.opponentSecondHalf,
-        },
       });
     } else {
       setFormData({
@@ -151,18 +127,6 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
           opponentSecondHalf: undefined,
         },
         passesInOpponentHalfInaccurate: {
-          teamFirstHalf: undefined,
-          opponentFirstHalf: undefined,
-          teamSecondHalf: undefined,
-          opponentSecondHalf: undefined,
-        },
-        successful8sActions: {
-          teamFirstHalf: undefined,
-          opponentFirstHalf: undefined,
-          teamSecondHalf: undefined,
-          opponentSecondHalf: undefined,
-        },
-        unsuccessful8sActions: {
           teamFirstHalf: undefined,
           opponentFirstHalf: undefined,
           teamSecondHalf: undefined,
@@ -209,16 +173,6 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
       } else if (category === 'passesInOpponentHalfInaccurate' && field) {
         newData.passesInOpponentHalfInaccurate = {
           ...newData.passesInOpponentHalfInaccurate,
-          [field]: numValue,
-        };
-      } else if (category === 'successful8sActions' && field) {
-        newData.successful8sActions = {
-          ...newData.successful8sActions,
-          [field]: numValue,
-        };
-      } else if (category === 'unsuccessful8sActions' && field) {
-        newData.unsuccessful8sActions = {
-          ...newData.unsuccessful8sActions,
           [field]: numValue,
         };
       }
@@ -486,56 +440,6 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
                 onChange={handleChange}
                 placeholder="0"
               />
-            </div>
-
-            {/* Skuteczne akcje 8s ACC */}
-            <div className={styles.tableRow}>
-              <div className={styles.rowLabel}>Skuteczne akcje 8s ACC</div>
-              <input
-                className={styles.tableInput}
-                name="successful8sActions.teamFirstHalf"
-                type="number"
-                min="0"
-                value={formData.successful8sActions?.teamFirstHalf || ''}
-                onChange={handleChange}
-                placeholder="0"
-              />
-              <div className={styles.emptyCell}></div>
-              <input
-                className={styles.tableInput}
-                name="successful8sActions.teamSecondHalf"
-                type="number"
-                min="0"
-                value={formData.successful8sActions?.teamSecondHalf || ''}
-                onChange={handleChange}
-                placeholder="0"
-              />
-              <div className={styles.emptyCell}></div>
-            </div>
-
-            {/* Nieskuteczne akcje 8s ACC */}
-            <div className={styles.tableRow}>
-              <div className={styles.rowLabel}>Nieskuteczne akcje 8s ACC</div>
-              <input
-                className={styles.tableInput}
-                name="unsuccessful8sActions.teamFirstHalf"
-                type="number"
-                min="0"
-                value={formData.unsuccessful8sActions?.teamFirstHalf || ''}
-                onChange={handleChange}
-                placeholder="0"
-              />
-              <div className={styles.emptyCell}></div>
-              <input
-                className={styles.tableInput}
-                name="unsuccessful8sActions.teamSecondHalf"
-                type="number"
-                min="0"
-                value={formData.unsuccessful8sActions?.teamSecondHalf || ''}
-                onChange={handleChange}
-                placeholder="0"
-              />
-              <div className={styles.emptyCell}></div>
             </div>
           </div>
 

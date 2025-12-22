@@ -2817,6 +2817,7 @@ export default function PlayerDetailsPage() {
                                         <p>PxT: {data.pxt.toFixed(2)}</p>
                                         <p>Minuty: {data.minutes}</p>
                                         <p>PxT/minutę: {data.pxtPerMinute.toFixed(3)}</p>
+                                        <p>Trend: {data.trendLine.toFixed(chartMode === 'pxt' ? 2 : 3)}</p>
                                         {data.position && <p>Pozycja: {data.position}</p>}
                                       </div>
                                     );
@@ -2829,9 +2830,36 @@ export default function PlayerDetailsPage() {
                                 dataKey={chartMode === 'pxt' ? 'pxt' : 'pxtPerMinute'} 
                                 stroke="#3b82f6" 
                                 strokeWidth={2}
-                                dot={{ fill: '#3b82f6', strokeWidth: 1, r: 4, stroke: '#fff' }}
+                                dot={{ 
+                                  fill: '#3b82f6', 
+                                  strokeWidth: 1, 
+                                  r: 4, 
+                                  stroke: '#fff'
+                                }}
                                 activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: '#3b82f6' }}
                                 name={chartMode === 'pxt' ? 'PxT' : 'PxT/min'}
+                                label={(props: any) => {
+                                  const { x, y, payload, value } = props;
+                                  // W recharts label otrzymuje payload jako cały obiekt danych
+                                  if (!payload || payload.trendLine === undefined || payload.trendLine === null) {
+                                    return null;
+                                  }
+                                  const trendValue = payload.trendLine;
+                                  if (typeof trendValue !== 'number' || isNaN(trendValue)) {
+                                    return null;
+                                  }
+                                  return (
+                                    <text 
+                                      x={x} 
+                                      y={y - 10} 
+                                      fill="#9ca3af" 
+                                      fontSize={10} 
+                                      textAnchor="middle"
+                                    >
+                                      {trendValue.toFixed(chartMode === 'pxt' ? 2 : 3)}
+                                    </text>
+                                  );
+                                }}
                                 animationDuration={800}
                                 animationEasing="ease-out"
                               />
