@@ -90,15 +90,14 @@ const SidePanel: React.FC<SidePanelProps> = ({
               <span className={styles.icon}>👥</span>
               <span>Statystyki zawodników</span>
             </Link>
-            {/* Ukryte - funkcjonalność w trakcie rozwoju */}
-            {/* <Link href="/statystyki-zespolu" className={styles.menuItem}>
+            <Link href="/statystyki-zespolu" className={styles.menuItem}>
               <span className={styles.icon}>📊</span>
               <span>Statystyki zespołu</span>
             </Link>
             <Link href={players.length > 0 ? `/profile/${players[0].id}` : '/zawodnicy'} className={styles.menuItem}>
               <span className={styles.icon}>👤</span>
               <span>Profil zawodnika</span>
-            </Link> */}
+            </Link>
           </div>
 
           {/* Sekcja Admin (tylko dla adminów) */}
