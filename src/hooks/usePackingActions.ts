@@ -77,6 +77,12 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   // Dodaj stan isReaction5sActive dla loses
   const [isReaction5sActive, setIsReaction5sActive] = useState<boolean>(false);
   
+  // Dodaj stan isAutActive dla loses
+  const [isAutActive, setIsAutActive] = useState<boolean>(false);
+  
+  // Dodaj stan isReaction5sNotApplicableActive dla loses
+  const [isReaction5sNotApplicableActive, setIsReaction5sNotApplicableActive] = useState<boolean>(false);
+  
   // Dodaj stan isPMAreaActive dla loses
   const [isPMAreaActive, setIsPMAreaActive] = useState<boolean>(false);
   
@@ -85,6 +91,12 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   
   // Dodaj stan opponentsBeforeBall dla regain (liczba przeciwników przed piłką)
   const [opponentsBeforeBall, setOpponentsBeforeBall] = useState<number>(0);
+  
+  // Dodaj stan playersLeftField dla regain/loses (liczba zawodników naszego zespołu, którzy opuścili boisko)
+  const [playersLeftField, setPlayersLeftField] = useState<number>(0);
+  
+  // Dodaj stan opponentsLeftField dla regain/loses (liczba zawodników przeciwnika, którzy opuścili boisko)
+  const [opponentsLeftField, setOpponentsLeftField] = useState<number>(0);
   
   // Dane o akcjach
   const [actions, setActions] = useState<Action[]>([]);
@@ -351,8 +363,25 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         mode: actionMode,
         ...(actionMode === "defense" && selectedDefensePlayers && { defensePlayers: selectedDefensePlayers }),
         // Dodajemy pola dla regain i loses
-        ...(actionCategory === "regain" && { isBelow8s: isBelow8sActive, playersBehindBall: playersBehindBall, opponentsBeforeBall: opponentsBeforeBall }),
-        ...(actionCategory === "loses" && { isBelow8s: isBelow8sActive, isReaction5s: isReaction5sActive, playersBehindBall: playersBehindBall, opponentsBeforeBall: opponentsBeforeBall })
+        ...(actionCategory === "regain" && { 
+          isBelow8s: isBelow8sActive, 
+          playersBehindBall: playersBehindBall, 
+          opponentsBeforeBall: opponentsBeforeBall,
+          playersLeftField: playersLeftField,
+          opponentsLeftField: opponentsLeftField,
+          totalPlayersOnField: 11 - playersLeftField, // Obliczamy jako 11 - zawodnicy, którzy opuścili boisko
+          totalOpponentsOnField: 11 - opponentsLeftField // Obliczamy jako 11 - przeciwnicy, którzy opuścili boisko
+        }),
+        ...(actionCategory === "loses" && { 
+          isBelow8s: isBelow8sActive, 
+          isReaction5s: isReaction5sActive, 
+          isAut: isAutActive,
+          isReaction5sNotApplicable: isReaction5sNotApplicableActive,
+          playersBehindBall: playersBehindBall, 
+          opponentsBeforeBall: opponentsBeforeBall,
+          totalPlayersOnField: totalPlayersOnField,
+          totalOpponentsOnField: totalOpponentsOnField
+        })
       };
       
       // Dodajemy dane graczy do akcji
@@ -456,6 +485,25 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     }
   }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP0StartActive, isP1StartActive, isP2StartActive, isP3StartActive, isP0Active, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf]);
 
+  // Funkcja pomocnicza do określenia kategorii akcji
+  const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
+    // Loses: ma isReaction5s (to jest główny wskaźnik dla loses)
+    if (action.isReaction5s !== undefined) {
+      return "loses";
+    }
+    // Regain: ma playersBehindBall lub opponentsBeforeBall, ale NIE ma isReaction5s
+    if (action.playersBehindBall !== undefined || 
+        action.opponentsBeforeBall !== undefined ||
+        action.totalPlayersOnField !== undefined ||
+        action.totalOpponentsOnField !== undefined ||
+        action.playersLeftField !== undefined ||
+        action.opponentsLeftField !== undefined) {
+      return "regain";
+    }
+    // Packing: domyślnie
+    return "packing";
+  };
+
   // Usuwanie akcji
   const handleDeleteAction = useCallback(async (actionId: string) => {
     if (!matchInfo?.matchId) {
@@ -484,19 +532,56 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       if (matchDoc.exists()) {
         const matchData = matchDoc.data() as TeamInfo;
         
-        // Wybieramy kolekcję w zależności od kategorii i trybu
-        let collectionField: string;
-        if (actionCategory === "regain") {
-          collectionField = "actions_regain";
-        } else if (actionCategory === "loses") {
-          collectionField = "actions_loses";
+        // Znajdź akcję w lokalnym stanie, aby określić jej kategorię
+        const actionToDelete = actions.find(a => a.id === actionId);
+        
+        // Jeśli nie ma w lokalnym stanie, sprawdź wszystkie kolekcje w Firebase
+        let foundAction: Action | undefined = actionToDelete;
+        let collectionField: string = "actions_packing";
+        
+        if (!foundAction) {
+          // Sprawdź wszystkie kolekcje
+          const packingActions = matchData.actions_packing || [];
+          const unpackingActions = matchData.actions_unpacking || [];
+          const regainActions = matchData.actions_regain || [];
+          const losesActions = matchData.actions_loses || [];
+          
+          foundAction = [...packingActions, ...unpackingActions, ...regainActions, ...losesActions]
+            .find((action: Action) => action.id === actionId);
+          
+          if (foundAction) {
+            const actionCategory = getActionCategory(foundAction);
+            if (actionCategory === "regain") {
+              collectionField = "actions_regain";
+            } else if (actionCategory === "loses") {
+              collectionField = "actions_loses";
+            } else {
+              // Dla packing sprawdzamy tryb (attack/defense)
+              const isDefense = foundAction.mode === "defense";
+              collectionField = isDefense ? "actions_unpacking" : "actions_packing";
+            }
+          }
         } else {
-          collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
+          // Określ kategorię na podstawie akcji z lokalnego stanu
+          const actionCategory = getActionCategory(foundAction);
+          if (actionCategory === "regain") {
+            collectionField = "actions_regain";
+          } else if (actionCategory === "loses") {
+            collectionField = "actions_loses";
+          } else {
+            // Dla packing sprawdzamy tryb (attack/defense)
+            const isDefense = foundAction.mode === "defense";
+            collectionField = isDefense ? "actions_unpacking" : "actions_packing";
+          }
         }
         
-        // Znajdź akcję, którą chcemy usunąć, aby uzyskać senderId i receiverId
+        if (!foundAction) {
+          console.error("Nie znaleziono akcji o ID:", actionId);
+          return false;
+        }
+        
+        // Pobierz akcje z odpowiedniej kolekcji
         const currentActions = (matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
-        const actionToDelete = currentActions.find((action: Action) => action.id === actionId);
         
         // Filtrujemy akcje, aby usunąć tę o podanym ID
         const updatedActions = currentActions.filter((action: Action) => action.id !== actionId);
@@ -531,7 +616,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       return false;
     }
-  }, [matchInfo?.matchId]);
+  }, [matchInfo?.matchId, actions]);
 
   // Usuwanie wszystkich akcji
   const handleDeleteAllActions = useCallback(async () => {
@@ -628,6 +713,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsPenaltyAreaEntry(false);
     setIsBelow8sActive(false);
     setIsReaction5sActive(false);
+    setIsAutActive(false);
+    setIsReaction5sNotApplicableActive(false);
     setIsPMAreaActive(false);
     setPlayersBehindBall(0);
     setOpponentsBeforeBall(0);
@@ -686,12 +773,20 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsBelow8sActive,
     isReaction5sActive,
     setIsReaction5sActive,
+    isAutActive,
+    setIsAutActive,
+    isReaction5sNotApplicableActive,
+    setIsReaction5sNotApplicableActive,
     isPMAreaActive,
     setIsPMAreaActive,
     playersBehindBall,
     setPlayersBehindBall,
     opponentsBeforeBall,
     setOpponentsBeforeBall,
+    playersLeftField,
+    setPlayersLeftField,
+    opponentsLeftField,
+    setOpponentsLeftField,
     setActions,
     
     // Funkcje

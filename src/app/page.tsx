@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { Tab, Player, TeamInfo, PlayerMinutes, Action, Shot } from "@/types";
 import Instructions from "@/components/Instructions/Instructions";
 import PlayersGrid from "@/components/PlayersGrid/PlayersGrid";
+import PlayerTile from "@/components/PlayersGrid/PlayerTile";
 import Tabs from "@/components/Tabs/Tabs";
 import { usePlayersState } from "@/hooks/usePlayersState";
 
@@ -28,17 +29,21 @@ import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesMod
 import MatchInfoModal from "@/components/MatchInfoModal/MatchInfoModal";
 import Link from "next/link";
 import ActionModal from "@/components/ActionModal/ActionModal";
+import RegainActionModal from "@/components/RegainActionModal/RegainActionModal";
+import LosesActionModal from "@/components/LosesActionModal/LosesActionModal";
 import MatchInfoHeader from "@/components/MatchInfoHeader/MatchInfoHeader";
+import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
+import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
+import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import { sortPlayersByLastName, getPlayerFullName } from "@/utils/playerUtils";
 import SidePanel from "@/components/SidePanel/SidePanel";
-import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import CustomVideoPlayer, { CustomVideoPlayerRef } from "@/components/CustomVideoPlayer/CustomVideoPlayer";
 import XGPitch from "@/components/XGPitch/XGPitch";
 import ShotModal from "@/components/ShotModal/ShotModal";
 import ShotsTable from "@/components/ShotsTable/ShotsTable";
 import { useShots } from "@/hooks/useShots";
-import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
+import { getCurrentSeason } from "@/utils/seasonUtils";
 import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
 import { usePKEntries } from "@/hooks/usePKEntries";
 import { PKEntry } from "@/types";
@@ -131,20 +136,31 @@ export default function Page() {
 
   // Funkcja pomocnicza do pobierania czasu z aktywnego odtwarzacza
   const getActiveVideoTime = async (): Promise<number> => {
+    // Najpierw sprawdź własny odtwarzacz
     if (customVideoRef.current) {
       try {
-        return await customVideoRef.current.getCurrentTime();
+        const time = await customVideoRef.current.getCurrentTime();
+        console.log('getActiveVideoTime - customVideoRef:', time);
+        if (time > 0) {
+          return time;
+        }
       } catch (error) {
         console.warn('Nie udało się pobrać czasu z własnego odtwarzacza:', error);
       }
     }
+    // Następnie sprawdź YouTube
     if (youtubeVideoRef.current) {
       try {
-        return await youtubeVideoRef.current.getCurrentTime();
+        const time = await youtubeVideoRef.current.getCurrentTime();
+        console.log('getActiveVideoTime - youtubeVideoRef:', time);
+        if (time > 0) {
+          return time;
+        }
       } catch (error) {
         console.warn('Nie udało się pobrać czasu z YouTube:', error);
       }
     }
+    console.log('getActiveVideoTime - zwracam 0 (brak aktywnego playera lub czas = 0)');
     return 0;
   };
 
@@ -169,7 +185,10 @@ export default function Page() {
 
   // State do przechowywania aktualnego czasu z zewnętrznego wideo
   const [externalVideoTime, setExternalVideoTime] = useState<number>(0);
-  const [isVideoVisible, setIsVideoVisible] = useState<boolean>(true);
+  const [isVideoVisible, setIsVideoVisible] = useState<boolean>(false);
+  const [isVideoFullscreen, setIsVideoFullscreen] = React.useState<boolean>(false);
+  const [isPlayersGridExpanded, setIsPlayersGridExpanded] = useState<boolean>(false);
+  const [isTeamsSelectorExpanded, setIsTeamsSelectorExpanded] = useState<boolean>(false);
 
   // Funkcja do otwierania ActionModal z zapisaniem czasu YouTube
   const openActionModalWithVideoTime = async () => {
@@ -213,8 +232,8 @@ export default function Page() {
       
       if (time === null) {
         if (hasExternalVideoTime) {
-          // Użyj ostatniego znanego czasu z zewnętrznego okna, cofnij o 15s
-          const adjustedTime = Math.max(0, externalVideoTime - 15);
+          // Użyj ostatniego znanego czasu z zewnętrznego okna, cofnij o 10s
+          const adjustedTime = Math.max(0, externalVideoTime - 10);
           localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
         } else {
           const proceed = window.confirm('Nie udało się pobrać czasu z wideo. Czy zapisać akcję bez czasu?');
@@ -222,18 +241,31 @@ export default function Page() {
           localStorage.setItem('tempVideoTimestamp', '0');
         }
       } else if (time > 0) {
-        // Cofnij czas o 15 sekund
-        const adjustedTime = Math.max(0, time - 15);
+        // Cofnij czas o 10 sekund
+        const adjustedTime = Math.max(0, time - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
       } else if (externalVideoTime > 0) {
-        // Fallback do ostatniego znanego czasu, cofnij o 15s
-        const adjustedTime = Math.max(0, externalVideoTime - 15);
+        // Fallback do ostatniego znanego czasu, cofnij o 10s
+        const adjustedTime = Math.max(0, externalVideoTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
       }
     } else {
-      const currentTime = await getActiveVideoTime();
+      // Spróbuj kilka razy pobrać czas (YouTube player może potrzebować czasu na załadowanie)
+      let currentTime = 0;
+      const maxAttempts = 5;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        currentTime = await getActiveVideoTime();
+        if (currentTime > 0) {
+          break;
+        }
+        // Poczekaj 200ms przed kolejną próbą
+        if (attempt < maxAttempts - 1) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+      
       if (currentTime > 0) {
-        const adjustedTime = Math.max(0, currentTime - 15);
+        const adjustedTime = Math.max(0, currentTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
       }
     }
@@ -241,7 +273,8 @@ export default function Page() {
   };
 
   const openAcc8sModalWithVideoTime = async () => {
-    // Sprawdź czy mamy otwarte zewnętrzne okno wideo (dokładnie tak jak w openActionModalWithVideoTime)
+    // Sprawdź czy mamy otwarte zewnętrzne okno wideo
+    // Używamy localStorage do sprawdzenia czy okno jest otwarte
     const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
     
     // Jeśli otrzymujemy czas z zewnętrznego okna (externalVideoTime > 0), to znaczy że okno jest faktycznie otwarte
@@ -279,8 +312,8 @@ export default function Page() {
       
       if (time === null) {
         if (hasExternalVideoTime) {
-          // Użyj ostatniego znanego czasu z zewnętrznego okna, cofnij o 15s
-          const adjustedTime = Math.max(0, externalVideoTime - 15);
+          // Użyj ostatniego znanego czasu z zewnętrznego okna, cofnij o 10s
+          const adjustedTime = Math.max(0, externalVideoTime - 10);
           localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
         } else {
           const proceed = window.confirm('Nie udało się pobrać czasu z wideo. Czy zapisać akcję bez czasu?');
@@ -288,19 +321,39 @@ export default function Page() {
           localStorage.setItem('tempVideoTimestamp', '0');
         }
       } else if (time > 0) {
-        // Cofnij czas o 15 sekund
-        const adjustedTime = Math.max(0, time - 15);
+        // Cofnij czas o 10 sekund
+        const adjustedTime = Math.max(0, time - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
       } else if (externalVideoTime > 0) {
-        // Fallback do ostatniego znanego czasu, cofnij o 15s
-        const adjustedTime = Math.max(0, externalVideoTime - 15);
+        // Fallback do ostatniego znanego czasu, cofnij o 10s
+        const adjustedTime = Math.max(0, externalVideoTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
       }
     } else {
-      const currentTime = await getActiveVideoTime();
+      console.log('openAcc8sModalWithVideoTime - sprawdzam getActiveVideoTime()');
+      // Spróbuj kilka razy pobrać czas (YouTube player może potrzebować czasu na załadowanie)
+      let currentTime = 0;
+      const maxAttempts = 5;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        currentTime = await getActiveVideoTime();
+        console.log(`openAcc8sModalWithVideoTime - attempt ${attempt + 1}/${maxAttempts}, currentTime:`, currentTime);
+        if (currentTime > 0) {
+          break;
+        }
+        // Poczekaj 200ms przed kolejną próbą (więcej czasu na załadowanie playera)
+        if (attempt < maxAttempts - 1) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+      
       if (currentTime > 0) {
-        const adjustedTime = Math.max(0, currentTime - 15);
+        const adjustedTime = Math.max(0, currentTime - 10);
+        console.log('openAcc8sModalWithVideoTime - adjustedTime (currentTime - 15):', adjustedTime, 'z currentTime:', currentTime);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+      } else {
+        console.warn('openAcc8sModalWithVideoTime - nie udało się pobrać czasu z playera po', maxAttempts, 'próbach');
+        // Ustaw 0 jako fallback, aby modal mógł się otworzyć
+        localStorage.setItem('tempVideoTimestamp', '0');
       }
     }
     setAcc8sModalData({});
@@ -439,25 +492,25 @@ export default function Page() {
       const time = await waitForTime;
       if (time === null) {
         if (hasExternalVideoTime) {
-          // Użyj ostatniego znanego czasu z zewnętrznego okna, cofnij o 15s
-          const adjustedTime = Math.max(0, externalVideoTime - 15);
+          // Użyj ostatniego znanego czasu z zewnętrznego okna, cofnij o 10s
+          const adjustedTime = Math.max(0, externalVideoTime - 10);
           localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
         } else {
           localStorage.setItem('tempVideoTimestamp', '0');
         }
       } else if (time > 0) {
-        // Cofnij czas o 15 sekund
-        const adjustedTime = Math.max(0, time - 15);
+        // Cofnij czas o 10 sekund
+        const adjustedTime = Math.max(0, time - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
       } else if (externalVideoTime > 0) {
-        // Fallback do ostatniego znanego czasu, cofnij o 15s
-        const adjustedTime = Math.max(0, externalVideoTime - 15);
+        // Fallback do ostatniego znanego czasu, cofnij o 10s
+        const adjustedTime = Math.max(0, externalVideoTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
       }
     } else {
       const currentTime = await getActiveVideoTime();
       if (currentTime > 0) {
-        const adjustedTime = Math.max(0, currentTime - 15);
+        const adjustedTime = Math.max(0, currentTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
       }
     }
@@ -609,12 +662,20 @@ export default function Page() {
     setIsBelow8sActive,
     isReaction5sActive,
     setIsReaction5sActive,
+    isAutActive,
+    setIsAutActive,
+    isReaction5sNotApplicableActive,
+    setIsReaction5sNotApplicableActive,
     isPMAreaActive,
     setIsPMAreaActive,
     playersBehindBall,
     setPlayersBehindBall,
     opponentsBeforeBall,
     setOpponentsBeforeBall,
+    playersLeftField,
+    setPlayersLeftField,
+    opponentsLeftField,
+    setOpponentsLeftField,
     handleZoneSelect,
     handleSaveAction,
     handleDeleteAction,
@@ -622,6 +683,40 @@ export default function Page() {
     resetActionState,
     setActions,
   } = packingActions;
+
+  // Filtruj akcje według kategorii
+  const filteredActions = useMemo(() => {
+    if (actionCategory === "regain") {
+      // Regain: ma playersBehindBall lub opponentsBeforeBall, ale NIE ma isReaction5s
+      // Kluczowa różnica: regain NIE ma isReaction5s
+      return actions.filter(action => 
+        (action.playersBehindBall !== undefined || 
+         action.opponentsBeforeBall !== undefined ||
+         action.totalPlayersOnField !== undefined ||
+         action.totalOpponentsOnField !== undefined ||
+         action.playersLeftField !== undefined ||
+         action.opponentsLeftField !== undefined) &&
+        action.isReaction5s === undefined
+      );
+    } else if (actionCategory === "loses") {
+      // Loses: ma isReaction5s (to jest główny wskaźnik dla loses)
+      return actions.filter(action => 
+        action.isReaction5s !== undefined
+      );
+    } else {
+      // Packing: nie ma pól charakterystycznych dla regain/loses
+      return actions.filter(action => 
+        action.isBelow8s === undefined &&
+        action.playersBehindBall === undefined &&
+        action.opponentsBeforeBall === undefined &&
+        action.isReaction5s === undefined &&
+        action.totalPlayersOnField === undefined &&
+        action.totalOpponentsOnField === undefined &&
+        action.playersLeftField === undefined &&
+        action.opponentsLeftField === undefined
+      );
+    }
+  }, [actions, actionCategory]);
 
   const { isAuthenticated, isLoading, userTeams, isAdmin, logout } = useAuth();
 
@@ -731,6 +826,70 @@ export default function Page() {
     // Sortowanie alfabetyczne po nazwisku
     return sortPlayersByLastName(teamFiltered);
   }, [players, selectedTeam]);
+
+  // Posegregowani zawodnicy według pozycji dla rozwiniętej listy
+  const playersByPosition = useMemo(() => {
+    const byPosition = filteredPlayers.reduce((acc, player) => {
+      let position = player.position || 'Brak pozycji';
+      
+      // Łączymy LW i RW w jedną grupę "Skrzydłowi"
+      if (position === 'LW' || position === 'RW') {
+        position = 'Skrzydłowi';
+      }
+      
+      if (!acc[position]) {
+        acc[position] = [];
+      }
+      acc[position].push(player);
+      return acc;
+    }, {} as Record<string, typeof filteredPlayers>);
+    
+    // Kolejność pozycji: GK, CB, DM, Skrzydłowi (LW/RW), AM, ST
+    const positionOrder = ['GK', 'CB', 'DM', 'Skrzydłowi', 'AM', 'ST'];
+    
+    // Sortuj pozycje według określonej kolejności
+    const sortedPositions = Object.keys(byPosition).sort((a, b) => {
+      const indexA = positionOrder.indexOf(a);
+      const indexB = positionOrder.indexOf(b);
+      
+      // Jeśli obie pozycje są w liście, sortuj według kolejności
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      // Jeśli tylko jedna jest w liście, ta w liście idzie pierwsza
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      // Jeśli żadna nie jest w liście, sortuj alfabetycznie
+      return a.localeCompare(b, 'pl', { sensitivity: 'base' });
+    });
+    
+    // Sortuj zawodników w każdej pozycji alfabetycznie po nazwisku
+    // Dla grupy "Skrzydłowi" sortuj najpierw po pozycji (LW przed RW), potem po nazwisku
+    sortedPositions.forEach(position => {
+      byPosition[position].sort((a, b) => {
+        // Dla grupy "Skrzydłowi" sortuj najpierw po pozycji
+        if (position === 'Skrzydłowi') {
+          const posA = a.position || '';
+          const posB = b.position || '';
+          if (posA !== posB) {
+            // LW przed RW
+            if (posA === 'LW') return -1;
+            if (posB === 'LW') return 1;
+          }
+        }
+        
+        const getLastName = (name: string) => {
+          const words = name.trim().split(/\s+/);
+          return words[words.length - 1].toLowerCase();
+        };
+        const lastNameA = getLastName(a.name);
+        const lastNameB = getLastName(b.name);
+        return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
+      });
+    });
+    
+    return { byPosition, sortedPositions };
+  }, [filteredPlayers]);
 
   React.useEffect(() => {
     // Sprawdzamy, czy w localStorage jest zapisana wartość połowy
@@ -1009,6 +1168,13 @@ export default function Page() {
     
 
   }, [isSecondHalf, packingActions]);
+
+  // Oblicz dostępne sezony na podstawie meczów wybranego zespołu
+  // MUSI być przed WSZYSTKIMI warunkowymi returnami, aby hook był zawsze wywoływany
+  const availableSeasons = React.useMemo(() => {
+    const teamFiltered = allMatches.filter(match => match.team === selectedTeam);
+    return getAvailableSeasonsFromMatches(teamFiltered);
+  }, [allMatches, selectedTeam]);
 
   // Sprawdź czy użytkownik ma dostęp do aplikacji
   if (isAppLoading) {
@@ -1610,6 +1776,25 @@ export default function Page() {
   };
 
   // Obsługa edycji akcji
+  // Funkcja do określenia kategorii akcji
+  const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
+    // Loses: ma isReaction5s (to jest główny wskaźnik dla loses)
+    if (action.isReaction5s !== undefined) {
+      return "loses";
+    }
+    // Regain: ma playersBehindBall lub opponentsBeforeBall, ale NIE ma isReaction5s
+    if (action.playersBehindBall !== undefined || 
+        action.opponentsBeforeBall !== undefined ||
+        action.totalPlayersOnField !== undefined ||
+        action.totalOpponentsOnField !== undefined ||
+        action.playersLeftField !== undefined ||
+        action.opponentsLeftField !== undefined) {
+      return "regain";
+    }
+    // Packing: domyślnie
+    return "packing";
+  };
+
   const handleEditAction = (action: Action) => {
     setEditingAction(action);
     setIsActionEditModalOpen(true);
@@ -1626,30 +1811,50 @@ export default function Page() {
 
       const db = getDB();
 
+      // Określamy kategorię akcji i odpowiednią kolekcję
+      const actionCategory = getActionCategory(editedAction);
+      let collectionField: string;
+      if (actionCategory === "regain") {
+        collectionField = "actions_regain";
+      } else if (actionCategory === "loses") {
+        collectionField = "actions_loses";
+      } else {
+        // Dla packing sprawdzamy tryb (attack/defense)
+        const isDefense = editedAction.mode === "defense";
+        collectionField = isDefense ? "actions_unpacking" : "actions_packing";
+      }
+
       // Znajdź oryginalną akcję, żeby sprawdzić czy zmieniał się mecz
       const originalAction = actions.find(a => a.id === editedAction.id);
       const originalMatchId = originalAction?.matchId;
       
-      
+      // Określamy kategorię oryginalnej akcji
+      const originalActionCategory = originalAction ? getActionCategory(originalAction) : actionCategory;
+      let originalCollectionField: string;
+      if (originalActionCategory === "regain") {
+        originalCollectionField = "actions_regain";
+      } else if (originalActionCategory === "loses") {
+        originalCollectionField = "actions_loses";
+      } else {
+        const isDefense = originalAction?.mode === "defense";
+        originalCollectionField = isDefense ? "actions_unpacking" : "actions_packing";
+      }
 
       // Czy akcja została przeniesiona do innego meczu?
       const isMovedToNewMatch = originalMatchId && originalMatchId !== editedAction.matchId;
 
       if (isMovedToNewMatch) {
-        
-        
         // 1. Usuń akcję ze starego meczu
         const oldMatchRef = doc(db, "matches", originalMatchId);
         const oldMatchDoc = await getDoc(oldMatchRef);
         
         if (oldMatchDoc.exists()) {
           const oldMatchData = oldMatchDoc.data() as TeamInfo;
-          const oldActions = oldMatchData.actions_packing || [];
+          const oldActions = (oldMatchData[originalCollectionField as keyof TeamInfo] as Action[] | undefined) || [];
           const filteredOldActions = oldActions.filter(a => a.id !== editedAction.id);
           
-  
           await updateDoc(oldMatchRef, {
-            actions_packing: filteredOldActions
+            [originalCollectionField]: filteredOldActions
           });
         }
 
@@ -1664,13 +1869,12 @@ export default function Page() {
         }
 
         const newMatchData = newMatchDoc.data() as TeamInfo;
-        const newActions = newMatchData.actions_packing || [];
+        const newActions = (newMatchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
         
-
         const updatedNewActions = [...newActions, removeUndefinedFields(editedAction)];
         
         await updateDoc(newMatchRef, {
-          actions_packing: updatedNewActions
+          [collectionField]: updatedNewActions
         });
 
         // Aktualizuj lokalny stan jeśli dotknięty jest aktualny mecz
@@ -1684,8 +1888,6 @@ export default function Page() {
         }
       } else {
         // Aktualizacja akcji w tym samym meczu
-        
-        // Standardowa aktualizacja w tym samym meczu
         const matchRef = doc(db, "matches", editedAction.matchId);
         const matchDoc = await getDoc(matchRef);
 
@@ -1696,11 +1898,11 @@ export default function Page() {
         }
 
         const matchData = matchDoc.data() as TeamInfo;
-        const currentActions = matchData.actions_packing || [];
+        const currentActions = (matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
         
         const actionIndex = currentActions.findIndex(a => a.id === editedAction.id);
         if (actionIndex === -1) {
-          console.error("❌ Nie znaleziono akcji do edycji:", editedAction.id);
+          console.error("❌ Nie znaleziono akcji do edycji:", editedAction.id, "w kolekcji:", collectionField);
           alert("Nie znaleziono akcji do edycji");
           return;
         }
@@ -1709,12 +1911,23 @@ export default function Page() {
         updatedActions[actionIndex] = removeUndefinedFields(editedAction);
 
         await updateDoc(matchRef, {
-          actions_packing: updatedActions
+          [collectionField]: updatedActions
         });
 
         // Aktualizuj lokalny stan jeśli to aktualny mecz
         if (matchInfo && editedAction.matchId === matchInfo.matchId) {
-          setActions(updatedActions);
+          // Dla regain/loses musimy załadować akcje z odpowiedniej kolekcji
+          if (actionCategory === "regain" || actionCategory === "loses") {
+            // Odśwież akcje z bazy dla odpowiedniej kategorii
+            const refreshedMatchDoc = await getDoc(matchRef);
+            if (refreshedMatchDoc.exists()) {
+              const refreshedMatchData = refreshedMatchDoc.data() as TeamInfo;
+              const refreshedActions = (refreshedMatchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
+              setActions(refreshedActions);
+            }
+          } else {
+            setActions(updatedActions);
+          }
         }
       }
 
@@ -1737,8 +1950,8 @@ export default function Page() {
   // Obsługa zamknięcia modalu edycji akcji
   const handleCloseActionEditModal = () => {
     setIsActionEditModalOpen(false);
-          setEditingAction(null);
-    };
+    setEditingAction(null);
+  };
 
   // Najpierw sprawdź czy aplikacja się ładuje
   if (isAppLoading) {
@@ -1773,7 +1986,150 @@ export default function Page() {
   return (
     <div className={styles.container}>
       <OfflineStatusBanner />
-      <Instructions />
+      <div className={styles.topHeader}>
+        <div className={styles.headerControlsWrapper}>
+          <div className={styles.selectorsGroup}>
+            <TeamsSelector
+              selectedTeam={selectedTeam}
+              onChange={setSelectedTeam}
+              className={styles.teamDropdown}
+              availableTeams={availableTeams}
+              showLabel={true}
+              isExpanded={isTeamsSelectorExpanded}
+              onToggle={() => setIsTeamsSelectorExpanded(!isTeamsSelectorExpanded)}
+            />
+            {selectedSeason && (
+              <SeasonSelector
+                selectedSeason={selectedSeason}
+                onChange={setSelectedSeason}
+                className={styles.seasonDropdown}
+                showLabel={true}
+                availableSeasons={availableSeasons}
+              />
+            )}
+            <div className={styles.playersGridWrapper}>
+              <PlayersGrid
+                players={filteredPlayers}
+                selectedPlayerId={selectedPlayerId}
+                onPlayerSelect={setSelectedPlayerId}
+                onAddPlayer={() => setIsModalOpen(true)}
+                onEditPlayer={handleEditPlayer}
+                onDeletePlayer={onDeletePlayer}
+                isExpanded={isPlayersGridExpanded}
+                onToggle={() => setIsPlayersGridExpanded(!isPlayersGridExpanded)}
+              />
+              <div className={styles.videoIconsHeader}>
+                <div 
+                  className={`${styles.youtubeLogoHeader} ${isVideoFullscreen ? styles.youtubeLogoHeaderActive : ''}`}
+                  onClick={() => {
+                    if (!isVideoVisible) {
+                      // Jeśli wideo jest ukryte, pokaż je w trybie fullscreen
+                      setIsVideoVisible(true);
+                      setIsVideoFullscreen(true);
+                    } else if (isVideoFullscreen) {
+                      // Jeśli wideo jest w trybie fullscreen, całkowicie je ukryj
+                      setIsVideoVisible(false);
+                      setIsVideoFullscreen(false);
+                    } else {
+                      // Jeśli wideo jest widoczne ale nie w fullscreen, przełącz na fullscreen
+                      setIsVideoFullscreen(true);
+                    }
+                  }}
+                >
+                  <svg className={styles.youtubeLogoIcon} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" fill="#FF0000"/>
+                  </svg>
+                </div>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (matchInfo) {
+                      localStorage.setItem('externalVideoMatchInfo', JSON.stringify(matchInfo));
+                      const externalWindow = window.open(
+                        '/video-external',
+                        'youtube-video',
+                        'width=1200,height=800,scrollbars=yes,resizable=yes'
+                      );
+                      if (externalWindow) {
+                        (window as any).externalVideoWindow = externalWindow;
+                        localStorage.setItem('externalVideoWindowOpen', 'true');
+                      }
+                    }
+                  }}
+                  className={styles.externalButtonHeader}
+                  title="Otwórz wideo w nowym oknie (dla drugiego monitora)"
+                >
+                  <span>🖥️</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className={styles.controlsContainer}>
+            {isOfflineMode && (
+              <div className={styles.offlineBadge}>
+                Tryb offline 📴
+              </div>
+            )}
+            <button 
+              className={styles.addButton}
+              onClick={openNewMatchModal}
+            >
+              + Dodaj mecz
+            </button>
+          </div>
+        </div>
+        <Instructions />
+      </div>
+      {isPlayersGridExpanded && (
+        <div className={styles.playersGridOverlay} onClick={() => setIsPlayersGridExpanded(false)}>
+          <div className={styles.playersGridModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.playersGridHeader}>
+              <h3 className={styles.playersGridTitle}>Zawodnicy</h3>
+              <div className={styles.playersGridHeaderActions}>
+                <button
+                  className={styles.addPlayerButton}
+                  onClick={() => setIsModalOpen(true)}
+                  aria-label="Dodaj nowego zawodnika"
+                  title="Dodaj nowego zawodnika"
+                >
+                  +
+                </button>
+                <button
+                  className={styles.closePlayersGridButton}
+                  onClick={() => setIsPlayersGridExpanded(false)}
+                  aria-label="Zamknij"
+                  title="Zamknij"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div className={styles.playersGridContentWrapper}>
+              {playersByPosition.sortedPositions.map((position) => (
+                <div key={position} className={styles.positionGroup}>
+                  <div className={styles.playersGridContent}>
+                    <div className={styles.positionLabel}>
+                      {position === 'Skrzydłowi' ? 'W' : position}
+                    </div>
+                    <div className={styles.playersGridContainer}>
+                      {playersByPosition.byPosition[position].map((player) => (
+                        <PlayerTile
+                          key={player.id}
+                          player={player}
+                          isSelected={player.id === selectedPlayerId}
+                          onSelect={setSelectedPlayerId}
+                          onEdit={handleEditPlayer}
+                          onDelete={onDeletePlayer}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       <MatchInfoHeader
         matchInfo={matchInfo}
         onChangeMatch={openEditMatchModal}
@@ -1799,21 +2155,15 @@ export default function Page() {
           <div className={styles.leftControls}>
           </div>
         </div>
-        <PlayersGrid
-          players={filteredPlayers}
-          selectedPlayerId={selectedPlayerId}
-          onPlayerSelect={setSelectedPlayerId}
-          onAddPlayer={() => setIsModalOpen(true)}
-          onEditPlayer={handleEditPlayer}
-          onDeletePlayer={onDeletePlayer}
-        />
         <div className={styles.videoPlayersContainer}>
-          <YouTubeVideo 
-            ref={youtubeVideoRef} 
-            matchInfo={matchInfo} 
-            isVisible={isVideoVisible}
-            onToggleVisibility={() => setIsVideoVisible(!isVideoVisible)}
-          />
+        <YouTubeVideo 
+          ref={youtubeVideoRef} 
+          matchInfo={matchInfo} 
+          isVisible={isVideoVisible}
+          onToggleVisibility={() => setIsVideoVisible(!isVideoVisible)}
+          isFullscreen={isVideoFullscreen}
+          onToggleFullscreen={() => setIsVideoFullscreen(!isVideoFullscreen)}
+        />
           <CustomVideoPlayer 
             ref={customVideoRef} 
             matchInfo={matchInfo} 
@@ -1879,6 +2229,10 @@ export default function Page() {
             setPlayersBehindBall={setPlayersBehindBall}
             opponentsBeforeBall={opponentsBeforeBall}
             setOpponentsBeforeBall={setOpponentsBeforeBall}
+            playersLeftField={playersLeftField}
+            setPlayersLeftField={setPlayersLeftField}
+            opponentsLeftField={opponentsLeftField}
+            setOpponentsLeftField={setOpponentsLeftField}
             handleSaveAction={onSaveAction}
             resetActionState={resetCustomActionState}
             resetActionPoints={resetActionPoints}
@@ -1942,6 +2296,10 @@ export default function Page() {
             setPlayersBehindBall={setPlayersBehindBall}
             opponentsBeforeBall={opponentsBeforeBall}
             setOpponentsBeforeBall={setOpponentsBeforeBall}
+            playersLeftField={playersLeftField}
+            setPlayersLeftField={setPlayersLeftField}
+            opponentsLeftField={opponentsLeftField}
+            setOpponentsLeftField={setOpponentsLeftField}
             handleSaveAction={onSaveAction}
             resetActionState={resetCustomActionState}
             resetActionPoints={resetActionPoints}
@@ -2005,6 +2363,10 @@ export default function Page() {
             setPlayersBehindBall={setPlayersBehindBall}
             opponentsBeforeBall={opponentsBeforeBall}
             setOpponentsBeforeBall={setOpponentsBeforeBall}
+            playersLeftField={playersLeftField}
+            setPlayersLeftField={setPlayersLeftField}
+            opponentsLeftField={opponentsLeftField}
+            setOpponentsLeftField={setOpponentsLeftField}
             handleSaveAction={onSaveAction}
             resetActionState={resetCustomActionState}
             resetActionPoints={resetActionPoints}
@@ -2034,7 +2396,7 @@ export default function Page() {
                   }
                   await openAcc8sModalWithVideoTime();
                 }}
-                className={styles.addButton}
+                className={styles.acc8sAddButton}
                 title="Dodaj akcję 8s ACC"
               >
                 +
@@ -2086,10 +2448,32 @@ export default function Page() {
         {activeTab === "pk_entries" && (
           <PKEntriesPitch
             pkEntries={pkEntries}
-            onEntryAdd={(startX, startY, endX, endY) => {
+            onEntryAdd={async (startX, startY, endX, endY) => {
               if (!matchInfo?.matchId || !matchInfo?.team) {
                 alert("Wybierz mecz, aby dodać wejście PK!");
                 return;
+              }
+              
+              // Pobierz czas wideo przed otwarciem modala (podobnie jak w openActionModalWithVideoTime)
+              const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
+              const hasExternalVideoTime = externalVideoTime > 0;
+              
+              if (isExternalWindowOpen || hasExternalVideoTime) {
+                // Jeśli mamy zewnętrzne okno lub externalVideoTime, użyj tego i odejmij 10s
+                const timestamp = hasExternalVideoTime ? externalVideoTime : 0;
+                const adjustedTime = Math.max(0, timestamp - 10);
+                localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+              } else {
+                // Spróbuj pobrać czas z aktywnego playera
+                const currentTime = await getActiveVideoTime();
+                if (currentTime > 0) {
+                  // Odejmij 15 sekund od czasu wideo
+                  const adjustedTime = Math.max(0, currentTime - 10);
+                  localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+                } else {
+                  // Fallback - ustaw 0
+                  localStorage.setItem('tempVideoTimestamp', '0');
+                }
               }
               
               // Otwórz modal z danymi wejścia PK
@@ -2181,12 +2565,14 @@ export default function Page() {
 
         {activeTab === "packing" || activeTab === "regain" || activeTab === "loses" ? (
           <ActionsTable
-            actions={actions}
+            actions={filteredActions}
             players={players}
             onDeleteAction={handleDeleteAction}
             onEditAction={handleEditAction}
             onRefreshPlayersData={handleRefreshPlayersData}
             youtubeVideoRef={youtubeVideoRef}
+            customVideoRef={customVideoRef}
+            actionCategory={actionCategory}
           />
         ) : activeTab === "pk_entries" ? (
           <PKEntriesTable
@@ -2209,6 +2595,8 @@ export default function Page() {
             onVideoTimeClick={(timestamp) => {
               seekActiveVideo(timestamp);
             }}
+            youtubeVideoRef={youtubeVideoRef}
+            customVideoRef={customVideoRef}
           />
         ) : activeTab === "xg" ? (
           <ShotsTable
@@ -2288,8 +2676,9 @@ export default function Page() {
           />
         )}
 
-        {/* Modal edycji akcji */}
-        <ActionModal
+        {/* Modal edycji akcji - warunkowo wyświetlamy odpowiedni modal */}
+        {editingAction && getActionCategory(editingAction) === "loses" ? (
+          <LosesActionModal
           isOpen={isActionEditModalOpen}
           onClose={handleCloseActionEditModal}
           players={players}
@@ -2435,7 +2824,6 @@ export default function Page() {
             }
           }}
           onSaveAction={() => {
-      
             if (editingAction) {
               handleSaveEditedAction(editingAction);
             }
@@ -2453,7 +2841,6 @@ export default function Page() {
           allMatches={allMatches}
           selectedMatchId={editingAction?.matchId || null}
           onMatchSelect={(matchId) => {
-
             if (editingAction) {
               setEditingAction({
                 ...editingAction,
@@ -2461,9 +2848,522 @@ export default function Page() {
               });
             }
           }}
+          matchInfo={matchInfo}
+          isBelow8sActive={editingAction?.isBelow8s || false}
+          onBelow8sToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isBelow8s: !editingAction.isBelow8s
+              });
+            }
+          }}
+          isReaction5sActive={editingAction?.isReaction5s || false}
+          onReaction5sToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isReaction5s: !editingAction.isReaction5s
+              });
+            }
+          }}
+          isAutActive={editingAction?.isAut || false}
+          onAutToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isAut: !editingAction.isAut
+              });
+            }
+          }}
+          isReaction5sNotApplicableActive={editingAction?.isReaction5sNotApplicable || false}
+          onReaction5sNotApplicableToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isReaction5sNotApplicable: !editingAction.isReaction5sNotApplicable
+              });
+            }
+          }}
+          playersBehindBall={editingAction?.playersBehindBall || 0}
+          onPlayersBehindBallChange={(count) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                playersBehindBall: count
+              });
+            }
+          }}
+          opponentsBeforeBall={editingAction?.opponentsBeforeBall || 0}
+          onOpponentsBeforeBallChange={(count) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                opponentsBeforeBall: count
+              });
+            }
+          }}
+          playersLeftField={editingAction?.playersLeftField || (editingAction?.totalPlayersOnField !== undefined ? 11 - editingAction.totalPlayersOnField : 0)}
+          onPlayersLeftFieldChange={(count) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                playersLeftField: count,
+                totalPlayersOnField: 11 - count
+              });
+            }
+          }}
+          opponentsLeftField={editingAction?.opponentsLeftField || (editingAction?.totalOpponentsOnField !== undefined ? 11 - editingAction.totalOpponentsOnField : 0)}
+          onOpponentsLeftFieldChange={(count) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                opponentsLeftField: count,
+                totalOpponentsOnField: 11 - count
+              });
+            }
+          }}
         />
+      ) : editingAction && getActionCategory(editingAction) === "regain" ? (
+        <RegainActionModal
+          isOpen={isActionEditModalOpen}
+          onClose={handleCloseActionEditModal}
+          players={players}
+          selectedPlayerId={editingAction?.senderId || null}
+          selectedReceiverId={editingAction?.receiverId || null}
+          onSenderSelect={(id) => {
+            if (editingAction) {
+              const player = players.find(p => p.id === id);
+              setEditingAction({
+                ...editingAction,
+                senderId: id || '',
+                senderName: player?.name || '',
+                senderNumber: player?.number || 0
+              });
+            }
+          }}
+          onReceiverSelect={(id) => {
+            if (editingAction) {
+              const player = players.find(p => p.id === id);
+              setEditingAction({
+                ...editingAction,
+                receiverId: id || '',
+                receiverName: player?.name || '',
+                receiverNumber: player?.number || 0
+              });
+            }
+          }}
+          actionMinute={editingAction?.minute || 0}
+          onMinuteChange={(minute) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                minute
+              });
+            }
+          }}
+          actionType={editingAction?.actionType as "pass" | "dribble" || 'pass'}
+          onActionTypeChange={(type) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                actionType: type
+              });
+            }
+          }}
+          currentPoints={editingAction?.packingPoints || 0}
+          onAddPoints={(points) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                packingPoints: (editingAction.packingPoints || 0) + points
+              });
+            }
+          }}
+          isP1Active={editingAction?.isP1 || false}
+          onP1Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP1: !editingAction.isP1
+              });
+            }
+          }}
+          isP2Active={editingAction?.isP2 || false}
+          onP2Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP2: !editingAction.isP2
+              });
+            }
+          }}
+          isP3Active={editingAction?.isP3 || false}
+          onP3Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP3: !editingAction.isP3
+              });
+            }
+          }}
+          isContact1Active={editingAction?.isContact1 || false}
+          onContact1Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isContact1: !editingAction.isContact1
+              });
+            }
+          }}
+          isContact2Active={editingAction?.isContact2 || false}
+          onContact2Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isContact2: !editingAction.isContact2
+              });
+            }
+          }}
+          isContact3PlusActive={editingAction?.isContact3Plus || false}
+          onContact3PlusToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isContact3Plus: !editingAction.isContact3Plus
+              });
+            }
+          }}
+          isShot={editingAction?.isShot || false}
+          onShotToggle={(checked) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isShot: checked
+              });
+            }
+          }}
+          isGoal={editingAction?.isGoal || false}
+          onGoalToggle={(checked) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isGoal: checked
+              });
+            }
+          }}
+          isPenaltyAreaEntry={editingAction?.isPenaltyAreaEntry || false}
+          onPenaltyAreaEntryToggle={(checked) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isPenaltyAreaEntry: checked
+              });
+            }
+          }}
+          isSecondHalf={editingAction?.isSecondHalf || false}
+          onSecondHalfToggle={(checked) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isSecondHalf: checked
+              });
+            }
+          }}
+          onSaveAction={() => {
+            if (editingAction) {
+              handleSaveEditedAction(editingAction);
+            }
+          }}
+          onReset={() => {
+            if (editingAction) {
+              const originalAction = actions.find(a => a.id === editingAction.id);
+              if (originalAction) {
+                setEditingAction({ ...originalAction });
+              }
+            }
+          }}
+          onResetPoints={resetActionPoints}
+          editingAction={editingAction}
+          allMatches={allMatches}
+          selectedMatchId={editingAction?.matchId || null}
+          onMatchSelect={(matchId) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                matchId
+              });
+            }
+          }}
+          matchInfo={matchInfo}
+          isBelow8sActive={editingAction?.isBelow8s || false}
+          onBelow8sToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isBelow8s: !editingAction.isBelow8s
+              });
+            }
+          }}
+          playersBehindBall={editingAction?.playersBehindBall || 0}
+          onPlayersBehindBallChange={(count) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                playersBehindBall: count
+              });
+            }
+          }}
+          opponentsBeforeBall={editingAction?.opponentsBeforeBall || 0}
+          onOpponentsBeforeBallChange={(count) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                opponentsBeforeBall: count
+              });
+            }
+          }}
+          playersLeftField={editingAction?.playersLeftField || (editingAction?.totalPlayersOnField !== undefined ? 11 - editingAction.totalPlayersOnField : 0)}
+          onPlayersLeftFieldChange={(count) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                playersLeftField: count,
+                totalPlayersOnField: 11 - count
+              });
+            }
+          }}
+          opponentsLeftField={editingAction?.opponentsLeftField || (editingAction?.totalOpponentsOnField !== undefined ? 11 - editingAction.totalOpponentsOnField : 0)}
+          onOpponentsLeftFieldChange={(count) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                opponentsLeftField: count,
+                totalOpponentsOnField: 11 - count
+              });
+            }
+          }}
+        />
+      ) : (
+        <ActionModal
+          isOpen={isActionEditModalOpen}
+          onClose={handleCloseActionEditModal}
+          players={players}
+          selectedPlayerId={editingAction?.senderId || null}
+          selectedReceiverId={editingAction?.receiverId || null}
+          onSenderSelect={(id) => {
+            if (editingAction) {
+              const player = players.find(p => p.id === id);
+              setEditingAction({
+                ...editingAction,
+                senderId: id || '',
+                senderName: player?.name || '',
+                senderNumber: player?.number || 0
+              });
+            }
+          }}
+          onReceiverSelect={(id) => {
+            if (editingAction) {
+              const player = players.find(p => p.id === id);
+              setEditingAction({
+                ...editingAction,
+                receiverId: id || '',
+                receiverName: player?.name || '',
+                receiverNumber: player?.number || 0
+              });
+            }
+          }}
+          actionMinute={editingAction?.minute || 0}
+          onMinuteChange={(minute) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                minute
+              });
+            }
+          }}
+          actionType={editingAction?.actionType as "pass" | "dribble" || 'pass'}
+          onActionTypeChange={(type) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                actionType: type
+              });
+            }
+          }}
+          currentPoints={editingAction?.packingPoints || 0}
+          onAddPoints={(points) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                packingPoints: (editingAction.packingPoints || 0) + points
+              });
+            }
+          }}
+          isP0StartActive={editingAction?.isP0Start || false}
+          onP0StartToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP0Start: !editingAction.isP0Start
+              });
+            }
+          }}
+          isP1StartActive={editingAction?.isP1Start || false}
+          onP1StartToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP1Start: !editingAction.isP1Start
+              });
+            }
+          }}
+          isP2StartActive={editingAction?.isP2Start || false}
+          onP2StartToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP2Start: !editingAction.isP2Start
+              });
+            }
+          }}
+          isP3StartActive={editingAction?.isP3Start || false}
+          onP3StartToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP3Start: !editingAction.isP3Start
+              });
+            }
+          }}
+          isP0Active={editingAction?.isP0 || false}
+          onP0Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP0: !editingAction.isP0
+              });
+            }
+          }}
+          isP1Active={editingAction?.isP1 || false}
+          onP1Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP1: !editingAction.isP1
+              });
+            }
+          }}
+          isP2Active={editingAction?.isP2 || false}
+          onP2Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP2: !editingAction.isP2
+              });
+            }
+          }}
+          isP3Active={editingAction?.isP3 || false}
+          onP3Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP3: !editingAction.isP3
+              });
+            }
+          }}
+          isContact1Active={editingAction?.isContact1 || false}
+          onContact1Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isContact1: !editingAction.isContact1
+              });
+            }
+          }}
+          isContact2Active={editingAction?.isContact2 || false}
+          onContact2Toggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isContact2: !editingAction.isContact2
+              });
+            }
+          }}
+          isContact3PlusActive={editingAction?.isContact3Plus || false}
+          onContact3PlusToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isContact3Plus: !editingAction.isContact3Plus
+              });
+            }
+          }}
+          isShot={editingAction?.isShot || false}
+          onShotToggle={(checked) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isShot: checked
+              });
+            }
+          }}
+          isGoal={editingAction?.isGoal || false}
+          onGoalToggle={(checked) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isGoal: checked
+              });
+            }
+          }}
+          isPenaltyAreaEntry={editingAction?.isPenaltyAreaEntry || false}
+          onPenaltyAreaEntryToggle={(checked) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isPenaltyAreaEntry: checked
+              });
+            }
+          }}
+          isSecondHalf={editingAction?.isSecondHalf || false}
+          onSecondHalfToggle={(checked) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isSecondHalf: checked
+              });
+            }
+          }}
+          onSaveAction={() => {
+            if (editingAction) {
+              handleSaveEditedAction(editingAction);
+            }
+          }}
+          onReset={() => {
+            if (editingAction) {
+              const originalAction = actions.find(a => a.id === editingAction.id);
+              if (originalAction) {
+                setEditingAction({ ...originalAction });
+              }
+            }
+          }}
+          onResetPoints={resetActionPoints}
+          editingAction={editingAction}
+          allMatches={allMatches}
+          selectedMatchId={editingAction?.matchId || null}
+          onMatchSelect={(matchId) => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                matchId
+              });
+            }
+          }}
+          matchInfo={matchInfo}
+        />
+      )}
 
-        {/* Panel boczny z menu */}
         <SidePanel
           players={players}
           actions={actions}

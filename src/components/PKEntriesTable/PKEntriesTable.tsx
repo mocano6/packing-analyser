@@ -11,6 +11,8 @@ interface PKEntriesTableProps {
   onDeleteEntry?: (entryId: string) => void;
   onEditEntry?: (entry: PKEntry) => void;
   onVideoTimeClick?: (timestamp: number) => void;
+  youtubeVideoRef?: React.RefObject<YouTubeVideoRef>;
+  customVideoRef?: React.RefObject<CustomVideoPlayerRef>;
 }
 
 interface SortConfig {
@@ -18,9 +20,10 @@ interface SortConfig {
   direction: 'asc' | 'desc';
 }
 
-const formatVideoTime = (seconds: number): string => {
+const formatVideoTime = (seconds?: number): string => {
+  if (!seconds && seconds !== 0) return '-';
   const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
+  const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
@@ -96,7 +99,7 @@ const PKEntryRow = ({
         &nbsp;{entry.minute}'
       </div>
       <div className={styles.cell}>
-        {entry.videoTimestamp ? (
+        {entry.videoTimestamp !== undefined && entry.videoTimestamp !== null ? (
           <span 
             className={styles.videoTimeLink}
             onClick={(e) => {
@@ -174,6 +177,8 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
   onDeleteEntry,
   onEditEntry,
   onVideoTimeClick,
+  youtubeVideoRef,
+  customVideoRef,
 }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'minute',
@@ -225,6 +230,38 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
     return sortConfig.direction === 'asc' ? '↑' : '↓';
   };
 
+  // Funkcja do obsługi kliknięcia na czas wideo (dokładnie tak jak w ActionsTable i Acc8sTable)
+  const handleVideoTimeClick = async (videoTimestamp?: number) => {
+    if (!videoTimestamp && videoTimestamp !== 0) return;
+    
+    // Sprawdź czy mamy otwarte zewnętrzne okno wideo (sprawdzamy bezpośrednio externalWindow, a nie localStorage)
+    const externalWindow = (window as any).externalVideoWindow;
+    const isExternalWindowOpen = externalWindow && !externalWindow.closed;
+    
+    if (isExternalWindowOpen) {
+      // Wyślij wiadomość do zewnętrznego okna
+      externalWindow.postMessage({
+        type: 'SEEK_TO_TIME',
+        time: videoTimestamp
+      }, '*');
+    } else if (customVideoRef?.current) {
+      try {
+        await customVideoRef.current.seekTo(videoTimestamp);
+      } catch (error) {
+        console.warn('Nie udało się przewinąć własnego odtwarzacza do czasu:', videoTimestamp, error);
+      }
+    } else if (youtubeVideoRef?.current) {
+      try {
+        await youtubeVideoRef.current.seekTo(videoTimestamp);
+      } catch (error) {
+        console.warn('Nie udało się przewinąć wideo do czasu:', videoTimestamp, error);
+      }
+    } else if (onVideoTimeClick) {
+      // Fallback do przekazanej funkcji
+      onVideoTimeClick(videoTimestamp);
+    }
+  };
+
   return (
     <div className={styles.tableContainer}>
       <div className={styles.matchesTable}>
@@ -259,7 +296,9 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
                 entry={entry}
                 onDelete={onDeleteEntry}
                 onEdit={onEditEntry}
-                onVideoTimeClick={onVideoTimeClick}
+                onVideoTimeClick={(timestamp) => {
+                  handleVideoTimeClick(timestamp);
+                }}
                 players={players}
               />
             ))

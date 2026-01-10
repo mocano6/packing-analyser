@@ -1,7 +1,29 @@
 /* components/ActionSection/ActionSection.module.css */
 .actionContainer {
   width: 100%;
-  margin: 1rem 0;
+  margin: 0.5rem 0;
+  position: relative;
+}
+
+.defenseInfo {
+  margin-top: 0;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  background-color: rgba(33, 150, 243, 0.08);
+  border-left: 2px solid #2196F3;
+  border-radius: 4px;
+  width: 100%;
+  display: block;
+  position: relative;
+  z-index: 10;
+}
+
+.defenseInfo p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
 }
 
 .pitchContainer {

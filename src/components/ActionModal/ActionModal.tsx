@@ -230,10 +230,72 @@ const ActionModal: React.FC<ActionModalProps> = ({
     // Sortowanie alfabetyczne po nazwisku
     const sortedPlayers = sortPlayersByLastName(playersToFilter);
     
-
-    
     return sortedPlayers;
   }, [players, isEditMode, allMatches, currentSelectedMatch, matchInfo]);
+
+  // Grupowanie zawodników według pozycji
+  const playersByPosition = useMemo(() => {
+    const byPosition = filteredPlayers.reduce((acc, player) => {
+      let position = player.position || 'Brak pozycji';
+      
+      // Łączymy LW i RW w jedną grupę "Skrzydłowi"
+      if (position === 'LW' || position === 'RW') {
+        position = 'Skrzydłowi';
+      }
+      
+      if (!acc[position]) {
+        acc[position] = [];
+      }
+      acc[position].push(player);
+      return acc;
+    }, {} as Record<string, typeof filteredPlayers>);
+    
+    // Kolejność pozycji: GK, CB, DM, Skrzydłowi (LW/RW), AM, ST
+    const positionOrder = ['GK', 'CB', 'DM', 'Skrzydłowi', 'AM', 'ST'];
+    
+    // Sortuj pozycje według określonej kolejności
+    const sortedPositions = Object.keys(byPosition).sort((a, b) => {
+      const indexA = positionOrder.indexOf(a);
+      const indexB = positionOrder.indexOf(b);
+      
+      // Jeśli obie pozycje są w liście, sortuj według kolejności
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      // Jeśli tylko jedna jest w liście, ta w liście idzie pierwsza
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      // Jeśli żadna nie jest w liście, sortuj alfabetycznie
+      return a.localeCompare(b, 'pl', { sensitivity: 'base' });
+    });
+    
+    // Sortuj zawodników w każdej pozycji alfabetycznie po nazwisku
+    // Dla grupy "Skrzydłowi" sortuj najpierw po pozycji (LW przed RW), potem po nazwisku
+    sortedPositions.forEach(position => {
+      byPosition[position].sort((a, b) => {
+        // Dla grupy "Skrzydłowi" sortuj najpierw po pozycji
+        if (position === 'Skrzydłowi') {
+          const posA = a.position || '';
+          const posB = b.position || '';
+          if (posA !== posB) {
+            // LW przed RW
+            if (posA === 'LW') return -1;
+            if (posB === 'LW') return 1;
+          }
+        }
+        
+        const getLastName = (name: string) => {
+          const words = name.trim().split(/\s+/);
+          return words[words.length - 1].toLowerCase();
+        };
+        const lastNameA = getLastName(a.name);
+        const lastNameB = getLastName(b.name);
+        return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
+      });
+    });
+    
+    return { byPosition, sortedPositions };
+  }, [filteredPlayers]);
 
   if (!isOpen) return null;
 
@@ -509,7 +571,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 <p>Kliknij, aby wybrać zawodnika wykonującego drybling.</p>
               )}
             </div>
-            <div className={styles.playersGrid}>
+            <div className={styles.playersGridContainer}>
               {filteredPlayers.length > 0 ? (
                 <>
                   {isEditMode && filteredPlayers.length < 3 && (
@@ -517,16 +579,27 @@ const ActionModal: React.FC<ActionModalProps> = ({
                       ⚠️ Tylko {filteredPlayers.length} zawodnik{filteredPlayers.length === 1 ? '' : 'ów'} dostępn{filteredPlayers.length === 1 ? 'y' : 'ych'} w tym meczu
                     </div>
                   )}
-                  {filteredPlayers.map((player) => (
-                  <PlayerCard
-                    key={player.id}
-                    player={player}
-                    isSender={mode === "defense" ? false : actionType === "pass" ? player.id === selectedPlayerId : false}
-                    isReceiver={mode === "defense" ? false : actionType === "pass" ? player.id === selectedReceiverId : false}
-                    isDribbler={mode === "defense" ? false : actionType === "dribble" ? player.id === selectedPlayerId : false}
-                    isDefensePlayer={mode === "defense" ? (selectedDefensePlayers || []).includes(player.id) : false}
-                    onSelect={handlePlayerClick}
-                  />
+                  {playersByPosition.sortedPositions.map((position) => (
+                    <div key={position} className={styles.positionGroup}>
+                      <div className={styles.playersGrid}>
+                        <div className={styles.positionLabel}>
+                          {position === 'Skrzydłowi' ? 'W' : position}
+                        </div>
+                        <div className={styles.playersGridItems}>
+                          {playersByPosition.byPosition[position].map((player) => (
+                            <PlayerCard
+                              key={player.id}
+                              player={player}
+                              isSender={mode === "defense" ? false : actionType === "pass" ? player.id === selectedPlayerId : false}
+                              isReceiver={mode === "defense" ? false : actionType === "pass" ? player.id === selectedReceiverId : false}
+                              isDribbler={mode === "defense" ? false : actionType === "dribble" ? player.id === selectedPlayerId : false}
+                              isDefensePlayer={mode === "defense" ? (selectedDefensePlayers || []).includes(player.id) : false}
+                            onSelect={handlePlayerClick}
+                          />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </>
               ) : (
@@ -551,253 +624,196 @@ const ActionModal: React.FC<ActionModalProps> = ({
 
           {/* Wszystkie przyciski w jednym rzędzie */}
           <div className={styles.compactButtonsRow}>
-            {/* Sekcja "Początek działania:" z przyciskami P0-P3 */}
+            {/* Sekcja "Początek i koniec działania" z przyciskami P0-P3 */}
             <div className={styles.pSectionContainer}>
-              <div className={styles.pSectionLabel}>Początek działania:</div>
-              <div className={styles.pButtonsGroup}>
-                <div className={styles.pTopRow}>
-                <button
-                  className={`${styles.compactButton} ${
-                    isP0StartActive ? styles.activeButton : ""
-                  }`}
-                  onClick={onP0StartToggle}
-                  title="Aktywuj/Dezaktywuj P0"
-                  aria-pressed={isP0StartActive}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>P0</span>
-                </button>
-                
-                <button
-                  className={`${styles.compactButton} ${
-                    isP1StartActive ? styles.activeButton : ""
-                  }`}
-                  onClick={onP1StartToggle}
-                  title="Aktywuj/Dezaktywuj P1"
-                  aria-pressed={isP1StartActive}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>P1</span>
-                </button>
-              </div>
-              
-              <div className={styles.pBottomRow}>
-                <button
-                  className={`${styles.compactButton} ${
-                    isP2StartActive ? styles.activeButton : ""
-                  }`}
-                  onClick={onP2StartToggle}
-                  title="Aktywuj/Dezaktywuj P2"
-                  aria-pressed={isP2StartActive}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>P2</span>
-                </button>
-                
-                <button
-                  className={`${styles.compactButton} ${
-                    isP3StartActive ? styles.activeButton : ""
-                  }`}
-                  onClick={onP3StartToggle}
-                  title="Aktywuj/Dezaktywuj P3"
-                  aria-pressed={isP3StartActive}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>P3</span>
-                </button>
-              </div>
-              </div>
-            </div>
-
-            {/* Sekcja "koniec działania:" z przyciskami P0-P3 */}
-            <div className={styles.pSectionContainer}>
-              <div className={styles.pSectionLabel}>Koniec działania:</div>
-              <div className={styles.pButtonsGroup}>
-                <div className={styles.pTopRow}>
-                <button
-                  className={`${styles.compactButton} ${
-                    isP0Active ? styles.activeButton : ""
-                  }`}
-                  onClick={onP0Toggle}
-                  title="Aktywuj/Dezaktywuj P0"
-                  aria-pressed={isP0Active}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>P0</span>
-                </button>
-                
-                <button
-                  className={`${styles.compactButton} ${
-                    isP1Active ? styles.activeButton : ""
-                  }`}
-                  onClick={onP1Toggle}
-                  title="Aktywuj/Dezaktywuj P1"
-                  aria-pressed={isP1Active}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>P1</span>
-                </button>
-              </div>
-              
-              <div className={styles.pBottomRow}>
-                <button
-                  className={`${styles.compactButton} ${
-                    isP2Active ? styles.activeButton : ""
-                  }`}
-                  onClick={onP2Toggle}
-                  title="Aktywuj/Dezaktywuj P2"
-                  aria-pressed={isP2Active}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>P2</span>
-                </button>
-                
-                <button
-                  className={`${styles.compactButton} ${
-                    isP3Active ? styles.activeButton : ""
-                  }`}
-                  onClick={onP3Toggle}
-                  title="Aktywuj/Dezaktywuj P3"
-                  aria-pressed={isP3Active}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>P3</span>
-                </button>
-              </div>
-              </div>
-            </div>
-
-            {/* Grupa przycisków kontaktów */}
-            <div className={styles.pSectionContainer}>
-              <div className={styles.pSectionLabel}>Liczba kontaktów:</div>
-              <div className={styles.pButtonsGroupNoBorder}>
-                <div className={styles.pTopRow}>
-                <button
-                  className={`${styles.compactButton} ${
-                    isContact1Active ? styles.activeButton : ""
-                  }`}
-                  onClick={onContact1Toggle}
-                  title="Aktywuj/Dezaktywuj 1T"
-                  aria-pressed={isContact1Active}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>1T</span>
-                </button>
-                
-                <button
-                  className={`${styles.compactButton} ${
-                    isContact2Active ? styles.activeButton : ""
-                  }`}
-                  onClick={onContact2Toggle}
-                  title="Aktywuj/Dezaktywuj 2T"
-                  aria-pressed={isContact2Active}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>2T</span>
-                </button>
-              </div>
-              
-              <div className={styles.pBottomRow}>
-                <button
-                  className={`${styles.compactButton} ${
-                    isContact3PlusActive ? styles.activeButton : ""
-                  }`}
-                  onClick={onContact3PlusToggle}
-                  title="Aktywuj/Dezaktywuj 3T+"
-                  aria-pressed={isContact3PlusActive}
-                  type="button"
-                >
-                  <span className={styles.compactLabel}>3T+</span>
-                </button>
-              </div>
-              </div>
-            </div>
-
-            {/* Pozostałe przyciski punktów (bez "Minięty przeciwnik") */}
-            {ACTION_BUTTONS.map((button, index) => {
-              if (button.type === "points" && button.label !== "Minięty przeciwnik") {
-                return (
-                  <div 
-                    key={index} 
-                    className={styles.compactPointsButton}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handlePointsAdd(button.points);
-                    }}
-                    title={button.description}
+              <div className={styles.pSectionLabel}>Początek i koniec działania:</div>
+              <div className={styles.pStartEndContainer}>
+                <div className={styles.actionTypeSelector}>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isP0StartActive ? styles.active : ""
+                    }`}
+                    onClick={onP0StartToggle}
+                    title="Aktywuj/Dezaktywuj P0"
+                    aria-pressed={isP0StartActive}
+                    type="button"
                   >
-                    <span className={styles.compactLabel}>{button.label}</span>
-                    <span className={styles.pointsValue}><b>{currentPoints}</b></span>
-                    <button
-                      className={styles.compactSubtractButton}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handlePointsAdd(-button.points);
-                      }}
-                      title={`Odejmij ${button.points} pkt`}
-                      type="button"
-                      disabled={currentPoints < button.points}
-                    >
-                      −
-                    </button>
-                  </div>
-                );
-              }
-              return null;
-            })}
+                    P0
+                  </button>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isP1StartActive ? styles.active : ""
+                    }`}
+                    onClick={onP1StartToggle}
+                    title="Aktywuj/Dezaktywuj P1"
+                    aria-pressed={isP1StartActive}
+                    type="button"
+                  >
+                    P1
+                  </button>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isP2StartActive ? styles.active : ""
+                    }`}
+                    onClick={onP2StartToggle}
+                    title="Aktywuj/Dezaktywuj P2"
+                    aria-pressed={isP2StartActive}
+                    type="button"
+                  >
+                    P2
+                  </button>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isP3StartActive ? styles.active : ""
+                    }`}
+                    onClick={onP3StartToggle}
+                    title="Aktywuj/Dezaktywuj P3"
+                    aria-pressed={isP3StartActive}
+                    type="button"
+                  >
+                    P3
+                  </button>
+                </div>
+                <div className={styles.actionTypeSelector}>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isP0Active ? styles.active : ""
+                    }`}
+                    onClick={onP0Toggle}
+                    title="Aktywuj/Dezaktywuj P0"
+                    aria-pressed={isP0Active}
+                    type="button"
+                  >
+                    P0
+                  </button>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isP1Active ? styles.active : ""
+                    }`}
+                    onClick={onP1Toggle}
+                    title="Aktywuj/Dezaktywuj P1"
+                    aria-pressed={isP1Active}
+                    type="button"
+                  >
+                    P1
+                  </button>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isP2Active ? styles.active : ""
+                    }`}
+                    onClick={onP2Toggle}
+                    title="Aktywuj/Dezaktywuj P2"
+                    aria-pressed={isP2Active}
+                    type="button"
+                  >
+                    P2
+                  </button>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isP3Active ? styles.active : ""
+                    }`}
+                    onClick={onP3Toggle}
+                    title="Aktywuj/Dezaktywuj P3"
+                    aria-pressed={isP3Active}
+                    type="button"
+                  >
+                    P3
+                  </button>
+                </div>
+              </div>
+            </div>
 
-            {/* Przyciski ułożone pionowo: Minięty przeciwnik, Wejście PK, Strzał, Gol */}
-            <div className={styles.verticalButtonsContainer}>
-              {/* Przycisk "Minięty przeciwnik" */}
-              {ACTION_BUTTONS.map((button, index) => {
-                if (button.type === "points" && button.label === "Minięty przeciwnik") {
-                  return (
-                    <div 
-                      key={index} 
-                      className={styles.compactPointsButton}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        // W trybie unpacking wyłączamy przycisk "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
-                        if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
-                          return; // Nie wykonuj kliknięcia
-                        }
-                        handlePointsAdd(button.points);
-                      }}
-                      title={button.description}
-                      style={{
-                        // W trybie unpacking wyłączamy przycisk "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
-                        pointerEvents: mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0 ? 'none' : 'auto',
-                        opacity: mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0 ? 0.6 : 1
-                      }}
-                    >
-                      <span className={styles.compactLabel}>{button.label}</span>
-                      <span className={styles.pointsValue}><b>{currentPoints}</b></span>
-                      <button
-                        className={styles.compactSubtractButton}
+            {/* Grupa przycisków kontaktów i przycisków pionowych obok siebie */}
+            <div className={styles.rightSideContainer}>
+              {/* Grupa przycisków kontaktów */}
+              <div className={styles.pSectionContainer}>
+                <div className={styles.pSectionLabel}>Liczba kontaktów:</div>
+                <div className={styles.actionTypeSelector}>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isContact1Active ? styles.active : ""
+                    }`}
+                    onClick={onContact1Toggle}
+                    title="Aktywuj/Dezaktywuj 1T"
+                    aria-pressed={isContact1Active}
+                    type="button"
+                  >
+                    1T
+                  </button>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isContact2Active ? styles.active : ""
+                    }`}
+                    onClick={onContact2Toggle}
+                    title="Aktywuj/Dezaktywuj 2T"
+                    aria-pressed={isContact2Active}
+                    type="button"
+                  >
+                    2T
+                  </button>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isContact3PlusActive ? styles.active : ""
+                    }`}
+                    onClick={onContact3PlusToggle}
+                    title="Aktywuj/Dezaktywuj 3T+"
+                    aria-pressed={isContact3PlusActive}
+                    type="button"
+                  >
+                    3T+
+                  </button>
+                </div>
+                {/* Przycisk "Minięty przeciwnik" */}
+                {ACTION_BUTTONS.map((button, index) => {
+                  if (button.type === "points" && button.label === "Minięty przeciwnik") {
+                    return (
+                      <div 
+                        key={index} 
+                        className={styles.compactPointsButtonSmall}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          // W trybie unpacking wyłączamy przycisk odejmowania dla "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
+                          // W trybie unpacking wyłączamy przycisk "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
                           if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
                             return; // Nie wykonuj kliknięcia
                           }
-                          handlePointsAdd(-button.points);
+                          handlePointsAdd(button.points);
                         }}
-                        title={`Odejmij ${button.points} pkt`}
-                        type="button"
-                        disabled={currentPoints < button.points || (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0)}
+                        title={button.description}
+                        style={{
+                          // W trybie unpacking wyłączamy przycisk "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
+                          pointerEvents: mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0 ? 'none' : 'auto',
+                          opacity: mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0 ? 0.6 : 1
+                        }}
                       >
-                        −
-                      </button>
-                    </div>
-                  );
-                }
-                return null;
-              })}
+                        <span className={styles.compactLabelSmall}>{button.label}</span>
+                        <span className={styles.pointsValueSmall}><b>{currentPoints}</b></span>
+                        <button
+                          className={styles.compactSubtractButtonSmall}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            // W trybie unpacking wyłączamy przycisk odejmowania dla "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
+                            if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
+                              return; // Nie wykonuj kliknięcia
+                            }
+                            handlePointsAdd(-button.points);
+                          }}
+                          title={`Odejmij ${button.points} pkt`}
+                          type="button"
+                          disabled={currentPoints < button.points || (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0)}
+                        >
+                          −
+                        </button>
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
 
+              {/* Przyciski ułożone pionowo: Wejście PK, Strzał, Gol */}
+              <div className={styles.verticalButtonsContainer}>
               {/* Przycisk "Wejście PK" */}
               <button
                 className={`${styles.compactButton} ${
@@ -839,6 +855,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 <span className={styles.compactLabel}>Gol</span>
               </button>
             </div>
+          </div>
           </div>
           
           {/* Przyciski kontrolne z polem minuty pomiędzy */}

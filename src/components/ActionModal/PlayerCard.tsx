@@ -22,45 +22,22 @@ const PlayerCard: React.FC<PlayerCardProps> = memo(function PlayerCard({
   isDefensePlayer = false,
   onSelect,
 }) {
-  const hasImage = !!player.imageUrl;
-  
   return (
     <div
       className={`${styles.playerTile} 
         ${isSender ? styles.playerSenderTile : ''} 
         ${isReceiver ? styles.playerReceiverTile : ''} 
         ${isDribbler ? styles.playerDribblerTile : ''}
-        ${isDefensePlayer ? styles.playerDefenseTile : ''}
-        ${hasImage ? styles.withImage : ''}`}
+        ${isDefensePlayer ? styles.playerDefenseTile : ''}`}
       onClick={() => onSelect(player.id)}
       role="button"
       tabIndex={0}
       aria-pressed={isSender || isReceiver || isDribbler || isDefensePlayer}
     >
-      {hasImage && (
-        <>
-          <img
-            src={player.imageUrl}
-            alt=""
-            className={styles.playerTileImage}
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-            }}
-          />
-          <div className={styles.playerTileOverlay}></div>
-        </>
-      )}
-
       <div className={styles.playerContent}>
         <div className={styles.number}>{player.number}</div>
-
         <div className={styles.playerInfo}>
           <div className={styles.name}>{getPlayerFullName(player)}</div>
-          <div className={styles.details}>
-            {player.position && (
-              <span className={styles.position}>{player.position}</span>
-            )}
-          </div>
         </div>
       </div>
     </div>

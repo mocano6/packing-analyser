@@ -40,19 +40,28 @@ const YouTubeVideoExternal: React.FC<YouTubeVideoExternalProps> = ({
   // Nasłuchiwanie wiadomości z głównego okna
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
+      console.log('YouTubeVideoExternal - otrzymano wiadomość:', event.data?.type, 'z origin:', event.origin);
       
       // Sprawdź czy to wiadomość z głównego okna (nie z YouTube)
-      if (event.origin !== 'https://www.youtube.com' && event.origin !== 'https://youtube.com') {
-        
+      // Akceptuj wiadomości z tego samego origin (główne okno) lub z innego origin niż YouTube
+      const isFromYouTube = event.origin === 'https://www.youtube.com' || event.origin === 'https://youtube.com';
+      const isFromMainWindow = !isFromYouTube && event.data?.type;
+      
+      if (isFromMainWindow) {
         if (event.data.type === 'SEEK_TO_TIME') {
+          console.log('YouTubeVideoExternal - otrzymano SEEK_TO_TIME, time:', event.data.time);
+          console.log('YouTubeVideoExternal - playerRef.current:', playerRef.current);
+          console.log('YouTubeVideoExternal - isPlayerReady:', isPlayerReady);
           if (playerRef.current && isPlayerReady) {
             try {
+              console.log('YouTubeVideoExternal - wywołuję seekTo z time:', event.data.time);
               await playerRef.current.seekTo(event.data.time, true);
+              console.log('YouTubeVideoExternal - seekTo zakończone pomyślnie');
             } catch (error) {
               console.warn('Nie udało się przewinąć wideo do czasu:', event.data.time, error);
             }
           } else {
-            // Player niegotowy
+            console.warn('YouTubeVideoExternal - player niegotowy (playerRef:', playerRef.current, 'isPlayerReady:', isPlayerReady, ')');
           }
         } else if (event.data.type === 'GET_CURRENT_TIME') {
           if (playerRef.current && isPlayerReady) {

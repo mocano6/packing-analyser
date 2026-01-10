@@ -11,6 +11,8 @@ interface TeamsSelectorProps {
   className?: string;
   availableTeams?: Team[];
   showLabel?: boolean;
+  isExpanded?: boolean;
+  onToggle?: () => void;
 }
 
 const TeamsSelector: React.FC<TeamsSelectorProps> = ({ 
@@ -18,7 +20,9 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
   onChange,
   className = "",
   availableTeams,
-  showLabel = false
+  showLabel = false,
+  isExpanded = false,
+  onToggle
 }) => {
   const [teams, setTeams] = useState<Record<string, Team>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -53,31 +57,79 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
   }, [availableTeams]);
 
   const teamsList = Object.values(teams);
+  const selectedTeamName = teams[selectedTeam]?.name || "Wybierz zespół";
+
+  const handleToggle = () => {
+    if (onToggle) {
+      onToggle();
+    }
+  };
+
+  const handleTeamSelect = (teamId: string) => {
+    onChange(teamId);
+    if (onToggle) {
+      onToggle();
+    }
+  };
 
   return (
-    <div className={styles.teamsSelectorContainer}>
-      {showLabel && (
-        <label className={styles.teamsSelectorLabel}>
-          Wybierz zespół:
-        </label>
-      )}
-      <select 
-        value={selectedTeam} 
-        onChange={(e) => onChange(e.target.value)}
-        className={`${styles.teamsSelector} ${className} ${isLoading ? styles.loading : ''}`}
-        disabled={isLoading || teamsList.length === 0}
-      >
-        {teamsList.length === 0 ? (
-          <option value="">Brak dostępnych zespołów</option>
-        ) : (
-          teamsList.map(team => (
-            <option key={team.id} value={team.id}>
-              {team.name}
-            </option>
-          ))
+    <>
+      <div className={styles.teamsSelectorContainer}>
+        {showLabel && (
+          <label className={styles.teamsSelectorLabel}>
+            Wybierz zespół:
+          </label>
         )}
-      </select>
-    </div>
+        <button 
+          className={`${styles.teamsSelectorHeader} ${isExpanded ? styles.teamsSelectorHeaderActive : ''} ${className}`}
+          onClick={handleToggle}
+          aria-label={isExpanded ? "Zwiń listę zespołów" : "Rozwiń listę zespołów"}
+          type="button"
+          disabled={isLoading || teamsList.length === 0}
+        >
+          <span>{selectedTeamName} ({teamsList.length})</span>
+        </button>
+      </div>
+      {isExpanded && (
+        <div className={styles.teamsSelectorOverlay} onClick={handleToggle}>
+          <div className={styles.teamsSelectorModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.teamsSelectorModalHeader}>
+              <h3 className={styles.teamsSelectorModalTitle}>Zespoły</h3>
+              <button
+                className={styles.closeTeamsSelectorButton}
+                onClick={handleToggle}
+                aria-label="Zamknij"
+                title="Zamknij"
+              >
+                ×
+              </button>
+            </div>
+            <div className={styles.teamsSelectorModalContent}>
+              {isLoading ? (
+                <div className={styles.loadingMessage}>Ładowanie zespołów...</div>
+              ) : teamsList.length === 0 ? (
+                <div className={styles.noTeamsMessage}>Brak dostępnych zespołów</div>
+              ) : (
+                <div className={styles.teamsList}>
+                  {teamsList.map(team => (
+                    <button
+                      key={team.id}
+                      className={`${styles.teamItem} ${
+                        selectedTeam === team.id ? styles.teamItemActive : ""
+                      }`}
+                      onClick={() => handleTeamSelect(team.id)}
+                      type="button"
+                    >
+                      {team.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

@@ -39,8 +39,13 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerRef, CustomVideoPlayerProp
       return 0;
     },
     seekTo: async (seconds: number): Promise<void> => {
+      console.log('CustomVideoPlayer seekTo - seconds:', seconds, 'videoRef.current:', videoRef.current);
       if (videoRef.current) {
+        console.log('CustomVideoPlayer seekTo - ustawiam currentTime na:', seconds);
         videoRef.current.currentTime = seconds;
+        console.log('CustomVideoPlayer seekTo - currentTime po ustawieniu:', videoRef.current.currentTime);
+      } else {
+        console.warn('CustomVideoPlayer seekTo - videoRef.current jest null');
       }
     }
   }));
@@ -153,14 +158,7 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerRef, CustomVideoPlayerProp
   }, []);
 
   if (!videoUrl) {
-    return (
-      <div className={styles.videoContainer}>
-        <div className={styles.noVideo}>
-          <p>Brak wgrane wideo dla tego meczu</p>
-          <p className={styles.hint}>Wideo można wgrać podczas tworzenia lub edycji meczu</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   if (isExternalWindowOpen) {

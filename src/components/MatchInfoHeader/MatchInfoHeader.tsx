@@ -20,8 +20,6 @@ interface CurrentMatchInfoProps {
 }
 
 const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players, allAvailableTeams = [] }) => {
-  const [isPlayerMinutesCollapsed, setIsPlayerMinutesCollapsed] = useState(true);
-
   if (!matchInfo || !matchInfo.matchId) {
     return null;
   }
@@ -33,50 +31,117 @@ const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players,
     }
 
     // Filtruj zawodników z co najmniej 1 minutą rozegrana
-    const filteredPlayerMinutes = matchInfo.playerMinutes.filter(playerMinute => {
-      const playTime = playerMinute.startMinute === 0 && playerMinute.endMinute === 0 
-        ? 0 
-        : playerMinute.endMinute - playerMinute.startMinute + 1;
-      return playTime >= 1;
-    });
+    const filteredPlayerMinutes = matchInfo.playerMinutes
+      .map(playerMinute => {
+        const player = players.find(p => p.id === playerMinute.playerId);
+        if (!player) return null;
+        
+        const playTime = playerMinute.startMinute === 0 && playerMinute.endMinute === 0 
+          ? 0 
+          : playerMinute.endMinute - playerMinute.startMinute + 1;
+        
+        if (playTime < 1) return null;
+        
+        return {
+          playerMinute,
+          player,
+          playTime,
+          position: playerMinute.position || player.position || 'Brak pozycji'
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
 
     if (filteredPlayerMinutes.length === 0) {
       return null;
     }
 
+    // Grupuj zawodników według pozycji - łączymy LW i RW w jedną grupę
+    const playersByPosition = filteredPlayerMinutes.reduce((acc, item) => {
+      let position = item.position;
+      
+      // Łączymy LW i RW w jedną grupę "Skrzydłowi"
+      if (position === 'LW' || position === 'RW') {
+        position = 'Skrzydłowi';
+      }
+      
+      if (!acc[position]) {
+        acc[position] = [];
+      }
+      acc[position].push(item);
+      return acc;
+    }, {} as Record<string, typeof filteredPlayerMinutes>);
+
+    // Kolejność pozycji: GK, CB, DM, Skrzydłowi (LW/RW), AM, ST
+    const positionOrder = ['GK', 'CB', 'DM', 'Skrzydłowi', 'AM', 'ST'];
+    
+    // Sortuj pozycje według określonej kolejności
+    const sortedPositions = Object.keys(playersByPosition).sort((a, b) => {
+      const indexA = positionOrder.indexOf(a);
+      const indexB = positionOrder.indexOf(b);
+      
+      // Jeśli obie pozycje są w liście, sortuj według kolejności
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      // Jeśli tylko jedna jest w liście, ta w liście idzie pierwsza
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      // Jeśli żadna nie jest w liście, sortuj alfabetycznie
+      return a.localeCompare(b, 'pl', { sensitivity: 'base' });
+    });
+
+    // Sortuj zawodników w każdej pozycji alfabetycznie po nazwisku
+    // Dla grupy "Skrzydłowi" sortuj najpierw po pozycji (LW przed RW), potem po nazwisku
+    sortedPositions.forEach(position => {
+      playersByPosition[position].sort((a, b) => {
+        // Dla grupy "Skrzydłowi" sortuj najpierw po pozycji
+        if (position === 'Skrzydłowi') {
+          const posA = a.position || '';
+          const posB = b.position || '';
+          if (posA !== posB) {
+            // LW przed RW
+            if (posA === 'LW') return -1;
+            if (posB === 'LW') return 1;
+          }
+        }
+        
+        const getLastName = (name: string) => {
+          const words = name.trim().split(/\s+/);
+          return words[words.length - 1].toLowerCase();
+        };
+        const lastNameA = getLastName(a.player.name);
+        const lastNameB = getLastName(b.player.name);
+        return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
+      });
+    });
+
     return (
       <div className={styles.playerMinutesInfo}>
-        <div 
-          className={styles.playerMinutesHeader}
-          onClick={() => setIsPlayerMinutesCollapsed(!isPlayerMinutesCollapsed)}
-        >
-          <h4>Czas gry zawodników ({filteredPlayerMinutes.length})</h4>
-          <button 
-            className={styles.collapseButton}
-            aria-label={isPlayerMinutesCollapsed ? "Rozwiń listę minut zawodników" : "Zwiń listę minut zawodników"}
-          >
-            {isPlayerMinutesCollapsed ? "▼" : "▲"}
-          </button>
-        </div>
-        
-        {!isPlayerMinutesCollapsed && (
-        <div className={styles.playerMinutesList}>
-            {filteredPlayerMinutes.map((playerMinute) => {
-            const player = players.find(p => p.id === playerMinute.playerId);
-            if (!player) return null;
-
-            return (
-              <div key={playerMinute.playerId} className={styles.playerMinuteItem}>
-                <span className={styles.playerName}>{player.name}</span>
-                <span className={styles.playerPosition}>{playerMinute.position || player.position}</span>
-                <span className={styles.playerMinutes}>
-                  {playerMinute.startMinute === 0 && playerMinute.endMinute === 0 ? 0 : playerMinute.endMinute - playerMinute.startMinute + 1} min
-                </span>
+        <h4 className={styles.playerMinutesTitle}>Czas gry zawodników ({filteredPlayerMinutes.length})</h4>
+        <div className={styles.playerMinutesGroups}>
+          {sortedPositions.map((position) => (
+            <div key={position} className={styles.playerPositionGroup}>
+              <h5 className={styles.positionGroupTitle}>
+                {position === 'Skrzydłowi' ? 'W' : position}
+              </h5>
+              <div className={styles.playerMinutesList}>
+                {playersByPosition[position].map((item) => (
+                  <div key={item.playerMinute.playerId} className={styles.playerMinuteItem}>
+                    <span className={styles.playerName}>
+                      {item.player.name}
+                      {item.player.isTestPlayer && (
+                        <span className={styles.testPlayerBadge}>T</span>
+                      )}
+                    </span>
+                    <span className={styles.playerMinutes}>
+                      {item.playTime} min
+                    </span>
+                  </div>
+                ))}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
-        )}
       </div>
     );
   };
@@ -109,11 +174,9 @@ const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players,
         </h3>
         <div className={styles.matchMeta}>
           <span className={styles.matchDate}>{matchInfo.date}</span>
-          <span className={styles.matchCompetitionInfo}>
-            <span className={styles.competition}>{matchInfo.competition}</span>
-            <span className={matchInfo.isHome ? styles.home : styles.away}>
-              {matchInfo.isHome ? "Dom" : "Wyjazd"}
-            </span>
+          <span className={styles.competition}>{matchInfo.competition}</span>
+          <span className={matchInfo.isHome ? styles.home : styles.away}>
+            {matchInfo.isHome ? "Dom" : "Wyjazd"}
           </span>
         </div>
       </div>
@@ -167,6 +230,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   const [deletingMatchIds, setDeletingMatchIds] = useState<Set<string>>(new Set());
   const [isMatchDataModalOpen, setIsMatchDataModalOpen] = useState(false);
   const [selectedMatchForData, setSelectedMatchForData] = useState<TeamInfo | null>(null);
+  const [isCurrentMatchInfoModalOpen, setIsCurrentMatchInfoModalOpen] = useState(false);
 
   // Automatycznie aktywuj tryb deweloperski (obejście uwierzytelniania)
   React.useEffect(() => {
@@ -354,49 +418,6 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
 
   return (
     <div className={styles.matchInfoContainer}>
-      {/* Dodajemy komponent wyświetlający szczegóły bieżącego meczu */}
-      <CurrentMatchInfo matchInfo={matchInfo} players={players} allAvailableTeams={allAvailableTeams} />
-      
-      <div className={styles.headerControls}>
-        <div className={styles.selectorsGroup}>
-          <div className={styles.seasonSelector}>
-            {selectedSeason && onChangeSeason && (
-              <SeasonSelector
-                selectedSeason={selectedSeason}
-                onChange={onChangeSeason}
-                className={styles.seasonDropdown}
-                showLabel={true}
-                availableSeasons={availableSeasons}
-              />
-            )}
-          </div>
-          
-          <div className={styles.teamSelector}>
-            <TeamsSelector
-              selectedTeam={selectedTeam}
-              onChange={onChangeTeam}
-              className={styles.teamDropdown}
-              availableTeams={availableTeams}
-              showLabel={true}
-            />
-          </div>
-        </div>
-        
-        <div className={styles.controlsContainer}>
-          {isOfflineMode && (
-            <div className={styles.offlineBadge || 'offlineBadge'}>
-              Tryb offline 📴
-            </div>
-          )}
-          <button 
-            className={styles.addButton}
-            onClick={handleAddMatch}
-          >
-            + Dodaj mecz
-          </button>
-        </div>
-      </div>
-
       <div className={styles.matchesTable}>
         <div className={styles.tableHeader}>
           <div 
@@ -445,7 +466,19 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                   className={`${styles.matchRow} ${isSelected ? styles.selected : ""} ${isHomeMatch ? styles.homeRow : styles.awayRow} ${isBeingDeleted ? styles.deleteInProgress : ""}`}
                   onClick={() => onSelectMatch(match)}
                 >
-                  <div className={styles.cell}>{match.date}</div>
+                  <div 
+                    className={`${styles.cell} ${isSelected ? styles.clickableDate : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isSelected && matchInfo) {
+                        setSelectedMatchForData(matchInfo);
+                        setIsCurrentMatchInfoModalOpen(true);
+                      }
+                    }}
+                    style={{ cursor: isSelected ? 'pointer' : 'default' }}
+                  >
+                    {match.date}
+                  </div>
                   <div className={styles.cell}>
                     <div className={styles.teamCell}>
                       {(() => {
@@ -625,6 +658,22 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
             currentMatch={selectedMatchForData}
             allAvailableTeams={allAvailableTeams}
           />
+        )}
+        
+        {/* Modal z informacjami o bieżącym meczu */}
+        {isCurrentMatchInfoModalOpen && matchInfo && (
+          <div className={styles.modalOverlay} onClick={() => setIsCurrentMatchInfoModalOpen(false)}>
+            <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+              <button
+                className={styles.modalCloseButton}
+                onClick={() => setIsCurrentMatchInfoModalOpen(false)}
+                aria-label="Zamknij"
+              >
+                ×
+              </button>
+              <CurrentMatchInfo matchInfo={matchInfo} players={players} allAvailableTeams={allAvailableTeams} />
+            </div>
+          </div>
         )}
         
         {/* Przycisk rozwijania/zwijania tabeli meczów */}

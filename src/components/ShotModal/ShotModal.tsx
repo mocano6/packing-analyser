@@ -95,6 +95,58 @@ const ShotModal: React.FC<ShotModalProps> = ({
     );
   }, [filteredPlayers, matchInfo, formData.teamContext]);
 
+  // Funkcja do grupowania zawodników według pozycji
+  const getPlayersByPosition = (playersList: Player[]) => {
+    const byPosition = playersList.reduce((acc, player) => {
+      let position = player.position || 'Brak pozycji';
+      
+      // Łączymy LW i RW w jedną grupę "Skrzydłowi"
+      if (position === 'LW' || position === 'RW') {
+        position = 'Skrzydłowi';
+      }
+      
+      if (!acc[position]) {
+        acc[position] = [];
+      }
+      acc[position].push(player);
+      return acc;
+    }, {} as Record<string, typeof playersList>);
+    
+    // Kolejność pozycji: GK, CB, DM, Skrzydłowi (LW/RW), AM, ST
+    const positionOrder = ['GK', 'CB', 'DM', 'Skrzydłowi', 'AM', 'ST'];
+    
+    // Sortuj pozycje według określonej kolejności
+    const sortedPositions = Object.keys(byPosition).sort((a, b) => {
+      const indexA = positionOrder.indexOf(a);
+      const indexB = positionOrder.indexOf(b);
+      
+      // Jeśli obie pozycje są w liście, sortuj według kolejności
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      // Jeśli tylko jedna jest w liście, ta w liście idzie pierwsza
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      // Jeśli żadna nie jest w liście, sortuj alfabetycznie
+      return a.localeCompare(b, 'pl', { sensitivity: 'base' });
+    });
+    
+    // Sortuj zawodników w każdej pozycji alfabetycznie po nazwisku
+    sortedPositions.forEach(position => {
+      byPosition[position].sort((a, b) => {
+        const getLastName = (name: string) => {
+          const words = name.trim().split(/\s+/);
+          return words[words.length - 1].toLowerCase();
+        };
+        const lastNameA = getLastName(a.name);
+        const lastNameB = getLastName(b.name);
+        return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
+      });
+    });
+    
+    return { byPosition, sortedPositions };
+  };
+
   // Znajdź bramkarza z największą liczbą minut
   const defaultGoalkeeper = useMemo(() => {
     if (filteredGoalkeepers.length === 0) return null;
@@ -463,92 +515,89 @@ const ShotModal: React.FC<ShotModalProps> = ({
           </div>
 
           {/* Wybór zawodnika z kafelków */}
-          <div className={styles.fieldGroup}>
+          <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
             <label>
               {formData.teamContext === "attack" 
                 ? "Zawodnik (atak - zielony):" 
                 : "Bramkarz (obrona - czerwony):"
               }
             </label>
-            <div className={styles.playersGrid}>
-              {(formData.teamContext === "defense" ? filteredGoalkeepers : filteredPlayers).map(player => (
-                <div
-                  key={player.id}
-                  className={`${styles.playerTile} ${
-                    formData.playerId === player.id 
-                      ? (formData.teamContext === "attack" ? styles.playerAttackerTile : styles.playerDefenderTile)
-                      : ''
-                  } ${player.imageUrl ? styles.withImage : ''}`}
-                  onClick={() => handlePlayerSelect(player.id)}
-                >
-                  {player.imageUrl && (
-                    <>
-                      <img
-                        src={player.imageUrl}
-                        alt=""
-                        className={styles.playerTileImage}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                      <div className={styles.playerTileOverlay}></div>
-                    </>
-                  )}
-                  <div className={styles.playerContent}>
-                    <div className={styles.number}>{player.number}</div>
-                    <div className={styles.playerInfo}>
-                      <div className={styles.name}>{getPlayerFullName(player)}</div>
-                      <div className={styles.details}>
-                        {player.position && (
-                          <span className={styles.position}>{player.position}</span>
-                        )}
+            <div className={styles.playersGridContainer}>
+              {(() => {
+                const playersToShow = formData.teamContext === "defense" ? filteredGoalkeepers : filteredPlayers;
+                const playersByPosition = getPlayersByPosition(playersToShow);
+                return playersByPosition.sortedPositions.map((position) => (
+                  <div key={position} className={styles.positionGroup}>
+                    <div className={styles.playersGrid}>
+                      <div className={styles.positionLabel}>
+                        {position === 'Skrzydłowi' ? 'W' : position}
+                      </div>
+                      <div className={styles.playersGridItems}>
+                        {playersByPosition.byPosition[position].map(player => (
+                          <div
+                            key={player.id}
+                            className={`${styles.playerTile} ${
+                              formData.playerId === player.id 
+                                ? (formData.teamContext === "attack" ? styles.playerAttackerTile : styles.playerDefenderTile)
+                                : ''
+                            }`}
+                            onClick={() => handlePlayerSelect(player.id)}
+                          >
+                            <div className={styles.playerContent}>
+                              <div className={styles.number}>{player.number}</div>
+                              <div className={styles.playerInfo}>
+                                <div className={styles.name}>{getPlayerFullName(player)}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ));
+              })()}
             </div>
           </div>
 
           {/* Zawodnicy na linii strzału (tylko w obronie) */}
           {formData.teamContext === "defense" && (
-            <div className={styles.fieldGroup}>
+            <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
               <label>Zawodnicy na linii strzału:</label>
-              <div className={styles.playersGrid}>
-                {filteredPlayers.map(player => (
-                  <div
-                    key={player.id}
-                    className={`${styles.playerTile} ${
-                      formData.linePlayers.includes(player.id) ? styles.playerLineTile : ''
-                    } ${player.imageUrl ? styles.withImage : ''}`}
-                    onClick={() => handleLinePlayerToggle(player.id)}
-                  >
-                    {player.imageUrl && (
-                      <>
-                        <img
-                          src={player.imageUrl}
-                          alt=""
-                          className={styles.playerTileImage}
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = "none";
-                          }}
-                        />
-                        <div className={styles.playerTileOverlay}></div>
-                      </>
-                    )}
-                    <div className={styles.playerContent}>
-                      <div className={styles.number}>{player.number}</div>
-                      <div className={styles.playerInfo}>
-                        <div className={styles.name}>{getPlayerFullName(player)}</div>
-                        <div className={styles.details}>
-                          {player.position && (
-                            <span className={styles.position}>{player.position}</span>
-                          )}
+              <div className={styles.playersGridContainer}>
+                {(() => {
+                  // Filtruj bramkarzy - w obronie bramkarz nie liczy się w linii strzału
+                  const playersWithoutGK = filteredPlayers.filter(player => 
+                    player.position !== "GK" && player.position !== "Bramkarz"
+                  );
+                  const playersByPosition = getPlayersByPosition(playersWithoutGK);
+                  return playersByPosition.sortedPositions.map((position) => (
+                    <div key={position} className={styles.positionGroup}>
+                      <div className={styles.playersGrid}>
+                        <div className={styles.positionLabel}>
+                          {position === 'Skrzydłowi' ? 'W' : position}
+                        </div>
+                        <div className={styles.playersGridItems}>
+                          {playersByPosition.byPosition[position].map(player => (
+                            <div
+                              key={player.id}
+                              className={`${styles.playerTile} ${
+                                formData.linePlayers.includes(player.id) ? styles.playerLineTile : ''
+                              }`}
+                              onClick={() => handleLinePlayerToggle(player.id)}
+                            >
+                              <div className={styles.playerContent}>
+                                <div className={styles.number}>{player.number}</div>
+                                <div className={styles.playerInfo}>
+                                  <div className={styles.name}>{getPlayerFullName(player)}</div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ));
+                })()}
               </div>
             </div>
           )}
@@ -557,7 +606,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
           {/* Kategoria akcji */}
           <div className={styles.fieldGroup}>
             <label>Kategoria akcji:</label>
-            <div className={styles.actionTypeButtons}>
+            <div className={styles.actionTypeSelector}>
               <button
                 type="button"
                 className={`${styles.actionTypeButton} ${formData.actionCategory === "open_play" ? styles.active : ""}`}
@@ -578,7 +627,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
           {/* Rodzaj akcji */}
           <div className={styles.fieldGroup}>
             <label>Rodzaj akcji:</label>
-            <div className={styles.actionTypeButtons}>
+            <div className={styles.actionTypeSelector}>
               {getAvailableActionTypes().map((actionType) => (
                 <button
                   key={actionType.value}
@@ -596,7 +645,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
           {formData.actionCategory === "sfg" && formData.actionType !== "penalty" && (
             <div className={styles.fieldGroup}>
               <label>Podrodzaj SFG:</label>
-              <div className={styles.actionTypeButtons}>
+              <div className={styles.actionTypeSelector}>
                 {getSfgSubtypes().map((subtype) => (
                   <button
                     key={subtype.value}
@@ -615,7 +664,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
           {formData.actionType !== "penalty" && (
             <div className={styles.fieldGroup}>
               <label>Faza akcji:</label>
-              <div className={styles.actionTypeButtons}>
+              <div className={styles.actionTypeSelector}>
                 {getActionPhases().map((phase) => (
                   <button
                     key={phase.value}
@@ -633,10 +682,10 @@ const ShotModal: React.FC<ShotModalProps> = ({
           {/* Typ strzału w jednej linii */}
           <div className={styles.fieldGroup}>
             <label>Typ strzału:</label>
-            <div className={styles.shotTypeButtons}>
+            <div className={styles.actionTypeSelector}>
               <button
                 type="button"
-                className={`${styles.shotTypeButton} ${formData.shotType === "on_target" ? styles.active : ""}`}
+                className={`${styles.actionTypeButton} ${formData.shotType === "on_target" ? styles.active : ""}`}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -647,7 +696,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
               </button>
               <button
                 type="button"
-                className={`${styles.shotTypeButton} ${formData.shotType === "off_target" ? styles.active : ""}`}
+                className={`${styles.actionTypeButton} ${formData.shotType === "off_target" ? styles.active : ""}`}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -658,7 +707,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
               </button>
               <button
                 type="button"
-                className={`${styles.shotTypeButton} ${formData.shotType === "blocked" ? styles.active : ""}`}
+                className={`${styles.actionTypeButton} ${formData.shotType === "blocked" ? styles.active : ""}`}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -669,7 +718,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
               </button>
               <button
                 type="button"
-                className={`${styles.shotTypeButton} ${styles.goalButton} ${formData.shotType === "goal" ? styles.active : ""}`}
+                className={`${styles.actionTypeButton} ${styles.goalButton} ${formData.shotType === "goal" ? styles.active : ""}`}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -683,57 +732,63 @@ const ShotModal: React.FC<ShotModalProps> = ({
 
           {/* Wybór asystenta (tylko gdy gol) */}
           {formData.shotType === "goal" && formData.teamContext === "attack" && (
-            <div className={styles.fieldGroup}>
+            <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
               <label>Asystent:</label>
-              <div className={styles.playersGrid}>
-                <div
-                  className={`${styles.playerTile} ${
-                    formData.assistantId === "" ? styles.playerAttackerTile : ''
-                  }`}
-                  onClick={() => handleAssistantSelect("")}
-                >
-                  <div className={styles.playerContent}>
-                    <div className={styles.playerInfo}>
-                      <div className={styles.name}>Brak asysty</div>
+              <div className={styles.playersGridContainer}>
+                <div className={styles.positionGroup}>
+                  <div className={styles.playersGrid}>
+                    <div className={styles.positionLabel} style={{ visibility: 'hidden' }}>
+                      GK
                     </div>
-                  </div>
-                </div>
-                {filteredPlayers.filter(player => player.id !== formData.playerId).map(player => (
-                  <div
-                    key={player.id}
-                    className={`${styles.playerTile} ${
-                      formData.assistantId === player.id 
-                        ? styles.playerAttackerTile
-                        : ''
-                    } ${player.imageUrl ? styles.withImage : ''}`}
-                    onClick={() => handleAssistantSelect(player.id)}
-                  >
-                    {player.imageUrl && (
-                      <>
-                        <img
-                          src={player.imageUrl}
-                          alt=""
-                          className={styles.playerTileImage}
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = "none";
-                          }}
-                        />
-                        <div className={styles.playerTileOverlay}></div>
-                      </>
-                    )}
-                    <div className={styles.playerContent}>
-                      <div className={styles.number}>{player.number}</div>
-                      <div className={styles.playerInfo}>
-                        <div className={styles.name}>{getPlayerFullName(player)}</div>
-                        <div className={styles.details}>
-                          {player.position && (
-                            <span className={styles.position}>{player.position}</span>
-                          )}
+                    <div className={styles.playersGridItems}>
+                      <div
+                        className={`${styles.playerTile} ${
+                          formData.assistantId === "" ? styles.playerAttackerTile : ''
+                        }`}
+                        onClick={() => handleAssistantSelect("")}
+                      >
+                        <div className={styles.playerContent}>
+                          <div className={styles.playerInfo}>
+                            <div className={styles.name}>Brak asysty</div>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                ))}
+                </div>
+                {(() => {
+                  const assistantPlayers = filteredPlayers.filter(player => player.id !== formData.playerId);
+                  const playersByPosition = getPlayersByPosition(assistantPlayers);
+                  return playersByPosition.sortedPositions.map((position) => (
+                    <div key={position} className={styles.positionGroup}>
+                      <div className={styles.playersGrid}>
+                        <div className={styles.positionLabel}>
+                          {position === 'Skrzydłowi' ? 'W' : position}
+                        </div>
+                        <div className={styles.playersGridItems}>
+                          {playersByPosition.byPosition[position].map(player => (
+                            <div
+                              key={player.id}
+                              className={`${styles.playerTile} ${
+                                formData.assistantId === player.id 
+                                  ? styles.playerAttackerTile
+                                  : ''
+                              }`}
+                              onClick={() => handleAssistantSelect(player.id)}
+                            >
+                              <div className={styles.playerContent}>
+                                <div className={styles.number}>{player.number}</div>
+                                <div className={styles.playerInfo}>
+                                  <div className={styles.name}>{getPlayerFullName(player)}</div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
           )}
@@ -741,7 +796,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
           {/* Liczba kontaktów */}
           <div className={styles.fieldGroup}>
             <label>Liczba kontaktów:</label>
-            <div className={styles.actionTypeButtons}>
+            <div className={styles.actionTypeSelector}>
               <button
                 type="button"
                 className={`${styles.actionTypeButton} ${formData.isContact1 ? styles.active : ""}`}
@@ -759,6 +814,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     };
                   });
                 }}
+                title="Aktywuj/Dezaktywuj 1T"
+                aria-pressed={formData.isContact1}
               >
                 1T
               </button>
@@ -779,6 +836,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     };
                   });
                 }}
+                title="Aktywuj/Dezaktywuj 2T"
+                aria-pressed={formData.isContact2}
               >
                 2T
               </button>
@@ -799,6 +858,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     };
                   });
                 }}
+                title="Aktywuj/Dezaktywuj 3T+"
+                aria-pressed={formData.isContact3Plus}
               >
                 3T+
               </button>
@@ -807,24 +868,24 @@ const ShotModal: React.FC<ShotModalProps> = ({
 
           <div className={styles.fieldGroup}>
             <label>Część ciała:</label>
-            <div className={styles.bodyPartButtons}>
+            <div className={styles.actionTypeSelector}>
               <button
                 type="button"
-                className={`${styles.bodyPartButton} ${formData.bodyPart === "foot" ? styles.active : ""}`}
+                className={`${styles.actionTypeButton} ${formData.bodyPart === "foot" ? styles.active : ""}`}
                 onClick={() => setFormData({...formData, bodyPart: "foot"})}
               >
                 Noga
               </button>
               <button
                 type="button"
-                className={`${styles.bodyPartButton} ${formData.bodyPart === "head" ? styles.active : ""}`}
+                className={`${styles.actionTypeButton} ${formData.bodyPart === "head" ? styles.active : ""}`}
                 onClick={() => setFormData({...formData, bodyPart: "head"})}
               >
                 Głowa
               </button>
               <button
                 type="button"
-                className={`${styles.bodyPartButton} ${formData.bodyPart === "other" ? styles.active : ""}`}
+                className={`${styles.actionTypeButton} ${formData.bodyPart === "other" ? styles.active : ""}`}
                 onClick={() => setFormData({...formData, bodyPart: "other"})}
               >
                 Inne
@@ -834,43 +895,43 @@ const ShotModal: React.FC<ShotModalProps> = ({
 
           {/* Zawodnicy blokujący (tylko w obronie i gdy typ strzału to zablokowany) */}
           {formData.teamContext === "defense" && formData.shotType === "blocked" && (
-            <div className={styles.fieldGroup}>
+            <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
               <label>Zawodnik blokujący strzał:</label>
-              <div className={styles.playersGrid}>
-                {filteredPlayers.map(player => (
-                  <div
-                    key={player.id}
-                    className={`${styles.playerTile} ${
-                      formData.blockingPlayers.includes(player.id) ? styles.playerBlockingTile : ''
-                    } ${player.imageUrl ? styles.withImage : ''}`}
-                    onClick={() => handleBlockingPlayerToggle(player.id)}
-                  >
-                    {player.imageUrl && (
-                      <>
-                        <img
-                          src={player.imageUrl}
-                          alt=""
-                          className={styles.playerTileImage}
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = "none";
-                          }}
-                        />
-                        <div className={styles.playerTileOverlay}></div>
-                      </>
-                    )}
-                    <div className={styles.playerContent}>
-                      <div className={styles.number}>{player.number}</div>
-                      <div className={styles.playerInfo}>
-                        <div className={styles.name}>{getPlayerFullName(player)}</div>
-                        <div className={styles.details}>
-                          {player.position && (
-                            <span className={styles.position}>{player.position}</span>
-                          )}
+              <div className={styles.playersGridContainer}>
+                {(() => {
+                  // Filtruj bramkarzy - bramkarz nie liczy się w blokowaniu strzału
+                  const playersWithoutGK = filteredPlayers.filter(player => 
+                    player.position !== "GK" && player.position !== "Bramkarz"
+                  );
+                  const playersByPosition = getPlayersByPosition(playersWithoutGK);
+                  return playersByPosition.sortedPositions.map((position) => (
+                    <div key={position} className={styles.positionGroup}>
+                      <div className={styles.playersGrid}>
+                        <div className={styles.positionLabel}>
+                          {position === 'Skrzydłowi' ? 'W' : position}
+                        </div>
+                        <div className={styles.playersGridItems}>
+                          {playersByPosition.byPosition[position].map(player => (
+                            <div
+                              key={player.id}
+                              className={`${styles.playerTile} ${
+                                formData.blockingPlayers.includes(player.id) ? styles.playerBlockingTile : ''
+                              }`}
+                              onClick={() => handleBlockingPlayerToggle(player.id)}
+                            >
+                              <div className={styles.playerContent}>
+                                <div className={styles.number}>{player.number}</div>
+                                <div className={styles.playerInfo}>
+                                  <div className={styles.name}>{getPlayerFullName(player)}</div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ));
+                })()}
               </div>
             </div>
           )}

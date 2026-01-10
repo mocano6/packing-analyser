@@ -23,9 +23,9 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
       role="tablist"
       aria-orientation="horizontal"
     >
-      <div className={styles.tabs}>
+      <div className={styles.actionTypeSelector}>
         <button
-          className={`${styles.tab} ${
+          className={`${styles.actionTypeButton} ${
             activeTab === "packing" ? styles.active : ""
           }`}
           onClick={handleTabChange("packing")}
@@ -34,10 +34,10 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
           aria-controls="packing-panel"
           id="packing-tab"
         >
-          Packing
+          PxT
         </button>
         <button
-          className={`${styles.tab} ${
+          className={`${styles.actionTypeButton} ${
             activeTab === "acc8s" ? styles.active : ""
           }`}
           onClick={handleTabChange("acc8s")}
@@ -49,7 +49,7 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
           8s ACC
         </button>
         <button
-          className={`${styles.tab} ${
+          className={`${styles.actionTypeButton} ${
             activeTab === "xg" ? styles.active : ""
           }`}
           onClick={handleTabChange("xg")}
@@ -61,7 +61,7 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
           xG
         </button>
         <button
-          className={`${styles.tab} ${
+          className={`${styles.actionTypeButton} ${
             activeTab === "regain" ? styles.active : ""
           }`}
           onClick={handleTabChange("regain")}
@@ -73,7 +73,7 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
           Regain
         </button>
         <button
-          className={`${styles.tab} ${
+          className={`${styles.actionTypeButton} ${
             activeTab === "loses" ? styles.active : ""
           }`}
           onClick={handleTabChange("loses")}
@@ -85,7 +85,7 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
           Loses
         </button>
         <button
-          className={`${styles.tab} ${
+          className={`${styles.actionTypeButton} ${
             activeTab === "pk_entries" ? styles.active : ""
           }`}
           onClick={handleTabChange("pk_entries")}

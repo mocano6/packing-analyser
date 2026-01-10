@@ -179,6 +179,26 @@ export const getXTValueForZone = (zone: number): number => {
 };
 
 /**
+ * Funkcja do pobierania wartości xT z przeciwległej strony boiska (odwrócona siatka)
+ * @param zone Indeks strefy (0-95)
+ * @returns Wartość xT z przeciwległej strony boiska
+ */
+export const getOppositeXTValueForZone = (zone: number): number => {
+  if (zone < 0 || zone >= 96) return 0;
+  
+  // Obliczanie wiersza i kolumny na podstawie zone
+  const row = Math.floor(zone / 12);
+  const col = zone % 12;
+  
+  // Odwracamy boisko: wiersze (0->7, 7->0) i kolumny (0->11, 11->0)
+  const oppositeRow = 7 - row;
+  const oppositeCol = 11 - col;
+  
+  // Pobieramy wartość xT z przeciwległej strony
+  return getXTValueFromMatrix(oppositeRow, oppositeCol);
+};
+
+/**
  * Funkcja do pobierania nazwy strefy w formie tablicy [litera, numer]
  * @param zone Indeks strefy (0-95)
  * @returns Nazwa strefy w formie tablicy [litera, numer] lub null jeśli indeks jest poza zakresem

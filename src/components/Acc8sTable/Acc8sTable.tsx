@@ -41,39 +41,61 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
     return events.length > 0 ? events.join(", ") : "-";
   };
 
-  // Funkcja do obsługi kliknięcia na czas wideo
+  // Funkcja do obsługi kliknięcia na czas wideo (dokładnie tak jak w ActionsTable)
   const handleVideoTimeClick = async (videoTimestamp?: number) => {
-    if (!videoTimestamp && videoTimestamp !== 0) return;
+    if (!videoTimestamp) return;
     
-    // Jeśli jest przekazana funkcja onVideoTimeClick, użyj jej (tak jak w ShotsTable)
-    if (onVideoTimeClick) {
-      await onVideoTimeClick(videoTimestamp);
-      return;
-    }
+    console.log('Acc8sTable handleVideoTimeClick - timestamp:', videoTimestamp);
+    console.log('Acc8sTable handleVideoTimeClick - customVideoRef?.current:', customVideoRef?.current);
+    console.log('Acc8sTable handleVideoTimeClick - youtubeVideoRef?.current:', youtubeVideoRef?.current);
     
-    // Fallback do lokalnej obsługi (jeśli nie ma onVideoTimeClick)
-    // Sprawdź czy mamy otwarte zewnętrzne okno wideo
-    const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
+    // Sprawdź czy mamy otwarte zewnętrzne okno wideo (sprawdzamy bezpośrednio externalWindow, a nie localStorage)
     const externalWindow = (window as any).externalVideoWindow;
+    const isExternalWindowOpen = externalWindow && !externalWindow.closed;
     
-    if (isExternalWindowOpen && externalWindow && !externalWindow.closed) {
-      // Wyślij wiadomość do zewnętrznego okna
-      externalWindow.postMessage({
-        type: 'SEEK_TO_TIME',
-        time: videoTimestamp
-      }, '*');
+    console.log('Acc8sTable handleVideoTimeClick - externalWindow:', externalWindow);
+    console.log('Acc8sTable handleVideoTimeClick - externalWindow?.closed:', externalWindow?.closed);
+    console.log('Acc8sTable handleVideoTimeClick - isExternalWindowOpen:', isExternalWindowOpen);
+    
+    if (isExternalWindowOpen) {
+      console.log('Acc8sTable - wysyłam SEEK_TO_TIME do zewnętrznego okna, timestamp:', videoTimestamp);
+      try {
+        // Wyślij wiadomość do zewnętrznego okna (używamy window.location.origin dla bezpieczeństwa)
+        const targetOrigin = window.location.origin;
+        externalWindow.postMessage({
+          type: 'SEEK_TO_TIME',
+          time: videoTimestamp
+        }, targetOrigin);
+        console.log('Acc8sTable - wiadomość wysłana pomyślnie do origin:', targetOrigin);
+      } catch (error) {
+        console.error('Acc8sTable - błąd podczas wysyłania wiadomości do zewnętrznego okna:', error);
+        // Fallback - spróbuj z '*' jako origin
+        try {
+          externalWindow.postMessage({
+            type: 'SEEK_TO_TIME',
+            time: videoTimestamp
+          }, '*');
+          console.log('Acc8sTable - wiadomość wysłana z fallback origin "*"');
+        } catch (fallbackError) {
+          console.error('Acc8sTable - błąd również przy fallback:', fallbackError);
+        }
+      }
+    } else if (youtubeVideoRef?.current) {
+      console.log('Acc8sTable - używam youtubeVideoRef');
+      try {
+        await youtubeVideoRef.current.seekTo(videoTimestamp);
+      } catch (error) {
+        console.warn('Nie udało się przewinąć YouTube do czasu:', videoTimestamp, error);
+      }
     } else if (customVideoRef?.current) {
+      console.log('Acc8sTable - używam customVideoRef');
       try {
         await customVideoRef.current.seekTo(videoTimestamp);
       } catch (error) {
         console.warn('Nie udało się przewinąć własnego odtwarzacza do czasu:', videoTimestamp, error);
       }
-    } else if (youtubeVideoRef?.current) {
-      try {
-        await youtubeVideoRef.current.seekTo(videoTimestamp);
-      } catch (error) {
-        console.warn('Nie udało się przewinąć wideo do czasu:', videoTimestamp, error);
-      }
+    } else {
+      console.warn('Acc8sTable - brak aktywnego playera');
     }
   };
 
@@ -110,24 +132,20 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
               {entry.minute}'
             </div>
             <div className={styles.cell}>
-              {(() => {
-                console.log('Acc8sTable render - entry:', entry.id, 'videoTimestamp:', entry.videoTimestamp, 'type:', typeof entry.videoTimestamp);
-                if (entry.videoTimestamp !== undefined && entry.videoTimestamp !== null) {
-                  return (
-                    <span 
-                      className={styles.videoTimeLink}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleVideoTimeClick(entry.videoTimestamp);
-                      }}
-                      title="Kliknij aby przejść do tego momentu w wideo"
-                    >
-                      {formatVideoTime(entry.videoTimestamp)}
-                    </span>
-                  );
-                }
-                return <span>-</span>;
-              })()}
+              {entry.videoTimestamp ? (
+                <span 
+                  className={styles.videoTimeLink}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleVideoTimeClick(entry.videoTimestamp);
+                  }}
+                  title="Kliknij aby przejść do tego momentu w wideo"
+                >
+                  {formatVideoTime(entry.videoTimestamp)}
+                </span>
+              ) : (
+                <span>-</span>
+              )}
             </div>
                 <div className={styles.cell}>
                   {entry.passingPlayerIds?.length || 0}

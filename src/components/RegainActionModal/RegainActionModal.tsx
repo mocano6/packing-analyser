@@ -60,6 +60,12 @@ interface RegainActionModalProps {
   // Nowy prop dla liczby przeciwników przed piłką
   opponentsBeforeBall: number;
   onOpponentsBeforeBallChange: (count: number) => void;
+  // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
+  playersLeftField: number;
+  onPlayersLeftFieldChange: (count: number) => void;
+  // Nowy prop dla liczby zawodników przeciwnika, którzy opuścili boisko
+  opponentsLeftField: number;
+  onOpponentsLeftFieldChange: (count: number) => void;
 }
 
 const RegainActionModal: React.FC<RegainActionModalProps> = ({
@@ -113,6 +119,12 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   // Nowy prop dla liczby przeciwników przed piłką
   opponentsBeforeBall,
   onOpponentsBeforeBallChange,
+  // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
+  playersLeftField,
+  onPlayersLeftFieldChange,
+  // Nowy prop dla liczby zawodników przeciwnika, którzy opuścili boisko
+  opponentsLeftField,
+  onOpponentsLeftFieldChange,
 }) => {
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
 
@@ -194,6 +206,58 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
     
     return sortedPlayers;
   }, [players, isEditMode, allMatches, currentSelectedMatch, matchInfo]);
+
+  // Grupowanie zawodników według pozycji
+  const playersByPosition = useMemo(() => {
+    const byPosition = filteredPlayers.reduce((acc, player) => {
+      let position = player.position || 'Brak pozycji';
+      
+      // Łączymy LW i RW w jedną grupę "Skrzydłowi"
+      if (position === 'LW' || position === 'RW') {
+        position = 'Skrzydłowi';
+      }
+      
+      if (!acc[position]) {
+        acc[position] = [];
+      }
+      acc[position].push(player);
+      return acc;
+    }, {} as Record<string, typeof filteredPlayers>);
+    
+    // Kolejność pozycji: GK, CB, DM, Skrzydłowi (LW/RW), AM, ST
+    const positionOrder = ['GK', 'CB', 'DM', 'Skrzydłowi', 'AM', 'ST'];
+    
+    // Sortuj pozycje według określonej kolejności
+    const sortedPositions = Object.keys(byPosition).sort((a, b) => {
+      const indexA = positionOrder.indexOf(a);
+      const indexB = positionOrder.indexOf(b);
+      
+      // Jeśli obie pozycje są w liście, sortuj według kolejności
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      // Jeśli tylko jedna jest w liście, ta w liście idzie pierwsza
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      // Jeśli żadna nie jest w liście, sortuj alfabetycznie
+      return a.localeCompare(b, 'pl', { sensitivity: 'base' });
+    });
+    
+    // Sortuj zawodników w każdej pozycji alfabetycznie po nazwisku
+    sortedPositions.forEach(position => {
+      byPosition[position].sort((a, b) => {
+        const getLastName = (name: string) => {
+          const words = name.trim().split(/\s+/);
+          return words[words.length - 1].toLowerCase();
+        };
+        const lastNameA = getLastName(a.name);
+        const lastNameB = getLastName(b.name);
+        return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
+      });
+    });
+    
+    return { byPosition, sortedPositions };
+  }, [filteredPlayers]);
 
   if (!isOpen) return null;
 
@@ -357,6 +421,91 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                   </button>
                 </div>
               </div>
+              {/* Przyciski dla zawodników, którzy opuścili boisko */}
+              <div className={styles.toggleGroup}>
+                <div 
+                  className={styles.compactPointsButton}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onPlayersLeftFieldChange(Math.min(10, playersLeftField + 1));
+                  }}
+                  title="Kliknij, aby dodać 1 partnera"
+                  style={{ cursor: 'pointer', position: 'relative' }}
+                >
+                  <span className={styles.compactLabel}>
+                    Partnerzy
+                  </span>
+                  <span className={styles.pointsValue}><b>{playersLeftField}</b></span>
+                  <button
+                    className={styles.compactSubtractButton}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onPlayersLeftFieldChange(Math.max(0, playersLeftField - 1));
+                    }}
+                    title="Odejmij 1 partnera"
+                    type="button"
+                    disabled={playersLeftField <= 0}
+                  >
+                    −
+                  </button>
+                  <div style={{ 
+                    position: 'absolute', 
+                    bottom: '4px', 
+                    right: '4px', 
+                    display: 'flex',
+                    gap: '2px',
+                    fontSize: '10px',
+                    lineHeight: '1'
+                  }}>
+                    <span>🟥</span>
+                    <span style={{ color: '#dc2626' }}>✚</span>
+                  </div>
+                </div>
+              </div>
+              <div className={styles.toggleGroup}>
+                <div 
+                  className={styles.compactPointsButton}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onOpponentsLeftFieldChange(Math.min(10, opponentsLeftField + 1));
+                  }}
+                  title="Kliknij, aby dodać 1 przeciwnika"
+                  style={{ cursor: 'pointer', position: 'relative' }}
+                >
+                  <span className={styles.compactLabel}>
+                    Przeciwnicy
+                  </span>
+                  <span className={styles.pointsValue}><b>{opponentsLeftField}</b></span>
+                  <button
+                    className={styles.compactSubtractButton}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onOpponentsLeftFieldChange(Math.max(0, opponentsLeftField - 1));
+                    }}
+                    title="Odejmij 1 przeciwnika"
+                    type="button"
+                    disabled={opponentsLeftField <= 0}
+                  >
+                    −
+                  </button>
+                  <div style={{ 
+                    position: 'absolute', 
+                    bottom: '4px', 
+                    right: '4px', 
+                    display: 'flex',
+                    gap: '2px',
+                    fontSize: '10px',
+                    lineHeight: '1'
+                  }}>
+                    <span>🟥</span>
+                    <span style={{ color: '#dc2626' }}>✚</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -368,7 +517,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
             <div className={styles.playerSelectionInfo}>
               <p>Kliknij, aby wybrać zawodnika, który odebrał piłkę od przeciwnika.</p>
             </div>
-            <div className={styles.playersGrid}>
+            <div className={styles.playersGridContainer}>
               {filteredPlayers.length > 0 ? (
                 <>
                   {isEditMode && filteredPlayers.length < 3 && (
@@ -376,16 +525,27 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                       ⚠️ Tylko {filteredPlayers.length} zawodnik{filteredPlayers.length === 1 ? '' : 'ów'} dostępn{filteredPlayers.length === 1 ? 'y' : 'ych'} w tym meczu
                     </div>
                   )}
-                  {filteredPlayers.map((player) => (
-                  <PlayerCard
-                    key={player.id}
-                    player={player}
-                    isSender={player.id === selectedPlayerId}
-                    isReceiver={false}
-                    isDribbler={false}
-                    isDefensePlayer={false}
-                    onSelect={handlePlayerClick}
-                  />
+                  {playersByPosition.sortedPositions.map((position) => (
+                    <div key={position} className={styles.positionGroup}>
+                      <div className={styles.playersGrid}>
+                        <div className={styles.positionLabel}>
+                          {position === 'Skrzydłowi' ? 'W' : position}
+                        </div>
+                        <div className={styles.playersGridItems}>
+                          {playersByPosition.byPosition[position].map(player => (
+                            <PlayerCard
+                              key={player.id}
+                              player={player}
+                              isSender={player.id === selectedPlayerId}
+                              isReceiver={false}
+                              isDribbler={false}
+                              isDefensePlayer={false}
+                              onSelect={handlePlayerClick}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </>
               ) : (
@@ -410,62 +570,6 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
 
           {/* Wszystkie przyciski w jednym rzędzie */}
           <div className={styles.compactButtonsRow}>
-            {/* Grupa przycisków kontaktów */}
-            <div className={styles.pButtonsGroupNoBorder}>
-              <div className={styles.pTopRow}>
-              <button
-                className={`${styles.compactButton} ${
-                  isContact1Active ? styles.activeButton : ""
-                }`}
-                onClick={onContact1Toggle}
-                title="Aktywuj/Dezaktywuj 1T"
-                aria-pressed={isContact1Active}
-                type="button"
-              >
-                <span className={styles.compactLabel}>1T</span>
-              </button>
-              
-              <button
-                className={`${styles.compactButton} ${
-                  isContact2Active ? styles.activeButton : ""
-                }`}
-                onClick={onContact2Toggle}
-                title="Aktywuj/Dezaktywuj 2T"
-                aria-pressed={isContact2Active}
-                type="button"
-              >
-                <span className={styles.compactLabel}>2T</span>
-              </button>
-            </div>
-            
-            <div className={styles.pBottomRow}>
-              <button
-                className={`${styles.compactButton} ${
-                  isContact3PlusActive ? styles.activeButton : ""
-                }`}
-                onClick={onContact3PlusToggle}
-                title="Aktywuj/Dezaktywuj 3T+"
-                aria-pressed={isContact3PlusActive}
-                type="button"
-              >
-                <span className={styles.compactLabel}>3T+</span>
-              </button>
-            </div>
-            </div>
-
-            {/* Przycisk "Poniżej 8s" */}
-            <button
-              className={`${styles.compactButton} ${
-                isBelow8sActive ? styles.activeButton : ""
-              }`}
-              onClick={onBelow8sToggle}
-              aria-pressed={isBelow8sActive}
-              type="button"
-              title="Poniżej 8 sekund"
-            >
-              <span className={styles.compactLabel}>Poniżej 8s</span>
-            </button>
-
             {/* Sekcja z przyciskami "przed piłką" - ułożone pionowo */}
             <div className={styles.verticalButtonsContainer}>
               {/* Przycisk "Liczba partnerów przed piłką" */}
@@ -507,7 +611,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                 title="Kliknij, aby dodać 1 przeciwnika"
                 style={{ cursor: 'pointer' }}
               >
-                <span className={styles.compactLabel}>Przeciwnik przed piłką</span>
+                <span className={styles.compactLabel}>Przeciwnik przed piłką (bez bramkarza)</span>
                 <span className={styles.pointsValue}><b>{opponentsBeforeBall}</b></span>
                 <button
                   className={styles.compactSubtractButton}
@@ -524,6 +628,19 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                 </button>
               </div>
             </div>
+
+            {/* Przycisk "Poniżej 8s" */}
+            <button
+              className={`${styles.compactButton} ${
+                isBelow8sActive ? styles.activeButton : ""
+              }`}
+              onClick={onBelow8sToggle}
+              aria-pressed={isBelow8sActive}
+              type="button"
+              title="Poniżej 8 sekund"
+            >
+              <span className={styles.compactLabel}>Poniżej 8s</span>
+            </button>
 
             {/* Pozostałe przyciski punktów (bez "Minięty przeciwnik") */}
             {ACTION_BUTTONS.map((button, index) => {

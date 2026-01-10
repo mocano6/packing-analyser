@@ -209,54 +209,68 @@ export default function Instructions() {
     </div>
   );
 
-  // Tylko renderuj zawartość instrukcji jeśli są rozwinięte
-  if (!isExpanded) {
-    return (
-      <div className={styles.instructionsContainer}>
-        <button
-          className={styles.toggleButton}
-          onClick={() => setIsExpanded(true)}
-          aria-expanded="false"
-        >
-          <span className={styles.toggleIcon}>📖</span>
-          Pokaż instrukcję
-          <span className={`${styles.arrow} ${styles.down}`}>▼</span>
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className={styles.instructionsContainer}>
+    <>
       <button
-        className={styles.toggleButton}
-        onClick={() => setIsExpanded(false)}
-        aria-expanded="true"
+        className={styles.iconButton}
+        onClick={() => setIsExpanded(true)}
+        aria-label="Pokaż instrukcję"
+        title="Pokaż instrukcję"
       >
-        <span className={styles.toggleIcon}>📖</span>
-        Ukryj instrukcję
-        <span className={`${styles.arrow} ${styles.up}`}>▼</span>
+        <svg 
+          className={styles.infoIcon}
+          viewBox="0 0 24 24" 
+          fill="none" 
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <circle cx="12" cy="12" r="10" stroke="#2196f3" strokeWidth="2" fill="none"/>
+          <text 
+            x="12" 
+            y="18" 
+            textAnchor="middle" 
+            fill="#2196f3" 
+            fontSize="16" 
+            fontWeight="bold"
+            fontFamily="Arial, sans-serif"
+          >
+            i
+          </text>
+        </svg>
       </button>
 
-      <div className={styles.instructionsContent}>
-        <SectionTabs />
+      {isExpanded && (
+        <div className={styles.modalOverlay} onClick={() => setIsExpanded(false)}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <button
+              className={styles.modalCloseButton}
+              onClick={() => setIsExpanded(false)}
+              aria-label="Zamknij instrukcję"
+            >
+              ×
+            </button>
+            
+            <div className={styles.instructionsContent}>
+              <SectionTabs />
 
-        <div className={styles.instructionsList}>
-          <h3>{sections[activeSection as keyof typeof sections].title}</h3>
-          {sections[activeSection as keyof typeof sections].content}
-        </div>
+              <div className={styles.instructionsList}>
+                <h3>{sections[activeSection as keyof typeof sections].title}</h3>
+                {sections[activeSection as keyof typeof sections].content}
+              </div>
 
-        <div className={styles.instructionFooter}>
-          <div className={styles.tip}>
-            <span className={styles.tipIcon}>💡</span>
-            <p>
-              Dokładna i konsekwentna analiza podań pozwoli na uzyskanie
-              wartościowych danych o stylu gry drużyny i skuteczności
-              zawodników.
-            </p>
+              <div className={styles.instructionFooter}>
+                <div className={styles.tip}>
+                  <span className={styles.tipIcon}>💡</span>
+                  <p>
+                    Dokładna i konsekwentna analiza podań pozwoli na uzyskanie
+                    wartościowych danych o stylu gry drużyny i skuteczności
+                    zawodników.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }

@@ -8,6 +8,8 @@ export interface PlayersGridProps {
   onAddPlayer: () => void;
   onEditPlayer: (id: string) => void;
   onDeletePlayer: (id: string) => void;
+  isExpanded?: boolean;
+  onToggle?: () => void;
 }
 
 export interface PlayerTileProps {

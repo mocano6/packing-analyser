@@ -6,15 +6,364 @@
   font-family: Arial, sans-serif;
 }
 
+.topHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.headerControlsWrapper {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.selectorsGroup {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.playersGridWrapper {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.videoIconsHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+}
+
+.youtubeLogoHeader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  transition: all 0.2s;
+  background-color: transparent;
+}
+
+.youtubeLogoHeader:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.youtubeLogoHeaderActive {
+  background-color: rgba(255, 0, 0, 0.1);
+  box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.2);
+}
+
+.youtubeLogoIcon {
+  width: 32px;
+  height: 32px;
+  display: block;
+}
+
+.externalButtonHeader {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: #666;
+  padding: 6px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.externalButtonHeader:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.controlsContainer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.seasonDropdown,
+.teamDropdown {
+  /* Styles are now handled by TeamsSelector component */
+  background-image: none !important;
+  padding-right: 12px !important;
+}
+
+.seasonDropdown:focus,
+.teamDropdown:focus {
+  outline: none;
+  border-color: #2196f3;
+}
+
+.addButton {
+  padding: 8px 16px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  min-width: auto;
+  width: auto;
+  height: auto;
+  line-height: 1.4;
+}
+
+.addButton:hover {
+  background-color: #1976d2;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.offlineBadge {
+  padding: 6px 12px;
+  background-color: #ff9800;
+  color: white;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Modal overlay dla siatki zawodników */
+.playersGridOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.playersGridModal {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 95%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: modalSlideIn 0.3s ease-out;
+  overflow: hidden;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.playersGridHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-radius: 16px 16px 0 0;
+}
+
+.playersGridTitle {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.playersGridHeaderActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.addPlayerButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  font-size: 24px;
+  font-weight: 300;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+  line-height: 1;
+  padding: 0;
+}
+
+.addPlayerButton:hover {
+  background: #2563eb;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5);
+}
+
+.addPlayerButton:active {
+  transform: scale(0.95);
+}
+
+.closePlayersGridButton {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  color: #6b7280;
+  border: none;
+  font-size: 20px;
+  font-weight: 300;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  line-height: 1;
+  padding: 0;
+}
+
+.closePlayersGridButton:hover {
+  background: #e5e7eb;
+  color: #374151;
+  transform: scale(1.1);
+}
+
+.closePlayersGridButton:active {
+  transform: scale(0.95);
+}
+
+.playersGridContentWrapper {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.playersGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 15px;
+}
+
+.playerTile {
+  background-color: white;
+  border-radius: 6px;
+  padding: 12px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  border: 1px solid #e0e0e0;
+}
+
+.playerTile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+}
+
+.playerTileSelected {
+  background-color: #e3f2fd;
+  border: 1px solid #2196f3;
+  color: #2196f3;
+}
+
+.positionGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.playersGridContent {
+  display: grid;
+  grid-template-columns: 50px 1fr;
+  gap: 12px;
+}
+
+.playersGridContainer {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 12px;
+  grid-column: 2;
+}
+
+.positionLabel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2196f3;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background-color: rgba(33, 150, 243, 0.1);
+  border-radius: 4px;
+  padding: 8px 4px;
+  grid-column: 1;
+  grid-row: 1 / -1;
+  align-self: start;
+  border: 1px solid rgba(33, 150, 243, 0.2);
+  width: 100%;
+  min-height: auto;
+}
+
 .content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
 .videoPlayersContainer {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 20px;
   width: 100%;
 }
@@ -68,7 +417,7 @@
   color: #1f2937;
 }
 
-.addButton {
+.acc8sAddButton {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -85,7 +434,7 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.addButton:hover {
+.acc8sAddButton:hover {
   background: #2563eb;
   transform: scale(1.1);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);

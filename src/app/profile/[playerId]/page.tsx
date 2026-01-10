@@ -70,6 +70,8 @@ export default function PlayerDetailsPage() {
   } | null>(null);
   const [actionsModalOpen, setActionsModalOpen] = useState(false);
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<{ playerId: string; playerName: string; zoneName: string } | null>(null);
+  const [isPlayerSelectModalOpen, setIsPlayerSelectModalOpen] = useState(false);
+  const [isMatchSelectModalOpen, setIsMatchSelectModalOpen] = useState(false);
 
   // Ref do śledzenia, czy już załadowaliśmy mecze dla danego zespołu
   const lastLoadedTeamRef = useRef<string | null>(null);
@@ -111,6 +113,82 @@ export default function PlayerDetailsPage() {
       return playerTeams.includes(selectedTeam);
     });
   }, [players, selectedTeam]);
+
+  // Grupowanie zawodników według pozycji dla modala wyboru
+  const playersByPosition = useMemo(() => {
+    const byPosition = filteredPlayers.reduce((acc, player) => {
+      let position = player.position || 'Brak pozycji';
+      
+      // Łączymy LW i RW w jedną grupę "Skrzydłowi"
+      if (position === 'LW' || position === 'RW') {
+        position = 'Skrzydłowi';
+      }
+      
+      if (!acc[position]) {
+        acc[position] = [];
+      }
+      acc[position].push(player);
+      return acc;
+    }, {} as Record<string, typeof filteredPlayers>);
+    
+    // Kolejność pozycji: GK, CB, DM, Skrzydłowi (LW/RW), AM, ST
+    const positionOrder = ['GK', 'CB', 'DM', 'Skrzydłowi', 'AM', 'ST'];
+    
+    // Sortuj pozycje według określonej kolejności
+    const sortedPositions = Object.keys(byPosition).sort((a, b) => {
+      const indexA = positionOrder.indexOf(a);
+      const indexB = positionOrder.indexOf(b);
+      
+      // Jeśli obie pozycje są w liście, sortuj według kolejności
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      // Jeśli tylko jedna jest w liście, ta w liście idzie pierwsza
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      // Jeśli żadna nie jest w liście, sortuj alfabetycznie
+      return a.localeCompare(b, 'pl', { sensitivity: 'base' });
+    });
+    
+    // Sortuj zawodników w każdej pozycji alfabetycznie po nazwisku
+    // Dla grupy "Skrzydłowi" sortuj najpierw po pozycji (LW przed RW), potem po nazwisku
+    sortedPositions.forEach(position => {
+      byPosition[position].sort((a, b) => {
+        // Dla grupy "Skrzydłowi" sortuj najpierw po pozycji
+        if (position === 'Skrzydłowi') {
+          const posA = a.position || '';
+          const posB = b.position || '';
+          if (posA !== posB) {
+            // LW przed RW
+            if (posA === 'LW') return -1;
+            if (posB === 'LW') return 1;
+          }
+        }
+        
+        const getLastName = (name: string) => {
+          const words = name.trim().split(/\s+/);
+          return words[words.length - 1].toLowerCase();
+        };
+        const lastNameA = getLastName(a.name);
+        const lastNameB = getLastName(b.name);
+        return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
+      });
+    });
+    
+    return { byPosition, sortedPositions };
+  }, [filteredPlayers]);
+
+  // Funkcja do wyboru zawodnika z modala
+  const handlePlayerSelect = (playerId: string) => {
+    setSelectedPlayerForView(playerId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedPlayerForView', playerId);
+    }
+    setAllActions([]);
+    setAllShots([]);
+    setSelectedMatchIds([]);
+    setIsPlayerSelectModalOpen(false);
+  };
 
   // Pobierz wszystkie akcje dla zawodnika
   useEffect(() => {
@@ -1900,34 +1978,15 @@ export default function PlayerDetailsPage() {
         </div>
         <div className={styles.selectorGroup}>
           <label htmlFor="player-select" className={styles.selectorLabel}>Zawodnik:</label>
-          <select
+          <button
             id="player-select"
-            value={selectedPlayerForView || ""}
-            onChange={(e) => {
-              if (e.target.value) {
-                const newPlayerId = e.target.value;
-                setSelectedPlayerForView(newPlayerId);
-                // Zapisz wybór zawodnika w localStorage
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('selectedPlayerForView', newPlayerId);
-                }
-                // Wyczyść akcje, aby wymusić przeładowanie
-                setAllActions([]);
-                setAllShots([]);
-                setSelectedMatchIds([]);
-                // Nie używaj router.push() - tylko zmień stan, aby uniknąć przeładowania strony
-                // router.push(`/profile/${newPlayerId}`);
-              }
-            }}
-            className={styles.selectorSelect}
+            onClick={() => setIsPlayerSelectModalOpen(true)}
+            className={styles.playerSelectButton}
           >
-            <option value="">Wybierz zawodnika...</option>
-            {filteredPlayers.map(player => (
-              <option key={player.id} value={player.id}>
-                {getPlayerFullName(player)}
-              </option>
-            ))}
-          </select>
+            {selectedPlayerForView 
+              ? getPlayerFullName(filteredPlayers.find(p => p.id === selectedPlayerForView) || filteredPlayers[0])
+              : "Wybierz zawodnika..."}
+          </button>
         </div>
         <div className={styles.selectorGroup}>
           <label htmlFor="season-select" className={styles.selectorLabel}>Sezon:</label>
@@ -1939,59 +1998,15 @@ export default function PlayerDetailsPage() {
           />
         </div>
         <div className={styles.selectorGroup}>
+          <label className={styles.selectorLabel}>Mecze:</label>
           <button
-            className={styles.matchToggleButton}
-            onClick={() => setShowMatchSelector(!showMatchSelector)}
+            className={styles.matchSelectButton}
+            onClick={() => setIsMatchSelectModalOpen(true)}
           >
-            {showMatchSelector ? "Ukryj" : "Pokaż"} wybór meczów ({filteredMatchesBySeason.filter(m => selectedMatchIds.includes(m.matchId || "")).length}/{filteredMatchesBySeason.length})
+            Wybrane mecze ({filteredMatchesBySeason.filter(m => selectedMatchIds.includes(m.matchId || "")).length}/{filteredMatchesBySeason.length})
           </button>
         </div>
       </div>
-
-      {/* Lista meczów do wyboru */}
-      {showMatchSelector && (
-        <div className={styles.matchesListContainer}>
-          <div className={styles.matchListHeader}>
-            <button
-              className={styles.selectAllButton}
-              onClick={() => {
-                const allIds = filteredMatchesBySeason
-                  .filter(m => m.matchId)
-                  .map(m => m.matchId!);
-                setSelectedMatchIds(allIds);
-              }}
-            >
-              Zaznacz wszystkie
-            </button>
-            <button
-              className={styles.deselectAllButton}
-              onClick={() => setSelectedMatchIds([])}
-            >
-              Odznacz wszystkie
-            </button>
-          </div>
-          <div className={styles.matchesCheckboxes}>
-            {filteredMatchesBySeason.map((match) => (
-              <label key={match.matchId} className={styles.matchCheckbox}>
-                <input
-                  type="checkbox"
-                  checked={selectedMatchIds.includes(match.matchId || "")}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedMatchIds([...selectedMatchIds, match.matchId!]);
-                    } else {
-                      setSelectedMatchIds(selectedMatchIds.filter(id => id !== match.matchId));
-                    }
-                  }}
-                />
-                <span>
-                  {match.opponent} ({new Date(match.date).toLocaleDateString('pl-PL')}) - {match.competition}
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className={styles.playerCard}>
         <div className={styles.playerHeader}>
@@ -2031,9 +2046,8 @@ export default function PlayerDetailsPage() {
           <div className={styles.loading}>Ładowanie statystyk...</div>
         ) : playerStats ? (
           <div className={styles.statsContainer}>
-
             <div className={styles.statsLayout}>
-              {/* Lista kategorii po lewej */}
+              {/* Lista kategorii na górze */}
               <div className={styles.categoriesList}>
                 <div
                   className={`${styles.categoryItem} ${expandedCategory === 'pxt' ? styles.active : ''}`}
@@ -2060,7 +2074,7 @@ export default function PlayerDetailsPage() {
                 </div>
               </div>
 
-              {/* Szczegóły po prawej */}
+              {/* Szczegóły poniżej */}
               <div className={styles.detailsPanel}>
                 {expandedCategory === 'pxt' && (
                   <div className={styles.pxtDetails}>
@@ -3240,6 +3254,126 @@ export default function PlayerDetailsPage() {
                   </div>
                 );
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal wyboru meczów */}
+      {isMatchSelectModalOpen && (
+        <div className={styles.matchSelectModalOverlay} onClick={() => setIsMatchSelectModalOpen(false)}>
+          <div className={styles.matchSelectModalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.matchSelectModalHeader}>
+              <h3>Wybierz mecze</h3>
+              <button 
+                className={styles.matchSelectModalClose}
+                onClick={() => setIsMatchSelectModalOpen(false)}
+                aria-label="Zamknij"
+              >
+                ×
+              </button>
+            </div>
+            <div className={styles.matchSelectModalBody}>
+              <div className={styles.matchSelectModalActions}>
+                <button
+                  className={styles.matchSelectActionButton}
+                  onClick={() => {
+                    const allIds = filteredMatchesBySeason
+                      .filter(m => m.matchId)
+                      .map(m => m.matchId!);
+                    setSelectedMatchIds(allIds);
+                  }}
+                >
+                  Zaznacz wszystkie
+                </button>
+                <button
+                  className={styles.matchSelectActionButton}
+                  onClick={() => setSelectedMatchIds([])}
+                >
+                  Odznacz wszystkie
+                </button>
+              </div>
+              <div className={styles.matchSelectMatchesList}>
+                {filteredMatchesBySeason.map((match) => {
+                  const isSelected = selectedMatchIds.includes(match.matchId || "");
+                  return (
+                    <div
+                      key={match.matchId}
+                      className={`${styles.matchSelectTile} ${isSelected ? styles.matchSelectTileActive : ''}`}
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedMatchIds(selectedMatchIds.filter(id => id !== match.matchId));
+                        } else {
+                          setSelectedMatchIds([...selectedMatchIds, match.matchId!]);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          if (isSelected) {
+                            setSelectedMatchIds(selectedMatchIds.filter(id => id !== match.matchId));
+                          } else {
+                            setSelectedMatchIds([...selectedMatchIds, match.matchId!]);
+                          }
+                        }
+                      }}
+                    >
+                      <div className={styles.matchSelectMatchInfo}>
+                        <span className={styles.matchSelectOpponent}>{match.opponent}</span>
+                        <span className={styles.matchSelectDate}>{new Date(match.date).toLocaleDateString('pl-PL')}</span>
+                        <span className={styles.matchSelectCompetition}>{match.competition}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal wyboru zawodnika */}
+      {isPlayerSelectModalOpen && (
+        <div className={styles.playerSelectModalOverlay} onClick={() => setIsPlayerSelectModalOpen(false)}>
+          <div className={styles.playerSelectModalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.playerSelectModalHeader}>
+              <h3>Wybierz zawodnika</h3>
+              <button 
+                className={styles.playerSelectModalClose}
+                onClick={() => setIsPlayerSelectModalOpen(false)}
+                aria-label="Zamknij"
+              >
+                ×
+              </button>
+            </div>
+            <div className={styles.playerSelectModalBody}>
+              {playersByPosition.sortedPositions.map((position) => (
+                <div key={position} className={styles.playerSelectPositionGroup}>
+                  <div className={styles.playerSelectPlayersList}>
+                    <div className={styles.playerSelectPositionLabel}>
+                      {position === 'Skrzydłowi' ? 'W' : position}
+                    </div>
+                    <div className={styles.playerSelectPlayersContainer}>
+                      {playersByPosition.byPosition[position].map((player) => (
+                        <button
+                          key={player.id}
+                          className={`${styles.playerSelectPlayerItem} ${selectedPlayerForView === player.id ? styles.playerSelectPlayerItemActive : ''}`}
+                          onClick={() => handlePlayerSelect(player.id)}
+                        >
+                          <div className={styles.playerSelectPlayerItemContent}>
+                            {player.number && (
+                              <span className={styles.playerSelectPlayerNumber}>{player.number}</span>
+                            )}
+                            <span className={styles.playerSelectPlayerName}>{getPlayerFullName(player)}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { PKEntry, Player, TeamInfo } from "@/types";
 import { getPlayerFullName } from "@/utils/playerUtils";
 import styles from "./PKEntryModal.module.css";
+import PlayerCard from "../ActionModal/PlayerCard";
 
 export interface PKEntryModalProps {
   isOpen: boolean;
@@ -74,6 +75,58 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
 
     return playersWithMinutes;
   }, [players, matchInfo]);
+
+  // Funkcja do grupowania zawodników według pozycji
+  const getPlayersByPosition = (playersList: Player[]) => {
+    const byPosition = playersList.reduce((acc, player) => {
+      let position = player.position || 'Brak pozycji';
+      
+      // Łączymy LW i RW w jedną grupę "Skrzydłowi"
+      if (position === 'LW' || position === 'RW') {
+        position = 'Skrzydłowi';
+      }
+      
+      if (!acc[position]) {
+        acc[position] = [];
+      }
+      acc[position].push(player);
+      return acc;
+    }, {} as Record<string, typeof playersList>);
+    
+    // Kolejność pozycji: GK, CB, DM, Skrzydłowi (LW/RW), AM, ST
+    const positionOrder = ['GK', 'CB', 'DM', 'Skrzydłowi', 'AM', 'ST'];
+    
+    // Sortuj pozycje według określonej kolejności
+    const sortedPositions = Object.keys(byPosition).sort((a, b) => {
+      const indexA = positionOrder.indexOf(a);
+      const indexB = positionOrder.indexOf(b);
+      
+      // Jeśli obie pozycje są w liście, sortuj według kolejności
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      // Jeśli tylko jedna jest w liście, ta w liście idzie pierwsza
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      // Jeśli żadna nie jest w liście, sortuj alfabetycznie
+      return a.localeCompare(b, 'pl', { sensitivity: 'base' });
+    });
+    
+    // Sortuj zawodników w każdej pozycji alfabetycznie po nazwisku
+    sortedPositions.forEach(position => {
+      byPosition[position].sort((a, b) => {
+        const getLastName = (name: string) => {
+          const words = name.trim().split(/\s+/);
+          return words[words.length - 1].toLowerCase();
+        };
+        const lastNameA = getLastName(a.name);
+        const lastNameB = getLastName(b.name);
+        return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
+      });
+    });
+    
+    return { byPosition, sortedPositions };
+  };
 
   useEffect(() => {
     if (editingEntry) {
@@ -288,6 +341,21 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
       ? formData.receiverName 
       : undefined;
 
+    // Pobierz czas wideo z localStorage (tak jak w Acc8sModal)
+    const videoTimestamp = typeof window !== 'undefined' 
+      ? localStorage.getItem('tempVideoTimestamp') 
+      : null;
+    // Obsługa wartości "0" - parseInt("0", 10) zwraca 0, ale "0" jest truthy jako string
+    const parsedVideoTimestamp = videoTimestamp !== null && videoTimestamp !== '' 
+      ? parseInt(videoTimestamp, 10) 
+      : undefined;
+    const isValidTimestamp = parsedVideoTimestamp !== undefined && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp >= 0;
+    
+    // Przy edycji zachowaj istniejący videoTimestamp, jeśli nowy nie jest dostępny
+    const finalVideoTimestamp = isValidTimestamp 
+      ? parsedVideoTimestamp 
+      : (editingEntry?.videoTimestamp);
+
     // Dla dryblingu - upewniamy się, że nie ma odbiorcy
     if (formData.entryType === "dribble") {
       onSave({
@@ -307,6 +375,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         teamContext: formData.teamContext,
         isPossible1T: formData.isPossible1T,
         pkPlayersCount: formData.pkPlayersCount,
+        ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
       });
     } else {
       // Dla pozostałych typów (pass, sfg, regain)
@@ -327,7 +396,13 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         teamContext: formData.teamContext,
         isPossible1T: formData.isPossible1T,
         pkPlayersCount: formData.pkPlayersCount,
+        ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
       });
+    }
+
+    // Wyczyść tempVideoTimestamp po zapisaniu
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('tempVideoTimestamp');
     }
 
     onClose();
@@ -395,7 +470,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
           {/* Typ akcji - kolor strzałki */}
           <div className={styles.fieldGroup}>
             <label>Typ akcji:</label>
-            <div className={styles.actionTypeButtons}>
+            <div className={styles.actionTypeSelector}>
               <button
                 type="button"
                 className={`${styles.actionTypeButton} ${formData.entryType === "pass" ? styles.active : ""}`}
@@ -405,7 +480,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                   receiverId: formData.receiverId || "", // Zachowaj odbiorcę jeśli istnieje
                   receiverName: formData.receiverName || "",
                 })}
-                style={formData.entryType === "pass" ? { borderColor: "#ef4444", background: "#ef4444", color: "white" } : {}}
               >
                 Podanie
               </button>
@@ -418,7 +492,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                   receiverId: "", // Usuń odbiorcę przy dryblingu
                   receiverName: "",
                 })}
-                style={formData.entryType === "dribble" ? { borderColor: "#1e40af", background: "#1e40af", color: "white" } : {}}
               >
                 Drybling
               </button>
@@ -431,7 +504,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                   receiverId: formData.receiverId || "", // Zachowaj odbiorcę jeśli istnieje
                   receiverName: formData.receiverName || "",
                 })}
-                style={formData.entryType === "sfg" ? { borderColor: "#10b981", background: "#10b981", color: "white" } : {}}
               >
                 SFG
               </button>
@@ -444,7 +516,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                   receiverId: formData.receiverId || "", // Zachowaj odbiorcę jeśli istnieje (opcjonalny)
                   receiverName: formData.receiverName || "",
                 })}
-                style={formData.entryType === "regain" ? { borderColor: "#f59e0b", background: "#f59e0b", color: "white" } : {}}
               >
                 Regain
               </button>
@@ -491,8 +562,8 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
           </div>
 
           {/* Lista zawodników - jedna lista z zielonym i czerwonym obramowaniem */}
-          <div className={styles.fieldGroup}>
-            <label className={styles.playerTitle}>
+          <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
+            <label>
               {formData.entryType === "dribble" 
                 ? "Wybierz zawodnika dryblującego:" 
                 : formData.entryType === "regain"
@@ -500,54 +571,32 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                 : "Wybierz zawodników:"
               }
             </label>
-            <div className={styles.playerSelectionInfo}>
-              {formData.entryType === "dribble" ? (
-                <p>Kliknij, aby wybrać zawodnika dryblującego.</p>
-              ) : formData.entryType === "regain" ? (
-                <p>Kliknij, aby wybrać zawodnika podającego (zielone obramowanie). Opcjonalnie kliknij drugi raz, aby wybrać zawodnika otrzymującego (czerwone obramowanie).</p>
-              ) : (
-                <p>Kliknij, aby wybrać zawodnika podającego (zielone obramowanie), następnie kliknij drugi raz, aby wybrać zawodnika otrzymującego (czerwone obramowanie).</p>
-              )}
-            </div>
-            <div className={styles.playersGrid}>
-              {filteredPlayers.map(player => (
-                <div
-                  key={player.id}
-                  className={`${styles.playerTile} ${
-                    formData.senderId === player.id 
-                      ? styles.playerSenderTile
-                      : formData.receiverId === player.id
-                      ? styles.playerReceiverTile
-                      : ''
-                  } ${player.imageUrl ? styles.withImage : ''}`}
-                  onClick={() => handlePlayerClick(player.id)}
-                >
-                  {player.imageUrl && (
-                    <>
-                      <img
-                        src={player.imageUrl}
-                        alt=""
-                        className={styles.playerTileImage}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                      <div className={styles.playerTileOverlay}></div>
-                    </>
-                  )}
-                  <div className={styles.playerContent}>
-                    <div className={styles.number}>{player.number}</div>
-                    <div className={styles.playerInfo}>
-                      <div className={styles.name}>{getPlayerFullName(player)}</div>
-                      <div className={styles.details}>
-                        {player.position && (
-                          <span className={styles.position}>{player.position}</span>
-                        )}
+            <div className={styles.playersGridContainer}>
+              {(() => {
+                const playersByPosition = getPlayersByPosition(filteredPlayers);
+                return playersByPosition.sortedPositions.map((position) => (
+                  <div key={position} className={styles.positionGroup}>
+                    <div className={styles.playersGrid}>
+                      <div className={styles.positionLabel}>
+                        {position === 'Skrzydłowi' ? 'W' : position}
+                      </div>
+                      <div className={styles.playersGridItems}>
+                        {playersByPosition.byPosition[position].map(player => (
+                          <PlayerCard
+                            key={player.id}
+                            player={player}
+                            isSender={formData.senderId === player.id}
+                            isReceiver={formData.receiverId === player.id}
+                            isDribbler={false}
+                            isDefensePlayer={false}
+                            onSelect={handlePlayerClick}
+                          />
+                        ))}
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ));
+              })()}
             </div>
           </div>
 

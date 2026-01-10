@@ -1315,7 +1315,7 @@ export default function StatystykiZespoluPage() {
       {selectedMatch && !isLoadingActions && (
         <div className={styles.statsContainer}>
           <div className={styles.statsLayout}>
-            {/* Lista kategorii po lewej */}
+            {/* Lista kategorii na górze */}
             <div className={styles.categoriesList}>
               <div
                 className={`${styles.categoryItem} ${expandedCategory === 'pxt' ? styles.active : ''}`}
@@ -1352,7 +1352,7 @@ export default function StatystykiZespoluPage() {
               </div>
       </div>
 
-            {/* Szczegóły po prawej */}
+            {/* Szczegóły poniżej */}
             {expandedCategory === 'xg' && selectedMatchInfo && (
               <div className={styles.detailsPanel}>
                 <h3>xG</h3>
@@ -1435,22 +1435,26 @@ export default function StatystykiZespoluPage() {
                       }
                       // xgFilter === 'all' - nie filtruj
                       
-                      const isHome = selectedMatchInfo.isHome;
-                      const teamName = selectedMatchInfo.team ? (availableTeams.find(t => t.id === selectedMatchInfo.team)?.name || 'Nasz zespół') : 'Nasz zespół';
-                      const opponentName = selectedMatchInfo.opponent || 'Przeciwnik';
+                      // Określ, który zespół jest wybrany (selectedTeam) i który jest przeciwnikiem w meczu
+                      const isSelectedTeamHome = selectedMatchInfo.team === selectedTeam;
+                      const teamIdInMatch = selectedTeam; // Wybrany zespół
+                      const opponentIdInMatch = isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team;
+                      
+                      const teamName = selectedMatchInfo.team ? (availableTeams.find(t => t.id === selectedTeam)?.name || 'Nasz zespół') : 'Nasz zespół';
+                      const opponentName = opponentIdInMatch ? (availableTeams.find(t => t.id === opponentIdInMatch)?.name || 'Przeciwnik') : 'Przeciwnik';
                       
                       const teamShots = filteredShotsForStats.filter(shot => {
                         const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
-                          ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
-                          : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
-                        return shotTeamId === (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent);
+                          ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                          : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                        return shotTeamId === teamIdInMatch;
                       });
                       
                       const opponentShots = filteredShotsForStats.filter(shot => {
                         const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
-                          ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
-                          : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
-                        return shotTeamId === (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team);
+                          ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                          : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                        return shotTeamId === opponentIdInMatch;
                       });
                       
                       const teamXG = teamShots.reduce((sum, shot) => sum + (shot.xG || 0), 0);
@@ -1490,8 +1494,8 @@ export default function StatystykiZespoluPage() {
                         }
                       };
                       
-                      const teamPossession = isHome ? getPossessionForXG('team') : getPossessionForXG('opponent');
-                      const opponentPossession = isHome ? getPossessionForXG('opponent') : getPossessionForXG('team');
+                      const teamPossession = isSelectedTeamHome ? getPossessionForXG('team') : getPossessionForXG('opponent');
+                      const opponentPossession = isSelectedTeamHome ? getPossessionForXG('opponent') : getPossessionForXG('team');
                       const teamXGPerMinPossession = teamPossession > 0 ? (teamXG / teamPossession) : 0;
                       const opponentXGPerMinPossession = opponentPossession > 0 ? (opponentXG / opponentPossession) : 0;
                       

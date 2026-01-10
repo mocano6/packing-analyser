@@ -207,18 +207,18 @@
 }
 
 .noVideo {
-  padding: 40px 20px;
+  padding: 20px 16px;
   text-align: center;
   color: #6b7280;
 }
 
 .noVideo p {
-  margin: 8px 0;
-  font-size: 14px;
+  margin: 4px 0;
+  font-size: 12px;
 }
 
 .hint {
-  font-size: 12px;
+  font-size: 11px;
   color: #9ca3af;
 }
 

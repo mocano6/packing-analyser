@@ -62,12 +62,20 @@ export interface ActionSectionProps {
   setIsBelow8sActive: React.Dispatch<React.SetStateAction<boolean>>;
   isReaction5sActive: boolean;
   setIsReaction5sActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isAutActive: boolean;
+  setIsAutActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isReaction5sNotApplicableActive: boolean;
+  setIsReaction5sNotApplicableActive: React.Dispatch<React.SetStateAction<boolean>>;
   isPMAreaActive: boolean;
   setIsPMAreaActive: React.Dispatch<React.SetStateAction<boolean>>;
   playersBehindBall: number;
   setPlayersBehindBall: React.Dispatch<React.SetStateAction<number>>;
   opponentsBeforeBall: number;
   setOpponentsBeforeBall: React.Dispatch<React.SetStateAction<number>>;
+  playersLeftField: number;
+  setPlayersLeftField: React.Dispatch<React.SetStateAction<number>>;
+  opponentsLeftField: number;
+  setOpponentsLeftField: React.Dispatch<React.SetStateAction<number>>;
   handleSaveAction: () => void;
   resetActionState: () => void;
   resetActionPoints: () => void;
@@ -133,12 +141,20 @@ const ActionSection = memo(function ActionSection({
   setIsBelow8sActive,
   isReaction5sActive,
   setIsReaction5sActive,
+  isAutActive,
+  setIsAutActive,
+  isReaction5sNotApplicableActive,
+  setIsReaction5sNotApplicableActive,
   isPMAreaActive,
   setIsPMAreaActive,
   playersBehindBall,
   setPlayersBehindBall,
   opponentsBeforeBall,
   setOpponentsBeforeBall,
+  playersLeftField,
+  setPlayersLeftField,
+  opponentsLeftField,
+  setOpponentsLeftField,
   handleSaveAction,
   resetActionState,
   resetActionPoints,
@@ -201,6 +217,18 @@ const ActionSection = memo(function ActionSection({
 
   return (
     <section className={styles.actionContainer}>
+      {/* Tekst informacyjny dla packing (atak) */}
+      {actionCategory === "packing" && mode === "attack" && (
+        <div className={styles.defenseInfo}>
+          <p>⚠️ Pola kolorowe to bramka, którą atakujesz</p>
+        </div>
+      )}
+      {/* Tekst informacyjny dla regain i loses */}
+      {(actionCategory === "regain" || actionCategory === "loses") && (
+        <div className={styles.defenseInfo}>
+          <p>⚠️ Pola kolorowe to bramka, której bronisz</p>
+        </div>
+      )}
       <FootballPitch
         selectedZone={selectedZone}
         onZoneSelect={handlePitchZoneSelect}
@@ -296,6 +324,12 @@ const ActionSection = memo(function ActionSection({
           // Nowy prop dla liczby przeciwników przed piłką
           opponentsBeforeBall={opponentsBeforeBall}
           onOpponentsBeforeBallChange={setOpponentsBeforeBall}
+          // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
+          playersLeftField={playersLeftField}
+          onPlayersLeftFieldChange={setPlayersLeftField}
+          // Nowy prop dla liczby zawodników przeciwnika, którzy opuścili boisko
+          opponentsLeftField={opponentsLeftField}
+          onOpponentsLeftFieldChange={setOpponentsLeftField}
         />
       ) : actionCategory === "loses" ? (
         <LosesActionModal
@@ -381,12 +415,24 @@ const ActionSection = memo(function ActionSection({
           // Nowy prop dla przycisku "Reakcja 5s"
           isReaction5sActive={isReaction5sActive}
           onReaction5sToggle={() => setIsReaction5sActive(!isReaction5sActive)}
+          // Nowy prop dla przycisku "Aut"
+          isAutActive={isAutActive}
+          onAutToggle={() => setIsAutActive(!isAutActive)}
+          // Nowy prop dla przycisku "Nie dotyczy" (reakcja 5s)
+          isReaction5sNotApplicableActive={isReaction5sNotApplicableActive}
+          onReaction5sNotApplicableToggle={() => setIsReaction5sNotApplicableActive(!isReaction5sNotApplicableActive)}
           // Nowy prop dla liczby partnerów przed piłką
           playersBehindBall={playersBehindBall}
           onPlayersBehindBallChange={setPlayersBehindBall}
           // Nowy prop dla liczby przeciwników przed piłką
           opponentsBeforeBall={opponentsBeforeBall}
           onOpponentsBeforeBallChange={setOpponentsBeforeBall}
+          // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
+          playersLeftField={playersLeftField}
+          onPlayersLeftFieldChange={setPlayersLeftField}
+          // Nowy prop dla liczby zawodników przeciwnika, którzy opuścili boisko
+          opponentsLeftField={opponentsLeftField}
+          onOpponentsLeftFieldChange={setOpponentsLeftField}
         />
       ) : (
         <ActionModal

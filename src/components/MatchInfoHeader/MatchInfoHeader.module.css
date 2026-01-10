@@ -1,6 +1,81 @@
 /* src/components/MatchInfoHeader/MatchInfoHeader.module.css */
 .matchInfoContainer {
   margin-bottom: 20px;
+  width: 100%;
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modalContent {
+  background: white;
+  border-radius: 12px;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  position: relative;
+  animation: slideUp 0.3s ease-out;
+  padding: 20px;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modalCloseButton {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 50%;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.modalCloseButton:hover {
+  background: #e5e7eb;
+  color: #374151;
+  transform: scale(1.1);
 }
 
 .headerControls {
@@ -8,12 +83,23 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .selectorsGroup {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.controlsContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .teamSelector {
@@ -242,6 +328,18 @@
   font-weight: 500;
 }
 
+.clickableDate {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  color: #2196f3;
+}
+
+.clickableDate:hover {
+  text-decoration-style: solid;
+  color: #1976d2;
+}
+
 .competition {
   background-color: rgba(33, 150, 243, 0.15);
   color: #110b55;
@@ -420,25 +518,34 @@
 
 /* Dodajemy style dla komponentu CurrentMatchInfo */
 .currentMatchInfo {
-  margin-bottom: 20px;
-  background-color: #f5f9ff;
+  margin-bottom: 0;
+  background-color: #ffffff;
   border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  width: 100%;
+}
+
+.matchTitle {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .matchTitle h3 {
   font-size: 18px;
   font-weight: 600;
-  margin: 0 0 10px 0;
+  margin: 0;
   color: #2c3e50;
+  line-height: 1.3;
 }
 
 .matchMeta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .matchDate {
@@ -453,37 +560,43 @@
 }
 
 .playerMinutesInfo {
-  margin-top: 15px;
+  margin-top: 20px;
+  padding-top: 20px;
   border-top: 1px solid #e0e0e0;
-  padding-top: 12px;
 }
 
-.playerMinutesHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  cursor: pointer;
-  user-select: none;
-  padding: 8px 0;
-  border-bottom: 1px solid #e0e0e0;
-  margin-bottom: 8px;
-  transition: background-color 0.2s;
-}
-
-.playerMinutesHeader:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-  padding-left: 8px;
-  padding-right: 8px;
-  margin-left: -8px;
-  margin-right: -8px;
-  border-radius: 4px;
-}
-
-.playerMinutesHeader h4 {
-  margin: 0;
-  font-size: 14px;
+.playerMinutesTitle {
+  margin: 0 0 12px 0;
+  font-size: 16px;
   font-weight: 600;
   color: #333;
+}
+
+.playerMinutesGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.playerPositionGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.positionGroupTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2196f3;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e3f2fd;
+}
+
+.playerMinutesList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .collapseButton {
@@ -501,39 +614,49 @@
   background-color: rgba(0, 0, 0, 0.1);
 }
 
-.playerMinutesList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
 .playerMinuteItem {
   display: inline-flex;
   align-items: center;
-  background-color: #fff;
-  border-radius: 6px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
   padding: 6px 10px;
-  font-size: 13px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  font-size: 12px;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .playerName {
-  font-weight: 600;
-  margin-right: 6px;
+  font-weight: 500;
+  color: #333;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.testPlayerBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background-color: #4caf50;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
 }
 
 .playerPosition {
-  background-color: #e3f2fd;
-  color: #1565c0;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  margin: 0 6px;
+  color: #666;
+  font-size: 12px;
 }
 
 .playerMinutes {
-  color: #666;
+  color: #2196f3;
+  font-weight: 500;
 }
 
 .opponentCell {

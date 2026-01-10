@@ -17,7 +17,7 @@
   border-radius: 12px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
   width: 95%;
-  max-width: 700px;
+  max-width: 900px;
   max-height: 90vh;
   overflow-y: auto;
   animation: modalIn 0.3s ease-out;
@@ -38,7 +38,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: 10px 14px;
   border-bottom: 1px solid #e5e7eb;
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
   border-radius: 12px 12px 0 0;
@@ -47,7 +47,7 @@
 .header h3 {
   margin: 0;
   color: #1f2937;
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 600;
 }
 
@@ -81,11 +81,11 @@
 
 .modeButton {
   flex: 1;
-  padding: 12px 20px;
+  padding: 6px 12px;
   background-color: #f8f9fa;
   border: none;
   color: #666;
-  font-size: 16px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -105,19 +105,19 @@
 }
 
 .form {
-  padding: 24px;
+  padding: 12px;
 }
 
 .formGroup {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .formGroup label {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   font-weight: 500;
   color: #374151;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .input,
@@ -163,9 +163,9 @@
 }
 
 .pointsValue {
-  font-size: 16px;
+  font-size: 12px;
   color: #2196f3;
-  margin-top: 2px;
+  margin-top: 1px;
   font-weight: 600;
   /* Zapobieganie zaznaczaniu tekstu */
   user-select: none;
@@ -329,18 +329,19 @@
 
 .buttonGroup {
   display: flex;
-  gap: 12px;
-  margin-top: 24px;
+  gap: 8px;
+  margin-top: 12px;
   justify-content: flex-end;
   flex-wrap: wrap;
 }
 
 .controlButton {
-  min-width: 100px;
-  padding: 10px 15px;
+  min-width: 80px;
+  padding: 8px 12px;
   border: none;
   border-radius: 4px;
   font-weight: 600;
+  font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -350,34 +351,42 @@
 .deleteButton {
   padding: 10px 20px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s;
   min-width: 100px;
 }
 
 .saveButton {
-  background: #3b82f6;
+  background-color: #2196f3;
   color: white;
 }
 
 .saveButton:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+  background-color: #1976d2;
+}
+
+.saveButton:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .cancelButton {
-  background: #f3f4f6;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
+  background-color: #f3f4f6;
+  color: #374151;
 }
 
 .cancelButton:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background-color: #e5e7eb;
+}
+
+.cancelButton:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .deleteButton {
@@ -424,14 +433,14 @@
 .minuteInput {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-weight: 600;
 }
 
 .minuteInput label {
   font-weight: 500;
   color: #374151;
-  font-size: 14px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -521,15 +530,53 @@
   }
 }
 
+.playersGridContainer {
+  max-height: 350px;
+  overflow-y: auto;
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.positionGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .playersGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
-  gap: 8px;
-  margin: 10px 0;
-  max-height: 300px;
-  overflow-y: auto;
-  padding: 10px;
-  border-radius: 8px;
+  grid-template-columns: 50px 1fr;
+  gap: 4px;
+}
+
+.playersGridItems {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  grid-column: 2;
+}
+
+.positionLabel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2196f3;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background-color: rgba(33, 150, 243, 0.1);
+  border-radius: 4px;
+  padding: 6px 4px;
+  grid-column: 1;
+  grid-row: 1 / -1;
+  align-self: start;
+  border: 1px solid rgba(33, 150, 243, 0.2);
+  width: 100%;
+  min-height: 32px;
 }
 
 .noPlayersMessage {
@@ -544,14 +591,13 @@
 }
 
 .warningMessage {
-  grid-column: 1 / -1;
   text-align: center;
-  padding: 10px;
+  padding: 8px;
   color: #856404;
   background-color: #fff3cd;
   border: 1px solid #ffeaa7;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
   margin-bottom: 8px;
 }
 
@@ -564,15 +610,19 @@
 
 .playerTile {
   position: relative;
-  border-radius: 8px;
+  background-color: white;
+  border-radius: 4px;
   cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   transition: transform 0.2s, box-shadow 0.2s;
   display: flex;
-  flex-direction: column;
-  height: 60px;
+  flex-direction: row;
+  align-items: center;
+  height: 32px;
   width: 100%;
   overflow: hidden;
+  border: none;
+  text-align: left;
 }
 
 .playerTile:hover {
@@ -581,72 +631,44 @@
 }
 
 .playerSenderTile {
-  border: 2px solid #4caf50; /* Zielony dla nadawcy */
-  background-color: rgba(76, 175, 80, 0.1);
+  border: 2px solid #4caf50;
+  background-color: rgba(76, 175, 80, 0.05);
 }
 
 .playerReceiverTile {
-  border: 2px solid #f44336; /* Czerwony dla odbiorcy */
-  background-color: rgba(244, 67, 54, 0.1);
+  border: 2px solid #f44336;
+  background-color: rgba(244, 67, 54, 0.05);
 }
 
 .playerDribblerTile {
-  border: 2px solid #9c27b0; /* Fioletowy dla dryblującego */
-  background-color: rgba(156, 39, 176, 0.1);
+  border: 2px solid #9c27b0;
+  background-color: rgba(156, 39, 176, 0.05);
 }
 
 .playerDefenseTile {
-  border: 2px solid #ff9800; /* Pomarańczowy dla obrony */
-  background-color: rgba(255, 152, 0, 0.1);
+  border: 2px solid #ff9800;
+  background-color: rgba(255, 152, 0, 0.05);
 }
 
 .playerTile.withImage {
-  color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-}
-
-.playerTileImage {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center top;
-  z-index: 0;
-}
-
-.playerTileOverlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.3) 0%,
-    rgba(0, 0, 0, 0.5) 50%,
-    rgba(0, 0, 0, 0.8) 100%
-  );
-  z-index: 1;
+  /* Obrazki nie są używane w poziomym layoutcie */
 }
 
 .playerContent {
   position: relative;
   z-index: 2;
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  flex-direction: row;
+  align-items: center;
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  padding: 3px 3px 3px 3px;
+  padding: 0 6px;
+  gap: 6px;
 }
 
 .number {
-  position: absolute;
-  top: 3px;
-  left: 3px;
+  flex-shrink: 0;
   font-size: 12px;
   font-weight: bold;
   line-height: 1;
@@ -656,64 +678,49 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  z-index: 3;
+  border-radius: 3px;
+  background-color: rgba(33, 150, 243, 0.1);
 }
 
-.playerSenderTile:not(.withImage) .number {
-  color: #4caf50;
+.playerSenderTile .number {
+  color: white;
+  background-color: #4caf50;
 }
 
-.playerReceiverTile:not(.withImage) .number {
-  color: #f44336;
+.playerReceiverTile .number {
+  color: white;
+  background-color: #f44336;
 }
 
-.playerDribblerTile:not(.withImage) .number {
-  color: #9c27b0;
+.playerDribblerTile .number {
+  color: white;
+  background-color: #9c27b0;
 }
 
-.playerDefenseTile:not(.withImage) .number {
-  color: #ff9800;
+.playerDefenseTile .number {
+  color: white;
+  background-color: #ff9800;
 }
 
 .playerInfo {
-  width: 100%;
-  padding: 0 5px;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-}
-
-.name {
-  font-size: 0.7rem;
-  font-weight: 600;
-  margin: 0;
-  line-height: 1.1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: center;
-  color: #333333;
-}
-
-.details {
+  flex: 1;
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  width: 100%;
-  margin-top: -2px;
+  min-width: 0;
 }
 
-.position {
-  font-size: 0.65rem;
-  color: #0066cc;
-  margin-top: 5px;
-  padding-bottom: 0px;
-  text-align: center;
+.name {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: #333;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .playerTitle {
@@ -723,13 +730,13 @@
 }
 
 .playerSelectionInfo {
-  font-size: 14px;
+  font-size: 11px;
   color: #666;
-  margin-bottom: 10px;
-  padding: 8px;
+  margin-bottom: 6px;
+  padding: 6px;
   background-color: #f5f8fa;
   border-radius: 4px;
-  border-left: 3px solid #2196f3;
+  border-left: 2px solid #2196f3;
 }
 
 .playerSelectionInfo p {
@@ -739,32 +746,32 @@
 .togglesRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 24px;
+  gap: 12px;
   align-items: center;
 }
 
 .toggleGroup {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .toggleLabel {
-  font-size: 14px;
+  font-size: 11px;
   color: #444;
   font-weight: 500;
 }
 
 .halfToggle, .typeToggle {
   display: flex;
-  border-radius: 4px;
+  border-radius: 3px;
   overflow: hidden;
-  width: 120px;
+  width: 100px;
   border: 1px solid #eaeaea;
 }
 
 .halfButton, .typeButton {
-  padding: 6px 12px;
+  padding: 4px 8px;
   border: none;
   background-color: #fafafa;
   color: #888;
@@ -773,7 +780,11 @@
   transition: all 0.15s;
   flex: 1;
   text-align: center;
-  font-size: 13px;
+  font-size: 11px;
+  height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .halfButton:first-child, .typeButton:first-child {
@@ -832,29 +843,48 @@
 /* Kompaktowy rząd wszystkich przycisków */
 .compactButtonsRow {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+  flex-direction: row;
+  gap: 12px;
+  margin-bottom: 10px;
   align-items: flex-start;
+  flex-wrap: wrap;
 }
 
 /* Kontener dla sekcji "Koniec działania:" z przyciskami */
 .pSectionContainer {
   display: flex;
   flex-direction: column;
-  min-width: 90px;
+  min-width: 70px;
+  gap: 0;
+  justify-content: flex-start;
+}
+
+.rightSideContainer {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.pStartEndContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 0;
+  padding-bottom: 0;
 }
 
 .pSectionLabel {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
-  font-size: 12px;
+  height: 24px;
+  font-size: 10px;
   font-weight: 500;
   color: #333;
   background-color: #ffffff;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+  margin-top: 0;
   /* Zapobieganie zaznaczaniu tekstu */
   user-select: none;
   -webkit-user-select: none;
@@ -865,43 +895,84 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+.actionTypeSelector {
+  display: flex;
+  gap: 6px;
+  background-color: #f3f4f6;
+  padding: 4px;
+  border-radius: 6px;
+  height: 34px;
+  box-sizing: border-box;
+  align-items: center;
+}
+
+.actionTypeButton {
+  padding: 6px 12px;
+  border: none;
+  background-color: transparent;
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.actionTypeButton:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.actionTypeButton.active {
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.2);
+}
+
 /* Grupa P0, P1, P2, P3 jako jeden element - bez ramki */
 .pButtonsGroup {
   display: flex;
   flex-direction: column;
-  min-width: 90px;
-  height: 88px; /* 2 x 44px dla przycisków */
+  min-width: 70px;
+  height: 56px; /* 2 x 28px dla przycisków */
 }
 
 /* Grupa przycisków kontaktów - bez ramki */
 .pButtonsGroupNoBorder {
   display: flex;
   flex-direction: column;
-  min-width: 90px;
+  min-width: 80px;
   height: 88px; /* 2 x 44px dla przycisków */
+  flex: 0 0 auto; /* Nie rozciągaj się */
 }
 
 /* Kontener dla przycisków ułożonych pionowo */
 .verticalButtonsContainer {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  min-width: 90px;
+  gap: 2px;
+  min-width: 70px;
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  height: 100px;
 }
 
 .pTopRow {
   display: flex;
   height: 44px; /* Dokładna wysokość górnego rzędu */
+  gap: 4px;
 }
 
 .pBottomRow {
   display: flex;
   height: 44px; /* Dokładna wysokość dolnego rzędu */
+  gap: 4px;
 }
 
 .pButtonBottom {
   border-top: 1px solid rgba(33, 150, 243, 0.3);
-  height: 44px; /* Dokładna wysokość dolnego rzędu */
+  height: 28px; /* Dokładna wysokość dolnego rzędu */
 }
 
 /* Kompaktowy przycisk */
@@ -909,15 +980,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 14px; /* Usuwam vertical padding dla spójnej wysokości */
+  padding: 0 10px;
   border: 1px solid rgba(33, 150, 243, 0.3);
   border-radius: 6px;
   background-color: #f5f5f5;
   cursor: pointer;
   transition: all 0.2s;
-  height: 44px; /* Exact height zamiast min-height */
-  min-width: 70px;
-  flex: 1;
+  height: 32px; /* Zmniejszona wysokość */
+  min-width: 60px;
+  flex: 0 1 auto; /* Nie rozciągaj się, ale może się zmniejszyć */
   box-sizing: border-box;
   /* Zapobieganie zaznaczaniu tekstu */
   user-select: none;
@@ -961,16 +1032,21 @@
 
 /* Kompaktowa etykieta */
 .compactLabel {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 500;
   color: #2196f3;
-  white-space: nowrap;
-  /* Zapobieganie zaznaczaniu tekstu */
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: 100%;
+  text-align: center;
+  line-height: 1.2;
+  word-wrap: break-word;
   user-select: none;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
-  pointer-events: none; /* Etykieta nie reaguje na kliknięcia */
+  pointer-events: none;
 }
 
 /* Kompaktowy przycisk punktów */
@@ -979,15 +1055,15 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 6px 14px; /* Zmniejszony padding dla spójnej wysokości */
+  padding: 4px 8px;
   border: 1px solid rgba(33, 150, 243, 0.3);
-  border-radius: 6px;
+  border-radius: 4px;
   background-color: #f5f5f5;
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
-  min-width: 85px;
-  height: 44px; /* Exact height zamiast min-height */
+  min-width: 65px;
+  height: 28px;
   box-sizing: border-box;
   /* Zapobieganie zaznaczaniu tekstu */
   user-select: none;
@@ -1037,6 +1113,90 @@
 }
 
 .compactSubtractButton:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Mniejsza wersja przycisku "Minięty przeciwnik" dla sekcji "Liczba kontaktów" */
+.compactPointsButtonSmall {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  margin-top: 4px;
+  border: 1px solid rgba(33, 150, 243, 0.3);
+  border-radius: 4px;
+  background-color: #f5f5f5;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  width: 100%;
+  height: 34px;
+  gap: 6px;
+  box-sizing: border-box;
+  box-sizing: border-box;
+}
+
+.compactPointsButtonSmall:hover {
+  background-color: #e3f2fd;
+  border-color: #2196f3;
+  transform: translateY(-1px);
+}
+
+.compactLabelSmall {
+  font-size: 10px;
+  font-weight: 500;
+  color: #2196f3;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  pointer-events: none;
+  flex: 1;
+  text-align: left;
+}
+
+.pointsValueSmall {
+  font-size: 11px;
+  color: #2196f3;
+  font-weight: 600;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  pointer-events: none;
+  min-width: 20px;
+  text-align: center;
+}
+
+.compactSubtractButtonSmall {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background-color: #ff5722;
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.compactSubtractButtonSmall:hover {
+  opacity: 1;
+  transform: scale(1.1);
+  background-color: #e64a19;
+}
+
+.compactSubtractButtonSmall:disabled {
   background-color: #ccc;
   cursor: not-allowed;
   transform: none;

@@ -181,46 +181,110 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Filtruj graczy z wybranego zespołu
-  const teamPlayers = useMemo(() => {
-    return players
-      .filter(player => player.teams && player.teams.includes(match.team))
-      .sort((a, b) => {
-        // Wyciągnij nazwisko (ostatnie słowo) z pełnej nazwy
+  // Filtruj i grupuj graczy z wybranego zespołu według pozycji
+  const teamPlayersByPosition = useMemo(() => {
+    const teamPlayers = players.filter(player => 
+      player.teams && player.teams.includes(match.team)
+    );
+    
+    // Grupuj według pozycji - łączymy LW i RW w jedną grupę
+    const byPosition = teamPlayers.reduce((acc, player) => {
+      let position = player.position || 'Brak pozycji';
+      
+      // Łączymy LW i RW w jedną grupę "Skrzydłowi"
+      if (position === 'LW' || position === 'RW') {
+        position = 'Skrzydłowi';
+      }
+      
+      if (!acc[position]) {
+        acc[position] = [];
+      }
+      acc[position].push(player);
+      return acc;
+    }, {} as Record<string, typeof teamPlayers>);
+    
+    // Kolejność pozycji: GK, CB, DM, Skrzydłowi (LW/RW), AM, ST
+    const positionOrder = ['GK', 'CB', 'DM', 'Skrzydłowi', 'AM', 'ST'];
+    
+    // Sortuj pozycje według określonej kolejności
+    const sortedPositions = Object.keys(byPosition).sort((a, b) => {
+      const indexA = positionOrder.indexOf(a);
+      const indexB = positionOrder.indexOf(b);
+      
+      // Jeśli obie pozycje są w liście, sortuj według kolejności
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      // Jeśli tylko jedna jest w liście, ta w liście idzie pierwsza
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      // Jeśli żadna nie jest w liście, sortuj alfabetycznie
+      return a.localeCompare(b, 'pl', { sensitivity: 'base' });
+    });
+    
+    // Sortuj zawodników w każdej pozycji alfabetycznie po nazwisku
+    // Dla grupy "Skrzydłowi" sortuj najpierw po pozycji (LW przed RW), potem po nazwisku
+    sortedPositions.forEach(position => {
+      byPosition[position].sort((a, b) => {
+        // Dla grupy "Skrzydłowi" sortuj najpierw po pozycji
+        if (position === 'Skrzydłowi') {
+          const posA = a.position || '';
+          const posB = b.position || '';
+          if (posA !== posB) {
+            // LW przed RW
+            if (posA === 'LW') return -1;
+            if (posB === 'LW') return 1;
+          }
+        }
+        
         const getLastName = (fullName: string) => {
           const words = fullName.trim().split(/\s+/);
           return words[words.length - 1].toLowerCase();
         };
-        
         const lastNameA = getLastName(a.name);
         const lastNameB = getLastName(b.name);
-        
         return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
       });
+    });
+    
+    return { byPosition, sortedPositions };
   }, [players, match.team]);
 
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent}>
-        <h2 className={styles.modalTitle}>
-          Minuty zawodników: {getTeamName(match.team)} vs {match.opponent}
-        </h2>
-        <p className={styles.modalSubtitle}>
-          Wpisz czas rozpoczęcia i zakończenia gry zawodników (w minutach).
-        </p>
-        
-        <form onSubmit={handleSubmit}>
-          <div className={styles.tableHeader}>
-            <div className={styles.headerCell}>Zawodnik</div>
-            <div className={styles.headerCell}>Od (min)</div>
-            <div className={styles.headerCell}>Do (min)</div>
-            <div className={styles.headerCell}>Pozycja</div>
-            <div className={styles.headerCell}>Status</div>
-            <div className={styles.headerCell}>Łączny czas</div>
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.modalHeader}>
+          <div>
+            <h2 className={styles.modalTitle}>
+              Minuty zawodników: {getTeamName(match.team)} vs {match.opponent}
+            </h2>
+            <p className={styles.modalSubtitle}>
+              Wpisz czas rozpoczęcia i zakończenia gry zawodników (w minutach).
+            </p>
           </div>
-
+          <button
+            type="button"
+            className={styles.closeButton}
+            onClick={onClose}
+            aria-label="Zamknij"
+            title="Zamknij"
+          >
+            ×
+          </button>
+        </div>
+        
+        <form className={styles.modalForm} onSubmit={handleSubmit}>
           <div className={styles.playersList}>
-            {teamPlayers.map(player => {
+            {teamPlayersByPosition.sortedPositions.map(position => {
+              const positionPlayers = teamPlayersByPosition.byPosition[position];
+              
+              return (
+                <div key={position} className={styles.positionGroup}>
+                  <div className={styles.positionGroupHeader}>
+                    {position === 'Skrzydłowi' ? 'W' : position}
+                  </div>
+                  <div className={styles.positionGroupContent}>
+                    {positionPlayers.map(player => {
               // Znajdź zapisane minuty dla tego zawodnika
               const minutes = playerMinutes.find(pm => pm.playerId === player.id) || {
                 playerId: player.id,
@@ -234,79 +298,72 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
               
               return (
                 <div key={player.id} className={styles.playerRow}>
-                  <div className={styles.playerName}>
-                    <span className={styles.playerNumber}>{player.number}</span>
-                    {player.name}
-                  </div>
-                  <div className={styles.timeInput}>
-                    <input
-                      type="number"
-                      min="0"
-                      max="130"
-                      value={minutes.startMinute}
-                      onChange={(e) => handleMinuteChange(
-                        player.id, 
-                        'startMinute', 
-                        parseInt(e.target.value) || 0
-                      )}
-                      className={styles.numberInput}
-                      disabled={minutes.status === 'kontuzja' || minutes.status === 'brak_powolania'}
-                    />
-                  </div>
-                  <div className={styles.timeInput}>
-                    <input
-                      type="number"
-                      min="0"
-                      max="130"
-                      value={minutes.endMinute}
-                      onChange={(e) => handleMinuteChange(
-                        player.id, 
-                        'endMinute', 
-                        parseInt(e.target.value) || 0
-                      )}
-                      className={styles.numberInput}
-                      disabled={minutes.status === 'kontuzja' || minutes.status === 'brak_powolania'}
-                    />
-                  </div>
-                  <div className={styles.positionInput}>
-                    <select
-                      value={minutes.position || getDefaultPosition(player.position)}
-                      onChange={(e) => handlePositionChange(
-                        player.id,
-                        e.target.value
-                      )}
-                      className={styles.positionSelect}
-                    >
-                      {POSITIONS.map(pos => (
-                        <option key={pos.value} value={pos.value}>
-                          {pos.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className={styles.statusInput}>
-                    <select
-                      value={minutes.status || 'dostepny'}
-                      onChange={(e) => handleStatusChange(
-                        player.id,
-                        e.target.value as 'dostepny' | 'kontuzja' | 'brak_powolania' | 'inny_zespol'
-                      )}
-                      className={styles.statusSelect}
-                    >
-                      <option value="dostepny">Dostępny</option>
-                      <option value="kontuzja">Kontuzja</option>
-                      <option value="brak_powolania">Brak powołania</option>
-                      <option value="inny_zespol">Inny zespół</option>
-                    </select>
-                  </div>
-                  <div className={styles.playTime}>
-                    {playTime} min
+                      <div className={styles.playerName}>
+                        <span className={styles.playerNumber}>{player.number}</span>
+                        <span>{player.name}</span>
+                        {player.isTestPlayer && (
+                          <span className={styles.testPlayerBadge}>T</span>
+                        )}
+                      </div>
+                      <div className={styles.timeInput}>
+                        <label className={styles.inputLabel}>Od</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="130"
+                          value={minutes.startMinute}
+                          onChange={(e) => handleMinuteChange(
+                            player.id, 
+                            'startMinute', 
+                            parseInt(e.target.value) || 0
+                          )}
+                          className={styles.numberInput}
+                          disabled={minutes.status === 'kontuzja' || minutes.status === 'brak_powolania'}
+                        />
+                      </div>
+                      <div className={styles.timeInput}>
+                        <label className={styles.inputLabel}>Do</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="130"
+                          value={minutes.endMinute}
+                          onChange={(e) => handleMinuteChange(
+                            player.id, 
+                            'endMinute', 
+                            parseInt(e.target.value) || 0
+                          )}
+                          className={styles.numberInput}
+                          disabled={minutes.status === 'kontuzja' || minutes.status === 'brak_powolania'}
+                        />
+                      </div>
+                      <div className={styles.statusInput}>
+                        <select
+                          value={minutes.status || 'dostepny'}
+                          onChange={(e) => handleStatusChange(
+                            player.id,
+                            e.target.value as 'dostepny' | 'kontuzja' | 'brak_powolania' | 'inny_zespol'
+                          )}
+                          className={styles.statusSelect}
+                        >
+                          <option value="dostepny">Dostępny</option>
+                          <option value="kontuzja">Kontuzja</option>
+                          <option value="brak_powolania">Brak powołania</option>
+                          <option value="inny_zespol">Inny zespół</option>
+                        </select>
+                      </div>
+                      <div className={styles.playTime}>
+                        {playTime} min
+                      </div>
+                    </div>
+                  );
+                })}
                   </div>
                 </div>
               );
             })}
 
-            {teamPlayers.length === 0 && (
+            {teamPlayersByPosition.sortedPositions.length === 0 && (
               <div className={styles.noPlayers}>
                 Brak zawodników przypisanych do zespołu {getTeamName(match.team)}
               </div>

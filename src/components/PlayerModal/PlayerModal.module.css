@@ -4,160 +4,265 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: rgba(0, 0, 0, 0.6);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .modalContent {
   background-color: white;
-  padding: 2rem;
-  border-radius: 8px;
+  padding: 20px;
+  border-radius: 12px;
   width: 90%;
-  max-width: 500px;
+  max-width: 480px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .modalTitle {
-  margin-top: 0;
-  color: #333;
-  text-align: center;
-  margin-bottom: 1.5rem;
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.closeButton {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  color: #6b7280;
+  border: none;
+  font-size: 24px;
+  font-weight: 300;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.closeButton:hover {
+  background: #e5e7eb;
+  color: #374151;
+  transform: scale(1.1);
+}
+
+.closeButton:active {
+  transform: scale(0.95);
 }
 
 .formGroup {
-  margin-bottom: 1.2rem;
+  margin-bottom: 14px;
+}
+
+.formGroup:last-of-type {
+  margin-bottom: 0;
 }
 
 .formLabel {
   display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-  color: #444;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: #374151;
+  font-size: 14px;
 }
 
 .formInput, .formSelect {
   width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background-color: #f9f9f9;
-  font-size: 1rem;
+  padding: 10px 12px;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  background-color: white;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
 }
 
 .formInput:focus, .formSelect:focus {
   outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .buttonGroup {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 1.5rem;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
 }
 
 .saveButton, .cancelButton {
-  padding: 8px 16px;
+  padding: 10px 20px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  display: flex;
-  align-items: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
-  min-width: 120px;
-  justify-content: center;
+  min-width: 100px;
 }
 
 .saveButton {
-  background-color: #2196f3;
+  background-color: #3b82f6;
   color: white;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
 }
 
 .saveButton:hover {
-  background-color: #1976d2;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  background-color: #2563eb;
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+  transform: translateY(-1px);
+}
+
+.saveButton:active {
+  transform: translateY(0);
+}
+
+.saveButton:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
 }
 
 .checkbox {
   margin-right: 8px;
-  transform: scale(1.2);
+  transform: scale(1.15);
+  cursor: pointer;
 }
 
 .cancelButton {
-  background-color: #f8f8f8;
-  color: #444;
-  border: 1px solid #ddd;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  background-color: #f3f4f6;
+  color: #374151;
 }
 
 .cancelButton:hover {
-  background-color: #e8e8e8;
-  color: #222;
-  border-color: #aaa;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  background-color: #e5e7eb;
+  transform: translateY(-1px);
+}
+
+.cancelButton:active {
+  transform: translateY(0);
+}
+
+.cancelButton:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 /* Style dla przycisków zespołów */
 .formTeams {
-  margin-bottom: 1rem;
+  margin-bottom: 16px;
+}
+
+.formTeams > label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #374151;
+  font-size: 14px;
 }
 
 .teamsButtonContainer {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .teamButton {
-  padding: 0.5rem 1rem;
-  border: 1px solid #ccc;
-  background-color: #f8f8f8;
-  border-radius: 4px;
+  padding: 8px 14px;
+  border: 2px solid #d1d5db;
+  background-color: white;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 13px;
+  font-weight: 500;
   transition: all 0.2s ease;
+  color: #374151;
 }
 
 .teamButton:hover {
-  background-color: #e8e8e8;
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+  transform: translateY(-1px);
 }
 
 .activeTeam {
-  background-color: #4a8cff;
+  background-color: #3b82f6;
   color: white;
-  border-color: #3a7ae8;
+  border-color: #3b82f6;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.activeTeam:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
 }
 
 /* Style dla błędów */
 .errorMessage {
-  background-color: #f8d7da;
-  color: #721c24;
-  padding: 12px;
-  border: 1px solid #f5c6cb;
-  border-radius: 4px;
+  background-color: #fef2f2;
+  color: #991b1b;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
   margin-bottom: 16px;
   font-weight: 500;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .fieldError {
-  color: #dc3545;
-  font-size: 0.875rem;
-  margin-top: 4px;
+  color: #dc2626;
+  font-size: 13px;
+  margin-top: 6px;
   font-weight: 500;
 }
 
 .inputError {
-  border-color: #dc3545 !important;
-  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.25) !important;
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
 }

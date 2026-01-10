@@ -26,8 +26,21 @@ const FootballPitch = memo(function FootballPitch({
   endZone,
   actionCategory = "packing",
 }: FootballPitchProps) {
-  // Stan przełącznika orientacji boiska
-  const [isFlipped, setIsFlipped] = useState(false);
+  // Stan przełącznika orientacji boiska - wczytujemy z localStorage
+  const [isFlipped, setIsFlipped] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('pitchFlipped');
+      return saved === 'true';
+    }
+    return false;
+  });
+
+  // Zapisujemy stan flip w localStorage przy każdej zmianie
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pitchFlipped', isFlipped.toString());
+    }
+  }, [isFlipped]);
 
   // Logowanie zmian stref dla debugowania
   useEffect(() => {

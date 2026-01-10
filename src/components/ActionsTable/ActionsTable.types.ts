@@ -20,4 +20,5 @@ export interface ActionsTableProps {
   onRefreshPlayersData?: () => void;
   youtubeVideoRef?: React.RefObject<YouTubeVideoRef>;
   customVideoRef?: React.RefObject<CustomVideoPlayerRef>;
+  actionCategory?: "packing" | "regain" | "loses"; // Kategoria akcji
 }

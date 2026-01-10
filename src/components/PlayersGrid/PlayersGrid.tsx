@@ -14,11 +14,11 @@ const PlayersGrid = memo(function PlayersGrid({
   onAddPlayer,
   onEditPlayer,
   onDeletePlayer,
+  isExpanded = false,
+  onToggle,
 }: PlayersGridProps) {
   // Stan do śledzenia czy komponent został zamontowany na kliencie
   const [isMounted, setIsMounted] = useState(false);
-  // Stan dla collapse/expand
-  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Po pierwszym renderze na kliencie, oznaczamy komponent jako zamontowany
   useEffect(() => {
@@ -34,51 +34,26 @@ const PlayersGrid = memo(function PlayersGrid({
     );
   }
 
+  const handleToggle = () => {
+    if (onToggle) {
+      onToggle();
+    }
+  };
+
   // Po hydratacji renderujemy pełną wersję komponentu
   return (
     <div className={styles.playersGridContainer}>
-      <div 
-        className={styles.playersGridHeader} 
-        onClick={() => setIsCollapsed(!isCollapsed)}
+      <label className={styles.playersGridLabel}>
+        Pokaż zawodników:
+      </label>
+      <button 
+        className={`${styles.playersGridHeader} ${isExpanded ? styles.playersGridHeaderActive : ''}`}
+        onClick={handleToggle}
+        aria-label={isExpanded ? "Zwiń listę zawodników" : "Rozwiń listę zawodników"}
+        type="button"
       >
-        <h3>Zawodnicy ({players.length})</h3>
-        <button 
-          className={styles.collapseButton}
-          aria-label={isCollapsed ? "Rozwiń listę zawodników" : "Zwiń listę zawodników"}
-        >
-          {isCollapsed ? "▼" : "▲"}
-        </button>
-      </div>
-      
-      {!isCollapsed && (
-    <div className={styles.playersGrid}>
-      {players.map((player) => (
-        <PlayerTile
-          key={player.id}
-          player={player}
-          isSelected={player.id === selectedPlayerId}
-          onSelect={onPlayerSelect}
-          onEdit={onEditPlayer}
-          onDelete={onDeletePlayer}
-        />
-      ))}
-      <div
-        className={`${styles.playerTile} ${styles.addPlayerTile}`}
-        onClick={onAddPlayer}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onAddPlayer();
-          }
-        }}
-        role="button"
-        tabIndex={0}
-        aria-label="Dodaj nowego zawodnika"
-      >
-        +
-      </div>
-        </div>
-      )}
+        <span>Zawodnicy ({players.length})</span>
+      </button>
     </div>
   );
 });

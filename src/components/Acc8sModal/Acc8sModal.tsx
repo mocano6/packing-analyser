@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Acc8sEntry, TeamInfo, Player } from "@/types";
-import { getPlayerFullName } from "@/utils/playerUtils";
 import styles from "./Acc8sModal.module.css";
 
 export interface Acc8sModalProps {
@@ -82,20 +81,25 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     }
   }, [editingEntry, isOpen]);
 
-  const handlePlayerToggle = (playerId: string) => {
-    setFormData((prev) => {
-      if (prev.passingPlayerIds.includes(playerId)) {
-        return {
-          ...prev,
-          passingPlayerIds: prev.passingPlayerIds.filter(id => id !== playerId),
-        };
-      } else {
-        return {
-          ...prev,
-          passingPlayerIds: [...prev.passingPlayerIds, playerId],
-        };
-      }
-    });
+  const handleAddPass = () => {
+    // Dodaj pierwszego dostępnego zawodnika, który nie jest jeszcze wybrany
+    const availablePlayer = filteredPlayers.find(player => !formData.passingPlayerIds.includes(player.id));
+    if (availablePlayer) {
+      setFormData((prev) => ({
+        ...prev,
+        passingPlayerIds: [...prev.passingPlayerIds, availablePlayer.id],
+      }));
+    }
+  };
+
+  const handleRemovePass = () => {
+    // Usuń ostatniego wybranego zawodnika
+    if (formData.passingPlayerIds.length > 0) {
+      setFormData((prev) => ({
+        ...prev,
+        passingPlayerIds: prev.passingPlayerIds.slice(0, -1),
+      }));
+    }
   };
 
   // Funkcja do obsługi zmiany połowy
@@ -120,7 +124,10 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     const videoTimestamp = typeof window !== 'undefined' 
       ? localStorage.getItem('tempVideoTimestamp') 
       : null;
-    const parsedVideoTimestamp = videoTimestamp ? parseInt(videoTimestamp, 10) : undefined;
+    // Obsługa wartości "0" - parseInt("0", 10) zwraca 0, ale "0" jest truthy jako string
+    const parsedVideoTimestamp = videoTimestamp !== null && videoTimestamp !== '' 
+      ? parseInt(videoTimestamp, 10) 
+      : undefined;
     const isValidTimestamp = parsedVideoTimestamp !== undefined && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp >= 0;
     
     console.log('Acc8sModal handleSubmit - videoTimestamp z localStorage:', videoTimestamp);
@@ -228,57 +235,25 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              // Liczba podań = liczba wybranych zawodników
+              handleAddPass();
             }}
             title="Liczba podań = liczba wybranych zawodników"
           >
             <span className={styles.compactLabel}>Liczba podań</span>
             <span className={styles.pointsValue}><b>{formData.passingPlayerIds.length}</b></span>
-          </div>
-
-          {/* Wielokrotny wybór zawodników biorących udział w akcji */}
-          <div className={styles.fieldGroup}>
-            <label className={styles.playerTitle}>
-              Zawodnicy biorący udział w akcji ({formData.passingPlayerIds.length}):
-            </label>
-            <div className={styles.playersGrid}>
-              {filteredPlayers.map(player => (
-                <div
-                  key={player.id}
-                  className={`${styles.playerTile} ${
-                    formData.passingPlayerIds.includes(player.id) 
-                      ? styles.playerSelectedTile
-                      : ''
-                  } ${player.imageUrl ? styles.withImage : ''}`}
-                  onClick={() => handlePlayerToggle(player.id)}
-                >
-                  {player.imageUrl && (
-                    <>
-                      <img
-                        src={player.imageUrl}
-                        alt=""
-                        className={styles.playerTileImage}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                      <div className={styles.playerTileOverlay}></div>
-                    </>
-                  )}
-                  <div className={styles.playerContent}>
-                    <div className={styles.number}>{player.number}</div>
-                    <div className={styles.playerInfo}>
-                      <div className={styles.name}>{getPlayerFullName(player)}</div>
-                      <div className={styles.details}>
-                        {player.position && (
-                          <span className={styles.position}>{player.position}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <button
+              className={styles.compactSubtractButton}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleRemovePass();
+              }}
+              title="Odejmij podanie"
+              type="button"
+              disabled={formData.passingPlayerIds.length === 0}
+            >
+              −
+            </button>
           </div>
 
           <div className={styles.buttonGroup}>

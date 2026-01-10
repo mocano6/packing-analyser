@@ -93,7 +93,13 @@ export interface Action {
   isBelow8s?: boolean; // Poniżej 8 sekund (dla regain i loses)
   playersBehindBall?: number; // Liczba partnerów przed piłką (dla regain i loses)
   opponentsBeforeBall?: number; // Liczba przeciwników przed piłką (dla regain i loses)
+  totalPlayersOnField?: number; // Całkowita liczba zawodników naszego zespołu na boisku (dla regain i loses) - obliczane jako 11 - playersLeftField
+  totalOpponentsOnField?: number; // Całkowita liczba zawodników przeciwnika na boisku (dla regain i loses) - obliczane jako 11 - opponentsLeftField
+  playersLeftField?: number; // Liczba zawodników naszego zespołu, którzy opuścili boisko (dla regain i loses)
+  opponentsLeftField?: number; // Liczba zawodników przeciwnika, którzy opuścili boisko (dla regain i loses)
   isReaction5s?: boolean; // Reakcja 5s (dla loses)
+  isAut?: boolean; // Aut (dla loses)
+  isReaction5sNotApplicable?: boolean; // Nie dotyczy - nie da się zrobić 5s (dla loses)
 }
 
 // Dla zachowania kompatybilności

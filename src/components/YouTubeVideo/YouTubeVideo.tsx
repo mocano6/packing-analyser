@@ -9,6 +9,8 @@ interface YouTubeVideoProps {
   matchInfo?: TeamInfo | null;
   isVisible?: boolean;
   onToggleVisibility?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 export interface YouTubeVideoRef {
@@ -20,10 +22,14 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
   matchInfo,
   isVisible = true,
   onToggleVisibility,
+  isFullscreen: isFullscreenProp,
+  onToggleFullscreen,
 }, ref) => {
   const playerRef = useRef<any>(null);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [isExternalWindowOpen, setIsExternalWindowOpen] = useState<boolean>(false);
+  const [isFullscreenInternal, setIsFullscreenInternal] = useState<boolean>(false);
+  const isFullscreen = isFullscreenProp !== undefined ? isFullscreenProp : isFullscreenInternal;
 
   // Funkcja do wyciągnięcia YouTube Video ID z URL
   const extractYouTubeId = (url: string): string | null => {
@@ -155,7 +161,7 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
 
   if (!videoId) {
     return (
-      <div className={styles.videoContainer}>
+      <div className={`${styles.videoContainer} ${styles.videoContainerNoVideo}`}>
         <div className={styles.noVideo}>
           <p>Brak dodanego wideo dla tego meczu</p>
           <p className={styles.hint}>Wideo można dodać podczas tworzenia lub edycji meczu</p>
@@ -194,37 +200,40 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
     return null;
   }
 
+  const handleToggleFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onToggleFullscreen) {
+      onToggleFullscreen();
+    } else {
+      setIsFullscreenInternal(!isFullscreenInternal);
+    }
+    if (!isVisible && !isFullscreen) {
+      // Jeśli wideo jest zwinięte, najpierw je rozwiń
+      if (onToggleVisibility) {
+        onToggleVisibility();
+      }
+    }
+  };
+
+  const handleLogoClick = () => {
+    if (onToggleFullscreen) {
+      onToggleFullscreen();
+    } else {
+      setIsFullscreenInternal(!isFullscreenInternal);
+    }
+    if (!isVisible) {
+      // Jeśli wideo jest zwinięte, najpierw je rozwiń
+      if (onToggleVisibility) {
+        onToggleVisibility();
+      }
+    }
+  };
+
   return (
-    <div className={styles.videoContainer}>
-      <div 
-        className={styles.videoHeader}
-        onClick={onToggleVisibility}
-      >
-        <h3>Nagranie YouTube</h3>
-        <div className={styles.headerButtons}>
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              openExternalVideo();
-            }}
-            className={styles.externalButton}
-            title="Otwórz wideo w nowym oknie (dla drugiego monitora)"
-          >
-            <span className={styles.externalIcon}>🖥️</span>
-          </button>
-          {onToggleVisibility && (
-            <button 
-              className={styles.collapseButton}
-              aria-label={isVisible ? "Ukryj odtwarzacz" : "Pokaż odtwarzacz"}
-            >
-              {isVisible ? "▲" : "▼"}
-            </button>
-          )}
-        </div>
-      </div>
+    <div className={`${styles.videoContainer} ${isFullscreen ? styles.videoContainerFullscreen : ''}`}>
       
       {isVisible && (
-        <div className={styles.videoWrapper}>
+        <div className={`${styles.videoWrapper} ${isFullscreen ? styles.videoWrapperFullscreen : ''}`}>
           {currentVideoTime > 0 && (
             <div className={styles.timeDisplay}>
               Czas: {Math.floor(currentVideoTime / 60)}:{(currentVideoTime % 60).toString().padStart(2, '0')}

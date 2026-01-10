@@ -5,6 +5,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import styles from "./ActionsTable.module.css";
 import { ActionsTableProps } from "@/components/ActionsTable/ActionsTable.types";
 import { Player } from "@/types";
+import { getOppositeXTValueForZone, zoneNameToIndex } from "@/constants/xtValues";
 
 type SortKey =
   | "minute"
@@ -59,6 +60,7 @@ const ActionRow = ({
   selectedMetric,
   actionModeFilter,
   players,
+  actionCategory,
 }: {
   action: ActionsTableProps["actions"][0];
   onDelete: (id: string) => void;
@@ -67,6 +69,7 @@ const ActionRow = ({
   selectedMetric: 'packing' | 'pxt' | 'xt';
   actionModeFilter: 'attack' | 'defense';
   players: Player[];
+  actionCategory?: "packing" | "regain" | "loses";
 }) => {
   const getEvents = () => {
     const events = [];
@@ -121,8 +124,25 @@ const ActionRow = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Oblicz grid-template-columns w zależności od actionCategory
+  const gridColumns = (() => {
+    // Dla regain i loses: 10 kolumn (bez "Zawodnik koniec" i "PxT", z "Partnerzy przed piłką" i "Atak xT")
+    if (actionCategory === "regain" || actionCategory === "loses") {
+      return "1fr 80px 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px";
+    }
+    // Dla packing: 10 kolumn (z "Zawodnik koniec" i "PxT", bez "Partnerzy przed piłką")
+    if (actionModeFilter === 'attack') {
+      return "1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px";
+    }
+    // Dla defense: 9 kolumn (bez "Zawodnik koniec")
+    return "1fr 80px 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px";
+  })();
+
   return (
-    <div className={`${styles.actionRow} ${isSecondHalf ? styles.secondHalfRow : styles.firstHalfRow}`}>
+    <div 
+      className={`${styles.actionRow} ${isSecondHalf ? styles.secondHalfRow : styles.firstHalfRow}`}
+      style={{ gridTemplateColumns: gridColumns }}
+    >
       <div className={styles.cell}>
         <span className={isSecondHalf ? styles.secondHalf : styles.firstHalf}>
           {isSecondHalf ? 'P2' : 'P1'}
@@ -148,7 +168,8 @@ const ActionRow = ({
       <div className={styles.cell}>
         {senderDisplay}
       </div>
-      {actionModeFilter === 'attack' && (
+      {/* Ukryj kolumnę "Zawodnik koniec" dla regain i loses */}
+      {actionModeFilter === 'attack' && actionCategory === "packing" && (
         <div className={styles.cell}>
           {receiverDisplay}
         </div>
@@ -160,7 +181,12 @@ const ActionRow = ({
       </div>
       <div className={styles.cell}>
         {(() => {
-          // Obliczamy xT różnicę: xTEnd - xTStart
+          // Dla regain i loses wyświetlamy wartość xT ze strefy (xTValueStart), nie różnicę
+          if (actionCategory === "regain" || actionCategory === "loses") {
+            const xTValue = action.xTValueStart || 0;
+            return typeof xTValue === 'number' ? xTValue.toFixed(3) : "-";
+          }
+          // Dla packing obliczamy xT różnicę: xTEnd - xTStart
           const xTStart = action.xTValueStart || 0;
           const xTEnd = action.xTValueEnd || 0;
           const xTDifference = xTEnd - xTStart;
@@ -168,20 +194,60 @@ const ActionRow = ({
           return typeof xTDifference === 'number' ? xTDifference.toFixed(3) : "-";
         })()}
       </div>
+      {/* Dla regain i loses dodajemy kolumnę "Atak xT" */}
+      {(actionCategory === "regain" || actionCategory === "loses") && (
+        <div className={styles.cell}>
+          {(() => {
+            // Obliczamy wartość xT z przeciwległej strony boiska
+            const zoneName = action.startZone || action.fromZone;
+            if (!zoneName) return "-";
+            
+            const zoneIndex = zoneNameToIndex(zoneName);
+            if (zoneIndex === null) return "-";
+            
+            const oppositeXT = getOppositeXTValueForZone(zoneIndex);
+            return typeof oppositeXT === 'number' ? oppositeXT.toFixed(3) : "-";
+          })()}
+        </div>
+      )}
       <div className={styles.cell}>
-        {action.packingPoints || 0}
+        {/* Dla regain i loses wyświetlamy "przed/za piłką" zamiast packingPoints */}
+        {actionCategory === "regain" || actionCategory === "loses" ? (
+          (() => {
+            const opponentsBefore = action.opponentsBeforeBall ?? 0;
+            const totalOpponents = action.totalOpponentsOnField ?? 11;
+            const opponentsBehind = totalOpponents - opponentsBefore;
+            return `${opponentsBefore}/${opponentsBehind}`;
+          })()
+        ) : (
+          action.packingPoints || 0
+        )}
       </div>
-      <div className={styles.cell}>
-        {(() => {
-          // Obliczamy PxT dynamicznie: (xTEnd - xTStart) * packingPoints
-          const xTStart = action.xTValueStart || 0;
-          const xTEnd = action.xTValueEnd || 0;
-          const packingPoints = action.packingPoints || 0;
-          const pxtValue = (xTEnd - xTStart) * packingPoints;
-          
-          return typeof pxtValue === 'number' ? pxtValue.toFixed(3) : "-";
-        })()}
-      </div>
+      {/* Dla regain i loses dodajemy kolumnę "Partnerzy przed piłką" */}
+      {(actionCategory === "regain" || actionCategory === "loses") && (
+        <div className={styles.cell}>
+          {(() => {
+            const playersBefore = action.playersBehindBall ?? 0;
+            const totalPlayers = action.totalPlayersOnField ?? 11;
+            const playersBehind = totalPlayers - playersBefore;
+            return `${playersBefore}/${playersBehind}`;
+          })()}
+        </div>
+      )}
+      {/* Ukryj kolumnę PxT dla regain i loses */}
+      {(actionCategory === "packing") && (
+        <div className={styles.cell}>
+          {(() => {
+            // Obliczamy PxT dynamicznie: (xTEnd - xTStart) * packingPoints
+            const xTStart = action.xTValueStart || 0;
+            const xTEnd = action.xTValueEnd || 0;
+            const packingPoints = action.packingPoints || 0;
+            const pxtValue = (xTEnd - xTStart) * packingPoints;
+            
+            return typeof pxtValue === 'number' ? pxtValue.toFixed(3) : "-";
+          })()}
+        </div>
+      )}
       <div className={styles.cell}>{getEvents()}</div>
       <div className={styles.cellActions}>
         {onEdit && (
@@ -209,7 +275,8 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   onEditAction,
   onRefreshPlayersData,
   youtubeVideoRef,
-  customVideoRef
+  customVideoRef,
+  actionCategory = "packing"
 }) => {
   const [sortConfig, setSortConfig] = useState<{
     key: SortKey;
@@ -245,9 +312,11 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   const handleVideoTimeClick = async (videoTimestamp?: number) => {
     if (!videoTimestamp) return;
     
-    // Sprawdź czy mamy otwarte zewnętrzne okno wideo
-    const externalWindow = window.open('', 'youtube-video');
-    if (externalWindow && !externalWindow.closed) {
+    // Sprawdź czy mamy otwarte zewnętrzne okno wideo (sprawdzamy bezpośrednio externalWindow, a nie localStorage)
+    const externalWindow = (window as any).externalVideoWindow;
+    const isExternalWindowOpen = externalWindow && !externalWindow.closed;
+    
+    if (isExternalWindowOpen) {
       // Wyślij wiadomość do zewnętrznego okna
       externalWindow.postMessage({
         type: 'SEEK_TO_TIME',
@@ -405,7 +474,23 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
       </div>
 
       <div className={styles.matchesTable}>
-        <div className={styles.tableHeader}>
+        <div 
+          className={styles.tableHeader}
+          style={{
+            gridTemplateColumns: (() => {
+              // Dla regain i loses: 10 kolumn (bez "Zawodnik koniec" i "PxT", z "Partnerzy przed piłką" i "Atak xT")
+              if (actionCategory === "regain" || actionCategory === "loses") {
+                return "1fr 80px 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px";
+              }
+              // Dla packing: 10 kolumn (z "Zawodnik koniec" i "PxT", bez "Partnerzy przed piłką")
+              if (actionModeFilter === 'attack') {
+                return "1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px";
+              }
+              // Dla defense: 9 kolumn (bez "Zawodnik koniec")
+              return "1fr 80px 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px";
+            })()
+          }}
+        >
           <HeaderCell
             label="Połowa / Min"
             sortKey="minute"
@@ -427,7 +512,8 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             sortDirection={sortConfig.direction}
             onSort={handleSort}
           />
-          {actionModeFilter === 'attack' && (
+          {/* Ukryj kolumnę "Zawodnik koniec" dla regain i loses */}
+          {actionModeFilter === 'attack' && actionCategory === "packing" && (
             <HeaderCell
               label="Zawodnik koniec"
               sortKey="receiver"
@@ -444,26 +530,49 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             onSort={handleSort}
           />
           <HeaderCell
-            label="xT"
+            label={actionCategory === "regain" || actionCategory === "loses" ? "Obrona xT" : "xT"}
             sortKey="xt"
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}
             onSort={handleSort}
           />
+          {/* Dla regain i loses dodajemy kolumnę "Atak xT" */}
+          {(actionCategory === "regain" || actionCategory === "loses") && (
+            <HeaderCell
+              label="Atak xT"
+              sortKey="oppositeXT"
+              currentSortKey={sortConfig.key}
+              sortDirection={sortConfig.direction}
+              onSort={handleSort}
+            />
+          )}
           <HeaderCell
-            label="Packing"
+            label={actionCategory === "regain" || actionCategory === "loses" ? "Liczba zawodników (przed/za) piłką" : "Packing"}
             sortKey="packing"
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}
             onSort={handleSort}
           />
-          <HeaderCell
-            label="PxT"
-            sortKey="pxt"
-            currentSortKey={sortConfig.key}
-            sortDirection={sortConfig.direction}
-            onSort={handleSort}
-          />
+          {/* Dla regain i loses dodajemy kolumnę "Partnerzy przed piłką" */}
+          {(actionCategory === "regain" || actionCategory === "loses") && (
+            <HeaderCell
+              label="Partnerzy (przed/za) piłką"
+              sortKey="playersBehindBall"
+              currentSortKey={sortConfig.key}
+              sortDirection={sortConfig.direction}
+              onSort={handleSort}
+            />
+          )}
+          {/* Ukryj kolumnę PxT dla regain i loses */}
+          {actionCategory === "packing" && (
+            <HeaderCell
+              label="PxT"
+              sortKey="pxt"
+              currentSortKey={sortConfig.key}
+              sortDirection={sortConfig.direction}
+              onSort={handleSort}
+            />
+          )}
           <HeaderCell
             label="Wydarzenia"
             sortKey="events"
@@ -487,6 +596,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
                 selectedMetric={selectedMetric}
                 actionModeFilter={actionModeFilter}
                 players={players || []}
+                actionCategory={actionCategory}
               />
             ))
           )}
