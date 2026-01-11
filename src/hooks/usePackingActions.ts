@@ -384,8 +384,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           isReaction5sNotApplicable: isReaction5sNotApplicableActive,
           playersBehindBall: playersBehindBall, 
           opponentsBeforeBall: opponentsBeforeBall,
-          totalPlayersOnField: totalPlayersOnField,
-          totalOpponentsOnField: totalOpponentsOnField
+          playersLeftField: playersLeftField,
+          opponentsLeftField: opponentsLeftField,
+          totalPlayersOnField: 11 - playersLeftField, // Obliczamy jako 11 - zawodnicy, którzy opuścili boisko
+          totalOpponentsOnField: 11 - opponentsLeftField // Obliczamy jako 11 - przeciwnicy, którzy opuścili boisko
         })
       };
       

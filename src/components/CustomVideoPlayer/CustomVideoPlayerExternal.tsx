@@ -65,7 +65,7 @@ const CustomVideoPlayerExternal: React.FC<CustomVideoPlayerExternalProps> = ({
       } else if (event.data.type === 'GET_CURRENT_TIME' && video) {
         if (window.opener) {
           window.opener.postMessage({
-            type: 'VIDEO_TIME_RESPONSE',
+            type: 'CURRENT_TIME_RESPONSE',
             time: video.currentTime
           }, '*');
         }

@@ -211,8 +211,31 @@ const ActionSection = memo(function ActionSection({
       const isExternalWindowOpen = externalWindow && !externalWindow.closed;
       
       if (isExternalWindowOpen) {
-        // W zewnętrznym oknie - nie możemy pobrać czasu bezpośrednio
-        return null;
+        // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
+        externalWindow.postMessage({
+          type: 'GET_CURRENT_TIME'
+        }, '*');
+        
+        // Czekaj na odpowiedź z zewnętrznego okna
+        const timeFromExternal = await new Promise<number | null>((resolve) => {
+          const handleTimeResponse = (event: MessageEvent) => {
+            if (event.data.type === 'CURRENT_TIME_RESPONSE' || event.data.type === 'VIDEO_TIME_RESPONSE') {
+              window.removeEventListener('message', handleTimeResponse);
+              resolve(event.data.time);
+            }
+          };
+          window.addEventListener('message', handleTimeResponse);
+          setTimeout(() => {
+            window.removeEventListener('message', handleTimeResponse);
+            resolve(null); // timeout
+          }, 2000);
+        });
+        
+        if (timeFromExternal === null || timeFromExternal === undefined) {
+          return null;
+        }
+        
+        currentVideoTime = timeFromExternal;
       } else if (youtubeVideoRef?.current) {
         currentVideoTime = await youtubeVideoRef.current.getCurrentTime();
       } else if (customVideoRef?.current) {
