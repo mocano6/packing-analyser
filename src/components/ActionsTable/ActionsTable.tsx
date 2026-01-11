@@ -168,8 +168,8 @@ const ActionRow = ({
       <div className={styles.cell}>
         {senderDisplay}
       </div>
-      {/* Ukryj kolumnę "Zawodnik koniec" dla regain i loses */}
-      {actionModeFilter === 'attack' && actionCategory === "packing" && (
+      {/* Ukryj kolumnę "Zawodnik koniec" dla regain i loses oraz unpacking */}
+      {actionCategory === "packing" && actionModeFilter === 'attack' && (
         <div className={styles.cell}>
           {receiverDisplay}
         </div>
@@ -289,8 +289,19 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   // Używamy PxT na stałe
   const selectedMetric = 'pxt';
   
-  // State dla filtrowania trybu akcji
-  const [actionModeFilter, setActionModeFilter] = useState<'attack' | 'defense'>('attack');
+  // State dla filtrowania trybu akcji - dla packing używamy attack/defense, dla regain/loses używamy regain/loses
+  const [actionModeFilter, setActionModeFilter] = useState<'attack' | 'defense' | 'regain' | 'loses'>(
+    actionCategory === "regain" || actionCategory === "loses" ? actionCategory : 'attack'
+  );
+
+  // Synchronizuj actionModeFilter z actionCategory
+  useEffect(() => {
+    if (actionCategory === "regain" || actionCategory === "loses") {
+      setActionModeFilter(actionCategory);
+    } else {
+      setActionModeFilter('attack');
+    }
+  }, [actionCategory]);
 
   // Dodajemy state do śledzenia, czy jakieś akcje mają brakujące dane graczy
   const [hasMissingPlayerData, setHasMissingPlayerData] = useState(false);
@@ -312,28 +323,55 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   const handleVideoTimeClick = async (videoTimestamp?: number) => {
     if (!videoTimestamp) return;
     
+    console.log('handleVideoTimeClick - videoTimestamp:', videoTimestamp);
+    console.log('handleVideoTimeClick - youtubeVideoRef:', youtubeVideoRef);
+    console.log('handleVideoTimeClick - customVideoRef:', customVideoRef);
+    
     // Sprawdź czy mamy otwarte zewnętrzne okno wideo (sprawdzamy bezpośrednio externalWindow, a nie localStorage)
     const externalWindow = (window as any).externalVideoWindow;
     const isExternalWindowOpen = externalWindow && !externalWindow.closed;
     
     if (isExternalWindowOpen) {
+      console.log('handleVideoTimeClick - używam zewnętrznego okna');
       // Wyślij wiadomość do zewnętrznego okna
-      externalWindow.postMessage({
-        type: 'SEEK_TO_TIME',
-        time: videoTimestamp
-      }, '*');
+      try {
+        externalWindow.postMessage({
+          type: 'SEEK_TO_TIME',
+          time: videoTimestamp
+        }, '*');
+        console.log('handleVideoTimeClick - wiadomość wysłana do zewnętrznego okna');
+      } catch (error) {
+        console.error('handleVideoTimeClick - błąd podczas wysyłania wiadomości:', error);
+      }
+    } else if (youtubeVideoRef?.current) {
+      console.log('handleVideoTimeClick - używam youtubeVideoRef, current:', youtubeVideoRef.current);
+      try {
+        await youtubeVideoRef.current.seekTo(videoTimestamp);
+        console.log('handleVideoTimeClick - youtubeVideoRef.seekTo zakończone');
+      } catch (error) {
+        console.warn('Nie udało się przewinąć wideo do czasu:', videoTimestamp, error);
+        // Spróbuj ponownie po krótkim czasie
+        setTimeout(async () => {
+          if (youtubeVideoRef?.current) {
+            try {
+              await youtubeVideoRef.current.seekTo(videoTimestamp);
+              console.log('handleVideoTimeClick - youtubeVideoRef.seekTo (retry) zakończone');
+            } catch (retryError) {
+              console.warn('Nie udało się przewinąć wideo do czasu (retry):', videoTimestamp, retryError);
+            }
+          }
+        }, 500);
+      }
     } else if (customVideoRef?.current) {
+      console.log('handleVideoTimeClick - używam customVideoRef');
       try {
         await customVideoRef.current.seekTo(videoTimestamp);
+        console.log('handleVideoTimeClick - customVideoRef.seekTo zakończone');
       } catch (error) {
         console.warn('Nie udało się przewinąć własnego odtwarzacza do czasu:', videoTimestamp, error);
       }
-    } else if (youtubeVideoRef?.current) {
-      try {
-        await youtubeVideoRef.current.seekTo(videoTimestamp);
-      } catch (error) {
-        console.warn('Nie udało się przewinąć wideo do czasu:', videoTimestamp, error);
-      }
+    } else {
+      console.warn('handleVideoTimeClick - brak dostępnego playera (youtubeVideoRef:', youtubeVideoRef, ', customVideoRef:', customVideoRef, ')');
     }
   };
 
@@ -347,10 +385,40 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
 
   // Posortowane akcje z wykorzystaniem useMemo dla optymalizacji wydajności
   const sortedActions = useMemo(() => {
-    // Filtrujemy akcje według trybu
+    // Filtrujemy akcje według trybu lub kategorii
     const filteredActions = actions.filter(action => {
-      const actionMode = action.mode || 'attack';
-      return actionMode === actionModeFilter;
+      if (actionCategory === "regain" || actionCategory === "loses") {
+        // Dla regain/loses filtrujemy po kategorii akcji
+        if (actionModeFilter === "regain") {
+          // Regain: ma playersBehindBall lub opponentsBeforeBall, ale NIE ma isReaction5s
+          const hasRegainFields = action.playersBehindBall !== undefined || 
+                                  action.opponentsBeforeBall !== undefined ||
+                                  action.totalPlayersOnField !== undefined ||
+                                  action.totalOpponentsOnField !== undefined ||
+                                  action.playersLeftField !== undefined ||
+                                  action.opponentsLeftField !== undefined;
+          const hasLosesFields = action.isReaction5s !== undefined || 
+                                 action.isAut !== undefined || 
+                                 action.isReaction5sNotApplicable !== undefined;
+          return hasRegainFields && !hasLosesFields;
+        } else if (actionModeFilter === "loses") {
+          // Loses: ma isReaction5s, isAut lub isReaction5sNotApplicable (którekolwiek z tych pól zdefiniowane)
+          // Uwaga: akcje loses mogą mieć również playersBehindBall, opponentsBeforeBall itd.
+          // Główny wskaźnik to obecność pól charakterystycznych dla loses
+          // Sprawdzamy zarówno undefined (niezdefiniowane) jak i false (zdefiniowane jako false)
+          const hasReaction5s = action.isReaction5s !== undefined;
+          const hasAut = action.isAut !== undefined;
+          const hasNotApplicable = action.isReaction5sNotApplicable !== undefined;
+          
+          // Jeśli którekolwiek z tych pól jest zdefiniowane (nawet jako false), to jest to akcja loses
+          return hasReaction5s || hasAut || hasNotApplicable;
+        }
+        return false;
+      } else {
+        // Dla packing filtrujemy po trybie (attack/defense)
+        const actionMode = action.mode || 'attack';
+        return actionMode === actionModeFilter;
+      }
     });
     
     const result = [...filteredActions];
@@ -437,7 +505,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
 
       return comparison * multiplier;
     });
-  }, [actions, sortConfig, actionModeFilter]);
+  }, [actions, sortConfig, actionModeFilter, actionCategory]);
 
   return (
     <div className={styles.tableContainer}>
@@ -446,20 +514,37 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         <div className={styles.headerButtons}>
           
           {/* Przełącznik trybu akcji */}
-          <div className={styles.modeToggle}>
-            <button
-              className={`${styles.modeButton} ${actionModeFilter === 'attack' ? styles.active : ''}`}
-              onClick={() => setActionModeFilter('attack')}
-            >
-              Packing
-            </button>
-            <button
-              className={`${styles.modeButton} ${actionModeFilter === 'defense' ? styles.active : ''}`}
-              onClick={() => setActionModeFilter('defense')}
-            >
-              Unpacking
-            </button>
-          </div>
+          {actionCategory === "regain" || actionCategory === "loses" ? (
+            <div className={styles.modeToggle}>
+              <button
+                className={`${styles.modeButton} ${actionModeFilter === 'regain' ? styles.active : ''}`}
+                onClick={() => setActionModeFilter('regain')}
+              >
+                Regain
+              </button>
+              <button
+                className={`${styles.modeButton} ${actionModeFilter === 'loses' ? styles.active : ''}`}
+                onClick={() => setActionModeFilter('loses')}
+              >
+                Loses
+              </button>
+            </div>
+          ) : (
+            <div className={styles.modeToggle}>
+              <button
+                className={`${styles.modeButton} ${actionModeFilter === 'attack' ? styles.active : ''}`}
+                onClick={() => setActionModeFilter('attack')}
+              >
+                Packing
+              </button>
+              <button
+                className={`${styles.modeButton} ${actionModeFilter === 'defense' ? styles.active : ''}`}
+                onClick={() => setActionModeFilter('defense')}
+              >
+                Unpacking
+              </button>
+            </div>
+          )}
           
           {hasMissingPlayerData && onRefreshPlayersData && (
             <button

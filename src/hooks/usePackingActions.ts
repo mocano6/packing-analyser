@@ -41,7 +41,7 @@ function removeUndefinedFields<T extends object>(obj: T): T {
   return result;
 }
 
-export function usePackingActions(players: Player[], matchInfo: TeamInfo | null, actionMode?: "attack" | "defense", selectedDefensePlayers?: string[], actionCategory?: "packing" | "regain" | "loses") {
+export function usePackingActions(players: Player[], matchInfo: TeamInfo | null, actionMode?: "attack" | "defense", selectedDefensePlayers?: string[], actionCategory?: "packing" | "regain" | "loses", loadBothRegainLoses?: boolean) {
   // Stany dla wybranego zawodnika
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedReceiverId, setSelectedReceiverId] = useState<string | null>(null);
@@ -146,12 +146,17 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         const matchData = matchDoc.data() as TeamInfo;
         // Ładujemy akcje z odpowiedniej kolekcji w zależności od kategorii
         let loadedActions: Action[];
-        if (actionCategory === "regain") {
+        if (loadBothRegainLoses) {
+          // Gdy chcemy pokazać obie kategorie (regain i loses), ładujemy z obu kolekcji
+          const regainActions = matchData.actions_regain || [];
+          const losesActions = matchData.actions_loses || [];
+          loadedActions = [...regainActions, ...losesActions];
+        } else if (actionCategory === "regain") {
           loadedActions = matchData.actions_regain || [];
         } else if (actionCategory === "loses") {
           loadedActions = matchData.actions_loses || [];
         } else {
-          // Ładujemy akcje z obu kolekcji (packing i unpacking)
+          // Dla packing ładujemy akcje z obu kolekcji (packing i unpacking)
           const packingActions = matchData.actions_packing || [];
           const unpackingActions = matchData.actions_unpacking || [];
           loadedActions = [...packingActions, ...unpackingActions];
@@ -230,7 +235,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       // Resetuj akcje jeśli nie ma wybranego meczu
       setActions([]);
     }
-  }, [matchInfo?.matchId, actionCategory, loadActionsForMatch]);
+  }, [matchInfo?.matchId, actionCategory, loadBothRegainLoses, loadActionsForMatch]);
 
   // Obsługa wyboru strefy - może przyjmować różną liczbę argumentów
   const handleZoneSelect = useCallback((

@@ -17,6 +17,7 @@ export interface ShotModalProps {
   matchId: string;
   players: Player[];
   matchInfo?: TeamInfo | null;
+  onCalculateMinuteFromVideo?: () => Promise<{ minute: number; isSecondHalf: boolean } | null>;
 }
 
 const ShotModal: React.FC<ShotModalProps> = ({
@@ -31,6 +32,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
   matchId,
   players,
   matchInfo,
+  onCalculateMinuteFromVideo,
 }) => {
   const [formData, setFormData] = useState({
     playerId: "",
@@ -170,6 +172,26 @@ const ShotModal: React.FC<ShotModalProps> = ({
       player.position !== "GK" && player.position !== "Bramkarz"
     );
   }, [filteredPlayers, matchInfo, formData.teamContext]);
+
+  // Automatycznie ustaw sugerowaną wartość minuty i połowy na podstawie czasu wideo przy otwarciu modalu
+  useEffect(() => {
+    if (isOpen && !editingShot && onCalculateMinuteFromVideo) {
+      console.log('ShotModal: wywołuję onCalculateMinuteFromVideo');
+      onCalculateMinuteFromVideo().then((result) => {
+        console.log('ShotModal: wynik obliczenia:', result);
+        if (result !== null && result.minute > 0) {
+          setFormData(prev => ({
+            ...prev,
+            minute: result.minute,
+            isP1Active: !result.isSecondHalf,
+            isP2Active: result.isSecondHalf,
+          }));
+        }
+      }).catch((error) => {
+        console.warn('Nie udało się obliczyć minuty z wideo:', error);
+      });
+    }
+  }, [isOpen, editingShot, onCalculateMinuteFromVideo]);
 
   useEffect(() => {
     if (editingShot) {

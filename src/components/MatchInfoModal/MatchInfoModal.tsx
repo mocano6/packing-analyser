@@ -28,6 +28,19 @@ const getDefaultMatchInfo = (availableTeams?: Team[], selectedTeam?: string): Te
   videoUrl: "",
 });
 
+// Funkcje pomocnicze do konwersji sekund na minuty i sekundy (poza komponentem, żeby były dostępne w useState)
+const secondsToMinutesAndSeconds = (seconds?: number): { minutes: number; seconds: number } => {
+  if (!seconds) return { minutes: 0, seconds: 0 };
+  return {
+    minutes: Math.floor(seconds / 60),
+    seconds: seconds % 60
+  };
+};
+
+const minutesAndSecondsToSeconds = (minutes: number, seconds: number): number => {
+  return minutes * 60 + seconds;
+};
+
 const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   isOpen,
   onClose,
@@ -40,10 +53,28 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
     currentInfo || getDefaultMatchInfo(availableTeams, selectedTeam)
   );
 
+  // Stany dla czasu startu połów (w formacie minuty:sekundy)
+  const [firstHalfTime, setFirstHalfTime] = useState(() => {
+    const time = secondsToMinutesAndSeconds(currentInfo?.firstHalfStartTime);
+    return time;
+  });
+
+  const [secondHalfTime, setSecondHalfTime] = useState(() => {
+    const time = secondsToMinutesAndSeconds(currentInfo?.secondHalfStartTime);
+    return time;
+  });
+
   // Reset formularza przy otwarciu modalu
   useEffect(() => {
-    setFormData(currentInfo || getDefaultMatchInfo(availableTeams, selectedTeam));
-  }, [currentInfo, isOpen, availableTeams, selectedTeam]);
+    const newFormData = currentInfo || getDefaultMatchInfo(availableTeams, selectedTeam);
+    setFormData(newFormData);
+    
+    // Resetuj również czasy połów
+    const firstHalf = secondsToMinutesAndSeconds(newFormData.firstHalfStartTime);
+    const secondHalf = secondsToMinutesAndSeconds(newFormData.secondHalfStartTime);
+    setFirstHalfTime(firstHalf);
+    setSecondHalfTime(secondHalf);
+  }, [currentInfo, isOpen, availableTeams, selectedTeam, secondsToMinutesAndSeconds]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -70,6 +101,24 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
     // Kopiujemy obiekt, aby uniknąć modyfikacji oryginalnego obiektu
     const infoToSave = { ...formData };
     
+    // Konwertuj minuty i sekundy na sekundy dla czasu startu połów
+    const firstHalfSeconds = minutesAndSecondsToSeconds(firstHalfTime.minutes, firstHalfTime.seconds);
+    const secondHalfSeconds = minutesAndSecondsToSeconds(secondHalfTime.minutes, secondHalfTime.seconds);
+    
+    // Jeśli wartości są >= 0, ustaw je (0 jest ważną wartością - oznacza początek wideo)
+    // Jeśli oba pola są puste (undefined), usuń pole
+    if (firstHalfTime.minutes !== undefined || firstHalfTime.seconds !== undefined) {
+      infoToSave.firstHalfStartTime = firstHalfSeconds;
+    } else {
+      delete infoToSave.firstHalfStartTime;
+    }
+    
+    if (secondHalfTime.minutes !== undefined || secondHalfTime.seconds !== undefined) {
+      infoToSave.secondHalfStartTime = secondHalfSeconds;
+    } else {
+      delete infoToSave.secondHalfStartTime;
+    }
+    
     // Zachowujemy ID meczu jeśli istnieje
     if (currentInfo?.matchId) {
       infoToSave.matchId = currentInfo.matchId;
@@ -79,6 +128,13 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
     if ('time' in infoToSave) {
       delete infoToSave.time;
     }
+    
+    // Usuwamy wszystkie pola z wartością undefined (Firebase nie akceptuje undefined)
+    Object.keys(infoToSave).forEach(key => {
+      if (infoToSave[key as keyof TeamInfo] === undefined) {
+        delete infoToSave[key as keyof TeamInfo];
+      }
+    });
     
     // Zapamiętaj ID zespołu przed zapisem
     const teamId = infoToSave.team;
@@ -233,6 +289,96 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
               <small className={styles.helpText}>
                 Obsługiwane formaty: youtube.com/watch?v=..., youtu.be/..., youtube.com/embed/...
               </small>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.tooltipTrigger} data-tooltip="Czas startu na nagraniu">Czas startu:</label>
+              <div className={styles.halvesTimeContainer}>
+                <div className={styles.halfTimeRow}>
+                  <span className={styles.halfLabel}>I połowa:</span>
+                  <div className={styles.timeInputContainer}>
+                    <input
+                      id="firstHalfMinutes"
+                      type="number"
+                      min="0"
+                      max="999"
+                      step="1"
+                      value={firstHalfTime.minutes === 0 ? 0 : (firstHalfTime.minutes || "")}
+                      onChange={(e) => {
+                        const value = e.target.value === "" ? undefined : parseInt(e.target.value, 10);
+                        if (value !== undefined && !isNaN(value)) {
+                          setFirstHalfTime(prev => ({ ...prev, minutes: Math.max(0, value) }));
+                        } else {
+                          setFirstHalfTime(prev => ({ ...prev, minutes: 0 }));
+                        }
+                      }}
+                      placeholder="0"
+                      className={styles.timeInput}
+                    />
+                    <span className={styles.timeSeparator}>:</span>
+                    <input
+                      id="firstHalfSeconds"
+                      type="number"
+                      min="0"
+                      max="59"
+                      step="1"
+                      value={firstHalfTime.seconds === 0 ? 0 : (firstHalfTime.seconds || "")}
+                      onChange={(e) => {
+                        const value = e.target.value === "" ? undefined : parseInt(e.target.value, 10);
+                        if (value !== undefined && !isNaN(value)) {
+                          setFirstHalfTime(prev => ({ ...prev, seconds: Math.max(0, Math.min(59, value)) }));
+                        } else {
+                          setFirstHalfTime(prev => ({ ...prev, seconds: 0 }));
+                        }
+                      }}
+                      placeholder="0"
+                      className={`${styles.timeInput} ${styles.timeInputSeconds}`}
+                    />
+                  </div>
+                </div>
+                <div className={styles.halfTimeRow}>
+                  <span className={styles.halfLabel}>II połowa:</span>
+                  <div className={styles.timeInputContainer}>
+                    <input
+                      id="secondHalfMinutes"
+                      type="number"
+                      min="0"
+                      max="999"
+                      step="1"
+                      value={secondHalfTime.minutes === 0 ? 0 : (secondHalfTime.minutes || "")}
+                      onChange={(e) => {
+                        const value = e.target.value === "" ? undefined : parseInt(e.target.value, 10);
+                        if (value !== undefined && !isNaN(value)) {
+                          setSecondHalfTime(prev => ({ ...prev, minutes: Math.max(0, value) }));
+                        } else {
+                          setSecondHalfTime(prev => ({ ...prev, minutes: 0 }));
+                        }
+                      }}
+                      placeholder="0"
+                      className={styles.timeInput}
+                    />
+                    <span className={styles.timeSeparator}>:</span>
+                    <input
+                      id="secondHalfSeconds"
+                      type="number"
+                      min="0"
+                      max="59"
+                      step="1"
+                      value={secondHalfTime.seconds === 0 ? 0 : (secondHalfTime.seconds || "")}
+                      onChange={(e) => {
+                        const value = e.target.value === "" ? undefined : parseInt(e.target.value, 10);
+                        if (value !== undefined && !isNaN(value)) {
+                          setSecondHalfTime(prev => ({ ...prev, seconds: Math.max(0, Math.min(59, value)) }));
+                        } else {
+                          setSecondHalfTime(prev => ({ ...prev, seconds: 0 }));
+                        }
+                      }}
+                      placeholder="0"
+                      className={`${styles.timeInput} ${styles.timeInputSeconds}`}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className={styles.formGroup}>

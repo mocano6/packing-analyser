@@ -4,7 +4,7 @@
 import React from "react";
 import styles from "./Tabs.module.css";
 
-export type Tab = "packing" | "acc8s" | "xg" | "regain" | "loses" | "pk_entries";
+export type Tab = "packing" | "acc8s" | "xg" | "regain_loses" | "pk_entries";
 
 export interface TabsProps {
   activeTab: Tab;
@@ -62,27 +62,15 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
         </button>
         <button
           className={`${styles.actionTypeButton} ${
-            activeTab === "regain" ? styles.active : ""
+            activeTab === "regain_loses" ? styles.active : ""
           }`}
-          onClick={handleTabChange("regain")}
+          onClick={handleTabChange("regain_loses")}
           role="tab"
-          aria-selected={activeTab === "regain"}
-          aria-controls="regain-panel"
-          id="regain-tab"
+          aria-selected={activeTab === "regain_loses"}
+          aria-controls="regain-loses-panel"
+          id="regain-loses-tab"
         >
-          Regain
-        </button>
-        <button
-          className={`${styles.actionTypeButton} ${
-            activeTab === "loses" ? styles.active : ""
-          }`}
-          onClick={handleTabChange("loses")}
-          role="tab"
-          aria-selected={activeTab === "loses"}
-          aria-controls="loses-panel"
-          id="loses-tab"
-        >
-          Loses
+          Regain/Loses
         </button>
         <button
           className={`${styles.actionTypeButton} ${

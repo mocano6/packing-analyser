@@ -19,6 +19,7 @@ export interface PKEntryModalProps {
   matchId: string;
   players: Player[];
   matchInfo?: TeamInfo | null;
+  onCalculateMinuteFromVideo?: () => Promise<{ minute: number; isSecondHalf: boolean } | null>;
 }
 
 const PKEntryModal: React.FC<PKEntryModalProps> = ({
@@ -34,6 +35,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
   matchId,
   players,
   matchInfo,
+  onCalculateMinuteFromVideo,
 }) => {
   const [formData, setFormData] = useState({
     senderId: "",
@@ -127,6 +129,25 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     
     return { byPosition, sortedPositions };
   };
+
+  // Automatycznie ustaw sugerowaną wartość minuty i połowy na podstawie czasu wideo przy otwarciu modalu
+  useEffect(() => {
+    if (isOpen && !editingEntry && onCalculateMinuteFromVideo) {
+      console.log('PKEntryModal: wywołuję onCalculateMinuteFromVideo');
+      onCalculateMinuteFromVideo().then((result) => {
+        console.log('PKEntryModal: wynik obliczenia:', result);
+        if (result !== null && result.minute > 0) {
+          setFormData(prev => ({
+            ...prev,
+            minute: result.minute,
+            isSecondHalf: result.isSecondHalf,
+          }));
+        }
+      }).catch((error) => {
+        console.warn('Nie udało się obliczyć minuty z wideo:', error);
+      });
+    }
+  }, [isOpen, editingEntry, onCalculateMinuteFromVideo]);
 
   useEffect(() => {
     if (editingEntry) {

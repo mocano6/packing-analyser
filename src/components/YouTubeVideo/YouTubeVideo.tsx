@@ -61,12 +61,28 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
       return 0;
     },
     seekTo: async (seconds: number): Promise<void> => {
+      console.log('YouTubeVideo.seekTo - seconds:', seconds, 'playerRef.current:', playerRef.current);
       if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
         try {
-          await playerRef.current.seekTo(seconds, true); // true = allowSeekAhead
+          console.log('YouTubeVideo.seekTo - wywołuję playerRef.current.seekTo');
+          // seekTo w YouTube IFrame API jest synchroniczne, nie zwraca Promise
+          playerRef.current.seekTo(seconds, true); // true = allowSeekAhead
+          console.log('YouTubeVideo.seekTo - zakończone');
         } catch (error) {
           console.warn('Nie udało się przewinąć YouTube playera do czasu:', seconds, error);
         }
+      } else {
+        console.warn('YouTubeVideo.seekTo - playerRef.current nie jest gotowy:', playerRef.current);
+        // Jeśli player nie jest gotowy, spróbuj ponownie po krótkim czasie
+        setTimeout(() => {
+          if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
+            try {
+              playerRef.current.seekTo(seconds, true);
+            } catch (error) {
+              console.warn('Nie udało się przewinąć YouTube playera do czasu (retry):', seconds, error);
+            }
+          }
+        }, 500);
       }
     }
   }));
@@ -78,6 +94,7 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
     try {
       playerRef.current = event.target;
       setPlayerError(null);
+      console.log('YouTubeVideo.onReady - playerRef.current ustawione:', playerRef.current);
     } catch (error) {
       console.error('Błąd podczas inicjalizacji playera:', error);
       setPlayerError('Błąd inicjalizacji playera');

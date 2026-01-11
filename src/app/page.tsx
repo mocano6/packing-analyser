@@ -91,15 +91,22 @@ function removeUndefinedFields<T extends object>(obj: T): T {
 }
 
 export default function Page() {
-  const [activeTab, setActiveTab] = React.useState<"packing" | "acc8s" | "xg" | "regain" | "loses" | "pk_entries">(() => {
+  const [activeTab, setActiveTab] = React.useState<"packing" | "acc8s" | "xg" | "regain_loses" | "pk_entries">(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('activeTab');
-      if (saved && ['packing', 'acc8s', 'xg', 'regain', 'loses', 'pk_entries'].includes(saved)) {
-        return saved as "packing" | "acc8s" | "xg" | "regain" | "loses" | "pk_entries";
+      if (saved && ['packing', 'acc8s', 'xg', 'regain_loses', 'pk_entries'].includes(saved)) {
+        return saved as "packing" | "acc8s" | "xg" | "regain_loses" | "pk_entries";
+      }
+      // Migracja starych wartości
+      if (saved === 'regain' || saved === 'loses') {
+        return "regain_loses";
       }
     }
     return "packing";
   });
+  
+  // Stan do przełączania między regain a loses w modalu
+  const [regainLosesMode, setRegainLosesMode] = React.useState<"regain" | "loses">("regain");
   
   // Zapisz aktywną kartę do localStorage przy każdej zmianie
   React.useEffect(() => {
@@ -107,6 +114,7 @@ export default function Page() {
       localStorage.setItem('activeTab', activeTab);
     }
   }, [activeTab]);
+
   // Inicjalizuj selectedTeam z localStorage lub pustym stringiem
   const [selectedTeam, setSelectedTeam] = React.useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -133,14 +141,15 @@ export default function Page() {
   const youtubeVideoRef = useRef<YouTubeVideoRef>(null);
   // Ref do Custom Video Player
   const customVideoRef = useRef<CustomVideoPlayerRef>(null);
+  // Ref do kontenera wideo YouTube do scrollowania
+  const youtubeVideoContainerRef = useRef<HTMLDivElement>(null);
 
   // Funkcja pomocnicza do pobierania czasu z aktywnego odtwarzacza
   const getActiveVideoTime = async (): Promise<number> => {
     // Najpierw sprawdź własny odtwarzacz
-    if (customVideoRef.current) {
+      if (customVideoRef.current) {
       try {
         const time = await customVideoRef.current.getCurrentTime();
-        console.log('getActiveVideoTime - customVideoRef:', time);
         if (time > 0) {
           return time;
         }
@@ -152,7 +161,6 @@ export default function Page() {
     if (youtubeVideoRef.current) {
       try {
         const time = await youtubeVideoRef.current.getCurrentTime();
-        console.log('getActiveVideoTime - youtubeVideoRef:', time);
         if (time > 0) {
           return time;
         }
@@ -160,7 +168,6 @@ export default function Page() {
         console.warn('Nie udało się pobrać czasu z YouTube:', error);
       }
     }
-    console.log('getActiveVideoTime - zwracam 0 (brak aktywnego playera lub czas = 0)');
     return 0;
   };
 
@@ -185,9 +192,52 @@ export default function Page() {
 
   // State do przechowywania aktualnego czasu z zewnętrznego wideo
   const [externalVideoTime, setExternalVideoTime] = useState<number>(0);
-  const [isVideoVisible, setIsVideoVisible] = useState<boolean>(false);
-  const [isVideoFullscreen, setIsVideoFullscreen] = React.useState<boolean>(false);
+  const [isVideoVisible, setIsVideoVisible] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('isVideoVisible');
+      return saved === 'true';
+    }
+    return false;
+  });
+  const [isVideoFullscreen, setIsVideoFullscreen] = React.useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('isVideoFullscreen');
+      return saved === 'true';
+    }
+    return false;
+  });
+
+  // Zapisz stan widoczności wideo do localStorage przy każdej zmianie
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('isVideoVisible', isVideoVisible.toString());
+    }
+  }, [isVideoVisible]);
+
+  // Zapisz stan fullscreen wideo do localStorage przy każdej zmianie
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('isVideoFullscreen', isVideoFullscreen.toString());
+    }
+  }, [isVideoFullscreen]);
+
+  // Funkcja do scrollowania do wideo YouTube
+  const handleScrollToVideo = () => {
+    if (youtubeVideoContainerRef.current) {
+      // Oblicz pozycję środka ekranu
+      const containerRect = youtubeVideoContainerRef.current.getBoundingClientRect();
+      const scrollPosition = window.scrollY + containerRect.top - (window.innerHeight / 2) + (containerRect.height / 2);
+      
+      window.scrollTo({
+        top: scrollPosition,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   const [isPlayersGridExpanded, setIsPlayersGridExpanded] = useState<boolean>(false);
+  const [showRegainLosesPopup, setShowRegainLosesPopup] = useState<boolean>(false);
+  const [pendingZoneSelection, setPendingZoneSelection] = useState<{zoneId: number, xT?: number} | null>(null);
   const [isTeamsSelectorExpanded, setIsTeamsSelectorExpanded] = useState<boolean>(false);
 
   // Funkcja do otwierania ActionModal z zapisaniem czasu YouTube
@@ -406,13 +456,83 @@ export default function Page() {
     isOfflineMode
   } = useMatchInfo();
 
+  // Funkcja do obliczania minuty meczu na podstawie czasu wideo (dla modalów ShotModal, PKEntryModal, Acc8sModal)
+  const calculateMatchMinuteFromVideoTime = React.useCallback(async (): Promise<{ minute: number; isSecondHalf: boolean } | null> => {
+    if (!matchInfo) {
+      console.log('calculateMatchMinuteFromVideoTime: brak matchInfo');
+      return null;
+    }
+
+    const firstHalfStart = matchInfo.firstHalfStartTime;
+    const secondHalfStart = matchInfo.secondHalfStartTime;
+
+    // Jeśli nie mamy czasu startu połów, nie możemy obliczyć minuty
+    if (firstHalfStart === undefined && secondHalfStart === undefined) {
+      return null;
+    }
+
+    try {
+      // Pobierz aktualny czas z wideo
+      let currentVideoTime = 0;
+      
+      // Sprawdź zewnętrzne okno wideo
+      const externalWindow = (window as any).externalVideoWindow;
+      const isExternalWindowOpen = externalWindow && !externalWindow.closed;
+      
+      if (isExternalWindowOpen) {
+        // W zewnętrznym oknie - nie możemy pobrać czasu bezpośrednio
+        return null;
+      } else if (youtubeVideoRef?.current) {
+        currentVideoTime = await youtubeVideoRef.current.getCurrentTime();
+      } else if (customVideoRef?.current) {
+        currentVideoTime = await customVideoRef.current.getCurrentTime();
+      } else {
+        return null;
+      }
+
+      // Oblicz minutę meczu
+      if (secondHalfStart !== undefined && currentVideoTime >= secondHalfStart) {
+        // Druga połowa
+        const secondsIntoSecondHalf = currentVideoTime - secondHalfStart;
+        const minute = Math.floor(secondsIntoSecondHalf / 60) + 46; // 46 = początek 2. połowy
+        const calculatedMinute = Math.max(46, Math.min(90, minute)); // Ograniczenie do 46-90
+        return { minute: calculatedMinute, isSecondHalf: true };
+      } else if (firstHalfStart !== undefined && currentVideoTime >= firstHalfStart) {
+        // Pierwsza połowa (gdy mamy zdefiniowany firstHalfStart)
+        const secondsIntoFirstHalf = currentVideoTime - firstHalfStart;
+        const minute = Math.floor(secondsIntoFirstHalf / 60) + 1;
+        const calculatedMinute = Math.max(1, Math.min(45, minute)); // Ograniczenie do 1-45
+        return { minute: calculatedMinute, isSecondHalf: false };
+      } else if (secondHalfStart !== undefined && currentVideoTime < secondHalfStart) {
+        // Pierwsza połowa (gdy nie mamy firstHalfStart, ale mamy secondHalfStart)
+        // Zakładamy, że pierwsza połowa zaczyna się od 0 lub od początku nagrania
+        // Obliczamy minutę na podstawie czasu wideo (zakładając, że 0 = minuta 0 meczu)
+        const minute = Math.floor(currentVideoTime / 60) + 1;
+        const calculatedMinute = Math.max(1, Math.min(45, minute)); // Ograniczenie do 1-45
+        return { minute: calculatedMinute, isSecondHalf: false };
+      } else if (firstHalfStart !== undefined && currentVideoTime < firstHalfStart) {
+        // Przed startem pierwszej połowy (gdy mamy zdefiniowany firstHalfStart)
+        return null;
+      } else {
+        // Nie mamy żadnych danych o czasie startu połów
+        return null;
+      }
+    } catch (error) {
+      console.warn('Nie udało się pobrać czasu z wideo:', error);
+      return null;
+    }
+  }, [matchInfo, youtubeVideoRef, customVideoRef]);
+
   // Stany dla trybu unpacking - muszą być przed usePackingActions
   const [actionMode, setActionMode] = useState<"attack" | "defense">("attack");
   const [selectedDefensePlayers, setSelectedDefensePlayers] = useState<string[]>([]);
 
   // Określamy kategorię akcji na podstawie aktywnej zakładki
-  const actionCategory = activeTab === "regain" ? "regain" : activeTab === "loses" ? "loses" : "packing";
-  const packingActions = usePackingActions(players, matchInfo, actionMode, selectedDefensePlayers, actionCategory);
+  // Określamy kategorię akcji na podstawie aktywnej zakładki
+  // Dla zakładki regain_loses przekazujemy "regain" jako domyślną, ale w usePackingActions
+  // zmienimy logikę, aby ładować obie kolekcje gdy activeTab === "regain_loses"
+  const actionCategory = activeTab === "regain_loses" ? regainLosesMode : "packing";
+  const packingActions = usePackingActions(players, matchInfo, actionMode, selectedDefensePlayers, actionCategory, activeTab === "regain_loses");
   
   // Wyciągnij funkcje z hooka
   const { resetActionPoints } = packingActions;
@@ -686,7 +806,29 @@ export default function Page() {
 
   // Filtruj akcje według kategorii
   const filteredActions = useMemo(() => {
-    if (actionCategory === "regain") {
+    if (activeTab === "regain_loses") {
+      // Dla zakładki regain_loses zwracamy wszystkie akcje regain i loses
+      // ActionsTable sam je przefiltruje po actionModeFilter
+      return actions.filter(action => {
+        // Regain: ma playersBehindBall lub opponentsBeforeBall, ale NIE ma isReaction5s
+        const isRegain = (action.playersBehindBall !== undefined || 
+                         action.opponentsBeforeBall !== undefined ||
+                         action.totalPlayersOnField !== undefined ||
+                         action.totalOpponentsOnField !== undefined ||
+                         action.playersLeftField !== undefined ||
+                         action.opponentsLeftField !== undefined) &&
+                        action.isReaction5s === undefined &&
+                        action.isAut === undefined &&
+                        action.isReaction5sNotApplicable === undefined;
+        
+        // Loses: ma isReaction5s, isAut lub isReaction5sNotApplicable
+        const isLoses = action.isReaction5s !== undefined || 
+                       action.isAut !== undefined || 
+                       action.isReaction5sNotApplicable !== undefined;
+        
+        return isRegain || isLoses;
+      });
+    } else if (actionCategory === "regain") {
       // Regain: ma playersBehindBall lub opponentsBeforeBall, ale NIE ma isReaction5s
       // Kluczowa różnica: regain NIE ma isReaction5s
       return actions.filter(action => 
@@ -696,12 +838,16 @@ export default function Page() {
          action.totalOpponentsOnField !== undefined ||
          action.playersLeftField !== undefined ||
          action.opponentsLeftField !== undefined) &&
-        action.isReaction5s === undefined
+        action.isReaction5s === undefined &&
+        action.isAut === undefined &&
+        action.isReaction5sNotApplicable === undefined
       );
     } else if (actionCategory === "loses") {
-      // Loses: ma isReaction5s (to jest główny wskaźnik dla loses)
+      // Loses: ma isReaction5s, isAut lub isReaction5sNotApplicable (którekolwiek z tych pól zdefiniowane)
       return actions.filter(action => 
-        action.isReaction5s !== undefined
+        action.isReaction5s !== undefined || 
+        action.isAut !== undefined || 
+        action.isReaction5sNotApplicable !== undefined
       );
     } else {
       // Packing: nie ma pól charakterystycznych dla regain/loses
@@ -716,7 +862,7 @@ export default function Page() {
         action.opponentsLeftField === undefined
       );
     }
-  }, [actions, actionCategory]);
+  }, [actions, actionCategory, activeTab]);
 
   const { isAuthenticated, isLoading, userTeams, isAdmin, logout } = useAuth();
 
@@ -1652,12 +1798,27 @@ export default function Page() {
 
   // Funkcja wyboru strefy - wybiera odpowiednią logikę na podstawie aktywnej zakładki
   const handleZoneSelection = (zoneId: number, xT?: number) => {
-    if (activeTab === "regain") {
-      return handleRegainZoneSelection(zoneId, xT);
-    } else if (activeTab === "loses") {
-      return handleLosesZoneSelection(zoneId, xT);
+    if (activeTab === "regain_loses") {
+      // Dla regain_loses pokazujemy popup z wyborem
+      setPendingZoneSelection({ zoneId, xT });
+      setShowRegainLosesPopup(true);
+      return;
     } else {
       return handlePackingZoneSelection(zoneId, xT);
+    }
+  };
+
+  // Funkcja obsługująca wybór w popupie
+  const handleRegainLosesChoice = (choice: "regain" | "loses") => {
+    if (pendingZoneSelection) {
+      setRegainLosesMode(choice);
+      setShowRegainLosesPopup(false);
+      if (choice === "regain") {
+        handleRegainZoneSelection(pendingZoneSelection.zoneId, pendingZoneSelection.xT);
+      } else {
+        handleLosesZoneSelection(pendingZoneSelection.zoneId, pendingZoneSelection.xT);
+      }
+      setPendingZoneSelection(null);
     }
   };
 
@@ -2155,7 +2316,7 @@ export default function Page() {
           <div className={styles.leftControls}>
           </div>
         </div>
-        <div className={styles.videoPlayersContainer}>
+        <div className={styles.videoPlayersContainer} ref={youtubeVideoContainerRef}>
         <YouTubeVideo 
           ref={youtubeVideoRef} 
           matchInfo={matchInfo} 
@@ -2248,10 +2409,16 @@ export default function Page() {
             onDefensePlayersChange={setSelectedDefensePlayers}
             // Kategoria akcji
             actionCategory="packing"
+            // Propsy do scrollowania do wideo YouTube
+            isVideoVisible={isVideoVisible}
+            onScrollToVideo={handleScrollToVideo}
+            videoContainerRef={youtubeVideoContainerRef}
+            youtubeVideoRef={youtubeVideoRef}
+            customVideoRef={customVideoRef}
           />
         )}
 
-        {activeTab === "regain" && (
+        {activeTab === "regain_loses" && (
           <ActionSection
             selectedZone={selectedZone}
             handleZoneSelect={handleZoneSelection}
@@ -2266,6 +2433,8 @@ export default function Page() {
             setActionType={setActionType}
             currentPoints={currentPoints}
             setCurrentPoints={setCurrentPoints}
+            isP0Active={isP0Active}
+            setIsP0Active={setIsP0Active}
             isP1Active={isP1Active}
             setIsP1Active={setIsP1Active}
             isP2Active={isP2Active}
@@ -2290,6 +2459,10 @@ export default function Page() {
             setIsBelow8sActive={setIsBelow8sActive}
             isReaction5sActive={isReaction5sActive}
             setIsReaction5sActive={setIsReaction5sActive}
+            isAutActive={isAutActive}
+            setIsAutActive={setIsAutActive}
+            isReaction5sNotApplicableActive={isReaction5sNotApplicableActive}
+            setIsReaction5sNotApplicableActive={setIsReaction5sNotApplicableActive}
             isPMAreaActive={isPMAreaActive}
             setIsPMAreaActive={setIsPMAreaActive}
             playersBehindBall={playersBehindBall}
@@ -2314,73 +2487,15 @@ export default function Page() {
             selectedDefensePlayers={selectedDefensePlayers}
             onDefensePlayersChange={setSelectedDefensePlayers}
             // Kategoria akcji
-            actionCategory="regain"
-          />
-        )}
-
-        {activeTab === "loses" && (
-          <ActionSection
-            selectedZone={selectedZone}
-            handleZoneSelect={handleZoneSelection}
-            players={filteredPlayers}
-            selectedPlayerId={selectedPlayerId}
-            setSelectedPlayerId={setSelectedPlayerId}
-            selectedReceiverId={selectedReceiverId}
-            setSelectedReceiverId={setSelectedReceiverId}
-            actionMinute={actionMinute}
-            setActionMinute={setActionMinute}
-            actionType={actionType}
-            setActionType={setActionType}
-            currentPoints={currentPoints}
-            setCurrentPoints={setCurrentPoints}
-            isP1Active={isP1Active}
-            setIsP1Active={setIsP1Active}
-            isP2Active={isP2Active}
-            setIsP2Active={setIsP2Active}
-            isP3Active={isP3Active}
-            setIsP3Active={setIsP3Active}
-            isContact1Active={isContact1Active}
-            setIsContact1Active={setIsContact1Active}
-            isContact2Active={isContact2Active}
-            setIsContact2Active={setIsContact2Active}
-            isContact3PlusActive={isContact3PlusActive}
-            setIsContact3PlusActive={setIsContact3PlusActive}
-            isShot={isShot}
-            setIsShot={setIsShot}
-            isGoal={isGoal}
-            setIsGoal={setIsGoal}
-            isPenaltyAreaEntry={isPenaltyAreaEntry}
-            setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
-            isSecondHalf={isSecondHalf}
-            setIsSecondHalf={handleSecondHalfToggle}
-            isBelow8sActive={isBelow8sActive}
-            setIsBelow8sActive={setIsBelow8sActive}
-            isReaction5sActive={isReaction5sActive}
-            setIsReaction5sActive={setIsReaction5sActive}
-            isPMAreaActive={isPMAreaActive}
-            setIsPMAreaActive={setIsPMAreaActive}
-            playersBehindBall={playersBehindBall}
-            setPlayersBehindBall={setPlayersBehindBall}
-            opponentsBeforeBall={opponentsBeforeBall}
-            setOpponentsBeforeBall={setOpponentsBeforeBall}
-            playersLeftField={playersLeftField}
-            setPlayersLeftField={setPlayersLeftField}
-            opponentsLeftField={opponentsLeftField}
-            setOpponentsLeftField={setOpponentsLeftField}
-            handleSaveAction={onSaveAction}
-            resetActionState={resetCustomActionState}
-            resetActionPoints={resetActionPoints}
-            startZone={startZone}
-            endZone={endZone}
-            isActionModalOpen={isActionModalOpen}
-            setIsActionModalOpen={setIsActionModalOpen}
-            matchInfo={matchInfo}
-            mode={actionMode}
-            onModeChange={setActionMode}
-            selectedDefensePlayers={selectedDefensePlayers}
-            onDefensePlayersChange={setSelectedDefensePlayers}
-            // Kategoria akcji
-            actionCategory="loses"
+            actionCategory={regainLosesMode}
+            regainLosesMode={regainLosesMode}
+            onRegainLosesModeChange={setRegainLosesMode}
+            // Propsy do scrollowania do wideo YouTube
+            isVideoVisible={isVideoVisible}
+            onScrollToVideo={handleScrollToVideo}
+            videoContainerRef={youtubeVideoContainerRef}
+            youtubeVideoRef={youtubeVideoRef}
+            customVideoRef={customVideoRef}
           />
         )}
 
@@ -2529,6 +2644,7 @@ export default function Page() {
             matchId={matchInfo?.matchId || ""}
             players={players}
             matchInfo={matchInfo}
+            onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
           />
         )}
 
@@ -2560,10 +2676,48 @@ export default function Page() {
             matchId={matchInfo?.matchId || ""}
             matchInfo={matchInfo}
             players={players}
+            onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
           />
         )}
 
-        {activeTab === "packing" || activeTab === "regain" || activeTab === "loses" ? (
+        {/* Popup wyboru Regain/Loses */}
+        {showRegainLosesPopup && (
+          <div className={styles.regainLosesPopupOverlay} onClick={() => {
+            setShowRegainLosesPopup(false);
+            setPendingZoneSelection(null);
+          }}>
+            <div className={styles.regainLosesPopup} onClick={(e) => e.stopPropagation()}>
+              <h3>Wybierz typ akcji</h3>
+              <div className={styles.regainLosesPopupButtons}>
+                <button
+                  className={styles.regainLosesPopupButton}
+                  onClick={() => handleRegainLosesChoice("regain")}
+                >
+                  Regain
+                </button>
+                <button
+                  className={styles.regainLosesPopupButton}
+                  onClick={() => handleRegainLosesChoice("loses")}
+                >
+                  Loses
+                </button>
+              </div>
+              <div className={styles.regainLosesPopupCancel}>
+                <button
+                  className={styles.regainLosesPopupCancelButton}
+                  onClick={() => {
+                    setShowRegainLosesPopup(false);
+                    setPendingZoneSelection(null);
+                  }}
+                >
+                  Anuluj
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "packing" || activeTab === "regain_loses" ? (
           <ActionsTable
             actions={filteredActions}
             players={players}
@@ -2733,30 +2887,59 @@ export default function Page() {
               });
             }
           }}
+          isP0Active={editingAction?.isP0 || false}
+          onP0Toggle={() => {
+            if (editingAction) {
+              const newIsP0Active = !editingAction.isP0;
+              setEditingAction({
+                ...editingAction,
+                isP0: newIsP0Active,
+                // Wyłącz inne przyciski P, gdy P0 jest aktywowany
+                isP1: newIsP0Active ? false : editingAction.isP1,
+                isP2: newIsP0Active ? false : editingAction.isP2,
+                isP3: newIsP0Active ? false : editingAction.isP3
+              });
+            }
+          }}
           isP1Active={editingAction?.isP1 || false}
           onP1Toggle={() => {
             if (editingAction) {
+              const newIsP1Active = !editingAction.isP1;
               setEditingAction({
                 ...editingAction,
-                isP1: !editingAction.isP1
+                isP1: newIsP1Active,
+                // Wyłącz inne przyciski P, gdy P1 jest aktywowany
+                isP0: newIsP1Active ? false : editingAction.isP0,
+                isP2: newIsP1Active ? false : editingAction.isP2,
+                isP3: newIsP1Active ? false : editingAction.isP3
               });
             }
           }}
           isP2Active={editingAction?.isP2 || false}
           onP2Toggle={() => {
             if (editingAction) {
+              const newIsP2Active = !editingAction.isP2;
               setEditingAction({
                 ...editingAction,
-                isP2: !editingAction.isP2
+                isP2: newIsP2Active,
+                // Wyłącz inne przyciski P, gdy P2 jest aktywowany
+                isP0: newIsP2Active ? false : editingAction.isP0,
+                isP1: newIsP2Active ? false : editingAction.isP1,
+                isP3: newIsP2Active ? false : editingAction.isP3
               });
             }
           }}
           isP3Active={editingAction?.isP3 || false}
           onP3Toggle={() => {
             if (editingAction) {
+              const newIsP3Active = !editingAction.isP3;
               setEditingAction({
                 ...editingAction,
-                isP3: !editingAction.isP3
+                isP3: newIsP3Active,
+                // Wyłącz inne przyciski P, gdy P3 jest aktywowany
+                isP0: newIsP3Active ? false : editingAction.isP0,
+                isP1: newIsP3Active ? false : editingAction.isP1,
+                isP2: newIsP3Active ? false : editingAction.isP2
               });
             }
           }}
@@ -2980,30 +3163,95 @@ export default function Page() {
               });
             }
           }}
-          isP1Active={editingAction?.isP1 || false}
-          onP1Toggle={() => {
+          isP0StartActive={editingAction?.isP0Start || false}
+          onP0StartToggle={() => {
             if (editingAction) {
               setEditingAction({
                 ...editingAction,
-                isP1: !editingAction.isP1
+                isP0Start: !editingAction.isP0Start
+              });
+            }
+          }}
+          isP1StartActive={editingAction?.isP1Start || false}
+          onP1StartToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP1Start: !editingAction.isP1Start
+              });
+            }
+          }}
+          isP2StartActive={editingAction?.isP2Start || false}
+          onP2StartToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP2Start: !editingAction.isP2Start
+              });
+            }
+          }}
+          isP3StartActive={editingAction?.isP3Start || false}
+          onP3StartToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isP3Start: !editingAction.isP3Start
+              });
+            }
+          }}
+          isP0Active={editingAction?.isP0 || false}
+          onP0Toggle={() => {
+            if (editingAction) {
+              const newIsP0Active = !editingAction.isP0;
+              setEditingAction({
+                ...editingAction,
+                isP0: newIsP0Active,
+                // Wyłącz inne przyciski P, gdy P0 jest aktywowany
+                isP1: newIsP0Active ? false : editingAction.isP1,
+                isP2: newIsP0Active ? false : editingAction.isP2,
+                isP3: newIsP0Active ? false : editingAction.isP3
+              });
+            }
+          }}
+          isP1Active={editingAction?.isP1 || false}
+          onP1Toggle={() => {
+            if (editingAction) {
+              const newIsP1Active = !editingAction.isP1;
+              setEditingAction({
+                ...editingAction,
+                isP1: newIsP1Active,
+                // Wyłącz inne przyciski P, gdy P1 jest aktywowany
+                isP0: newIsP1Active ? false : editingAction.isP0,
+                isP2: newIsP1Active ? false : editingAction.isP2,
+                isP3: newIsP1Active ? false : editingAction.isP3
               });
             }
           }}
           isP2Active={editingAction?.isP2 || false}
           onP2Toggle={() => {
             if (editingAction) {
+              const newIsP2Active = !editingAction.isP2;
               setEditingAction({
                 ...editingAction,
-                isP2: !editingAction.isP2
+                isP2: newIsP2Active,
+                // Wyłącz inne przyciski P, gdy P2 jest aktywowany
+                isP0: newIsP2Active ? false : editingAction.isP0,
+                isP1: newIsP2Active ? false : editingAction.isP1,
+                isP3: newIsP2Active ? false : editingAction.isP3
               });
             }
           }}
           isP3Active={editingAction?.isP3 || false}
           onP3Toggle={() => {
             if (editingAction) {
+              const newIsP3Active = !editingAction.isP3;
               setEditingAction({
                 ...editingAction,
-                isP3: !editingAction.isP3
+                isP3: newIsP3Active,
+                // Wyłącz inne przyciski P, gdy P3 jest aktywowany
+                isP0: newIsP3Active ? false : editingAction.isP0,
+                isP1: newIsP3Active ? false : editingAction.isP1,
+                isP2: newIsP3Active ? false : editingAction.isP2
               });
             }
           }}
@@ -3203,72 +3451,112 @@ export default function Page() {
           isP0StartActive={editingAction?.isP0Start || false}
           onP0StartToggle={() => {
             if (editingAction) {
+              const newIsP0StartActive = !editingAction.isP0Start;
               setEditingAction({
                 ...editingAction,
-                isP0Start: !editingAction.isP0Start
+                isP0Start: newIsP0StartActive,
+                // Wyłącz inne przyciski P Start, gdy P0 Start jest aktywowany
+                isP1Start: newIsP0StartActive ? false : editingAction.isP1Start,
+                isP2Start: newIsP0StartActive ? false : editingAction.isP2Start,
+                isP3Start: newIsP0StartActive ? false : editingAction.isP3Start
               });
             }
           }}
           isP1StartActive={editingAction?.isP1Start || false}
           onP1StartToggle={() => {
             if (editingAction) {
+              const newIsP1StartActive = !editingAction.isP1Start;
               setEditingAction({
                 ...editingAction,
-                isP1Start: !editingAction.isP1Start
+                isP1Start: newIsP1StartActive,
+                // Wyłącz inne przyciski P Start, gdy P1 Start jest aktywowany
+                isP0Start: newIsP1StartActive ? false : editingAction.isP0Start,
+                isP2Start: newIsP1StartActive ? false : editingAction.isP2Start,
+                isP3Start: newIsP1StartActive ? false : editingAction.isP3Start
               });
             }
           }}
           isP2StartActive={editingAction?.isP2Start || false}
           onP2StartToggle={() => {
             if (editingAction) {
+              const newIsP2StartActive = !editingAction.isP2Start;
               setEditingAction({
                 ...editingAction,
-                isP2Start: !editingAction.isP2Start
+                isP2Start: newIsP2StartActive,
+                // Wyłącz inne przyciski P Start, gdy P2 Start jest aktywowany
+                isP0Start: newIsP2StartActive ? false : editingAction.isP0Start,
+                isP1Start: newIsP2StartActive ? false : editingAction.isP1Start,
+                isP3Start: newIsP2StartActive ? false : editingAction.isP3Start
               });
             }
           }}
           isP3StartActive={editingAction?.isP3Start || false}
           onP3StartToggle={() => {
             if (editingAction) {
+              const newIsP3StartActive = !editingAction.isP3Start;
               setEditingAction({
                 ...editingAction,
-                isP3Start: !editingAction.isP3Start
+                isP3Start: newIsP3StartActive,
+                // Wyłącz inne przyciski P Start, gdy P3 Start jest aktywowany
+                isP0Start: newIsP3StartActive ? false : editingAction.isP0Start,
+                isP1Start: newIsP3StartActive ? false : editingAction.isP1Start,
+                isP2Start: newIsP3StartActive ? false : editingAction.isP2Start
               });
             }
           }}
           isP0Active={editingAction?.isP0 || false}
           onP0Toggle={() => {
             if (editingAction) {
+              const newIsP0Active = !editingAction.isP0;
               setEditingAction({
                 ...editingAction,
-                isP0: !editingAction.isP0
+                isP0: newIsP0Active,
+                // Wyłącz inne przyciski P End, gdy P0 End jest aktywowany
+                isP1: newIsP0Active ? false : editingAction.isP1,
+                isP2: newIsP0Active ? false : editingAction.isP2,
+                isP3: newIsP0Active ? false : editingAction.isP3
               });
             }
           }}
           isP1Active={editingAction?.isP1 || false}
           onP1Toggle={() => {
             if (editingAction) {
+              const newIsP1Active = !editingAction.isP1;
               setEditingAction({
                 ...editingAction,
-                isP1: !editingAction.isP1
+                isP1: newIsP1Active,
+                // Wyłącz inne przyciski P End, gdy P1 End jest aktywowany
+                isP0: newIsP1Active ? false : editingAction.isP0,
+                isP2: newIsP1Active ? false : editingAction.isP2,
+                isP3: newIsP1Active ? false : editingAction.isP3
               });
             }
           }}
           isP2Active={editingAction?.isP2 || false}
           onP2Toggle={() => {
             if (editingAction) {
+              const newIsP2Active = !editingAction.isP2;
               setEditingAction({
                 ...editingAction,
-                isP2: !editingAction.isP2
+                isP2: newIsP2Active,
+                // Wyłącz inne przyciski P End, gdy P2 End jest aktywowany
+                isP0: newIsP2Active ? false : editingAction.isP0,
+                isP1: newIsP2Active ? false : editingAction.isP1,
+                isP3: newIsP2Active ? false : editingAction.isP3
               });
             }
           }}
           isP3Active={editingAction?.isP3 || false}
           onP3Toggle={() => {
             if (editingAction) {
+              const newIsP3Active = !editingAction.isP3;
               setEditingAction({
                 ...editingAction,
-                isP3: !editingAction.isP3
+                isP3: newIsP3Active,
+                // Wyłącz inne przyciski P End, gdy P3 End jest aktywowany
+                isP0: newIsP3Active ? false : editingAction.isP0,
+                isP1: newIsP3Active ? false : editingAction.isP1,
+                isP2: newIsP3Active ? false : editingAction.isP2
               });
             }
           }}
@@ -3390,6 +3678,7 @@ export default function Page() {
             matchId={matchInfo?.matchId || ""}
             players={players}
             matchInfo={matchInfo}
+            onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
           />
         )}
 

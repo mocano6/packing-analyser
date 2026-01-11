@@ -19,6 +19,7 @@ interface ActionModalProps {
   onReceiverSelect: (id: string | null) => void;
   actionMinute: number;
   onMinuteChange: (minute: number) => void;
+  onCalculateMinuteFromVideo?: () => Promise<{ minute: number; isSecondHalf: boolean } | null>;
   actionType: "pass" | "dribble";
   onActionTypeChange: (type: "pass" | "dribble") => void;
   currentPoints: number;
@@ -78,6 +79,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
   onReceiverSelect,
   actionMinute,
   onMinuteChange,
+  onCalculateMinuteFromVideo,
   actionType,
   onActionTypeChange,
   currentPoints,
@@ -127,6 +129,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
   onDefensePlayersChange,
 }) => {
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
+  const isAutoSettingFromVideo = React.useRef(false);
 
   // Ładujemy ostatnio wybraną opcję trybu
   useEffect(() => {
@@ -159,6 +162,28 @@ const ActionModal: React.FC<ActionModalProps> = ({
 
   // Określamy czy jesteśmy w trybie edycji
   const isEditMode = !!editingAction;
+
+  // Automatycznie ustaw sugerowaną wartość minuty na podstawie czasu wideo przy otwarciu modalu
+  useEffect(() => {
+    if (isOpen && !isEditMode && onCalculateMinuteFromVideo) {
+      isAutoSettingFromVideo.current = true;
+      onCalculateMinuteFromVideo().then((result) => {
+        if (result !== null && result.minute > 0) {
+          // Ustawiamy połowę meczu
+          onSecondHalfToggle(result.isSecondHalf);
+          // Ustawiamy minutę
+          onMinuteChange(result.minute);
+        }
+        // Resetujemy flagę po ustawieniu wartości
+        setTimeout(() => {
+          isAutoSettingFromVideo.current = false;
+        }, 100);
+      }).catch((error) => {
+        console.warn('Nie udało się obliczyć minuty z wideo:', error);
+        isAutoSettingFromVideo.current = false;
+      });
+    }
+  }, [isOpen, isEditMode, onCalculateMinuteFromVideo, onMinuteChange, onSecondHalfToggle]);
 
   // Funkcja do pobierania nazwy zespołu
   const getTeamName = (teamId: string) => {
@@ -397,6 +422,11 @@ const ActionModal: React.FC<ActionModalProps> = ({
   const handleSecondHalfToggle = (value: boolean) => {
     onSecondHalfToggle(value);
     
+    // Jeśli ustawiamy wartości automatycznie z wideo, nie zmieniajmy minuty
+    if (isAutoSettingFromVideo.current) {
+      return;
+    }
+    
     // Jeśli włączamy drugą połowę, a minuta jest mniejsza niż 46, ustawiamy na 46
     if (value && actionMinute < 46) {
       onMinuteChange(46);
@@ -626,9 +656,8 @@ const ActionModal: React.FC<ActionModalProps> = ({
           <div className={styles.compactButtonsRow}>
             {/* Sekcja "Początek i koniec działania" z przyciskami P0-P3 */}
             <div className={styles.pSectionContainer}>
-              <div className={styles.pSectionLabel}>Początek i koniec działania:</div>
               <div className={styles.pStartEndContainer}>
-                <div className={styles.actionTypeSelector}>
+                <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Początek działania">
                   <button
                     className={`${styles.actionTypeButton} ${
                       isP0StartActive ? styles.active : ""
@@ -674,7 +703,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                     P3
                   </button>
                 </div>
-                <div className={styles.actionTypeSelector}>
+                <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Koniec działania">
                   <button
                     className={`${styles.actionTypeButton} ${
                       isP0Active ? styles.active : ""
@@ -727,8 +756,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
             <div className={styles.rightSideContainer}>
               {/* Grupa przycisków kontaktów */}
               <div className={styles.pSectionContainer}>
-                <div className={styles.pSectionLabel}>Liczba kontaktów:</div>
-                <div className={styles.actionTypeSelector}>
+                <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Liczba kontaktów">
                   <button
                     className={`${styles.actionTypeButton} ${
                       isContact1Active ? styles.active : ""

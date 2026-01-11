@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { getDB } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
+import { getAuth, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { Team, getTeamsArray } from "@/constants/teamsLoader";
 import { UserData } from "@/hooks/useAuth";
 import { toast } from "react-hot-toast";
@@ -21,6 +22,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
   const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [editingUser, setEditingUser] = useState<string | null>(null);
+  const [showAddUserModal, setShowAddUserModal] = useState<boolean>(false);
+  const [newUserEmail, setNewUserEmail] = useState<string>("");
+  const [newUserPassword, setNewUserPassword] = useState<string>("");
+  const [newUserRole, setNewUserRole] = useState<'user' | 'admin'>('user');
+  const [newUserTeams, setNewUserTeams] = useState<string[]>([]);
+  const [isCreatingUser, setIsCreatingUser] = useState<boolean>(false);
 
   // Pobierz wszystkich użytkowników
   const fetchUsers = async () => {
@@ -154,6 +161,93 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
     await updateUserTeams(userId, newTeams);
   };
 
+  // Obsługa zmiany zespołów dla nowego użytkownika
+  const handleNewUserTeamToggle = (teamId: string) => {
+    setNewUserTeams(prev => 
+      prev.includes(teamId)
+        ? prev.filter(t => t !== teamId)
+        : [...prev, teamId]
+    );
+  };
+
+  // Dodaj nowego użytkownika
+  const createUser = async () => {
+    if (!newUserEmail || !newUserPassword) {
+      toast.error("Email i hasło są wymagane");
+      return;
+    }
+
+    if (newUserPassword.length < 6) {
+      toast.error("Hasło musi mieć co najmniej 6 znaków");
+      return;
+    }
+
+    setIsCreatingUser(true);
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+
+    try {
+      if (!currentUser) {
+        toast.error("Brak zalogowanego użytkownika");
+        return;
+      }
+
+      // Utwórz nowe konto użytkownika (automatycznie loguje nowego użytkownika)
+      const userCredential = await createUserWithEmailAndPassword(auth, newUserEmail, newUserPassword);
+      const newUserId = userCredential.user.uid;
+
+      // Utwórz dokument użytkownika w Firestore przed wylogowaniem
+      const db = getDB();
+      const userRef = doc(db, "users", newUserId);
+      const newUserData: UserData = {
+        email: newUserEmail,
+        allowedTeams: newUserTeams,
+        role: newUserRole,
+        createdAt: new Date(),
+        lastLogin: null as any
+      };
+
+      await setDoc(userRef, newUserData).catch(error => {
+        handleFirestoreError(error, db);
+        throw error;
+      });
+
+      // Wyloguj nowego użytkownika
+      await signOut(auth);
+
+      // Dodaj do lokalnego stanu
+      setUsers(prev => [...prev, { id: newUserId, ...newUserData }]);
+
+      // Resetuj formularz
+      setNewUserEmail("");
+      setNewUserPassword("");
+      setNewUserRole('user');
+      setNewUserTeams([]);
+      setShowAddUserModal(false);
+
+      toast.success("Użytkownik został utworzony pomyślnie. Proszę zalogować się ponownie jako administrator.");
+      
+      // Przekieruj do strony logowania po 2 sekundach
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000);
+    } catch (error: any) {
+      console.error("Błąd podczas tworzenia użytkownika:", error);
+
+      if (error.code === 'auth/email-already-in-use') {
+        toast.error("Użytkownik o tym adresie email już istnieje");
+      } else if (error.code === 'auth/invalid-email') {
+        toast.error("Nieprawidłowy adres email");
+      } else if (error.code === 'auth/weak-password') {
+        toast.error("Hasło jest zbyt słabe");
+      } else {
+        toast.error("Błąd podczas tworzenia użytkownika: " + (error.message || "Nieznany błąd"));
+      }
+    } finally {
+      setIsCreatingUser(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchTeamsData();
@@ -210,6 +304,20 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
           }}
         >
           Odśwież listę zespołów
+        </button>
+        <button
+          onClick={() => setShowAddUserModal(true)}
+          disabled={isLoading || isCreatingUser}
+          style={{
+            padding: "10px 15px",
+            backgroundColor: "#17a2b8",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+            cursor: (isLoading || isCreatingUser) ? "not-allowed" : "pointer"
+          }}
+        >
+          + Dodaj użytkownika
         </button>
       </div>
 
@@ -297,9 +405,161 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
         </div>
       )}
 
+      {/* Modal dodawania użytkownika */}
+      {showAddUserModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 10000
+        }} onClick={() => !isCreatingUser && setShowAddUserModal(false)}>
+          <div style={{
+            backgroundColor: "white",
+            padding: "30px",
+            borderRadius: "8px",
+            maxWidth: "500px",
+            width: "90%",
+            maxHeight: "90vh",
+            overflowY: "auto"
+          }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Dodaj nowego użytkownika</h3>
+            
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
+                Email:
+              </label>
+              <input
+                type="email"
+                value={newUserEmail}
+                onChange={(e) => setNewUserEmail(e.target.value)}
+                placeholder="email@example.com"
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #ddd",
+                  borderRadius: "4px",
+                  boxSizing: "border-box"
+                }}
+                disabled={isCreatingUser}
+              />
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
+                Hasło (min. 6 znaków):
+              </label>
+              <input
+                type="password"
+                value={newUserPassword}
+                onChange={(e) => setNewUserPassword(e.target.value)}
+                placeholder="Hasło"
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #ddd",
+                  borderRadius: "4px",
+                  boxSizing: "border-box"
+                }}
+                disabled={isCreatingUser}
+              />
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
+                Rola:
+              </label>
+              <select
+                value={newUserRole}
+                onChange={(e) => setNewUserRole(e.target.value as 'user' | 'admin')}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #ddd",
+                  borderRadius: "4px",
+                  boxSizing: "border-box"
+                }}
+                disabled={isCreatingUser}
+              >
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
+                Dostępne zespoły:
+              </label>
+              <div style={{
+                maxHeight: "200px",
+                overflowY: "auto",
+                border: "1px solid #ddd",
+                borderRadius: "4px",
+                padding: "10px"
+              }}>
+                {teams.map(team => (
+                  <label key={team.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                    <input
+                      type="checkbox"
+                      checked={newUserTeams.includes(team.id)}
+                      onChange={() => handleNewUserTeamToggle(team.id)}
+                      disabled={isCreatingUser}
+                    />
+                    <span>{team.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => {
+                  setShowAddUserModal(false);
+                  setNewUserEmail("");
+                  setNewUserPassword("");
+                  setNewUserRole('user');
+                  setNewUserTeams([]);
+                }}
+                disabled={isCreatingUser}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#6c757d",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: isCreatingUser ? "not-allowed" : "pointer"
+                }}
+              >
+                Anuluj
+              </button>
+              <button
+                onClick={createUser}
+                disabled={isCreatingUser || !newUserEmail || !newUserPassword}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: isCreatingUser || !newUserEmail || !newUserPassword ? "#ccc" : "#17a2b8",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: (isCreatingUser || !newUserEmail || !newUserPassword) ? "not-allowed" : "pointer"
+                }}
+              >
+                {isCreatingUser ? "Tworzenie..." : "Utwórz użytkownika"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ marginTop: "20px", fontSize: "0.9em", color: "#666" }}>
         <h4>Instrukcje:</h4>
         <ul style={{ paddingLeft: "20px" }}>
+          <li>Kliknij "Dodaj użytkownika" aby utworzyć nowe konto</li>
           <li>Zaznacz/odznacz zespoły dla każdego użytkownika, aby nadać mu odpowiednie uprawnienia</li>
           <li>Zmień rolę na "Admin" aby użytkownik mógł zarządzać innymi użytkownikami</li>
           <li>Użytkownicy bez żadnych zespołów nie będą mogli korzystać z aplikacji</li>

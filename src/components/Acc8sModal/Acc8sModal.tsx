@@ -13,6 +13,7 @@ export interface Acc8sModalProps {
   matchId: string;
   matchInfo?: TeamInfo | null;
   players: Player[];
+  onCalculateMinuteFromVideo?: () => Promise<{ minute: number; isSecondHalf: boolean } | null>;
 }
 
 const Acc8sModal: React.FC<Acc8sModalProps> = ({
@@ -24,6 +25,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
   matchId,
   matchInfo,
   players,
+  onCalculateMinuteFromVideo,
 }) => {
   const [formData, setFormData] = useState({
     minute: 1,
@@ -56,6 +58,25 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
 
     return playersWithMinutes;
   }, [players, matchInfo]);
+
+  // Automatycznie ustaw sugerowaną wartość minuty i połowy na podstawie czasu wideo przy otwarciu modalu
+  useEffect(() => {
+    if (isOpen && !editingEntry && onCalculateMinuteFromVideo) {
+      console.log('Acc8sModal: wywołuję onCalculateMinuteFromVideo');
+      onCalculateMinuteFromVideo().then((result) => {
+        console.log('Acc8sModal: wynik obliczenia:', result);
+        if (result !== null && result.minute > 0) {
+          setFormData(prev => ({
+            ...prev,
+            minute: result.minute,
+            isSecondHalf: result.isSecondHalf,
+          }));
+        }
+      }).catch((error) => {
+        console.warn('Nie udało się obliczyć minuty z wideo:', error);
+      });
+    }
+  }, [isOpen, editingEntry, onCalculateMinuteFromVideo]);
 
   useEffect(() => {
     if (editingEntry) {

@@ -19,10 +19,21 @@ interface LosesActionModalProps {
   onReceiverSelect: (id: string | null) => void;
   actionMinute: number;
   onMinuteChange: (minute: number) => void;
+  onCalculateMinuteFromVideo?: () => Promise<{ minute: number; isSecondHalf: boolean } | null>;
   actionType: "pass" | "dribble";
   onActionTypeChange: (type: "pass" | "dribble") => void;
   currentPoints: number;
   onAddPoints: (points: number) => void;
+  isP0StartActive: boolean;
+  onP0StartToggle: () => void;
+  isP1StartActive: boolean;
+  onP1StartToggle: () => void;
+  isP2StartActive: boolean;
+  onP2StartToggle: () => void;
+  isP3StartActive: boolean;
+  onP3StartToggle: () => void;
+  isP0Active: boolean;
+  onP0Toggle: () => void;
   isP1Active: boolean;
   onP1Toggle: () => void;
   isP2Active: boolean;
@@ -87,10 +98,21 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   onReceiverSelect,
   actionMinute,
   onMinuteChange,
+  onCalculateMinuteFromVideo,
   actionType,
   onActionTypeChange,
   currentPoints,
   onAddPoints,
+  isP0StartActive,
+  onP0StartToggle,
+  isP1StartActive,
+  onP1StartToggle,
+  isP2StartActive,
+  onP2StartToggle,
+  isP3StartActive,
+  onP3StartToggle,
+  isP0Active,
+  onP0Toggle,
   isP1Active,
   onP1Toggle,
   isP2Active,
@@ -149,6 +171,23 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
 
   // Określamy czy jesteśmy w trybie edycji
   const isEditMode = !!editingAction;
+
+  // Automatycznie ustaw sugerowaną wartość minuty na podstawie czasu wideo przy otwarciu modalu
+  useEffect(() => {
+    if (isOpen && !isEditMode && onCalculateMinuteFromVideo) {
+      onCalculateMinuteFromVideo().then((result) => {
+        if (result !== null && result.minute > 0) {
+          onMinuteChange(result.minute);
+          // Ustaw również połowę meczu
+          if (result.isSecondHalf !== isSecondHalf) {
+            onSecondHalfToggle(result.isSecondHalf);
+          }
+        }
+      }).catch((error) => {
+        console.warn('Nie udało się obliczyć minuty z wideo:', error);
+      });
+    }
+  }, [isOpen, isEditMode, onCalculateMinuteFromVideo, onMinuteChange, isSecondHalf, onSecondHalfToggle]);
 
   // Funkcja do pobierania nazwy zespołu
   const getTeamName = (teamId: string) => {
@@ -590,7 +629,54 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
           <div className={styles.compactButtonsRow}>
             {/* Grupa przycisków kontaktów i reakcji 5s */}
             <div className={styles.pSectionContainer}>
-              <div className={styles.actionTypeSelector}>
+              {/* Sekcja z przyciskami P0-P3 - przestrzeń w której piłka została stracona */}
+              <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Przestrzeń w której piłka została stracona">
+                <button
+                  className={`${styles.actionTypeButton} ${
+                    isP0Active ? styles.active : ""
+                  }`}
+                  onClick={onP0Toggle}
+                  title="Aktywuj/Dezaktywuj P0"
+                  aria-pressed={isP0Active}
+                  type="button"
+                >
+                  P0
+                </button>
+                <button
+                  className={`${styles.actionTypeButton} ${
+                    isP1Active ? styles.active : ""
+                  }`}
+                  onClick={onP1Toggle}
+                  title="Aktywuj/Dezaktywuj P1"
+                  aria-pressed={isP1Active}
+                  type="button"
+                >
+                  P1
+                </button>
+                <button
+                  className={`${styles.actionTypeButton} ${
+                    isP2Active ? styles.active : ""
+                  }`}
+                  onClick={onP2Toggle}
+                  title="Aktywuj/Dezaktywuj P2"
+                  aria-pressed={isP2Active}
+                  type="button"
+                >
+                  P2
+                </button>
+                <button
+                  className={`${styles.actionTypeButton} ${
+                    isP3Active ? styles.active : ""
+                  }`}
+                  onClick={onP3Toggle}
+                  title="Aktywuj/Dezaktywuj P3"
+                  aria-pressed={isP3Active}
+                  type="button"
+                >
+                  P3
+                </button>
+              </div>
+              <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Liczba kontaktów z piłką">
                 <button
                   className={`${styles.actionTypeButton} ${
                     isContact1Active ? styles.active : ""
@@ -625,7 +711,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   3T+
                 </button>
               </div>
-              <div className={`${styles.actionTypeSelector} ${styles.actionTypeSelectorSecond}`}>
+              <div className={`${styles.actionTypeSelector} ${styles.actionTypeSelectorSecond} ${styles.tooltipTrigger}`} data-tooltip="Czy wystąpił kontrpressing">
                 <button
                   className={`${styles.actionTypeButton} ${
                     isReaction5sActive ? styles.active : ""

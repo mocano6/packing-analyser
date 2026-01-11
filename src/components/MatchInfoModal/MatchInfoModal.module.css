@@ -278,6 +278,127 @@
   width: 100%;
 }
 
+.halvesTimeContainer {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  align-items: center;
+}
+
+.halfTimeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.halfLabel {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+  min-width: 65px;
+}
+
+.timeInputContainer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.timeInput {
+  width: 60px;
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  background-color: #fff;
+  color: #1f2937;
+  text-align: center;
+}
+
+.timeInputSeconds {
+  width: 50px;
+  padding: 6px 4px;
+  min-width: 50px;
+}
+
+.timeInput:hover {
+  border-color: #d1d5db;
+}
+
+.timeInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background-color: #fff;
+}
+
+.timeSeparator {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  user-select: none;
+}
+
+.tooltipTrigger {
+  position: relative;
+  cursor: help;
+}
+
+.tooltipTrigger[data-tooltip]::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background-color: rgba(255, 255, 255, 0.98);
+  color: #1f2937;
+  font-size: 11px;
+  font-weight: 400;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease-in-out;
+  z-index: 1000;
+  min-width: 200px;
+  max-width: 400px;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.4;
+  word-wrap: break-word;
+  backdrop-filter: blur(8px);
+}
+
+.tooltipTrigger[data-tooltip]:hover::before {
+  opacity: 1;
+  transition: opacity 0.1s ease-in-out;
+}
+
+.tooltipTrigger[data-tooltip]::after {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 2px;
+  border: 6px solid transparent;
+  border-top-color: #e5e7eb;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease-in-out;
+  z-index: 1000;
+}
+
+.tooltipTrigger[data-tooltip]:hover::after {
+  opacity: 1;
+  transition: opacity 0.1s ease-in-out;
+}
+
 .section {
   margin-bottom: 18px;
   padding-bottom: 16px;

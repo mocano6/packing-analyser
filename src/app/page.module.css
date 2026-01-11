@@ -89,6 +89,109 @@
   background-color: rgba(0, 0, 0, 0.05);
 }
 
+.regainLosesPopupOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+}
+
+.regainLosesPopup {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 280px;
+  max-width: 400px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  animation: modalIn 0.3s ease-out;
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.regainLosesPopup h3 {
+  margin: 0 0 20px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  text-align: center;
+}
+
+.regainLosesPopupButtons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.regainLosesPopupButton {
+  flex: 1;
+  padding: 12px 20px;
+  border: 2px solid #3b82f6;
+  border-radius: 8px;
+  background-color: #3b82f6;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.regainLosesPopupButton:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+}
+
+.regainLosesPopupButton:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.regainLosesPopupCancel {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.regainLosesPopupCancelButton {
+  padding: 10px 24px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background-color: #f3f4f6;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 100px;
+}
+
+.regainLosesPopupCancelButton:hover {
+  background-color: #e5e7eb;
+  border-color: #9ca3af;
+  color: #1f2937;
+}
+
+.regainLosesPopupCancelButton:active {
+  background-color: #d1d5db;
+  transform: scale(0.98);
+}
+
 .controlsContainer {
   display: flex;
   align-items: center;
@@ -155,7 +258,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 10001;
   backdrop-filter: blur(4px);
   animation: fadeIn 0.3s ease-out;
 }

@@ -221,6 +221,8 @@ export interface TeamInfo {
   videoUrl?: string; // URL wideo z YouTube dla tego meczu
   videoStoragePath?: string; // Ścieżka do wideo w Firebase Storage
   videoStorageUrl?: string; // URL do wideo z Firebase Storage (signed URL)
+  firstHalfStartTime?: number; // Czas startu 1. połowy w sekundach na nagraniu
+  secondHalfStartTime?: number; // Czas startu 2. połowy w sekundach na nagraniu
   playerMinutes?: PlayerMinutes[];
   actions_packing?: Action[]; // Tablica akcji packing związanych z tym meczem
   actions_unpacking?: Action[]; // Tablica akcji unpacking związanych z tym meczem

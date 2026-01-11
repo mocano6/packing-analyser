@@ -19,10 +19,21 @@ interface RegainActionModalProps {
   onReceiverSelect: (id: string | null) => void;
   actionMinute: number;
   onMinuteChange: (minute: number) => void;
+  onCalculateMinuteFromVideo?: () => Promise<{ minute: number; isSecondHalf: boolean } | null>;
   actionType: "pass" | "dribble";
   onActionTypeChange: (type: "pass" | "dribble") => void;
   currentPoints: number;
   onAddPoints: (points: number) => void;
+  isP0StartActive: boolean;
+  onP0StartToggle: () => void;
+  isP1StartActive: boolean;
+  onP1StartToggle: () => void;
+  isP2StartActive: boolean;
+  onP2StartToggle: () => void;
+  isP3StartActive: boolean;
+  onP3StartToggle: () => void;
+  isP0Active: boolean;
+  onP0Toggle: () => void;
   isP1Active: boolean;
   onP1Toggle: () => void;
   isP2Active: boolean;
@@ -78,10 +89,21 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   onReceiverSelect,
   actionMinute,
   onMinuteChange,
+  onCalculateMinuteFromVideo,
   actionType,
   onActionTypeChange,
   currentPoints,
   onAddPoints,
+  isP0StartActive,
+  onP0StartToggle,
+  isP1StartActive,
+  onP1StartToggle,
+  isP2StartActive,
+  onP2StartToggle,
+  isP3StartActive,
+  onP3StartToggle,
+  isP0Active,
+  onP0Toggle,
   isP1Active,
   onP1Toggle,
   isP2Active,
@@ -131,6 +153,23 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
 
   // Określamy czy jesteśmy w trybie edycji
   const isEditMode = !!editingAction;
+
+  // Automatycznie ustaw sugerowaną wartość minuty na podstawie czasu wideo przy otwarciu modalu
+  useEffect(() => {
+    if (isOpen && !isEditMode && onCalculateMinuteFromVideo) {
+      onCalculateMinuteFromVideo().then((result) => {
+        if (result !== null && result.minute > 0) {
+          onMinuteChange(result.minute);
+          // Ustaw również połowę meczu
+          if (result.isSecondHalf !== isSecondHalf) {
+            onSecondHalfToggle(result.isSecondHalf);
+          }
+        }
+      }).catch((error) => {
+        console.warn('Nie udało się obliczyć minuty z wideo:', error);
+      });
+    }
+  }, [isOpen, isEditMode, onCalculateMinuteFromVideo, onMinuteChange, isSecondHalf, onSecondHalfToggle]);
 
   // Funkcja do pobierania nazwy zespołu
   const getTeamName = (teamId: string) => {
@@ -570,7 +609,112 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
 
           {/* Wszystkie przyciski w jednym rzędzie */}
           <div className={styles.compactButtonsRow}>
-            {/* Sekcja z przyciskami "przed piłką" - ułożone pionowo */}
+            {/* Box 1: P0-P3, Poniżej 8s, Wejście PK, Strzał, Gol */}
+            <div className={styles.pSectionContainer}>
+              {/* Sekcja z przyciskami P0-P3 - przestrzeń w której piłka została odebrana */}
+              <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Przestrzeń w której piłka została odebrana">
+                <button
+                  className={`${styles.actionTypeButton} ${
+                    isP0Active ? styles.active : ""
+                  }`}
+                  onClick={onP0Toggle}
+                  title="Aktywuj/Dezaktywuj P0"
+                  aria-pressed={isP0Active}
+                  type="button"
+                >
+                  P0
+                </button>
+                <button
+                  className={`${styles.actionTypeButton} ${
+                    isP1Active ? styles.active : ""
+                  }`}
+                  onClick={onP1Toggle}
+                  title="Aktywuj/Dezaktywuj P1"
+                  aria-pressed={isP1Active}
+                  type="button"
+                >
+                  P1
+                </button>
+                <button
+                  className={`${styles.actionTypeButton} ${
+                    isP2Active ? styles.active : ""
+                  }`}
+                  onClick={onP2Toggle}
+                  title="Aktywuj/Dezaktywuj P2"
+                  aria-pressed={isP2Active}
+                  type="button"
+                >
+                  P2
+                </button>
+                <button
+                  className={`${styles.actionTypeButton} ${
+                    isP3Active ? styles.active : ""
+                  }`}
+                  onClick={onP3Toggle}
+                  title="Aktywuj/Dezaktywuj P3"
+                  aria-pressed={isP3Active}
+                  type="button"
+                >
+                  P3
+                </button>
+              </div>
+              {/* Rząd z "Poniżej 8s" i "Wejście PK, Strzał, Gol" */}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                {/* Przycisk "Poniżej 8s" */}
+                <button
+                  className={`${styles.compactButton} ${
+                    isBelow8sActive ? styles.activeButton : ""
+                  }`}
+                  onClick={onBelow8sToggle}
+                  aria-pressed={isBelow8sActive}
+                  type="button"
+                  title="Poniżej 8 sekund"
+                >
+                  <span className={styles.compactLabel}>Poniżej 8s</span>
+                </button>
+                {/* Przyciski ułożone pionowo: Wejście PK, Strzał, Gol */}
+                <div className={styles.verticalButtonsContainer}>
+                  <button
+                    className={`${styles.compactButton} ${
+                      isPenaltyAreaEntry ? styles.activeButton : ""
+                    }`}
+                    onClick={handlePenaltyAreaEntryToggle}
+                    aria-pressed={isPenaltyAreaEntry}
+                    type="button"
+                    title="Wejście w pole karne"
+                  >
+                    <span className={styles.compactLabel}>Wejście PK</span>
+                  </button>
+
+                  <button
+                    className={`${styles.compactButton} ${
+                      isShot ? styles.activeButton : ""
+                    }`}
+                    onClick={handleShotToggle}
+                    aria-pressed={isShot}
+                    type="button"
+                    title="Strzał"
+                  >
+                    <span className={styles.compactLabel}>Strzał</span>
+                  </button>
+
+                  <button
+                    className={`${styles.compactButton} ${
+                      isGoal ? styles.activeButton : ""
+                    } ${!isShot ? styles.disabledButton : ""}`}
+                    onClick={handleGoalToggle}
+                    disabled={!isShot}
+                    aria-pressed={isGoal}
+                    aria-disabled={!isShot}
+                    type="button"
+                    title={!isShot ? "Musisz najpierw zaznaczyć Strzał" : "Gol"}
+                  >
+                    <span className={styles.compactLabel}>Gol</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            {/* Box 2: Sekcja z przyciskami "przed piłką" - ułożone pionowo */}
             <div className={styles.verticalButtonsContainer}>
               {/* Przycisk "Liczba partnerów przed piłką" */}
               <div 
@@ -629,19 +773,6 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
               </div>
             </div>
 
-            {/* Przycisk "Poniżej 8s" */}
-            <button
-              className={`${styles.compactButton} ${
-                isBelow8sActive ? styles.activeButton : ""
-              }`}
-              onClick={onBelow8sToggle}
-              aria-pressed={isBelow8sActive}
-              type="button"
-              title="Poniżej 8 sekund"
-            >
-              <span className={styles.compactLabel}>Poniżej 8s</span>
-            </button>
-
             {/* Pozostałe przyciski punktów (bez "Minięty przeciwnik") */}
             {ACTION_BUTTONS.map((button, index) => {
               if (button.type === "points" && button.label !== "Minięty przeciwnik") {
@@ -676,47 +807,6 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
               }
               return null;
             })}
-
-            {/* Przyciski ułożone pionowo: Wejście PK, Strzał, Gol */}
-            <div className={styles.verticalButtonsContainer}>
-              <button
-                className={`${styles.compactButton} ${
-                  isPenaltyAreaEntry ? styles.activeButton : ""
-                }`}
-                onClick={handlePenaltyAreaEntryToggle}
-                aria-pressed={isPenaltyAreaEntry}
-                type="button"
-                title="Wejście w pole karne"
-              >
-                <span className={styles.compactLabel}>Wejście PK</span>
-              </button>
-
-              <button
-                className={`${styles.compactButton} ${
-                  isShot ? styles.activeButton : ""
-                }`}
-                onClick={handleShotToggle}
-                aria-pressed={isShot}
-                type="button"
-                title="Strzał"
-              >
-                <span className={styles.compactLabel}>Strzał</span>
-              </button>
-
-              <button
-                className={`${styles.compactButton} ${
-                  isGoal ? styles.activeButton : ""
-                } ${!isShot ? styles.disabledButton : ""}`}
-                onClick={handleGoalToggle}
-                disabled={!isShot}
-                aria-pressed={isGoal}
-                aria-disabled={!isShot}
-                type="button"
-                title={!isShot ? "Musisz najpierw zaznaczyć Strzał" : "Gol"}
-              >
-                <span className={styles.compactLabel}>Gol</span>
-              </button>
-            </div>
           </div>
           
           {/* Przyciski kontrolne z polem minuty pomiędzy */}

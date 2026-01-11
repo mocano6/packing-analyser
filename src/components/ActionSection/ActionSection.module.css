@@ -12,7 +12,8 @@
   background-color: rgba(33, 150, 243, 0.08);
   border-left: 2px solid #2196F3;
   border-radius: 4px;
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
   display: block;
   position: relative;
   z-index: 10;
@@ -24,6 +25,70 @@
   font-size: 12px;
   font-weight: 400;
   line-height: 1.4;
+  white-space: nowrap;
+}
+
+.scrollToVideoButtonFixed {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: white;
+  border: 2px solid #FF0000;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: opacity 0.3s ease, transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  z-index: 1000;
+  padding: 0;
+  opacity: 1;
+}
+
+.scrollToVideoButtonFixed:hover {
+  background-color: rgba(255, 0, 0, 0.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  transform: scale(1.1);
+}
+
+.scrollToVideoButtonFixed:active {
+  transform: scale(0.95);
+}
+
+.scrollToVideoButtonFixed svg {
+  display: block;
+}
+
+.regainLosesToggle {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.toggleButton {
+  padding: 6px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background-color: white;
+  color: #4a5568;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggleButton:hover {
+  border-color: #2196f3;
+  background-color: #f8f9fa;
+}
+
+.toggleButton.active {
+  background-color: #2196f3;
+  border-color: #2196f3;
+  color: white;
 }
 
 .pitchContainer {
