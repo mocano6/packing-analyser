@@ -347,6 +347,11 @@
   border-bottom: 1px solid #e5e7eb;
 }
 
+.detailsSection:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+}
+
 /* Grid layout tylko dla sekcji z kafelkami */
 .detailsSectionWithTiles {
   display: grid;
@@ -402,8 +407,8 @@
 .detailsRow {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 0;
+  gap: 2px;
+  padding: 4px 0;
   font-size: 13px;
   border-bottom: 1px solid #f0f0f0;
 }
@@ -419,6 +424,11 @@
   text-transform: uppercase;
   letter-spacing: 0.3px;
   margin-bottom: 4px;
+  text-decoration: none;
+}
+
+.detailsLabel .preserveCase {
+  text-transform: none;
 }
 
 .detailsValue {
@@ -448,6 +458,108 @@
   color: #d1d5db;
   font-weight: 300;
   font-size: 14px;
+}
+
+/* Suwak Atak/Obrona */
+.attackDefenseSlider {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.sliderLabels {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sliderLabel {
+  color: #6b7280;
+}
+
+.sliderLabel:first-child {
+  color: #3b82f6;
+}
+
+.sliderLabel:last-child {
+  color: #10b981;
+}
+
+.sliderTrack {
+  position: relative;
+  width: 100%;
+  height: 24px;
+  background: linear-gradient(to right, #3b82f6 0%, #e5e7eb 50%, #10b981 100%);
+  border-radius: 12px;
+  overflow: visible;
+  margin-bottom: 4px;
+}
+
+.sliderFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 12px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+  opacity: 0.3;
+}
+
+.sliderIndicator {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 32px;
+  background: white;
+  border: 2px solid;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: left 0.3s ease, border-color 0.3s ease;
+  z-index: 10;
+}
+
+.sliderIndicator::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid;
+  border-top-color: inherit;
+}
+
+.sliderValue {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1f2937;
+  white-space: nowrap;
+  position: relative;
+  z-index: 1;
+}
+
+.sliderScale {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 2px;
+  padding: 0 2px;
+}
+
+.scaleMark {
+  font-size: 9px;
+  color: #9ca3af;
+  font-weight: 500;
+  flex: 1;
+  text-align: center;
 }
 
 .rankingBadge {
@@ -694,6 +806,8 @@
   background-color: #f3f4f6;
   padding: 4px;
   border-radius: 8px;
+  width: auto;
+  max-width: fit-content;
 }
 
 .heatmapModeButton {

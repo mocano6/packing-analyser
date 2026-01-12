@@ -826,7 +826,7 @@ export default function StatystykiZespoluPage() {
       if (
         (action.isBelow8s !== undefined || 
          action.playersBehindBall !== undefined || 
-         action.opponentsBeforeBall !== undefined) &&
+         action.opponentsBehindBall !== undefined) &&
         !action.isReaction5s
       ) {
         totalRegains += 1;
@@ -837,7 +837,7 @@ export default function StatystykiZespoluPage() {
         action.isReaction5s !== undefined ||
         (action.isBelow8s !== undefined && 
          action.playersBehindBall === undefined && 
-         action.opponentsBeforeBall === undefined)
+         action.opponentsBehindBall === undefined)
       ) {
         totalLoses += 1;
       }

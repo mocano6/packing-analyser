@@ -22,6 +22,11 @@ const TeamsManagement = dynamic(
   { ssr: false }
 );
 
+const RegainLosesMigration = dynamic(
+  () => import("@/components/AdminPanel/RegainLosesMigration"),
+  { ssr: false }
+);
+
 export default function AdminPage() {
   const router = useRouter();
   const { isAuthenticated, isAdmin, isLoading } = useAuth();
@@ -220,6 +225,11 @@ service cloud.firestore {
         >
           🔍 Przeprowadź analizę danych
         </Link>
+      </section>
+
+      <section style={{ marginBottom: "30px" }}>
+        <h2>Migracja akcji Regain i Loses</h2>
+        <RegainLosesMigration />
       </section>
 
       <section style={{ marginBottom: "30px" }}>

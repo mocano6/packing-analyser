@@ -497,6 +497,15 @@
   font-weight: 600 !important;
   font-size: 12px;
   -moz-appearance: textfield;
+  pointer-events: auto !important;
+  cursor: text !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  position: relative;
+  z-index: 10;
+  background-color: white !important;
 }
 
 .minuteField::-webkit-inner-spin-button,
@@ -509,6 +518,12 @@
   border-color: #007bff;
   outline: none;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.minuteField:disabled {
+  pointer-events: none;
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 @media (max-width: 600px) {
@@ -825,6 +840,9 @@
   overflow: hidden;
   width: 100px;
   border: 1px solid #eaeaea;
+  position: relative;
+  z-index: 10;
+  pointer-events: auto !important;
 }
 
 .halfButton, .typeButton {
@@ -833,11 +851,22 @@
   background-color: #fafafa;
   color: #888;
   font-weight: 400;
-  cursor: pointer;
+  cursor: pointer !important;
   transition: all 0.15s;
   flex: 1;
   text-align: center;
   font-size: 11px;
+  pointer-events: auto !important;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.halfButton:disabled, .typeButton:disabled {
+  pointer-events: none;
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .halfButton:first-child, .typeButton:first-child {

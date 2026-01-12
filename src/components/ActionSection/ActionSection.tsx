@@ -70,8 +70,8 @@ export interface ActionSectionProps {
   setIsPMAreaActive: React.Dispatch<React.SetStateAction<boolean>>;
   playersBehindBall: number;
   setPlayersBehindBall: React.Dispatch<React.SetStateAction<number>>;
-  opponentsBeforeBall: number;
-  setOpponentsBeforeBall: React.Dispatch<React.SetStateAction<number>>;
+  opponentsBehindBall: number;
+  setOpponentsBehindBall: React.Dispatch<React.SetStateAction<number>>;
   playersLeftField: number;
   setPlayersLeftField: React.Dispatch<React.SetStateAction<number>>;
   opponentsLeftField: number;
@@ -159,8 +159,8 @@ const ActionSection = memo(function ActionSection({
   setIsPMAreaActive,
   playersBehindBall,
   setPlayersBehindBall,
-  opponentsBeforeBall,
-  setOpponentsBeforeBall,
+  opponentsBehindBall,
+  setOpponentsBehindBall,
   playersLeftField,
   setPlayersLeftField,
   opponentsLeftField,
@@ -209,15 +209,64 @@ const ActionSection = memo(function ActionSection({
       // Sprawdź zewnętrzne okno wideo
       const externalWindow = (window as any).externalVideoWindow;
       const isExternalWindowOpen = externalWindow && !externalWindow.closed;
+      const isExternalWindowOpenFromStorage = localStorage.getItem('externalVideoWindowOpen') === 'true';
       
-      if (isExternalWindowOpen) {
-        // W zewnętrznym oknie - nie możemy pobrać czasu bezpośrednio
-        return null;
+      if (isExternalWindowOpen || isExternalWindowOpenFromStorage) {
+        // W zewnętrznym oknie - pobierz czas przez postMessage
+        console.log('ActionSection calculateMatchMinuteFromVideoTime: zewnętrzne okno otwarte, pobieram czas przez postMessage');
+        
+        // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
+        if (externalWindow && !externalWindow.closed) {
+          externalWindow.postMessage({
+            type: 'GET_CURRENT_TIME'
+          }, '*');
+        } else {
+          window.postMessage({
+            type: 'GET_CURRENT_TIME'
+          }, '*');
+        }
+        
+        // Czekaj na odpowiedź z zewnętrznego okna
+        const waitForTime = new Promise<number | null>((resolve) => {
+          const handleTimeResponse = (event: MessageEvent) => {
+            if (event.data.type === 'CURRENT_TIME_RESPONSE') {
+              window.removeEventListener('message', handleTimeResponse);
+              resolve(event.data.time);
+            }
+          };
+          window.addEventListener('message', handleTimeResponse);
+          setTimeout(() => {
+            window.removeEventListener('message', handleTimeResponse);
+            resolve(null); // timeout
+          }, 1000);
+        });
+        
+        const time = await waitForTime;
+        if (time !== null && time > 0) {
+          currentVideoTime = time;
+          console.log('ActionSection calculateMatchMinuteFromVideoTime: pobrano czas z zewnętrznego okna:', currentVideoTime);
+        } else {
+          console.log('ActionSection calculateMatchMinuteFromVideoTime: nie udało się pobrać czasu z zewnętrznego okna');
+          return null;
+        }
       } else if (youtubeVideoRef?.current) {
-        currentVideoTime = await youtubeVideoRef.current.getCurrentTime();
+        try {
+          currentVideoTime = await youtubeVideoRef.current.getCurrentTime();
+          console.log('ActionSection calculateMatchMinuteFromVideoTime: pobrano czas z YouTube:', currentVideoTime);
+        } catch (error) {
+          console.warn('ActionSection calculateMatchMinuteFromVideoTime: błąd pobierania czasu z YouTube:', error);
+          return null;
+        }
       } else if (customVideoRef?.current) {
-        currentVideoTime = await customVideoRef.current.getCurrentTime();
+        try {
+          currentVideoTime = await customVideoRef.current.getCurrentTime();
+          console.log('ActionSection calculateMatchMinuteFromVideoTime: pobrano czas z CustomVideo:', currentVideoTime);
+        } catch (error) {
+          console.warn('ActionSection calculateMatchMinuteFromVideoTime: błąd pobierania czasu z CustomVideo:', error);
+          return null;
+        }
       } else {
+        console.log('ActionSection calculateMatchMinuteFromVideoTime: brak dostępnych refów wideo (youtubeVideoRef:', !!youtubeVideoRef?.current, ', customVideoRef:', !!customVideoRef?.current, ')');
         return null;
       }
 
@@ -502,24 +551,30 @@ const ActionSection = memo(function ActionSection({
           }}
           isContact1Active={isContact1Active}
           onContact1Toggle={() => {
-            setIsContact1Active(!isContact1Active);
-            if (!isContact1Active) {
+            const newValue = !isContact1Active;
+            setIsContact1Active(newValue);
+            if (newValue) {
+              // Jeśli aktywujemy 1T, wyłączamy pozostałe
               setIsContact2Active(false);
               setIsContact3PlusActive(false);
             }
           }}
           isContact2Active={isContact2Active}
           onContact2Toggle={() => {
-            setIsContact2Active(!isContact2Active);
-            if (!isContact2Active) {
+            const newValue = !isContact2Active;
+            setIsContact2Active(newValue);
+            if (newValue) {
+              // Jeśli aktywujemy 2T, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact3PlusActive(false);
             }
           }}
           isContact3PlusActive={isContact3PlusActive}
           onContact3PlusToggle={() => {
-            setIsContact3PlusActive(!isContact3PlusActive);
-            if (!isContact3PlusActive) {
+            const newValue = !isContact3PlusActive;
+            setIsContact3PlusActive(newValue);
+            if (newValue) {
+              // Jeśli aktywujemy 3T+, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact2Active(false);
             }
@@ -634,24 +689,30 @@ const ActionSection = memo(function ActionSection({
           }}
           isContact1Active={isContact1Active}
           onContact1Toggle={() => {
-            setIsContact1Active(!isContact1Active);
-            if (!isContact1Active) {
+            const newValue = !isContact1Active;
+            setIsContact1Active(newValue);
+            if (newValue) {
+              // Jeśli aktywujemy 1T, wyłączamy pozostałe
               setIsContact2Active(false);
               setIsContact3PlusActive(false);
             }
           }}
           isContact2Active={isContact2Active}
           onContact2Toggle={() => {
-            setIsContact2Active(!isContact2Active);
-            if (!isContact2Active) {
+            const newValue = !isContact2Active;
+            setIsContact2Active(newValue);
+            if (newValue) {
+              // Jeśli aktywujemy 2T, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact3PlusActive(false);
             }
           }}
           isContact3PlusActive={isContact3PlusActive}
           onContact3PlusToggle={() => {
-            setIsContact3PlusActive(!isContact3PlusActive);
-            if (!isContact3PlusActive) {
+            const newValue = !isContact3PlusActive;
+            setIsContact3PlusActive(newValue);
+            if (newValue) {
+              // Jeśli aktywujemy 3T+, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact2Active(false);
             }
@@ -675,8 +736,8 @@ const ActionSection = memo(function ActionSection({
           playersBehindBall={playersBehindBall}
           onPlayersBehindBallChange={setPlayersBehindBall}
           // Nowy prop dla liczby przeciwników przed piłką
-          opponentsBeforeBall={opponentsBeforeBall}
-          onOpponentsBeforeBallChange={setOpponentsBeforeBall}
+            opponentsBehindBall={opponentsBehindBall}
+          onOpponentsBehindBallChange={setOpponentsBehindBall}
           // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
           playersLeftField={playersLeftField}
           onPlayersLeftFieldChange={setPlayersLeftField}
@@ -777,24 +838,30 @@ const ActionSection = memo(function ActionSection({
           }}
           isContact1Active={isContact1Active}
           onContact1Toggle={() => {
-            setIsContact1Active(!isContact1Active);
-            if (!isContact1Active) {
+            const newValue = !isContact1Active;
+            setIsContact1Active(newValue);
+            if (newValue) {
+              // Jeśli aktywujemy 1T, wyłączamy pozostałe
               setIsContact2Active(false);
               setIsContact3PlusActive(false);
             }
           }}
           isContact2Active={isContact2Active}
           onContact2Toggle={() => {
-            setIsContact2Active(!isContact2Active);
-            if (!isContact2Active) {
+            const newValue = !isContact2Active;
+            setIsContact2Active(newValue);
+            if (newValue) {
+              // Jeśli aktywujemy 2T, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact3PlusActive(false);
             }
           }}
           isContact3PlusActive={isContact3PlusActive}
           onContact3PlusToggle={() => {
-            setIsContact3PlusActive(!isContact3PlusActive);
-            if (!isContact3PlusActive) {
+            const newValue = !isContact3PlusActive;
+            setIsContact3PlusActive(newValue);
+            if (newValue) {
+              // Jeśli aktywujemy 3T+, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact2Active(false);
             }
@@ -816,19 +883,40 @@ const ActionSection = memo(function ActionSection({
           onBelow8sToggle={() => setIsBelow8sActive(!isBelow8sActive)}
           // Nowy prop dla przycisku "Reakcja 5s"
           isReaction5sActive={isReaction5sActive}
-          onReaction5sToggle={() => setIsReaction5sActive(!isReaction5sActive)}
+          onReaction5sToggle={() => {
+            const newValue = !isReaction5sActive;
+            setIsReaction5sActive(newValue);
+            if (newValue) {
+              setIsAutActive(false);
+              setIsReaction5sNotApplicableActive(false);
+            }
+          }}
           // Nowy prop dla przycisku "Aut"
           isAutActive={isAutActive}
-          onAutToggle={() => setIsAutActive(!isAutActive)}
+          onAutToggle={() => {
+            const newValue = !isAutActive;
+            setIsAutActive(newValue);
+            if (newValue) {
+              setIsReaction5sActive(false);
+              setIsReaction5sNotApplicableActive(false);
+            }
+          }}
           // Nowy prop dla przycisku "Nie dotyczy" (reakcja 5s)
           isReaction5sNotApplicableActive={isReaction5sNotApplicableActive}
-          onReaction5sNotApplicableToggle={() => setIsReaction5sNotApplicableActive(!isReaction5sNotApplicableActive)}
+          onReaction5sNotApplicableToggle={() => {
+            const newValue = !isReaction5sNotApplicableActive;
+            setIsReaction5sNotApplicableActive(newValue);
+            if (newValue) {
+              setIsReaction5sActive(false);
+              setIsAutActive(false);
+            }
+          }}
           // Nowy prop dla liczby partnerów przed piłką
           playersBehindBall={playersBehindBall}
           onPlayersBehindBallChange={setPlayersBehindBall}
           // Nowy prop dla liczby przeciwników przed piłką
-          opponentsBeforeBall={opponentsBeforeBall}
-          onOpponentsBeforeBallChange={setOpponentsBeforeBall}
+            opponentsBehindBall={opponentsBehindBall}
+          onOpponentsBehindBallChange={setOpponentsBehindBall}
           // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
           playersLeftField={playersLeftField}
           onPlayersLeftFieldChange={setPlayersLeftField}
@@ -929,24 +1017,30 @@ const ActionSection = memo(function ActionSection({
           }}
           isContact1Active={isContact1Active}
           onContact1Toggle={() => {
-            setIsContact1Active(!isContact1Active);
-            if (!isContact1Active) {
+            const newValue = !isContact1Active;
+            setIsContact1Active(newValue);
+            if (newValue) {
+              // Jeśli aktywujemy 1T, wyłączamy pozostałe
               setIsContact2Active(false);
               setIsContact3PlusActive(false);
             }
           }}
           isContact2Active={isContact2Active}
           onContact2Toggle={() => {
-            setIsContact2Active(!isContact2Active);
-            if (!isContact2Active) {
+            const newValue = !isContact2Active;
+            setIsContact2Active(newValue);
+            if (newValue) {
+              // Jeśli aktywujemy 2T, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact3PlusActive(false);
             }
           }}
           isContact3PlusActive={isContact3PlusActive}
           onContact3PlusToggle={() => {
-            setIsContact3PlusActive(!isContact3PlusActive);
-            if (!isContact3PlusActive) {
+            const newValue = !isContact3PlusActive;
+            setIsContact3PlusActive(newValue);
+            if (newValue) {
+              // Jeśli aktywujemy 3T+, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact2Active(false);
             }
