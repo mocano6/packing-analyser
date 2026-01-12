@@ -52,7 +52,36 @@ export default function PlayerDetailsPage() {
     }
     return "";
   });
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  
+  // Zapisz selectedPlayerForView do localStorage przy zmianie
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (selectedPlayerForView) {
+        localStorage.setItem('selectedPlayerForView', selectedPlayerForView);
+      } else {
+        localStorage.removeItem('selectedPlayerForView');
+      }
+    }
+  }, [selectedPlayerForView]);
+  // Inicjalizuj expandedCategory z localStorage
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('expandedCategory');
+      return saved || null;
+    }
+    return null;
+  });
+  
+  // Zapisz expandedCategory do localStorage przy zmianie
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (expandedCategory) {
+        localStorage.setItem('expandedCategory', expandedCategory);
+      } else {
+        localStorage.removeItem('expandedCategory');
+      }
+    }
+  }, [expandedCategory]);
   const [selectedPxtCategory, setSelectedPxtCategory] = useState<"sender" | "receiver" | "dribbler">("sender");
   const [heatmapMode, setHeatmapMode] = useState<"pxt" | "count">("pxt");
   const [heatmapDirection, setHeatmapDirection] = useState<"from" | "to">("from"); // Domyślnie "from" dla sender
@@ -64,7 +93,7 @@ export default function PlayerDetailsPage() {
   const [partnerStatsMode, setPartnerStatsMode] = useState<"sender" | "receiver">("sender");
   const [partnerSortMode, setPartnerSortMode] = useState<"passes" | "pxt">("passes");
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
-  const [selectedActionFilter, setSelectedActionFilter] = useState<'p1' | 'p2' | 'p3' | 'pk' | 'shot' | 'goal' | null>(null);
+  const [selectedActionFilter, setSelectedActionFilter] = useState<'p0' | 'p1' | 'p2' | 'p3' | 'p0start' | 'p1start' | 'p2start' | 'p3start' | 'pk' | 'shot' | 'goal' | null>(null);
   const [zoneDetails, setZoneDetails] = useState<{
     zoneName: string;
     players: Array<{ playerId: string; playerName: string; passes: number; pxt: number; p1Count: number; p2Count: number; p3Count: number; pkCount: number; shotCount: number; goalCount: number }>;
@@ -73,6 +102,10 @@ export default function PlayerDetailsPage() {
   const [regainAttackDefenseMode, setRegainAttackDefenseMode] = useState<"attack" | "defense" | null>("defense"); // Tryb atak/obrona: null = wyłączony, "attack" = w ataku, "defense" = w obronie (domyślnie obrona)
   const [selectedRegainZone, setSelectedRegainZone] = useState<string | null>(null);
   const [selectedRegainPackingFilter, setSelectedRegainPackingFilter] = useState<"P0" | "P1" | "P2" | "P3" | null>(null); // Filtr P0-P3 dla regainów
+  const [losesAttackDefenseMode, setLosesAttackDefenseMode] = useState<"attack" | "defense">("defense"); // Tryb atak/obrona dla strat: "attack" = w ataku, "defense" = w obronie (domyślnie obrona)
+  const [selectedLosesZone, setSelectedLosesZone] = useState<string | null>(null);
+  const [selectedLosesPackingFilter, setSelectedLosesPackingFilter] = useState<"P0" | "P1" | "P2" | "P3" | null>(null); // Filtr P0-P3 dla strat
+  const [losesZoneActions, setLosesZoneActions] = useState<Action[] | null>(null);
   const [selectedPackingFilter, setSelectedPackingFilter] = useState<"P0" | "P1" | "P2" | "P3" | null>(null); // Filtr dla P0-P3
   const [regainZoneActions, setRegainZoneActions] = useState<Action[] | null>(null);
   const [actionsModalOpen, setActionsModalOpen] = useState(false);
@@ -676,6 +709,26 @@ export default function PlayerDetailsPage() {
     let regainXTInDefense = 0; // Suma xTValueStart/xTValueEnd dla akcji w obronie
     let regainAttackCount = 0; // Liczba akcji w ataku
     let regainDefenseCount = 0; // Liczba akcji w obronie
+    // Statystyki strat - xT w ataku i obronie
+    let losesXTInAttack = 0; // Suma losesAttackXT dla akcji w ataku
+    let losesXTInDefense = 0; // Suma losesDefenseXT dla akcji w obronie
+    let losesAttackCount = 0; // Liczba akcji w ataku
+    let losesDefenseCount = 0; // Liczba akcji w obronie
+    // Liczniki strat według stref
+    let losesP0Count = 0;
+    let losesP1Count = 0;
+    let losesP2Count = 0;
+    let losesP3Count = 0;
+    // Liczniki strat według stref - boczne
+    let losesP0CountLateral = 0;
+    let losesP1CountLateral = 0;
+    let losesP2CountLateral = 0;
+    let losesP3CountLateral = 0;
+    // Liczniki strat według stref - centralne
+    let losesP0CountCentral = 0;
+    let losesP1CountCentral = 0;
+    let losesP2CountCentral = 0;
+    let losesP3CountCentral = 0;
     // Liczniki regainów według stref
     let regainP0Count = 0;
     let regainP1Count = 0;
@@ -700,6 +753,15 @@ export default function PlayerDetailsPage() {
     let totalDefensePlayerDifference = 0; // Suma różnic dla akcji w obronie
     let totalDefensePlayersUnderBall = 0; // Suma partnerów pod piłką dla akcji w obronie
     let totalDefenseOpponentsUnderBall = 0; // Suma przeciwników pod piłką dla akcji w obronie
+    // Średnia różnica zawodników w ataku dla strat (partnerzy za piłką - przeciwnicy za piłką)
+    let totalLosesAttackPlayerDifference = 0; // Suma różnic dla akcji w ataku
+    let totalLosesAttackPlayersBehind = 0; // Suma partnerów za piłką dla akcji w ataku
+    let totalLosesAttackPlayersBefore = 0; // Suma partnerów przed piłką dla akcji w ataku
+    let totalLosesAttackOpponentsBehind = 0; // Suma przeciwników za piłką dla akcji w ataku
+    // Średnia różnica zawodników w obronie dla strat (zawodnicy za piłką - przeciwnicy przed piłką, uwzględniając zawodników na boisku)
+    let totalLosesDefensePlayerDifference = 0; // Suma różnic dla akcji w obronie
+    let totalLosesDefensePlayersUnderBall = 0; // Suma partnerów pod piłką dla akcji w obronie
+    let totalLosesDefenseOpponentsUnderBall = 0; // Suma przeciwników pod piłką dla akcji w obronie
     // Całkowita różnica zawodników przed piłką dla wszystkich akcji regainów (niezależnie od trybu)
     // Wzór: (liczba zawodników przed piłką - liczba przeciwników za piłką)
     let totalOverallPlayerDifference = 0; // Suma różnic dla wszystkich akcji regainów
@@ -760,7 +822,14 @@ export default function PlayerDetailsPage() {
     let pxtSenderFromP1 = 0;
     let pxtSenderFromOther = 0;
     
-    // Liczniki akcji jako podający
+    // Liczniki akcji jako podający - miejsca startowe (P0-P3 Start)
+    let senderP0StartCount = 0;
+    let senderP1StartCount = 0;
+    let senderP2StartCount = 0;
+    let senderP3StartCount = 0;
+    
+    // Liczniki akcji jako podający - miejsca końcowe (P0-P3)
+    let senderP0Count = 0;
     let senderP1Count = 0;
     let senderP2Count = 0;
     let senderP3Count = 0;
@@ -807,7 +876,20 @@ export default function PlayerDetailsPage() {
       return letter === 'A' || letter === 'B' || letter === 'G' || letter === 'H';
     };
 
-    // Liczniki akcji jako podający - strefy boczne
+    // Liczniki akcji jako podający - miejsca startowe - strefy boczne
+    let senderP0StartCountLateral = 0;
+    let senderP1StartCountLateral = 0;
+    let senderP2StartCountLateral = 0;
+    let senderP3StartCountLateral = 0;
+    
+    // Liczniki akcji jako podający - miejsca startowe - strefy centralne
+    let senderP0StartCountCentral = 0;
+    let senderP1StartCountCentral = 0;
+    let senderP2StartCountCentral = 0;
+    let senderP3StartCountCentral = 0;
+    
+    // Liczniki akcji jako podający - miejsca końcowe - strefy boczne
+    let senderP0CountLateral = 0;
     let senderP1CountLateral = 0;
     let senderP2CountLateral = 0;
     let senderP3CountLateral = 0;
@@ -815,7 +897,8 @@ export default function PlayerDetailsPage() {
     let senderShotCountLateral = 0;
     let senderGoalCountLateral = 0;
 
-    // Liczniki akcji jako podający - strefy centralne
+    // Liczniki akcji jako podający - miejsca końcowe - strefy centralne
+    let senderP0CountCentral = 0;
     let senderP1CountCentral = 0;
     let senderP2CountCentral = 0;
     let senderP3CountCentral = 0;
@@ -903,6 +986,11 @@ export default function PlayerDetailsPage() {
     // Loses: from (z której strefy tracił piłkę)
     const losesHeatmap = new Map<string, number>();
     const losesActionCountHeatmap = new Map<string, number>();
+    const losesAttackHeatmap = new Map<string, number>(); // xT w ataku (losesAttackXT) - klucz to losesAttackZone
+    const losesDefenseHeatmap = new Map<string, number>(); // xT w obronie (losesDefenseXT) - klucz to losesDefenseZone
+    const losesAttackCountHeatmap = new Map<string, number>(); // Liczba akcji w ataku - klucz to losesAttackZone
+    const losesDefenseCountHeatmap = new Map<string, number>(); // Liczba akcji w obronie - klucz to losesDefenseZone
+    const losesZoneStats = new Map<string, Action[]>(); // Lista akcji strat dla każdej strefy
     
     // Statystyki dla każdej strefy - kto podawał do wybranego zawodnika (tylko dla receiver)
     // Map<zoneName, Map<playerId, { passes: number, pxt: number, p1Count: number, p2Count: number, p3Count: number, pkCount: number, shotCount: number, goalCount: number }>>
@@ -1034,6 +1122,33 @@ export default function PlayerDetailsPage() {
         // Licz tylko akcje, które mają strefę (tak jak heatmapa)
         if (zoneForBreakdown) {
           const senderIsLateral = isLateralZone(zoneForBreakdown);
+          
+          // Miejsca startowe (P0-P3 Start) - używamy strefy źródłowej (fromZone/startZone)
+          const startZoneName = convertZoneToName(action.fromZone || action.startZone);
+          if (startZoneName) {
+            const startZoneIsLateral = isLateralZone(startZoneName);
+            
+            if (action.isP0Start) {
+              senderP0StartCount += 1;
+              if (startZoneIsLateral) senderP0StartCountLateral += 1;
+              else senderP0StartCountCentral += 1;
+            }
+            if (action.isP1Start) {
+              senderP1StartCount += 1;
+              if (startZoneIsLateral) senderP1StartCountLateral += 1;
+              else senderP1StartCountCentral += 1;
+            }
+            if (action.isP2Start) {
+              senderP2StartCount += 1;
+              if (startZoneIsLateral) senderP2StartCountLateral += 1;
+              else senderP2StartCountCentral += 1;
+            }
+            if (action.isP3Start) {
+              senderP3StartCount += 1;
+              if (startZoneIsLateral) senderP3StartCountLateral += 1;
+              else senderP3StartCountCentral += 1;
+            }
+          }
 
           // PK może być jednocześnie strzałem, więc sprawdzamy oba warunki niezależnie
           if (action.isPenaltyAreaEntry) {
@@ -1056,20 +1171,20 @@ export default function PlayerDetailsPage() {
             }
           }
           
-          // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
-          if (action.isP3 || action.isP3Start) {
+          // Miejsca końcowe (P1-P3) - używamy strefy docelowej (toZone/endZone) - tylko isP1, isP2, isP3 (bez Start)
+          if (action.isP3) {
             pxtSenderFromP3 += pxtValue;
             senderP3Count += 1;
             if (senderIsLateral) senderP3CountLateral += 1;
             else senderP3CountCentral += 1;
           }
-          if (action.isP2 || action.isP2Start) {
+          if (action.isP2) {
             pxtSenderFromP2 += pxtValue;
             senderP2Count += 1;
             if (senderIsLateral) senderP2CountLateral += 1;
             else senderP2CountCentral += 1;
           }
-          if (action.isP1 || action.isP1Start) {
+          if (action.isP1) {
             pxtSenderFromP1 += pxtValue;
             senderP1Count += 1;
             if (senderIsLateral) senderP1CountLateral += 1;
@@ -1077,7 +1192,7 @@ export default function PlayerDetailsPage() {
           }
           
           // Inne akcje (które nie są PK, strzałem, P1, P2, P3)
-          if (!action.isPenaltyAreaEntry && !action.isShot && !(action.isP3 || action.isP3Start) && !(action.isP2 || action.isP2Start) && !(action.isP1 || action.isP1Start)) {
+          if (!action.isPenaltyAreaEntry && !action.isShot && !action.isP3 && !action.isP2 && !action.isP1) {
             pxtSenderFromOther += pxtValue;
           }
         }
@@ -1126,19 +1241,20 @@ export default function PlayerDetailsPage() {
           }
           
           // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
-          if (action.isP3 || action.isP3Start) {
+          // Używamy tylko isP3, isP2, isP1 (bez Start) dla miejsc końcowych
+          if (action.isP3) {
             pxtReceiverFromP3 += pxtValue;
             receiverP3Count += 1;
             if (receiverIsLateral) receiverP3CountLateral += 1;
             else receiverP3CountCentral += 1;
           }
-          if (action.isP2 || action.isP2Start) {
+          if (action.isP2) {
             pxtReceiverFromP2 += pxtValue;
             receiverP2Count += 1;
             if (receiverIsLateral) receiverP2CountLateral += 1;
             else receiverP2CountCentral += 1;
           }
-          if (action.isP1 || action.isP1Start) {
+          if (action.isP1) {
             pxtReceiverFromP1 += pxtValue;
             receiverP1Count += 1;
             if (receiverIsLateral) receiverP1CountLateral += 1;
@@ -1146,7 +1262,7 @@ export default function PlayerDetailsPage() {
           }
           
           // Inne akcje (które nie są PK, strzałem, P1, P2, P3)
-          if (!action.isPenaltyAreaEntry && !action.isShot && !(action.isP3 || action.isP3Start) && !(action.isP2 || action.isP2Start) && !(action.isP1 || action.isP1Start)) {
+          if (!action.isPenaltyAreaEntry && !action.isShot && !action.isP3 && !action.isP2 && !action.isP1) {
             pxtReceiverFromOther += pxtValue;
           }
         }
@@ -1193,19 +1309,20 @@ export default function PlayerDetailsPage() {
           }
           
           // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
-          if (action.isP3 || action.isP3Start) {
+          // Używamy tylko isP3, isP2, isP1 (bez Start) dla miejsc końcowych
+          if (action.isP3) {
             pxtDribblingFromP3 += pxtValue;
             dribblingP3Count += 1;
             if (dribblingIsLateral) dribblingP3CountLateral += 1;
             else dribblingP3CountCentral += 1;
           }
-          if (action.isP2 || action.isP2Start) {
+          if (action.isP2) {
             pxtDribblingFromP2 += pxtValue;
             dribblingP2Count += 1;
             if (dribblingIsLateral) dribblingP2CountLateral += 1;
             else dribblingP2CountCentral += 1;
           }
-          if (action.isP1 || action.isP1Start) {
+          if (action.isP1) {
             pxtDribblingFromP1 += pxtValue;
             dribblingP1Count += 1;
             if (dribblingIsLateral) dribblingP1CountLateral += 1;
@@ -1213,7 +1330,7 @@ export default function PlayerDetailsPage() {
           }
           
           // Inne akcje (które nie są PK, strzałem, P1, P2, P3)
-          if (!action.isPenaltyAreaEntry && !action.isShot && !(action.isP3 || action.isP3Start) && !(action.isP2 || action.isP2Start) && !(action.isP1 || action.isP1Start)) {
+          if (!action.isPenaltyAreaEntry && !action.isShot && !action.isP3 && !action.isP2 && !action.isP1) {
             pxtDribblingFromOther += pxtValue;
           }
         }
@@ -1225,14 +1342,26 @@ export default function PlayerDetailsPage() {
       // Filtruj akcje według wybranego typu akcji (P1, P2, P3, PK, Strzał, Gol)
       // Filtr wpływa tylko na heatmapę, nie na liczniki (które są już obliczone powyżej)
       if (selectedActionFilter) {
-        // Użyj tej samej logiki co w licznikach - sprawdź isP1, isP2, isP3, isP1Start, isP2Start, isP3Start
-        const isP1 = action.isP1 || action.isP1Start || false;
-        const isP2 = action.isP2 || action.isP2Start || false;
-        const isP3 = action.isP3 || action.isP3Start || false;
+        // Użyj tej samej logiki co w licznikach - sprawdź isP0, isP1, isP2, isP3, isP0Start, isP1Start, isP2Start, isP3Start
+        const isP0Start = action.isP0Start || false;
+        const isP1Start = action.isP1Start || false;
+        const isP2Start = action.isP2Start || false;
+        const isP3Start = action.isP3Start || false;
+        const isP0 = action.isP0 || false;
+        const isP1 = action.isP1 || false;
+        const isP2 = action.isP2 || false;
+        const isP3 = action.isP3 || false;
         const isPK = action.isPenaltyAreaEntry || false;
         const isShot = action.isShot || false;
         const isGoal = action.isGoal || false;
 
+        // Filtry dla P0-P3 Start (używają isP0Start, isP1Start, isP2Start, isP3Start)
+        if (selectedActionFilter === 'p0start' && !isP0Start) return;
+        if (selectedActionFilter === 'p1start' && !isP1Start) return;
+        if (selectedActionFilter === 'p2start' && !isP2Start) return;
+        if (selectedActionFilter === 'p3start' && !isP3Start) return;
+        // Filtry dla P0-P3 (używają isP0, isP1, isP2, isP3)
+        if (selectedActionFilter === 'p0' && !isP0) return;
         if (selectedActionFilter === 'p1' && !isP1) return;
         if (selectedActionFilter === 'p2' && !isP2) return;
         if (selectedActionFilter === 'p3' && !isP3) return;
@@ -1244,7 +1373,15 @@ export default function PlayerDetailsPage() {
       // PxT i xT
       const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
       const packingPoints = action.packingPoints || 0;
-      const pxtValue = xTDifference * packingPoints;
+      let pxtValue = xTDifference * packingPoints;
+      
+      // Dla goli, jeśli pxtValue jest 0, ale akcja jest golem, ustaw minimalną wartość > 0
+      // aby była widoczna w trybie "PxT" (komponent PlayerHeatmapPitch wyświetla tylko wartości > 0)
+      if (action.isGoal && pxtValue === 0 && selectedActionFilter === 'goal') {
+        // Ustaw minimalną wartość, aby gol był widoczny w trybie "PxT"
+        // Używamy bardzo małej wartości > 0, aby była widoczna, ale nie zniekształcała skali
+        pxtValue = 0.001;
+      }
 
       // PxT jako podający (sender) - tylko dla podań
       // Podstawowe statystyki (pxtAsSender, totalPxT, etc.) są już obliczone w pierwszej pętli
@@ -1255,6 +1392,8 @@ export default function PlayerDetailsPage() {
         // Wypełnij heatmapę tylko jeśli heatmapDirection === 'from' (aby zgadzało się z licznikami)
         if (fromZoneName && heatmapDirection === 'from') {
           const currentValue = senderFromHeatmap.get(fromZoneName) || 0;
+          // Dla goli (i innych akcji) zawsze dodajemy wartość, nawet jeśli pxtValue jest 0
+          // W trybie "PxT" wartość 0 nie będzie wyświetlana, ale w trybie "Liczba akcji" będzie
           senderFromHeatmap.set(fromZoneName, currentValue + pxtValue);
           const currentCount = senderFromActionCountHeatmap.get(fromZoneName) || 0;
           senderFromActionCountHeatmap.set(fromZoneName, currentCount + 1);
@@ -1754,15 +1893,132 @@ export default function PlayerDetailsPage() {
         }
       }
 
-      // Straty
+      // Straty - oblicz statystyki podobnie jak dla regainów
+      const isLosesAction = (action: any) => {
+        // Jeśli akcja ma _actionSource, użyj tego (najbardziej niezawodne)
+        if (action._actionSource) {
+          return action._actionSource === 'loses';
+        }
+        
+        // Fallback: sprawdź pola akcji
+        // Loses: ma isReaction5s LUB ma isBelow8s ale NIE MA playersBehindBall/opponentsBehindBall
+        const isLoses = action.isReaction5s !== undefined || 
+                       (action.isBelow8s !== undefined && 
+                        action.playersBehindBall === undefined && 
+                        action.opponentsBehindBall === undefined);
+        
+        return isLoses;
+      };
+      
       if (
-        (action.isReaction5s !== undefined ||
-         (action.isBelow8s !== undefined &&
-          action.playersBehindBall === undefined &&
-          action.opponentsBehindBall === undefined)) &&
+        isLosesAction(action) &&
         action.senderId === targetPlayerId
       ) {
         totalLoses += 1;
+        
+        // Strefa, w której zawodnik stracił piłkę - używamy nowych pól
+        const losesDefenseZone = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+        const losesZoneName = convertZoneToName(losesDefenseZone);
+        
+        if (losesZoneName) {
+          // Liczba akcji
+          const currentCount = losesActionCountHeatmap.get(losesZoneName) || 0;
+          losesActionCountHeatmap.set(losesZoneName, currentCount + 1);
+          
+          // xT odbiorców - dla loses używamy losesDefenseXT (wartość w obronie)
+          const receiverXT = action.losesDefenseXT !== undefined 
+            ? action.losesDefenseXT 
+            : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+          const currentXT = losesHeatmap.get(losesZoneName) || 0;
+          losesHeatmap.set(losesZoneName, currentXT + receiverXT);
+          
+          // Wartość xT w obronie - używamy losesDefenseXT (nowe pole) lub starych pól dla backward compatibility
+          const defenseXT = action.losesDefenseXT !== undefined 
+            ? action.losesDefenseXT 
+            : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+          
+          // Wartość xT w ataku - używamy losesAttackXT (nowe pole) lub starych pól dla backward compatibility
+          const attackXT = action.losesAttackXT !== undefined 
+            ? action.losesAttackXT 
+            : (action.oppositeXT !== undefined 
+              ? action.oppositeXT 
+              : (() => {
+                  // Oblicz dynamicznie jeśli nie ma w obiekcie (dla starych akcji)
+                  const zoneIndex = zoneNameToIndex(losesZoneName);
+                  return zoneIndex !== null ? getOppositeXTValueForZone(zoneIndex) : 0;
+                })());
+          
+          // Strefa ataku - używamy nowych pól
+          const losesAttackZone = action.losesAttackZone || action.oppositeZone;
+          const oppositeZoneName = losesAttackZone 
+            ? convertZoneToName(losesAttackZone)
+            : getOppositeZoneName(losesZoneName);
+          
+          // Zbierz statystyki xT w ataku i obronie
+          // Dla loses zawsze dodajemy do obu statystyk (atak i obrona), bo każda akcja ma obie wartości
+          // - defenseXT to wartość w obronie (losesDefenseXT)
+          // - attackXT to wartość w ataku (losesAttackXT)
+          
+          // Zawsze dodajemy wartość w obronie (defenseXT)
+          losesXTInDefense += defenseXT;
+          losesDefenseCount += 1;
+          
+          // Zawsze dodajemy wartość w ataku (attackXT)
+          losesXTInAttack += attackXT;
+          losesAttackCount += 1;
+          
+          // Dla "W ataku" i "W obronie":
+          // - "W obronie": klucz to losesDefenseZone, wartość to losesDefenseXT (wartość w obronie)
+          // - "W ataku": klucz to losesAttackZone, wartość to losesAttackXT (wartość w ataku)
+          // Zawsze dodajemy do obu heatmap
+          // "W ataku" - pokazuje losesAttackXT na losesAttackZone
+          if (oppositeZoneName) {
+            const currentAttackXT = losesAttackHeatmap.get(oppositeZoneName) || 0;
+            losesAttackHeatmap.set(oppositeZoneName, currentAttackXT + attackXT);
+            // Liczba akcji w ataku - zawsze dodajemy
+            const currentAttackCount = losesAttackCountHeatmap.get(oppositeZoneName) || 0;
+            losesAttackCountHeatmap.set(oppositeZoneName, currentAttackCount + 1);
+          }
+          
+          // "W obronie" - pokazuje losesDefenseXT na losesDefenseZone
+          if (losesZoneName) {
+            const currentDefenseXT = losesDefenseHeatmap.get(losesZoneName) || 0;
+            losesDefenseHeatmap.set(losesZoneName, currentDefenseXT + defenseXT);
+            // Liczba akcji w obronie - zawsze dodajemy
+            const currentDefenseCount = losesDefenseCountHeatmap.get(losesZoneName) || 0;
+            losesDefenseCountHeatmap.set(losesZoneName, currentDefenseCount + 1);
+          }
+          
+          // Zbierz akcje dla tej strefy
+          if (!losesZoneStats.has(losesZoneName)) {
+            losesZoneStats.set(losesZoneName, []);
+          }
+          losesZoneStats.get(losesZoneName)!.push(action);
+          
+          // Liczniki według stref (P0, P1, P2, P3)
+          const isLateral = isLateralZone(losesZoneName);
+          
+          if (action.isP0) {
+            losesP0Count += 1;
+            if (isLateral) losesP0CountLateral += 1;
+            else losesP0CountCentral += 1;
+          }
+          if (action.isP1) {
+            losesP1Count += 1;
+            if (isLateral) losesP1CountLateral += 1;
+            else losesP1CountCentral += 1;
+          }
+          if (action.isP2) {
+            losesP2Count += 1;
+            if (isLateral) losesP2CountLateral += 1;
+            else losesP2CountCentral += 1;
+          }
+          if (action.isP3) {
+            losesP3Count += 1;
+            if (isLateral) losesP3CountLateral += 1;
+            else losesP3CountCentral += 1;
+          }
+        }
       }
 
       // Wejścia w PK
@@ -1952,6 +2208,15 @@ export default function PlayerDetailsPage() {
       regainAverageOverallPlayerDifference: totalRegains > 0 ? totalOverallPlayerDifference / totalRegains : 0,
       regainAverageOverallPlayersBefore: totalRegains > 0 ? totalOverallPlayersBefore / totalRegains : 0,
       regainAverageOverallOpponentsBehind: totalRegains > 0 ? totalOverallOpponentsBehind / totalRegains : 0,
+      // Średnie wartości zawodników dla strat - w ataku
+      losesAverageAttackPlayerDifference: losesAttackCount > 0 ? totalLosesAttackPlayerDifference / losesAttackCount : 0,
+      losesAverageAttackPlayersBehind: losesAttackCount > 0 ? totalLosesAttackPlayersBehind / losesAttackCount : 0,
+      losesAverageAttackPlayersBefore: losesAttackCount > 0 ? totalLosesAttackPlayersBefore / losesAttackCount : 0,
+      losesAverageAttackOpponentsBehind: losesAttackCount > 0 ? totalLosesAttackOpponentsBehind / losesAttackCount : 0,
+      // Średnie wartości zawodników dla strat - w obronie
+      losesAverageDefensePlayerDifference: losesDefenseCount > 0 ? totalLosesDefensePlayerDifference / losesDefenseCount : 0,
+      losesAverageDefensePlayersUnderBall: losesDefenseCount > 0 ? totalLosesDefensePlayersUnderBall / losesDefenseCount : 0,
+      losesAverageDefenseOpponentsUnderBall: losesDefenseCount > 0 ? totalLosesDefenseOpponentsUnderBall / losesDefenseCount : 0,
       // Liczniki regainów według stref
       regainP0Count,
       regainP1Count,
@@ -1984,21 +2249,39 @@ export default function PlayerDetailsPage() {
       // Liczniki podań
       senderPassCount,
       receiverPassCount,
-      // Liczniki akcji jako podający
+      // Liczniki akcji jako podający - miejsca startowe (P0-P3 Start)
+      senderP0StartCount,
+      senderP1StartCount,
+      senderP2StartCount,
+      senderP3StartCount,
+      // Liczniki akcji jako podający - miejsca startowe - strefy boczne
+      senderP0StartCountLateral,
+      senderP1StartCountLateral,
+      senderP2StartCountLateral,
+      senderP3StartCountLateral,
+      // Liczniki akcji jako podający - miejsca startowe - strefy centralne
+      senderP0StartCountCentral,
+      senderP1StartCountCentral,
+      senderP2StartCountCentral,
+      senderP3StartCountCentral,
+      // Liczniki akcji jako podający - miejsca końcowe (P0-P3)
+      senderP0Count,
       senderP1Count,
       senderP2Count,
       senderP3Count,
       senderPKCount,
       senderShotCount,
       senderGoalCount,
-      // Liczniki akcji jako podający - strefy boczne
+      // Liczniki akcji jako podający - miejsca końcowe - strefy boczne
+      senderP0CountLateral,
       senderP1CountLateral,
       senderP2CountLateral,
       senderP3CountLateral,
       senderPKCountLateral,
       senderShotCountLateral,
       senderGoalCountLateral,
-      // Liczniki akcji jako podający - strefy centralne
+      // Liczniki akcji jako podający - miejsca końcowe - strefy centralne
+      senderP0CountCentral,
       senderP1CountCentral,
       senderP2CountCentral,
       senderP3CountCentral,
@@ -2077,6 +2360,32 @@ export default function PlayerDetailsPage() {
       regainAttackCountHeatmap: new Map(regainAttackCountHeatmap),
       regainDefenseCountHeatmap: new Map(regainDefenseCountHeatmap),
       regainZoneStats: new Map(Array.from(regainZoneStats.entries()).map(([zone, actions]) => [zone, [...actions]])),
+      // Statystyki strat - xT w ataku i obronie
+      losesXTInAttack,
+      losesXTInDefense,
+      losesAttackCount,
+      losesDefenseCount,
+      // Liczniki strat według stref
+      losesP0Count,
+      losesP1Count,
+      losesP2Count,
+      losesP3Count,
+      losesP0CountLateral,
+      losesP1CountLateral,
+      losesP2CountLateral,
+      losesP3CountLateral,
+      losesP0CountCentral,
+      losesP1CountCentral,
+      losesP2CountCentral,
+      losesP3CountCentral,
+      // Heatmapy - Straty
+      losesHeatmap: new Map(losesHeatmap),
+      losesActionCountHeatmap: new Map(losesActionCountHeatmap),
+      losesAttackHeatmap: new Map(losesAttackHeatmap),
+      losesDefenseHeatmap: new Map(losesDefenseHeatmap),
+      losesAttackCountHeatmap: new Map(losesAttackCountHeatmap),
+      losesDefenseCountHeatmap: new Map(losesDefenseCountHeatmap),
+      losesZoneStats: new Map(Array.from(losesZoneStats.entries()).map(([zone, actions]) => [zone, [...actions]])),
       // Statystyki zawodników dla każdej strefy (dla receiver)
       // Dla kierunku "from": zawodnicy, którzy podawali Z tej strefy
       zonePlayerStatsFrom: new Map(Array.from(zonePlayerStatsFrom.entries()).map(([zone, players]) => [
@@ -2103,7 +2412,7 @@ export default function PlayerDetailsPage() {
       partnerStatsAsSender: new Map(partnerStatsAsSender),
       partnerStatsAsReceiver: new Map(partnerStatsAsReceiver),
     };
-  }, [player, allActions, filteredMatchesBySeason, selectedMatchIds, totalMinutes, positionMinutes, selectedPlayerForView, selectedActionFilter, heatmapDirection]);
+  }, [player, allActions, filteredMatchesBySeason, selectedMatchIds, totalMinutes, positionMinutes, selectedPlayerForView, heatmapDirection]);
 
   // Oblicz ranking w zespole dla statystyk zawodnika
   const teamRanking = useMemo(() => {
@@ -2219,6 +2528,54 @@ export default function PlayerDetailsPage() {
         dribblingActionsCount += 1;
       });
       
+      // Oblicz statystyki regainów dla innych zawodników
+      const isRegainAction = (action: any) => {
+        if (action._actionSource) {
+          return action._actionSource === 'regain';
+        }
+        const hasRegainFields = action.playersBehindBall !== undefined || action.opponentsBehindBall !== undefined;
+        const isLoses = action.isReaction5s !== undefined || 
+                       (action.isBelow8s !== undefined && 
+                        action.playersBehindBall === undefined && 
+                        action.opponentsBehindBall === undefined);
+        return hasRegainFields && !isLoses;
+      };
+      
+      const regainActions = allTeamActions.filter(action => {
+        if (selectedMatchIds.length > 0) {
+          if (!selectedMatchIds.includes(action.matchId || "")) return false;
+        }
+        return isRegainAction(action) && action.senderId === teamPlayer.id;
+      });
+      
+      let totalRegains = 0;
+      let regainXTInAttack = 0;
+      let regainXTInDefense = 0;
+      let regainAttackCount = 0;
+      let regainDefenseCount = 0;
+      
+      regainActions.forEach(action => {
+        totalRegains += 1;
+        
+        // Wartość xT w obronie
+        const defenseXT = action.regainDefenseXT !== undefined 
+          ? action.regainDefenseXT 
+          : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+        
+        // Wartość xT w ataku
+        const attackXT = action.regainAttackXT !== undefined 
+          ? action.regainAttackXT 
+          : (action.oppositeXT !== undefined 
+            ? action.oppositeXT 
+            : 0);
+        
+        // Zawsze dodajemy do obu statystyk
+        regainXTInDefense += defenseXT;
+        regainDefenseCount += 1;
+        regainXTInAttack += attackXT;
+        regainAttackCount += 1;
+      });
+      
       return {
         playerId: teamPlayer.id,
         pxtAsSender,
@@ -2233,6 +2590,14 @@ export default function PlayerDetailsPage() {
         pxtDribblingPer90: pxtAsDribbler * per90Multiplier,
         dribblingActionsPer90: dribblingActionsCount * per90Multiplier,
         pxtDribblingPerAction: dribblingActionsCount > 0 ? pxtAsDribbler / dribblingActionsCount : 0,
+        totalRegains,
+        regainsPer90: totalRegains * per90Multiplier,
+        regainXTInAttack,
+        regainXTInDefense,
+        regainXTInAttackPer90: regainXTInAttack * per90Multiplier,
+        regainXTInDefensePer90: regainXTInDefense * per90Multiplier,
+        regainXTInAttackPerAction: regainAttackCount > 0 ? regainXTInAttack / regainAttackCount : 0,
+        regainXTInDefensePerAction: regainDefenseCount > 0 ? regainXTInDefense / regainDefenseCount : 0,
       };
     });
     
@@ -2483,10 +2848,13 @@ export default function PlayerDetailsPage() {
                   className={`${styles.categoryItem} ${expandedCategory === 'regains' ? styles.active : ''}`}
                   onClick={() => setExpandedCategory(expandedCategory === 'regains' ? null : 'regains')}
                 >
-                  <span className={styles.categoryName}>Regainy</span>
+                  <span className={styles.categoryName}>Przechwyty</span>
                   <span className={styles.categoryValue}>{playerStats.regainsPer90.toFixed(1)}</span>
                 </div>
-                <div className={styles.categoryItem}>
+                <div
+                  className={`${styles.categoryItem} ${expandedCategory === 'loses' ? styles.active : ''}`}
+                  onClick={() => setExpandedCategory(expandedCategory === 'loses' ? null : 'loses')}
+                >
                   <span className={styles.categoryName}>Straty</span>
                   <span className={styles.categoryValue}>{playerStats.losesPer90.toFixed(1)}</span>
                 </div>
@@ -2593,7 +2961,64 @@ export default function PlayerDetailsPage() {
                           </div>
                         </div>
                         <div className={styles.actionCounts}>
-                          <div className={styles.countItemsWrapper}>
+                          <div className={styles.countItemsWrapper} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 300px) minmax(0, 1fr)', gap: '16px', alignItems: 'flex-start' }}>
+                            {/* Miejsca startowe (P0-P3 Start) - po lewej stronie */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxWidth: '100%' }}>
+                              <div 
+                                className={`${styles.countItem} ${selectedActionFilter === 'p0start' ? styles.countItemSelected : ''}`}
+                                onClick={() => setSelectedActionFilter(selectedActionFilter === 'p0start' ? null : 'p0start')}
+                              >
+                                <span className={styles.countLabel}>P0 Start:</span>
+                                <span className={styles.countValue}>{playerStats.senderP0StartCount}</span>
+                                <div className={styles.zoneBreakdown}>
+                                  <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.senderP0StartCountLateral}</span>
+                                  <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.senderP0StartCountCentral}</span>
+                                </div>
+                              </div>
+                              <div 
+                                className={`${styles.countItem} ${selectedActionFilter === 'p1start' ? styles.countItemSelected : ''}`}
+                                onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1start' ? null : 'p1start')}
+                              >
+                                <span className={styles.countLabel}>P1 Start:</span>
+                                <span className={styles.countValue}>{playerStats.senderP1StartCount}</span>
+                                <div className={styles.zoneBreakdown}>
+                                  <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.senderP1StartCountLateral}</span>
+                                  <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.senderP1StartCountCentral}</span>
+                                </div>
+                              </div>
+                              <div 
+                                className={`${styles.countItem} ${selectedActionFilter === 'p2start' ? styles.countItemSelected : ''}`}
+                                onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2start' ? null : 'p2start')}
+                              >
+                                <span className={styles.countLabel}>P2 Start:</span>
+                                <span className={styles.countValue}>{playerStats.senderP2StartCount}</span>
+                                <div className={styles.zoneBreakdown}>
+                                  <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.senderP2StartCountLateral}</span>
+                                  <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.senderP2StartCountCentral}</span>
+                                </div>
+                              </div>
+                              <div 
+                                className={`${styles.countItem} ${selectedActionFilter === 'p3start' ? styles.countItemSelected : ''}`}
+                                onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3start' ? null : 'p3start')}
+                              >
+                                <span className={styles.countLabel}>P3 Start:</span>
+                                <span className={styles.countValue}>{playerStats.senderP3StartCount}</span>
+                                <div className={styles.zoneBreakdown}>
+                                  <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.senderP3StartCountLateral}</span>
+                                  <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.senderP3StartCountCentral}</span>
+                                </div>
+                              </div>
+                            </div>
+                            {/* Miejsca końcowe (P1-P3) - po prawej stronie */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', minWidth: 0 }}>
                             <div 
                               className={`${styles.countItem} ${selectedActionFilter === 'p1' ? styles.countItemSelected : ''}`}
                               onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1' ? null : 'p1')}
@@ -2671,6 +3096,7 @@ export default function PlayerDetailsPage() {
                                 <span className={styles.zoneLabel}>Strefy centralne:</span>
                                 <span className={styles.zoneValue}>{playerStats.senderGoalCountCentral}</span>
                               </div>
+                            </div>
                             </div>
                           </div>
                         </div>
@@ -3525,7 +3951,7 @@ export default function PlayerDetailsPage() {
 
                 {expandedCategory === 'regains' && (
                   <div className={styles.regainsDetails}>
-                    <h3 style={{ marginBottom: '20px', marginTop: '0' }}>Szczegóły Regainów</h3>
+                    <h3 style={{ marginBottom: '20px', marginTop: '0' }}>Szczegóły Przechwytów</h3>
                     
                     {/* Przełącznik atak/obrona - pod tytułem */}
                     <div className={styles.heatmapModeToggle} style={{ marginBottom: '20px', width: 'auto', display: 'inline-flex' }}>
@@ -3553,7 +3979,7 @@ export default function PlayerDetailsPage() {
                         {playerStats.regainXTInAttack !== undefined && playerStats.regainXTInDefense !== undefined && (
                           <>
                             <div className={styles.detailsRow}>
-                              <span className={styles.detailsLabel}>REGAINY:</span>
+                              <span className={styles.detailsLabel}>PRZECHWYTY:</span>
                               <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                 <span className={styles.valueMain}><strong>{playerStats.totalRegains}</strong></span>
                                 <span className={styles.valueSecondary}>({playerStats.regainsPer90.toFixed(1)} / 90 min)</span>
@@ -4027,7 +4453,7 @@ export default function PlayerDetailsPage() {
                             </div>
                             <div className={styles.zoneDetailsBody}>
                               <p className={styles.zoneDetailsSubtitle}>
-                                Regainy w strefie {selectedRegainZone}:
+                                Przechwyty w strefie {selectedRegainZone}:
                               </p>
                               {regainZoneActions && regainZoneActions.length > 0 ? (
                                 <div className={styles.zonePlayersList}>
@@ -4267,10 +4693,10 @@ export default function PlayerDetailsPage() {
                                           return (
                                             <div className={styles.chartTooltip}>
                                               <p><strong>{data.matchName}</strong></p>
-                                              <p>Regainy: {data.regains}</p>
+                                              <p>Przechwyty: {data.regains}</p>
                                               <p>xT: {data.xt?.toFixed(3) || '0.000'}</p>
                                               <p>Minuty: {data.minutes}</p>
-                                              <p>Regainy/minutę: {data.regainsPerMinute.toFixed(3)}</p>
+                                              <p>Przechwyty/minutę: {data.regainsPerMinute.toFixed(3)}</p>
                                             </div>
                                           );
                                         }
@@ -4289,7 +4715,7 @@ export default function PlayerDetailsPage() {
                                         stroke: '#fff'
                                       }}
                                       activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: '#3b82f6' }}
-                                      name="Regainy"
+                                      name="Przechwyty"
                                       animationDuration={800}
                                       animationEasing="ease-out"
                                     />
@@ -4330,7 +4756,7 @@ export default function PlayerDetailsPage() {
                                       height={60}
                                     />
                                     <YAxis 
-                                      label={{ value: 'Regainy', angle: -90, position: 'insideLeft' }}
+                                      label={{ value: 'Przechwyty', angle: -90, position: 'insideLeft' }}
                                       tick={{ fontSize: 12 }}
                                     />
                                     <Tooltip 
@@ -4340,7 +4766,7 @@ export default function PlayerDetailsPage() {
                                           return (
                                             <div className={styles.chartTooltip}>
                                               <p className={styles.tooltipLabel}>{`Przedział: ${data.minute} min`}</p>
-                                              <p style={{ color: '#3b82f6' }}>Regainy: {data.regains}</p>
+                                              <p style={{ color: '#3b82f6' }}>Przechwyty: {data.regains}</p>
                                             </div>
                                           );
                                         }
@@ -4359,7 +4785,7 @@ export default function PlayerDetailsPage() {
                                         stroke: '#fff'
                                       }}
                                       activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2, fill: '#3b82f6' }}
-                                      name="Regainy"
+                                      name="Przechwyty"
                                     />
                                   </LineChart>
                                 </ResponsiveContainer>
@@ -4424,9 +4850,9 @@ export default function PlayerDetailsPage() {
                                     </div>
                                   )}
                                   <div className={styles.detailsRow}>
-                                    <span className={styles.detailsLabel}>Regainy</span>
+                                    <span className={styles.detailsLabel}>Przechwyty</span>
                                     <span className={styles.detailsValue}>
-                                      <span className={styles.valueMain}><strong>{regainsCount}</strong> regainów</span>
+                                      <span className={styles.valueMain}><strong>{regainsCount}</strong> przechwytów</span>
                                       <span className={styles.valueSecondary}>({regainsPer90.toFixed(1)} / 90 min)</span>
                                     </span>
                                   </div>
@@ -4437,6 +4863,257 @@ export default function PlayerDetailsPage() {
                         )}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {expandedCategory === 'loses' && (
+                  <div className={styles.regainsDetails}>
+                    <h3 style={{ marginBottom: '20px', marginTop: '0' }}>Szczegóły Strat</h3>
+                    
+                    {/* Przełącznik atak/obrona - pod tytułem */}
+                    <div className={styles.heatmapModeToggle} style={{ marginBottom: '20px', width: 'auto', display: 'inline-flex' }}>
+                      <button
+                        className={`${styles.heatmapModeButton} ${losesAttackDefenseMode === 'defense' ? styles.active : ''}`}
+                        onClick={() => {
+                          setLosesAttackDefenseMode('defense');
+                        }}
+                      >
+                        W obronie
+                      </button>
+                      <button
+                        className={`${styles.heatmapModeButton} ${losesAttackDefenseMode === 'attack' ? styles.active : ''}`}
+                        onClick={() => {
+                          setLosesAttackDefenseMode('attack');
+                        }}
+                      >
+                        W ataku
+                      </button>
+                    </div>
+
+                    {/* Statystyki podstawowe */}
+                    <div className={styles.detailsSection} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                      <div className={styles.detailsSectionContent}>
+                        {playerStats.losesXTInAttack !== undefined && playerStats.losesXTInDefense !== undefined && (
+                          <>
+                            <div className={styles.detailsRow}>
+                              <span className={styles.detailsLabel}>STRATY:</span>
+                              <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <span className={styles.valueMain}><strong>{playerStats.totalLoses}</strong></span>
+                                <span className={styles.valueSecondary}>({playerStats.losesPer90.toFixed(1)} / 90 min)</span>
+                              </span>
+                            </div>
+                            {losesAttackDefenseMode === 'attack' && (
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', marginBottom: '8px' }}>
+                                <div className={styles.detailsRow}>
+                                  <span className={styles.detailsLabel}><span className={styles.preserveCase}>xT</span> W ATAKU:</span>
+                                  <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <span className={styles.valueMain}>{playerStats.losesXTInAttack.toFixed(3)}</span>
+                                    {playerStats.losesAttackCount > 0 && (
+                                      <>
+                                        <span className={styles.valueSecondary}> • {(playerStats.losesXTInAttack / playerStats.losesAttackCount).toFixed(3)}/akcję</span>
+                                      </>
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            {losesAttackDefenseMode === 'defense' && (
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', marginBottom: '8px' }}>
+                                <div className={styles.detailsRow}>
+                                  <span className={styles.detailsLabel}><span className={styles.preserveCase}>xT</span> W OBRONIE:</span>
+                                  <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <span className={styles.valueMain}>{playerStats.losesXTInDefense.toFixed(3)}</span>
+                                    {playerStats.losesDefenseCount > 0 && (
+                                      <>
+                                        <span className={styles.valueSecondary}> • {(playerStats.losesXTInDefense / playerStats.losesDefenseCount).toFixed(3)}/akcję</span>
+                                      </>
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {/* Wykres pokazuje różnicę zawodników - używa wartości zależnych od trybu */}
+                        {(() => {
+                          const actionCount = playerStats.totalLoses;
+                          
+                          // Wartości zależą od trybu - podobnie jak dla przechwytów
+                          const isAttackMode = losesAttackDefenseMode === 'attack';
+                          // Dla ataku: partnerzy za piłką, przeciwnicy przed piłką
+                          // Dla obrony: partnerzy za piłką (totalPlayersOnField - bramkarz - playersBehindBall), przeciwnicy za piłką (totalOpponentsOnField - bramkarz - opponentsBehindBall)
+                          const displayPlayersValue = isAttackMode
+                            ? (playerStats.losesAverageAttackPlayersBehind || 0) // Zawodnicy za piłką w ataku
+                            : (playerStats.losesAverageDefensePlayersUnderBall || 0); // Zawodnicy za piłką w obronie
+                          const displayOpponentsValue = isAttackMode
+                            ? (playerStats.losesAverageAttackOpponentsBehind || 0) // Przeciwnicy za piłką w ataku
+                            : (playerStats.losesAverageDefenseOpponentsUnderBall || 0); // Przeciwnicy za piłką w obronie
+                          
+                          // Oblicz różnicę z wartości wyświetlanych w tekście
+                          // Dla ataku: partnerzy za piłką - przeciwnicy za piłką
+                          // Dla obrony: przeciwnicy za piłką - nasi za piłką
+                          // Wzór dla obrony: (totalOpponentsOnField - bramkarz - opponentsBehindBall) - (totalPlayersOnField - bramkarz - playersBehindBall)
+                          const playerDifference = isAttackMode
+                            ? (displayPlayersValue || 0) - (displayOpponentsValue || 0) // Atak: partnerzy za piłką - przeciwnicy za piłką
+                            : (displayOpponentsValue || 0) - (displayPlayersValue || 0); // Obrona: przeciwnicy za piłką - nasi za piłką
+                          
+                          if (actionCount > 0) {
+                            // Oblicz pozycję na osi: -5 do +5, gdzie 0 to środek
+                            const normalizedValue = Math.max(-5, Math.min(5, playerDifference));
+                            
+                            // Pozycja w procentach
+                            const position = ((normalizedValue + 5) / 10) * 100;
+                            
+                            return (
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>
+                                  {losesAttackDefenseMode === 'attack' ? 'ZAWODNICY PRZED PIŁKĄ' : 'ZAWODNICY ZA PIŁKĄ'}
+                                </span>
+                                <div className={styles.attackDefenseSlider}>
+                                  <div className={styles.sliderLabels}>
+                                    <span className={styles.sliderLabel}>Obrona</span>
+                                    <span className={styles.sliderLabel}>Atak</span>
+                                  </div>
+                                  <div className={styles.sliderTrack}>
+                                    <div 
+                                      className={styles.sliderFill}
+                                      style={{
+                                        width: `${position}%`,
+                                        backgroundColor: normalizedValue >= 0 
+                                          ? '#3b82f6' 
+                                          : '#10b981'
+                                      }}
+                                    />
+                                    <div 
+                                      className={styles.sliderIndicator}
+                                      style={{
+                                        left: `${position}%`,
+                                        borderColor: normalizedValue >= 0 
+                                          ? '#3b82f6' 
+                                          : '#10b981'
+                                      }}
+                                    >
+                                      <span className={styles.sliderValue}>{Math.abs(playerDifference).toFixed(2)}</span>
+                                    </div>
+                                  </div>
+                                  <div className={styles.sliderScale}>
+                                    <span className={styles.scaleMark}>5</span>
+                                    <span className={styles.scaleMark}>4</span>
+                                    <span className={styles.scaleMark}>3</span>
+                                    <span className={styles.scaleMark}>2</span>
+                                    <span className={styles.scaleMark}>1</span>
+                                    <span className={styles.scaleMark}>0</span>
+                                    <span className={styles.scaleMark}>1</span>
+                                    <span className={styles.scaleMark}>2</span>
+                                    <span className={styles.scaleMark}>3</span>
+                                    <span className={styles.scaleMark}>4</span>
+                                    <span className={styles.scaleMark}>5</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                      <div className={styles.actionCounts}>
+                        <div className={styles.countItemsWrapper}>
+                          <div 
+                            className={`${styles.countItem} ${selectedLosesPackingFilter === 'P0' ? styles.countItemSelected : ''}`}
+                            onClick={() => setSelectedLosesPackingFilter(selectedLosesPackingFilter === 'P0' ? null : 'P0')}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <span className={styles.countLabel}>P0:</span>
+                            <span className={styles.countValue}>{playerStats.losesP0Count || 0}</span>
+                            <div className={styles.zoneBreakdown}>
+                              <span className={styles.zoneLabel}>Strefy boczne:</span>
+                              <span className={styles.zoneValue}>{playerStats.losesP0CountLateral || 0}</span>
+                              <span className={styles.zoneLabel}>Strefy centralne:</span>
+                              <span className={styles.zoneValue}>{playerStats.losesP0CountCentral || 0}</span>
+                            </div>
+                          </div>
+                          <div 
+                            className={`${styles.countItem} ${selectedLosesPackingFilter === 'P1' ? styles.countItemSelected : ''}`}
+                            onClick={() => setSelectedLosesPackingFilter(selectedLosesPackingFilter === 'P1' ? null : 'P1')}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <span className={styles.countLabel}>P1:</span>
+                            <span className={styles.countValue}>{playerStats.losesP1Count || 0}</span>
+                            <div className={styles.zoneBreakdown}>
+                              <span className={styles.zoneLabel}>Strefy boczne:</span>
+                              <span className={styles.zoneValue}>{playerStats.losesP1CountLateral || 0}</span>
+                              <span className={styles.zoneLabel}>Strefy centralne:</span>
+                              <span className={styles.zoneValue}>{playerStats.losesP1CountCentral || 0}</span>
+                            </div>
+                          </div>
+                          <div 
+                            className={`${styles.countItem} ${selectedLosesPackingFilter === 'P2' ? styles.countItemSelected : ''}`}
+                            onClick={() => setSelectedLosesPackingFilter(selectedLosesPackingFilter === 'P2' ? null : 'P2')}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <span className={styles.countLabel}>P2:</span>
+                            <span className={styles.countValue}>{playerStats.losesP2Count || 0}</span>
+                            <div className={styles.zoneBreakdown}>
+                              <span className={styles.zoneLabel}>Strefy boczne:</span>
+                              <span className={styles.zoneValue}>{playerStats.losesP2CountLateral || 0}</span>
+                              <span className={styles.zoneLabel}>Strefy centralne:</span>
+                              <span className={styles.zoneValue}>{playerStats.losesP2CountCentral || 0}</span>
+                            </div>
+                          </div>
+                          <div 
+                            className={`${styles.countItem} ${selectedLosesPackingFilter === 'P3' ? styles.countItemSelected : ''}`}
+                            onClick={() => setSelectedLosesPackingFilter(selectedLosesPackingFilter === 'P3' ? null : 'P3')}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <span className={styles.countLabel}>P3:</span>
+                            <span className={styles.countValue}>{playerStats.losesP3Count || 0}</span>
+                            <div className={styles.zoneBreakdown}>
+                              <span className={styles.zoneLabel}>Strefy boczne:</span>
+                              <span className={styles.zoneValue}>{playerStats.losesP3CountLateral || 0}</span>
+                              <span className={styles.zoneLabel}>Strefy centralne:</span>
+                              <span className={styles.zoneValue}>{playerStats.losesP3CountCentral || 0}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Boisko z heatmapą */}
+                    <div className={styles.detailsSection}>
+                      <div className={styles.heatmapHeader}>
+                        <h4>Heatmapa strat</h4>
+                        <div className={styles.heatmapControls}>
+                          <div className={styles.heatmapModeToggle} style={{ width: 'auto', display: 'inline-flex' }}>
+                            <button
+                              className={`${styles.heatmapModeButton} ${regainHeatmapMode === 'xt' ? styles.active : ''}`}
+                              onClick={() => setRegainHeatmapMode('xt')}
+                            >
+                              xT odbiorców
+                            </button>
+                            <button
+                              className={`${styles.heatmapModeButton} ${regainHeatmapMode === 'count' ? styles.active : ''}`}
+                              onClick={() => setRegainHeatmapMode('count')}
+                            >
+                              Liczba akcji
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className={styles.heatmapWrapper}>
+                        <div className={styles.heatmapContainer}>
+                          <PlayerHeatmapPitch
+                            heatmapData={playerStats.losesHeatmap || new Map<string, number>()}
+                            category="loses"
+                            mode={regainHeatmapMode === 'xt' ? 'pxt' : 'count'}
+                            mirrored={false}
+                            onZoneClick={(zoneName) => {
+                              // TODO: Implementacja kliknięcia na strefę dla strat
+                              setSelectedLosesZone(zoneName);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

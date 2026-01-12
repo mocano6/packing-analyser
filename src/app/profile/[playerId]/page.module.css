@@ -355,7 +355,7 @@
 /* Grid layout tylko dla sekcji z kafelkami */
 .detailsSectionWithTiles {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr minmax(0, 700px);
   gap: 20px;
   align-items: flex-start;
 }
@@ -1440,6 +1440,8 @@
   padding-top: 0;
   border-top: none;
   align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .countItemsWrapper {
