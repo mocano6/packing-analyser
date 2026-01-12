@@ -872,7 +872,7 @@ export default function Page() {
         return isRegain || isLoses;
       });
     } else if (actionCategory === "regain") {
-      // Regain: ma playersBehindBall lub opponentsBeforeBall, ale NIE ma isReaction5s
+      // Regain: ma playersBehindBall lub opponentsBehindBall, ale NIE ma isReaction5s
       // Kluczowa różnica: regain NIE ma isReaction5s
       return actions.filter(action => 
         (action.playersBehindBall !== undefined || 
@@ -1986,7 +1986,7 @@ export default function Page() {
     if (action.isReaction5s !== undefined) {
       return "loses";
     }
-    // Regain: ma playersBehindBall lub opponentsBeforeBall, ale NIE ma isReaction5s
+    // Regain: ma playersBehindBall lub opponentsBehindBall, ale NIE ma isReaction5s
     if (action.playersBehindBall !== undefined || 
         action.opponentsBehindBall !== undefined ||
         action.totalPlayersOnField !== undefined ||

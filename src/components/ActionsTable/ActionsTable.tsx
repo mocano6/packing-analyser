@@ -5,23 +5,33 @@ import React, { useMemo, useState, useEffect } from "react";
 import styles from "./ActionsTable.module.css";
 import { ActionsTableProps } from "@/components/ActionsTable/ActionsTable.types";
 import { Player, Action } from "@/types";
-import { getOppositeXTValueForZone, zoneNameToIndex, getZoneData } from "@/constants/xtValues";
+import { getOppositeXTValueForZone, zoneNameToIndex, getZoneData, getZoneName, zoneNameToString } from "@/constants/xtValues";
 
 // Funkcja do określenia kategorii akcji (spójna z page.tsx)
 const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
   // Loses: ma isReaction5s, isAut lub isReaction5sNotApplicable (którekolwiek z tych pól zdefiniowane)
+  // LUB ma pola specyficzne dla loses (losesAttackZone, losesDefenseZone, losesAttackXT, losesDefenseXT)
   if (action.isReaction5s !== undefined || 
       action.isAut !== undefined || 
-      action.isReaction5sNotApplicable !== undefined) {
+      action.isReaction5sNotApplicable !== undefined ||
+      action.losesAttackZone !== undefined ||
+      action.losesDefenseZone !== undefined ||
+      action.losesAttackXT !== undefined ||
+      action.losesDefenseXT !== undefined) {
     return "loses";
   }
   // Regain: ma playersBehindBall lub opponentsBehindBall, ale NIE ma isReaction5s
-  if (action.playersBehindBall !== undefined || 
-      action.opponentsBehindBall !== undefined ||
-      action.totalPlayersOnField !== undefined ||
-      action.totalOpponentsOnField !== undefined ||
-      action.playersLeftField !== undefined ||
-      action.opponentsLeftField !== undefined) {
+  // LUB ma pola specyficzne dla regain (regainAttackZone, regainDefenseZone, regainAttackXT, regainDefenseXT)
+  if (action.regainAttackZone !== undefined ||
+      action.regainDefenseZone !== undefined ||
+      action.regainAttackXT !== undefined ||
+      action.regainDefenseXT !== undefined ||
+      (action.playersBehindBall !== undefined || 
+       action.opponentsBehindBall !== undefined ||
+       action.totalPlayersOnField !== undefined ||
+       action.totalOpponentsOnField !== undefined ||
+       action.playersLeftField !== undefined ||
+       action.opponentsLeftField !== undefined)) {
     return "regain";
   }
   // Packing: domyślnie
@@ -202,15 +212,36 @@ const ActionRow = ({
       </div>
       <div className={styles.cell}>
         {(() => {
+          // Określ kategorię akcji dla tej konkretnej akcji
+          const currentActionCategory = getActionCategory(action);
           // Dla regain i loses wyświetlamy wartość xT z obrony (regainDefenseXT/losesDefenseXT)
-          if (actionCategory === "regain" || actionCategory === "loses") {
-            if (actionCategory === "regain") {
+          if (currentActionCategory === "regain" || currentActionCategory === "loses") {
+            if (currentActionCategory === "regain") {
               const xTValue = action.regainDefenseXT ?? action.xTValueStart ?? action.xTValueEnd ?? 0;
-              return typeof xTValue === 'number' ? xTValue.toFixed(3) : "-";
+              if (xTValue === undefined || xTValue === null) {
+                return "-";
+              }
+              const valueStr = typeof xTValue === 'number' ? xTValue.toFixed(3) : "-";
+              // Określ nazwę strefy na podstawie źródła wartości
+              let zoneName = "";
+              if (action.regainDefenseZone) {
+                zoneName = action.regainDefenseZone.toUpperCase();
+              } else if (action.fromZone) {
+                zoneName = action.fromZone.toUpperCase();
+              } else if (action.toZone) {
+                zoneName = action.toZone.toUpperCase();
+              } else if (action.startZone) {
+                zoneName = typeof action.startZone === 'string' ? action.startZone.toUpperCase() : String(action.startZone);
+              }
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <span>{valueStr}</span>
+                  {zoneName && <span style={{ fontSize: '10px', color: '#666' }}>{zoneName}</span>}
+                </div>
+              );
             } else {
               // Dla loses: użyj tego samego podejścia co dla regain
               // Najpierw sprawdź nowe pola, potem stare, na końcu oblicz z strefy
-              // Używamy bezpośredniego dostępu do wartości, sprawdzając czy są zdefiniowane
               let xTValue: number | undefined = undefined;
               
               // Sprawdź losesDefenseXT - może być 0, więc sprawdzamy typeof
@@ -227,11 +258,26 @@ const ActionRow = ({
                 }
               }
               
+              // Określ nazwę strefy PRZED obliczeniem z strefy (aby mieć dostęp do oryginalnej strefy)
+              let zoneName = "";
+              if (action.losesDefenseZone) {
+                zoneName = action.losesDefenseZone.toUpperCase();
+              } else if (action.fromZone) {
+                zoneName = action.fromZone.toUpperCase();
+              } else if (action.toZone) {
+                zoneName = action.toZone.toUpperCase();
+              } else if (action.startZone) {
+                zoneName = typeof action.startZone === 'string' ? action.startZone.toUpperCase() : String(action.startZone);
+              }
+              
               // Jeśli nadal brakuje, spróbuj obliczyć z strefy
               if (xTValue === undefined) {
-                const zoneName = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
-                if (zoneName) {
-                  const zoneIndex = zoneNameToIndex(zoneName);
+                const zoneNameForCalc = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+                if (zoneNameForCalc) {
+                  if (!zoneName) {
+                    zoneName = typeof zoneNameForCalc === 'string' ? zoneNameForCalc.toUpperCase() : String(zoneNameForCalc);
+                  }
+                  const zoneIndex = zoneNameToIndex(zoneNameForCalc);
                   if (zoneIndex !== null) {
                     // Dla loses, xT w obronie to wartość ze strefy gdzie nastąpiła strata (bezpośrednio ze strefy, nie opposite)
                     const zoneData = getZoneData(zoneIndex);
@@ -247,7 +293,13 @@ const ActionRow = ({
               if (xTValue === undefined || xTValue === null) {
                 return "-";
               }
-              return xTValue.toFixed(3);
+              const valueStr = xTValue.toFixed(3);
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <span>{valueStr}</span>
+                  {zoneName && <span style={{ fontSize: '10px', color: '#666' }}>{zoneName}</span>}
+                </div>
+              );
             }
           }
           // Dla packing obliczamy xT różnicę: xTEnd - xTStart
@@ -259,24 +311,67 @@ const ActionRow = ({
         })()}
       </div>
       {/* Dla regain i loses dodajemy kolumnę "Atak xT" */}
-      {(actionCategory === "regain" || actionCategory === "loses") && (
-        <div className={styles.cell}>
-          {(() => {
-            if (actionCategory === "regain") {
+      {(() => {
+        const currentActionCategory = getActionCategory(action);
+        return (currentActionCategory === "regain" || currentActionCategory === "loses") && (
+          <div className={styles.cell}>
+            {(() => {
+              if (currentActionCategory === "regain") {
               // Dla regain: użyj nowych pól lub oblicz z strefy
-              const attackXT = action.regainAttackXT ?? (() => {
+              let attackXT: number | undefined = action.regainAttackXT;
+              
+              // Określ nazwę strefy PRZED obliczeniem z strefy (aby mieć dostęp do oryginalnej strefy)
+              let zoneName = "";
+              if (action.regainAttackZone) {
+                zoneName = action.regainAttackZone.toUpperCase();
+              } else if (action.oppositeZone) {
+                zoneName = action.oppositeZone.toUpperCase();
+              } else if (action.startZone) {
+                zoneName = typeof action.startZone === 'string' ? action.startZone.toUpperCase() : String(action.startZone);
+              } else if (action.fromZone) {
+                zoneName = action.fromZone.toUpperCase();
+              }
+              
+              if (attackXT === undefined) {
                 // Fallback: oblicz z strefy jeśli brakuje
-                const zoneName = action.regainAttackZone || action.oppositeZone || action.startZone || action.fromZone;
-                if (!zoneName) return undefined;
-                const zoneIndex = zoneNameToIndex(zoneName);
-                if (zoneIndex === null) return undefined;
-                return getOppositeXTValueForZone(zoneIndex);
-              })();
-              return attackXT !== undefined && typeof attackXT === 'number' ? attackXT.toFixed(3) : "-";
+                const zoneNameForCalc = action.regainAttackZone || action.oppositeZone || action.startZone || action.fromZone;
+                if (zoneNameForCalc) {
+                  if (!zoneName) {
+                    zoneName = typeof zoneNameForCalc === 'string' ? zoneNameForCalc.toUpperCase() : String(zoneNameForCalc);
+                  }
+                  const zoneIndex = zoneNameToIndex(zoneNameForCalc);
+                  if (zoneIndex !== null) {
+                    attackXT = getOppositeXTValueForZone(zoneIndex);
+                  }
+                }
+              }
+              
+              if (attackXT === undefined || attackXT === null) {
+                return "-";
+              }
+              const valueStr = typeof attackXT === 'number' ? attackXT.toFixed(3) : "-";
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <span>{valueStr}</span>
+                  {zoneName && <span style={{ fontSize: '10px', color: '#666' }}>{zoneName}</span>}
+                </div>
+              );
             } else {
               // Dla loses: użyj tego samego podejścia co dla regain
               // Najpierw sprawdź nowe pola, potem stare, na końcu oblicz z strefy
               let attackXT: number | undefined = undefined;
+              
+              // Określ nazwę strefy PRZED obliczeniem z strefy (aby mieć dostęp do oryginalnej strefy)
+              let zoneName = "";
+              if (action.losesAttackZone) {
+                zoneName = action.losesAttackZone.toUpperCase();
+              } else if (action.oppositeZone) {
+                zoneName = action.oppositeZone.toUpperCase();
+              } else if (action.startZone) {
+                zoneName = typeof action.startZone === 'string' ? action.startZone.toUpperCase() : String(action.startZone);
+              } else if (action.fromZone) {
+                zoneName = action.fromZone.toUpperCase();
+              }
               
               // Sprawdź losesAttackXT - może być 0, więc sprawdzamy typeof
               if (action.losesAttackXT !== undefined && action.losesAttackXT !== null) {
@@ -290,9 +385,12 @@ const ActionRow = ({
               
               // Jeśli nadal brakuje, oblicz z strefy
               if (attackXT === undefined) {
-                const zoneName = action.losesAttackZone || action.oppositeZone || action.startZone || action.fromZone;
-                if (zoneName) {
-                  const zoneIndex = zoneNameToIndex(zoneName);
+                const zoneNameForCalc = action.losesAttackZone || action.oppositeZone || action.startZone || action.fromZone;
+                if (zoneNameForCalc) {
+                  if (!zoneName) {
+                    zoneName = typeof zoneNameForCalc === 'string' ? zoneNameForCalc.toUpperCase() : String(zoneNameForCalc);
+                  }
+                  const zoneIndex = zoneNameToIndex(zoneNameForCalc);
                   if (zoneIndex !== null) {
                     attackXT = getOppositeXTValueForZone(zoneIndex);
                   }
@@ -303,6 +401,21 @@ const ActionRow = ({
               if (attackXT === undefined) {
                 const defenseZoneName = action.losesDefenseZone || action.fromZone || action.toZone;
                 if (defenseZoneName) {
+                  if (!zoneName) {
+                    // Oblicz opposite zone name
+                    const defenseZoneIndex = zoneNameToIndex(defenseZoneName);
+                    if (defenseZoneIndex !== null) {
+                      const row = Math.floor(defenseZoneIndex / 12);
+                      const col = defenseZoneIndex % 12;
+                      const oppositeRow = 7 - row;
+                      const oppositeCol = 11 - col;
+                      const oppositeIndex = oppositeRow * 12 + oppositeCol;
+                      const oppositeZoneData = getZoneName(oppositeIndex);
+                      if (oppositeZoneData) {
+                        zoneName = zoneNameToString(oppositeZoneData).toUpperCase();
+                      }
+                    }
+                  }
                   const defenseZoneIndex = zoneNameToIndex(defenseZoneName);
                   if (defenseZoneIndex !== null) {
                     // Oblicz opposite zone i jego xT
@@ -321,11 +434,18 @@ const ActionRow = ({
               if (attackXT === undefined || attackXT === null) {
                 return "-";
               }
-              return attackXT.toFixed(3);
+              const valueStr = attackXT.toFixed(3);
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <span>{valueStr}</span>
+                  {zoneName && <span style={{ fontSize: '10px', color: '#666' }}>{zoneName}</span>}
+                </div>
+              );
             }
           })()}
         </div>
-      )}
+        );
+      })()}
       <div className={styles.cell}>
         {/* Dla regain i loses wyświetlamy "przed/za piłką" zamiast packingPoints */}
         {actionCategory === "regain" || actionCategory === "loses" ? (
@@ -432,9 +552,24 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   // Synchronizuj actionModeFilter z actionCategory i zapisuj wybór w localStorage
   useEffect(() => {
     if (actionCategory === "regain" || actionCategory === "loses") {
-      // Zapisz wybór w localStorage
-      if (typeof window !== 'undefined' && (actionModeFilter === 'regain' || actionModeFilter === 'loses')) {
-        localStorage.setItem(`actionModeFilter_${actionCategory}`, actionModeFilter);
+      // Jeśli actionModeFilter nie jest zgodny z actionCategory, zsynchronizuj go
+      if (actionModeFilter !== 'regain' && actionModeFilter !== 'loses') {
+        // Przywróć ostatni wybór z localStorage lub użyj actionCategory
+        if (typeof window !== 'undefined') {
+          const saved = localStorage.getItem(`actionModeFilter_${actionCategory}`);
+          if (saved === 'regain' || saved === 'loses') {
+            setActionModeFilter(saved);
+          } else {
+            setActionModeFilter(actionCategory);
+          }
+        } else {
+      setActionModeFilter(actionCategory);
+        }
+      } else {
+        // Zapisz wybór w localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`actionModeFilter_${actionCategory}`, actionModeFilter);
+        }
       }
     } else {
       // Dla packing zapisz wybór
@@ -442,7 +577,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         localStorage.setItem('actionModeFilter_packing', actionModeFilter);
       }
     }
-  }, [actionModeFilter, actionCategory]);
+  }, [actionCategory, actionModeFilter]);
 
   // Dodajemy state do śledzenia, czy jakieś akcje mają brakujące dane graczy
   const [hasMissingPlayerData, setHasMissingPlayerData] = useState(false);
@@ -531,7 +666,12 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
       if (actionCategory === "regain" || actionCategory === "loses") {
         // Dla regain/loses używamy funkcji getActionCategory do identyfikacji kategorii akcji
         const actionCat = getActionCategory(action);
-        return actionCat === actionModeFilter;
+        // Sprawdzamy, czy actionModeFilter jest 'regain' lub 'loses' (nie 'attack' lub 'defense')
+        if (actionModeFilter === 'regain' || actionModeFilter === 'loses') {
+          return actionCat === actionModeFilter;
+        }
+        // Fallback: jeśli actionModeFilter nie jest poprawny, użyj actionCategory
+        return actionCat === actionCategory;
       } else {
         // Dla packing filtrujemy po trybie (attack/defense)
         const actionMode = action.mode || 'attack';
