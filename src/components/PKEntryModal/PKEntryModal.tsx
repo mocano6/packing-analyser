@@ -377,47 +377,38 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
       ? parsedVideoTimestamp 
       : (editingEntry?.videoTimestamp);
 
+    // Przygotuj obiekt do zapisania
+    const entryDataToSave = {
+      matchId,
+      teamId: matchInfo?.team || "",
+      startX: editingEntry ? editingEntry.startX : startX,
+      startY: editingEntry ? editingEntry.startY : startY,
+      endX: editingEntry ? editingEntry.endX : endX,
+      endY: editingEntry ? editingEntry.endY : endY,
+      minute: formData.minute,
+      isSecondHalf: formData.isSecondHalf,
+      senderId: formData.senderId,
+      senderName: formData.senderName,
+      entryType: formData.entryType,
+      teamContext: formData.teamContext,
+      isPossible1T: formData.isPossible1T,
+      pkPlayersCount: formData.pkPlayersCount,
+      ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
+    };
+
     // Dla dryblingu - upewniamy się, że nie ma odbiorcy
     if (formData.entryType === "dribble") {
       onSave({
-        matchId,
-        teamId: matchInfo?.team || "",
-        startX: editingEntry ? editingEntry.startX : startX,
-        startY: editingEntry ? editingEntry.startY : startY,
-        endX: editingEntry ? editingEntry.endX : endX,
-        endY: editingEntry ? editingEntry.endY : endY,
-        minute: formData.minute,
-        isSecondHalf: formData.isSecondHalf,
-        senderId: formData.senderId,
-        senderName: formData.senderName,
+        ...entryDataToSave,
         receiverId: undefined,
         receiverName: undefined,
-        entryType: formData.entryType,
-        teamContext: formData.teamContext,
-        isPossible1T: formData.isPossible1T,
-        pkPlayersCount: formData.pkPlayersCount,
-        ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
       });
     } else {
       // Dla pozostałych typów (pass, sfg, regain)
       onSave({
-        matchId,
-        teamId: matchInfo?.team || "",
-        startX: editingEntry ? editingEntry.startX : startX,
-        startY: editingEntry ? editingEntry.startY : startY,
-        endX: editingEntry ? editingEntry.endX : endX,
-        endY: editingEntry ? editingEntry.endY : endY,
-        minute: formData.minute,
-        isSecondHalf: formData.isSecondHalf,
-        senderId: formData.senderId,
-        senderName: formData.senderName,
+        ...entryDataToSave,
         receiverId: receiverId,
         receiverName: receiverName,
-        entryType: formData.entryType,
-        teamContext: formData.teamContext,
-        isPossible1T: formData.isPossible1T,
-        pkPlayersCount: formData.pkPlayersCount,
-        ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
       });
     }
 

@@ -35,15 +35,46 @@ export const usePKEntries = (matchId: string) => {
     }
   }, [matchId]);
 
+  // Funkcja pomocnicza do usuwania pól undefined z obiektu
+  const removeUndefinedFields = (obj: any): any => {
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => removeUndefinedFields(item));
+    }
+    
+    if (typeof obj === 'object') {
+      const cleaned: any = {};
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          const value = obj[key];
+          if (value !== undefined) {
+            cleaned[key] = removeUndefinedFields(value);
+          }
+        }
+      }
+      return cleaned;
+    }
+    
+    return obj;
+  };
+
   // Zapisz wejścia PK do Firebase
   const savePKEntries = useCallback(async (updatedEntries: PKEntry[]) => {
-    if (!matchId) return false;
+    if (!matchId) {
+      return false;
+    }
+    
+    // Usuń wszystkie pola undefined przed zapisaniem
+    const cleanedEntries = removeUndefinedFields(updatedEntries);
     
     try {
       const db = getDB();
       const matchRef = doc(db, "matches", matchId);
       await updateDoc(matchRef, {
-        pkEntries: updatedEntries
+        pkEntries: cleanedEntries
       });
       setPkEntries(updatedEntries);
       return true;
