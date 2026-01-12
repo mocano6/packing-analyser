@@ -66,11 +66,11 @@ const PlayerDetailsPanel: React.FC<PlayerDetailsPanelProps> = ({
       }
 
       // Regainy - sprawdzamy czy akcja ma pola charakterystyczne dla regain
-      // (np. isBelow8s, playersBehindBall, opponentsBeforeBall)
+      // (np. isBelow8s, playersBehindBall, opponentsBehindBall)
       if (
         (action.isBelow8s !== undefined || 
          action.playersBehindBall !== undefined || 
-         action.opponentsBeforeBall !== undefined) &&
+         action.opponentsBehindBall !== undefined) &&
         action.senderId === player.id &&
         !action.isReaction5s
       ) {
@@ -83,7 +83,7 @@ const PlayerDetailsPanel: React.FC<PlayerDetailsPanelProps> = ({
         (action.isReaction5s !== undefined ||
          (action.isBelow8s !== undefined && 
           action.playersBehindBall === undefined && 
-          action.opponentsBeforeBall === undefined)) &&
+          action.opponentsBehindBall === undefined)) &&
         action.senderId === player.id
       ) {
         totalLoses += 1;

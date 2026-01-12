@@ -8,9 +8,10 @@ import { getXTColor } from "@/components/FootballPitch/utils";
 
 export interface PlayerHeatmapPitchProps {
   heatmapData: Map<string, number>; // Map<zoneName, xTValue or count>
-  category: "sender" | "receiver" | "dribbler";
+  category: "sender" | "receiver" | "dribbler" | "regains";
   mode?: "pxt" | "count"; // Tryb wyświetlania: PxT lub liczba akcji
   onZoneClick?: (zoneName: string) => void; // Callback przy kliknięciu na strefę
+  mirrored?: boolean; // Czy mapa ma być odwrócona (lustrzane odbicie)
 }
 
 const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
@@ -18,18 +19,38 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
   category,
   mode = "pxt",
   onZoneClick,
+  mirrored = false,
 }: PlayerHeatmapPitchProps) {
-  // Funkcja do pobierania wartości xT dla pozycji
+  // Funkcja do pobierania wartości xT dla pozycji z uwzględnieniem odwrócenia
   const getXTValueForPosition = useCallback((visualRow: number, visualCol: number): number => {
-    return getXTValueFromMatrix(visualRow, visualCol);
-  }, []);
+    if (mirrored) {
+      // Odbita orientacja - wartości rosną w lewo, A1-A12 na dole
+      const sourceRow = 7 - visualRow;  // Odbicie wierszy
+      const sourceCol = 11 - visualCol; // Odbicie kolumn
+      return getXTValueFromMatrix(sourceRow, sourceCol);
+    } else {
+      // Standardowa orientacja - wartości rosną w prawo, A1-A12 na górze
+      return getXTValueFromMatrix(visualRow, visualCol);
+    }
+  }, [mirrored]);
 
-  // Funkcja do pobierania nazwy strefy
+  // Funkcja do pobierania nazwy strefy z uwzględnieniem odwrócenia
   const getZoneNameForPosition = useCallback((visualRow: number, visualCol: number): string => {
-    const visualIndex = visualRow * 12 + visualCol;
-    const zoneName = getZoneName(visualIndex);
-    return zoneName ? zoneNameToString(zoneName) : '';
-  }, []);
+    if (mirrored) {
+      // Odbita orientacja - oblicz opposite strefę
+      const visualIndex = visualRow * 12 + visualCol;
+      const sourceRow = 7 - visualRow;
+      const sourceCol = 11 - visualCol;
+      const sourceIndex = sourceRow * 12 + sourceCol;
+      const zoneName = getZoneName(sourceIndex);
+      return zoneName ? zoneNameToString(zoneName) : '';
+    } else {
+      // Standardowa orientacja
+      const visualIndex = visualRow * 12 + visualCol;
+      const zoneName = getZoneName(visualIndex);
+      return zoneName ? zoneNameToString(zoneName) : '';
+    }
+  }, [mirrored]);
 
   // Funkcja do obliczania koloru heatmapy - profesjonalny gradient od niebieskiego do czerwonego
   const getHeatmapColor = useCallback((value: number, maxValue: number): string => {
@@ -97,7 +118,9 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
         // Pobierz nazwę strefy
         const zoneNameStr = getZoneNameForPosition(row, col);
         
-        // Pobierz wartość PxT z heatmapy dla tej strefy (sprawdzamy różne warianty nazwy)
+        // Gdy mapa jest odwrócona, heatmapa już ma klucze jako opposite strefy
+        // Więc używamy zoneNameStr bezpośrednio (który już jest opposite dla odwróconej mapy)
+        // Gdy mapa nie jest odwrócona, używamy zoneNameStr normalnie
         let heatmapXTValue = heatmapData.get(zoneNameStr) || 0;
         // Jeśli nie znaleziono, spróbuj z małą literą
         if (heatmapXTValue === 0 && zoneNameStr) {
@@ -178,9 +201,9 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
         </div>
       )}
       <div
-        className={styles.pitch}
+        className={`${styles.pitch} ${mirrored ? styles.flipped : ''}`}
         role="grid"
-        aria-label={`Heatmapa ${category === 'sender' ? 'podania' : category === 'receiver' ? 'przyjęcia' : 'dryblingu'}`}
+        aria-label={`Heatmapa ${category === 'sender' ? 'podania' : category === 'receiver' ? 'przyjęcia' : category === 'dribbler' ? 'dryblingu' : 'regainów'}`}
       >
         <div className={styles.grid}>{cells}</div>
         <div className={styles.pitchLines} aria-hidden="true">

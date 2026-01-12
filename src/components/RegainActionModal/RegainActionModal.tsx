@@ -68,9 +68,9 @@ interface RegainActionModalProps {
   // Nowy prop dla liczby partnerów przed piłką
   playersBehindBall: number;
   onPlayersBehindBallChange: (count: number) => void;
-  // Nowy prop dla liczby przeciwników przed piłką
-  opponentsBeforeBall: number;
-  onOpponentsBeforeBallChange: (count: number) => void;
+  // Nowy prop dla liczby przeciwników za piłką
+  opponentsBehindBall: number;
+  onOpponentsBehindBallChange: (count: number) => void;
   // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
   playersLeftField: number;
   onPlayersLeftFieldChange: (count: number) => void;
@@ -139,8 +139,8 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   playersBehindBall,
   onPlayersBehindBallChange,
   // Nowy prop dla liczby przeciwników przed piłką
-  opponentsBeforeBall,
-  onOpponentsBeforeBallChange,
+  opponentsBehindBall,
+  onOpponentsBehindBallChange,
   // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
   playersLeftField,
   onPlayersLeftFieldChange,
@@ -445,16 +445,42 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
               </div>
               <div className={styles.toggleGroup}>
                 <label>Połowa:</label>
-                <div className={styles.halfToggle}>
+                <div 
+                  className={styles.halfToggle}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
                   <button
+                    type="button"
                     className={`${styles.halfButton} ${!isSecondHalf ? styles.activeHalf : ''}`}
-                    onClick={() => handleSecondHalfToggle(false)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleSecondHalfToggle(false);
+                    }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    disabled={false}
+                    style={{ pointerEvents: 'auto', zIndex: 11 }}
                   >
                     P1
                   </button>
                   <button
+                    type="button"
                     className={`${styles.halfButton} ${isSecondHalf ? styles.activeHalf : ''}`}
-                    onClick={() => handleSecondHalfToggle(true)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleSecondHalfToggle(true);
+                    }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    disabled={false}
+                    style={{ pointerEvents: 'auto', zIndex: 11 }}
                   >
                     P2
                   </button>
@@ -750,23 +776,23 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  onOpponentsBeforeBallChange(opponentsBeforeBall + 1);
+                  onOpponentsBehindBallChange(opponentsBehindBall + 1);
                 }}
                 title="Kliknij, aby dodać 1 przeciwnika"
                 style={{ cursor: 'pointer' }}
               >
                 <span className={styles.compactLabel}>Przeciwnik przed piłką (bez bramkarza)</span>
-                <span className={styles.pointsValue}><b>{opponentsBeforeBall}</b></span>
+                <span className={styles.pointsValue}><b>{opponentsBehindBall}</b></span>
                 <button
                   className={styles.compactSubtractButton}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    onOpponentsBeforeBallChange(Math.max(0, opponentsBeforeBall - 1));
+                    onOpponentsBehindBallChange(Math.max(0, opponentsBehindBall - 1));
                   }}
                   title="Odejmij 1 przeciwnika"
                   type="button"
-                  disabled={opponentsBeforeBall <= 0}
+                  disabled={opponentsBehindBall <= 0}
                 >
                   −
                 </button>
@@ -841,9 +867,16 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                   type="number"
                   value={actionMinute}
                   onChange={handleMinuteChange}
+                  onInput={handleMinuteChange}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onFocus={(e) => e.stopPropagation()}
                   min={isSecondHalf ? 46 : 1}
                   max={isSecondHalf ? 130 : 65}
                   className={styles.minuteField}
+                  readOnly={false}
+                  disabled={false}
+                  style={{ pointerEvents: 'auto', zIndex: 11 }}
                 />
                 <button
                   type="button"

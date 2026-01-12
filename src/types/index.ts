@@ -56,8 +56,10 @@ export interface Action {
   matchId: string;
   teamId: string;
   minute: number;
-  fromZone: string;
-  toZone: string;
+  fromZone?: string; // Opcjonalne - dla regain używamy regainAttackZone/regainDefenseZone
+  toZone?: string; // Opcjonalne - dla regain używamy regainAttackZone/regainDefenseZone
+  regainAttackZone?: string; // Strefa ataku dla regain (opposite zone)
+  regainDefenseZone?: string; // Strefa obrony dla regain (gdzie nastąpił regain)
   actionType: string;
   videoTimestamp?: number; // Czas w sekundach z YouTube playera
   // Dodatkowe pola z ActionsPacking
@@ -92,11 +94,24 @@ export interface Action {
   defensePlayers?: string[]; // Lista zawodników obrony (tylko dla trybu obrona)
   isBelow8s?: boolean; // Poniżej 8 sekund (dla regain i loses)
   playersBehindBall?: number; // Liczba partnerów przed piłką (dla regain i loses)
-  opponentsBeforeBall?: number; // Liczba przeciwników przed piłką (dla regain i loses)
+  opponentsBehindBall?: number; // Liczba przeciwników za piłką (dla regain i loses)
   totalPlayersOnField?: number; // Całkowita liczba zawodników naszego zespołu na boisku (dla regain i loses) - obliczane jako 11 - playersLeftField
   totalOpponentsOnField?: number; // Całkowita liczba zawodników przeciwnika na boisku (dla regain i loses) - obliczane jako 11 - opponentsLeftField
   playersLeftField?: number; // Liczba zawodników naszego zespołu, którzy opuścili boisko (dla regain i loses)
   opponentsLeftField?: number; // Liczba zawodników przeciwnika, którzy opuścili boisko (dla regain i loses)
+  // Pola dla regain - wartości po przekątnej (opposite)
+  regainAttackXT?: number; // Wartość xT w ataku dla regain (z opposite zone)
+  regainDefenseXT?: number; // Wartość xT w obronie dla regain (z regain zone)
+  regainAttackZone?: string; // Strefa ataku dla regain (opposite zone)
+  regainDefenseZone?: string; // Strefa obrony dla regain (gdzie nastąpił regain)
+  oppositeXT?: number; // Wartość xT po przekątnej (opposite) - DEPRECATED, użyj regainAttackXT
+  oppositeZone?: string; // Strefa po przekątnej (opposite) - DEPRECATED, użyj regainAttackZone
+  isAttack?: boolean; // Czy to atak (xTValueEnd < 0.02) czy obrona (xTValueEnd >= 0.02) - dla regain
+  // Pola dla loses - wartości po przekątnej (opposite)
+  losesAttackXT?: number; // Wartość xT w ataku dla loses (z opposite zone)
+  losesDefenseXT?: number; // Wartość xT w obronie dla loses (z lose zone)
+  losesAttackZone?: string; // Strefa ataku dla loses (opposite zone)
+  losesDefenseZone?: string; // Strefa obrony dla loses (gdzie nastąpiła strata)
   isReaction5s?: boolean; // Reakcja 5s (dla loses)
   isAut?: boolean; // Aut (dla loses)
   isReaction5sNotApplicable?: boolean; // Nie dotyczy - nie da się zrobić 5s (dla loses)

@@ -13,7 +13,13 @@ import { usePlayersState } from "@/hooks/usePlayersState";
 import { usePackingActions } from "@/hooks/usePackingActions";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { TEAMS, fetchTeams, getTeamsArray, Team } from "@/constants/teamsLoader";
-import { getXTValueFromMatrix } from "@/constants/xtValues";
+import { 
+  getXTValueFromMatrix, 
+  getOppositeXTValueForZone, 
+  zoneNameToIndex, 
+  getZoneName, 
+  zoneNameToString 
+} from "@/constants/xtValues";
 import styles from "./page.module.css";
 import OfflineStatus from '@/components/OfflineStatus/OfflineStatus';
 import ExportButton from "@/components/ExportButton/ExportButton";
@@ -477,6 +483,8 @@ export default function Page() {
       // Sprawdź zewnętrzne okno wideo
       const externalWindow = (window as any).externalVideoWindow;
       const isExternalWindowOpen = externalWindow && !externalWindow.closed;
+      const isExternalWindowOpenFromStorage = localStorage.getItem('externalVideoWindowOpen') === 'true';
+      const hasExternalVideoTime = externalVideoTime > 0;
       
       if (isExternalWindowOpen) {
         // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
@@ -505,10 +513,23 @@ export default function Page() {
         
         currentVideoTime = timeFromExternal;
       } else if (youtubeVideoRef?.current) {
-        currentVideoTime = await youtubeVideoRef.current.getCurrentTime();
+        try {
+          currentVideoTime = await youtubeVideoRef.current.getCurrentTime();
+          console.log('calculateMatchMinuteFromVideoTime: pobrano czas z YouTube:', currentVideoTime);
+        } catch (error) {
+          console.warn('calculateMatchMinuteFromVideoTime: błąd pobierania czasu z YouTube:', error);
+          return null;
+        }
       } else if (customVideoRef?.current) {
-        currentVideoTime = await customVideoRef.current.getCurrentTime();
+        try {
+          currentVideoTime = await customVideoRef.current.getCurrentTime();
+          console.log('calculateMatchMinuteFromVideoTime: pobrano czas z CustomVideo:', currentVideoTime);
+        } catch (error) {
+          console.warn('calculateMatchMinuteFromVideoTime: błąd pobierania czasu z CustomVideo:', error);
+          return null;
+        }
       } else {
+        console.log('calculateMatchMinuteFromVideoTime: brak dostępnych refów wideo (youtubeVideoRef:', !!youtubeVideoRef?.current, ', customVideoRef:', !!customVideoRef?.current, ')');
         return null;
       }
 
@@ -543,7 +564,7 @@ export default function Page() {
       console.warn('Nie udało się pobrać czasu z wideo:', error);
       return null;
     }
-  }, [matchInfo, youtubeVideoRef, customVideoRef]);
+  }, [matchInfo, youtubeVideoRef, customVideoRef, externalVideoTime]);
 
   // Stany dla trybu unpacking - muszą być przed usePackingActions
   const [actionMode, setActionMode] = useState<"attack" | "defense">("attack");
@@ -812,8 +833,8 @@ export default function Page() {
     setIsPMAreaActive,
     playersBehindBall,
     setPlayersBehindBall,
-    opponentsBeforeBall,
-    setOpponentsBeforeBall,
+    opponentsBehindBall,
+    setOpponentsBehindBall,
     playersLeftField,
     setPlayersLeftField,
     opponentsLeftField,
@@ -832,9 +853,9 @@ export default function Page() {
       // Dla zakładki regain_loses zwracamy wszystkie akcje regain i loses
       // ActionsTable sam je przefiltruje po actionModeFilter
       return actions.filter(action => {
-        // Regain: ma playersBehindBall lub opponentsBeforeBall, ale NIE ma isReaction5s
+        // Regain: ma playersBehindBall lub opponentsBehindBall, ale NIE ma isReaction5s
         const isRegain = (action.playersBehindBall !== undefined || 
-                         action.opponentsBeforeBall !== undefined ||
+                         action.opponentsBehindBall !== undefined ||
                          action.totalPlayersOnField !== undefined ||
                          action.totalOpponentsOnField !== undefined ||
                          action.playersLeftField !== undefined ||
@@ -855,7 +876,7 @@ export default function Page() {
       // Kluczowa różnica: regain NIE ma isReaction5s
       return actions.filter(action => 
         (action.playersBehindBall !== undefined || 
-         action.opponentsBeforeBall !== undefined ||
+         action.opponentsBehindBall !== undefined ||
          action.totalPlayersOnField !== undefined ||
          action.totalOpponentsOnField !== undefined ||
          action.playersLeftField !== undefined ||
@@ -876,7 +897,7 @@ export default function Page() {
       return actions.filter(action => 
         action.isBelow8s === undefined &&
         action.playersBehindBall === undefined &&
-        action.opponentsBeforeBall === undefined &&
+        action.opponentsBehindBall === undefined &&
         action.isReaction5s === undefined &&
         action.totalPlayersOnField === undefined &&
         action.totalOpponentsOnField === undefined &&
@@ -1967,7 +1988,7 @@ export default function Page() {
     }
     // Regain: ma playersBehindBall lub opponentsBeforeBall, ale NIE ma isReaction5s
     if (action.playersBehindBall !== undefined || 
-        action.opponentsBeforeBall !== undefined ||
+        action.opponentsBehindBall !== undefined ||
         action.totalPlayersOnField !== undefined ||
         action.totalOpponentsOnField !== undefined ||
         action.playersLeftField !== undefined ||
@@ -1983,6 +2004,347 @@ export default function Page() {
     setIsActionEditModalOpen(true);
   };
 
+  // Funkcja konwersji starych akcji regain do nowego formatu
+  const convertOldRegainAction = (action: Action): Action => {
+    const actionCategory = getActionCategory(action);
+    
+    // Tylko dla regain
+    if (actionCategory !== "regain") {
+      return action;
+    }
+
+    const convertedAction: any = { ...action };
+    
+    // Konwertuj strefy: stare pola → nowe pola
+    if (!convertedAction.regainAttackZone || !convertedAction.regainDefenseZone) {
+      // Jeśli mamy stare pola, konwertuj je
+      if (convertedAction.oppositeZone) {
+        convertedAction.regainAttackZone = convertedAction.oppositeZone;
+      } else if (convertedAction.regainZone) {
+        // regainZone to była strefa regain (obrona), więc opposite to atak
+        const startZone = convertedAction.regainZone || convertedAction.fromZone || convertedAction.toZone;
+        if (startZone) {
+          const startZoneName = typeof startZone === 'string' ? startZone.toUpperCase() : null;
+          if (startZoneName) {
+            const zoneIndex = zoneNameToIndex(startZoneName);
+            if (zoneIndex !== null) {
+              const row = Math.floor(zoneIndex / 12);
+              const col = zoneIndex % 12;
+              const oppositeRow = 7 - row;
+              const oppositeCol = 11 - col;
+              const oppositeIndex = oppositeRow * 12 + oppositeCol;
+              const oppositeZoneData = getZoneName(oppositeIndex);
+              if (oppositeZoneData) {
+                convertedAction.regainAttackZone = zoneNameToString(oppositeZoneData);
+              }
+            }
+          }
+        }
+        convertedAction.regainDefenseZone = startZone;
+      } else if (convertedAction.fromZone || convertedAction.toZone) {
+        // fromZone/toZone są takie same dla regain
+        const regainZone = convertedAction.fromZone || convertedAction.toZone;
+        convertedAction.regainDefenseZone = regainZone;
+        
+        // Oblicz opposite zone
+        const startZoneName = typeof regainZone === 'string' ? regainZone.toUpperCase() : null;
+        if (startZoneName) {
+          const zoneIndex = zoneNameToIndex(startZoneName);
+          if (zoneIndex !== null) {
+            const row = Math.floor(zoneIndex / 12);
+            const col = zoneIndex % 12;
+            const oppositeRow = 7 - row;
+            const oppositeCol = 11 - col;
+            const oppositeIndex = oppositeRow * 12 + oppositeCol;
+            const oppositeZoneData = getZoneName(oppositeIndex);
+            if (oppositeZoneData) {
+              convertedAction.regainAttackZone = zoneNameToString(oppositeZoneData);
+            }
+          }
+        }
+      }
+    }
+    
+    // Konwertuj wartości xT: zamień miejscami jeśli są stare pola
+    if (convertedAction.regainAttackXT === undefined || convertedAction.regainDefenseXT === undefined) {
+      // Jeśli mamy stare pola, konwertuj je
+      if (convertedAction.oppositeXT !== undefined) {
+        convertedAction.regainAttackXT = convertedAction.oppositeXT;
+      } else if (convertedAction.regainDefenseXT === undefined) {
+        // Użyj xTValueStart/xTValueEnd jako regainDefenseXT
+        const defenseXT = convertedAction.xTValueStart || convertedAction.xTValueEnd;
+        if (defenseXT !== undefined) {
+          convertedAction.regainDefenseXT = defenseXT;
+        }
+      }
+      
+      // Jeśli nadal brakuje regainAttackXT, oblicz z opposite zone
+      if (convertedAction.regainAttackXT === undefined && convertedAction.regainAttackZone) {
+        const attackZoneName = typeof convertedAction.regainAttackZone === 'string' 
+          ? convertedAction.regainAttackZone.toUpperCase() 
+          : null;
+        if (attackZoneName) {
+          const zoneIndex = zoneNameToIndex(attackZoneName);
+          if (zoneIndex !== null) {
+            convertedAction.regainAttackXT = getOppositeXTValueForZone(zoneIndex);
+          }
+        }
+      }
+    }
+    
+    // Usuń stare pola
+    delete convertedAction.fromZone;
+    delete convertedAction.toZone;
+    delete convertedAction.regainZone;
+    delete convertedAction.oppositeZone;
+    delete convertedAction.oppositeXT;
+    delete convertedAction.mode;
+    delete convertedAction.xTValueStart;
+    delete convertedAction.xTValueEnd;
+    delete convertedAction.isP0Start;
+    delete convertedAction.isP1Start;
+    delete convertedAction.isP2Start;
+    delete convertedAction.isP3Start;
+    delete convertedAction.isContact1;
+    delete convertedAction.isContact2;
+    delete convertedAction.isContact3Plus;
+    
+    return convertedAction as Action;
+  };
+
+  const convertOldLosesAction = (action: Action): Action => {
+    const actionCategory = getActionCategory(action);
+    
+    // Tylko dla loses
+    if (actionCategory !== "loses") {
+      return action;
+    }
+
+    const convertedAction: any = { ...action };
+    
+    // Konwertuj strefy: stare pola → nowe pola
+    if (!convertedAction.losesAttackZone || !convertedAction.losesDefenseZone) {
+      // Jeśli mamy stare pola, konwertuj je
+      if (convertedAction.oppositeZone) {
+        convertedAction.losesAttackZone = convertedAction.oppositeZone;
+      } else if (convertedAction.fromZone || convertedAction.toZone) {
+        // fromZone/toZone są takie same dla loses
+        const losesZone = convertedAction.fromZone || convertedAction.toZone;
+        convertedAction.losesDefenseZone = losesZone;
+        
+        // Oblicz opposite zone
+        const startZoneName = typeof losesZone === 'string' ? losesZone.toUpperCase() : null;
+        if (startZoneName) {
+          const zoneIndex = zoneNameToIndex(startZoneName);
+          if (zoneIndex !== null) {
+            const row = Math.floor(zoneIndex / 12);
+            const col = zoneIndex % 12;
+            const oppositeRow = 7 - row;
+            const oppositeCol = 11 - col;
+            const oppositeIndex = oppositeRow * 12 + oppositeCol;
+            const oppositeZoneData = getZoneName(oppositeIndex);
+            if (oppositeZoneData) {
+              convertedAction.losesAttackZone = zoneNameToString(oppositeZoneData);
+            }
+          }
+        }
+      }
+    }
+    
+    // Konwertuj wartości xT: stare pola → nowe pola
+    if (convertedAction.losesAttackXT === undefined || convertedAction.losesDefenseXT === undefined) {
+      // Jeśli mamy stare pola, konwertuj je
+      if (convertedAction.oppositeXT !== undefined) {
+        convertedAction.losesAttackXT = convertedAction.oppositeXT;
+      } else if (convertedAction.losesDefenseXT === undefined) {
+        // Użyj xTValueStart/xTValueEnd jako losesDefenseXT
+        const defenseXT = convertedAction.xTValueStart || convertedAction.xTValueEnd;
+        if (defenseXT !== undefined) {
+          convertedAction.losesDefenseXT = defenseXT;
+        }
+      }
+      
+      // Jeśli nadal brakuje losesAttackXT, oblicz z opposite zone
+      if (convertedAction.losesAttackXT === undefined && convertedAction.losesAttackZone) {
+        const attackZoneName = typeof convertedAction.losesAttackZone === 'string' 
+          ? convertedAction.losesAttackZone.toUpperCase() 
+          : null;
+        if (attackZoneName) {
+          const zoneIndex = zoneNameToIndex(attackZoneName);
+          if (zoneIndex !== null) {
+            convertedAction.losesAttackXT = getOppositeXTValueForZone(zoneIndex);
+          }
+        }
+      }
+    }
+    
+    // Usuń stare pola
+    delete convertedAction.fromZone;
+    delete convertedAction.toZone;
+    delete convertedAction.oppositeZone;
+    delete convertedAction.oppositeXT;
+    delete convertedAction.mode;
+    delete convertedAction.xTValueStart;
+    delete convertedAction.xTValueEnd;
+    delete convertedAction.isP0Start;
+    delete convertedAction.isP1Start;
+    delete convertedAction.isP2Start;
+    delete convertedAction.isP3Start;
+    delete convertedAction.isP0;
+    delete convertedAction.isP1;
+    delete convertedAction.isP2;
+    delete convertedAction.isP3;
+    delete convertedAction.isContact1;
+    delete convertedAction.isContact2;
+    delete convertedAction.isContact3Plus;
+    delete convertedAction.packingPoints;
+    delete convertedAction.isShot;
+    delete convertedAction.isGoal;
+    delete convertedAction.isPenaltyAreaEntry;
+    
+    return convertedAction as Action;
+  };
+
+  // Funkcja pomocnicza do obliczania opposite wartości dla regain/loses
+  const calculateOppositeValues = (action: Action): Action => {
+    const actionCategory = getActionCategory(action);
+    
+    // Tylko dla regain i loses
+    if (actionCategory !== "regain" && actionCategory !== "loses") {
+      return action;
+    }
+
+    // Dla regain: sprawdź czy akcja już ma wszystkie potrzebne wartości w nowym formacie
+    if (actionCategory === "regain") {
+      if (action.regainDefenseXT !== undefined && action.regainAttackXT !== undefined && action.regainAttackZone && action.regainDefenseZone && action.isAttack !== undefined) {
+        // Konwertuj stare akcje do nowego formatu
+        return convertOldRegainAction(action);
+      }
+    } else if (actionCategory === "loses") {
+      // Dla loses: sprawdź czy akcja już ma wszystkie potrzebne wartości w nowym formacie
+      if (action.losesDefenseXT !== undefined && action.losesAttackXT !== undefined && action.losesAttackZone && action.losesDefenseZone) {
+        // Konwertuj stare akcje do nowego formatu
+        return convertOldLosesAction(action);
+      }
+    }
+
+    // Oblicz brakujące wartości
+    const startZone = action.fromZone || action.startZone;
+    if (!startZone) {
+      return action;
+    }
+
+    // Konwertuj strefę na nazwę (format "A1")
+    const startZoneName = typeof startZone === 'string' 
+      ? startZone.toUpperCase() 
+      : null;
+    
+    if (!startZoneName) {
+      return action;
+    }
+
+    const zoneIndex = zoneNameToIndex(startZoneName);
+    if (zoneIndex === null) {
+      return action;
+    }
+
+    // Oblicz opposite strefę
+    const row = Math.floor(zoneIndex / 12);
+    const col = zoneIndex % 12;
+    const oppositeRow = 7 - row;
+    const oppositeCol = 11 - col;
+    const oppositeIndex = oppositeRow * 12 + oppositeCol;
+    const oppositeZoneData = getZoneName(oppositeIndex);
+    const oppositeZone = oppositeZoneData ? zoneNameToString(oppositeZoneData) : null;
+
+    // Oblicz opposite xT
+    const oppositeXT = getOppositeXTValueForZone(zoneIndex);
+
+    // Określ czy to atak czy obrona
+    const receiverXT = action.xTValueEnd || 0;
+    const isAttack = receiverXT < 0.02; // xT < 0.02 to atak
+
+    // Dla regain: używamy nowych pól regainDefenseXT i regainAttackXT
+    if (actionCategory === "regain") {
+      // Wartość w obronie - używamy xTValueStart/xTValueEnd (są takie same dla regain)
+      const defenseXT = action.xTValueStart || action.xTValueEnd || 0;
+      
+      // Określ strefy
+      const regainDefenseZone = action.regainDefenseZone || action.regainZone || action.fromZone || action.toZone || startZone;
+      const regainAttackZone = action.regainAttackZone || oppositeZone;
+      
+      const convertedAction = {
+        ...action,
+        regainDefenseZone,
+        regainAttackZone: regainAttackZone || undefined,
+        regainDefenseXT: defenseXT,
+        regainAttackXT: oppositeXT,
+        isAttack
+      };
+      
+      // Usuń stare pola
+      delete convertedAction.fromZone;
+      delete convertedAction.toZone;
+      delete convertedAction.regainZone;
+      delete convertedAction.oppositeZone;
+      delete convertedAction.oppositeXT;
+      delete convertedAction.mode;
+      delete convertedAction.xTValueStart;
+      delete convertedAction.xTValueEnd;
+      delete convertedAction.isP0Start;
+      delete convertedAction.isP1Start;
+      delete convertedAction.isP2Start;
+      delete convertedAction.isP3Start;
+      delete convertedAction.isContact1;
+      delete convertedAction.isContact2;
+      delete convertedAction.isContact3Plus;
+      
+      return convertedAction as Action;
+    } else if (actionCategory === "loses") {
+      // Dla loses: używamy nowych pól losesAttackXT i losesDefenseXT
+      const defenseXT = action.xTValueStart || action.xTValueEnd || 0;
+      
+      // Określ strefy
+      const losesDefenseZone = action.losesDefenseZone || action.fromZone || action.toZone || startZone;
+      const losesAttackZone = action.losesAttackZone || oppositeZone;
+      
+      const convertedAction = {
+        ...action,
+        losesDefenseZone,
+        losesAttackZone: losesAttackZone || undefined,
+        losesDefenseXT: defenseXT,
+        losesAttackXT: oppositeXT,
+        isAttack
+      };
+      
+      // Usuń stare pola
+      delete convertedAction.fromZone;
+      delete convertedAction.toZone;
+      delete convertedAction.oppositeZone;
+      delete convertedAction.oppositeXT;
+      delete convertedAction.mode;
+      delete convertedAction.xTValueStart;
+      delete convertedAction.xTValueEnd;
+      delete convertedAction.isP0Start;
+      delete convertedAction.isP1Start;
+      delete convertedAction.isP2Start;
+      delete convertedAction.isP3Start;
+      delete convertedAction.isP0;
+      delete convertedAction.isP1;
+      delete convertedAction.isP2;
+      delete convertedAction.isP3;
+      delete convertedAction.isContact1;
+      delete convertedAction.isContact2;
+      delete convertedAction.isContact3Plus;
+      delete convertedAction.packingPoints;
+      delete convertedAction.isShot;
+      delete convertedAction.isGoal;
+      delete convertedAction.isPenaltyAreaEntry;
+      
+      return convertedAction as Action;
+    }
+  };
+
   // Obsługa zapisania edytowanej akcji
   const handleSaveEditedAction = async (editedAction: Action) => {
     try {
@@ -1996,6 +2358,16 @@ export default function Page() {
 
       // Określamy kategorię akcji i odpowiednią kolekcję
       const actionCategory = getActionCategory(editedAction);
+      
+      // Oblicz opposite wartości dla regain/loses jeśli brakuje
+      let actionWithOppositeValues = calculateOppositeValues(editedAction);
+      
+      // Dla regain i loses: konwertuj stare akcje do nowego formatu
+      if (actionCategory === "regain") {
+        actionWithOppositeValues = convertOldRegainAction(actionWithOppositeValues);
+      } else if (actionCategory === "loses") {
+        actionWithOppositeValues = convertOldLosesAction(actionWithOppositeValues);
+      }
       let collectionField: string;
       if (actionCategory === "regain") {
         collectionField = "actions_regain";
@@ -2054,7 +2426,30 @@ export default function Page() {
         const newMatchData = newMatchDoc.data() as TeamInfo;
         const newActions = (newMatchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
         
-        const updatedNewActions = [...newActions, removeUndefinedFields(editedAction)];
+        // Zachowujemy wszystkie pola, w tym te z wartością false
+        const cleanedAction = removeUndefinedFields(actionWithOppositeValues);
+        // Upewniamy się, że pola boolean są zachowane nawet jeśli są false
+        // Używamy wartości bezpośrednio z editedAction, aby upewnić się, że są aktualne
+        const actionWithBooleans = {
+          ...cleanedAction,
+          // Zachowujemy pola boolean dla regain i loses - używamy wartości z editedAction
+          ...(actionCategory === "regain" || actionCategory === "loses" ? {
+            isP0: editedAction.isP0 === true,
+            isP1: editedAction.isP1 === true,
+            isP2: editedAction.isP2 === true,
+            isP3: editedAction.isP3 === true,
+            isContact1: editedAction.isContact1 === true,
+            isContact2: editedAction.isContact2 === true,
+            isContact3Plus: editedAction.isContact3Plus === true,
+            isShot: editedAction.isShot === true,
+            isGoal: editedAction.isGoal === true,
+            isPenaltyAreaEntry: editedAction.isPenaltyAreaEntry === true,
+            ...(actionCategory === "loses" && {
+              isPMArea: (editedAction as any).isPMArea === true
+            })
+          } : {})
+        };
+        const updatedNewActions = [...newActions, actionWithBooleans];
         
         await updateDoc(newMatchRef, {
           [collectionField]: updatedNewActions
@@ -2067,7 +2462,7 @@ export default function Page() {
           setActions(filteredActions);
         } else if (matchInfo?.matchId === editedAction.matchId) {
           // Dodaj akcję do lokalnego stanu (nowy mecz)
-          setActions([...actions, editedAction]);
+          setActions([...actions, actionWithOppositeValues]);
         }
       } else {
         // Aktualizacja akcji w tym samym meczu
@@ -2091,7 +2486,32 @@ export default function Page() {
         }
 
         const updatedActions = [...currentActions];
-        updatedActions[actionIndex] = removeUndefinedFields(editedAction);
+        // Zachowujemy wszystkie pola, w tym te z wartością false
+        const cleanedAction = removeUndefinedFields(actionWithOppositeValues);
+        // Upewniamy się, że pola boolean są zachowane nawet jeśli są false
+        // Używamy wartości bezpośrednio z editedAction, aby upewnić się, że są aktualne
+        const actionWithBooleans = {
+          ...cleanedAction,
+          // Zachowujemy pola boolean dla regain i loses - używamy wartości z editedAction
+          ...(actionCategory === "regain" || actionCategory === "loses" ? {
+            isP0: editedAction.isP0 === true,
+            isP1: editedAction.isP1 === true,
+            isP2: editedAction.isP2 === true,
+            isP3: editedAction.isP3 === true,
+            isContact1: editedAction.isContact1 === true,
+            isContact2: editedAction.isContact2 === true,
+            isContact3Plus: editedAction.isContact3Plus === true,
+            isShot: editedAction.isShot === true,
+            isGoal: editedAction.isGoal === true,
+            isPenaltyAreaEntry: editedAction.isPenaltyAreaEntry === true,
+            ...(actionCategory === "loses" && {
+              isPMArea: (editedAction as any).isPMArea === true
+            })
+          } : {})
+        };
+        console.log("🔍 DEBUG - Zapisywana akcja z polami boolean:", JSON.stringify(actionWithBooleans, null, 2));
+        console.log("🔍 DEBUG - editedAction.isP3:", editedAction.isP3, "editedAction.isContact3Plus:", editedAction.isContact3Plus);
+        updatedActions[actionIndex] = actionWithBooleans;
 
         await updateDoc(matchRef, {
           [collectionField]: updatedActions
@@ -2410,8 +2830,8 @@ export default function Page() {
             setIsPMAreaActive={setIsPMAreaActive}
             playersBehindBall={playersBehindBall}
             setPlayersBehindBall={setPlayersBehindBall}
-            opponentsBeforeBall={opponentsBeforeBall}
-            setOpponentsBeforeBall={setOpponentsBeforeBall}
+            opponentsBehindBall={opponentsBehindBall}
+            setOpponentsBehindBall={setOpponentsBehindBall}
             playersLeftField={playersLeftField}
             setPlayersLeftField={setPlayersLeftField}
             opponentsLeftField={opponentsLeftField}
@@ -2489,8 +2909,8 @@ export default function Page() {
             setIsPMAreaActive={setIsPMAreaActive}
             playersBehindBall={playersBehindBall}
             setPlayersBehindBall={setPlayersBehindBall}
-            opponentsBeforeBall={opponentsBeforeBall}
-            setOpponentsBeforeBall={setOpponentsBeforeBall}
+            opponentsBehindBall={opponentsBehindBall}
+            setOpponentsBehindBall={setOpponentsBehindBall}
             playersLeftField={playersLeftField}
             setPlayersLeftField={setPlayersLeftField}
             opponentsLeftField={opponentsLeftField}
@@ -2891,6 +3311,7 @@ export default function Page() {
               });
             }
           }}
+          onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
           actionType={editingAction?.actionType as "pass" | "dribble" || 'pass'}
           onActionTypeChange={(type) => {
             if (editingAction) {
@@ -2968,27 +3389,39 @@ export default function Page() {
           isContact1Active={editingAction?.isContact1 || false}
           onContact1Toggle={() => {
             if (editingAction) {
+              const newValue = !editingAction.isContact1;
               setEditingAction({
                 ...editingAction,
-                isContact1: !editingAction.isContact1
+                isContact1: newValue,
+                // Jeśli aktywujemy 1T, wyłączamy pozostałe
+                isContact2: newValue ? false : editingAction.isContact2,
+                isContact3Plus: newValue ? false : editingAction.isContact3Plus
               });
             }
           }}
           isContact2Active={editingAction?.isContact2 || false}
           onContact2Toggle={() => {
             if (editingAction) {
+              const newValue = !editingAction.isContact2;
               setEditingAction({
                 ...editingAction,
-                isContact2: !editingAction.isContact2
+                isContact2: newValue,
+                // Jeśli aktywujemy 2T, wyłączamy pozostałe
+                isContact1: newValue ? false : editingAction.isContact1,
+                isContact3Plus: newValue ? false : editingAction.isContact3Plus
               });
             }
           }}
           isContact3PlusActive={editingAction?.isContact3Plus || false}
           onContact3PlusToggle={() => {
             if (editingAction) {
+              const newValue = !editingAction.isContact3Plus;
               setEditingAction({
                 ...editingAction,
-                isContact3Plus: !editingAction.isContact3Plus
+                isContact3Plus: newValue,
+                // Jeśli aktywujemy 3T+, wyłączamy pozostałe
+                isContact1: newValue ? false : editingAction.isContact1,
+                isContact2: newValue ? false : editingAction.isContact2
               });
             }
           }}
@@ -3066,27 +3499,36 @@ export default function Page() {
           isReaction5sActive={editingAction?.isReaction5s || false}
           onReaction5sToggle={() => {
             if (editingAction) {
+              const newValue = !editingAction.isReaction5s;
               setEditingAction({
                 ...editingAction,
-                isReaction5s: !editingAction.isReaction5s
+                isReaction5s: newValue,
+                isAut: newValue ? false : editingAction.isAut,
+                isReaction5sNotApplicable: newValue ? false : editingAction.isReaction5sNotApplicable
               });
             }
           }}
           isAutActive={editingAction?.isAut || false}
           onAutToggle={() => {
             if (editingAction) {
+              const newValue = !editingAction.isAut;
               setEditingAction({
                 ...editingAction,
-                isAut: !editingAction.isAut
+                isAut: newValue,
+                isReaction5s: newValue ? false : editingAction.isReaction5s,
+                isReaction5sNotApplicable: newValue ? false : editingAction.isReaction5sNotApplicable
               });
             }
           }}
           isReaction5sNotApplicableActive={editingAction?.isReaction5sNotApplicable || false}
           onReaction5sNotApplicableToggle={() => {
             if (editingAction) {
+              const newValue = !editingAction.isReaction5sNotApplicable;
               setEditingAction({
                 ...editingAction,
-                isReaction5sNotApplicable: !editingAction.isReaction5sNotApplicable
+                isReaction5sNotApplicable: newValue,
+                isReaction5s: newValue ? false : editingAction.isReaction5s,
+                isAut: newValue ? false : editingAction.isAut
               });
             }
           }}
@@ -3099,12 +3541,12 @@ export default function Page() {
               });
             }
           }}
-          opponentsBeforeBall={editingAction?.opponentsBeforeBall || 0}
-          onOpponentsBeforeBallChange={(count) => {
+          opponentsBehindBall={editingAction?.opponentsBehindBall || 0}
+          onOpponentsBehindBallChange={(count) => {
             if (editingAction) {
               setEditingAction({
                 ...editingAction,
-                opponentsBeforeBall: count
+                opponentsBehindBall: count
               });
             }
           }}
@@ -3280,27 +3722,39 @@ export default function Page() {
           isContact1Active={editingAction?.isContact1 || false}
           onContact1Toggle={() => {
             if (editingAction) {
+              const newValue = !editingAction.isContact1;
               setEditingAction({
                 ...editingAction,
-                isContact1: !editingAction.isContact1
+                isContact1: newValue,
+                // Jeśli aktywujemy 1T, wyłączamy pozostałe
+                isContact2: newValue ? false : editingAction.isContact2,
+                isContact3Plus: newValue ? false : editingAction.isContact3Plus
               });
             }
           }}
           isContact2Active={editingAction?.isContact2 || false}
           onContact2Toggle={() => {
             if (editingAction) {
+              const newValue = !editingAction.isContact2;
               setEditingAction({
                 ...editingAction,
-                isContact2: !editingAction.isContact2
+                isContact2: newValue,
+                // Jeśli aktywujemy 2T, wyłączamy pozostałe
+                isContact1: newValue ? false : editingAction.isContact1,
+                isContact3Plus: newValue ? false : editingAction.isContact3Plus
               });
             }
           }}
           isContact3PlusActive={editingAction?.isContact3Plus || false}
           onContact3PlusToggle={() => {
             if (editingAction) {
+              const newValue = !editingAction.isContact3Plus;
               setEditingAction({
                 ...editingAction,
-                isContact3Plus: !editingAction.isContact3Plus
+                isContact3Plus: newValue,
+                // Jeśli aktywujemy 3T+, wyłączamy pozostałe
+                isContact1: newValue ? false : editingAction.isContact1,
+                isContact2: newValue ? false : editingAction.isContact2
               });
             }
           }}
@@ -3384,12 +3838,12 @@ export default function Page() {
               });
             }
           }}
-          opponentsBeforeBall={editingAction?.opponentsBeforeBall || 0}
-          onOpponentsBeforeBallChange={(count) => {
+          opponentsBehindBall={editingAction?.opponentsBehindBall || 0}
+          onOpponentsBehindBallChange={(count) => {
             if (editingAction) {
               setEditingAction({
                 ...editingAction,
-                opponentsBeforeBall: count
+                opponentsBehindBall: count
               });
             }
           }}
@@ -3585,27 +4039,39 @@ export default function Page() {
           isContact1Active={editingAction?.isContact1 || false}
           onContact1Toggle={() => {
             if (editingAction) {
+              const newValue = !editingAction.isContact1;
               setEditingAction({
                 ...editingAction,
-                isContact1: !editingAction.isContact1
+                isContact1: newValue,
+                // Jeśli aktywujemy 1T, wyłączamy pozostałe
+                isContact2: newValue ? false : editingAction.isContact2,
+                isContact3Plus: newValue ? false : editingAction.isContact3Plus
               });
             }
           }}
           isContact2Active={editingAction?.isContact2 || false}
           onContact2Toggle={() => {
             if (editingAction) {
+              const newValue = !editingAction.isContact2;
               setEditingAction({
                 ...editingAction,
-                isContact2: !editingAction.isContact2
+                isContact2: newValue,
+                // Jeśli aktywujemy 2T, wyłączamy pozostałe
+                isContact1: newValue ? false : editingAction.isContact1,
+                isContact3Plus: newValue ? false : editingAction.isContact3Plus
               });
             }
           }}
           isContact3PlusActive={editingAction?.isContact3Plus || false}
           onContact3PlusToggle={() => {
             if (editingAction) {
+              const newValue = !editingAction.isContact3Plus;
               setEditingAction({
                 ...editingAction,
-                isContact3Plus: !editingAction.isContact3Plus
+                isContact3Plus: newValue,
+                // Jeśli aktywujemy 3T+, wyłączamy pozostałe
+                isContact1: newValue ? false : editingAction.isContact1,
+                isContact2: newValue ? false : editingAction.isContact2
               });
             }
           }}
