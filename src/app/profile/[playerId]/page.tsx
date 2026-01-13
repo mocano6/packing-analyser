@@ -3458,28 +3458,28 @@ export default function PlayerDetailsPage() {
                         )}
 
                         {/* statystyki średnich po wejściach */}
-                        <div style={{ marginTop: 14 }}>
-                          <div className={styles.detailsRow}>
-                            <span className={styles.detailsLabel}>Śr. partnerów w PK:</span>
-                            <span className={styles.detailsValue}>
-                              <span className={styles.valueMain}><strong>{pkEntriesAverages.avgPartners.toFixed(2)}</strong></span>
-                            </span>
+                        {pkEntriesStats.playerEntries.length > 0 && (
+                          <div style={{ marginTop: 14 }}>
+                            <div className={styles.detailsRow}>
+                              <span className={styles.detailsLabel}>Śr. partnerów w PK:</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueMain}><strong>{pkEntriesAverages.avgPartners.toFixed(2)}</strong></span>
+                              </span>
+                            </div>
+                            <div className={styles.detailsRow}>
+                              <span className={styles.detailsLabel}>Śr. przeciwników w PK:</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueMain}><strong>{pkEntriesAverages.avgOpponents.toFixed(2)}</strong></span>
+                              </span>
+                            </div>
+                            <div className={styles.detailsRow}>
+                              <span className={styles.detailsLabel}>Śr. różnica (przeciwnicy−partnerzy):</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueMain}><strong>{pkEntriesAverages.avgDiffOppMinusPartners.toFixed(2)}</strong></span>
+                              </span>
+                            </div>
                           </div>
-                          <div className={styles.detailsRow}>
-                            <span className={styles.detailsLabel}>Śr. przeciwników w PK:</span>
-                            <span className={styles.detailsValue}>
-                              <span className={styles.valueMain}><strong>{pkEntriesAverages.avgOpponents.toFixed(2)}</strong></span>
-                            </span>
-                          </div>
-                          <div className={styles.detailsRow}>
-                            <span className={styles.detailsLabel}>Śr. różnica (przeciwnicy−partnerzy):</span>
-                            <span className={styles.detailsValue}>
-                              <span className={styles.valueMain}><strong>{pkEntriesAverages.avgDiffOppMinusPartners.toFixed(2)}</strong></span>
-                            </span>
-                          </div>
-                        </div>
-                      </>
-                    )}
+                        )}
                       </div>
                     </div>
                   </div>
