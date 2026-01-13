@@ -150,16 +150,18 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
     const midX = (start.x + end.x) / 2;
     const midY = (start.y + end.y) / 2;
     
-    // Kolor grota: jasnozielony jeśli był strzał, w przeciwnym razie kolor strzałki
-    const arrowheadColor = isShot ? '#86efac' : arrowColor;
+    // Kolor grota: zawsze kolor strzałki (bez jasnozielonego dla strzału)
+    const arrowheadColor = arrowColor;
     // Rozmiar grota: większy jeśli był gol, średni jeśli strzał, standardowy w przeciwnym razie
     const arrowheadSize = isGoal ? 3 : (isShot ? 2.5 : 1.2);
     // refX ustawiony tak, aby grot kończył się dokładnie na końcu linii
-    // refX określa przesunięcie punktu odniesienia markera od jego początku
-    // Większa wartość refX przesuwa grot w prawo (w kierunku końca linii)
-    // Dla strzału potrzebujemy znacznie większego refX, aby grot był na końcu linii
-    // refX powinien być bliski rozmiarowi grota, aby czubek grota był na końcu linii
-    const refX = isGoal ? "2.5" : (isShot ? "3.2" : "0.9");
+    // Czubek polygonu grota jest w punkcie (1, 0.5), więc refX=1 umieszcza czubek na końcu linii
+    const refX = "1";
+    
+    // Kolory kropki: obramowanie pomarańczowe dla regain, białe w pozostałych przypadkach
+    // Wypełnienie: czarne dla strzału, jasnozielone dla gola
+    const dotStrokeColor = isRegain ? '#f59e0b' : 'white';
+    const dotFillColor = isGoal ? '#86efac' : '#1f2937';
     
     return (
       <svg
@@ -197,6 +199,7 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
             />
           </marker>
         </defs>
+        {/* Linia podstawowa */}
         <line
           x1={start.x}
           y1={start.y}
@@ -208,43 +211,16 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
           pointerEvents="stroke"
           style={{ cursor: 'pointer' }}
         />
-        {/* Emoji piłki na początku strzałki, jeśli był gol */}
-        {isGoal && (
-          <foreignObject
-            x={start.x - 1.5}
-            y={start.y - 1.5}
-            width="3"
-            height="3"
-            pointerEvents="none"
-            style={{
-              overflow: 'visible',
-            }}
-          >
-            <div
-              style={{
-                width: '3px',
-                height: '3px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '3px',
-                lineHeight: '1',
-                userSelect: 'none',
-                aspectRatio: '1',
-              }}
-            >
-              ⚽
-            </div>
-          </foreignObject>
-        )}
-        {/* Pomarańczowa kropka na środku linii, jeśli był regain */}
-        {isRegain && (
+        {/* Kropka na początku strzałki, jeśli był strzał lub gol */}
+        {/* Wypełnienie: czarne dla strzału, jasnozielone dla gola */}
+        {/* Obramowanie: pomarańczowe dla regain, białe w pozostałych przypadkach */}
+        {(isShot || isGoal) && (
           <circle
-            cx={midX}
-            cy={midY}
-            r="1.2"
-            fill="#f59e0b"
-            stroke="white"
+            cx={start.x}
+            cy={start.y}
+            r="1.0"
+            fill={dotFillColor}
+            stroke={dotStrokeColor}
             strokeWidth="0.15"
             pointerEvents="none"
           />
