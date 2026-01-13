@@ -14,7 +14,7 @@ import { getPlayerFullName } from "@/utils/playerUtils";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPitch";
-import { getOppositeXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString } from "@/constants/xtValues";
+import { getOppositeXTValueForZone, getXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString } from "@/constants/xtValues";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
@@ -1913,10 +1913,17 @@ export default function PlayerDetailsPage() {
           const currentXT = regainHeatmap.get(regainZoneName) || 0;
           regainHeatmap.set(regainZoneName, currentXT + receiverXT);
           
-          // Wartość xT w obronie - używamy regainDefenseXT (nowe pole) lub starych pól dla backward compatibility
+          // Wartość xT w obronie:
+          // - preferuj regainDefenseXT (nowe pole)
+          // - fallback: policz z aktualnej strefy regainu (getXTValueForZone)
+          // - ostateczny fallback: stare pola xTValueStart/xTValueEnd
           const defenseXT = action.regainDefenseXT !== undefined 
             ? action.regainDefenseXT 
-            : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+            : (() => {
+                const idx = regainZoneName ? zoneNameToIndex(regainZoneName) : null;
+                if (idx !== null) return getXTValueForZone(idx);
+                return action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0);
+              })();
           
           // Wartość xT w ataku - używamy regainAttackXT (nowe pole) lub starych pól dla backward compatibility
           const oppositeXT = action.regainAttackXT !== undefined 
@@ -2738,17 +2745,23 @@ export default function PlayerDetailsPage() {
       regainActions.forEach(action => {
         totalRegains += 1;
         
-        // Wartość xT w obronie
-        const defenseXT = action.regainDefenseXT !== undefined 
-          ? action.regainDefenseXT 
-          : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+        // Wartość xT w obronie — identyczna logika jak w playerStats (żeby % zespołu i rankingi nie były przekłamane na starych akcjach)
+        const regainDefenseZone = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+        const regainZoneName = convertZoneToNameHelper(regainDefenseZone);
+        const zoneIdx = regainZoneName ? zoneNameToIndex(regainZoneName) : null;
+
+        const defenseXT = action.regainDefenseXT !== undefined
+          ? action.regainDefenseXT
+          : (zoneIdx !== null
+              ? getXTValueForZone(zoneIdx)
+              : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0)));
         
-        // Wartość xT w ataku
-        const attackXT = action.regainAttackXT !== undefined 
-          ? action.regainAttackXT 
-          : (action.oppositeXT !== undefined 
-            ? action.oppositeXT 
-            : 0);
+        // Wartość xT w ataku — preferuj nowe pole, fallback: oppositeXT, a jeśli brak to policz z przeciwległej strefy
+        const attackXT = action.regainAttackXT !== undefined
+          ? action.regainAttackXT
+          : (action.oppositeXT !== undefined
+              ? action.oppositeXT
+              : (zoneIdx !== null ? getOppositeXTValueForZone(zoneIdx) : 0));
         
         // Zawsze dodajemy do obu statystyk
         regainXTInDefense += defenseXT;
