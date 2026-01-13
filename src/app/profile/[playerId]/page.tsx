@@ -3116,44 +3116,52 @@ export default function PlayerDetailsPage() {
                   <div className={styles.xgDetails}>
                     <h3>Szczegóły xG</h3>
 
-                    <div className={styles.categoryControls} style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                      <div className={styles.categoryControls} style={{ margin: 0 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 16 }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: 4 }}>Połowa:</span>
                         <button
                           className={`${styles.categoryButton} ${xgHalf === 'all' ? styles.active : ''}`}
                           onClick={() => setXgHalf('all')}
+                          style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                         >
                           Wszystkie
                         </button>
                         <button
                           className={`${styles.categoryButton} ${xgHalf === 'first' ? styles.active : ''}`}
                           onClick={() => setXgHalf('first')}
+                          style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                         >
                           I połowa
                         </button>
                         <button
                           className={`${styles.categoryButton} ${xgHalf === 'second' ? styles.active : ''}`}
                           onClick={() => setXgHalf('second')}
+                          style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                         >
                           II połowa
                         </button>
                       </div>
 
-                      <div className={styles.categoryControls} style={{ margin: 0 }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginLeft: 'auto' }}>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: 4 }}>Typ:</span>
                         <button
                           className={`${styles.categoryButton} ${xgFilter === 'all' ? styles.active : ''}`}
                           onClick={() => setXgFilter('all')}
+                          style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                         >
                           Wszystkie xG
                         </button>
                         <button
                           className={`${styles.categoryButton} ${xgFilter === 'sfg' ? styles.active : ''}`}
                           onClick={() => setXgFilter('sfg')}
+                          style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                         >
                           xG SFG
                         </button>
                         <button
                           className={`${styles.categoryButton} ${xgFilter === 'open_play' ? styles.active : ''}`}
                           onClick={() => setXgFilter('open_play')}
+                          style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                         >
                           xG Otwarta gra
                         </button>
@@ -3232,34 +3240,124 @@ export default function PlayerDetailsPage() {
                       </div>
 
                       <div className={styles.xgPitchPanel}>
-                        <div className={styles.xgPitchHeader}>
-                          <div className={styles.xgPitchTitle}>Mapa strzałów</div>
-                          <div className={styles.xgPitchSubtitle}>Kolor i rozmiar zależy od xG, kliknij kropkę aby podświetlić</div>
-                        </div>
-
                         {xgStats.playerShots.length === 0 ? (
                           <div className={styles.noData}>
                             Brak strzałów dla wybranych filtrów.
                           </div>
                         ) : (
-                          <XGPitch
-                            shots={xgStats.playerShots}
-                            onShotClick={(shot) => setSelectedXGShotIdForView(shot.id)}
-                            selectedShotId={selectedXGShotIdForView}
-                            matchInfo={
-                              xgStats.headerMatch
-                                ? {
-                                    team: xgStats.headerMatch.team,
-                                    opponent: xgStats.headerMatch.opponent,
-                                    opponentLogo: xgStats.headerMatch.opponentLogo,
-                                  }
-                                : {
-                                    team: selectedTeam || undefined,
-                                    opponent: xgStats.relevantMatchesCount > 1 ? "Różni" : "Przeciwnik",
-                                  }
-                            }
-                            allTeams={teams || []}
-                          />
+                          <>
+                            <XGPitch
+                              shots={xgStats.playerShots}
+                              onShotClick={(shot) => setSelectedXGShotIdForView(shot.id)}
+                              selectedShotId={selectedXGShotIdForView}
+                              matchInfo={
+                                xgStats.headerMatch
+                                  ? {
+                                      team: xgStats.headerMatch.team,
+                                      opponent: xgStats.headerMatch.opponent,
+                                      opponentLogo: xgStats.headerMatch.opponentLogo,
+                                    }
+                                  : {
+                                      team: selectedTeam || undefined,
+                                      opponent: xgStats.relevantMatchesCount > 1 ? "Różni" : "Przeciwnik",
+                                    }
+                              }
+                              allTeams={teams || []}
+                              hideTeamLogos
+                              hideToggleButton
+                            />
+
+                            {/* Szczegóły klikniętego strzału */}
+                            {selectedXGShotIdForView && (() => {
+                              const selectedShot = xgStats.playerShots.find(s => s.id === selectedXGShotIdForView);
+                              if (!selectedShot) return null;
+                              return (
+                                <div className={styles.zoneDetailsPanel} style={{ marginTop: 12 }}>
+                                  <div className={styles.zoneDetailsHeader}>
+                                    <h4>
+                                      Strzał • {selectedShot.xG.toFixed(2)} xG
+                                      {selectedShot.minute !== undefined && ` • ${selectedShot.minute}'${selectedShot.isSecondHalf ? ' (II)' : ' (I)'}`}
+                                    </h4>
+                                    <button
+                                      type="button"
+                                      className={styles.zoneDetailsClose}
+                                      onClick={() => setSelectedXGShotIdForView(undefined)}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className={styles.zoneDetailsBody}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                                      <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                        <span className={styles.detailsLabel}>xG:</span>
+                                        <span className={styles.detailsValue}>
+                                          <span className={styles.valueMain}><strong>{selectedShot.xG.toFixed(2)}</strong></span>
+                                        </span>
+                                      </div>
+                                      {selectedShot.xGOT !== undefined && (
+                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                          <span className={styles.detailsLabel}>xG OT:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}><strong>{selectedShot.xGOT.toFixed(2)}</strong></span>
+                                          </span>
+                                        </div>
+                                      )}
+                                      {selectedShot.isGoal !== undefined && (
+                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                          <span className={styles.detailsLabel}>Gol:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}>
+                                              <strong>{selectedShot.isGoal ? "Tak" : "Nie"}</strong>
+                                            </span>
+                                          </span>
+                                        </div>
+                                      )}
+                                      {selectedShot.isOnTarget !== undefined && (
+                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                          <span className={styles.detailsLabel}>Celny:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}>
+                                              <strong>{selectedShot.isOnTarget ? "Tak" : "Nie"}</strong>
+                                            </span>
+                                          </span>
+                                        </div>
+                                      )}
+                                      {selectedShot.isBlocked !== undefined && (
+                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                          <span className={styles.detailsLabel}>Zablokowany:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}>
+                                              <strong>{selectedShot.isBlocked ? "Tak" : "Nie"}</strong>
+                                            </span>
+                                          </span>
+                                        </div>
+                                      )}
+                                      {selectedShot.actionType && (
+                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                          <span className={styles.detailsLabel}>Typ:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}>
+                                              <strong>{selectedShot.actionType === 'sfg' ? 'SFG' : 'Otwarta gra'}</strong>
+                                            </span>
+                                          </span>
+                                        </div>
+                                      )}
+                                      {selectedShot.playersOnLine !== undefined && (
+                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                          <span className={styles.detailsLabel}>Zawodnicy na linii:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}>
+                                              <strong>{selectedShot.playersOnLine}</strong>
+                                            </span>
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </>
                         )}
                       </div>
                     </div>
@@ -3289,20 +3387,24 @@ export default function PlayerDetailsPage() {
 
                           <div className={styles.detailsRow}>
                             <span className={styles.detailsLabel}>Gole i strzały:</span>
-                            <span className={styles.detailsValue} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                              <span>
+                            <span className={styles.detailsValue} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                 <span className={styles.valueMain}><strong>{pkEntriesStats.goals}</strong></span>
-                                <span className={styles.valueSecondary}> gole</span>
+                                <span className={styles.valueSecondary} style={{ fontSize: '12px' }}>gole</span>
                               </span>
-                              <span>
+                              <span style={{ color: '#d1d5db', fontSize: '12px' }}>•</span>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                 <span className={styles.valueMain}><strong>{pkEntriesStats.shots}</strong></span>
-                                <span className={styles.valueSecondary}> strzały</span>
-                                {pkEntriesStats.shotsWithoutGoal > 0 && (
-                                  <span className={styles.valueSecondary}>
-                                    {' '}({pkEntriesStats.shotsWithoutGoal} bez gola)
-                                  </span>
-                                )}
+                                <span className={styles.valueSecondary} style={{ fontSize: '12px' }}>strzały</span>
                               </span>
+                              {pkEntriesStats.shotsWithoutGoal > 0 && (
+                                <>
+                                  <span style={{ color: '#d1d5db', fontSize: '12px' }}>•</span>
+                                  <span className={styles.valueSecondary} style={{ fontSize: '12px' }}>
+                                    {pkEntriesStats.shotsWithoutGoal} bez gola
+                                  </span>
+                                </>
+                              )}
                             </span>
                           </div>
 
@@ -3320,18 +3422,20 @@ export default function PlayerDetailsPage() {
                             <>
                               <div className={styles.detailsRow}>
                                 <span className={styles.detailsLabel}>Śr. w PK:</span>
-                                <span className={styles.detailsValue} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                                  <span>
+                                <span className={styles.detailsValue} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                     <span className={styles.valueMain}><strong>{pkEntriesAverages.avgPartners.toFixed(2)}</strong></span>
-                                    <span className={styles.valueSecondary}> partnerzy</span>
+                                    <span className={styles.valueSecondary} style={{ fontSize: '12px' }}>partnerzy</span>
                                   </span>
-                                  <span>
+                                  <span style={{ color: '#d1d5db', fontSize: '12px' }}>•</span>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                     <span className={styles.valueMain}><strong>{pkEntriesAverages.avgOpponents.toFixed(2)}</strong></span>
-                                    <span className={styles.valueSecondary}> przeciwnicy</span>
+                                    <span className={styles.valueSecondary} style={{ fontSize: '12px' }}>przeciwnicy</span>
                                   </span>
-                                  <span>
+                                  <span style={{ color: '#d1d5db', fontSize: '12px' }}>•</span>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                     <span className={styles.valueMain}><strong>{pkEntriesAverages.avgDiffOppMinusPartners.toFixed(2)}</strong></span>
-                                    <span className={styles.valueSecondary}> różnica</span>
+                                    <span className={styles.valueSecondary} style={{ fontSize: '12px' }}>różnica</span>
                                   </span>
                                 </span>
                               </div>
@@ -3358,6 +3462,9 @@ export default function PlayerDetailsPage() {
                           </div>
                         ) : (
                           <>
+                            <div style={{ marginBottom: 8, fontSize: 12, color: '#6b7280', textAlign: 'center' }}>
+                              Kliknij strzałkę, aby zobaczyć szczegóły wejścia
+                            </div>
                             <PKEntriesPitch
                               pkEntries={pkEntriesFilteredForView}
                               // Celowo nie podświetlamy po kliknięciu – klik ma pokazywać szczegóły niżej
