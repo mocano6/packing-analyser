@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Player, Action, TeamInfo } from "@/types";
+import { Player, Action, TeamInfo, PKEntry, Shot } from "@/types";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { useTeams } from "@/hooks/useTeams";
@@ -17,6 +17,8 @@ import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPit
 import { getOppositeXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString } from "@/constants/xtValues";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
+import XGPitch from "@/components/XGPitch/XGPitch";
 import styles from "./page.module.css";
 
 export default function PlayerDetailsPage() {
@@ -112,6 +114,10 @@ export default function PlayerDetailsPage() {
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<{ playerId: string; playerName: string; zoneName: string } | null>(null);
   const [isPlayerSelectModalOpen, setIsPlayerSelectModalOpen] = useState(false);
   const [isMatchSelectModalOpen, setIsMatchSelectModalOpen] = useState(false);
+  const [selectedPKEntryIdForView, setSelectedPKEntryIdForView] = useState<string | undefined>(undefined);
+  const [selectedXGShotIdForView, setSelectedXGShotIdForView] = useState<string | undefined>(undefined);
+  const [xgHalf, setXgHalf] = useState<"all" | "first" | "second">("all");
+  const [xgFilter, setXgFilter] = useState<"all" | "sfg" | "open_play">("all");
 
   // Ref do śledzenia, czy już załadowaliśmy mecze dla danego zespołu
   const lastLoadedTeamRef = useRef<string | null>(null);
@@ -153,6 +159,188 @@ export default function PlayerDetailsPage() {
       return playerTeams.includes(selectedTeam);
     });
   }, [players, selectedTeam]);
+
+  // Wejścia w PK (rysowane ręcznie w module PK) - dane z meczów (matches.pkEntries)
+  const pkEntriesStats = useMemo(() => {
+    const targetPlayerId = selectedPlayerForView || playerId;
+    const selectedSet = new Set(selectedMatchIds);
+
+    const relevantMatches = filteredMatchesBySeason.filter(m => {
+      const id = m.matchId || "";
+      if (!id) return false;
+      if (selectedMatchIds.length === 0) return true;
+      return selectedSet.has(id);
+    });
+
+    const allPkEntries: PKEntry[] = relevantMatches.flatMap(m => {
+      const matchPk = (m.pkEntries || []) as PKEntry[];
+      const matchId = m.matchId || "";
+      return matchPk.map(e => ({
+        ...e,
+        matchId: e.matchId || matchId,
+      }));
+    });
+
+    // Dla wkładu zawodnika liczymy tylko wejścia w PK w ataku
+    const teamAttackEntries = allPkEntries.filter(e => (e.teamContext ?? "attack") === "attack");
+
+    const playerEntries = teamAttackEntries.filter(e =>
+      e.senderId === targetPlayerId || e.receiverId === targetPlayerId
+    );
+
+    const teamTotal = teamAttackEntries.length;
+    const playerTotal = playerEntries.length;
+
+    const goals = playerEntries.filter(e => !!e.isGoal).length;
+    const shots = playerEntries.filter(e => !!e.isShot).length;
+    const shotsWithoutGoal = playerEntries.filter(e => !!e.isShot && !e.isGoal).length;
+    const regains = playerEntries.filter(e => !!e.isRegain).length;
+
+    const involvementPct = teamTotal > 0 ? (playerTotal / teamTotal) * 100 : 0;
+    const regainPct = playerTotal > 0 ? (regains / playerTotal) * 100 : 0;
+
+    const headerMatch = relevantMatches.length === 1 ? relevantMatches[0] : null;
+
+    return {
+      relevantMatchesCount: relevantMatches.length,
+      teamTotal,
+      playerTotal,
+      involvementPct,
+      goals,
+      shots,
+      shotsWithoutGoal,
+      regains,
+      regainPct,
+      playerEntries,
+      headerMatch,
+    };
+  }, [filteredMatchesBySeason, selectedMatchIds, selectedPlayerForView, playerId]);
+
+  const xgStats = useMemo(() => {
+    const targetPlayerId = selectedPlayerForView || playerId;
+    const selectedSet = new Set(selectedMatchIds);
+
+    const relevantMatches = filteredMatchesBySeason.filter(m => {
+      const id = m.matchId || "";
+      if (!id) return false;
+      if (selectedMatchIds.length === 0) return true;
+      return selectedSet.has(id);
+    });
+
+    // Helpery do klasyfikacji SFG / otwarta gra
+    const isSfgShot = (shot: Shot) => {
+      return (
+        shot.actionType === "corner" ||
+        shot.actionType === "free_kick" ||
+        shot.actionType === "direct_free_kick" ||
+        shot.actionType === "penalty" ||
+        shot.actionType === "throw_in"
+      );
+    };
+
+    const isOpenPlayShot = (shot: Shot) => {
+      // Traktujemy wszystko poza SFG jako „otwarta gra” (w tym kontra / regain)
+      return !isSfgShot(shot);
+    };
+
+    const filterByHalf = (shots: Shot[]) => {
+      if (xgHalf === "first") return shots.filter(s => (s.minute || 0) <= 45);
+      if (xgHalf === "second") return shots.filter(s => (s.minute || 0) > 45);
+      return shots;
+    };
+
+    const filterByType = (shots: Shot[]) => {
+      if (xgFilter === "sfg") return shots.filter(isSfgShot);
+      if (xgFilter === "open_play") return shots.filter(isOpenPlayShot);
+      return shots;
+    };
+
+    // Strzały zawodnika (już wczytane do allShots) + filtry mecz/połowa/typ
+    const playerShotsAll = (allShots as Shot[]).filter(s => {
+      if (!s) return false;
+      if (s.playerId !== targetPlayerId) return false;
+      if (selectedMatchIds.length > 0) {
+        return selectedSet.has((s.matchId || "") as string);
+      }
+      return true;
+    });
+    const playerShots = filterByType(filterByHalf(playerShotsAll));
+
+    // Strzały zespołu (do udziału) — z danych meczowych
+    // Ważne: część historycznych strzałów może nie mieć teamId, więc wnioskujemy je jak w statystykach zespołu
+    const teamShotsAll: Shot[] = relevantMatches.flatMap(m => {
+      const matchShots = (m.shots || []) as Shot[];
+      const matchId = m.matchId || "";
+      const isSelectedTeamHome = !!selectedTeam && m.team === selectedTeam;
+
+      const inferTeamId = (shot: Shot) => {
+        if (shot.teamId) return shot.teamId;
+        if (!selectedTeam) return undefined;
+        if (!m.team || !m.opponent) return undefined;
+
+        // teamContext: "attack" = nasz zespół atakuje, "defense" = nasz zespół broni (czyli strzela przeciwnik)
+        if (shot.teamContext === "attack") {
+          return isSelectedTeamHome ? m.team : m.opponent;
+        }
+        return isSelectedTeamHome ? m.opponent : m.team;
+      };
+
+      return matchShots
+        .map(s => ({
+          ...s,
+          matchId: s.matchId || matchId,
+          teamId: s.teamId || (inferTeamId(s) as any),
+        }))
+        .filter(s => !!selectedTeam && s.teamId === selectedTeam);
+    });
+
+    const teamShots = filterByType(filterByHalf(teamShotsAll));
+
+    const playerXG = playerShots.reduce((sum, s) => sum + (s.xG || 0), 0);
+    const playerCount = playerShots.length;
+    const playerXGPerShot = playerCount > 0 ? playerXG / playerCount : 0;
+
+    const playerOnTarget = playerShots.filter(s => s.shotType === "on_target" || s.shotType === "goal" || !!s.isGoal);
+    const playerXGOT = playerOnTarget.reduce((sum, s) => sum + (s.xG || 0), 0);
+    const playerGoals = playerShots.filter(s => !!s.isGoal || s.shotType === "goal").length;
+    const playerXGMinusGoals = playerXG - playerGoals;
+
+    const playerBlocked = playerShots.filter(s => s.shotType === "blocked");
+    const playerXGBlocked = playerBlocked.reduce((sum, s) => sum + (s.xG || 0), 0);
+
+    const playerLinePlayersTotal = playerShots.reduce((sum, s) => {
+      if (s.teamContext === "attack") return sum + (s.linePlayersCount || 0);
+      return sum + ((s.linePlayers?.length || 0) as number);
+    }, 0);
+    const playerAvgLinePlayers = playerCount > 0 ? playerLinePlayersTotal / playerCount : 0;
+
+    const teamXG = teamShots.reduce((sum, s) => sum + (s.xG || 0), 0);
+    const teamCount = teamShots.length;
+
+    const xgSharePct = teamXG > 0 ? (playerXG / teamXG) * 100 : 0;
+    const shotSharePct = teamCount > 0 ? (playerCount / teamCount) * 100 : 0;
+
+    const headerMatch = relevantMatches.length === 1 ? relevantMatches[0] : null;
+
+    return {
+      relevantMatchesCount: relevantMatches.length,
+      playerShots,
+      playerXG,
+      playerCount,
+      playerXGPerShot,
+      playerXGOT,
+      playerOnTargetCount: playerOnTarget.length,
+      playerGoals,
+      playerXGMinusGoals,
+      playerXGBlocked,
+      playerAvgLinePlayers,
+      teamXG,
+      teamCount,
+      xgSharePct,
+      shotSharePct,
+      headerMatch,
+    };
+  }, [allShots, filteredMatchesBySeason, playerId, selectedMatchIds, selectedPlayerForView, selectedTeam, xgHalf, xgFilter]);
 
   // Grupowanie zawodników według pozycji dla modala wyboru
   const playersByPosition = useMemo(() => {
@@ -512,7 +700,7 @@ export default function PlayerDetailsPage() {
           }
         }
       }
-    }
+      }
     // Jeśli zawodnik z localStorage jest dostępny, zachowaj go (nie nadpisuj playerId z URL)
   }, [filteredPlayers, playerId, selectedPlayerForView]);
 
@@ -1896,8 +2084,8 @@ export default function PlayerDetailsPage() {
         // Fallback: sprawdź pola akcji
         // Loses: ma isReaction5s LUB ma isBelow8s ale NIE MA playersBehindBall/opponentsBehindBall
         const isLoses = action.isReaction5s !== undefined || 
-                       (action.isBelow8s !== undefined && 
-                        action.playersBehindBall === undefined && 
+         (action.isBelow8s !== undefined &&
+          action.playersBehindBall === undefined &&
                         action.opponentsBehindBall === undefined);
         
         return isLoses;
@@ -2833,7 +3021,10 @@ export default function PlayerDetailsPage() {
                   <span className={styles.categoryName}>PxT</span>
                   <span className={styles.categoryValue}>{playerStats.pxtPer90.toFixed(2)}</span>
                 </div>
-                <div className={styles.categoryItem}>
+                <div
+                  className={`${styles.categoryItem} ${expandedCategory === 'xg' ? styles.active : ''}`}
+                  onClick={() => setExpandedCategory(expandedCategory === 'xg' ? null : 'xg')}
+                >
                   <span className={styles.categoryName}>xG</span>
                   <span className={styles.categoryValue}>{playerStats.xgPer90.toFixed(2)}</span>
                 </div>
@@ -2851,7 +3042,10 @@ export default function PlayerDetailsPage() {
                   <span className={styles.categoryName}>Straty</span>
                   <span className={styles.categoryValue}>{playerStats.losesPer90.toFixed(1)}</span>
                 </div>
-                <div className={styles.categoryItem}>
+                <div
+                  className={`${styles.categoryItem} ${expandedCategory === 'pk_entries' ? styles.active : ''}`}
+                  onClick={() => setExpandedCategory(expandedCategory === 'pk_entries' ? null : 'pk_entries')}
+                >
                   <span className={styles.categoryName}>Wejścia w PK</span>
                   <span className={styles.categoryValue}>{playerStats.pkEntriesPer90.toFixed(1)}</span>
                 </div>
@@ -2859,6 +3053,256 @@ export default function PlayerDetailsPage() {
 
               {/* Szczegóły poniżej */}
               <div className={styles.detailsPanel}>
+                {expandedCategory === 'xg' && (
+                  <div className={styles.xgDetails}>
+                    <h3>Szczegóły xG</h3>
+
+                    <div className={styles.categoryControls} style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                      <div className={styles.categoryControls} style={{ margin: 0 }}>
+                        <button
+                          className={`${styles.categoryButton} ${xgHalf === 'all' ? styles.active : ''}`}
+                          onClick={() => setXgHalf('all')}
+                        >
+                          Wszystkie
+                        </button>
+                        <button
+                          className={`${styles.categoryButton} ${xgHalf === 'first' ? styles.active : ''}`}
+                          onClick={() => setXgHalf('first')}
+                        >
+                          I połowa
+                        </button>
+                        <button
+                          className={`${styles.categoryButton} ${xgHalf === 'second' ? styles.active : ''}`}
+                          onClick={() => setXgHalf('second')}
+                        >
+                          II połowa
+                        </button>
+                      </div>
+
+                      <div className={styles.categoryControls} style={{ margin: 0 }}>
+                        <button
+                          className={`${styles.categoryButton} ${xgFilter === 'all' ? styles.active : ''}`}
+                          onClick={() => setXgFilter('all')}
+                        >
+                          Wszystkie xG
+                        </button>
+                        <button
+                          className={`${styles.categoryButton} ${xgFilter === 'sfg' ? styles.active : ''}`}
+                          onClick={() => setXgFilter('sfg')}
+                        >
+                          xG SFG
+                        </button>
+                        <button
+                          className={`${styles.categoryButton} ${xgFilter === 'open_play' ? styles.active : ''}`}
+                          onClick={() => setXgFilter('open_play')}
+                        >
+                          xG Otwarta gra
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className={`${styles.detailsSection} ${styles.detailsSectionWithTiles}`}>
+                      <div className={styles.detailsSectionContent}>
+                        <h4>Strzały i jakość</h4>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>xG:</span>
+                          <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerXG.toFixed(2)}</strong></span>
+                            {xgStats.teamXG > 0 && (
+                              <span className={styles.valueSecondary}>({xgStats.xgSharePct.toFixed(1)}% xG zespołu)</span>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>Strzały:</span>
+                          <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerCount}</strong></span>
+                            {xgStats.teamCount > 0 && (
+                              <span className={styles.valueSecondary}>({xgStats.shotSharePct.toFixed(1)}% strzałów zespołu)</span>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>xG/strzał:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerXGPerShot.toFixed(2)}</strong></span>
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>xG OT:</span>
+                          <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerXGOT.toFixed(2)}</strong></span>
+                            <span className={styles.valueSecondary}>({xgStats.playerOnTargetCount}/{xgStats.playerCount} celne/gole)</span>
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>Gole:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerGoals}</strong></span>
+                            <span className={styles.valueSecondary}> • różnica xG–gole: {xgStats.playerXGMinusGoals.toFixed(2)}</span>
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>xG zablokowane:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerXGBlocked.toFixed(2)}</strong></span>
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>Zawodnicy na linii/strzał:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerAvgLinePlayers.toFixed(2)}</strong></span>
+                          </span>
+                        </div>
+
+                        {xgStats.relevantMatchesCount > 1 && (
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Zakres:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueSecondary}>Wybrane mecze: {xgStats.relevantMatchesCount}</span>
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className={styles.xgPitchPanel}>
+                        <div className={styles.xgPitchHeader}>
+                          <div className={styles.xgPitchTitle}>Mapa strzałów</div>
+                          <div className={styles.xgPitchSubtitle}>Kolor i rozmiar zależy od xG, kliknij kropkę aby podświetlić</div>
+                        </div>
+
+                        {xgStats.playerShots.length === 0 ? (
+                          <div className={styles.noData}>
+                            Brak strzałów dla wybranych filtrów.
+                          </div>
+                        ) : (
+                          <XGPitch
+                            shots={xgStats.playerShots}
+                            onShotClick={(shot) => setSelectedXGShotIdForView(shot.id)}
+                            selectedShotId={selectedXGShotIdForView}
+                            matchInfo={
+                              xgStats.headerMatch
+                                ? {
+                                    team: xgStats.headerMatch.team,
+                                    opponent: xgStats.headerMatch.opponent,
+                                    opponentLogo: xgStats.headerMatch.opponentLogo,
+                                  }
+                                : {
+                                    team: selectedTeam || undefined,
+                                    opponent: xgStats.relevantMatchesCount > 1 ? "Różni" : "Przeciwnik",
+                                  }
+                            }
+                            allTeams={teams || []}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {expandedCategory === 'pk_entries' && (
+                  <div className={styles.pkEntriesDetails}>
+                    <h3>Wejścia w PK</h3>
+
+                    <div className={`${styles.detailsSection} ${styles.detailsSectionWithTiles}`}>
+                      <div className={styles.detailsSectionContent}>
+                        <h4>Wkład zawodnika</h4>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>Udział:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}>
+                              <strong>{pkEntriesStats.playerTotal}</strong> / {pkEntriesStats.teamTotal}
+                            </span>
+                            <span className={styles.valueSecondary}>
+                              ({pkEntriesStats.involvementPct.toFixed(1)}% wejść zespołu)
+                            </span>
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>Gole po wejściu:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}><strong>{pkEntriesStats.goals}</strong></span>
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>Strzały po wejściu:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}><strong>{pkEntriesStats.shots}</strong></span>
+                            <span className={styles.valueSecondary}>
+                              (bez gola: {pkEntriesStats.shotsWithoutGoal})
+                            </span>
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>Regain:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}><strong>{pkEntriesStats.regains}</strong></span>
+                            <span className={styles.valueSecondary}>
+                              ({pkEntriesStats.regainPct.toFixed(1)}% udziałów)
+                            </span>
+                          </span>
+                        </div>
+
+                        {pkEntriesStats.relevantMatchesCount > 1 && (
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Zakres:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueSecondary}>
+                                Wybrane mecze: {pkEntriesStats.relevantMatchesCount}
+                              </span>
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className={styles.pkEntriesPitchPanel}>
+                        <div className={styles.pkEntriesPitchHeader}>
+                          <div className={styles.pkEntriesPitchTitle}>Wizualizacja na boisku</div>
+                          <div className={styles.pkEntriesPitchSubtitle}>
+                            Kliknij strzałkę, aby podświetlić
+                          </div>
+                        </div>
+
+                        {pkEntriesStats.playerEntries.length === 0 ? (
+                          <div className={styles.noData}>
+                            Brak wejść w PK dla wybranego zawodnika w zaznaczonych meczach.
+                          </div>
+                        ) : (
+                          <PKEntriesPitch
+                            pkEntries={pkEntriesStats.playerEntries}
+                            selectedEntryId={selectedPKEntryIdForView}
+                            onEntryClick={(entry) => setSelectedPKEntryIdForView(entry.id)}
+                            matchInfo={
+                              pkEntriesStats.headerMatch
+                                ? {
+                                    team: pkEntriesStats.headerMatch.team,
+                                    opponent: pkEntriesStats.headerMatch.opponent,
+                                    opponentLogo: pkEntriesStats.headerMatch.opponentLogo,
+                                  }
+                                : {
+                                    team: selectedTeam || undefined,
+                                    opponent: pkEntriesStats.relevantMatchesCount > 1 ? "Różni" : "Przeciwnik",
+                                  }
+                            }
+                            allTeams={teams || []}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {expandedCategory === 'pxt' && (
                   <div className={styles.pxtDetails}>
                     <h3>Szczegóły PxT</h3>
@@ -3089,7 +3533,7 @@ export default function PlayerDetailsPage() {
                                 <span className={styles.zoneLabel}>Strefy centralne:</span>
                                 <span className={styles.zoneValue}>{playerStats.senderGoalCountCentral}</span>
                               </div>
-                            </div>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -4083,7 +4527,7 @@ export default function PlayerDetailsPage() {
                           // Dla ataku: partnerzy za piłką - przeciwnicy za piłką
                           // Dla obrony: przeciwnicy za piłką - nasi za piłką
                           // Wzór dla obrony: (totalOpponentsOnField - bramkarz - opponentsBehindBall) - (totalPlayersOnField - bramkarz - playersBehindBall)
-                          const playerDifference = isAttackMode
+                          const playerDifference = isAttackMode 
                             ? (displayPlayersValue || 0) - (displayOpponentsValue || 0) // Atak: partnerzy za piłką - przeciwnicy za piłką
                             : (displayOpponentsValue || 0) - (displayPlayersValue || 0); // Obrona: przeciwnicy za piłką - nasi za piłką
                           
@@ -4473,17 +4917,17 @@ export default function PlayerDetailsPage() {
                                   let oppositeXT = action.regainAttackXT !== undefined 
                                     ? action.regainAttackXT 
                                     : (action.oppositeXT !== undefined 
-                                      ? action.oppositeXT 
-                                      : (() => {
+                                    ? action.oppositeXT 
+                                    : (() => {
                                           const regainDefenseZone = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
                                           const zoneNameStr = convertZoneToNameHelper(regainDefenseZone);
                                           if (zoneNameStr) {
                                             const zoneIndex = zoneNameToIndex(zoneNameStr);
                                             if (zoneIndex !== null) {
                                               return getOppositeXTValueForZone(zoneIndex);
-                                            }
                                           }
-                                          return 0;
+                                        }
+                                        return 0;
                                         })());
                                   
                                   return (
@@ -4881,7 +5325,7 @@ export default function PlayerDetailsPage() {
                       >
                         W ataku
                       </button>
-                    </div>
+              </div>
 
                     {/* Statystyki podstawowe */}
                     <div className={styles.detailsSection} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
@@ -4894,7 +5338,7 @@ export default function PlayerDetailsPage() {
                                 <span className={styles.valueMain}><strong>{playerStats.totalLoses}</strong></span>
                                 <span className={styles.valueSecondary}>({playerStats.losesPer90.toFixed(1)} / 90 min)</span>
                               </span>
-                            </div>
+            </div>
                             {losesAttackDefenseMode === 'attack' && (
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', marginBottom: '8px' }}>
                                 <div className={styles.detailsRow}>

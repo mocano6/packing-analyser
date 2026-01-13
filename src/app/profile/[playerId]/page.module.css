@@ -341,6 +341,82 @@
   color: #1f2937;
 }
 
+.pkEntriesDetails {
+  overflow: visible;
+}
+
+.pkEntriesDetails h3 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.xgDetails {
+  overflow: visible;
+}
+
+.xgDetails h3 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.xgPitchPanel {
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.xgPitchHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.xgPitchTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.xgPitchSubtitle {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.pkEntriesPitchPanel {
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.pkEntriesPitchHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.pkEntriesPitchTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.pkEntriesPitchSubtitle {
+  font-size: 12px;
+  color: #6b7280;
+}
+
 .detailsSection {
   margin-bottom: 24px;
   padding-bottom: 20px;
