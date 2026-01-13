@@ -113,9 +113,9 @@
   cursor: crosshair;
 }
 
-/* Klasa dla odbitej orientacji */
+/* Klasa dla odbitej orientacji - tylko logiczne odbicie, bez wizualnego */
 .pitch.flipped {
-  /* Logiczne odbicie - bez wizualnych zmian */
+  /* Logiczne odbicie - bez wizualnych zmian CSS */
 }
 
 .pitchLines {

@@ -206,7 +206,11 @@ export interface PKEntry {
   teamContext?: "attack" | "defense"; // Kontekst zespołu
   videoTimestamp?: number; // Czas wideo w milisekundach
   isPossible1T?: boolean; // Możliwe 1T
-  pkPlayersCount?: number; // Liczba zawodników w PK
+  pkPlayersCount?: number; // Liczba partnerów w PK
+  opponentsInPKCount?: number; // Liczba przeciwników w PK
+  isShot?: boolean; // Czy po wejściu w PK był strzał
+  isGoal?: boolean; // Czy po wejściu w PK był gol
+  isRegain?: boolean; // Czy był przechwyt piłki
   timestamp: number;
 }
 

@@ -1107,7 +1107,6 @@ export default function PlayerDetailsPage() {
         totalPxT += pxtValue;
         totalXT += xTDifference;
         senderActionsCount += 1;
-        senderPassCount += 1;
         // Strefa źródłowa (z której podawał)
         const fromZoneName = convertZoneToName(action.fromZone || action.startZone);
         // Strefa docelowa (do której podawał)
@@ -1119,14 +1118,17 @@ export default function PlayerDetailsPage() {
           ? fromZoneName
           : toZoneName;
         
-        // Licz tylko akcje, które mają strefę (tak jak heatmapa)
-        if (zoneForBreakdown) {
-          const senderIsLateral = isLateralZone(zoneForBreakdown);
+        // Miejsca startowe (P0-P3 Start) - używamy strefy źródłowej (fromZone/startZone)
+        // Licz podania tylko jeśli mają strefę startową (dla spójności z licznikami P0-P3 Start)
+        const startZoneName = convertZoneToName(action.fromZone || action.startZone);
+        if (startZoneName) {
+          senderPassCount += 1;
           
-          // Miejsca startowe (P0-P3 Start) - używamy strefy źródłowej (fromZone/startZone)
-          const startZoneName = convertZoneToName(action.fromZone || action.startZone);
-          if (startZoneName) {
+          // Licz tylko akcje, które mają strefę (tak jak heatmapa)
+          if (zoneForBreakdown) {
+            const senderIsLateral = isLateralZone(zoneForBreakdown);
             const startZoneIsLateral = isLateralZone(startZoneName);
+            const hasPStartFlag = action.isP0Start || action.isP1Start || action.isP2Start || action.isP3Start;
             
             if (action.isP0Start) {
               senderP0StartCount += 1;
@@ -1148,7 +1150,13 @@ export default function PlayerDetailsPage() {
               if (startZoneIsLateral) senderP3StartCountLateral += 1;
               else senderP3StartCountCentral += 1;
             }
+            
           }
+        }
+        
+        // Licz tylko akcje, które mają strefę (tak jak heatmapa)
+        if (zoneForBreakdown) {
+          const senderIsLateral = isLateralZone(zoneForBreakdown);
 
           // PK może być jednocześnie strzałem, więc sprawdzamy oba warunki niezależnie
           if (action.isPenaltyAreaEntry) {

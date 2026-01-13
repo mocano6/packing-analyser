@@ -230,35 +230,67 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
     return sortConfig.direction === 'asc' ? '↑' : '↓';
   };
 
-  // Funkcja do obsługi kliknięcia na czas wideo (dokładnie tak jak w ActionsTable i Acc8sTable)
+  // Funkcja do obsługi kliknięcia na czas wideo (dokładnie tak jak w ActionsTable)
   const handleVideoTimeClick = async (videoTimestamp?: number) => {
     if (!videoTimestamp && videoTimestamp !== 0) return;
+    
+    console.log('PKEntriesTable handleVideoTimeClick - videoTimestamp:', videoTimestamp);
+    console.log('PKEntriesTable handleVideoTimeClick - youtubeVideoRef:', youtubeVideoRef);
+    console.log('PKEntriesTable handleVideoTimeClick - customVideoRef:', customVideoRef);
     
     // Sprawdź czy mamy otwarte zewnętrzne okno wideo (sprawdzamy bezpośrednio externalWindow, a nie localStorage)
     const externalWindow = (window as any).externalVideoWindow;
     const isExternalWindowOpen = externalWindow && !externalWindow.closed;
     
     if (isExternalWindowOpen) {
+      console.log('PKEntriesTable handleVideoTimeClick - używam zewnętrznego okna');
       // Wyślij wiadomość do zewnętrznego okna
-      externalWindow.postMessage({
-        type: 'SEEK_TO_TIME',
-        time: videoTimestamp
-      }, '*');
+      try {
+        externalWindow.postMessage({
+          type: 'SEEK_TO_TIME',
+          time: videoTimestamp
+        }, '*');
+        console.log('PKEntriesTable handleVideoTimeClick - wiadomość wysłana do zewnętrznego okna');
+      } catch (error) {
+        console.error('PKEntriesTable handleVideoTimeClick - błąd podczas wysyłania wiadomości:', error);
+      }
+    } else if (youtubeVideoRef?.current) {
+      console.log('PKEntriesTable handleVideoTimeClick - używam youtubeVideoRef, current:', youtubeVideoRef.current);
+      try {
+        await youtubeVideoRef.current.seekTo(videoTimestamp);
+        console.log('PKEntriesTable handleVideoTimeClick - youtubeVideoRef.seekTo zakończone');
+      } catch (error) {
+        console.warn('Nie udało się przewinąć wideo do czasu:', videoTimestamp, error);
+        // Spróbuj ponownie po krótkim czasie
+        setTimeout(async () => {
+          if (youtubeVideoRef?.current) {
+            try {
+              await youtubeVideoRef.current.seekTo(videoTimestamp);
+              console.log('PKEntriesTable handleVideoTimeClick - youtubeVideoRef.seekTo (retry) zakończone');
+            } catch (retryError) {
+              console.warn('Nie udało się przewinąć wideo do czasu (retry):', videoTimestamp, retryError);
+            }
+          }
+        }, 500);
+      }
     } else if (customVideoRef?.current) {
+      console.log('PKEntriesTable handleVideoTimeClick - używam customVideoRef');
       try {
         await customVideoRef.current.seekTo(videoTimestamp);
+        console.log('PKEntriesTable handleVideoTimeClick - customVideoRef.seekTo zakończone');
       } catch (error) {
         console.warn('Nie udało się przewinąć własnego odtwarzacza do czasu:', videoTimestamp, error);
       }
-    } else if (youtubeVideoRef?.current) {
-      try {
-        await youtubeVideoRef.current.seekTo(videoTimestamp);
-      } catch (error) {
-        console.warn('Nie udało się przewinąć wideo do czasu:', videoTimestamp, error);
-      }
     } else if (onVideoTimeClick) {
       // Fallback do przekazanej funkcji
-      onVideoTimeClick(videoTimestamp);
+      console.log('PKEntriesTable handleVideoTimeClick - używam onVideoTimeClick');
+      try {
+        await onVideoTimeClick(videoTimestamp);
+      } catch (error) {
+        console.warn('Nie udało się przewinąć wideo przez onVideoTimeClick:', error);
+      }
+    } else {
+      console.warn('PKEntriesTable handleVideoTimeClick - brak dostępnego playera (youtubeVideoRef:', youtubeVideoRef, ', customVideoRef:', customVideoRef, ')');
     }
   };
 

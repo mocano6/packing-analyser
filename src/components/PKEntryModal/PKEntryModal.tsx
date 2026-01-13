@@ -44,10 +44,14 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     receiverName: "",
     minute: 1,
     isSecondHalf: false,
-    entryType: "pass" as "pass" | "dribble" | "sfg" | "regain",
+    entryType: "pass" as "pass" | "dribble" | "sfg",
     teamContext: "attack" as "attack" | "defense",
     isPossible1T: false,
     pkPlayersCount: 0,
+    opponentsInPKCount: 0,
+    isShot: false,
+    isGoal: false,
+    isRegain: false,
   });
 
   // Filtrowanie zawodników grających w danym meczu (podobnie jak w ShotModal)
@@ -162,6 +166,10 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         teamContext: editingEntry.teamContext || "attack",
         isPossible1T: editingEntry.isPossible1T || false,
         pkPlayersCount: editingEntry.pkPlayersCount || 0,
+        opponentsInPKCount: editingEntry.opponentsInPKCount || 0,
+        isShot: editingEntry.isShot || false,
+        isGoal: editingEntry.isGoal || false,
+        isRegain: editingEntry.isRegain || false,
       });
     } else {
       // Pobierz aktualną połowę z localStorage
@@ -183,6 +191,10 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         teamContext: autoTeamContext,
         isPossible1T: false,
         pkPlayersCount: 0,
+        opponentsInPKCount: 0,
+        isShot: false,
+        isGoal: false,
+        isRegain: false,
       });
     }
   }, [editingEntry, isOpen, startX]);
@@ -339,7 +351,60 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Walidacja w zależności od typu akcji
+    // Walidacja w zależności od kontekstu zespołu
+    // W obronie nie wymagamy wyboru zawodników
+    if (formData.teamContext === "defense") {
+      // W obronie nie zapisujemy zawodników
+      const entryDataToSave = {
+        matchId,
+        teamId: matchInfo?.team || "",
+        startX: editingEntry ? editingEntry.startX : startX,
+        startY: editingEntry ? editingEntry.startY : startY,
+        endX: editingEntry ? editingEntry.endX : endX,
+        endY: editingEntry ? editingEntry.endY : endY,
+        minute: formData.minute,
+        isSecondHalf: formData.isSecondHalf,
+        senderId: "",
+        senderName: "",
+        entryType: formData.entryType,
+        teamContext: formData.teamContext,
+        isPossible1T: formData.isPossible1T,
+        pkPlayersCount: formData.pkPlayersCount,
+        opponentsInPKCount: formData.opponentsInPKCount,
+        isShot: formData.isShot,
+        isGoal: formData.isGoal,
+        isRegain: formData.isRegain,
+        receiverId: undefined,
+        receiverName: undefined,
+      };
+      
+      // Pobierz czas wideo z localStorage
+      const videoTimestamp = typeof window !== 'undefined' 
+        ? localStorage.getItem('tempVideoTimestamp') 
+        : null;
+      const parsedVideoTimestamp = videoTimestamp !== null && videoTimestamp !== '' 
+        ? parseInt(videoTimestamp, 10) 
+        : undefined;
+      const isValidTimestamp = parsedVideoTimestamp !== undefined && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp >= 0;
+      const finalVideoTimestamp = isValidTimestamp 
+        ? parsedVideoTimestamp 
+        : (editingEntry?.videoTimestamp);
+      
+      onSave({
+        ...entryDataToSave,
+        ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
+      });
+      
+      // Wyczyść tempVideoTimestamp po zapisaniu
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('tempVideoTimestamp');
+      }
+      
+      onClose();
+      return;
+    }
+    
+    // Walidacja w zależności od typu akcji (tylko dla ataku)
     if (!formData.senderId || formData.senderId.trim() === "") {
       alert("Wybierz zawodnika podającego z listy");
       return;
@@ -393,6 +458,10 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
       teamContext: formData.teamContext,
       isPossible1T: formData.isPossible1T,
       pkPlayersCount: formData.pkPlayersCount,
+      opponentsInPKCount: formData.opponentsInPKCount,
+      isShot: formData.isShot,
+      isGoal: formData.isGoal,
+      isRegain: formData.isRegain,
       ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
     };
 
@@ -452,7 +521,14 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
             <button
               type="button"
               className={`${styles.toggleButton} ${formData.teamContext === "defense" ? styles.active : ""}`}
-              onClick={() => setFormData({...formData, teamContext: "defense"})}
+              onClick={() => setFormData({
+                ...formData, 
+                teamContext: "defense",
+                senderId: "",
+                senderName: "",
+                receiverId: "",
+                receiverName: "",
+              })}
             >
               Obrona
             </button>
@@ -519,33 +595,23 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
               >
                 SFG
               </button>
-              <button
-                type="button"
-                className={`${styles.actionTypeButton} ${formData.entryType === "regain" ? styles.active : ""}`}
-                onClick={() => setFormData({
-                  ...formData, 
-                  entryType: "regain",
-                  receiverId: formData.receiverId || "", // Zachowaj odbiorcę jeśli istnieje (opcjonalny)
-                  receiverName: formData.receiverName || "",
-                })}
-              >
-                Regain
-              </button>
             </div>
           </div>
 
-          {/* Niewykorzystane 1T i Liczba zawodników w PK */}
+          {/* Niewykorzystane 1T, Partnerzy w PK i Przeciwnicy w PK */}
           <div className={styles.fieldGroup}>
             <div className={styles.compactButtonsRow}>
-              <button
-                type="button"
-                className={`${styles.compactButton} ${formData.isPossible1T ? styles.activeButton : ""}`}
-                onClick={() => setFormData({...formData, isPossible1T: !formData.isPossible1T})}
-                title="Niewykorzystane 1T"
-                aria-pressed={formData.isPossible1T}
-              >
-                <span className={styles.compactLabel}>Niewykorzystane 1T</span>
-              </button>
+              {formData.teamContext === "attack" && (
+                <button
+                  type="button"
+                  className={`${styles.compactButton} ${styles.tooltipTrigger} ${formData.isPossible1T ? styles.activeButton : ""}`}
+                  onClick={() => setFormData({...formData, isPossible1T: !formData.isPossible1T})}
+                  data-tooltip="Był kontakt w 1T, ale strzału nie było"
+                  aria-pressed={formData.isPossible1T}
+                >
+                  <span className={styles.compactLabel}>1T bez strzału</span>
+                </button>
+              )}
               <div 
                 className={styles.compactPointsButtonSmall}
                 onClick={(e) => {
@@ -553,9 +619,9 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                   e.stopPropagation();
                   setFormData({...formData, pkPlayersCount: formData.pkPlayersCount + 1});
                 }}
-                title="Kliknij aby zwiększyć liczbę zawodników w PK"
+                title="Kliknij aby zwiększyć liczbę partnerów w PK"
               >
-                <span className={styles.compactLabel}>Liczba zawodników w PK</span>
+                <span className={styles.compactLabel}>Partnerzy w PK</span>
                 <span className={styles.pointsValue}><b>{formData.pkPlayersCount}</b></span>
                 <button
                   type="button"
@@ -570,47 +636,114 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                   −
                 </button>
               </div>
+              <div 
+                className={styles.compactPointsButtonSmall}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setFormData({...formData, opponentsInPKCount: formData.opponentsInPKCount + 1});
+                }}
+                title="Kliknij aby zwiększyć liczbę przeciwników w PK"
+              >
+                <span className={styles.compactLabel}>Przeciwnicy w PK</span>
+                <span className={styles.pointsValue}><b>{formData.opponentsInPKCount}</b></span>
+                <button
+                  type="button"
+                  className={styles.compactSubtractButton}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setFormData({...formData, opponentsInPKCount: Math.max(0, formData.opponentsInPKCount - 1)});
+                  }}
+                  title="Odejmij 1"
+                >
+                  −
+                </button>
+              </div>
+              <button
+                type="button"
+                className={`${styles.compactButton} ${styles.tooltipTrigger} ${formData.isShot ? styles.activeButton : ""}`}
+                onClick={() => {
+                  // Jeśli odznaczamy strzał, odznaczamy też gol
+                  if (formData.isShot) {
+                    setFormData({...formData, isShot: false, isGoal: false});
+                  } else {
+                    setFormData({...formData, isShot: true});
+                  }
+                }}
+                data-tooltip="Po wejściu w PK był strzał"
+                aria-pressed={formData.isShot}
+              >
+                <span className={styles.compactLabel}>Strzał</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.compactButton} ${styles.tooltipTrigger} ${formData.isGoal ? styles.activeButton : ""}`}
+                onClick={() => {
+                  // Jeśli zaznaczamy gol, automatycznie zaznaczamy strzał
+                  if (!formData.isGoal) {
+                    setFormData({...formData, isGoal: true, isShot: true});
+                  } else {
+                    setFormData({...formData, isGoal: false});
+                  }
+                }}
+                data-tooltip="Po wejściu w PK był gol"
+                aria-pressed={formData.isGoal}
+              >
+                <span className={styles.compactLabel}>Gol</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.compactButton} ${styles.tooltipTrigger} ${formData.isRegain ? styles.activeButton : ""}`}
+                onClick={() => setFormData({...formData, isRegain: !formData.isRegain})}
+                data-tooltip="Przechwyt piłki"
+                aria-pressed={formData.isRegain}
+              >
+                <span className={styles.compactLabel}>Regain</span>
+              </button>
             </div>
           </div>
 
-          {/* Lista zawodników - jedna lista z zielonym i czerwonym obramowaniem */}
-          <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
-            <label>
-              {formData.entryType === "dribble" 
-                ? "Wybierz zawodnika dryblującego:" 
-                : formData.entryType === "regain"
-                ? "Wybierz zawodników (regain - może być jeden lub dwóch):"
-                : "Wybierz zawodników:"
-              }
-            </label>
-            <div className={styles.playersGridContainer}>
-              {(() => {
-                const playersByPosition = getPlayersByPosition(filteredPlayers);
-                return playersByPosition.sortedPositions.map((position) => (
-                  <div key={position} className={styles.positionGroup}>
-                    <div className={styles.playersGrid}>
-                      <div className={styles.positionLabel}>
-                        {position === 'Skrzydłowi' ? 'W' : position}
-                      </div>
-                      <div className={styles.playersGridItems}>
-                        {playersByPosition.byPosition[position].map(player => (
-                          <PlayerCard
-                            key={player.id}
-                            player={player}
-                            isSender={formData.senderId === player.id}
-                            isReceiver={formData.receiverId === player.id}
-                            isDribbler={false}
-                            isDefensePlayer={false}
-                            onSelect={handlePlayerClick}
-                          />
-                        ))}
+          {/* Lista zawodników - jedna lista z zielonym i czerwonym obramowaniem - tylko dla ataku */}
+          {formData.teamContext === "attack" && (
+            <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
+              <label>
+                {formData.entryType === "dribble" 
+                  ? "Wybierz zawodnika dryblującego:" 
+                  : formData.entryType === "regain"
+                  ? "Wybierz zawodników (regain - może być jeden lub dwóch):"
+                  : "Wybierz zawodników:"
+                }
+              </label>
+              <div className={styles.playersGridContainer}>
+                {(() => {
+                  const playersByPosition = getPlayersByPosition(filteredPlayers);
+                  return playersByPosition.sortedPositions.map((position) => (
+                    <div key={position} className={styles.positionGroup}>
+                      <div className={styles.playersGrid}>
+                        <div className={styles.positionLabel}>
+                          {position === 'Skrzydłowi' ? 'W' : position}
+                        </div>
+                        <div className={styles.playersGridItems}>
+                          {playersByPosition.byPosition[position].map(player => (
+                            <PlayerCard
+                              key={player.id}
+                              player={player}
+                              isSender={formData.senderId === player.id}
+                              isReceiver={formData.receiverId === player.id}
+                              isDribbler={false}
+                              isDefensePlayer={false}
+                              onSelect={handlePlayerClick}
+                            />
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ));
-              })()}
+                  ));
+                })()}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className={styles.buttonGroup}>
             {editingEntry && onDelete && (

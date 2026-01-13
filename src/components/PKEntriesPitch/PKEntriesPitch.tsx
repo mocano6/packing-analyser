@@ -142,6 +142,24 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
     
     const isSelected = selectedEntryId === entry.id;
     const arrowColor = getArrowColor(entry, isSelected);
+    const isShot = entry.isShot || false;
+    const isGoal = entry.isGoal || false;
+    const isRegain = entry.isRegain || false;
+    
+    // Oblicz środek linii dla pomarańczowej kropki przy regain
+    const midX = (start.x + end.x) / 2;
+    const midY = (start.y + end.y) / 2;
+    
+    // Kolor grota: jasnozielony jeśli był strzał, w przeciwnym razie kolor strzałki
+    const arrowheadColor = isShot ? '#86efac' : arrowColor;
+    // Rozmiar grota: większy jeśli był gol, średni jeśli strzał, standardowy w przeciwnym razie
+    const arrowheadSize = isGoal ? 3 : (isShot ? 2.5 : 1.2);
+    // refX ustawiony tak, aby grot kończył się dokładnie na końcu linii
+    // refX określa przesunięcie punktu odniesienia markera od jego początku
+    // Większa wartość refX przesuwa grot w prawo (w kierunku końca linii)
+    // Dla strzału potrzebujemy znacznie większego refX, aby grot był na końcu linii
+    // refX powinien być bliski rozmiarowi grota, aby czubek grota był na końcu linii
+    const refX = isGoal ? "2.5" : (isShot ? "3.2" : "0.9");
     
     return (
       <svg
@@ -166,16 +184,16 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
         <defs>
           <marker
             id={`arrowhead-${entry.id}`}
-            markerWidth="1"
-            markerHeight="1"
-            refX="0.9"
+            markerWidth={arrowheadSize}
+            markerHeight={arrowheadSize}
+            refX={refX}
             refY="0.5"
             orient="auto"
             markerUnits="userSpaceOnUse"
           >
             <polygon
               points="0 0, 1 0.5, 0 1"
-              fill={arrowColor}
+              fill={arrowheadColor}
             />
           </marker>
         </defs>
@@ -190,6 +208,47 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
           pointerEvents="stroke"
           style={{ cursor: 'pointer' }}
         />
+        {/* Emoji piłki na początku strzałki, jeśli był gol */}
+        {isGoal && (
+          <foreignObject
+            x={start.x - 1.5}
+            y={start.y - 1.5}
+            width="3"
+            height="3"
+            pointerEvents="none"
+            style={{
+              overflow: 'visible',
+            }}
+          >
+            <div
+              style={{
+                width: '3px',
+                height: '3px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '3px',
+                lineHeight: '1',
+                userSelect: 'none',
+                aspectRatio: '1',
+              }}
+            >
+              ⚽
+            </div>
+          </foreignObject>
+        )}
+        {/* Pomarańczowa kropka na środku linii, jeśli był regain */}
+        {isRegain && (
+          <circle
+            cx={midX}
+            cy={midY}
+            r="1.2"
+            fill="#f59e0b"
+            stroke="white"
+            strokeWidth="0.15"
+            pointerEvents="none"
+          />
+        )}
       </svg>
     );
   };
@@ -274,35 +333,69 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
 
   return (
     <div className={styles.pitchContainer}>
-      {/* Loga zespołów */}
+      {/* Loga zespołów - zamieniają się miejscami gdy boisko jest odwrócone */}
       <div className={styles.teamLogos}>
-        <div className={styles.teamLogo}>
-          {matchInfo?.opponentLogo && (
-            <img 
-              src={matchInfo.opponentLogo} 
-              alt="Logo przeciwnika" 
-              className={styles.teamLogoImage}
-            />
-          )}
-          <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
-        </div>
-        <div className={styles.vs}>VS</div>
-        <div className={styles.teamLogo}>
-          {(() => {
-            const teamData = allTeams.find(team => team.id === matchInfo?.team);
-            return teamData?.logo ? (
-              <img 
-                src={teamData.logo} 
-                alt="Logo zespołu" 
-                className={styles.teamLogoImage}
-              />
-            ) : null;
-          })()}
-          <span className={styles.teamName}>{(() => {
-            const teamData = allTeams.find(team => team.id === matchInfo?.team);
-            return teamData?.name || matchInfo?.team || 'Nasz zespół';
-          })()}</span>
-        </div>
+        {isFlipped ? (
+          <>
+            <div className={styles.teamLogo}>
+              {(() => {
+                const teamData = allTeams.find(team => team.id === matchInfo?.team);
+                return teamData?.logo ? (
+                  <img 
+                    src={teamData.logo} 
+                    alt="Logo zespołu" 
+                    className={styles.teamLogoImage}
+                  />
+                ) : null;
+              })()}
+              <span className={styles.teamName}>{(() => {
+                const teamData = allTeams.find(team => team.id === matchInfo?.team);
+                return teamData?.name || matchInfo?.team || 'Nasz zespół';
+              })()}</span>
+            </div>
+            <div className={styles.vs}>VS</div>
+            <div className={styles.teamLogo}>
+              {matchInfo?.opponentLogo && (
+                <img 
+                  src={matchInfo.opponentLogo} 
+                  alt="Logo przeciwnika" 
+                  className={styles.teamLogoImage}
+                />
+              )}
+              <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={styles.teamLogo}>
+              {matchInfo?.opponentLogo && (
+                <img 
+                  src={matchInfo.opponentLogo} 
+                  alt="Logo przeciwnika" 
+                  className={styles.teamLogoImage}
+                />
+              )}
+              <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
+            </div>
+            <div className={styles.vs}>VS</div>
+            <div className={styles.teamLogo}>
+              {(() => {
+                const teamData = allTeams.find(team => team.id === matchInfo?.team);
+                return teamData?.logo ? (
+                  <img 
+                    src={teamData.logo} 
+                    alt="Logo zespołu" 
+                    className={styles.teamLogoImage}
+                  />
+                ) : null;
+              })()}
+              <span className={styles.teamName}>{(() => {
+                const teamData = allTeams.find(team => team.id === matchInfo?.team);
+                return teamData?.name || matchInfo?.team || 'Nasz zespół';
+              })()}</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Przycisk przełączania orientacji */}
