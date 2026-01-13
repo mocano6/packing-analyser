@@ -3277,15 +3277,17 @@ export default function PlayerDetailsPage() {
           </Link>
           <div className={styles.headerTitleRow}>
             <h1>Profil zawodnika</h1>
-            <button
-              type="button"
-              className={styles.exportPdfButton}
-              onClick={handleExportPdf}
-              disabled={isPrintingProfile}
-              title="Eksportuj pełny profil do PDF"
-            >
-              Eksport PDF
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                className={styles.exportPdfButton}
+                onClick={handleExportPdf}
+                disabled={isPrintingProfile}
+                title="Eksportuj pełny profil do PDF"
+              >
+                Eksport PDF
+              </button>
+            )}
           </div>
         </div>
 
