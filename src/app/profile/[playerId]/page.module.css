@@ -131,6 +131,14 @@
   position: relative;
 }
 
+.headerTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 44px; /* miejsce na backButton po prawej */
+  flex-wrap: wrap;
+}
+
 .backButton {
   position: absolute;
   top: 0;
@@ -165,6 +173,210 @@
   color: #1f2937;
 }
 
+.exportPdfButton {
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.exportPdfButton:hover {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+.exportPdfButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.noPrint {
+  display: block;
+}
+
+.printOnly {
+  display: none;
+}
+
+.printPage {
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  color: #111827;
+  padding: 24px;
+}
+
+.printHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.printHeaderLeft {
+  width: 100px;
+  flex: 0 0 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.printHeaderMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.printPhoto {
+  width: 100%;
+  height: 100%;
+  max-width: 100px;
+  max-height: 100px;
+  object-fit: contain;
+  object-position: center center;
+  border-radius: 8px;
+}
+
+.printTitle {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.printSubtitle {
+  font-size: 13px;
+  color: #374151;
+  margin-top: 4px;
+}
+
+.printMeta {
+  font-size: 12px;
+  color: #6b7280;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.printSection {
+  margin-top: 16px;
+  break-inside: avoid;
+}
+
+.printSectionTitle {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.printNote {
+  font-size: 11px;
+  color: #6b7280;
+  margin: -2px 0 10px 0;
+}
+
+.printMapsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.printMapCard {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #ffffff;
+  break-inside: avoid;
+}
+
+.printMapTitle {
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: #111827;
+}
+
+.printPitchCard {
+  margin-top: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #ffffff;
+  break-inside: avoid;
+}
+
+@media (max-width: 700px) {
+  .printMapsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.printGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.printItem {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.printLabel {
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.printValue {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.printTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 11px;
+}
+
+.printTable th,
+.printTable td {
+  border: 1px solid #e5e7eb;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.printTable th {
+  background: #f9fafb;
+  font-weight: 800;
+}
+
+@media print {
+  .noPrint {
+    display: none !important;
+  }
+  .printOnly {
+    display: block !important;
+  }
+  .printPage {
+    padding: 0;
+  }
+}
+
 .playerCard {
   background: white;
   border-radius: 16px;
@@ -184,19 +396,23 @@
 
 .imageContainer {
   flex-shrink: 0;
-  width: 120px;
-  height: 120px;
+  width: 160px;
+  height: 160px;
   border-radius: 12px;
   overflow: hidden;
   border: 3px solid white;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .playerImage {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: center top;
+  object-fit: contain;
+  object-position: center center;
 }
 
 .playerInfo {
@@ -266,7 +482,11 @@
 }
 
 .statsContainer {
-  padding: 24px;
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .statsLayout {
@@ -314,20 +534,32 @@
   font-size: 14px;
 }
 
-.categoryValue {
-  font-weight: 700;
-  color: #2196f3;
-  font-size: 15px;
-}
-
 .detailsPanel {
   width: 100%;
   background: white;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 20px;
+  border-radius: 12px;
+  padding: 24px;
   min-height: 300px;
   overflow: visible;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Sekcje typu regains/loses – ten sam styl nagłówka co xG/PK/PxT */
+.regainsDetails {
+  overflow: visible;
+}
+
+.regainsDetails h3 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.heatmapModeToggle {
+  margin-bottom: 20px;
+  display: inline-flex;
 }
 
 .pxtDetails {
@@ -339,6 +571,82 @@
   font-size: 20px;
   font-weight: 700;
   color: #1f2937;
+}
+
+.pkEntriesDetails {
+  overflow: visible;
+}
+
+.pkEntriesDetails h3 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.xgDetails {
+  overflow: visible;
+}
+
+.xgDetails h3 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.xgPitchPanel {
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.xgPitchHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.xgPitchTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.xgPitchSubtitle {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.pkEntriesPitchPanel {
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.pkEntriesPitchHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.pkEntriesPitchTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.pkEntriesPitchSubtitle {
+  font-size: 12px;
+  color: #6b7280;
 }
 
 .detailsSection {
@@ -458,6 +766,79 @@
   color: #d1d5db;
   font-weight: 300;
   font-size: 14px;
+}
+
+/* Metryki w postaci czytelnych "chipsów" (liczba + jednostka) */
+.metricList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.metricChip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.metricNumber {
+  font-weight: 800;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+
+.metricUnit {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.metricNote {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Pasek filtrów (Połowa/Typ/Flagi) */
+.filterBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.filterGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.filterGroupRight {
+  margin-left: auto;
+}
+
+.filterLabel {
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 4px;
+}
+
+.helperText {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
 }
 
 /* Suwak Atak/Obrona */
@@ -717,35 +1098,51 @@
 
 .categoryControls {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 2px solid #e5e7eb;
+  flex-wrap: wrap;
 }
 
 .categoryButton {
-  padding: 10px 20px;
-  border: 2px solid #e5e7eb;
+  padding: 8px 16px;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
-  background: white;
+  background: #ffffff;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: #374151;
-  transition: all 0.2s ease;
-  flex: 1;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .categoryButton:hover {
-  border-color: #3b82f6;
-  background-color: #f8fafc;
+  border-color: #cbd5e1;
+  background-color: #f9fafb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .categoryButton.active {
-  border-color: #3b82f6;
-  background-color: #3b82f6;
-  color: white;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  border-color: #2563eb;
+  background-color: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+}
+
+.categoryButton:active {
+  transform: translateY(0);
+}
+
+.categoryButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35);
 }
 
 .heatmapHeader {

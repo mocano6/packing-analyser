@@ -105,6 +105,8 @@ export const usePKEntries = (matchId: string) => {
     // Po zapisaniu odśwież dane z Firebase, aby upewnić się, że mamy najnowsze dane
     if (success) {
       await fetchPKEntries();
+      // Wyświetl zapisany obiekt w konsoli
+      console.log('✅ PK Entry zapisany:', newEntry);
     }
     
     return success ? newEntry : null;

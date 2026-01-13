@@ -148,6 +148,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   opponentsLeftField,
   onOpponentsLeftFieldChange,
 }) => {
+  const clamp0to10 = (value: number) => Math.max(0, Math.min(10, value));
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
 
 
@@ -263,11 +264,16 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
       return acc;
     }, {} as Record<string, typeof filteredPlayers>);
     
-    // Kolejność pozycji: GK, CB, DM, Skrzydłowi (LW/RW), AM, ST
-    const positionOrder = ['GK', 'CB', 'DM', 'Skrzydłowi', 'AM', 'ST'];
+    // Kolejność pozycji: GK, CB, DM, Skrzydłowi (LW/RW), AM, ST (ST zawsze na końcu)
+    const positionOrder = ['GK', 'CB', 'DM', 'Skrzydłowi', 'AM'];
+    const lastPosition = 'ST';
     
     // Sortuj pozycje według określonej kolejności
     const sortedPositions = Object.keys(byPosition).sort((a, b) => {
+      // ST zawsze na końcu
+      if (a === lastPosition) return 1;
+      if (b === lastPosition) return -1;
+      
       const indexA = positionOrder.indexOf(a);
       const indexB = positionOrder.indexOf(b);
       
@@ -748,19 +754,44 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  onPlayersBehindBallChange(playersBehindBall + 1);
+                  onPlayersBehindBallChange(clamp0to10(playersBehindBall + 1));
                 }}
-                title="Kliknij, aby dodać 1 partnera"
+                title="Kliknij, aby dodać 1 partnera (max 10)"
                 style={{ cursor: 'pointer' }}
               >
                 <span className={styles.compactLabel}>Partner przed piłką</span>
-                <span className={styles.pointsValue}><b>{playersBehindBall}</b></span>
+                <input
+                  className={styles.compactNumberInput}
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={10}
+                  step={1}
+                  value={playersBehindBall}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onChange={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const raw = e.target.value;
+                    const next = raw === "" ? 0 : Number(raw);
+                    onPlayersBehindBallChange(clamp0to10(Number.isFinite(next) ? next : 0));
+                  }}
+                  onWheel={(e) => {
+                    // zapobiega zmianie wartości scrollem
+                    (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  aria-label="Partnerzy przed piłką (0-10)"
+                  title="Wpisz liczbę 0–10"
+                />
                 <button
                   className={styles.compactSubtractButton}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    onPlayersBehindBallChange(Math.max(0, playersBehindBall - 1));
+                    onPlayersBehindBallChange(clamp0to10(playersBehindBall - 1));
                   }}
                   title="Odejmij 1 partnera"
                   type="button"
@@ -776,19 +807,43 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  onOpponentsBehindBallChange(opponentsBehindBall + 1);
+                  onOpponentsBehindBallChange(clamp0to10(opponentsBehindBall + 1));
                 }}
-                title="Kliknij, aby dodać 1 przeciwnika"
+                title="Kliknij, aby dodać 1 przeciwnika (max 10)"
                 style={{ cursor: 'pointer' }}
               >
                 <span className={styles.compactLabel}>Przeciwnik przed piłką (bez bramkarza)</span>
-                <span className={styles.pointsValue}><b>{opponentsBehindBall}</b></span>
+                <input
+                  className={styles.compactNumberInput}
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={10}
+                  step={1}
+                  value={opponentsBehindBall}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onChange={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const raw = e.target.value;
+                    const next = raw === "" ? 0 : Number(raw);
+                    onOpponentsBehindBallChange(clamp0to10(Number.isFinite(next) ? next : 0));
+                  }}
+                  onWheel={(e) => {
+                    (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  aria-label="Przeciwnicy przed piłką (0-10)"
+                  title="Wpisz liczbę 0–10"
+                />
                 <button
                   className={styles.compactSubtractButton}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    onOpponentsBehindBallChange(Math.max(0, opponentsBehindBall - 1));
+                    onOpponentsBehindBallChange(clamp0to10(opponentsBehindBall - 1));
                   }}
                   title="Odejmij 1 przeciwnika"
                   type="button"

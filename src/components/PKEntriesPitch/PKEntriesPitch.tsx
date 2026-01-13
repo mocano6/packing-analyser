@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useState, useCallback } from "react";
+import React, { memo, useEffect, useRef, useState, useCallback } from "react";
 import { PKEntry } from "@/types";
 import styles from "./PKEntriesPitch.module.css";
 
@@ -9,6 +9,9 @@ export interface PKEntriesPitchProps {
   onEntryAdd?: (startX: number, startY: number, endX: number, endY: number) => void;
   onEntryClick?: (entry: PKEntry) => void;
   selectedEntryId?: string;
+  hideTeamLogos?: boolean;
+  hideFlipButton?: boolean;
+  hideInstructions?: boolean;
   matchInfo?: {
     team?: string;
     opponent?: string;
@@ -28,11 +31,18 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
   onEntryAdd,
   onEntryClick,
   selectedEntryId,
+  hideTeamLogos = false,
+  hideFlipButton = false,
+  hideInstructions = false,
   matchInfo,
   allTeams = [],
 }: PKEntriesPitchProps) {
   // Stan przełącznika orientacji boiska
   const [isFlipped, setIsFlipped] = useState(false);
+
+  // Rozmiar boiska w pikselach (do rysowania SVG bez zniekształceń)
+  const pitchRef = useRef<HTMLDivElement | null>(null);
+  const [pitchSize, setPitchSize] = useState<{ width: number; height: number } | null>(null);
   
   // Stan dla rysowania nowej strzałki
   const [drawingState, setDrawingState] = useState<{
@@ -77,7 +87,11 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
   const handlePitchClick = (event: React.MouseEvent<HTMLDivElement>) => {
     // Sprawdź czy kliknięto na istniejącą strzałkę
     const target = event.target as HTMLElement;
-    if (target.closest(`.${styles.arrowContainer}`) || target.closest(`.${styles.arrowPoint}`)) {
+    if (
+      target.closest('[data-pk-entry-arrow="true"]') ||
+      target.closest(`.${styles.arrowContainer}`) ||
+      target.closest(`.${styles.arrowPoint}`)
+    ) {
       return; // Nie dodawaj nowej strzałki, jeśli kliknięto na istniejącą
     }
     
@@ -135,8 +149,30 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
     }
   };
 
+  useEffect(() => {
+    if (!pitchRef.current) return;
+
+    const el = pitchRef.current;
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      // Zabezpieczenie przed 0x0 (np. w trakcie animacji/layoutu)
+      if (rect.width > 0 && rect.height > 0) {
+        setPitchSize({ width: rect.width, height: rect.height });
+      }
+    };
+
+    update();
+
+    const ro = new ResizeObserver(() => update());
+    ro.observe(el);
+
+    return () => ro.disconnect();
+  }, []);
+
   // Funkcja rysowania strzałki jako SVG
   const renderArrow = (entry: PKEntry) => {
+    if (!pitchSize) return null;
+
     const start = convertCoordinates(entry.startX, entry.startY);
     const end = convertCoordinates(entry.endX, entry.endY);
     
@@ -145,27 +181,50 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
     const isShot = entry.isShot || false;
     const isGoal = entry.isGoal || false;
     const isRegain = entry.isRegain || false;
+
+    // Mapowanie % boiska -> px (bez zniekształceń kółek/markerów)
+    const startPx = { x: (start.x / 100) * pitchSize.width, y: (start.y / 100) * pitchSize.height };
+    const endPx = { x: (end.x / 100) * pitchSize.width, y: (end.y / 100) * pitchSize.height };
+
+    // Hierarchia kolorów kropki: gol (najważniejszy) > strzał > regain
+    // Gol: zielony wypełnienie
+    // Strzał (bez gola): czarne wypełnienie, białe obramowanie
+    // Regain: pomarańczowe obramowanie (pogrubione jeśli jest też gol)
+    // Regain (bez strzału i gola): białe wypełnienie, pomarańczowe obramowanie
+    let dotFillColor = "white";
+    let dotStrokeColor = "white";
+    let dotStrokeWidth = 1.4;
     
-    // Oblicz środek linii dla pomarańczowej kropki przy regain
-    const midX = (start.x + end.x) / 2;
-    const midY = (start.y + end.y) / 2;
-    
-    // Kolor grota: jasnozielony jeśli był strzał, w przeciwnym razie kolor strzałki
-    const arrowheadColor = isShot ? '#86efac' : arrowColor;
-    // Rozmiar grota: większy jeśli był gol, średni jeśli strzał, standardowy w przeciwnym razie
-    const arrowheadSize = isGoal ? 3 : (isShot ? 2.5 : 1.2);
-    // refX ustawiony tak, aby grot kończył się dokładnie na końcu linii
-    // refX określa przesunięcie punktu odniesienia markera od jego początku
-    // Większa wartość refX przesuwa grot w prawo (w kierunku końca linii)
-    // Dla strzału potrzebujemy znacznie większego refX, aby grot był na końcu linii
-    // refX powinien być bliski rozmiarowi grota, aby czubek grota był na końcu linii
-    const refX = isGoal ? "2.5" : (isShot ? "3.2" : "0.9");
+    if (isGoal) {
+      // Gol ma najwyższy priorytet - zawsze zielone wypełnienie
+      dotFillColor = "#86efac"; // jasnozielony
+      // Jeśli jest też regain, obramowanie pomarańczowe i pogrubione
+      if (isRegain) {
+        dotStrokeColor = "#f59e0b"; // pomarańczowy
+        dotStrokeWidth = 2.0; // pogrubione
+      } else {
+        dotStrokeColor = "white";
+      }
+    } else if (isShot) {
+      // Strzał ma drugi priorytet
+      dotFillColor = "#111827"; // czarny
+      dotStrokeColor = "white";
+    } else if (isRegain) {
+      // Regain ma najniższy priorytet (tylko gdy nie ma strzału ani gola)
+      dotFillColor = "white";
+      dotStrokeColor = "#f59e0b"; // pomarańczowy
+    }
+
+    // Parametry UI (px) - wszystkie strzałki mają jednakowe parametry
+    const lineWidth = 1.5;
+    const dotR = 5; // trochę większa kropka dla strzał/gol
+    const arrowheadSize = 10; // jednakowy rozmiar grota dla wszystkich strzałek
     
     return (
       <svg
         key={entry.id}
         className={styles.arrowSvgAbsolute}
-        viewBox="0 0 100 100"
+        viewBox={`0 0 ${pitchSize.width} ${pitchSize.height}`}
         preserveAspectRatio="none"
         style={{
           position: 'absolute',
@@ -176,76 +235,48 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
           pointerEvents: 'none',
           zIndex: isSelected ? 30 : 20,
         }}
-        onClick={(e) => {
-          e.stopPropagation();
-          handleEntryClick(e as any, entry);
-        }}
       >
         <defs>
           <marker
             id={`arrowhead-${entry.id}`}
             markerWidth={arrowheadSize}
             markerHeight={arrowheadSize}
-            refX={refX}
-            refY="0.5"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
             orient="auto"
             markerUnits="userSpaceOnUse"
           >
-            <polygon
-              points="0 0, 1 0.5, 0 1"
-              fill={arrowheadColor}
-            />
+            <path d="M0 0 L10 5 L0 10 Z" fill={arrowColor} />
           </marker>
         </defs>
+        {/* Linia podstawowa */}
         <line
-          x1={start.x}
-          y1={start.y}
-          x2={end.x}
-          y2={end.y}
+          x1={startPx.x}
+          y1={startPx.y}
+          x2={endPx.x}
+          y2={endPx.y}
           stroke={arrowColor}
-          strokeWidth="0.3"
+          strokeWidth={lineWidth}
           markerEnd={`url(#arrowhead-${entry.id})`}
           pointerEvents="stroke"
           style={{ cursor: 'pointer' }}
+          // round cap powoduje "wystawanie" linii poza punkt końcowy i optycznie wygląda,
+          // jakby grot był bliżej środka. Butt daje czysty styk linia -> grot.
+          strokeLinecap="butt"
+          strokeLinejoin="round"
+          data-pk-entry-arrow="true"
+          onClick={(e) => handleEntryClick(e, entry)}
         />
-        {/* Emoji piłki na początku strzałki, jeśli był gol */}
-        {isGoal && (
-          <foreignObject
-            x={start.x - 1.5}
-            y={start.y - 1.5}
-            width="3"
-            height="3"
-            pointerEvents="none"
-            style={{
-              overflow: 'visible',
-            }}
-          >
-            <div
-              style={{
-                width: '3px',
-                height: '3px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '3px',
-                lineHeight: '1',
-                userSelect: 'none',
-                aspectRatio: '1',
-              }}
-            >
-              ⚽
-            </div>
-          </foreignObject>
-        )}
-        {/* Pomarańczowa kropka na środku linii, jeśli był regain */}
-        {isRegain && (
+        {/* Kropka na początku strzałki, jeśli był strzał, gol lub regain */}
+        {(isShot || isGoal || isRegain) && (
           <circle
-            cx={midX}
-            cy={midY}
-            r="1.2"
-            fill="#f59e0b"
-            stroke="white"
-            strokeWidth="0.15"
+            cx={startPx.x}
+            cy={startPx.y}
+            r={dotR}
+            fill={dotFillColor}
+            stroke={dotStrokeColor}
+            strokeWidth={dotStrokeWidth}
             pointerEvents="none"
           />
         )}
@@ -262,14 +293,19 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
         drawingState.currentY === undefined) {
       return null;
     }
+
+    if (!pitchSize) return null;
     
     const start = convertCoordinates(drawingState.startX, drawingState.startY);
     const end = convertCoordinates(drawingState.currentX, drawingState.currentY);
+
+    const startPx = { x: (start.x / 100) * pitchSize.width, y: (start.y / 100) * pitchSize.height };
+    const endPx = { x: (end.x / 100) * pitchSize.width, y: (end.y / 100) * pitchSize.height };
     
     return (
       <svg
         className={styles.arrowSvgAbsolute}
-        viewBox="0 0 100 100"
+        viewBox={`0 0 ${pitchSize.width} ${pitchSize.height}`}
         preserveAspectRatio="none"
         style={{
           position: 'absolute',
@@ -284,47 +320,45 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
         <defs>
           <marker
             id="temporary-arrowhead"
-            markerWidth="1"
-            markerHeight="1"
-            refX="0.9"
-            refY="0.5"
+            markerWidth="9"
+            markerHeight="9"
+            viewBox="0 0 10 10"
+            refX="10"
+            refY="5"
             orient="auto"
             markerUnits="userSpaceOnUse"
           >
-            <polygon
-              points="0 0, 1 0.5, 0 1"
-              fill="#3b82f6"
-              opacity="0.6"
-            />
+            <path d="M0 0 L10 5 L0 10 Z" fill="#3b82f6" opacity="0.6" />
           </marker>
         </defs>
         <line
-          x1={start.x}
-          y1={start.y}
-          x2={end.x}
-          y2={end.y}
+          x1={startPx.x}
+          y1={startPx.y}
+          x2={endPx.x}
+          y2={endPx.y}
           stroke="#3b82f6"
-          strokeWidth="0.3"
-          strokeDasharray="0.5,0.5"
+          strokeWidth="1.5"
+          strokeDasharray="4,4"
           opacity="0.6"
           markerEnd="url(#temporary-arrowhead)"
+          strokeLinecap="round"
         />
         <circle
-          cx={start.x}
-          cy={start.y}
-          r="0.8"
+          cx={startPx.x}
+          cy={startPx.y}
+          r="3.5"
           fill="#3b82f6"
           stroke="white"
-          strokeWidth="0.2"
+          strokeWidth="1"
           opacity="0.8"
         />
         <circle
-          cx={end.x}
-          cy={end.y}
-          r="0.8"
+          cx={endPx.x}
+          cy={endPx.y}
+          r="3.5"
           fill="#3b82f6"
           stroke="white"
-          strokeWidth="0.2"
+          strokeWidth="1"
           opacity="0.8"
         />
       </svg>
@@ -334,92 +368,100 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
   return (
     <div className={styles.pitchContainer}>
       {/* Loga zespołów - zamieniają się miejscami gdy boisko jest odwrócone */}
-      <div className={styles.teamLogos}>
-        {isFlipped ? (
-          <>
-            <div className={styles.teamLogo}>
-              {(() => {
-                const teamData = allTeams.find(team => team.id === matchInfo?.team);
-                return teamData?.logo ? (
+      {!hideTeamLogos && (
+        <div className={styles.teamLogos}>
+          {isFlipped ? (
+            <>
+              <div className={styles.teamLogo}>
+                {(() => {
+                  const teamData = allTeams.find(team => team.id === matchInfo?.team);
+                  return teamData?.logo ? (
+                    <img 
+                      src={teamData.logo} 
+                      alt="Logo zespołu" 
+                      className={styles.teamLogoImage}
+                    />
+                  ) : null;
+                })()}
+                <span className={styles.teamName}>{(() => {
+                  const teamData = allTeams.find(team => team.id === matchInfo?.team);
+                  return teamData?.name || matchInfo?.team || 'Nasz zespół';
+                })()}</span>
+              </div>
+              <div className={styles.vs}>VS</div>
+              <div className={styles.teamLogo}>
+                {matchInfo?.opponentLogo && (
                   <img 
-                    src={teamData.logo} 
-                    alt="Logo zespołu" 
+                    src={matchInfo.opponentLogo} 
+                    alt="Logo przeciwnika" 
                     className={styles.teamLogoImage}
                   />
-                ) : null;
-              })()}
-              <span className={styles.teamName}>{(() => {
-                const teamData = allTeams.find(team => team.id === matchInfo?.team);
-                return teamData?.name || matchInfo?.team || 'Nasz zespół';
-              })()}</span>
-            </div>
-            <div className={styles.vs}>VS</div>
-            <div className={styles.teamLogo}>
-              {matchInfo?.opponentLogo && (
-                <img 
-                  src={matchInfo.opponentLogo} 
-                  alt="Logo przeciwnika" 
-                  className={styles.teamLogoImage}
-                />
-              )}
-              <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className={styles.teamLogo}>
-              {matchInfo?.opponentLogo && (
-                <img 
-                  src={matchInfo.opponentLogo} 
-                  alt="Logo przeciwnika" 
-                  className={styles.teamLogoImage}
-                />
-              )}
-              <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
-            </div>
-            <div className={styles.vs}>VS</div>
-            <div className={styles.teamLogo}>
-              {(() => {
-                const teamData = allTeams.find(team => team.id === matchInfo?.team);
-                return teamData?.logo ? (
+                )}
+                <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={styles.teamLogo}>
+                {matchInfo?.opponentLogo && (
                   <img 
-                    src={teamData.logo} 
-                    alt="Logo zespołu" 
+                    src={matchInfo.opponentLogo} 
+                    alt="Logo przeciwnika" 
                     className={styles.teamLogoImage}
                   />
-                ) : null;
-              })()}
-              <span className={styles.teamName}>{(() => {
-                const teamData = allTeams.find(team => team.id === matchInfo?.team);
-                return teamData?.name || matchInfo?.team || 'Nasz zespół';
-              })()}</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Przycisk przełączania orientacji */}
-      <button
-        className={styles.flipButton}
-        onClick={handleFlipToggle}
-        title="Obróć boisko"
-        type="button"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 12h-4M3 12h4M12 3v4M12 17v4M7 7l10 10M7 17l10-10" />
-        </svg>
-      </button>
-
-      {/* Instrukcja */}
-      {drawingState.isDrawing && (
-        <div className={styles.instruction}>
-          Kliknij punkt końcowy strzałki
+                )}
+                <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
+              </div>
+              <div className={styles.vs}>VS</div>
+              <div className={styles.teamLogo}>
+                {(() => {
+                  const teamData = allTeams.find(team => team.id === matchInfo?.team);
+                  return teamData?.logo ? (
+                    <img 
+                      src={teamData.logo} 
+                      alt="Logo zespołu" 
+                      className={styles.teamLogoImage}
+                    />
+                  ) : null;
+                })()}
+                <span className={styles.teamName}>{(() => {
+                  const teamData = allTeams.find(team => team.id === matchInfo?.team);
+                  return teamData?.name || matchInfo?.team || 'Nasz zespół';
+                })()}</span>
+              </div>
+            </>
+          )}
         </div>
       )}
-      {!drawingState.isDrawing && (
-        <div className={styles.instruction}>
-          Kliknij, aby rozpocząć rysowanie strzałki (punkt startu)
-        </div>
+
+      {/* Przycisk przełączania orientacji */}
+      {!hideFlipButton && (
+        <button
+          className={styles.flipButton}
+          onClick={handleFlipToggle}
+          title="Obróć boisko"
+          type="button"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 12h-4M3 12h4M12 3v4M12 17v4M7 7l10 10M7 17l10-10" />
+          </svg>
+        </button>
+      )}
+
+      {/* Instrukcja */}
+      {!hideInstructions && !!onEntryAdd && (
+        <>
+          {drawingState.isDrawing && (
+            <div className={styles.instruction}>
+              Kliknij punkt końcowy strzałki
+            </div>
+          )}
+          {!drawingState.isDrawing && (
+            <div className={styles.instruction}>
+              Kliknij, aby rozpocząć rysowanie strzałki (punkt startu)
+            </div>
+          )}
+        </>
       )}
 
       <div
@@ -428,6 +470,7 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
         aria-label="Boisko piłkarskie do analizy wejść w pole karne"
         onClick={handlePitchClick}
         onMouseMove={handlePitchMouseMove}
+        ref={pitchRef}
       >
         <div className={styles.pitchLines} aria-hidden="true">
           <div className={styles.centerLine} />

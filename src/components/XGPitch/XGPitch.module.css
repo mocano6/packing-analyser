@@ -7,47 +7,7 @@
   position: relative;
 }
 
-/* Loga zespołów */
-.teamLogos {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 8px 16px;
-  border-radius: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  backdrop-filter: blur(4px);
-}
-
-.teamLogo {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.teamLogoImage {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-  border-radius: 2px;
-}
-
-.teamName {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-}
-
-.vs {
-  font-size: 11px;
-  font-weight: 500;
-  color: #6b7280;
-}
+/* (usunięto nagłówek z nazwami/logami drużyn – nie jest potrzebny w wizualizacji) */
 
 /* Przycisk przełączania orientacji */
 .flipButton {
@@ -70,49 +30,7 @@
   backdrop-filter: blur(4px);
 }
 
-/* Przycisk ukrywania/pokazywania tagów */
-.toggleShotsButton {
-  position: absolute;
-  top: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.95) 0%, rgba(37, 99, 235, 0.95) 100%);
-  color: white;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(8px);
-}
-
-.toggleShotsButton:hover {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 1) 0%, rgba(37, 99, 235, 1) 100%);
-  transform: translateX(-50%) translateY(-2px);
-  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5), 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.toggleShotsButton:active {
-  transform: translateX(-50%) translateY(0);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-}
-
-.toggleShotsButton svg {
-  width: 16px;
-  height: 16px;
-  transition: transform 0.3s ease;
-}
-
-.toggleShotsButton span {
-  white-space: nowrap;
-}
+/* (usunięto przełącznik 'Ukryj tagi' – nie jest potrzebny w wizualizacji) */
 
 .flipButton:hover {
   background: rgba(33, 150, 243, 1);

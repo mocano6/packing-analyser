@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Player, Action, TeamInfo } from "@/types";
+import { Player, Action, TeamInfo, PKEntry, Shot } from "@/types";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { useTeams } from "@/hooks/useTeams";
@@ -14,9 +14,11 @@ import { getPlayerFullName } from "@/utils/playerUtils";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPitch";
-import { getOppositeXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString } from "@/constants/xtValues";
+import { getOppositeXTValueForZone, getXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString } from "@/constants/xtValues";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
+import XGPitch from "@/components/XGPitch/XGPitch";
 import styles from "./page.module.css";
 
 export default function PlayerDetailsPage() {
@@ -112,6 +114,39 @@ export default function PlayerDetailsPage() {
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<{ playerId: string; playerName: string; zoneName: string } | null>(null);
   const [isPlayerSelectModalOpen, setIsPlayerSelectModalOpen] = useState(false);
   const [isMatchSelectModalOpen, setIsMatchSelectModalOpen] = useState(false);
+  const [selectedPKEntryIdForView, setSelectedPKEntryIdForView] = useState<string | undefined>(undefined);
+  const [pkEntryTypeFilter, setPkEntryTypeFilter] = useState<"all" | "pass" | "dribble" | "sfg">("all");
+  const [pkOnlyRegain, setPkOnlyRegain] = useState(false);
+  const [pkOnlyShot, setPkOnlyShot] = useState(false);
+  const [pkOnlyGoal, setPkOnlyGoal] = useState(false);
+  const [selectedXGShotIdForView, setSelectedXGShotIdForView] = useState<string | undefined>(undefined);
+  const [selectedXGShotForView, setSelectedXGShotForView] = useState<Shot | undefined>(undefined);
+  const [xgHalf, setXgHalf] = useState<"all" | "first" | "second">("all");
+  const [xgFilter, setXgFilter] = useState<"all" | "sfg" | "open_play">("all");
+  const [isPrintingProfile, setIsPrintingProfile] = useState(false);
+
+  useEffect(() => {
+    const handleAfterPrint = () => setIsPrintingProfile(false);
+    if (typeof window !== "undefined") {
+      window.addEventListener("afterprint", handleAfterPrint);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("afterprint", handleAfterPrint);
+      }
+    };
+  }, []);
+
+  const handleExportPdf = () => {
+    if (typeof window === "undefined") return;
+    setIsPrintingProfile(true);
+    // Daj Reactowi chwilę na wyrenderowanie widoku "printOnly"
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.print();
+      });
+    });
+  };
 
   // Ref do śledzenia, czy już załadowaliśmy mecze dla danego zespołu
   const lastLoadedTeamRef = useRef<string | null>(null);
@@ -153,6 +188,216 @@ export default function PlayerDetailsPage() {
       return playerTeams.includes(selectedTeam);
     });
   }, [players, selectedTeam]);
+
+  // Wejścia w PK (rysowane ręcznie w module PK) - dane z meczów (matches.pkEntries)
+  const pkEntriesStats = useMemo(() => {
+    const targetPlayerId = selectedPlayerForView || playerId;
+    const selectedSet = new Set(selectedMatchIds);
+
+    const relevantMatches = filteredMatchesBySeason.filter(m => {
+      const id = m.matchId || "";
+      if (!id) return false;
+      if (selectedMatchIds.length === 0) return true;
+      return selectedSet.has(id);
+    });
+
+    const allPkEntries: PKEntry[] = relevantMatches.flatMap(m => {
+      const matchPk = (m.pkEntries || []) as PKEntry[];
+      const matchId = m.matchId || "";
+      return matchPk.map(e => ({
+        ...e,
+        matchId: e.matchId || matchId,
+      }));
+    });
+
+    // Dla wkładu zawodnika liczymy tylko wejścia w PK w ataku
+    const teamAttackEntries = allPkEntries.filter(e => (e.teamContext ?? "attack") === "attack");
+
+    const playerEntries = teamAttackEntries.filter(e =>
+      e.senderId === targetPlayerId || e.receiverId === targetPlayerId
+    );
+
+    const teamTotal = teamAttackEntries.length;
+    const playerTotal = playerEntries.length;
+
+    const goals = playerEntries.filter(e => !!e.isGoal).length;
+    const shots = playerEntries.filter(e => !!e.isShot).length;
+    const shotsWithoutGoal = playerEntries.filter(e => !!e.isShot && !e.isGoal).length;
+    const regains = playerEntries.filter(e => !!e.isRegain).length;
+
+    const involvementPct = teamTotal > 0 ? (playerTotal / teamTotal) * 100 : 0;
+    const regainPct = playerTotal > 0 ? (regains / playerTotal) * 100 : 0;
+
+    const headerMatch = relevantMatches.length === 1 ? relevantMatches[0] : null;
+
+    return {
+      relevantMatchesCount: relevantMatches.length,
+      teamTotal,
+      playerTotal,
+      involvementPct,
+      goals,
+      shots,
+      shotsWithoutGoal,
+      regains,
+      regainPct,
+      playerEntries,
+      headerMatch,
+    };
+  }, [filteredMatchesBySeason, selectedMatchIds, selectedPlayerForView, playerId]);
+
+  const pkEntriesFilteredForView = useMemo(() => {
+    return pkEntriesStats.playerEntries.filter(e => {
+      if (pkEntryTypeFilter !== "all" && (e.entryType || "pass") !== pkEntryTypeFilter) return false;
+      if (pkOnlyRegain && !e.isRegain) return false;
+      if (pkOnlyShot && !e.isShot) return false;
+      if (pkOnlyGoal && !e.isGoal) return false;
+      return true;
+    });
+  }, [pkEntriesStats.playerEntries, pkEntryTypeFilter, pkOnlyRegain, pkOnlyShot, pkOnlyGoal]);
+
+  const selectedPKEntry = useMemo(() => {
+    if (!selectedPKEntryIdForView) return null;
+    return pkEntriesStats.playerEntries.find(e => e.id === selectedPKEntryIdForView) || null;
+  }, [pkEntriesStats.playerEntries, selectedPKEntryIdForView]);
+
+  const pkEntriesAverages = useMemo(() => {
+    const entries = pkEntriesStats.playerEntries;
+    if (entries.length === 0) {
+      return { avgPartners: 0, avgOpponents: 0, avgDiffOppMinusPartners: 0 };
+    }
+    const partnersSum = entries.reduce((s, e) => s + (e.pkPlayersCount ?? 0), 0);
+    const oppSum = entries.reduce((s, e) => s + (e.opponentsInPKCount ?? 0), 0);
+    const avgPartners = partnersSum / entries.length;
+    const avgOpponents = oppSum / entries.length;
+    const avgDiffOppMinusPartners = avgOpponents - avgPartners;
+    return { avgPartners, avgOpponents, avgDiffOppMinusPartners };
+  }, [pkEntriesStats.playerEntries]);
+
+  const xgStats = useMemo(() => {
+    const targetPlayerId = selectedPlayerForView || playerId;
+    const selectedSet = new Set(selectedMatchIds);
+
+    const relevantMatches = filteredMatchesBySeason.filter(m => {
+      const id = m.matchId || "";
+      if (!id) return false;
+      if (selectedMatchIds.length === 0) return true;
+      return selectedSet.has(id);
+    });
+
+    // Helpery do klasyfikacji SFG / otwarta gra
+    const isSfgShot = (shot: Shot) => {
+      return (
+        shot.actionType === "corner" ||
+        shot.actionType === "free_kick" ||
+        shot.actionType === "direct_free_kick" ||
+        shot.actionType === "penalty" ||
+        shot.actionType === "throw_in"
+      );
+    };
+
+    const isOpenPlayShot = (shot: Shot) => {
+      // Traktujemy wszystko poza SFG jako „otwarta gra” (w tym kontra / regain)
+      return !isSfgShot(shot);
+    };
+
+    const filterByHalf = (shots: Shot[]) => {
+      if (xgHalf === "first") return shots.filter(s => (s.minute || 0) <= 45);
+      if (xgHalf === "second") return shots.filter(s => (s.minute || 0) > 45);
+      return shots;
+    };
+
+    const filterByType = (shots: Shot[]) => {
+      if (xgFilter === "sfg") return shots.filter(isSfgShot);
+      if (xgFilter === "open_play") return shots.filter(isOpenPlayShot);
+      return shots;
+    };
+
+    // Strzały zawodnika (już wczytane do allShots) + filtry mecz/połowa/typ
+    const playerShotsAll = (allShots as Shot[]).filter(s => {
+      if (!s) return false;
+      if (s.playerId !== targetPlayerId) return false;
+      if (selectedMatchIds.length > 0) {
+        return selectedSet.has((s.matchId || "") as string);
+      }
+      return true;
+    });
+    const playerShots = filterByType(filterByHalf(playerShotsAll));
+
+    // Strzały zespołu (do udziału) — z danych meczowych
+    // Ważne: część historycznych strzałów może nie mieć teamId, więc wnioskujemy je jak w statystykach zespołu
+    const teamShotsAll: Shot[] = relevantMatches.flatMap(m => {
+      const matchShots = (m.shots || []) as Shot[];
+      const matchId = m.matchId || "";
+      const isSelectedTeamHome = !!selectedTeam && m.team === selectedTeam;
+
+      const inferTeamId = (shot: Shot) => {
+        if (shot.teamId) return shot.teamId;
+        if (!selectedTeam) return undefined;
+        if (!m.team || !m.opponent) return undefined;
+
+        // teamContext: "attack" = nasz zespół atakuje, "defense" = nasz zespół broni (czyli strzela przeciwnik)
+        if (shot.teamContext === "attack") {
+          return isSelectedTeamHome ? m.team : m.opponent;
+        }
+        return isSelectedTeamHome ? m.opponent : m.team;
+      };
+
+      return matchShots
+        .map(s => ({
+          ...s,
+          matchId: s.matchId || matchId,
+          teamId: s.teamId || (inferTeamId(s) as any),
+        }))
+        .filter(s => !!selectedTeam && s.teamId === selectedTeam);
+    });
+
+    const teamShots = filterByType(filterByHalf(teamShotsAll));
+
+    const playerXG = playerShots.reduce((sum, s) => sum + (s.xG || 0), 0);
+    const playerCount = playerShots.length;
+    const playerXGPerShot = playerCount > 0 ? playerXG / playerCount : 0;
+
+    const playerOnTarget = playerShots.filter(s => s.shotType === "on_target" || s.shotType === "goal" || !!s.isGoal);
+    const playerXGOT = playerOnTarget.reduce((sum, s) => sum + (s.xG || 0), 0);
+    const playerGoals = playerShots.filter(s => !!s.isGoal || s.shotType === "goal").length;
+    const playerXGMinusGoals = playerXG - playerGoals;
+
+    const playerBlocked = playerShots.filter(s => s.shotType === "blocked");
+    const playerXGBlocked = playerBlocked.reduce((sum, s) => sum + (s.xG || 0), 0);
+
+    const playerLinePlayersTotal = playerShots.reduce((sum, s) => {
+      if (s.teamContext === "attack") return sum + (s.linePlayersCount || 0);
+      return sum + ((s.linePlayers?.length || 0) as number);
+    }, 0);
+    const playerAvgLinePlayers = playerCount > 0 ? playerLinePlayersTotal / playerCount : 0;
+
+    const teamXG = teamShots.reduce((sum, s) => sum + (s.xG || 0), 0);
+    const teamCount = teamShots.length;
+
+    const xgSharePct = teamXG > 0 ? (playerXG / teamXG) * 100 : 0;
+    const shotSharePct = teamCount > 0 ? (playerCount / teamCount) * 100 : 0;
+
+    const headerMatch = relevantMatches.length === 1 ? relevantMatches[0] : null;
+
+    return {
+      relevantMatchesCount: relevantMatches.length,
+      playerShots,
+      playerXG,
+      playerCount,
+      playerXGPerShot,
+      playerXGOT,
+      playerOnTargetCount: playerOnTarget.length,
+      playerGoals,
+      playerXGMinusGoals,
+      playerXGBlocked,
+      playerAvgLinePlayers,
+      teamXG,
+      teamCount,
+      xgSharePct,
+      shotSharePct,
+      headerMatch,
+    };
+  }, [allShots, filteredMatchesBySeason, playerId, selectedMatchIds, selectedPlayerForView, selectedTeam, xgHalf, xgFilter]);
 
   // Grupowanie zawodników według pozycji dla modala wyboru
   const playersByPosition = useMemo(() => {
@@ -481,7 +726,7 @@ export default function PlayerDetailsPage() {
     }
   }, [selectedTeam, availableTeams]);
 
-  // Inicjalizuj selectedPlayerForView - priorytet ma playerId z URL
+  // Inicjalizuj selectedPlayerForView - priorytet ma localStorage, jeśli zawodnik jest dostępny
   useEffect(() => {
     if (filteredPlayers.length === 0) {
       // Jeśli nie ma zawodników, wyczyść selectedPlayerForView
@@ -491,21 +736,11 @@ export default function PlayerDetailsPage() {
       return;
     }
     
-    // Jeśli selectedPlayerForView jest pusty, zawsze ustaw pierwszego dostępnego zawodnika
-    if (!selectedPlayerForView) {
-      const firstPlayerId = filteredPlayers[0]?.id;
-      if (firstPlayerId) {
-        setSelectedPlayerForView(firstPlayerId);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('selectedPlayerForView', firstPlayerId);
-        }
-      }
-      return;
-    }
-    
     // Sprawdź czy aktualny selectedPlayerForView jest dostępny w filteredPlayers
-    if (!filteredPlayers.some(p => p.id === selectedPlayerForView)) {
-      // Jeśli aktualny zawodnik nie jest dostępny w filteredPlayers
+    const isCurrentPlayerAvailable = selectedPlayerForView && filteredPlayers.some(p => p.id === selectedPlayerForView);
+    
+    // Jeśli selectedPlayerForView jest pusty lub zawodnik nie jest dostępny
+    if (!isCurrentPlayerAvailable) {
       // Sprawdź czy playerId z URL jest dostępny
       if (filteredPlayers.some(p => p.id === playerId)) {
         setSelectedPlayerForView(playerId);
@@ -522,14 +757,9 @@ export default function PlayerDetailsPage() {
           }
         }
       }
-    } else if (filteredPlayers.some(p => p.id === playerId) && selectedPlayerForView !== playerId) {
-      // Jeśli playerId z URL jest dostępny i różny od aktualnego, użyj go (priorytet)
-      setSelectedPlayerForView(playerId);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('selectedPlayerForView', playerId);
       }
-    }
-  }, [filteredPlayers, playerId]);
+    // Jeśli zawodnik z localStorage jest dostępny, zachowaj go (nie nadpisuj playerId z URL)
+  }, [filteredPlayers, playerId, selectedPlayerForView]);
 
   // Zaznacz wszystkie mecze domyślnie przy zmianie sezonu (tylko jeśli nie są ręcznie odznaczone)
   const [manuallyDeselectedAll, setManuallyDeselectedAll] = useState(false);
@@ -1740,10 +1970,17 @@ export default function PlayerDetailsPage() {
           const currentXT = regainHeatmap.get(regainZoneName) || 0;
           regainHeatmap.set(regainZoneName, currentXT + receiverXT);
           
-          // Wartość xT w obronie - używamy regainDefenseXT (nowe pole) lub starych pól dla backward compatibility
+          // Wartość xT w obronie:
+          // - preferuj regainDefenseXT (nowe pole)
+          // - fallback: policz z aktualnej strefy regainu (getXTValueForZone)
+          // - ostateczny fallback: stare pola xTValueStart/xTValueEnd
           const defenseXT = action.regainDefenseXT !== undefined 
             ? action.regainDefenseXT 
-            : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+            : (() => {
+                const idx = regainZoneName ? zoneNameToIndex(regainZoneName) : null;
+                if (idx !== null) return getXTValueForZone(idx);
+                return action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0);
+              })();
           
           // Wartość xT w ataku - używamy regainAttackXT (nowe pole) lub starych pól dla backward compatibility
           const oppositeXT = action.regainAttackXT !== undefined 
@@ -1908,14 +2145,16 @@ export default function PlayerDetailsPage() {
           return action._actionSource === 'loses';
         }
         
-        // Fallback: sprawdź pola akcji
-        // Loses: ma isReaction5s LUB ma isBelow8s ale NIE MA playersBehindBall/opponentsBehindBall
-        const isLoses = action.isReaction5s !== undefined || 
-                       (action.isBelow8s !== undefined && 
-                        action.playersBehindBall === undefined && 
-                        action.opponentsBehindBall === undefined);
-        
-        return isLoses;
+        // Fallback: sprawdź pola akcji (bardziej odporne na zmiany schematu)
+        return (
+          action.isReaction5s !== undefined ||
+          action.isAut !== undefined ||
+          action.isReaction5sNotApplicable !== undefined ||
+          action.losesDefenseXT !== undefined ||
+          action.losesAttackXT !== undefined ||
+          action.losesDefenseZone !== undefined ||
+          action.losesAttackZone !== undefined
+        );
       };
       
       if (
@@ -1933,17 +2172,29 @@ export default function PlayerDetailsPage() {
           const currentCount = losesActionCountHeatmap.get(losesZoneName) || 0;
           losesActionCountHeatmap.set(losesZoneName, currentCount + 1);
           
-          // xT odbiorców - dla loses używamy losesDefenseXT (wartość w obronie)
-          const receiverXT = action.losesDefenseXT !== undefined 
-            ? action.losesDefenseXT 
-            : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+          // xT odbiorców - dla strat używamy wartości w obronie (losesDefenseXT),
+          // a jeśli jej brak w starych danych - licz z aktualnej strefy (getXTValueForZone)
+          const receiverXT = action.losesDefenseXT !== undefined
+            ? action.losesDefenseXT
+            : (() => {
+                const idx = losesZoneName ? zoneNameToIndex(losesZoneName) : null;
+                if (idx !== null) return getXTValueForZone(idx);
+                return action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0);
+              })();
           const currentXT = losesHeatmap.get(losesZoneName) || 0;
           losesHeatmap.set(losesZoneName, currentXT + receiverXT);
           
-          // Wartość xT w obronie - używamy losesDefenseXT (nowe pole) lub starych pól dla backward compatibility
-          const defenseXT = action.losesDefenseXT !== undefined 
-            ? action.losesDefenseXT 
-            : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+          // Wartość xT w obronie — analogicznie jak w przechwytach:
+          // - preferuj losesDefenseXT
+          // - fallback: policz z aktualnej strefy straty
+          // - ostatecznie stare pola
+          const defenseXT = action.losesDefenseXT !== undefined
+            ? action.losesDefenseXT
+            : (() => {
+                const idx = losesZoneName ? zoneNameToIndex(losesZoneName) : null;
+                if (idx !== null) return getXTValueForZone(idx);
+                return action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0);
+              })();
           
           // Wartość xT w ataku - używamy losesAttackXT (nowe pole) lub starych pól dla backward compatibility
           const attackXT = action.losesAttackXT !== undefined 
@@ -2006,22 +2257,22 @@ export default function PlayerDetailsPage() {
           // Liczniki według stref (P0, P1, P2, P3)
           const isLateral = isLateralZone(losesZoneName);
           
-          if (action.isP0) {
+          if (action.isP0 || action.isP0Start) {
             losesP0Count += 1;
             if (isLateral) losesP0CountLateral += 1;
             else losesP0CountCentral += 1;
           }
-          if (action.isP1) {
+          if (action.isP1 || action.isP1Start) {
             losesP1Count += 1;
             if (isLateral) losesP1CountLateral += 1;
             else losesP1CountCentral += 1;
           }
-          if (action.isP2) {
+          if (action.isP2 || action.isP2Start) {
             losesP2Count += 1;
             if (isLateral) losesP2CountLateral += 1;
             else losesP2CountCentral += 1;
           }
-          if (action.isP3) {
+          if (action.isP3 || action.isP3Start) {
             losesP3Count += 1;
             if (isLateral) losesP3CountLateral += 1;
             else losesP3CountCentral += 1;
@@ -2565,17 +2816,23 @@ export default function PlayerDetailsPage() {
       regainActions.forEach(action => {
         totalRegains += 1;
         
-        // Wartość xT w obronie
-        const defenseXT = action.regainDefenseXT !== undefined 
-          ? action.regainDefenseXT 
-          : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+        // Wartość xT w obronie — identyczna logika jak w playerStats (żeby % zespołu i rankingi nie były przekłamane na starych akcjach)
+        const regainDefenseZone = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+        const regainZoneName = convertZoneToNameHelper(regainDefenseZone);
+        const zoneIdx = regainZoneName ? zoneNameToIndex(regainZoneName) : null;
+
+        const defenseXT = action.regainDefenseXT !== undefined
+          ? action.regainDefenseXT
+          : (zoneIdx !== null
+              ? getXTValueForZone(zoneIdx)
+              : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0)));
         
-        // Wartość xT w ataku
-        const attackXT = action.regainAttackXT !== undefined 
-          ? action.regainAttackXT 
-          : (action.oppositeXT !== undefined 
-            ? action.oppositeXT 
-            : 0);
+        // Wartość xT w ataku — preferuj nowe pole, fallback: oppositeXT, a jeśli brak to policz z przeciwległej strefy
+        const attackXT = action.regainAttackXT !== undefined
+          ? action.regainAttackXT
+          : (action.oppositeXT !== undefined
+              ? action.oppositeXT
+              : (zoneIdx !== null ? getOppositeXTValueForZone(zoneIdx) : 0));
         
         // Zawsze dodajemy do obu statystyk
         regainXTInDefense += defenseXT;
@@ -2727,12 +2984,310 @@ export default function PlayerDetailsPage() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <Link href="/" className={styles.backButton} title="Powrót do głównej">
-          ←
-        </Link>
-        <h1>Profil zawodnika</h1>
-      </div>
+      {/* Widok do PDF (druk) */}
+      {isPrintingProfile && (
+        <div className={styles.printOnly}>
+          <div className={styles.printPage}>
+            <div className={styles.printHeader}>
+              <div className={styles.printHeaderLeft}>
+                {player.imageUrl && (
+                  <img
+                    src={player.imageUrl}
+                    alt={getPlayerFullName(player)}
+                    className={styles.printPhoto}
+                  />
+                )}
+              </div>
+              <div className={styles.printHeaderMain}>
+                <div className={styles.printTitle}>Profil zawodnika</div>
+                <div className={styles.printSubtitle}>
+                  {getPlayerFullName(player)}{player.number ? ` (#${player.number})` : ""}{player.position ? ` • ${player.position}` : ""}
+                </div>
+              </div>
+              <div className={styles.printMeta}>
+                <div>Data: {new Date().toLocaleDateString("pl-PL")}</div>
+                {playerStats && <div>Minuty: {playerStats.totalMinutes}</div>}
+              </div>
+            </div>
+
+            <div className={styles.printSection}>
+              <div className={styles.printSectionTitle}>Kontekst</div>
+              <div className={styles.printGrid}>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Zespół</div>
+                  <div className={styles.printValue}>
+                    {teams?.find(t => t.id === selectedTeam)?.name || selectedTeam || "-"}
+                  </div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Sezon</div>
+                  <div className={styles.printValue}>{selectedSeason || "all"}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Mecze</div>
+                  <div className={styles.printValue}>
+                    {selectedMatchIds.length > 0
+                      ? `${selectedMatchIds.length} wybranych`
+                      : `${filteredMatchesBySeason.length} (wszystkie)`}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {playerStats && (
+              <div className={styles.printSection}>
+                <div className={styles.printSectionTitle}>Podsumowanie</div>
+                <div className={styles.printGrid}>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>PxT (suma)</div>
+                    <div className={styles.printValue}>{playerStats.totalPxT.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>xG (suma)</div>
+                    <div className={styles.printValue}>{playerStats.totalxG.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Przechwyty</div>
+                    <div className={styles.printValue}>{playerStats.totalRegains}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Straty</div>
+                    <div className={styles.printValue}>{playerStats.totalLoses}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Wejścia w PK</div>
+                    <div className={styles.printValue}>{playerStats.totalPKEntries}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PxT */}
+            {playerStats && (
+              <div className={styles.printSection}>
+                <div className={styles.printSectionTitle}>PxT</div>
+                <div className={styles.printGrid}>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>PxT (suma)</div>
+                    <div className={styles.printValue}>{playerStats.totalPxT.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>PxT / 90</div>
+                    <div className={styles.printValue}>{playerStats.pxtPer90.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>PxT / 90 (podający)</div>
+                    <div className={styles.printValue}>{playerStats.pxtSenderPer90.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>PxT / 90 (przyjmujący)</div>
+                    <div className={styles.printValue}>{playerStats.pxtReceiverPer90.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>PxT / 90 (drybling)</div>
+                    <div className={styles.printValue}>{playerStats.pxtDribblingPer90.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Sender (suma)</div>
+                    <div className={styles.printValue}>{playerStats.pxtAsSender.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Receiver (suma)</div>
+                    <div className={styles.printValue}>{playerStats.pxtAsReceiver.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Drybling (suma)</div>
+                    <div className={styles.printValue}>{playerStats.pxtAsDribbler.toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Mapy (heatmapy/boiska) wyłączone w PDF – komponenty potrafią nie zdążyć się wyrenderować przed print(). */}
+
+            {/* xG */}
+            <div className={styles.printSection}>
+              <div className={styles.printSectionTitle}>xG</div>
+              <div className={styles.printGrid}>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>xG (suma)</div>
+                  <div className={styles.printValue}>{xgStats.playerXG.toFixed(2)}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Strzały</div>
+                  <div className={styles.printValue}>{xgStats.playerCount}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Gole</div>
+                  <div className={styles.printValue}>{xgStats.playerGoals}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>xG/strzał</div>
+                  <div className={styles.printValue}>{xgStats.playerXGPerShot.toFixed(2)}</div>
+                </div>
+              </div>
+
+              {xgStats.playerShots?.length > 0 && (
+                <table className={styles.printTable}>
+                  <thead>
+                    <tr>
+                      <th>Min</th>
+                      <th>Połowa</th>
+                      <th>xG</th>
+                      <th>Gol</th>
+                      <th>Typ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {xgStats.playerShots.map((s) => (
+                      <tr key={s.id}>
+                        <td>{s.minute}'</td>
+                        <td>{(s as any).isSecondHalf ? "II" : "I"}</td>
+                        <td>{s.xG.toFixed(2)}</td>
+                        <td>{s.isGoal ? "Tak" : "Nie"}</td>
+                        <td>
+                          {(() => {
+                            const at = s.actionType;
+                            if (!at) return "-";
+                            const sfgTypes = new Set([
+                              "corner",
+                              "free_kick",
+                              "direct_free_kick",
+                              "penalty",
+                              "throw_in",
+                            ]);
+                            return sfgTypes.has(at) ? "SFG" : "Otwarta gra";
+                          })()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Wejścia w PK */}
+            <div className={styles.printSection}>
+              <div className={styles.printSectionTitle}>Wejścia w PK</div>
+              <div className={styles.printGrid}>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Udział</div>
+                  <div className={styles.printValue}>
+                    {pkEntriesStats.playerTotal} / {pkEntriesStats.teamTotal} ({pkEntriesStats.involvementPct.toFixed(1)}%)
+                  </div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Gole</div>
+                  <div className={styles.printValue}>{pkEntriesStats.goals}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Strzały</div>
+                  <div className={styles.printValue}>{pkEntriesStats.shots}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Regain</div>
+                  <div className={styles.printValue}>{pkEntriesStats.regains}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Śr. partnerzy</div>
+                  <div className={styles.printValue}>{pkEntriesAverages.avgPartners.toFixed(2)}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Śr. przeciwnicy</div>
+                  <div className={styles.printValue}>{pkEntriesAverages.avgOpponents.toFixed(2)}</div>
+                </div>
+              </div>
+
+              {pkEntriesStats.playerEntries?.length > 0 && (
+                <table className={styles.printTable}>
+                  <thead>
+                    <tr>
+                      <th>Min</th>
+                      <th>Połowa</th>
+                      <th>Typ</th>
+                      <th>Regain</th>
+                      <th>Strzał</th>
+                      <th>Gol</th>
+                      <th>Partnerzy</th>
+                      <th>Przeciwnicy</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pkEntriesStats.playerEntries.map((e) => (
+                      <tr key={e.id}>
+                        <td>{e.minute}'</td>
+                        <td>{e.isSecondHalf ? "II" : "I"}</td>
+                        <td>{(e.entryType || "pass").toUpperCase()}</td>
+                        <td>{e.isRegain ? "Tak" : "Nie"}</td>
+                        <td>{e.isShot ? "Tak" : "Nie"}</td>
+                        <td>{e.isGoal ? "Tak" : "Nie"}</td>
+                        <td>{e.pkPlayersCount ?? 0}</td>
+                        <td>{e.opponentsInPKCount ?? 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Przechwyty i Straty – skrót */}
+            {playerStats && (
+              <div className={styles.printSection}>
+                <div className={styles.printSectionTitle}>Przechwyty i Straty</div>
+                <div className={styles.printGrid}>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Przechwyty (suma)</div>
+                    <div className={styles.printValue}>{playerStats.totalRegains}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Przechwyty / 90</div>
+                    <div className={styles.printValue}>{playerStats.regainsPer90.toFixed(1)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Straty (suma)</div>
+                    <div className={styles.printValue}>{playerStats.totalLoses}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Straty / 90</div>
+                    <div className={styles.printValue}>{playerStats.losesPer90.toFixed(1)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>xT z przechwytów (atak/obr.)</div>
+                    <div className={styles.printValue}>
+                      {(playerStats.regainXTInAttack ?? 0).toFixed(3)} / {(playerStats.regainXTInDefense ?? 0).toFixed(3)}
+                    </div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>xT ze strat (atak/obr.)</div>
+                    <div className={styles.printValue}>
+                      {(playerStats.losesXTInAttack ?? 0).toFixed(3)} / {(playerStats.losesXTInDefense ?? 0).toFixed(3)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className={styles.noPrint}>
+        <div className={styles.header}>
+          <Link href="/" className={styles.backButton} title="Powrót do głównej">
+            ←
+          </Link>
+          <div className={styles.headerTitleRow}>
+            <h1>Profil zawodnika</h1>
+            <button
+              type="button"
+              className={styles.exportPdfButton}
+              onClick={handleExportPdf}
+              disabled={isPrintingProfile}
+              title="Eksportuj pełny profil do PDF"
+            >
+              Eksport PDF
+            </button>
+          </div>
+        </div>
 
       {/* Selektor zespołu, zawodnika, sezonu i meczów na górze */}
       <div className={styles.playerSelectorContainer}>
@@ -2841,39 +3396,563 @@ export default function PlayerDetailsPage() {
             <div className={styles.statsLayout}>
               {/* Lista kategorii na górze */}
               <div className={styles.categoriesList}>
-                <div
+                <button
+                  type="button"
                   className={`${styles.categoryItem} ${expandedCategory === 'pxt' ? styles.active : ''}`}
                   onClick={() => setExpandedCategory(expandedCategory === 'pxt' ? null : 'pxt')}
                 >
                   <span className={styles.categoryName}>PxT</span>
-                  <span className={styles.categoryValue}>{playerStats.pxtPer90.toFixed(2)}</span>
-                </div>
-                <div className={styles.categoryItem}>
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.categoryItem} ${expandedCategory === 'xg' ? styles.active : ''}`}
+                  onClick={() => setExpandedCategory(expandedCategory === 'xg' ? null : 'xg')}
+                >
                   <span className={styles.categoryName}>xG</span>
-                  <span className={styles.categoryValue}>{playerStats.xgPer90.toFixed(2)}</span>
-                </div>
-                <div
+                </button>
+                <button
+                  type="button"
                   className={`${styles.categoryItem} ${expandedCategory === 'regains' ? styles.active : ''}`}
                   onClick={() => setExpandedCategory(expandedCategory === 'regains' ? null : 'regains')}
                 >
                   <span className={styles.categoryName}>Przechwyty</span>
-                  <span className={styles.categoryValue}>{playerStats.regainsPer90.toFixed(1)}</span>
-                </div>
-                <div
+                </button>
+                <button
+                  type="button"
                   className={`${styles.categoryItem} ${expandedCategory === 'loses' ? styles.active : ''}`}
                   onClick={() => setExpandedCategory(expandedCategory === 'loses' ? null : 'loses')}
                 >
                   <span className={styles.categoryName}>Straty</span>
-                  <span className={styles.categoryValue}>{playerStats.losesPer90.toFixed(1)}</span>
-                </div>
-                <div className={styles.categoryItem}>
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.categoryItem} ${expandedCategory === 'pk_entries' ? styles.active : ''}`}
+                  onClick={() => setExpandedCategory(expandedCategory === 'pk_entries' ? null : 'pk_entries')}
+                >
                   <span className={styles.categoryName}>Wejścia w PK</span>
-                  <span className={styles.categoryValue}>{playerStats.pkEntriesPer90.toFixed(1)}</span>
-                </div>
+                </button>
               </div>
 
               {/* Szczegóły poniżej */}
               <div className={styles.detailsPanel}>
+                {expandedCategory === 'xg' && (
+                  <div className={styles.xgDetails}>
+                    <h3>Szczegóły xG</h3>
+
+                    <div className={styles.filterBar}>
+                      <div className={styles.filterGroup}>
+                        <span className={styles.filterLabel}>Połowa</span>
+                        <button
+                          className={`${styles.categoryButton} ${xgHalf === 'all' ? styles.active : ''}`}
+                          onClick={() => setXgHalf('all')}
+                          type="button"
+                        >
+                          Wszystkie
+                        </button>
+                        <button
+                          className={`${styles.categoryButton} ${xgHalf === 'first' ? styles.active : ''}`}
+                          onClick={() => setXgHalf('first')}
+                          type="button"
+                        >
+                          I połowa
+                        </button>
+                        <button
+                          className={`${styles.categoryButton} ${xgHalf === 'second' ? styles.active : ''}`}
+                          onClick={() => setXgHalf('second')}
+                          type="button"
+                        >
+                          II połowa
+                        </button>
+                      </div>
+
+                      <div className={`${styles.filterGroup} ${styles.filterGroupRight}`}>
+                        <span className={styles.filterLabel}>Typ</span>
+                        <button
+                          className={`${styles.categoryButton} ${xgFilter === 'all' ? styles.active : ''}`}
+                          onClick={() => setXgFilter('all')}
+                          type="button"
+                        >
+                          Wszystkie xG
+                        </button>
+                        <button
+                          className={`${styles.categoryButton} ${xgFilter === 'sfg' ? styles.active : ''}`}
+                          onClick={() => setXgFilter('sfg')}
+                          type="button"
+                        >
+                          xG SFG
+                        </button>
+                        <button
+                          className={`${styles.categoryButton} ${xgFilter === 'open_play' ? styles.active : ''}`}
+                          onClick={() => setXgFilter('open_play')}
+                          type="button"
+                        >
+                          xG Otwarta gra
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className={`${styles.detailsSection} ${styles.detailsSectionWithTiles}`}>
+                      <div className={styles.detailsSectionContent}>
+                        <h4>Strzały i jakość</h4>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>xG:</span>
+                          <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerXG.toFixed(2)}</strong></span>
+                            {xgStats.teamXG > 0 && (
+                              <span className={styles.valueSecondary}>({xgStats.xgSharePct.toFixed(1)}% xG zespołu)</span>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>Strzały:</span>
+                          <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerCount}</strong></span>
+                            {xgStats.teamCount > 0 && (
+                              <span className={styles.valueSecondary}>({xgStats.shotSharePct.toFixed(1)}% strzałów zespołu)</span>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>xG/strzał:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerXGPerShot.toFixed(2)}</strong></span>
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>xG OT:</span>
+                          <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerXGOT.toFixed(2)}</strong></span>
+                            <span className={styles.valueSecondary}>({xgStats.playerOnTargetCount}/{xgStats.playerCount} celne/gole)</span>
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>Gole:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerGoals}</strong></span>
+                            <span className={styles.valueSecondary}> • różnica xG–gole: {xgStats.playerXGMinusGoals.toFixed(2)}</span>
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>xG zablokowane:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerXGBlocked.toFixed(2)}</strong></span>
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>Zawodnicy na linii/strzał:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerAvgLinePlayers.toFixed(2)}</strong></span>
+                          </span>
+                        </div>
+
+                        {xgStats.relevantMatchesCount > 1 && (
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Zakres:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueSecondary}>Wybrane mecze: {xgStats.relevantMatchesCount}</span>
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className={styles.xgPitchPanel}>
+                        {xgStats.playerShots.length === 0 ? (
+                          <div className={styles.noData}>
+                            Brak strzałów dla wybranych filtrów.
+                          </div>
+                        ) : (
+                          <>
+                            <XGPitch
+                              shots={xgStats.playerShots}
+                              onShotClick={(shot) => {
+                                setSelectedXGShotIdForView(shot.id);
+                                setSelectedXGShotForView(shot);
+                              }}
+                              selectedShotId={selectedXGShotIdForView}
+                              matchInfo={
+                                xgStats.headerMatch
+                                  ? {
+                                      team: xgStats.headerMatch.team,
+                                      opponent: xgStats.headerMatch.opponent,
+                                      opponentLogo: xgStats.headerMatch.opponentLogo,
+                                    }
+                                  : {
+                                      team: selectedTeam || undefined,
+                                      opponent: xgStats.relevantMatchesCount > 1 ? "Różni" : "Przeciwnik",
+                                    }
+                              }
+                              allTeams={teams || []}
+                              hideTeamLogos
+                              hideToggleButton
+                            />
+
+                            {/* Szczegóły klikniętego strzału */}
+                            {selectedXGShotIdForView && (() => {
+                              const selectedShot =
+                                selectedXGShotForView?.id === selectedXGShotIdForView
+                                  ? selectedXGShotForView
+                                  : xgStats.playerShots.find(s => s.id === selectedXGShotIdForView);
+                              if (!selectedShot) return null;
+                              return (
+                                <div className={styles.zoneDetailsPanel} style={{ marginTop: 12 }}>
+                                  <div className={styles.zoneDetailsHeader}>
+                                    <h4>
+                                      Strzał • {selectedShot.xG.toFixed(2)} xG
+                                      {selectedShot.minute !== undefined && ` • ${selectedShot.minute}'${selectedShot.isSecondHalf ? ' (II)' : ' (I)'}`}
+                                    </h4>
+                                    <button
+                                      type="button"
+                                      className={styles.zoneDetailsClose}
+                                      onClick={() => {
+                                        setSelectedXGShotIdForView(undefined);
+                                        setSelectedXGShotForView(undefined);
+                                      }}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className={styles.zoneDetailsBody}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                                      <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                        <span className={styles.detailsLabel}>xG:</span>
+                                        <span className={styles.detailsValue}>
+                                          <span className={styles.valueMain}><strong>{selectedShot.xG.toFixed(2)}</strong></span>
+                                        </span>
+                                      </div>
+                                      {selectedShot.xGOT !== undefined && (
+                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                          <span className={styles.detailsLabel}>xG OT:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}><strong>{selectedShot.xGOT.toFixed(2)}</strong></span>
+                                          </span>
+                                        </div>
+                                      )}
+                                      {selectedShot.isGoal !== undefined && (
+                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                          <span className={styles.detailsLabel}>Gol:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}>
+                                              <strong>{selectedShot.isGoal ? "Tak" : "Nie"}</strong>
+                                            </span>
+                                          </span>
+                                        </div>
+                                      )}
+                                      {selectedShot.isOnTarget !== undefined && (
+                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                          <span className={styles.detailsLabel}>Celny:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}>
+                                              <strong>{selectedShot.isOnTarget ? "Tak" : "Nie"}</strong>
+                                            </span>
+                                          </span>
+                                        </div>
+                                      )}
+                                      {selectedShot.isBlocked !== undefined && (
+                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                          <span className={styles.detailsLabel}>Zablokowany:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}>
+                                              <strong>{selectedShot.isBlocked ? "Tak" : "Nie"}</strong>
+                                            </span>
+                                          </span>
+                                        </div>
+                                      )}
+                                      {selectedShot.actionType && (
+                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                          <span className={styles.detailsLabel}>Typ:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}>
+                                              <strong>{selectedShot.actionType === 'sfg' ? 'SFG' : 'Otwarta gra'}</strong>
+                                            </span>
+                                          </span>
+                                        </div>
+                                      )}
+                                      {selectedShot.playersOnLine !== undefined && (
+                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                          <span className={styles.detailsLabel}>Zawodnicy na linii:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}>
+                                              <strong>{selectedShot.playersOnLine}</strong>
+                                            </span>
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {expandedCategory === 'pk_entries' && (
+                  <div className={styles.pkEntriesDetails}>
+                    <h3>Wejścia w PK</h3>
+
+                    <div className={`${styles.detailsSection} ${styles.detailsSectionWithTiles}`}>
+                      <div className={styles.detailsSectionContent}>
+                        <h4>Wkład zawodnika</h4>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginTop: '12px' }}>
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Udział:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}>
+                                <strong>{pkEntriesStats.playerTotal}</strong> / {pkEntriesStats.teamTotal}
+                              </span>
+                              <span className={styles.valueSecondary}>
+                                ({pkEntriesStats.involvementPct.toFixed(1)}% zespołu)
+                              </span>
+                            </span>
+                          </div>
+
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Gole:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}><strong>{pkEntriesStats.goals}</strong></span>
+                            </span>
+                          </div>
+
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Strzały:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}><strong>{pkEntriesStats.shots}</strong></span>
+                              {pkEntriesStats.shotsWithoutGoal > 0 && (
+                                <span className={styles.valueSecondary}> • {pkEntriesStats.shotsWithoutGoal} bez gola</span>
+                              )}
+                            </span>
+                          </div>
+
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Regain:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}><strong>{pkEntriesStats.regains}</strong></span>
+                              <span className={styles.valueSecondary}>
+                                {' '}({pkEntriesStats.regainPct.toFixed(1)}%)
+                              </span>
+                            </span>
+                          </div>
+
+                          {pkEntriesStats.playerEntries.length > 0 && (
+                            <>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>Partnerzy w PK:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgPartners.toFixed(2)}</strong></span>
+                                </span>
+                              </div>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>Przeciwnicy w PK:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgOpponents.toFixed(2)}</strong></span>
+                                </span>
+                              </div>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>Różnica:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgDiffOppMinusPartners.toFixed(2)}</strong></span>
+                                </span>
+                              </div>
+                            </>
+                          )}
+
+                          {pkEntriesStats.relevantMatchesCount > 1 && (
+                            <div className={styles.detailsRow}>
+                              <span className={styles.detailsLabel}>Zakres:</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueSecondary}>
+                                  {pkEntriesStats.relevantMatchesCount} mecze
+                                </span>
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className={styles.pkEntriesPitchPanel}>
+                        {pkEntriesStats.playerEntries.length === 0 ? (
+                          <div className={styles.noData}>
+                            Brak wejść w PK dla wybranego zawodnika w zaznaczonych meczach.
+                          </div>
+                        ) : (
+                          <>
+                            <div className={styles.helperText}>
+                              Kliknij w strzałkę na boisku, aby zobaczyć szczegóły wejścia
+                            </div>
+                            <PKEntriesPitch
+                              pkEntries={pkEntriesFilteredForView}
+                              // Celowo nie podświetlamy po kliknięciu – klik ma pokazywać szczegóły niżej
+                              selectedEntryId={undefined}
+                              onEntryClick={(entry) => setSelectedPKEntryIdForView(entry.id)}
+                              hideTeamLogos
+                              hideFlipButton
+                              hideInstructions
+                              matchInfo={
+                                pkEntriesStats.headerMatch
+                                  ? {
+                                      team: pkEntriesStats.headerMatch.team,
+                                      opponent: pkEntriesStats.headerMatch.opponent,
+                                      opponentLogo: pkEntriesStats.headerMatch.opponentLogo,
+                                    }
+                                  : {
+                                      team: selectedTeam || undefined,
+                                      opponent: pkEntriesStats.relevantMatchesCount > 1 ? "Różni" : "Przeciwnik",
+                                    }
+                              }
+                              allTeams={teams || []}
+                            />
+
+                            {/* Filtry pod boiskiem */}
+                            <div className={styles.filterBar} style={{ marginTop: 12 }}>
+                              <div className={styles.filterGroup}>
+                                <span className={styles.filterLabel}>Typ</span>
+                                <button
+                                  className={`${styles.categoryButton} ${pkEntryTypeFilter === 'all' ? styles.active : ''}`}
+                                  onClick={() => setPkEntryTypeFilter('all')}
+                                  type="button"
+                                >
+                                  Wszystkie
+                                </button>
+                                <button
+                                  className={`${styles.categoryButton} ${pkEntryTypeFilter === 'dribble' ? styles.active : ''}`}
+                                  onClick={() => setPkEntryTypeFilter('dribble')}
+                                  type="button"
+                                >
+                                  Drybling
+                                </button>
+                                <button
+                                  className={`${styles.categoryButton} ${pkEntryTypeFilter === 'pass' ? styles.active : ''}`}
+                                  onClick={() => setPkEntryTypeFilter('pass')}
+                                  type="button"
+                                >
+                                  Podanie
+                                </button>
+                                <button
+                                  className={`${styles.categoryButton} ${pkEntryTypeFilter === 'sfg' ? styles.active : ''}`}
+                                  onClick={() => setPkEntryTypeFilter('sfg')}
+                                  type="button"
+                                >
+                                  SFG
+                                </button>
+                              </div>
+
+                              <div className={`${styles.filterGroup} ${styles.filterGroupRight}`}>
+                                <span className={styles.filterLabel}>Flagi</span>
+                                <button
+                                  className={`${styles.categoryButton} ${pkOnlyRegain ? styles.active : ''}`}
+                                  onClick={() => setPkOnlyRegain(v => !v)}
+                                  type="button"
+                                >
+                                  Regain
+                                </button>
+                                <button
+                                  className={`${styles.categoryButton} ${pkOnlyShot ? styles.active : ''}`}
+                                  onClick={() => setPkOnlyShot(v => !v)}
+                                  type="button"
+                                >
+                                  Strzał
+                                </button>
+                                <button
+                                  className={`${styles.categoryButton} ${pkOnlyGoal ? styles.active : ''}`}
+                                  onClick={() => setPkOnlyGoal(v => !v)}
+                                  type="button"
+                                >
+                                  Gol
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Szczegóły klikniętego wejścia */}
+                            {selectedPKEntry && (
+                              <div className={styles.zoneDetailsPanel} style={{ marginTop: 12 }}>
+                                <div className={styles.zoneDetailsHeader}>
+                                  <h4>
+                                    {selectedPKEntry.minute}' {selectedPKEntry.isSecondHalf ? "(II)" : "(I)"} • {(selectedPKEntry.entryType || "pass").toUpperCase()}
+                                    {selectedPKEntry.senderName && ` • ${selectedPKEntry.senderName}`}
+                                  </h4>
+                                  <button
+                                    type="button"
+                                    className={styles.zoneDetailsClose}
+                                    onClick={() => setSelectedPKEntryIdForView(undefined)}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                                <div className={styles.zoneDetailsBody}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                      <span className={styles.detailsLabel}>Regain:</span>
+                                      <span className={styles.detailsValue}>
+                                        <span className={styles.valueMain}>
+                                          <strong>{selectedPKEntry.isRegain ? "Tak" : "Nie"}</strong>
+                                        </span>
+                                      </span>
+                                    </div>
+                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                      <span className={styles.detailsLabel}>Strzał:</span>
+                                      <span className={styles.detailsValue}>
+                                        <span className={styles.valueMain}>
+                                          <strong>{selectedPKEntry.isShot ? "Tak" : "Nie"}</strong>
+                                        </span>
+                                      </span>
+                                    </div>
+                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                      <span className={styles.detailsLabel}>Gol:</span>
+                                      <span className={styles.detailsValue}>
+                                        <span className={styles.valueMain}>
+                                          <strong>{selectedPKEntry.isGoal ? "Tak" : "Nie"}</strong>
+                                        </span>
+                                      </span>
+                                    </div>
+                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                      <span className={styles.detailsLabel}>Partnerzy w PK:</span>
+                                      <span className={styles.detailsValue}>
+                                        <span className={styles.valueMain}>
+                                          <strong>{selectedPKEntry.pkPlayersCount ?? 0}</strong>
+                                        </span>
+                                      </span>
+                                    </div>
+                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                      <span className={styles.detailsLabel}>Przeciwnicy w PK:</span>
+                                      <span className={styles.detailsValue}>
+                                        <span className={styles.valueMain}>
+                                          <strong>{selectedPKEntry.opponentsInPKCount ?? 0}</strong>
+                                        </span>
+                                      </span>
+                                    </div>
+                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                      <span className={styles.detailsLabel}>Różnica:</span>
+                                      <span className={styles.detailsValue}>
+                                        <span className={styles.valueMain}>
+                                          <strong>{(selectedPKEntry.opponentsInPKCount ?? 0) - (selectedPKEntry.pkPlayersCount ?? 0)}</strong>
+                                        </span>
+                                        <span className={styles.valueSecondary}>
+                                          {' '}(przeciwnicy−partnerzy)
+                                        </span>
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {expandedCategory === 'pxt' && (
                   <div className={styles.pxtDetails}>
                     <h3>Szczegóły PxT</h3>
@@ -3104,7 +4183,7 @@ export default function PlayerDetailsPage() {
                                 <span className={styles.zoneLabel}>Strefy centralne:</span>
                                 <span className={styles.zoneValue}>{playerStats.senderGoalCountCentral}</span>
                               </div>
-                            </div>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -3959,10 +5038,10 @@ export default function PlayerDetailsPage() {
 
                 {expandedCategory === 'regains' && (
                   <div className={styles.regainsDetails}>
-                    <h3 style={{ marginBottom: '20px', marginTop: '0' }}>Szczegóły Przechwytów</h3>
+                    <h3>Szczegóły Przechwytów</h3>
                     
                     {/* Przełącznik atak/obrona - pod tytułem */}
-                    <div className={styles.heatmapModeToggle} style={{ marginBottom: '20px', width: 'auto', display: 'inline-flex' }}>
+                    <div className={styles.heatmapModeToggle}>
                       <button
                         className={`${styles.heatmapModeButton} ${regainAttackDefenseMode === 'defense' ? styles.active : ''}`}
                         onClick={() => {
@@ -4098,7 +5177,7 @@ export default function PlayerDetailsPage() {
                           // Dla ataku: partnerzy za piłką - przeciwnicy za piłką
                           // Dla obrony: przeciwnicy za piłką - nasi za piłką
                           // Wzór dla obrony: (totalOpponentsOnField - bramkarz - opponentsBehindBall) - (totalPlayersOnField - bramkarz - playersBehindBall)
-                          const playerDifference = isAttackMode
+                          const playerDifference = isAttackMode 
                             ? (displayPlayersValue || 0) - (displayOpponentsValue || 0) // Atak: partnerzy za piłką - przeciwnicy za piłką
                             : (displayOpponentsValue || 0) - (displayPlayersValue || 0); // Obrona: przeciwnicy za piłką - nasi za piłką
                           
@@ -4488,17 +5567,17 @@ export default function PlayerDetailsPage() {
                                   let oppositeXT = action.regainAttackXT !== undefined 
                                     ? action.regainAttackXT 
                                     : (action.oppositeXT !== undefined 
-                                      ? action.oppositeXT 
-                                      : (() => {
+                                    ? action.oppositeXT 
+                                    : (() => {
                                           const regainDefenseZone = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
                                           const zoneNameStr = convertZoneToNameHelper(regainDefenseZone);
                                           if (zoneNameStr) {
                                             const zoneIndex = zoneNameToIndex(zoneNameStr);
                                             if (zoneIndex !== null) {
                                               return getOppositeXTValueForZone(zoneIndex);
-                                            }
                                           }
-                                          return 0;
+                                        }
+                                        return 0;
                                         })());
                                   
                                   return (
@@ -4876,10 +5955,10 @@ export default function PlayerDetailsPage() {
 
                 {expandedCategory === 'loses' && (
                   <div className={styles.regainsDetails}>
-                    <h3 style={{ marginBottom: '20px', marginTop: '0' }}>Szczegóły Strat</h3>
+                    <h3>Szczegóły Strat</h3>
                     
                     {/* Przełącznik atak/obrona - pod tytułem */}
-                    <div className={styles.heatmapModeToggle} style={{ marginBottom: '20px', width: 'auto', display: 'inline-flex' }}>
+                    <div className={styles.heatmapModeToggle}>
                       <button
                         className={`${styles.heatmapModeButton} ${losesAttackDefenseMode === 'defense' ? styles.active : ''}`}
                         onClick={() => {
@@ -4896,7 +5975,7 @@ export default function PlayerDetailsPage() {
                       >
                         W ataku
                       </button>
-                    </div>
+              </div>
 
                     {/* Statystyki podstawowe */}
                     <div className={styles.detailsSection} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
@@ -4909,7 +5988,7 @@ export default function PlayerDetailsPage() {
                                 <span className={styles.valueMain}><strong>{playerStats.totalLoses}</strong></span>
                                 <span className={styles.valueSecondary}>({playerStats.losesPer90.toFixed(1)} / 90 min)</span>
                               </span>
-                            </div>
+            </div>
                             {losesAttackDefenseMode === 'attack' && (
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', marginBottom: '8px' }}>
                                 <div className={styles.detailsRow}>
@@ -5418,6 +6497,7 @@ export default function PlayerDetailsPage() {
         onImportError={() => {}}
         onLogout={logout}
       />
+    </div>
     </div>
   );
 }

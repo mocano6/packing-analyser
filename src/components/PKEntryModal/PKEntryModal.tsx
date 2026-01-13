@@ -386,18 +386,33 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         ? parseInt(videoTimestamp, 10) 
         : undefined;
       const isValidTimestamp = parsedVideoTimestamp !== undefined && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp >= 0;
+
+      const videoTimestampRaw = typeof window !== 'undefined'
+        ? localStorage.getItem('tempVideoTimestampRaw')
+        : null;
+      const parsedVideoTimestampRaw = videoTimestampRaw !== null && videoTimestampRaw !== ''
+        ? parseInt(videoTimestampRaw, 10)
+        : undefined;
+      const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw >= 0;
+
       const finalVideoTimestamp = isValidTimestamp 
         ? parsedVideoTimestamp 
         : (editingEntry?.videoTimestamp);
+
+      const finalVideoTimestampRaw = isValidTimestampRaw
+        ? parsedVideoTimestampRaw
+        : (editingEntry as any)?.videoTimestampRaw;
       
       onSave({
         ...entryDataToSave,
         ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
+        ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
       });
       
       // Wyczyść tempVideoTimestamp po zapisaniu
       if (typeof window !== 'undefined') {
         localStorage.removeItem('tempVideoTimestamp');
+        localStorage.removeItem('tempVideoTimestampRaw');
       }
       
       onClose();
@@ -436,11 +451,23 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
       ? parseInt(videoTimestamp, 10) 
       : undefined;
     const isValidTimestamp = parsedVideoTimestamp !== undefined && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp >= 0;
+
+    const videoTimestampRaw = typeof window !== 'undefined'
+      ? localStorage.getItem('tempVideoTimestampRaw')
+      : null;
+    const parsedVideoTimestampRaw = videoTimestampRaw !== null && videoTimestampRaw !== ''
+      ? parseInt(videoTimestampRaw, 10)
+      : undefined;
+    const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw >= 0;
     
     // Przy edycji zachowaj istniejący videoTimestamp, jeśli nowy nie jest dostępny
     const finalVideoTimestamp = isValidTimestamp 
       ? parsedVideoTimestamp 
       : (editingEntry?.videoTimestamp);
+
+    const finalVideoTimestampRaw = isValidTimestampRaw
+      ? parsedVideoTimestampRaw
+      : (editingEntry as any)?.videoTimestampRaw;
 
     // Przygotuj obiekt do zapisania
     const entryDataToSave = {
@@ -463,6 +490,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
       isGoal: formData.isGoal,
       isRegain: formData.isRegain,
       ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
+      ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
     };
 
     // Dla dryblingu - upewniamy się, że nie ma odbiorcy
@@ -484,6 +512,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     // Wyczyść tempVideoTimestamp po zapisaniu
     if (typeof window !== 'undefined') {
       localStorage.removeItem('tempVideoTimestamp');
+      localStorage.removeItem('tempVideoTimestampRaw');
     }
 
     onClose();

@@ -289,21 +289,28 @@ export default function Page() {
       if (time === null) {
         if (hasExternalVideoTime) {
           // Użyj ostatniego znanego czasu z zewnętrznego okna, cofnij o 10s
-          const adjustedTime = Math.max(0, externalVideoTime - 10);
+          const rawTime = Math.max(0, externalVideoTime);
+          const adjustedTime = Math.max(0, rawTime - 10);
           localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+          localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
         } else {
           const proceed = window.confirm('Nie udało się pobrać czasu z wideo. Czy zapisać akcję bez czasu?');
           if (!proceed) return;
           localStorage.setItem('tempVideoTimestamp', '0');
+          localStorage.setItem('tempVideoTimestampRaw', '0');
         }
       } else if (time > 0) {
         // Cofnij czas o 10 sekund
-        const adjustedTime = Math.max(0, time - 10);
+        const rawTime = Math.max(0, time);
+        const adjustedTime = Math.max(0, rawTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
       } else if (externalVideoTime > 0) {
         // Fallback do ostatniego znanego czasu, cofnij o 10s
-        const adjustedTime = Math.max(0, externalVideoTime - 10);
+        const rawTime = Math.max(0, externalVideoTime);
+        const adjustedTime = Math.max(0, rawTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
       }
     } else {
       // Spróbuj kilka razy pobrać czas (YouTube player może potrzebować czasu na załadowanie)
@@ -321,8 +328,10 @@ export default function Page() {
       }
       
       if (currentTime > 0) {
-        const adjustedTime = Math.max(0, currentTime - 10);
+        const rawTime = Math.max(0, currentTime);
+        const adjustedTime = Math.max(0, rawTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
       }
     }
     setIsActionModalOpen(true);
@@ -369,21 +378,28 @@ export default function Page() {
       if (time === null) {
         if (hasExternalVideoTime) {
           // Użyj ostatniego znanego czasu z zewnętrznego okna, cofnij o 10s
-          const adjustedTime = Math.max(0, externalVideoTime - 10);
+          const rawTime = Math.max(0, externalVideoTime);
+          const adjustedTime = Math.max(0, rawTime - 10);
           localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+          localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
         } else {
           const proceed = window.confirm('Nie udało się pobrać czasu z wideo. Czy zapisać akcję bez czasu?');
           if (!proceed) return;
           localStorage.setItem('tempVideoTimestamp', '0');
+          localStorage.setItem('tempVideoTimestampRaw', '0');
         }
       } else if (time > 0) {
         // Cofnij czas o 10 sekund
-        const adjustedTime = Math.max(0, time - 10);
+        const rawTime = Math.max(0, time);
+        const adjustedTime = Math.max(0, rawTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
       } else if (externalVideoTime > 0) {
         // Fallback do ostatniego znanego czasu, cofnij o 10s
-        const adjustedTime = Math.max(0, externalVideoTime - 10);
+        const rawTime = Math.max(0, externalVideoTime);
+        const adjustedTime = Math.max(0, rawTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
       }
     } else {
       console.log('openAcc8sModalWithVideoTime - sprawdzam getActiveVideoTime()');
@@ -403,13 +419,16 @@ export default function Page() {
       }
       
       if (currentTime > 0) {
-        const adjustedTime = Math.max(0, currentTime - 10);
+        const rawTime = Math.max(0, currentTime);
+        const adjustedTime = Math.max(0, rawTime - 10);
         console.log('openAcc8sModalWithVideoTime - adjustedTime (currentTime - 15):', adjustedTime, 'z currentTime:', currentTime);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
       } else {
         console.warn('openAcc8sModalWithVideoTime - nie udało się pobrać czasu z playera po', maxAttempts, 'próbach');
         // Ustaw 0 jako fallback, aby modal mógł się otworzyć
         localStorage.setItem('tempVideoTimestamp', '0');
+        localStorage.setItem('tempVideoTimestampRaw', '0');
       }
     }
     setAcc8sModalData({});
@@ -508,13 +527,13 @@ export default function Page() {
         });
         
         if (timeFromExternal === null || timeFromExternal === undefined) {
-          return null;
+        return null;
         }
         
         currentVideoTime = timeFromExternal;
       } else if (youtubeVideoRef?.current) {
         try {
-          currentVideoTime = await youtubeVideoRef.current.getCurrentTime();
+        currentVideoTime = await youtubeVideoRef.current.getCurrentTime();
           console.log('calculateMatchMinuteFromVideoTime: pobrano czas z YouTube:', currentVideoTime);
         } catch (error) {
           console.warn('calculateMatchMinuteFromVideoTime: błąd pobierania czasu z YouTube:', error);
@@ -522,7 +541,7 @@ export default function Page() {
         }
       } else if (customVideoRef?.current) {
         try {
-          currentVideoTime = await customVideoRef.current.getCurrentTime();
+        currentVideoTime = await customVideoRef.current.getCurrentTime();
           console.log('calculateMatchMinuteFromVideoTime: pobrano czas z CustomVideo:', currentVideoTime);
         } catch (error) {
           console.warn('calculateMatchMinuteFromVideoTime: błąd pobierania czasu z CustomVideo:', error);
@@ -656,25 +675,34 @@ export default function Page() {
       if (time === null) {
         if (hasExternalVideoTime) {
           // Użyj ostatniego znanego czasu z zewnętrznego okna, cofnij o 10s
-          const adjustedTime = Math.max(0, externalVideoTime - 10);
+          const rawTime = Math.max(0, externalVideoTime);
+          const adjustedTime = Math.max(0, rawTime - 10);
           localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+          localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
         } else {
           localStorage.setItem('tempVideoTimestamp', '0');
+          localStorage.setItem('tempVideoTimestampRaw', '0');
         }
       } else if (time > 0) {
         // Cofnij czas o 10 sekund
-        const adjustedTime = Math.max(0, time - 10);
+        const rawTime = Math.max(0, time);
+        const adjustedTime = Math.max(0, rawTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
       } else if (externalVideoTime > 0) {
         // Fallback do ostatniego znanego czasu, cofnij o 10s
-        const adjustedTime = Math.max(0, externalVideoTime - 10);
+        const rawTime = Math.max(0, externalVideoTime);
+        const adjustedTime = Math.max(0, rawTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
       }
     } else {
       const currentTime = await getActiveVideoTime();
       if (currentTime > 0) {
-        const adjustedTime = Math.max(0, currentTime - 10);
+        const rawTime = Math.max(0, currentTime);
+        const adjustedTime = Math.max(0, rawTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
       }
     }
     
@@ -704,16 +732,25 @@ export default function Page() {
       const videoTimestamp = localStorage.getItem('tempVideoTimestamp');
       const parsedVideoTimestamp = videoTimestamp ? parseInt(videoTimestamp) : undefined;
       const isValidTimestamp = parsedVideoTimestamp !== undefined && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp > 0;
+
+      const videoTimestampRaw = localStorage.getItem('tempVideoTimestampRaw');
+      const parsedVideoTimestampRaw = videoTimestampRaw ? parseInt(videoTimestampRaw) : undefined;
+      const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw > 0;
       
       // Dodaj videoTimestamp do danych strzału
       // Przy edycji zachowaj istniejący videoTimestamp, jeśli nowy nie jest dostępny
       const finalVideoTimestamp = isValidTimestamp 
         ? parsedVideoTimestamp 
         : (shotModalData?.editingShot?.videoTimestamp);
+
+      const finalVideoTimestampRaw = isValidTimestampRaw
+        ? parsedVideoTimestampRaw
+        : (shotModalData?.editingShot as any)?.videoTimestampRaw;
       
       const shotDataWithTimestamp = {
         ...shotData,
         ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
+        ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
       };
       
       // Debug: sprawdź czy videoTimestamp jest zapisywany
@@ -3017,19 +3054,23 @@ export default function Page() {
               
               if (isExternalWindowOpen || hasExternalVideoTime) {
                 // Jeśli mamy zewnętrzne okno lub externalVideoTime, użyj tego i odejmij 10s
-                const timestamp = hasExternalVideoTime ? externalVideoTime : 0;
-                const adjustedTime = Math.max(0, timestamp - 10);
+                const rawTime = hasExternalVideoTime ? externalVideoTime : 0;
+                const adjustedTime = Math.max(0, rawTime - 10);
                 localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+                localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
               } else {
                 // Spróbuj pobrać czas z aktywnego playera
                 const currentTime = await getActiveVideoTime();
                 if (currentTime > 0) {
                   // Odejmij 15 sekund od czasu wideo
-                  const adjustedTime = Math.max(0, currentTime - 10);
+                  const rawTime = Math.max(0, currentTime);
+                  const adjustedTime = Math.max(0, rawTime - 10);
                   localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+                  localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
                 } else {
                   // Fallback - ustaw 0
                   localStorage.setItem('tempVideoTimestamp', '0');
+                  localStorage.setItem('tempVideoTimestampRaw', '0');
                 }
               }
               
