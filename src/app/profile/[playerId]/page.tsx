@@ -3288,21 +3288,21 @@ export default function PlayerDetailsPage() {
                           </div>
 
                           <div className={styles.detailsRow}>
-                            <span className={styles.detailsLabel}>Gole:</span>
-                            <span className={styles.detailsValue}>
-                              <span className={styles.valueMain}><strong>{pkEntriesStats.goals}</strong></span>
-                            </span>
-                          </div>
-
-                          <div className={styles.detailsRow}>
-                            <span className={styles.detailsLabel}>Strzały:</span>
-                            <span className={styles.detailsValue}>
-                              <span className={styles.valueMain}><strong>{pkEntriesStats.shots}</strong></span>
-                              {pkEntriesStats.shotsWithoutGoal > 0 && (
-                                <span className={styles.valueSecondary}>
-                                  {' '}(bez gola: {pkEntriesStats.shotsWithoutGoal})
-                                </span>
-                              )}
+                            <span className={styles.detailsLabel}>Gole i strzały:</span>
+                            <span className={styles.detailsValue} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                              <span>
+                                <span className={styles.valueMain}><strong>{pkEntriesStats.goals}</strong></span>
+                                <span className={styles.valueSecondary}> gole</span>
+                              </span>
+                              <span>
+                                <span className={styles.valueMain}><strong>{pkEntriesStats.shots}</strong></span>
+                                <span className={styles.valueSecondary}> strzały</span>
+                                {pkEntriesStats.shotsWithoutGoal > 0 && (
+                                  <span className={styles.valueSecondary}>
+                                    {' '}({pkEntriesStats.shotsWithoutGoal} bez gola)
+                                  </span>
+                                )}
+                              </span>
                             </span>
                           </div>
 
@@ -3319,25 +3319,19 @@ export default function PlayerDetailsPage() {
                           {pkEntriesStats.playerEntries.length > 0 && (
                             <>
                               <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>Śr. partnerów w PK:</span>
-                                <span className={styles.detailsValue}>
-                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgPartners.toFixed(2)}</strong></span>
-                                </span>
-                              </div>
-
-                              <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>Śr. przeciwników w PK:</span>
-                                <span className={styles.detailsValue}>
-                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgOpponents.toFixed(2)}</strong></span>
-                                </span>
-                              </div>
-
-                              <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>Śr. różnica:</span>
-                                <span className={styles.detailsValue}>
-                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgDiffOppMinusPartners.toFixed(2)}</strong></span>
-                                  <span className={styles.valueSecondary}>
-                                    {' '}(przeciwnicy−partnerzy)
+                                <span className={styles.detailsLabel}>Śr. w PK:</span>
+                                <span className={styles.detailsValue} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                                  <span>
+                                    <span className={styles.valueMain}><strong>{pkEntriesAverages.avgPartners.toFixed(2)}</strong></span>
+                                    <span className={styles.valueSecondary}> partnerzy</span>
+                                  </span>
+                                  <span>
+                                    <span className={styles.valueMain}><strong>{pkEntriesAverages.avgOpponents.toFixed(2)}</strong></span>
+                                    <span className={styles.valueSecondary}> przeciwnicy</span>
+                                  </span>
+                                  <span>
+                                    <span className={styles.valueMain}><strong>{pkEntriesAverages.avgDiffOppMinusPartners.toFixed(2)}</strong></span>
+                                    <span className={styles.valueSecondary}> różnica</span>
                                   </span>
                                 </span>
                               </div>
@@ -3448,44 +3442,23 @@ export default function PlayerDetailsPage() {
                             </div>
 
                             {/* Szczegóły klikniętego wejścia */}
-                            <div style={{ marginTop: 12 }}>
-                              {selectedPKEntry ? (
-                                <div style={{
-                                  background: '#f9fafb',
-                                  border: '1px solid #e5e7eb',
-                                  borderRadius: 8,
-                                  padding: 16
-                                }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                                    <div>
-                                      <div className={styles.detailsRow} style={{ padding: 0, marginBottom: 8 }}>
-                                        <span className={styles.detailsLabel}>Wejście:</span>
-                                        <span className={styles.detailsValue}>
-                                          <span className={styles.valueMain}>
-                                            <strong>{selectedPKEntry.minute}'</strong> {selectedPKEntry.isSecondHalf ? "(II)" : "(I)"} • {(selectedPKEntry.entryType || "pass").toUpperCase()}
-                                          </span>
-                                        </span>
-                                      </div>
-                                      {selectedPKEntry.senderName && (
-                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                          <span className={styles.detailsLabel}>Zawodnik:</span>
-                                          <span className={styles.detailsValue}>
-                                            <span className={styles.valueMain}>{selectedPKEntry.senderName}</span>
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className={styles.categoryButton}
-                                      onClick={() => setSelectedPKEntryIdForView(undefined)}
-                                      style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
-                                    >
-                                      ✕
-                                    </button>
-                                  </div>
-
-                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+                            {selectedPKEntry && (
+                              <div className={styles.zoneDetailsPanel} style={{ marginTop: 12 }}>
+                                <div className={styles.zoneDetailsHeader}>
+                                  <h4>
+                                    {selectedPKEntry.minute}' {selectedPKEntry.isSecondHalf ? "(II)" : "(I)"} • {(selectedPKEntry.entryType || "pass").toUpperCase()}
+                                    {selectedPKEntry.senderName && ` • ${selectedPKEntry.senderName}`}
+                                  </h4>
+                                  <button
+                                    type="button"
+                                    className={styles.zoneDetailsClose}
+                                    onClick={() => setSelectedPKEntryIdForView(undefined)}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                                <div className={styles.zoneDetailsBody}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                                     <div className={styles.detailsRow} style={{ padding: 0 }}>
                                       <span className={styles.detailsLabel}>Regain:</span>
                                       <span className={styles.detailsValue}>
@@ -3539,12 +3512,8 @@ export default function PlayerDetailsPage() {
                                     </div>
                                   </div>
                                 </div>
-                              ) : (
-                                <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', padding: '8px' }}>
-                                  Kliknij wejście na boisku, aby zobaczyć szczegóły.
-                                </div>
-                              )}
-                            </div>
+                              </div>
+                            )}
                           </>
                         )}
                       </div>
