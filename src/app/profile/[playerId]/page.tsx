@@ -115,6 +115,10 @@ export default function PlayerDetailsPage() {
   const [isPlayerSelectModalOpen, setIsPlayerSelectModalOpen] = useState(false);
   const [isMatchSelectModalOpen, setIsMatchSelectModalOpen] = useState(false);
   const [selectedPKEntryIdForView, setSelectedPKEntryIdForView] = useState<string | undefined>(undefined);
+  const [pkEntryTypeFilter, setPkEntryTypeFilter] = useState<"all" | "pass" | "dribble" | "sfg">("all");
+  const [pkOnlyRegain, setPkOnlyRegain] = useState(false);
+  const [pkOnlyShot, setPkOnlyShot] = useState(false);
+  const [pkOnlyGoal, setPkOnlyGoal] = useState(false);
   const [selectedXGShotIdForView, setSelectedXGShotIdForView] = useState<string | undefined>(undefined);
   const [xgHalf, setXgHalf] = useState<"all" | "first" | "second">("all");
   const [xgFilter, setXgFilter] = useState<"all" | "sfg" | "open_play">("all");
@@ -215,6 +219,34 @@ export default function PlayerDetailsPage() {
       headerMatch,
     };
   }, [filteredMatchesBySeason, selectedMatchIds, selectedPlayerForView, playerId]);
+
+  const pkEntriesFilteredForView = useMemo(() => {
+    return pkEntriesStats.playerEntries.filter(e => {
+      if (pkEntryTypeFilter !== "all" && (e.entryType || "pass") !== pkEntryTypeFilter) return false;
+      if (pkOnlyRegain && !e.isRegain) return false;
+      if (pkOnlyShot && !e.isShot) return false;
+      if (pkOnlyGoal && !e.isGoal) return false;
+      return true;
+    });
+  }, [pkEntriesStats.playerEntries, pkEntryTypeFilter, pkOnlyRegain, pkOnlyShot, pkOnlyGoal]);
+
+  const selectedPKEntry = useMemo(() => {
+    if (!selectedPKEntryIdForView) return null;
+    return pkEntriesStats.playerEntries.find(e => e.id === selectedPKEntryIdForView) || null;
+  }, [pkEntriesStats.playerEntries, selectedPKEntryIdForView]);
+
+  const pkEntriesAverages = useMemo(() => {
+    const entries = pkEntriesStats.playerEntries;
+    if (entries.length === 0) {
+      return { avgPartners: 0, avgOpponents: 0, avgDiffOppMinusPartners: 0 };
+    }
+    const partnersSum = entries.reduce((s, e) => s + (e.pkPlayersCount ?? 0), 0);
+    const oppSum = entries.reduce((s, e) => s + (e.opponentsInPKCount ?? 0), 0);
+    const avgPartners = partnersSum / entries.length;
+    const avgOpponents = oppSum / entries.length;
+    const avgDiffOppMinusPartners = avgOpponents - avgPartners;
+    return { avgPartners, avgOpponents, avgDiffOppMinusPartners };
+  }, [pkEntriesStats.playerEntries]);
 
   const xgStats = useMemo(() => {
     const targetPlayerId = selectedPlayerForView || playerId;
@@ -3294,40 +3326,160 @@ export default function PlayerDetailsPage() {
                       </div>
 
                       <div className={styles.pkEntriesPitchPanel}>
-                        <div className={styles.pkEntriesPitchHeader}>
-                          <div className={styles.pkEntriesPitchTitle}>Wizualizacja na boisku</div>
-                          <div className={styles.pkEntriesPitchSubtitle}>
-                            Kliknij strzałkę, aby podświetlić
-                          </div>
-                        </div>
-
                         {pkEntriesStats.playerEntries.length === 0 ? (
                           <div className={styles.noData}>
                             Brak wejść w PK dla wybranego zawodnika w zaznaczonych meczach.
                           </div>
                         ) : (
-                          <PKEntriesPitch
-                            pkEntries={pkEntriesStats.playerEntries}
-                            selectedEntryId={selectedPKEntryIdForView}
-                            onEntryClick={(entry) => setSelectedPKEntryIdForView(entry.id)}
-                            hideTeamLogos
-                            hideFlipButton
-                            hideInstructions
-                            matchInfo={
-                              pkEntriesStats.headerMatch
-                                ? {
-                                    team: pkEntriesStats.headerMatch.team,
-                                    opponent: pkEntriesStats.headerMatch.opponent,
-                                    opponentLogo: pkEntriesStats.headerMatch.opponentLogo,
-                                  }
-                                : {
-                                    team: selectedTeam || undefined,
-                                    opponent: pkEntriesStats.relevantMatchesCount > 1 ? "Różni" : "Przeciwnik",
-                                  }
-                            }
-                            allTeams={teams || []}
-                          />
+                          <>
+                            <PKEntriesPitch
+                              pkEntries={pkEntriesFilteredForView}
+                              // Celowo nie podświetlamy po kliknięciu – klik ma pokazywać szczegóły niżej
+                              selectedEntryId={undefined}
+                              onEntryClick={(entry) => setSelectedPKEntryIdForView(entry.id)}
+                              hideTeamLogos
+                              hideFlipButton
+                              hideInstructions
+                              matchInfo={
+                                pkEntriesStats.headerMatch
+                                  ? {
+                                      team: pkEntriesStats.headerMatch.team,
+                                      opponent: pkEntriesStats.headerMatch.opponent,
+                                      opponentLogo: pkEntriesStats.headerMatch.opponentLogo,
+                                    }
+                                  : {
+                                      team: selectedTeam || undefined,
+                                      opponent: pkEntriesStats.relevantMatchesCount > 1 ? "Różni" : "Przeciwnik",
+                                    }
+                              }
+                              allTeams={teams || []}
+                            />
+
+                            {/* Filtry pod boiskiem */}
+                            <div className={styles.categoryControls} style={{ marginTop: 10, justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                              <div className={styles.categoryControls} style={{ margin: 0 }}>
+                                <button
+                                  className={`${styles.categoryButton} ${pkEntryTypeFilter === 'all' ? styles.active : ''}`}
+                                  onClick={() => setPkEntryTypeFilter('all')}
+                                >
+                                  Wszystkie
+                                </button>
+                                <button
+                                  className={`${styles.categoryButton} ${pkEntryTypeFilter === 'dribble' ? styles.active : ''}`}
+                                  onClick={() => setPkEntryTypeFilter('dribble')}
+                                >
+                                  Prowadzenie/Drybling
+                                </button>
+                                <button
+                                  className={`${styles.categoryButton} ${pkEntryTypeFilter === 'pass' ? styles.active : ''}`}
+                                  onClick={() => setPkEntryTypeFilter('pass')}
+                                >
+                                  Podanie
+                                </button>
+                                <button
+                                  className={`${styles.categoryButton} ${pkEntryTypeFilter === 'sfg' ? styles.active : ''}`}
+                                  onClick={() => setPkEntryTypeFilter('sfg')}
+                                >
+                                  SFG
+                                </button>
+                              </div>
+
+                              <div className={styles.categoryControls} style={{ margin: 0 }}>
+                                <button
+                                  className={`${styles.categoryButton} ${pkOnlyRegain ? styles.active : ''}`}
+                                  onClick={() => setPkOnlyRegain(v => !v)}
+                                >
+                                  Regain
+                                </button>
+                                <button
+                                  className={`${styles.categoryButton} ${pkOnlyShot ? styles.active : ''}`}
+                                  onClick={() => setPkOnlyShot(v => !v)}
+                                >
+                                  Strzał
+                                </button>
+                                <button
+                                  className={`${styles.categoryButton} ${pkOnlyGoal ? styles.active : ''}`}
+                                  onClick={() => setPkOnlyGoal(v => !v)}
+                                >
+                                  Gol
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Szczegóły klikniętego wejścia */}
+                            <div style={{ marginTop: 12 }}>
+                              {selectedPKEntry ? (
+                                <div style={{
+                                  background: '#f9fafb',
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: 10,
+                                  padding: 12,
+                                  display: 'grid',
+                                  gridTemplateColumns: '1fr 1fr',
+                                  gap: 10
+                                }}>
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Wybrane wejście</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>
+                                      {selectedPKEntry.minute}{selectedPKEntry.isSecondHalf ? "’ (II)" : "’ (I)"} • {(selectedPKEntry.entryType || "pass").toUpperCase()}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: '#374151', marginTop: 4 }}>
+                                      {selectedPKEntry.senderName ? `Zawodnik: ${selectedPKEntry.senderName}` : "Zawodnik: —"}
+                                    </div>
+                                  </div>
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Atrybuty</div>
+                                    <div style={{ fontSize: 12, color: '#111827', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                      <span><b>Regain:</b> {selectedPKEntry.isRegain ? "tak" : "nie"}</span>
+                                      <span><b>Strzał:</b> {selectedPKEntry.isShot ? "tak" : "nie"}</span>
+                                      <span><b>Gol:</b> {selectedPKEntry.isGoal ? "tak" : "nie"}</span>
+                                      <span><b>Partnerzy:</b> {selectedPKEntry.pkPlayersCount ?? 0}</span>
+                                      <span><b>Przeciwnicy:</b> {selectedPKEntry.opponentsInPKCount ?? 0}</span>
+                                      <span><b>Różnica:</b> {(selectedPKEntry.opponentsInPKCount ?? 0) - (selectedPKEntry.pkPlayersCount ?? 0)}</span>
+                                    </div>
+                                  </div>
+                                  <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end' }}>
+                                    <button
+                                      type="button"
+                                      className={styles.categoryButton}
+                                      onClick={() => setSelectedPKEntryIdForView(undefined)}
+                                    >
+                                      Wyczyść wybór
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: 12, color: '#6b7280' }}>
+                                  Kliknij wejście na boisku, aby zobaczyć szczegóły.
+                                </div>
+                              )}
+                            </div>
+                          </>
                         )}
+
+                        {/* statystyki średnich po wejściach */}
+                        <div style={{ marginTop: 14 }}>
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Śr. partnerów w PK:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}><strong>{pkEntriesAverages.avgPartners.toFixed(2)}</strong></span>
+                            </span>
+                          </div>
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Śr. przeciwników w PK:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}><strong>{pkEntriesAverages.avgOpponents.toFixed(2)}</strong></span>
+                            </span>
+                          </div>
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Śr. różnica (przeciwnicy−partnerzy):</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}><strong>{pkEntriesAverages.avgDiffOppMinusPartners.toFixed(2)}</strong></span>
+                            </span>
+                          </div>
+                        </div>
+                      </>
+                    )}
                       </div>
                     </div>
                   </div>
