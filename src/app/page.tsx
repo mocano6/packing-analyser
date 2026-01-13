@@ -508,13 +508,13 @@ export default function Page() {
         });
         
         if (timeFromExternal === null || timeFromExternal === undefined) {
-          return null;
+        return null;
         }
         
         currentVideoTime = timeFromExternal;
       } else if (youtubeVideoRef?.current) {
         try {
-          currentVideoTime = await youtubeVideoRef.current.getCurrentTime();
+        currentVideoTime = await youtubeVideoRef.current.getCurrentTime();
           console.log('calculateMatchMinuteFromVideoTime: pobrano czas z YouTube:', currentVideoTime);
         } catch (error) {
           console.warn('calculateMatchMinuteFromVideoTime: błąd pobierania czasu z YouTube:', error);
@@ -522,7 +522,7 @@ export default function Page() {
         }
       } else if (customVideoRef?.current) {
         try {
-          currentVideoTime = await customVideoRef.current.getCurrentTime();
+        currentVideoTime = await customVideoRef.current.getCurrentTime();
           console.log('calculateMatchMinuteFromVideoTime: pobrano czas z CustomVideo:', currentVideoTime);
         } catch (error) {
           console.warn('calculateMatchMinuteFromVideoTime: błąd pobierania czasu z CustomVideo:', error);

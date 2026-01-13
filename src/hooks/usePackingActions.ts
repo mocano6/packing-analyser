@@ -388,11 +388,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         }
         
         if (actionCategory === "regain") {
-          // Określ czy to atak czy obrona na podstawie xT odbiorców
-          const receiverXT = xTEnd !== undefined ? xTEnd : 0;
-          regainIsAttack = receiverXT < 0.02; // xT < 0.02 to atak
-          console.log(`🔍 DEBUG regain - receiverXT: ${receiverXT}, isAttack: ${regainIsAttack}`);
-          console.log(`🔍 DEBUG regain END - regainOppositeXT: ${regainOppositeXT}, regainOppositeZone: ${regainOppositeZone}, regainIsAttack: ${regainIsAttack}`);
+        // Określ czy to atak czy obrona na podstawie xT odbiorców
+        const receiverXT = xTEnd !== undefined ? xTEnd : 0;
+        regainIsAttack = receiverXT < 0.02; // xT < 0.02 to atak
+        console.log(`🔍 DEBUG regain - receiverXT: ${receiverXT}, isAttack: ${regainIsAttack}`);
+        console.log(`🔍 DEBUG regain END - regainOppositeXT: ${regainOppositeXT}, regainOppositeZone: ${regainOppositeZone}, regainIsAttack: ${regainIsAttack}`);
         } else if (actionCategory === "loses") {
           // Dla loses używamy tych samych wartości co dla regain
           losesOppositeXT = regainOppositeXT;
@@ -410,14 +410,14 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         receiverId: (actionCategory === "regain" || actionCategory === "loses") ? undefined : (actionType === "pass" ? selectedReceiverId || undefined : undefined),
         // Dla regain i loses nie używamy fromZone/toZone
         ...(actionCategory !== "regain" && actionCategory !== "loses" && {
-          fromZone: formattedStartZone,
-          toZone: formattedEndZone,
+        fromZone: formattedStartZone,
+        toZone: formattedEndZone,
         }),
         actionType: actionType,
         minute: actionMinute,
         // packingPoints tylko dla akcji innych niż regain i loses
         ...(actionCategory !== "regain" && actionCategory !== "loses" && {
-          packingPoints: packingValue || currentPoints,
+        packingPoints: packingValue || currentPoints,
         }),
         ...(isValidTimestamp && { videoTimestamp: parsedVideoTimestamp }),
         // Przypisujemy wartości xT tylko jeśli są zdefiniowane i NIE jest to regain ani loses
@@ -426,36 +426,36 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         // PxT będzie obliczane dynamicznie na froncie
         // Pola P0-P3 Start tylko dla akcji innych niż regain i loses
         ...(actionCategory !== "regain" && actionCategory !== "loses" && {
-          isP0Start: isP0StartActive,
-          isP1Start: isP1StartActive,
-          isP2Start: isP2StartActive,
-          isP3Start: isP3StartActive,
+        isP0Start: isP0StartActive,
+        isP1Start: isP1StartActive,
+        isP2Start: isP2StartActive,
+        isP3Start: isP3StartActive,
         }),
         // Pola P0-P3 tylko dla akcji innych niż regain i loses
         ...(actionCategory !== "regain" && actionCategory !== "loses" && {
-          isP0: isP0Active,
-          isP1: isP1Active,
-          isP2: isP2Active,
-          isP3: isP3Active,
+        isP0: isP0Active,
+        isP1: isP1Active,
+        isP2: isP2Active,
+        isP3: isP3Active,
         }),
         // Pola Contact tylko dla akcji innych niż regain i loses
         ...(actionCategory !== "regain" && actionCategory !== "loses" && {
-          isContact1: isContact1Active,
-          isContact2: isContact2Active,
-          isContact3Plus: isContact3PlusActive,
+        isContact1: isContact1Active,
+        isContact2: isContact2Active,
+        isContact3Plus: isContact3PlusActive,
         }),
         // Pola isShot, isGoal, isPenaltyAreaEntry tylko dla akcji innych niż regain i loses
         ...(actionCategory !== "regain" && actionCategory !== "loses" && {
-          isShot: isShot,
-          isGoal: isGoal,
-          isPenaltyAreaEntry: isPenaltyAreaEntry,
+        isShot: isShot,
+        isGoal: isGoal,
+        isPenaltyAreaEntry: isPenaltyAreaEntry,
         }),
         // Zawsze zapisujemy informację o połowie meczu (nie jako opcjonalną)
         isSecondHalf: isSecondHalfParam !== undefined ? isSecondHalfParam : isSecondHalf,
         // Dodajemy tryb akcji i zawodników obrony (tylko dla akcji innych niż regain i loses)
         ...(actionCategory !== "regain" && actionCategory !== "loses" && {
-          mode: actionMode,
-          ...(actionMode === "defense" && selectedDefensePlayers && { defensePlayers: selectedDefensePlayers }),
+        mode: actionMode,
+        ...(actionMode === "defense" && selectedDefensePlayers && { defensePlayers: selectedDefensePlayers }),
         }),
         ...(actionCategory === "regain" && (() => {
           // Dla regainów: xTValueStart i xTValueEnd są takie same, używamy jednej wartości dla obrony
@@ -537,11 +537,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           const losesFields: any = {
             losesAttackZone: losesOppositeZone || formattedStartZone, // Strefa ataku (opposite zone)
             losesDefenseZone: formattedStartZone, // Strefa obrony (gdzie nastąpiła strata)
-            isBelow8s: isBelow8sActive, 
-            isReaction5s: isReaction5sActive, 
-            isAut: isAutActive,
-            isReaction5sNotApplicable: isReaction5sNotApplicableActive,
-            playersBehindBall: playersBehindBall, 
+          isBelow8s: isBelow8sActive, 
+          isReaction5s: isReaction5sActive, 
+          isAut: isAutActive,
+          isReaction5sNotApplicable: isReaction5sNotApplicableActive,
+          playersBehindBall: playersBehindBall, 
             opponentsBehindBall: opponentsBehindBall,
             playersLeftField: playersLeftField,
             opponentsLeftField: opponentsLeftField,

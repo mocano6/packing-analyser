@@ -314,8 +314,8 @@ const ActionRow = ({
       {(() => {
         const currentActionCategory = getActionCategory(action);
         return (currentActionCategory === "regain" || currentActionCategory === "loses") && (
-          <div className={styles.cell}>
-            {(() => {
+        <div className={styles.cell}>
+          {(() => {
               if (currentActionCategory === "regain") {
               // Dla regain: użyj nowych pól lub oblicz z strefy
               let attackXT: number | undefined = action.regainAttackXT;

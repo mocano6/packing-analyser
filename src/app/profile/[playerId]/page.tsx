@@ -481,7 +481,7 @@ export default function PlayerDetailsPage() {
     }
   }, [selectedTeam, availableTeams]);
 
-  // Inicjalizuj selectedPlayerForView - priorytet ma playerId z URL
+  // Inicjalizuj selectedPlayerForView - priorytet ma localStorage, jeśli zawodnik jest dostępny
   useEffect(() => {
     if (filteredPlayers.length === 0) {
       // Jeśli nie ma zawodników, wyczyść selectedPlayerForView
@@ -491,21 +491,11 @@ export default function PlayerDetailsPage() {
       return;
     }
     
-    // Jeśli selectedPlayerForView jest pusty, zawsze ustaw pierwszego dostępnego zawodnika
-    if (!selectedPlayerForView) {
-      const firstPlayerId = filteredPlayers[0]?.id;
-      if (firstPlayerId) {
-        setSelectedPlayerForView(firstPlayerId);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('selectedPlayerForView', firstPlayerId);
-        }
-      }
-      return;
-    }
-    
     // Sprawdź czy aktualny selectedPlayerForView jest dostępny w filteredPlayers
-    if (!filteredPlayers.some(p => p.id === selectedPlayerForView)) {
-      // Jeśli aktualny zawodnik nie jest dostępny w filteredPlayers
+    const isCurrentPlayerAvailable = selectedPlayerForView && filteredPlayers.some(p => p.id === selectedPlayerForView);
+    
+    // Jeśli selectedPlayerForView jest pusty lub zawodnik nie jest dostępny
+    if (!isCurrentPlayerAvailable) {
       // Sprawdź czy playerId z URL jest dostępny
       if (filteredPlayers.some(p => p.id === playerId)) {
         setSelectedPlayerForView(playerId);
@@ -522,14 +512,9 @@ export default function PlayerDetailsPage() {
           }
         }
       }
-    } else if (filteredPlayers.some(p => p.id === playerId) && selectedPlayerForView !== playerId) {
-      // Jeśli playerId z URL jest dostępny i różny od aktualnego, użyj go (priorytet)
-      setSelectedPlayerForView(playerId);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('selectedPlayerForView', playerId);
-      }
     }
-  }, [filteredPlayers, playerId]);
+    // Jeśli zawodnik z localStorage jest dostępny, zachowaj go (nie nadpisuj playerId z URL)
+  }, [filteredPlayers, playerId, selectedPlayerForView]);
 
   // Zaznacz wszystkie mecze domyślnie przy zmianie sezonu (tylko jeśli nie są ręcznie odznaczone)
   const [manuallyDeselectedAll, setManuallyDeselectedAll] = useState(false);
