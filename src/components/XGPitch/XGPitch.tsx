@@ -65,15 +65,9 @@ const XGPitch = memo(function XGPitch({
   onShotAdd,
   onShotClick,
   selectedShotId,
-  matchInfo,
-  allTeams = [],
-  hideToggleButton = false,
-  hideTeamLogos = false,
 }: XGPitchProps) {
   // Stan przełącznika orientacji boiska
   const [isFlipped, setIsFlipped] = useState(false);
-  // Stan przełącznika widoczności kropek
-  const [showShots, setShowShots] = useState(true);
 
   // Obsługa przełączania orientacji
   const handleFlipToggle = () => {
@@ -111,58 +105,6 @@ const XGPitch = memo(function XGPitch({
 
   return (
     <div className={styles.pitchContainer}>
-      {/* Loga zespołów */}
-      {!hideTeamLogos && (
-      <div className={styles.teamLogos}>
-        <div className={styles.teamLogo}>
-          {matchInfo?.opponentLogo && (
-            <img 
-              src={matchInfo.opponentLogo} 
-              alt="Logo przeciwnika" 
-              className={styles.teamLogoImage}
-            />
-          )}
-          <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
-        </div>
-        <div className={styles.vs}>VS</div>
-        <div className={styles.teamLogo}>
-          {(() => {
-            const teamData = allTeams.find(team => team.id === matchInfo?.team);
-            return teamData?.logo ? (
-              <img 
-                src={teamData.logo} 
-                alt="Logo zespołu" 
-                className={styles.teamLogoImage}
-              />
-            ) : null;
-          })()}
-          <span className={styles.teamName}>{(() => {
-            const teamData = allTeams.find(team => team.id === matchInfo?.team);
-            return teamData?.name || matchInfo?.team || 'Nasz zespół';
-          })()}</span>
-        </div>
-      </div>
-      )}
-      
-      {/* Przycisk ukrywania/pokazywania tagów */}
-      {!hideToggleButton && (
-        <button
-          className={styles.toggleShotsButton}
-          onClick={() => setShowShots(!showShots)}
-          title={showShots ? 'Ukryj tagi' : 'Pokaż tagi'}
-          type="button"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {showShots ? (
-              <path d="M8 2L2 8L8 14M14 2L8 8L14 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            ) : (
-              <path d="M2 2L8 8L2 14M14 2L8 8L14 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            )}
-          </svg>
-          <span>{showShots ? 'Ukryj tagi' : 'Pokaż tagi'}</span>
-        </button>
-      )}
-
       <div
         className={`${styles.pitch} ${isFlipped ? styles.flipped : ''}`}
         role="grid"
@@ -186,7 +128,7 @@ const XGPitch = memo(function XGPitch({
         </div>
 
         {/* Renderowanie strzałów */}
-        {showShots && shots.map((shot) => {
+        {shots.map((shot) => {
           let displayX = shot.x;
           let displayY = shot.y;
           

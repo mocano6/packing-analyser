@@ -150,6 +150,14 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
       ? parseInt(videoTimestamp, 10) 
       : undefined;
     const isValidTimestamp = parsedVideoTimestamp !== undefined && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp >= 0;
+
+    const videoTimestampRaw = typeof window !== 'undefined'
+      ? localStorage.getItem('tempVideoTimestampRaw')
+      : null;
+    const parsedVideoTimestampRaw = videoTimestampRaw !== null && videoTimestampRaw !== ''
+      ? parseInt(videoTimestampRaw, 10)
+      : undefined;
+    const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw >= 0;
     
     console.log('Acc8sModal handleSubmit - videoTimestamp z localStorage:', videoTimestamp);
     console.log('Acc8sModal handleSubmit - parsedVideoTimestamp:', parsedVideoTimestamp);
@@ -161,6 +169,10 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
       ? parsedVideoTimestamp 
       : (editingEntry?.videoTimestamp);
 
+    const finalVideoTimestampRaw = isValidTimestampRaw
+      ? parsedVideoTimestampRaw
+      : (editingEntry as any)?.videoTimestampRaw;
+
     const entryData = {
       matchId,
       teamId: matchInfo?.team || "",
@@ -171,6 +183,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
       isPKEntryUnder8s: formData.isPKEntryUnder8s,
       passingPlayerIds: formData.passingPlayerIds,
       ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
+      ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
     };
 
     console.log('Acc8sModal handleSubmit - entryData:', entryData);
@@ -182,6 +195,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     // Wyczyść tempVideoTimestamp po zapisaniu
     if (typeof window !== 'undefined') {
       localStorage.removeItem('tempVideoTimestamp');
+      localStorage.removeItem('tempVideoTimestampRaw');
     }
 
     onClose();

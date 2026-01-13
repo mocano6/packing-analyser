@@ -329,6 +329,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       const videoTimestamp = localStorage.getItem('tempVideoTimestamp');
       const parsedVideoTimestamp = videoTimestamp ? parseInt(videoTimestamp) : undefined;
       const isValidTimestamp = parsedVideoTimestamp && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp > 0;
+
+      // Surowy timestamp bez korekty (-10s)
+      const videoTimestampRaw = localStorage.getItem('tempVideoTimestampRaw');
+      const parsedVideoTimestampRaw = videoTimestampRaw ? parseInt(videoTimestampRaw) : undefined;
+      const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw > 0;
       
       // PxT będzie obliczane dynamicznie na froncie
       
@@ -420,6 +425,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         packingPoints: packingValue || currentPoints,
         }),
         ...(isValidTimestamp && { videoTimestamp: parsedVideoTimestamp }),
+        ...(isValidTimestampRaw && { videoTimestampRaw: parsedVideoTimestampRaw }),
         // Przypisujemy wartości xT tylko jeśli są zdefiniowane i NIE jest to regain ani loses
         ...(actionCategory !== "regain" && actionCategory !== "loses" && xTStart !== undefined && { xTValueStart: xTStart }),
         ...(actionCategory !== "regain" && actionCategory !== "loses" && xTEnd !== undefined && { xTValueEnd: xTEnd }),
@@ -1041,6 +1047,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setSelectedReceiverId(null);
     // Wyczyść zapisany czas YouTube
     localStorage.removeItem('tempVideoTimestamp');
+    localStorage.removeItem('tempVideoTimestampRaw');
     // Nie resetujemy isSecondHalf, bo połowa meczu jest utrzymywana między akcjami
   }, []);
 

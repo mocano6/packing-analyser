@@ -120,8 +120,33 @@ export default function PlayerDetailsPage() {
   const [pkOnlyShot, setPkOnlyShot] = useState(false);
   const [pkOnlyGoal, setPkOnlyGoal] = useState(false);
   const [selectedXGShotIdForView, setSelectedXGShotIdForView] = useState<string | undefined>(undefined);
+  const [selectedXGShotForView, setSelectedXGShotForView] = useState<Shot | undefined>(undefined);
   const [xgHalf, setXgHalf] = useState<"all" | "first" | "second">("all");
   const [xgFilter, setXgFilter] = useState<"all" | "sfg" | "open_play">("all");
+  const [isPrintingProfile, setIsPrintingProfile] = useState(false);
+
+  useEffect(() => {
+    const handleAfterPrint = () => setIsPrintingProfile(false);
+    if (typeof window !== "undefined") {
+      window.addEventListener("afterprint", handleAfterPrint);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("afterprint", handleAfterPrint);
+      }
+    };
+  }, []);
+
+  const handleExportPdf = () => {
+    if (typeof window === "undefined") return;
+    setIsPrintingProfile(true);
+    // Daj Reactowi chwilę na wyrenderowanie widoku "printOnly"
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.print();
+      });
+    });
+  };
 
   // Ref do śledzenia, czy już załadowaliśmy mecze dla danego zespołu
   const lastLoadedTeamRef = useRef<string | null>(null);
@@ -2959,12 +2984,310 @@ export default function PlayerDetailsPage() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <Link href="/" className={styles.backButton} title="Powrót do głównej">
-          ←
-        </Link>
-        <h1>Profil zawodnika</h1>
-      </div>
+      {/* Widok do PDF (druk) */}
+      {isPrintingProfile && (
+        <div className={styles.printOnly}>
+          <div className={styles.printPage}>
+            <div className={styles.printHeader}>
+              <div className={styles.printHeaderLeft}>
+                {player.imageUrl && (
+                  <img
+                    src={player.imageUrl}
+                    alt={getPlayerFullName(player)}
+                    className={styles.printPhoto}
+                  />
+                )}
+              </div>
+              <div className={styles.printHeaderMain}>
+                <div className={styles.printTitle}>Profil zawodnika</div>
+                <div className={styles.printSubtitle}>
+                  {getPlayerFullName(player)}{player.number ? ` (#${player.number})` : ""}{player.position ? ` • ${player.position}` : ""}
+                </div>
+              </div>
+              <div className={styles.printMeta}>
+                <div>Data: {new Date().toLocaleDateString("pl-PL")}</div>
+                {playerStats && <div>Minuty: {playerStats.totalMinutes}</div>}
+              </div>
+            </div>
+
+            <div className={styles.printSection}>
+              <div className={styles.printSectionTitle}>Kontekst</div>
+              <div className={styles.printGrid}>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Zespół</div>
+                  <div className={styles.printValue}>
+                    {teams?.find(t => t.id === selectedTeam)?.name || selectedTeam || "-"}
+                  </div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Sezon</div>
+                  <div className={styles.printValue}>{selectedSeason || "all"}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Mecze</div>
+                  <div className={styles.printValue}>
+                    {selectedMatchIds.length > 0
+                      ? `${selectedMatchIds.length} wybranych`
+                      : `${filteredMatchesBySeason.length} (wszystkie)`}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {playerStats && (
+              <div className={styles.printSection}>
+                <div className={styles.printSectionTitle}>Podsumowanie</div>
+                <div className={styles.printGrid}>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>PxT (suma)</div>
+                    <div className={styles.printValue}>{playerStats.totalPxT.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>xG (suma)</div>
+                    <div className={styles.printValue}>{playerStats.totalxG.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Przechwyty</div>
+                    <div className={styles.printValue}>{playerStats.totalRegains}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Straty</div>
+                    <div className={styles.printValue}>{playerStats.totalLoses}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Wejścia w PK</div>
+                    <div className={styles.printValue}>{playerStats.totalPKEntries}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PxT */}
+            {playerStats && (
+              <div className={styles.printSection}>
+                <div className={styles.printSectionTitle}>PxT</div>
+                <div className={styles.printGrid}>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>PxT (suma)</div>
+                    <div className={styles.printValue}>{playerStats.totalPxT.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>PxT / 90</div>
+                    <div className={styles.printValue}>{playerStats.pxtPer90.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>PxT / 90 (podający)</div>
+                    <div className={styles.printValue}>{playerStats.pxtSenderPer90.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>PxT / 90 (przyjmujący)</div>
+                    <div className={styles.printValue}>{playerStats.pxtReceiverPer90.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>PxT / 90 (drybling)</div>
+                    <div className={styles.printValue}>{playerStats.pxtDribblingPer90.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Sender (suma)</div>
+                    <div className={styles.printValue}>{playerStats.pxtAsSender.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Receiver (suma)</div>
+                    <div className={styles.printValue}>{playerStats.pxtAsReceiver.toFixed(2)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Drybling (suma)</div>
+                    <div className={styles.printValue}>{playerStats.pxtAsDribbler.toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Mapy (heatmapy/boiska) wyłączone w PDF – komponenty potrafią nie zdążyć się wyrenderować przed print(). */}
+
+            {/* xG */}
+            <div className={styles.printSection}>
+              <div className={styles.printSectionTitle}>xG</div>
+              <div className={styles.printGrid}>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>xG (suma)</div>
+                  <div className={styles.printValue}>{xgStats.playerXG.toFixed(2)}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Strzały</div>
+                  <div className={styles.printValue}>{xgStats.playerCount}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Gole</div>
+                  <div className={styles.printValue}>{xgStats.playerGoals}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>xG/strzał</div>
+                  <div className={styles.printValue}>{xgStats.playerXGPerShot.toFixed(2)}</div>
+                </div>
+              </div>
+
+              {xgStats.playerShots?.length > 0 && (
+                <table className={styles.printTable}>
+                  <thead>
+                    <tr>
+                      <th>Min</th>
+                      <th>Połowa</th>
+                      <th>xG</th>
+                      <th>Gol</th>
+                      <th>Typ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {xgStats.playerShots.map((s) => (
+                      <tr key={s.id}>
+                        <td>{s.minute}'</td>
+                        <td>{(s as any).isSecondHalf ? "II" : "I"}</td>
+                        <td>{s.xG.toFixed(2)}</td>
+                        <td>{s.isGoal ? "Tak" : "Nie"}</td>
+                        <td>
+                          {(() => {
+                            const at = s.actionType;
+                            if (!at) return "-";
+                            const sfgTypes = new Set([
+                              "corner",
+                              "free_kick",
+                              "direct_free_kick",
+                              "penalty",
+                              "throw_in",
+                            ]);
+                            return sfgTypes.has(at) ? "SFG" : "Otwarta gra";
+                          })()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Wejścia w PK */}
+            <div className={styles.printSection}>
+              <div className={styles.printSectionTitle}>Wejścia w PK</div>
+              <div className={styles.printGrid}>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Udział</div>
+                  <div className={styles.printValue}>
+                    {pkEntriesStats.playerTotal} / {pkEntriesStats.teamTotal} ({pkEntriesStats.involvementPct.toFixed(1)}%)
+                  </div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Gole</div>
+                  <div className={styles.printValue}>{pkEntriesStats.goals}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Strzały</div>
+                  <div className={styles.printValue}>{pkEntriesStats.shots}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Regain</div>
+                  <div className={styles.printValue}>{pkEntriesStats.regains}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Śr. partnerzy</div>
+                  <div className={styles.printValue}>{pkEntriesAverages.avgPartners.toFixed(2)}</div>
+                </div>
+                <div className={styles.printItem}>
+                  <div className={styles.printLabel}>Śr. przeciwnicy</div>
+                  <div className={styles.printValue}>{pkEntriesAverages.avgOpponents.toFixed(2)}</div>
+                </div>
+              </div>
+
+              {pkEntriesStats.playerEntries?.length > 0 && (
+                <table className={styles.printTable}>
+                  <thead>
+                    <tr>
+                      <th>Min</th>
+                      <th>Połowa</th>
+                      <th>Typ</th>
+                      <th>Regain</th>
+                      <th>Strzał</th>
+                      <th>Gol</th>
+                      <th>Partnerzy</th>
+                      <th>Przeciwnicy</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pkEntriesStats.playerEntries.map((e) => (
+                      <tr key={e.id}>
+                        <td>{e.minute}'</td>
+                        <td>{e.isSecondHalf ? "II" : "I"}</td>
+                        <td>{(e.entryType || "pass").toUpperCase()}</td>
+                        <td>{e.isRegain ? "Tak" : "Nie"}</td>
+                        <td>{e.isShot ? "Tak" : "Nie"}</td>
+                        <td>{e.isGoal ? "Tak" : "Nie"}</td>
+                        <td>{e.pkPlayersCount ?? 0}</td>
+                        <td>{e.opponentsInPKCount ?? 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Przechwyty i Straty – skrót */}
+            {playerStats && (
+              <div className={styles.printSection}>
+                <div className={styles.printSectionTitle}>Przechwyty i Straty</div>
+                <div className={styles.printGrid}>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Przechwyty (suma)</div>
+                    <div className={styles.printValue}>{playerStats.totalRegains}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Przechwyty / 90</div>
+                    <div className={styles.printValue}>{playerStats.regainsPer90.toFixed(1)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Straty (suma)</div>
+                    <div className={styles.printValue}>{playerStats.totalLoses}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>Straty / 90</div>
+                    <div className={styles.printValue}>{playerStats.losesPer90.toFixed(1)}</div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>xT z przechwytów (atak/obr.)</div>
+                    <div className={styles.printValue}>
+                      {(playerStats.regainXTInAttack ?? 0).toFixed(3)} / {(playerStats.regainXTInDefense ?? 0).toFixed(3)}
+                    </div>
+                  </div>
+                  <div className={styles.printItem}>
+                    <div className={styles.printLabel}>xT ze strat (atak/obr.)</div>
+                    <div className={styles.printValue}>
+                      {(playerStats.losesXTInAttack ?? 0).toFixed(3)} / {(playerStats.losesXTInDefense ?? 0).toFixed(3)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className={styles.noPrint}>
+        <div className={styles.header}>
+          <Link href="/" className={styles.backButton} title="Powrót do głównej">
+            ←
+          </Link>
+          <div className={styles.headerTitleRow}>
+            <h1>Profil zawodnika</h1>
+            <button
+              type="button"
+              className={styles.exportPdfButton}
+              onClick={handleExportPdf}
+              disabled={isPrintingProfile}
+              title="Eksportuj pełny profil do PDF"
+            >
+              Eksport PDF
+            </button>
+          </div>
+        </div>
 
       {/* Selektor zespołu, zawodnika, sezonu i meczów na górze */}
       <div className={styles.playerSelectorContainer}>
@@ -3073,41 +3396,41 @@ export default function PlayerDetailsPage() {
             <div className={styles.statsLayout}>
               {/* Lista kategorii na górze */}
               <div className={styles.categoriesList}>
-                <div
+                <button
+                  type="button"
                   className={`${styles.categoryItem} ${expandedCategory === 'pxt' ? styles.active : ''}`}
                   onClick={() => setExpandedCategory(expandedCategory === 'pxt' ? null : 'pxt')}
                 >
                   <span className={styles.categoryName}>PxT</span>
-                  <span className={styles.categoryValue}>{playerStats.pxtPer90.toFixed(2)}</span>
-                </div>
-                <div
+                </button>
+                <button
+                  type="button"
                   className={`${styles.categoryItem} ${expandedCategory === 'xg' ? styles.active : ''}`}
                   onClick={() => setExpandedCategory(expandedCategory === 'xg' ? null : 'xg')}
                 >
                   <span className={styles.categoryName}>xG</span>
-                  <span className={styles.categoryValue}>{playerStats.xgPer90.toFixed(2)}</span>
-                </div>
-                <div
+                </button>
+                <button
+                  type="button"
                   className={`${styles.categoryItem} ${expandedCategory === 'regains' ? styles.active : ''}`}
                   onClick={() => setExpandedCategory(expandedCategory === 'regains' ? null : 'regains')}
                 >
                   <span className={styles.categoryName}>Przechwyty</span>
-                  <span className={styles.categoryValue}>{playerStats.regainsPer90.toFixed(1)}</span>
-                </div>
-                <div
+                </button>
+                <button
+                  type="button"
                   className={`${styles.categoryItem} ${expandedCategory === 'loses' ? styles.active : ''}`}
                   onClick={() => setExpandedCategory(expandedCategory === 'loses' ? null : 'loses')}
                 >
                   <span className={styles.categoryName}>Straty</span>
-                  <span className={styles.categoryValue}>{playerStats.losesPer90.toFixed(1)}</span>
-                </div>
-                <div
+                </button>
+                <button
+                  type="button"
                   className={`${styles.categoryItem} ${expandedCategory === 'pk_entries' ? styles.active : ''}`}
                   onClick={() => setExpandedCategory(expandedCategory === 'pk_entries' ? null : 'pk_entries')}
                 >
                   <span className={styles.categoryName}>Wejścia w PK</span>
-                  <span className={styles.categoryValue}>{playerStats.pkEntriesPer90.toFixed(1)}</span>
-                </div>
+                </button>
               </div>
 
               {/* Szczegóły poniżej */}
@@ -3116,52 +3439,52 @@ export default function PlayerDetailsPage() {
                   <div className={styles.xgDetails}>
                     <h3>Szczegóły xG</h3>
 
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 16 }}>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: 4 }}>Połowa:</span>
+                    <div className={styles.filterBar}>
+                      <div className={styles.filterGroup}>
+                        <span className={styles.filterLabel}>Połowa</span>
                         <button
                           className={`${styles.categoryButton} ${xgHalf === 'all' ? styles.active : ''}`}
                           onClick={() => setXgHalf('all')}
-                          style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
+                          type="button"
                         >
                           Wszystkie
                         </button>
                         <button
                           className={`${styles.categoryButton} ${xgHalf === 'first' ? styles.active : ''}`}
                           onClick={() => setXgHalf('first')}
-                          style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
+                          type="button"
                         >
                           I połowa
                         </button>
                         <button
                           className={`${styles.categoryButton} ${xgHalf === 'second' ? styles.active : ''}`}
                           onClick={() => setXgHalf('second')}
-                          style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
+                          type="button"
                         >
                           II połowa
                         </button>
                       </div>
 
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginLeft: 'auto' }}>
-                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: 4 }}>Typ:</span>
+                      <div className={`${styles.filterGroup} ${styles.filterGroupRight}`}>
+                        <span className={styles.filterLabel}>Typ</span>
                         <button
                           className={`${styles.categoryButton} ${xgFilter === 'all' ? styles.active : ''}`}
                           onClick={() => setXgFilter('all')}
-                          style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
+                          type="button"
                         >
                           Wszystkie xG
                         </button>
                         <button
                           className={`${styles.categoryButton} ${xgFilter === 'sfg' ? styles.active : ''}`}
                           onClick={() => setXgFilter('sfg')}
-                          style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
+                          type="button"
                         >
                           xG SFG
                         </button>
                         <button
                           className={`${styles.categoryButton} ${xgFilter === 'open_play' ? styles.active : ''}`}
                           onClick={() => setXgFilter('open_play')}
-                          style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
+                          type="button"
                         >
                           xG Otwarta gra
                         </button>
@@ -3248,7 +3571,10 @@ export default function PlayerDetailsPage() {
                           <>
                             <XGPitch
                               shots={xgStats.playerShots}
-                              onShotClick={(shot) => setSelectedXGShotIdForView(shot.id)}
+                              onShotClick={(shot) => {
+                                setSelectedXGShotIdForView(shot.id);
+                                setSelectedXGShotForView(shot);
+                              }}
                               selectedShotId={selectedXGShotIdForView}
                               matchInfo={
                                 xgStats.headerMatch
@@ -3269,7 +3595,10 @@ export default function PlayerDetailsPage() {
 
                             {/* Szczegóły klikniętego strzału */}
                             {selectedXGShotIdForView && (() => {
-                              const selectedShot = xgStats.playerShots.find(s => s.id === selectedXGShotIdForView);
+                              const selectedShot =
+                                selectedXGShotForView?.id === selectedXGShotIdForView
+                                  ? selectedXGShotForView
+                                  : xgStats.playerShots.find(s => s.id === selectedXGShotIdForView);
                               if (!selectedShot) return null;
                               return (
                                 <div className={styles.zoneDetailsPanel} style={{ marginTop: 12 }}>
@@ -3281,7 +3610,10 @@ export default function PlayerDetailsPage() {
                                     <button
                                       type="button"
                                       className={styles.zoneDetailsClose}
-                                      onClick={() => setSelectedXGShotIdForView(undefined)}
+                                      onClick={() => {
+                                        setSelectedXGShotIdForView(undefined);
+                                        setSelectedXGShotForView(undefined);
+                                      }}
                                     >
                                       ×
                                     </button>
@@ -3386,24 +3718,18 @@ export default function PlayerDetailsPage() {
                           </div>
 
                           <div className={styles.detailsRow}>
-                            <span className={styles.detailsLabel}>Gole i strzały:</span>
-                            <span className={styles.detailsValue} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                <span className={styles.valueMain}><strong>{pkEntriesStats.goals}</strong></span>
-                                <span className={styles.valueSecondary} style={{ fontSize: '12px' }}>gole</span>
-                              </span>
-                              <span style={{ color: '#d1d5db', fontSize: '12px' }}>•</span>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                <span className={styles.valueMain}><strong>{pkEntriesStats.shots}</strong></span>
-                                <span className={styles.valueSecondary} style={{ fontSize: '12px' }}>strzały</span>
-                              </span>
+                            <span className={styles.detailsLabel}>Gole:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}><strong>{pkEntriesStats.goals}</strong></span>
+                            </span>
+                          </div>
+
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Strzały:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}><strong>{pkEntriesStats.shots}</strong></span>
                               {pkEntriesStats.shotsWithoutGoal > 0 && (
-                                <>
-                                  <span style={{ color: '#d1d5db', fontSize: '12px' }}>•</span>
-                                  <span className={styles.valueSecondary} style={{ fontSize: '12px' }}>
-                                    {pkEntriesStats.shotsWithoutGoal} bez gola
-                                  </span>
-                                </>
+                                <span className={styles.valueSecondary}> • {pkEntriesStats.shotsWithoutGoal} bez gola</span>
                               )}
                             </span>
                           </div>
@@ -3421,22 +3747,21 @@ export default function PlayerDetailsPage() {
                           {pkEntriesStats.playerEntries.length > 0 && (
                             <>
                               <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>Śr. w PK:</span>
-                                <span className={styles.detailsValue} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                    <span className={styles.valueMain}><strong>{pkEntriesAverages.avgPartners.toFixed(2)}</strong></span>
-                                    <span className={styles.valueSecondary} style={{ fontSize: '12px' }}>partnerzy</span>
-                                  </span>
-                                  <span style={{ color: '#d1d5db', fontSize: '12px' }}>•</span>
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                    <span className={styles.valueMain}><strong>{pkEntriesAverages.avgOpponents.toFixed(2)}</strong></span>
-                                    <span className={styles.valueSecondary} style={{ fontSize: '12px' }}>przeciwnicy</span>
-                                  </span>
-                                  <span style={{ color: '#d1d5db', fontSize: '12px' }}>•</span>
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                    <span className={styles.valueMain}><strong>{pkEntriesAverages.avgDiffOppMinusPartners.toFixed(2)}</strong></span>
-                                    <span className={styles.valueSecondary} style={{ fontSize: '12px' }}>różnica</span>
-                                  </span>
+                                <span className={styles.detailsLabel}>Partnerzy w PK:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgPartners.toFixed(2)}</strong></span>
+                                </span>
+                              </div>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>Przeciwnicy w PK:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgOpponents.toFixed(2)}</strong></span>
+                                </span>
+                              </div>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>Różnica:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgDiffOppMinusPartners.toFixed(2)}</strong></span>
                                 </span>
                               </div>
                             </>
@@ -3462,8 +3787,8 @@ export default function PlayerDetailsPage() {
                           </div>
                         ) : (
                           <>
-                            <div style={{ marginBottom: 8, fontSize: 12, color: '#6b7280', textAlign: 'center' }}>
-                              Kliknij strzałkę, aby zobaczyć szczegóły wejścia
+                            <div className={styles.helperText}>
+                              Kliknij w strzałkę na boisku, aby zobaczyć szczegóły wejścia
                             </div>
                             <PKEntriesPitch
                               pkEntries={pkEntriesFilteredForView}
@@ -3489,59 +3814,59 @@ export default function PlayerDetailsPage() {
                             />
 
                             {/* Filtry pod boiskiem */}
-                            <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                                <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: 4 }}>Typ:</span>
+                            <div className={styles.filterBar} style={{ marginTop: 12 }}>
+                              <div className={styles.filterGroup}>
+                                <span className={styles.filterLabel}>Typ</span>
                                 <button
                                   className={`${styles.categoryButton} ${pkEntryTypeFilter === 'all' ? styles.active : ''}`}
                                   onClick={() => setPkEntryTypeFilter('all')}
-                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
+                                  type="button"
                                 >
                                   Wszystkie
                                 </button>
                                 <button
                                   className={`${styles.categoryButton} ${pkEntryTypeFilter === 'dribble' ? styles.active : ''}`}
                                   onClick={() => setPkEntryTypeFilter('dribble')}
-                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
+                                  type="button"
                                 >
                                   Drybling
                                 </button>
                                 <button
                                   className={`${styles.categoryButton} ${pkEntryTypeFilter === 'pass' ? styles.active : ''}`}
                                   onClick={() => setPkEntryTypeFilter('pass')}
-                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
+                                  type="button"
                                 >
                                   Podanie
                                 </button>
                                 <button
                                   className={`${styles.categoryButton} ${pkEntryTypeFilter === 'sfg' ? styles.active : ''}`}
                                   onClick={() => setPkEntryTypeFilter('sfg')}
-                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
+                                  type="button"
                                 >
                                   SFG
                                 </button>
                               </div>
 
-                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginLeft: 'auto' }}>
-                                <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: 4 }}>Flagi:</span>
+                              <div className={`${styles.filterGroup} ${styles.filterGroupRight}`}>
+                                <span className={styles.filterLabel}>Flagi</span>
                                 <button
                                   className={`${styles.categoryButton} ${pkOnlyRegain ? styles.active : ''}`}
                                   onClick={() => setPkOnlyRegain(v => !v)}
-                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
+                                  type="button"
                                 >
                                   Regain
                                 </button>
                                 <button
                                   className={`${styles.categoryButton} ${pkOnlyShot ? styles.active : ''}`}
                                   onClick={() => setPkOnlyShot(v => !v)}
-                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
+                                  type="button"
                                 >
                                   Strzał
                                 </button>
                                 <button
                                   className={`${styles.categoryButton} ${pkOnlyGoal ? styles.active : ''}`}
                                   onClick={() => setPkOnlyGoal(v => !v)}
-                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
+                                  type="button"
                                 >
                                   Gol
                                 </button>
@@ -4713,10 +5038,10 @@ export default function PlayerDetailsPage() {
 
                 {expandedCategory === 'regains' && (
                   <div className={styles.regainsDetails}>
-                    <h3 style={{ marginBottom: '20px', marginTop: '0' }}>Szczegóły Przechwytów</h3>
+                    <h3>Szczegóły Przechwytów</h3>
                     
                     {/* Przełącznik atak/obrona - pod tytułem */}
-                    <div className={styles.heatmapModeToggle} style={{ marginBottom: '20px', width: 'auto', display: 'inline-flex' }}>
+                    <div className={styles.heatmapModeToggle}>
                       <button
                         className={`${styles.heatmapModeButton} ${regainAttackDefenseMode === 'defense' ? styles.active : ''}`}
                         onClick={() => {
@@ -5630,10 +5955,10 @@ export default function PlayerDetailsPage() {
 
                 {expandedCategory === 'loses' && (
                   <div className={styles.regainsDetails}>
-                    <h3 style={{ marginBottom: '20px', marginTop: '0' }}>Szczegóły Strat</h3>
+                    <h3>Szczegóły Strat</h3>
                     
                     {/* Przełącznik atak/obrona - pod tytułem */}
-                    <div className={styles.heatmapModeToggle} style={{ marginBottom: '20px', width: 'auto', display: 'inline-flex' }}>
+                    <div className={styles.heatmapModeToggle}>
                       <button
                         className={`${styles.heatmapModeButton} ${losesAttackDefenseMode === 'defense' ? styles.active : ''}`}
                         onClick={() => {
@@ -6172,6 +6497,7 @@ export default function PlayerDetailsPage() {
         onImportError={() => {}}
         onLogout={logout}
       />
+    </div>
     </div>
   );
 }

@@ -61,7 +61,8 @@ export interface Action {
   regainAttackZone?: string; // Strefa ataku dla regain (opposite zone)
   regainDefenseZone?: string; // Strefa obrony dla regain (gdzie nastąpił regain)
   actionType: string;
-  videoTimestamp?: number; // Czas w sekundach z YouTube playera
+  videoTimestamp?: number; // Czas w sekundach z YouTube playera (po korekcie -10s)
+  videoTimestampRaw?: number; // Surowy czas w sekundach z playera (bez korekty)
   // Dodatkowe pola z ActionsPacking
   senderId: string;
   senderName?: string;
@@ -169,7 +170,8 @@ export interface Shot {
   bodyPart?: 'foot' | 'head' | 'other';
   matchId: string;
   timestamp: number;
-  videoTimestamp?: number; // Czas wideo w sekundach z YouTube playera
+  videoTimestamp?: number; // Czas wideo w sekundach (po korekcie -10s)
+  videoTimestampRaw?: number; // Surowy czas wideo w sekundach (bez korekty)
   // Nowe pola dla strzałów
   shotType: 'on_target' | 'off_target' | 'blocked' | 'goal'; // Typ strzału: celny, niecelny, zablokowany, gol
   teamContext: 'attack' | 'defense'; // Kontekst zespołu: atak czy obrona
@@ -204,7 +206,8 @@ export interface PKEntry {
   receiverName?: string; // Nazwa zawodnika otrzymującego (opcjonalne dla dryblingu i regain)
   entryType?: "pass" | "dribble" | "sfg" | "regain"; // Typ akcji definiujący kolor strzałki
   teamContext?: "attack" | "defense"; // Kontekst zespołu
-  videoTimestamp?: number; // Czas wideo w milisekundach
+  videoTimestamp?: number; // Czas wideo w sekundach (po korekcie -10s)
+  videoTimestampRaw?: number; // Surowy czas wideo w sekundach (bez korekty)
   isPossible1T?: boolean; // Możliwe 1T
   pkPlayersCount?: number; // Liczba partnerów w PK
   opponentsInPKCount?: number; // Liczba przeciwników w PK
@@ -224,7 +227,8 @@ export interface Acc8sEntry {
   isShotUnder8s: boolean; // Strzał do 8s
   isPKEntryUnder8s: boolean; // Wejście w PK do 8s
   passingPlayerIds: string[]; // ID zawodników biorących udział w akcji (wielokrotny wybór)
-  videoTimestamp?: number; // Czas wideo w sekundach (nie milisekundach jak w PKEntry)
+  videoTimestamp?: number; // Czas wideo w sekundach (po korekcie -10s)
+  videoTimestampRaw?: number; // Surowy czas wideo w sekundach (bez korekty)
   timestamp: number;
 }
 
