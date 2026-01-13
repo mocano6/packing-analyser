@@ -3274,55 +3274,87 @@ export default function PlayerDetailsPage() {
                       <div className={styles.detailsSectionContent}>
                         <h4>Wkład zawodnika</h4>
 
-                        <div className={styles.detailsRow}>
-                          <span className={styles.detailsLabel}>Udział:</span>
-                          <span className={styles.detailsValue}>
-                            <span className={styles.valueMain}>
-                              <strong>{pkEntriesStats.playerTotal}</strong> / {pkEntriesStats.teamTotal}
-                            </span>
-                            <span className={styles.valueSecondary}>
-                              ({pkEntriesStats.involvementPct.toFixed(1)}% wejść zespołu)
-                            </span>
-                          </span>
-                        </div>
-
-                        <div className={styles.detailsRow}>
-                          <span className={styles.detailsLabel}>Gole po wejściu:</span>
-                          <span className={styles.detailsValue}>
-                            <span className={styles.valueMain}><strong>{pkEntriesStats.goals}</strong></span>
-                          </span>
-                        </div>
-
-                        <div className={styles.detailsRow}>
-                          <span className={styles.detailsLabel}>Strzały po wejściu:</span>
-                          <span className={styles.detailsValue}>
-                            <span className={styles.valueMain}><strong>{pkEntriesStats.shots}</strong></span>
-                            <span className={styles.valueSecondary}>
-                              (bez gola: {pkEntriesStats.shotsWithoutGoal})
-                            </span>
-                          </span>
-                        </div>
-
-                        <div className={styles.detailsRow}>
-                          <span className={styles.detailsLabel}>Regain:</span>
-                          <span className={styles.detailsValue}>
-                            <span className={styles.valueMain}><strong>{pkEntriesStats.regains}</strong></span>
-                            <span className={styles.valueSecondary}>
-                              ({pkEntriesStats.regainPct.toFixed(1)}% udziałów)
-                            </span>
-                          </span>
-                        </div>
-
-                        {pkEntriesStats.relevantMatchesCount > 1 && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginTop: '12px' }}>
                           <div className={styles.detailsRow}>
-                            <span className={styles.detailsLabel}>Zakres:</span>
+                            <span className={styles.detailsLabel}>Udział:</span>
                             <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}>
+                                <strong>{pkEntriesStats.playerTotal}</strong> / {pkEntriesStats.teamTotal}
+                              </span>
                               <span className={styles.valueSecondary}>
-                                Wybrane mecze: {pkEntriesStats.relevantMatchesCount}
+                                ({pkEntriesStats.involvementPct.toFixed(1)}% zespołu)
                               </span>
                             </span>
                           </div>
-                        )}
+
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Gole:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}><strong>{pkEntriesStats.goals}</strong></span>
+                            </span>
+                          </div>
+
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Strzały:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}><strong>{pkEntriesStats.shots}</strong></span>
+                              {pkEntriesStats.shotsWithoutGoal > 0 && (
+                                <span className={styles.valueSecondary}>
+                                  {' '}(bez gola: {pkEntriesStats.shotsWithoutGoal})
+                                </span>
+                              )}
+                            </span>
+                          </div>
+
+                          <div className={styles.detailsRow}>
+                            <span className={styles.detailsLabel}>Regain:</span>
+                            <span className={styles.detailsValue}>
+                              <span className={styles.valueMain}><strong>{pkEntriesStats.regains}</strong></span>
+                              <span className={styles.valueSecondary}>
+                                {' '}({pkEntriesStats.regainPct.toFixed(1)}%)
+                              </span>
+                            </span>
+                          </div>
+
+                          {pkEntriesStats.playerEntries.length > 0 && (
+                            <>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>Śr. partnerów w PK:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgPartners.toFixed(2)}</strong></span>
+                                </span>
+                              </div>
+
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>Śr. przeciwników w PK:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgOpponents.toFixed(2)}</strong></span>
+                                </span>
+                              </div>
+
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>Śr. różnica:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgDiffOppMinusPartners.toFixed(2)}</strong></span>
+                                  <span className={styles.valueSecondary}>
+                                    {' '}(przeciwnicy−partnerzy)
+                                  </span>
+                                </span>
+                              </div>
+                            </>
+                          )}
+
+                          {pkEntriesStats.relevantMatchesCount > 1 && (
+                            <div className={styles.detailsRow}>
+                              <span className={styles.detailsLabel}>Zakres:</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueSecondary}>
+                                  {pkEntriesStats.relevantMatchesCount} mecze
+                                </span>
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       <div className={styles.pkEntriesPitchPanel}>
@@ -3356,50 +3388,59 @@ export default function PlayerDetailsPage() {
                             />
 
                             {/* Filtry pod boiskiem */}
-                            <div className={styles.categoryControls} style={{ marginTop: 10, justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-                              <div className={styles.categoryControls} style={{ margin: 0 }}>
+                            <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                                <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: 4 }}>Typ:</span>
                                 <button
                                   className={`${styles.categoryButton} ${pkEntryTypeFilter === 'all' ? styles.active : ''}`}
                                   onClick={() => setPkEntryTypeFilter('all')}
+                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                                 >
                                   Wszystkie
                                 </button>
                                 <button
                                   className={`${styles.categoryButton} ${pkEntryTypeFilter === 'dribble' ? styles.active : ''}`}
                                   onClick={() => setPkEntryTypeFilter('dribble')}
+                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                                 >
-                                  Prowadzenie/Drybling
+                                  Drybling
                                 </button>
                                 <button
                                   className={`${styles.categoryButton} ${pkEntryTypeFilter === 'pass' ? styles.active : ''}`}
                                   onClick={() => setPkEntryTypeFilter('pass')}
+                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                                 >
                                   Podanie
                                 </button>
                                 <button
                                   className={`${styles.categoryButton} ${pkEntryTypeFilter === 'sfg' ? styles.active : ''}`}
                                   onClick={() => setPkEntryTypeFilter('sfg')}
+                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                                 >
                                   SFG
                                 </button>
                               </div>
 
-                              <div className={styles.categoryControls} style={{ margin: 0 }}>
+                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginLeft: 'auto' }}>
+                                <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: 4 }}>Flagi:</span>
                                 <button
                                   className={`${styles.categoryButton} ${pkOnlyRegain ? styles.active : ''}`}
                                   onClick={() => setPkOnlyRegain(v => !v)}
+                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                                 >
                                   Regain
                                 </button>
                                 <button
                                   className={`${styles.categoryButton} ${pkOnlyShot ? styles.active : ''}`}
                                   onClick={() => setPkOnlyShot(v => !v)}
+                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                                 >
                                   Strzał
                                 </button>
                                 <button
                                   className={`${styles.categoryButton} ${pkOnlyGoal ? styles.active : ''}`}
                                   onClick={() => setPkOnlyGoal(v => !v)}
+                                  style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                                 >
                                   Gol
                                 </button>
@@ -3412,73 +3453,99 @@ export default function PlayerDetailsPage() {
                                 <div style={{
                                   background: '#f9fafb',
                                   border: '1px solid #e5e7eb',
-                                  borderRadius: 10,
-                                  padding: 12,
-                                  display: 'grid',
-                                  gridTemplateColumns: '1fr 1fr',
-                                  gap: 10
+                                  borderRadius: 8,
+                                  padding: 16
                                 }}>
-                                  <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Wybrane wejście</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>
-                                      {selectedPKEntry.minute}{selectedPKEntry.isSecondHalf ? "’ (II)" : "’ (I)"} • {(selectedPKEntry.entryType || "pass").toUpperCase()}
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                                    <div>
+                                      <div className={styles.detailsRow} style={{ padding: 0, marginBottom: 8 }}>
+                                        <span className={styles.detailsLabel}>Wejście:</span>
+                                        <span className={styles.detailsValue}>
+                                          <span className={styles.valueMain}>
+                                            <strong>{selectedPKEntry.minute}'</strong> {selectedPKEntry.isSecondHalf ? "(II)" : "(I)"} • {(selectedPKEntry.entryType || "pass").toUpperCase()}
+                                          </span>
+                                        </span>
+                                      </div>
+                                      {selectedPKEntry.senderName && (
+                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                          <span className={styles.detailsLabel}>Zawodnik:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}>{selectedPKEntry.senderName}</span>
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
-                                    <div style={{ fontSize: 12, color: '#374151', marginTop: 4 }}>
-                                      {selectedPKEntry.senderName ? `Zawodnik: ${selectedPKEntry.senderName}` : "Zawodnik: —"}
-                                    </div>
-                                  </div>
-                                  <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Atrybuty</div>
-                                    <div style={{ fontSize: 12, color: '#111827', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                      <span><b>Regain:</b> {selectedPKEntry.isRegain ? "tak" : "nie"}</span>
-                                      <span><b>Strzał:</b> {selectedPKEntry.isShot ? "tak" : "nie"}</span>
-                                      <span><b>Gol:</b> {selectedPKEntry.isGoal ? "tak" : "nie"}</span>
-                                      <span><b>Partnerzy:</b> {selectedPKEntry.pkPlayersCount ?? 0}</span>
-                                      <span><b>Przeciwnicy:</b> {selectedPKEntry.opponentsInPKCount ?? 0}</span>
-                                      <span><b>Różnica:</b> {(selectedPKEntry.opponentsInPKCount ?? 0) - (selectedPKEntry.pkPlayersCount ?? 0)}</span>
-                                    </div>
-                                  </div>
-                                  <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end' }}>
                                     <button
                                       type="button"
                                       className={styles.categoryButton}
                                       onClick={() => setSelectedPKEntryIdForView(undefined)}
+                                      style={{ padding: '6px 12px', fontSize: '12px', borderWidth: '1px' }}
                                     >
-                                      Wyczyść wybór
+                                      ✕
                                     </button>
+                                  </div>
+
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                      <span className={styles.detailsLabel}>Regain:</span>
+                                      <span className={styles.detailsValue}>
+                                        <span className={styles.valueMain}>
+                                          <strong>{selectedPKEntry.isRegain ? "Tak" : "Nie"}</strong>
+                                        </span>
+                                      </span>
+                                    </div>
+                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                      <span className={styles.detailsLabel}>Strzał:</span>
+                                      <span className={styles.detailsValue}>
+                                        <span className={styles.valueMain}>
+                                          <strong>{selectedPKEntry.isShot ? "Tak" : "Nie"}</strong>
+                                        </span>
+                                      </span>
+                                    </div>
+                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                      <span className={styles.detailsLabel}>Gol:</span>
+                                      <span className={styles.detailsValue}>
+                                        <span className={styles.valueMain}>
+                                          <strong>{selectedPKEntry.isGoal ? "Tak" : "Nie"}</strong>
+                                        </span>
+                                      </span>
+                                    </div>
+                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                      <span className={styles.detailsLabel}>Partnerzy w PK:</span>
+                                      <span className={styles.detailsValue}>
+                                        <span className={styles.valueMain}>
+                                          <strong>{selectedPKEntry.pkPlayersCount ?? 0}</strong>
+                                        </span>
+                                      </span>
+                                    </div>
+                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                      <span className={styles.detailsLabel}>Przeciwnicy w PK:</span>
+                                      <span className={styles.detailsValue}>
+                                        <span className={styles.valueMain}>
+                                          <strong>{selectedPKEntry.opponentsInPKCount ?? 0}</strong>
+                                        </span>
+                                      </span>
+                                    </div>
+                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
+                                      <span className={styles.detailsLabel}>Różnica:</span>
+                                      <span className={styles.detailsValue}>
+                                        <span className={styles.valueMain}>
+                                          <strong>{(selectedPKEntry.opponentsInPKCount ?? 0) - (selectedPKEntry.pkPlayersCount ?? 0)}</strong>
+                                        </span>
+                                        <span className={styles.valueSecondary}>
+                                          {' '}(przeciwnicy−partnerzy)
+                                        </span>
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
                               ) : (
-                                <div style={{ fontSize: 12, color: '#6b7280' }}>
+                                <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', padding: '8px' }}>
                                   Kliknij wejście na boisku, aby zobaczyć szczegóły.
                                 </div>
                               )}
                             </div>
                           </>
-                        )}
-
-                        {/* statystyki średnich po wejściach */}
-                        {pkEntriesStats.playerEntries.length > 0 && (
-                          <div style={{ marginTop: 14 }}>
-                            <div className={styles.detailsRow}>
-                              <span className={styles.detailsLabel}>Śr. partnerów w PK:</span>
-                              <span className={styles.detailsValue}>
-                                <span className={styles.valueMain}><strong>{pkEntriesAverages.avgPartners.toFixed(2)}</strong></span>
-                              </span>
-                            </div>
-                            <div className={styles.detailsRow}>
-                              <span className={styles.detailsLabel}>Śr. przeciwników w PK:</span>
-                              <span className={styles.detailsValue}>
-                                <span className={styles.valueMain}><strong>{pkEntriesAverages.avgOpponents.toFixed(2)}</strong></span>
-                              </span>
-                            </div>
-                            <div className={styles.detailsRow}>
-                              <span className={styles.detailsLabel}>Śr. różnica (przeciwnicy−partnerzy):</span>
-                              <span className={styles.detailsValue}>
-                                <span className={styles.valueMain}><strong>{pkEntriesAverages.avgDiffOppMinusPartners.toFixed(2)}</strong></span>
-                              </span>
-                            </div>
-                          </div>
                         )}
                       </div>
                     </div>
