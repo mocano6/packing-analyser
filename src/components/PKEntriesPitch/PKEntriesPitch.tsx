@@ -9,6 +9,9 @@ export interface PKEntriesPitchProps {
   onEntryAdd?: (startX: number, startY: number, endX: number, endY: number) => void;
   onEntryClick?: (entry: PKEntry) => void;
   selectedEntryId?: string;
+  hideTeamLogos?: boolean;
+  hideFlipButton?: boolean;
+  hideInstructions?: boolean;
   matchInfo?: {
     team?: string;
     opponent?: string;
@@ -28,6 +31,9 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
   onEntryAdd,
   onEntryClick,
   selectedEntryId,
+  hideTeamLogos = false,
+  hideFlipButton = false,
+  hideInstructions = false,
   matchInfo,
   allTeams = [],
 }: PKEntriesPitchProps) {
@@ -362,92 +368,100 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
   return (
     <div className={styles.pitchContainer}>
       {/* Loga zespołów - zamieniają się miejscami gdy boisko jest odwrócone */}
-      <div className={styles.teamLogos}>
-        {isFlipped ? (
-          <>
-            <div className={styles.teamLogo}>
-              {(() => {
-                const teamData = allTeams.find(team => team.id === matchInfo?.team);
-                return teamData?.logo ? (
+      {!hideTeamLogos && (
+        <div className={styles.teamLogos}>
+          {isFlipped ? (
+            <>
+              <div className={styles.teamLogo}>
+                {(() => {
+                  const teamData = allTeams.find(team => team.id === matchInfo?.team);
+                  return teamData?.logo ? (
+                    <img 
+                      src={teamData.logo} 
+                      alt="Logo zespołu" 
+                      className={styles.teamLogoImage}
+                    />
+                  ) : null;
+                })()}
+                <span className={styles.teamName}>{(() => {
+                  const teamData = allTeams.find(team => team.id === matchInfo?.team);
+                  return teamData?.name || matchInfo?.team || 'Nasz zespół';
+                })()}</span>
+              </div>
+              <div className={styles.vs}>VS</div>
+              <div className={styles.teamLogo}>
+                {matchInfo?.opponentLogo && (
                   <img 
-                    src={teamData.logo} 
-                    alt="Logo zespołu" 
+                    src={matchInfo.opponentLogo} 
+                    alt="Logo przeciwnika" 
                     className={styles.teamLogoImage}
                   />
-                ) : null;
-              })()}
-              <span className={styles.teamName}>{(() => {
-                const teamData = allTeams.find(team => team.id === matchInfo?.team);
-                return teamData?.name || matchInfo?.team || 'Nasz zespół';
-              })()}</span>
-            </div>
-            <div className={styles.vs}>VS</div>
-            <div className={styles.teamLogo}>
-              {matchInfo?.opponentLogo && (
-                <img 
-                  src={matchInfo.opponentLogo} 
-                  alt="Logo przeciwnika" 
-                  className={styles.teamLogoImage}
-                />
-              )}
-              <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className={styles.teamLogo}>
-              {matchInfo?.opponentLogo && (
-                <img 
-                  src={matchInfo.opponentLogo} 
-                  alt="Logo przeciwnika" 
-                  className={styles.teamLogoImage}
-                />
-              )}
-              <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
-            </div>
-            <div className={styles.vs}>VS</div>
-            <div className={styles.teamLogo}>
-              {(() => {
-                const teamData = allTeams.find(team => team.id === matchInfo?.team);
-                return teamData?.logo ? (
+                )}
+                <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={styles.teamLogo}>
+                {matchInfo?.opponentLogo && (
                   <img 
-                    src={teamData.logo} 
-                    alt="Logo zespołu" 
+                    src={matchInfo.opponentLogo} 
+                    alt="Logo przeciwnika" 
                     className={styles.teamLogoImage}
                   />
-                ) : null;
-              })()}
-              <span className={styles.teamName}>{(() => {
-                const teamData = allTeams.find(team => team.id === matchInfo?.team);
-                return teamData?.name || matchInfo?.team || 'Nasz zespół';
-              })()}</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Przycisk przełączania orientacji */}
-      <button
-        className={styles.flipButton}
-        onClick={handleFlipToggle}
-        title="Obróć boisko"
-        type="button"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 12h-4M3 12h4M12 3v4M12 17v4M7 7l10 10M7 17l10-10" />
-        </svg>
-      </button>
-
-      {/* Instrukcja */}
-      {drawingState.isDrawing && (
-        <div className={styles.instruction}>
-          Kliknij punkt końcowy strzałki
+                )}
+                <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
+              </div>
+              <div className={styles.vs}>VS</div>
+              <div className={styles.teamLogo}>
+                {(() => {
+                  const teamData = allTeams.find(team => team.id === matchInfo?.team);
+                  return teamData?.logo ? (
+                    <img 
+                      src={teamData.logo} 
+                      alt="Logo zespołu" 
+                      className={styles.teamLogoImage}
+                    />
+                  ) : null;
+                })()}
+                <span className={styles.teamName}>{(() => {
+                  const teamData = allTeams.find(team => team.id === matchInfo?.team);
+                  return teamData?.name || matchInfo?.team || 'Nasz zespół';
+                })()}</span>
+              </div>
+            </>
+          )}
         </div>
       )}
-      {!drawingState.isDrawing && (
-        <div className={styles.instruction}>
-          Kliknij, aby rozpocząć rysowanie strzałki (punkt startu)
-        </div>
+
+      {/* Przycisk przełączania orientacji */}
+      {!hideFlipButton && (
+        <button
+          className={styles.flipButton}
+          onClick={handleFlipToggle}
+          title="Obróć boisko"
+          type="button"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 12h-4M3 12h4M12 3v4M12 17v4M7 7l10 10M7 17l10-10" />
+          </svg>
+        </button>
+      )}
+
+      {/* Instrukcja */}
+      {!hideInstructions && !!onEntryAdd && (
+        <>
+          {drawingState.isDrawing && (
+            <div className={styles.instruction}>
+              Kliknij punkt końcowy strzałki
+            </div>
+          )}
+          {!drawingState.isDrawing && (
+            <div className={styles.instruction}>
+              Kliknij, aby rozpocząć rysowanie strzałki (punkt startu)
+            </div>
+          )}
+        </>
       )}
 
       <div

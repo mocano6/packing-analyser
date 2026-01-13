@@ -2088,14 +2088,16 @@ export default function PlayerDetailsPage() {
           return action._actionSource === 'loses';
         }
         
-        // Fallback: sprawdź pola akcji
-        // Loses: ma isReaction5s LUB ma isBelow8s ale NIE MA playersBehindBall/opponentsBehindBall
-        const isLoses = action.isReaction5s !== undefined || 
-         (action.isBelow8s !== undefined &&
-          action.playersBehindBall === undefined &&
-                        action.opponentsBehindBall === undefined);
-        
-        return isLoses;
+        // Fallback: sprawdź pola akcji (bardziej odporne na zmiany schematu)
+        return (
+          action.isReaction5s !== undefined ||
+          action.isAut !== undefined ||
+          action.isReaction5sNotApplicable !== undefined ||
+          action.losesDefenseXT !== undefined ||
+          action.losesAttackXT !== undefined ||
+          action.losesDefenseZone !== undefined ||
+          action.losesAttackZone !== undefined
+        );
       };
       
       if (
@@ -2113,17 +2115,29 @@ export default function PlayerDetailsPage() {
           const currentCount = losesActionCountHeatmap.get(losesZoneName) || 0;
           losesActionCountHeatmap.set(losesZoneName, currentCount + 1);
           
-          // xT odbiorców - dla loses używamy losesDefenseXT (wartość w obronie)
-          const receiverXT = action.losesDefenseXT !== undefined 
-            ? action.losesDefenseXT 
-            : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+          // xT odbiorców - dla strat używamy wartości w obronie (losesDefenseXT),
+          // a jeśli jej brak w starych danych - licz z aktualnej strefy (getXTValueForZone)
+          const receiverXT = action.losesDefenseXT !== undefined
+            ? action.losesDefenseXT
+            : (() => {
+                const idx = losesZoneName ? zoneNameToIndex(losesZoneName) : null;
+                if (idx !== null) return getXTValueForZone(idx);
+                return action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0);
+              })();
           const currentXT = losesHeatmap.get(losesZoneName) || 0;
           losesHeatmap.set(losesZoneName, currentXT + receiverXT);
           
-          // Wartość xT w obronie - używamy losesDefenseXT (nowe pole) lub starych pól dla backward compatibility
-          const defenseXT = action.losesDefenseXT !== undefined 
-            ? action.losesDefenseXT 
-            : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+          // Wartość xT w obronie — analogicznie jak w przechwytach:
+          // - preferuj losesDefenseXT
+          // - fallback: policz z aktualnej strefy straty
+          // - ostatecznie stare pola
+          const defenseXT = action.losesDefenseXT !== undefined
+            ? action.losesDefenseXT
+            : (() => {
+                const idx = losesZoneName ? zoneNameToIndex(losesZoneName) : null;
+                if (idx !== null) return getXTValueForZone(idx);
+                return action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0);
+              })();
           
           // Wartość xT w ataku - używamy losesAttackXT (nowe pole) lub starych pól dla backward compatibility
           const attackXT = action.losesAttackXT !== undefined 
@@ -2186,22 +2200,22 @@ export default function PlayerDetailsPage() {
           // Liczniki według stref (P0, P1, P2, P3)
           const isLateral = isLateralZone(losesZoneName);
           
-          if (action.isP0) {
+          if (action.isP0 || action.isP0Start) {
             losesP0Count += 1;
             if (isLateral) losesP0CountLateral += 1;
             else losesP0CountCentral += 1;
           }
-          if (action.isP1) {
+          if (action.isP1 || action.isP1Start) {
             losesP1Count += 1;
             if (isLateral) losesP1CountLateral += 1;
             else losesP1CountCentral += 1;
           }
-          if (action.isP2) {
+          if (action.isP2 || action.isP2Start) {
             losesP2Count += 1;
             if (isLateral) losesP2CountLateral += 1;
             else losesP2CountCentral += 1;
           }
-          if (action.isP3) {
+          if (action.isP3 || action.isP3Start) {
             losesP3Count += 1;
             if (isLateral) losesP3CountLateral += 1;
             else losesP3CountCentral += 1;
@@ -3296,6 +3310,9 @@ export default function PlayerDetailsPage() {
                             pkEntries={pkEntriesStats.playerEntries}
                             selectedEntryId={selectedPKEntryIdForView}
                             onEntryClick={(entry) => setSelectedPKEntryIdForView(entry.id)}
+                            hideTeamLogos
+                            hideFlipButton
+                            hideInstructions
                             matchInfo={
                               pkEntriesStats.headerMatch
                                 ? {
