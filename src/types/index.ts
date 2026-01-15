@@ -90,6 +90,7 @@ export interface Action {
   isShot?: boolean;
   isGoal?: boolean;
   isPenaltyAreaEntry?: boolean;
+  isControversial?: boolean;
   isSecondHalf: boolean;
   mode?: "attack" | "defense"; // Tryb akcji: Atak lub Obrona
   defensePlayers?: string[]; // Lista zawodników obrony (tylko dla trybu obrona)
@@ -188,6 +189,7 @@ export interface Shot {
   isContact3Plus?: boolean; // Liczba kontaktów: 3T+
   assistantId?: string; // ID asystenta (tylko dla goli)
   assistantName?: string; // Nazwa asystenta (tylko dla goli)
+  isControversial?: boolean;
 }
 
 export interface PKEntry {
@@ -214,6 +216,7 @@ export interface PKEntry {
   isShot?: boolean; // Czy po wejściu w PK był strzał
   isGoal?: boolean; // Czy po wejściu w PK był gol
   isRegain?: boolean; // Czy był przechwyt piłki
+  isControversial?: boolean;
   timestamp: number;
 }
 
@@ -227,6 +230,7 @@ export interface Acc8sEntry {
   isShotUnder8s: boolean; // Strzał do 8s
   isPKEntryUnder8s: boolean; // Wejście w PK do 8s
   passingPlayerIds: string[]; // ID zawodników biorących udział w akcji (wielokrotny wybór)
+  isControversial?: boolean;
   videoTimestamp?: number; // Czas wideo w sekundach (po korekcie -10s)
   videoTimestampRaw?: number; // Surowy czas wideo w sekundach (bez korekty)
   timestamp: number;

@@ -52,6 +52,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     isShot: false,
     isGoal: false,
     isRegain: false,
+    isControversial: false,
   });
 
   // Filtrowanie zawodników grających w danym meczu (podobnie jak w ShotModal)
@@ -170,6 +171,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         isShot: editingEntry.isShot || false,
         isGoal: editingEntry.isGoal || false,
         isRegain: editingEntry.isRegain || false,
+        isControversial: editingEntry.isControversial || false,
       });
     } else {
       // Pobierz aktualną połowę z localStorage
@@ -374,6 +376,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         isShot: formData.isShot,
         isGoal: formData.isGoal,
         isRegain: formData.isRegain,
+        isControversial: formData.isControversial,
         receiverId: undefined,
         receiverName: undefined,
       };
@@ -489,6 +492,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
       isShot: formData.isShot,
       isGoal: formData.isGoal,
       isRegain: formData.isRegain,
+      isControversial: formData.isControversial,
       ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
       ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
     };
@@ -784,6 +788,16 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                 Usuń wejście
               </button>
             )}
+            <button
+              type="button"
+              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${formData.isControversial ? styles.controversyButtonActive : ""}`}
+              onClick={() => setFormData({ ...formData, isControversial: !formData.isControversial })}
+              aria-pressed={formData.isControversial}
+              aria-label="Oznacz jako kontrowersja"
+              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
+            >
+              !
+            </button>
             <button type="button" onClick={onClose} className={styles.cancelButton}>
               Anuluj
             </button>

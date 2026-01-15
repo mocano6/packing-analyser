@@ -58,6 +58,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     isContact3Plus: false,
     assistantId: "",
     assistantName: "",
+    isControversial: false,
   });
 
   // Filtrowanie zawodników grających w danym meczu (podobnie jak w ActionModal)
@@ -219,6 +220,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         isContact3Plus: editingShot.isContact3Plus || false,
         assistantId: (editingShot as any)?.assistantId || "",
         assistantName: (editingShot as any)?.assistantName || "",
+        isControversial: editingShot.isControversial || false,
       });
     } else {
       // Automatyczne wykrywanie kontekstu zespołu na podstawie pozycji
@@ -250,6 +252,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         isContact3Plus: false,
         assistantId: "",
         assistantName: "",
+        isControversial: false,
       });
     }
   }, [editingShot, isOpen, matchInfo, xG, x]);
@@ -430,6 +433,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       isContact3Plus: formData.isContact3Plus,
       assistantId: formData.assistantId || undefined,
       assistantName: formData.assistantName || undefined,
+      isControversial: formData.isControversial,
       matchId,
     });
 
@@ -968,6 +972,16 @@ const ShotModal: React.FC<ShotModalProps> = ({
                 Usuń strzał
               </button>
             )}
+            <button
+              type="button"
+              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${formData.isControversial ? styles.controversyButtonActive : ""}`}
+              onClick={() => setFormData({ ...formData, isControversial: !formData.isControversial })}
+              aria-pressed={formData.isControversial}
+              aria-label="Oznacz jako kontrowersja"
+              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
+            >
+              !
+            </button>
             <button type="button" onClick={onClose} className={styles.cancelButton}>
               Anuluj
             </button>

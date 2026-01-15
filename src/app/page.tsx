@@ -839,6 +839,7 @@ export default function Page() {
     isShot,
     isGoal,
     isPenaltyAreaEntry,
+    isControversial,
     setSelectedPlayerId,
     setSelectedReceiverId,
     setCurrentPoints,
@@ -858,6 +859,7 @@ export default function Page() {
     setIsShot,
     setIsGoal,
     setIsPenaltyAreaEntry,
+    setIsControversial,
     isBelow8sActive,
     setIsBelow8sActive,
     isReaction5sActive,
@@ -2857,6 +2859,8 @@ export default function Page() {
             setIsGoal={setIsGoal}
             isPenaltyAreaEntry={isPenaltyAreaEntry}
             setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
+            isControversial={isControversial}
+            setIsControversial={setIsControversial}
             isSecondHalf={isSecondHalf}
             setIsSecondHalf={handleSecondHalfToggle}
             isBelow8sActive={isBelow8sActive}
@@ -2932,6 +2936,8 @@ export default function Page() {
             setIsGoal={setIsGoal}
             isPenaltyAreaEntry={isPenaltyAreaEntry}
             setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
+            isControversial={isControversial}
+            setIsControversial={setIsControversial}
             isSecondHalf={isSecondHalf}
             setIsSecondHalf={handleSecondHalfToggle}
             isBelow8sActive={isBelow8sActive}
@@ -3611,6 +3617,15 @@ export default function Page() {
               });
             }
           }}
+          isControversial={editingAction?.isControversial || false}
+          onControversialToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isControversial: !editingAction.isControversial
+              });
+            }
+          }}
         />
       ) : editingAction && getActionCategory(editingAction) === "regain" ? (
         <RegainActionModal
@@ -3908,6 +3923,15 @@ export default function Page() {
               });
             }
           }}
+          isControversial={editingAction?.isControversial || false}
+          onControversialToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isControversial: !editingAction.isControversial
+              });
+            }
+          }}
         />
       ) : (
         <ActionModal
@@ -4178,6 +4202,15 @@ export default function Page() {
             }
           }}
           matchInfo={matchInfo}
+          isControversial={editingAction?.isControversial || false}
+          onControversialToggle={() => {
+            if (editingAction) {
+              setEditingAction({
+                ...editingAction,
+                isControversial: !editingAction.isControversial
+              });
+            }
+          }}
         />
       )}
 

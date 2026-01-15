@@ -16,7 +16,7 @@ import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/s
 import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPitch";
 import { getOppositeXTValueForZone, getXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString } from "@/constants/xtValues";
 import SidePanel from "@/components/SidePanel/SidePanel";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
 import XGPitch from "@/components/XGPitch/XGPitch";
 import styles from "./page.module.css";
@@ -24,7 +24,7 @@ import styles from "./page.module.css";
 export default function PlayerDetailsPage() {
   const params = useParams();
   const router = useRouter();
-  const playerId = params?.playerId as string;
+  const playerId = typeof params?.playerId === "string" ? params.playerId : "";
 
   const { players } = usePlayersState();
   const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
@@ -35,8 +35,26 @@ export default function PlayerDetailsPage() {
   const [allShots, setAllShots] = useState<any[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
   const [allTeamActions, setAllTeamActions] = useState<Action[]>([]); // Wszystkie akcje zespołu dla rankingu
-  const [selectedMatchIds, setSelectedMatchIds] = useState<string[]>([]);
-  const [selectedSeason, setSelectedSeason] = useState<string>("all");
+  const [selectedMatchIds, setSelectedMatchIds] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("profile_selectedMatchIds");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+    }
+    return [];
+  });
+  const [selectedSeason, setSelectedSeason] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("profile_selectedSeason") || "all";
+    }
+    return "all";
+  });
   const [showMatchSelector, setShowMatchSelector] = useState<boolean>(false);
   // Inicjalizuj selectedTeam z localStorage lub pustym stringiem
   const [selectedTeam, setSelectedTeam] = useState<string>(() => {
@@ -65,6 +83,17 @@ export default function PlayerDetailsPage() {
       }
     }
   }, [selectedPlayerForView]);
+
+  useEffect(() => {
+    if (!playerId) return;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("selectedPlayerForView", playerId);
+    }
+    if (selectedPlayerForView !== playerId) {
+      setSelectedPlayerForView(playerId);
+    }
+    router.replace("/profile");
+  }, [playerId, router, selectedPlayerForView]);
   // Inicjalizuj expandedCategory z localStorage
   const [expandedCategory, setExpandedCategory] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
@@ -84,6 +113,13 @@ export default function PlayerDetailsPage() {
       }
     }
   }, [expandedCategory]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("profile_selectedSeason", selectedSeason);
+    }
+  }, [selectedSeason]);
+
   const [selectedPxtCategory, setSelectedPxtCategory] = useState<"sender" | "receiver" | "dribbler">("sender");
   const [heatmapMode, setHeatmapMode] = useState<"pxt" | "count">("pxt");
   const [heatmapDirection, setHeatmapDirection] = useState<"from" | "to">("from"); // Domyślnie "from" dla sender
@@ -572,12 +608,6 @@ export default function PlayerDetailsPage() {
 
         setAllActions(allActionsData);
         setAllShots(allShotsData);
-        
-        // Zaznacz wszystkie mecze domyślnie (tylko z wyfiltrowanych)
-        const matchIds = matchesToLoad
-          .filter(m => m.matchId)
-          .map(m => m.matchId!);
-        setSelectedMatchIds(matchIds);
       } catch (error) {
         console.error("Błąd podczas pobierania akcji:", error);
         setAllActions([]);
@@ -599,12 +629,16 @@ export default function PlayerDetailsPage() {
     return availableSeasons.length > 0 ? availableSeasons[0].id : "all";
   }, [availableSeasons]);
 
-  // Ustaw domyślny sezon na ostatni dostępny
+  // Ustaw domyślny sezon, jeśli nie jest ustawiony lub nie jest dostępny
   useEffect(() => {
-    if (selectedSeason === "all" && defaultSeason !== "all") {
+    if (!selectedSeason) {
+      setSelectedSeason(defaultSeason);
+      return;
+    }
+    if (selectedSeason !== "all" && !availableSeasons.some(season => season.id === selectedSeason)) {
       setSelectedSeason(defaultSeason);
     }
-  }, [selectedSeason, defaultSeason]);
+  }, [selectedSeason, defaultSeason, availableSeasons]);
 
   // Dostępne zespoły
   const availableTeams = useMemo(() => {
@@ -729,48 +763,76 @@ export default function PlayerDetailsPage() {
   // Inicjalizuj selectedPlayerForView - priorytet ma localStorage, jeśli zawodnik jest dostępny
   useEffect(() => {
     if (filteredPlayers.length === 0) {
-      // Jeśli nie ma zawodników, wyczyść selectedPlayerForView
-      if (selectedPlayerForView) {
-        setSelectedPlayerForView("");
-      }
       return;
     }
-    
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('selectedPlayerForView');
+      if (saved && filteredPlayers.some(p => p.id === saved)) {
+        if (selectedPlayerForView !== saved) {
+          setSelectedPlayerForView(saved);
+        }
+        return;
+      }
+    }
+
     // Sprawdź czy aktualny selectedPlayerForView jest dostępny w filteredPlayers
     const isCurrentPlayerAvailable = selectedPlayerForView && filteredPlayers.some(p => p.id === selectedPlayerForView);
     
     // Jeśli selectedPlayerForView jest pusty lub zawodnik nie jest dostępny
     if (!isCurrentPlayerAvailable) {
-      // Sprawdź czy playerId z URL jest dostępny
-      if (filteredPlayers.some(p => p.id === playerId)) {
-        setSelectedPlayerForView(playerId);
+      const firstPlayerId = filteredPlayers[0]?.id;
+      if (firstPlayerId) {
+        setSelectedPlayerForView(firstPlayerId);
         if (typeof window !== 'undefined') {
-          localStorage.setItem('selectedPlayerForView', playerId);
-        }
-      } else {
-        // Jeśli playerId też nie jest dostępny, ustaw pierwszego dostępnego
-        const firstPlayerId = filteredPlayers[0]?.id;
-        if (firstPlayerId) {
-          setSelectedPlayerForView(firstPlayerId);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('selectedPlayerForView', firstPlayerId);
-          }
+          localStorage.setItem('selectedPlayerForView', firstPlayerId);
         }
       }
-      }
+    }
     // Jeśli zawodnik z localStorage jest dostępny, zachowaj go (nie nadpisuj playerId z URL)
-  }, [filteredPlayers, playerId, selectedPlayerForView]);
+  }, [filteredPlayers, selectedPlayerForView]);
 
   // Zaznacz wszystkie mecze domyślnie przy zmianie sezonu (tylko jeśli nie są ręcznie odznaczone)
-  const [manuallyDeselectedAll, setManuallyDeselectedAll] = useState(false);
-  useEffect(() => {
-    if (!manuallyDeselectedAll) {
-      const matchIds = filteredMatchesBySeason
-        .filter(m => m.matchId)
-        .map(m => m.matchId!);
-      setSelectedMatchIds(matchIds);
+  const [manuallyDeselectedAll, setManuallyDeselectedAll] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("profile_manuallyDeselectedAll") === "true";
     }
-  }, [filteredMatchesBySeason, manuallyDeselectedAll]);
+    return false;
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("profile_selectedMatchIds", JSON.stringify(selectedMatchIds));
+    }
+  }, [selectedMatchIds]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("profile_manuallyDeselectedAll", String(manuallyDeselectedAll));
+    }
+  }, [manuallyDeselectedAll]);
+  useEffect(() => {
+    const availableMatchIds = filteredMatchesBySeason
+      .filter(m => m.matchId)
+      .map(m => m.matchId!);
+
+    if (availableMatchIds.length === 0) {
+      if (selectedMatchIds.length > 0) {
+        setSelectedMatchIds([]);
+      }
+      return;
+    }
+
+    const availableSet = new Set(availableMatchIds);
+    const filteredSelected = selectedMatchIds.filter(id => availableSet.has(id));
+
+    if (filteredSelected.length !== selectedMatchIds.length) {
+      setSelectedMatchIds(filteredSelected);
+      return;
+    }
+
+    if (!manuallyDeselectedAll && filteredSelected.length === 0) {
+      setSelectedMatchIds(availableMatchIds);
+    }
+  }, [filteredMatchesBySeason, manuallyDeselectedAll, selectedMatchIds]);
 
   // Oblicz minuty gry zawodnika i według pozycji
   const { totalMinutes, positionMinutes } = useMemo(() => {
@@ -3720,18 +3782,15 @@ export default function PlayerDetailsPage() {
                           </div>
 
                           <div className={styles.detailsRow}>
-                            <span className={styles.detailsLabel}>Gole:</span>
+                            <span className={styles.detailsLabel}>Gole / strzały:</span>
                             <span className={styles.detailsValue}>
-                              <span className={styles.valueMain}><strong>{pkEntriesStats.goals}</strong></span>
-                            </span>
-                          </div>
-
-                          <div className={styles.detailsRow}>
-                            <span className={styles.detailsLabel}>Strzały:</span>
-                            <span className={styles.detailsValue}>
-                              <span className={styles.valueMain}><strong>{pkEntriesStats.shots}</strong></span>
-                              {pkEntriesStats.shotsWithoutGoal > 0 && (
-                                <span className={styles.valueSecondary}> • {pkEntriesStats.shotsWithoutGoal} bez gola</span>
+                              <span className={styles.valueMain}>
+                                <strong>{pkEntriesStats.goals}</strong> / {pkEntriesStats.shots}
+                              </span>
+                              {pkEntriesStats.shots > 0 && (
+                                <span className={styles.valueSecondary}>
+                                  {" "}• {((pkEntriesStats.goals / pkEntriesStats.shots) * 100).toFixed(1)}% skuteczności
+                                </span>
                               )}
                             </span>
                           </div>
@@ -3747,26 +3806,17 @@ export default function PlayerDetailsPage() {
                           </div>
 
                           {pkEntriesStats.playerEntries.length > 0 && (
-                            <>
-                              <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>Partnerzy w PK:</span>
-                                <span className={styles.detailsValue}>
-                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgPartners.toFixed(2)}</strong></span>
+                            <div className={styles.detailsRow}>
+                              <span className={styles.detailsLabel}>Przewaga w PK:</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueMain}>
+                                  <strong>{(pkEntriesAverages.avgPartners - pkEntriesAverages.avgOpponents).toFixed(2)}</strong>
                                 </span>
-                              </div>
-                              <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>Przeciwnicy w PK:</span>
-                                <span className={styles.detailsValue}>
-                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgOpponents.toFixed(2)}</strong></span>
+                                <span className={styles.valueSecondary}>
+                                  {" "}• Partnerzy: {pkEntriesAverages.avgPartners.toFixed(2)} • Przeciwnicy: {pkEntriesAverages.avgOpponents.toFixed(2)}
                                 </span>
-                              </div>
-                              <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>Różnica:</span>
-                                <span className={styles.detailsValue}>
-                                  <span className={styles.valueMain}><strong>{pkEntriesAverages.avgDiffOppMinusPartners.toFixed(2)}</strong></span>
-                                </span>
-                              </div>
-                            </>
+                              </span>
+                            </div>
                           )}
 
                           {pkEntriesStats.relevantMatchesCount > 1 && (
@@ -5713,19 +5763,29 @@ export default function PlayerDetailsPage() {
                           return isRegain && action.senderId === (selectedPlayerForView || player?.id);
                         });
 
-                        const intervals: { [key: number]: number } = {};
+                        const intervals: { [key: number]: { count: number; xt: number } } = {};
                         
                         regainActions.forEach((action: any) => {
                           const interval = Math.floor(action.minute / 5) * 5;
-                          intervals[interval] = (intervals[interval] || 0) + 1;
+                          if (!intervals[interval]) {
+                            intervals[interval] = { count: 0, xt: 0 };
+                          }
+                          intervals[interval].count += 1;
+                          // Oblicz xT dla regainu (regainDefenseXT lub xTValueStart/xTValueEnd)
+                          const receiverXT = action.regainDefenseXT !== undefined 
+                            ? action.regainDefenseXT 
+                            : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+                          intervals[interval].xt += receiverXT;
                         });
 
                         const data: any[] = [];
                         for (let i = 0; i <= 90; i += 5) {
+                          const intervalData = intervals[i] || { count: 0, xt: 0 };
                           data.push({
                             minute: `${i}-${i + 5}`,
                             minuteValue: i,
-                            regains: intervals[i] || 0
+                            regains: intervalData.count,
+                            xt: intervalData.xt
                           });
                         }
 
@@ -5833,50 +5893,74 @@ export default function PlayerDetailsPage() {
                                 <h4>Wykres minutowy</h4>
                               </div>
                               <div className={styles.matchChartContainer}>
-                                <ResponsiveContainer width="100%" height={250}>
-                                  <LineChart data={regainMinuteChartData} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                                <ResponsiveContainer width="100%" height={280}>
+                                  <BarChart data={regainMinuteChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" opacity={0.5} vertical={false} />
                                     <XAxis 
                                       dataKey="minute" 
                                       label={{ value: 'Przedział minutowy', position: 'insideBottom', offset: -5 }}
-                                      tick={{ fontSize: 11 }}
+                                      tick={{ fontSize: 11, fill: '#6b7280' }}
                                       angle={-45}
                                       textAnchor="end"
                                       height={60}
+                                      axisLine={{ stroke: '#e5e7eb' }}
                                     />
                                     <YAxis 
-                                      label={{ value: 'Przechwyty', angle: -90, position: 'insideLeft' }}
-                                      tick={{ fontSize: 12 }}
+                                      yAxisId="left"
+                                      label={{ value: 'Przechwyty', angle: -90, position: 'insideLeft', style: { fill: '#3b82f6' } }}
+                                      tick={{ fontSize: 12, fill: '#6b7280' }}
+                                      axisLine={{ stroke: '#e5e7eb' }}
+                                    />
+                                    <YAxis 
+                                      yAxisId="right"
+                                      orientation="right"
+                                      label={{ value: 'xT', angle: 90, position: 'insideRight', style: { fill: '#10b981' } }}
+                                      tick={{ fontSize: 12, fill: '#6b7280' }}
+                                      axisLine={{ stroke: '#e5e7eb' }}
                                     />
                                     <Tooltip 
+                                      contentStyle={{
+                                        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                                        border: '1px solid #e5e7eb',
+                                        borderRadius: '8px',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                        padding: '12px'
+                                      }}
                                       content={({ active, payload }) => {
                                         if (active && payload && payload.length) {
                                           const data = payload[0].payload;
                                           return (
                                             <div className={styles.chartTooltip}>
-                                              <p className={styles.tooltipLabel}>{`Przedział: ${data.minute} min`}</p>
-                                              <p style={{ color: '#3b82f6' }}>Przechwyty: {data.regains}</p>
+                                              <p className={styles.tooltipLabel} style={{ marginBottom: '8px', fontWeight: 600, color: '#1f2937' }}>
+                                                {`${data.minute} min`}
+                                              </p>
+                                              <p style={{ color: '#3b82f6', margin: '4px 0', fontSize: '14px' }}>
+                                                <strong>Przechwyty:</strong> {data.regains}
+                                              </p>
+                                              <p style={{ color: '#10b981', margin: '4px 0', fontSize: '14px' }}>
+                                                <strong>xT:</strong> {data.xt?.toFixed(3) || '0.000'}
+                                              </p>
                                             </div>
                                           );
                                         }
                                         return null;
                                       }}
                                     />
-                                    <Line 
-                                      type="monotone" 
+                                    <Bar 
+                                      yAxisId="left"
                                       dataKey="regains" 
-                                      stroke="#3b82f6" 
-                                      strokeWidth={2}
-                                      dot={{ 
-                                        fill: '#3b82f6', 
-                                        strokeWidth: 1, 
-                                        r: 3, 
-                                        stroke: '#fff'
-                                      }}
-                                      activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2, fill: '#3b82f6' }}
+                                      fill="#3b82f6"
+                                      radius={[8, 8, 0, 0]}
                                       name="Przechwyty"
                                     />
-                                  </LineChart>
+                                    <Bar 
+                                      yAxisId="right"
+                                      dataKey="xt" 
+                                      fill="#10b981"
+                                      radius={[8, 8, 0, 0]}
+                                      name="xT"
+                                    />
+                                  </BarChart>
                                 </ResponsiveContainer>
                               </div>
                             </div>
@@ -6203,6 +6287,394 @@ export default function PlayerDetailsPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Wykresy dla strat */}
+                    {(() => {
+                      const isLosesAction = (action: any) => {
+                        if (action._actionSource) {
+                          return action._actionSource === 'loses';
+                        }
+                        return (
+                          action.isReaction5s !== undefined ||
+                          action.isAut !== undefined ||
+                          action.isReaction5sNotApplicable !== undefined ||
+                          action.losesDefenseXT !== undefined ||
+                          action.losesAttackXT !== undefined ||
+                          action.losesDefenseZone !== undefined ||
+                          action.losesAttackZone !== undefined
+                        );
+                      };
+
+                      // Oblicz dane mecz po meczu dla strat
+                      const losesMatchData = filteredMatchesBySeason
+                        .filter(match => {
+                          if (selectedMatchIds.length > 0) {
+                            return selectedMatchIds.includes(match.matchId || "");
+                          }
+                          return true;
+                        })
+                        .map((match) => {
+                          let minutes = 0;
+                          if (match.playerMinutes) {
+                            const playerMinute = match.playerMinutes.find((pm: any) => pm.playerId === (selectedPlayerForView || player?.id));
+                            if (playerMinute) {
+                              minutes = playerMinute.startMinute === 0 && playerMinute.endMinute === 0
+                                ? 0
+                                : playerMinute.endMinute - playerMinute.startMinute + 1;
+                            }
+                          }
+                          
+                          const matchLosesActions = allActions.filter(a => {
+                            const isLoses = isLosesAction(a);
+                            return a.matchId === match.matchId &&
+                              a.senderId === (selectedPlayerForView || player?.id) &&
+                              isLoses;
+                          });
+                          
+                          const matchLoses = matchLosesActions.length;
+                          
+                          const matchName = match.isHome 
+                            ? `${match.opponent} (D)`
+                            : `${match.opponent} (W)`;
+                          const matchDate = new Date(match.date).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' });
+                          
+                          // Oblicz xT dla strat w tym meczu
+                          const matchXT = matchLosesActions.reduce((sum, action: any) => {
+                            // Używamy losesDefenseXT (wartość w obronie) jako xT
+                            const defenseXT = action.losesDefenseXT !== undefined
+                              ? action.losesDefenseXT
+                              : (() => {
+                                  const losesDefenseZone = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+                                  const losesZoneName = convertZoneToName(losesDefenseZone);
+                                  if (losesZoneName) {
+                                    const idx = zoneNameToIndex(losesZoneName);
+                                    if (idx !== null) return getXTValueForZone(idx);
+                                  }
+                                  return action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0);
+                                })();
+                            return sum + defenseXT;
+                          }, 0);
+                          
+                          return {
+                            matchId: match.matchId,
+                            matchName: `${matchDate} ${matchName}`,
+                            loses: matchLoses,
+                            xt: matchXT,
+                            minutes: minutes,
+                            losesPerMinute: minutes > 0 ? matchLoses / minutes : 0,
+                          };
+                        })
+                        .filter(m => m.minutes > 0)
+                        .sort((a, b) => {
+                          const matchA = filteredMatchesBySeason.find(m => m.matchId === a.matchId);
+                          const matchB = filteredMatchesBySeason.find(m => m.matchId === b.matchId);
+                          if (!matchA || !matchB) return 0;
+                          return new Date(matchA.date).getTime() - new Date(matchB.date).getTime();
+                        });
+
+                      const losesActions = allActions.filter((action: any) => {
+                        return isLosesAction(action) && action.senderId === (selectedPlayerForView || player?.id);
+                      });
+
+                      // Przygotuj dane dla wykresu minutowego (co 5 minut)
+                      const losesMinuteChartData = (() => {
+                          const intervals: { [key: number]: { count: number; xt: number } } = {};
+                          
+                          losesActions.forEach((action: any) => {
+                            const interval = Math.floor(action.minute / 5) * 5;
+                            if (!intervals[interval]) {
+                              intervals[interval] = { count: 0, xt: 0 };
+                            }
+                            intervals[interval].count += 1;
+                            // Oblicz xT dla straty - używamy losesDefenseXT (wartość w obronie)
+                            const defenseXT = action.losesDefenseXT !== undefined
+                              ? action.losesDefenseXT
+                              : (() => {
+                                  const losesDefenseZone = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+                                  const losesZoneName = convertZoneToName(losesDefenseZone);
+                                  if (losesZoneName) {
+                                    const idx = zoneNameToIndex(losesZoneName);
+                                    if (idx !== null) return getXTValueForZone(idx);
+                                  }
+                                  return action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0);
+                                })();
+                            intervals[interval].xt += defenseXT;
+                          });
+
+                          const data: any[] = [];
+                          for (let i = 0; i <= 90; i += 5) {
+                            const intervalData = intervals[i] || { count: 0, xt: 0 };
+                            data.push({
+                              minute: `${i}-${i + 5}`,
+                              minuteValue: i,
+                              loses: intervalData.count,
+                              xt: intervalData.xt
+                            });
+                          }
+
+                          return data;
+                        })();
+
+                        if (losesMatchData.length > 0) {
+                          return (
+                            <>
+                              <div className={styles.detailsSection}>
+                                <div className={styles.chartHeader}>
+                                  <h4>Wykres mecz po meczu</h4>
+                                </div>
+                                <div className={styles.matchChartContainer}>
+                                  <ResponsiveContainer width="100%" height={300}>
+                                    <LineChart data={losesMatchData} margin={{ top: 10, right: 20, left: 10, bottom: 60 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                                    <XAxis 
+                                      dataKey="matchName" 
+                                      angle={-45}
+                                      textAnchor="end"
+                                      height={80}
+                                      interval={0}
+                                      tick={{ fontSize: 11 }}
+                                      stroke="#6b7280"
+                                    />
+                                    <YAxis 
+                                      label={{ 
+                                        value: 'Straty / xT', 
+                                        angle: -90, 
+                                        position: 'insideLeft', 
+                                        style: { textAnchor: 'middle' } 
+                                      }}
+                                      stroke="#6b7280"
+                                      tick={(props) => {
+                                        const { x, y, payload } = props;
+                                        const dataPoint = losesMatchData[props.index];
+                                        const displayText = dataPoint 
+                                          ? `${dataPoint.loses} / ${dataPoint.xt?.toFixed(2) || '0.00'}` 
+                                          : `${payload.value}`;
+                                        return (
+                                          <g transform={`translate(${x},${y})`}>
+                                            <text x={0} y={0} dy={4} textAnchor="end" fill="#6b7280" fontSize={11}>
+                                              {displayText}
+                                            </text>
+                                          </g>
+                                        );
+                                      }}
+                                    />
+                                    <Tooltip 
+                                      content={({ active, payload }) => {
+                                        if (active && payload && payload.length) {
+                                          const data = payload[0].payload;
+                                          return (
+                                            <div className={styles.chartTooltip}>
+                                              <p><strong>{data.matchName}</strong></p>
+                                              <p>Straty: {data.loses}</p>
+                                              <p>xT: {data.xt?.toFixed(3) || '0.000'}</p>
+                                              <p>Minuty: {data.minutes}</p>
+                                              <p>Straty/minutę: {data.losesPerMinute.toFixed(3)}</p>
+                                            </div>
+                                          );
+                                        }
+                                        return null;
+                                      }}
+                                    />
+                                    <Line 
+                                      type="monotone" 
+                                      dataKey="loses" 
+                                      stroke="#3b82f6" 
+                                      strokeWidth={2}
+                                      dot={{ 
+                                        fill: '#3b82f6', 
+                                        strokeWidth: 1, 
+                                        r: 4, 
+                                        stroke: '#fff'
+                                      }}
+                                      activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: '#3b82f6' }}
+                                      name="Straty"
+                                      animationDuration={800}
+                                      animationEasing="ease-out"
+                                    />
+                                    <Line 
+                                      type="monotone" 
+                                      dataKey="xt" 
+                                      stroke="#10b981" 
+                                      strokeWidth={2}
+                                      dot={{ 
+                                        fill: '#10b981', 
+                                        strokeWidth: 1, 
+                                        r: 4, 
+                                        stroke: '#fff'
+                                      }}
+                                      activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: '#10b981' }}
+                                      name="xT"
+                                      animationDuration={800}
+                                      animationEasing="ease-out"
+                                    />
+                                    </LineChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              </div>
+                              {losesActions.length > 0 && (
+                                <div className={styles.detailsSection}>
+                                  <div className={styles.chartHeader}>
+                                    <h4>Wykres minutowy</h4>
+                                  </div>
+                                  <div className={styles.matchChartContainer}>
+                                    <ResponsiveContainer width="100%" height={280}>
+                                      <BarChart data={losesMinuteChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" opacity={0.5} vertical={false} />
+                                  <XAxis 
+                                    dataKey="minute" 
+                                    label={{ value: 'Przedział minutowy', position: 'insideBottom', offset: -5 }}
+                                    tick={{ fontSize: 11, fill: '#6b7280' }}
+                                    angle={-45}
+                                    textAnchor="end"
+                                    height={60}
+                                    axisLine={{ stroke: '#e5e7eb' }}
+                                  />
+                                  <YAxis 
+                                    yAxisId="left"
+                                    label={{ value: 'Straty', angle: -90, position: 'insideLeft', style: { fill: '#3b82f6' } }}
+                                    tick={{ fontSize: 12, fill: '#6b7280' }}
+                                    axisLine={{ stroke: '#e5e7eb' }}
+                                  />
+                                  <YAxis 
+                                    yAxisId="right"
+                                    orientation="right"
+                                    label={{ value: 'xT', angle: 90, position: 'insideRight', style: { fill: '#10b981' } }}
+                                    tick={{ fontSize: 12, fill: '#6b7280' }}
+                                    axisLine={{ stroke: '#e5e7eb' }}
+                                  />
+                                  <Tooltip 
+                                    contentStyle={{
+                                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                                      border: '1px solid #e5e7eb',
+                                      borderRadius: '8px',
+                                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                      padding: '12px'
+                                    }}
+                                    content={({ active, payload }) => {
+                                      if (active && payload && payload.length) {
+                                        const data = payload[0].payload;
+                                        return (
+                                          <div className={styles.chartTooltip}>
+                                            <p className={styles.tooltipLabel} style={{ marginBottom: '8px', fontWeight: 600, color: '#1f2937' }}>
+                                              {`${data.minute} min`}
+                                            </p>
+                                            <p style={{ color: '#3b82f6', margin: '4px 0', fontSize: '14px' }}>
+                                              <strong>Straty:</strong> {data.loses}
+                                            </p>
+                                            <p style={{ color: '#10b981', margin: '4px 0', fontSize: '14px' }}>
+                                              <strong>xT:</strong> {data.xt?.toFixed(3) || '0.000'}
+                                            </p>
+                                          </div>
+                                        );
+                                      }
+                                      return null;
+                                    }}
+                                  />
+                                  <Bar 
+                                    yAxisId="left"
+                                    dataKey="loses" 
+                                    fill="#3b82f6"
+                                    radius={[8, 8, 0, 0]}
+                                    name="Straty"
+                                  />
+                                  <Bar 
+                                    yAxisId="right"
+                                    dataKey="xt" 
+                                    fill="#10b981"
+                                    radius={[8, 8, 0, 0]}
+                                    name="xT"
+                                  />
+                                      </BarChart>
+                                    </ResponsiveContainer>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          );
+                        }
+                        
+                        if (losesActions.length > 0) {
+                          return (
+                            <div className={styles.detailsSection}>
+                              <div className={styles.chartHeader}>
+                                <h4>Wykres minutowy</h4>
+                              </div>
+                              <div className={styles.matchChartContainer}>
+                                <ResponsiveContainer width="100%" height={280}>
+                                  <BarChart data={losesMinuteChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" opacity={0.5} vertical={false} />
+                                    <XAxis 
+                                      dataKey="minute" 
+                                      label={{ value: 'Przedział minutowy', position: 'insideBottom', offset: -5 }}
+                                      tick={{ fontSize: 11, fill: '#6b7280' }}
+                                      angle={-45}
+                                      textAnchor="end"
+                                      height={60}
+                                      axisLine={{ stroke: '#e5e7eb' }}
+                                    />
+                                    <YAxis 
+                                      yAxisId="left"
+                                      label={{ value: 'Straty', angle: -90, position: 'insideLeft', style: { fill: '#3b82f6' } }}
+                                      tick={{ fontSize: 12, fill: '#6b7280' }}
+                                      axisLine={{ stroke: '#e5e7eb' }}
+                                    />
+                                    <YAxis 
+                                      yAxisId="right"
+                                      orientation="right"
+                                      label={{ value: 'xT', angle: 90, position: 'insideRight', style: { fill: '#10b981' } }}
+                                      tick={{ fontSize: 12, fill: '#6b7280' }}
+                                      axisLine={{ stroke: '#e5e7eb' }}
+                                    />
+                                    <Tooltip 
+                                      contentStyle={{
+                                        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                                        border: '1px solid #e5e7eb',
+                                        borderRadius: '8px',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                        padding: '12px'
+                                      }}
+                                      content={({ active, payload }) => {
+                                        if (active && payload && payload.length) {
+                                          const data = payload[0].payload;
+                                          return (
+                                            <div className={styles.chartTooltip}>
+                                              <p className={styles.tooltipLabel} style={{ marginBottom: '8px', fontWeight: 600, color: '#1f2937' }}>
+                                                {`${data.minute} min`}
+                                              </p>
+                                              <p style={{ color: '#3b82f6', margin: '4px 0', fontSize: '14px' }}>
+                                                <strong>Straty:</strong> {data.loses}
+                                              </p>
+                                              <p style={{ color: '#10b981', margin: '4px 0', fontSize: '14px' }}>
+                                                <strong>xT:</strong> {data.xt?.toFixed(3) || '0.000'}
+                                              </p>
+                                            </div>
+                                          );
+                                        }
+                                        return null;
+                                      }}
+                                    />
+                                    <Bar 
+                                      yAxisId="left"
+                                      dataKey="loses" 
+                                      fill="#3b82f6"
+                                      radius={[8, 8, 0, 0]}
+                                      name="Straty"
+                                    />
+                                    <Bar 
+                                      yAxisId="right"
+                                      dataKey="xt" 
+                                      fill="#10b981"
+                                      radius={[8, 8, 0, 0]}
+                                      name="xT"
+                                    />
+                                  </BarChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                    })()}
                   </div>
                 )}
               </div>

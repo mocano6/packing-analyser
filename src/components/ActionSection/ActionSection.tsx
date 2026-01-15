@@ -56,6 +56,8 @@ export interface ActionSectionProps {
   setIsGoal: React.Dispatch<React.SetStateAction<boolean>>;
   isPenaltyAreaEntry: boolean;
   setIsPenaltyAreaEntry: React.Dispatch<React.SetStateAction<boolean>>;
+  isControversial: boolean;
+  setIsControversial: React.Dispatch<React.SetStateAction<boolean>>;
   isSecondHalf: boolean;
   setIsSecondHalf: React.Dispatch<React.SetStateAction<boolean>>;
   isBelow8sActive: boolean;
@@ -145,6 +147,8 @@ const ActionSection = memo(function ActionSection({
   setIsGoal,
   isPenaltyAreaEntry,
   setIsPenaltyAreaEntry,
+  isControversial,
+  setIsControversial,
   isSecondHalf,
   setIsSecondHalf,
   isBelow8sActive,
@@ -583,6 +587,8 @@ const ActionSection = memo(function ActionSection({
           selectedMatchId={undefined}
           onMatchSelect={undefined}
           matchInfo={matchInfo}
+        isControversial={isControversial}
+        onControversialToggle={() => setIsControversial(!isControversial)}
         />
       ) : actionCategory === "regain" ? (
         <RegainActionModal
@@ -732,6 +738,8 @@ const ActionSection = memo(function ActionSection({
           // Nowy prop dla liczby zawodników przeciwnika, którzy opuścili boisko
           opponentsLeftField={opponentsLeftField}
           onOpponentsLeftFieldChange={setOpponentsLeftField}
+          isControversial={isControversial}
+          onControversialToggle={() => setIsControversial(!isControversial)}
         />
       ) : actionCategory === "loses" ? (
         <LosesActionModal
@@ -911,6 +919,8 @@ const ActionSection = memo(function ActionSection({
           // Nowy prop dla liczby zawodników przeciwnika, którzy opuścili boisko
           opponentsLeftField={opponentsLeftField}
           onOpponentsLeftFieldChange={setOpponentsLeftField}
+          isControversial={isControversial}
+          onControversialToggle={() => setIsControversial(!isControversial)}
         />
       ) : (
         <ActionModal
@@ -1045,6 +1055,8 @@ const ActionSection = memo(function ActionSection({
           onReset={resetActionState}
           onResetPoints={resetActionPoints}
           matchInfo={matchInfo}
+          isControversial={isControversial}
+          onControversialToggle={() => setIsControversial(!isControversial)}
           // Nowe propsy dla trybu unpacking
           mode={mode}
           onModeChange={onModeChange}

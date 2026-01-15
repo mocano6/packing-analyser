@@ -77,6 +77,8 @@ interface RegainActionModalProps {
   // Nowy prop dla liczby zawodników przeciwnika, którzy opuścili boisko
   opponentsLeftField: number;
   onOpponentsLeftFieldChange: (count: number) => void;
+  isControversial: boolean;
+  onControversialToggle: () => void;
 }
 
 const RegainActionModal: React.FC<RegainActionModalProps> = ({
@@ -147,6 +149,8 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   // Nowy prop dla liczby zawodników przeciwnika, którzy opuścili boisko
   opponentsLeftField,
   onOpponentsLeftFieldChange,
+  isControversial,
+  onControversialToggle,
 }) => {
   const clamp0to10 = (value: number) => Math.max(0, Math.min(10, value));
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
@@ -341,7 +345,12 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
 
 
   const handleShotToggle = () => {
-    onShotToggle(!isShot);
+    if (isShot) {
+      onShotToggle(false);
+      onGoalToggle(false);
+      return;
+    }
+    onShotToggle(true);
   };
 
   const handleGoalToggle = () => {
@@ -694,13 +703,13 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
               <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
                 {/* Przycisk "Poniżej 8s" */}
                 <button
-                  className={`${styles.compactButton} ${
+                  className={`${styles.compactButton} ${styles.tooltipTrigger} ${
                     isBelow8sActive ? styles.activeButton : ""
                   }`}
                   onClick={onBelow8sToggle}
                   aria-pressed={isBelow8sActive}
                   type="button"
-                  title="Poniżej 8 sekund"
+                  data-tooltip={`8 sekund od jego rozpoczęcia (1T):\n• wejść w pole karne rywala\n• oddać strzał na bramkę lub strzelić gola`}
                 >
                   <span className={styles.compactLabel}>Poniżej 8s</span>
                 </button>
@@ -747,7 +756,10 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
               </div>
             </div>
             {/* Box 2: Sekcja z przyciskami "przed piłką" - ułożone pionowo */}
-            <div className={styles.verticalButtonsContainer}>
+            <div
+              className={`${styles.verticalButtonsContainer} ${styles.tooltipTrigger}`}
+              data-tooltip="Liczymy zawodników wyraźnie do bramki przeciwnika."
+            >
               {/* Przycisk "Liczba partnerów przed piłką" */}
               <div 
                 className={styles.compactPointsButton}
@@ -756,7 +768,6 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                   e.stopPropagation();
                   onPlayersBehindBallChange(clamp0to10(playersBehindBall + 1));
                 }}
-                title="Kliknij, aby dodać 1 partnera (max 10)"
                 style={{ cursor: 'pointer' }}
               >
                 <span className={styles.compactLabel}>Partner przed piłką</span>
@@ -809,7 +820,6 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                   e.stopPropagation();
                   onOpponentsBehindBallChange(clamp0to10(opponentsBehindBall + 1));
                 }}
-                title="Kliknij, aby dodać 1 przeciwnika (max 10)"
                 style={{ cursor: 'pointer' }}
               >
                 <span className={styles.compactLabel}>Przeciwnik przed piłką (bez bramkarza)</span>
@@ -892,6 +902,16 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
           
           {/* Przyciski kontrolne z polem minuty pomiędzy */}
           <div className={styles.buttonGroup}>
+            <button
+              type="button"
+              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${isControversial ? styles.controversyButtonActive : ""}`}
+              onClick={onControversialToggle}
+              aria-pressed={isControversial}
+              aria-label="Oznacz jako kontrowersja"
+              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
+            >
+              !
+            </button>
             <button
               className={styles.cancelButton}
               onClick={handleCancel}
