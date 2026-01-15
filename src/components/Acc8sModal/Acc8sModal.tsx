@@ -35,6 +35,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     passingPlayerIds: [] as string[],
     isControversial: false,
   });
+  const isEditMode = Boolean(editingEntry);
 
   const filteredPlayers = useMemo(() => {
     if (!matchInfo) return players;
@@ -127,6 +128,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
 
   // Funkcja do obsługi zmiany połowy
   const handleSecondHalfToggle = (value: boolean) => {
+    if (isEditMode) return;
     setFormData((prev) => {
       const newMinute = value 
         ? Math.max(46, prev.minute) 
@@ -142,6 +144,9 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const lockedMinute = isEditMode ? (editingEntry?.minute ?? formData.minute) : formData.minute;
+    const lockedIsSecondHalf = isEditMode ? (editingEntry?.isSecondHalf ?? formData.isSecondHalf) : formData.isSecondHalf;
     
     // Pobierz czas wideo z localStorage (tak jak w packingu)
     const videoTimestamp = typeof window !== 'undefined' 
@@ -167,19 +172,19 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     console.log('Acc8sModal handleSubmit - editingEntry?.videoTimestamp:', editingEntry?.videoTimestamp);
     
     // Przy edycji zachowaj istniejący videoTimestamp, jeśli nowy nie jest dostępny
-    const finalVideoTimestamp = isValidTimestamp 
-      ? parsedVideoTimestamp 
-      : (editingEntry?.videoTimestamp);
+    const finalVideoTimestamp = isEditMode
+      ? editingEntry?.videoTimestamp
+      : (isValidTimestamp ? parsedVideoTimestamp : undefined);
 
-    const finalVideoTimestampRaw = isValidTimestampRaw
-      ? parsedVideoTimestampRaw
-      : (editingEntry as any)?.videoTimestampRaw;
+    const finalVideoTimestampRaw = isEditMode
+      ? (editingEntry as any)?.videoTimestampRaw
+      : (isValidTimestampRaw ? parsedVideoTimestampRaw : undefined);
 
     const entryData = {
       matchId,
       teamId: matchInfo?.team || "",
-      minute: formData.minute,
-      isSecondHalf: formData.isSecondHalf,
+      minute: lockedMinute,
+      isSecondHalf: lockedIsSecondHalf,
       teamContext: "attack" as const, // Zawsze atak
       isShotUnder8s: formData.isShotUnder8s,
       isPKEntryUnder8s: formData.isPKEntryUnder8s,
@@ -232,6 +237,8 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
                 type="button"
                 className={`${styles.halfButton} ${!formData.isSecondHalf ? styles.activeHalf : ''}`}
                 onClick={() => handleSecondHalfToggle(false)}
+                disabled={isEditMode}
+                aria-disabled={isEditMode}
               >
                 P1
               </button>
@@ -239,6 +246,8 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
                 type="button"
                 className={`${styles.halfButton} ${formData.isSecondHalf ? styles.activeHalf : ''}`}
                 onClick={() => handleSecondHalfToggle(true)}
+                disabled={isEditMode}
+                aria-disabled={isEditMode}
               >
                 P2
               </button>
@@ -322,6 +331,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
                     setFormData({...formData, minute: newMinute});
                   }}
                   title="Zmniejsz minutę"
+                  disabled={isEditMode}
                 >
                   −
                 </button>
@@ -340,6 +350,8 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
                   max={formData.isSecondHalf ? 130 : 65}
                   className={styles.minuteField}
                   required
+                  readOnly={isEditMode}
+                  disabled={isEditMode}
                 />
                 <button
                   type="button"
@@ -352,6 +364,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
                     setFormData({...formData, minute: newMinute});
                   }}
                   title="Zwiększ minutę"
+                  disabled={isEditMode}
                 >
                   +
                 </button>

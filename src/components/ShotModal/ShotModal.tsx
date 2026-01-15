@@ -60,6 +60,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     assistantName: "",
     isControversial: false,
   });
+  const isEditMode = Boolean(editingShot);
 
   // Filtrowanie zawodników grających w danym meczu (podobnie jak w ActionModal)
   const filteredPlayers = useMemo(() => {
@@ -408,6 +409,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     }
 
     const finalXG = calculateFinalXG();
+    const lockedMinute = editingShot ? editingShot.minute : formData.minute;
     
     onSave({
       x: editingShot ? editingShot.x : x,
@@ -415,7 +417,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       xG: finalXG / 100, // Konwersja z procentów na ułamek
       playerId: formData.playerId,
       playerName: formData.playerName,
-      minute: formData.minute,
+      minute: lockedMinute,
       isGoal: formData.shotType === "goal",
       bodyPart: formData.bodyPart,
       shotType: formData.shotType === "goal" ? "on_target" : formData.shotType,
@@ -997,6 +999,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                       setFormData({...formData, minute: newMinute});
                     }}
                     title="Zmniejsz minutę"
+                    disabled={isEditMode}
                   >
                     −
                   </button>
@@ -1012,6 +1015,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     max="120"
                     className={styles.minuteField}
                     required
+                    readOnly={isEditMode}
+                    disabled={isEditMode}
                   />
                   <button
                     type="button"
@@ -1021,6 +1026,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                       setFormData({...formData, minute: newMinute});
                     }}
                     title="Zwiększ minutę"
+                    disabled={isEditMode}
                   >
                     +
                   </button>

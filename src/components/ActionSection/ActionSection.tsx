@@ -426,7 +426,7 @@ const ActionSection = memo(function ActionSection({
       {/* Tekst informacyjny dla regain i loses */}
       {(actionCategory === "regain" || actionCategory === "loses") && (
         <div className={styles.defenseInfo}>
-          <p>⚠️ Pola kolorowe to bramka, której bronisz</p>
+          <p>⚠️ Pola kolorowe to bramka, którą atakujesz</p>
         </div>
       )}
       {/* Przycisk scrollowania do wideo YouTube - fixed w prawym dolnym rogu */}

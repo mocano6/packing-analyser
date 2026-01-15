@@ -329,6 +329,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
   if (!isOpen) return null;
 
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isEditMode) return;
     onMinuteChange(parseInt(e.target.value) || 0);
   };
 
@@ -429,6 +430,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
   };
 
   const handleSecondHalfToggle = (value: boolean) => {
+    if (isEditMode) return;
     onSecondHalfToggle(value);
     
     // Jeśli ustawiamy wartości automatycznie z wideo, nie zmieniajmy minuty
@@ -576,6 +578,8 @@ const ActionModal: React.FC<ActionModalProps> = ({
                     type="button"
                     className={`${styles.halfButton} ${!isSecondHalf ? styles.activeHalf : ''}`}
                     onClick={() => handleSecondHalfToggle(false)}
+                    disabled={isEditMode}
+                    aria-disabled={isEditMode}
                   >
                     P1
                   </button>
@@ -583,6 +587,8 @@ const ActionModal: React.FC<ActionModalProps> = ({
                     type="button"
                     className={`${styles.halfButton} ${isSecondHalf ? styles.activeHalf : ''}`}
                     onClick={() => handleSecondHalfToggle(true)}
+                    disabled={isEditMode}
+                    aria-disabled={isEditMode}
                   >
                     P2
                   </button>
@@ -929,6 +935,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                     onMinuteChange(newMinute);
                   }}
                   title="Zmniejsz minutę"
+                  disabled={isEditMode}
                 >
                   −
                 </button>
@@ -940,6 +947,8 @@ const ActionModal: React.FC<ActionModalProps> = ({
                   min={isSecondHalf ? 46 : 1}
                   max={isSecondHalf ? 130 : 65}
                   className={styles.minuteField}
+                  readOnly={isEditMode}
+                  disabled={isEditMode}
                 />
                 <button
                   type="button"
@@ -952,6 +961,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                     onMinuteChange(newMinute);
                   }}
                   title="Zwiększ minutę"
+                  disabled={isEditMode}
                 >
                   +
                 </button>

@@ -737,15 +737,17 @@ export default function Page() {
       const parsedVideoTimestampRaw = videoTimestampRaw ? parseInt(videoTimestampRaw) : undefined;
       const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw > 0;
       
+      const isEditMode = Boolean(shotModalData?.editingShot);
+      
       // Dodaj videoTimestamp do danych strzału
-      // Przy edycji zachowaj istniejący videoTimestamp, jeśli nowy nie jest dostępny
-      const finalVideoTimestamp = isValidTimestamp 
-        ? parsedVideoTimestamp 
-        : (shotModalData?.editingShot?.videoTimestamp);
+      // Przy edycji zawsze zachowaj istniejący timestamp
+      const finalVideoTimestamp = isEditMode
+        ? shotModalData?.editingShot?.videoTimestamp
+        : (isValidTimestamp ? parsedVideoTimestamp : undefined);
 
-      const finalVideoTimestampRaw = isValidTimestampRaw
-        ? parsedVideoTimestampRaw
-        : (shotModalData?.editingShot as any)?.videoTimestampRaw;
+      const finalVideoTimestampRaw = isEditMode
+        ? (shotModalData?.editingShot as any)?.videoTimestampRaw
+        : (isValidTimestampRaw ? parsedVideoTimestampRaw : undefined);
       
       const shotDataWithTimestamp = {
         ...shotData,
@@ -2253,17 +2255,26 @@ export default function Page() {
       return action;
     }
 
-    // Dla regain: sprawdź czy akcja już ma wszystkie potrzebne wartości w nowym formacie
+    // Dla regain: jeśli akcja ma już komplet nowych pól, nie przemapowuj niczego
     if (actionCategory === "regain") {
-      if (action.regainDefenseXT !== undefined && action.regainAttackXT !== undefined && action.regainAttackZone && action.regainDefenseZone && action.isAttack !== undefined) {
-        // Konwertuj stare akcje do nowego formatu
-        return convertOldRegainAction(action);
+      if (
+        action.regainDefenseXT !== undefined &&
+        action.regainAttackXT !== undefined &&
+        action.regainAttackZone &&
+        action.regainDefenseZone &&
+        action.isAttack !== undefined
+      ) {
+        return action;
       }
     } else if (actionCategory === "loses") {
-      // Dla loses: sprawdź czy akcja już ma wszystkie potrzebne wartości w nowym formacie
-      if (action.losesDefenseXT !== undefined && action.losesAttackXT !== undefined && action.losesAttackZone && action.losesDefenseZone) {
-        // Konwertuj stare akcje do nowego formatu
-        return convertOldLosesAction(action);
+      // Dla loses: jeśli akcja ma już komplet nowych pól, nie przemapowuj niczego
+      if (
+        action.losesDefenseXT !== undefined &&
+        action.losesAttackXT !== undefined &&
+        action.losesAttackZone &&
+        action.losesDefenseZone
+      ) {
+        return action;
       }
     }
 
@@ -2395,18 +2406,22 @@ export default function Page() {
 
       const db = getDB();
 
+      // Zablokuj czas akcji podczas edycji (minuta/połowa/timestamp)
+      const originalAction = actions.find(a => a.id === editedAction.id);
+      const lockedEditedAction = originalAction ? {
+        ...editedAction,
+        minute: originalAction.minute,
+        isSecondHalf: originalAction.isSecondHalf,
+        videoTimestamp: originalAction.videoTimestamp,
+        videoTimestampRaw: (originalAction as any)?.videoTimestampRaw
+      } : editedAction;
+      
       // Określamy kategorię akcji i odpowiednią kolekcję
-      const actionCategory = getActionCategory(editedAction);
+      const actionCategory = getActionCategory(lockedEditedAction);
       
-      // Oblicz opposite wartości dla regain/loses jeśli brakuje
-      let actionWithOppositeValues = calculateOppositeValues(editedAction);
-      
-      // Dla regain i loses: konwertuj stare akcje do nowego formatu
-      if (actionCategory === "regain") {
-        actionWithOppositeValues = convertOldRegainAction(actionWithOppositeValues);
-      } else if (actionCategory === "loses") {
-        actionWithOppositeValues = convertOldLosesAction(actionWithOppositeValues);
-      }
+      // Przy edycji NIE przemapowujemy starych akcji na nowe i nie przeliczamy opposite
+      // Zachowujemy dokładnie to, co było zapisane wcześniej.
+      const actionWithOppositeValues = lockedEditedAction;
       let collectionField: string;
       if (actionCategory === "regain") {
         collectionField = "actions_regain";
@@ -2419,7 +2434,6 @@ export default function Page() {
       }
 
       // Znajdź oryginalną akcję, żeby sprawdzić czy zmieniał się mecz
-      const originalAction = actions.find(a => a.id === editedAction.id);
       const originalMatchId = originalAction?.matchId;
       
       // Określamy kategorię oryginalnej akcji

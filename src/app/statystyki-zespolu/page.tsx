@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Action, TeamInfo, Shot } from "@/types";
-import { getOppositeXTValueForZone, getZoneName, zoneNameToIndex, zoneNameToString } from "@/constants/xtValues";
+import { getOppositeXTValueForZone, getZoneName, getXTValueForZone, zoneNameToIndex, zoneNameToString } from "@/constants/xtValues";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
@@ -1330,6 +1330,137 @@ export default function StatystykiZespoluPage() {
     return result;
   }, [derivedRegainActions]);
 
+  const regainsTimelineXT = useMemo(() => {
+    if (derivedRegainActions.length === 0) return [];
+    const intervals: { [key: number]: { regains: number; xtAttack: number; xtDefense: number } } = {};
+    derivedRegainActions.forEach(action => {
+      const minute = typeof action.minute === 'number' ? action.minute : Number(action.minute);
+      if (!Number.isFinite(minute)) return;
+      const interval = Math.floor(minute / 5) * 5;
+      if (!intervals[interval]) {
+        intervals[interval] = { regains: 0, xtAttack: 0, xtDefense: 0 };
+      }
+      const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+      const defenseXT = action.regainDefenseXT !== undefined
+        ? action.regainDefenseXT
+        : (action.xTValueEnd ?? action.xTValueStart ?? 0);
+      const attackXT = action.regainAttackXT !== undefined
+        ? action.regainAttackXT
+        : (action.oppositeXT ?? (defenseZoneName && zoneNameToIndex(defenseZoneName) !== null
+          ? getOppositeXTValueForZone(zoneNameToIndex(defenseZoneName)!)
+          : 0));
+      intervals[interval].regains += 1;
+      intervals[interval].xtAttack += attackXT;
+      intervals[interval].xtDefense += defenseXT;
+    });
+    const data: { minute: string; regains: number; xtAttack: number; xtDefense: number }[] = [];
+    for (let i = 0; i <= 90; i += 5) {
+      const intervalData = intervals[i] || { regains: 0, xtAttack: 0, xtDefense: 0 };
+      data.push({
+        minute: `${i}-${i + 5}`,
+        regains: intervalData.regains,
+        xtAttack: intervalData.xtAttack,
+        xtDefense: intervalData.xtDefense,
+      });
+    }
+    return data;
+  }, [derivedRegainActions]);
+
+  const teamLosesStats = useMemo(() => {
+    if (derivedLosesActions.length === 0) {
+      return {
+        losesXTInAttack: 0,
+        losesXTInDefense: 0,
+        losesAttackCount: 0,
+        losesDefenseCount: 0,
+      };
+    }
+
+    let losesXTInAttack = 0;
+    let losesXTInDefense = 0;
+    let losesAttackCount = 0;
+    let losesDefenseCount = 0;
+
+    derivedLosesActions.forEach(action => {
+      const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+
+      const defenseXT = action.losesDefenseXT !== undefined
+        ? action.losesDefenseXT
+        : (() => {
+            const idx = defenseZoneName ? zoneNameToIndex(defenseZoneName) : null;
+            if (idx !== null) return getXTValueForZone(idx);
+            return action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0);
+          })();
+
+      const attackXT = action.losesAttackXT !== undefined
+        ? action.losesAttackXT
+        : (action.oppositeXT !== undefined
+          ? action.oppositeXT
+          : (() => {
+              const idx = defenseZoneName ? zoneNameToIndex(defenseZoneName) : null;
+              return idx !== null ? getOppositeXTValueForZone(idx) : 0;
+            })());
+
+      losesXTInDefense += defenseXT;
+      losesDefenseCount += 1;
+      losesXTInAttack += attackXT;
+      losesAttackCount += 1;
+    });
+
+    return {
+      losesXTInAttack,
+      losesXTInDefense,
+      losesAttackCount,
+      losesDefenseCount,
+    };
+  }, [derivedLosesActions]);
+
+  const losesTimelineXT = useMemo(() => {
+    if (derivedLosesActions.length === 0) return [];
+    const intervals: { [key: number]: { loses: number; xtAttack: number; xtDefense: number } } = {};
+    derivedLosesActions.forEach(action => {
+      const minute = typeof action.minute === 'number' ? action.minute : Number(action.minute);
+      if (!Number.isFinite(minute)) return;
+      const interval = Math.floor(minute / 5) * 5;
+      if (!intervals[interval]) {
+        intervals[interval] = { loses: 0, xtAttack: 0, xtDefense: 0 };
+      }
+      const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+      const defenseXT = action.losesDefenseXT !== undefined
+        ? action.losesDefenseXT
+        : (() => {
+            const idx = defenseZoneName ? zoneNameToIndex(defenseZoneName) : null;
+            if (idx !== null) return getXTValueForZone(idx);
+            return action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0);
+          })();
+      const attackXT = action.losesAttackXT !== undefined
+        ? action.losesAttackXT
+        : (action.oppositeXT !== undefined
+          ? action.oppositeXT
+          : (() => {
+              const idx = defenseZoneName ? zoneNameToIndex(defenseZoneName) : null;
+              return idx !== null ? getOppositeXTValueForZone(idx) : 0;
+            })());
+      intervals[interval].loses += 1;
+      intervals[interval].xtAttack += attackXT;
+      intervals[interval].xtDefense += defenseXT;
+    });
+    const data: { minute: string; loses: number; xtAttack: number; xtDefense: number }[] = [];
+    for (let i = 0; i <= 90; i += 5) {
+      const intervalData = intervals[i] || { loses: 0, xtAttack: 0, xtDefense: 0 };
+      data.push({
+        minute: `${i}-${i + 5}`,
+        loses: intervalData.loses,
+        xtAttack: intervalData.xtAttack,
+        xtDefense: intervalData.xtDefense,
+      });
+    }
+    return data;
+  }, [derivedLosesActions]);
+
   const losesContextStats = useMemo(() => {
     if (derivedLosesActions.length === 0) {
       return {
@@ -1359,6 +1490,43 @@ export default function StatystykiZespoluPage() {
       unknownCount,
     };
   }, [derivedLosesActions]);
+
+  // Wykres PK entries co 5 minut (zespół vs przeciwnik)
+  const pkEntriesTimeline = useMemo(() => {
+    if (!selectedMatch || allPKEntries.length === 0) return [];
+
+    const intervals: { [key: number]: { team: number; opponent: number } } = {};
+    
+    allPKEntries.forEach((entry: any) => {
+      if (!entry || !entry.minute) return;
+      const minute = typeof entry.minute === 'number' ? entry.minute : Number(entry.minute);
+      if (!Number.isFinite(minute)) return;
+      
+      const interval = Math.floor(minute / 5) * 5;
+      if (!intervals[interval]) {
+        intervals[interval] = { team: 0, opponent: 0 };
+      }
+      
+      // teamContext: 'attack' = nasze wejścia, 'defense' = wejścia przeciwnika
+      const context = entry.teamContext ?? 'attack';
+      if (context === 'attack') {
+        intervals[interval].team += 1;
+      } else {
+        intervals[interval].opponent += 1;
+      }
+    });
+
+    const data: { minute: string; team: number; opponent: number }[] = [];
+    for (let i = 0; i <= 90; i += 5) {
+      const intervalData = intervals[i] || { team: 0, opponent: 0 };
+      data.push({
+        minute: `${i}-${i + 5}`,
+        team: intervalData.team,
+        opponent: intervalData.opponent,
+      });
+    }
+    return data;
+  }, [selectedMatch, allPKEntries]);
 
   const teamRegainContext = teamRegainAttackDefenseMode === "attack"
     ? {
@@ -1942,6 +2110,39 @@ export default function StatystykiZespoluPage() {
                     )}
                   </div>
                 )}
+
+                {/* Wykres wejść w PK co 5 minut */}
+                <div className={styles.chartContainerInPanel}>
+                  <div className={styles.chartHeader}>
+                    <h3>Wejścia w PK co 5 minut</h3>
+                    <span className={styles.chartInfo}>
+                      Zespół vs Przeciwnik
+                    </span>
+                  </div>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={pkEntriesTimeline} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="minute" label={{ value: 'Przedział minutowy', position: 'insideBottom', offset: -5 }} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip
+                        content={({ payload, label }) => {
+                          if (!payload || payload.length === 0) return null;
+                          const data = payload[0]?.payload || {};
+                          return (
+                            <div className={styles.tooltip}>
+                              <p className={styles.tooltipLabel}>{`Przedział: ${label} min`}</p>
+                              <p><strong>Zespół:</strong> {data.team}</p>
+                              <p><strong>Przeciwnik:</strong> {data.opponent}</p>
+                            </div>
+                          );
+                        }}
+                      />
+                      <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
+                      <Bar dataKey="team" name="Zespół" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="opponent" name="Przeciwnik" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
             {expandedCategory === 'regains' && selectedMatchInfo && (
@@ -2005,15 +2206,17 @@ export default function StatystykiZespoluPage() {
                     </span>
                   </div>
                   <div className={styles.detailsRow}>
-                    <span className={styles.detailsLabel}>xT {teamRegainAttackDefenseMode === 'attack' ? 'W ATAKU' : 'W OBRONIE'}:</span>
+                    <span className={styles.detailsLabel}><span className={styles.preserveCase}>xT</span> W ATAKU:</span>
                     <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>
-                        {teamRegainAttackDefenseMode === 'attack'
-                          ? teamRegainStats.regainXTInAttack.toFixed(3)
-                          : teamRegainStats.regainXTInDefense.toFixed(3)}
-                      </span> <span className={styles.valueSecondary}>• {teamRegainAttackDefenseMode === 'attack'
-                          ? teamRegainStats.regainXTInAttackPerAction.toFixed(3)
-                          : teamRegainStats.regainXTInDefensePerAction.toFixed(3)} / akcję</span>
+                      <span className={styles.valueMain}>{teamRegainStats.regainXTInAttack.toFixed(3)}</span>
+                      <span className={styles.valueSecondary}>• {teamRegainStats.regainXTInAttackPerAction.toFixed(3)} / akcję</span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}><span className={styles.preserveCase}>xT</span> W OBRONIE:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{teamRegainStats.regainXTInDefense.toFixed(3)}</span>
+                      <span className={styles.valueSecondary}>• {teamRegainStats.regainXTInDefensePerAction.toFixed(3)} / akcję</span>
                     </span>
                   </div>
                   <div className={styles.detailsRow}>
@@ -2059,6 +2262,38 @@ export default function StatystykiZespoluPage() {
                   </div>
                 </div>
 
+                <div className={styles.chartContainerInPanel}>
+                  <div className={styles.chartHeader}>
+                    <h3>Przechwyty: liczba i <span className={styles.preserveCase}>xT</span> co 5 minut</h3>
+                  </div>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={regainsTimelineXT} margin={{ top: 10, right: 20, left: 0, bottom: 10 }} barGap={0} barCategoryGap="20%">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                      <XAxis dataKey="minute" tick={{ fontSize: 11 }} angle={-45} textAnchor="end" height={50} />
+                      <YAxis yAxisId="left" allowDecimals={false} tick={{ fontSize: 12 }} />
+                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          const data = payload[0].payload;
+                          return (
+                            <div className={styles.tooltip}>
+                              <p className={styles.tooltipLabel}>{`Przedział: ${data.minute} min`}</p>
+                              <p style={{ color: '#3b82f6' }}>Przechwyty: {data.regains}</p>
+                              <p style={{ color: '#ef4444' }}>xT w ataku: {data.xtAttack?.toFixed(3)}</p>
+                              <p style={{ color: '#6b7280' }}>xT w obronie: {data.xtDefense?.toFixed(3)}</p>
+                            </div>
+                          );
+                        }}
+                      />
+                      <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
+                      <Bar yAxisId="left" dataKey="regains" name="Przechwyty" fill="#3b82f6" radius={[4, 4, 0, 0]} opacity={0.85} />
+                      <Bar yAxisId="right" dataKey="xtAttack" name="xT w ataku" fill="#ef4444" radius={[4, 4, 0, 0]} opacity={0.85} />
+                      <Bar yAxisId="right" dataKey="xtDefense" name="xT w obronie" fill="#6b7280" radius={[4, 4, 0, 0]} opacity={0.85} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
                 {/* Wykres na dole - jak w oryginalnej wersji */}
                 <div className={styles.chartContainerInPanel}>
                   <div className={styles.chartHeader}>
@@ -2069,7 +2304,7 @@ export default function StatystykiZespoluPage() {
                   </div>
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={regainLosesTimeline} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
                       <XAxis dataKey="minute" label={{ value: 'Przedział minutowy', position: 'insideBottom', offset: -5 }} />
                       <YAxis allowDecimals={false} />
                       <Tooltip
@@ -2085,7 +2320,7 @@ export default function StatystykiZespoluPage() {
                           );
                         }}
                       />
-                      <Legend />
+                      <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
                       <Bar dataKey="regains" name="Przechwyty" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="loses" name="Straty" fill="#ef4444" radius={[4, 4, 0, 0]} />
                     </BarChart>
@@ -2136,6 +2371,24 @@ export default function StatystykiZespoluPage() {
                     </span>
                   </div>
                   <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}><span className={styles.preserveCase}>xT</span> W ATAKU:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{teamLosesStats.losesXTInAttack.toFixed(3)}</span>
+                      {teamLosesStats.losesAttackCount > 0 && (
+                        <span className={styles.valueSecondary}>• {(teamLosesStats.losesXTInAttack / teamLosesStats.losesAttackCount).toFixed(3)} / akcję</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}><span className={styles.preserveCase}>xT</span> W OBRONIE:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{teamLosesStats.losesXTInDefense.toFixed(3)}</span>
+                      {teamLosesStats.losesDefenseCount > 0 && (
+                        <span className={styles.valueSecondary}>• {(teamLosesStats.losesXTInDefense / teamLosesStats.losesDefenseCount).toFixed(3)} / akcję</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}>TEMPO STRAT:</span>
                     <span className={styles.detailsValue}>
                       {losesPer10.toFixed(2)}/10 min • {losesPer5.toFixed(2)}/5 min
@@ -2169,14 +2422,15 @@ export default function StatystykiZespoluPage() {
                 {/* Wykres na dole */}
                 <div className={styles.chartContainerInPanel}>
                   <div className={styles.chartHeader}>
-                    <h3>Straty co 5 minut</h3>
+                    <h3>Straty: liczba i <span className={styles.preserveCase}>xT</span> co 5 minut</h3>
                     <span className={styles.chartInfo}>{teamStats.totalLoses} strat</span>
                   </div>
                   <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={regainLosesTimeline} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="minute" label={{ value: 'Przedział minutowy', position: 'insideBottom', offset: -5 }} />
-                      <YAxis allowDecimals={false} />
+                    <BarChart data={losesTimelineXT} margin={{ top: 10, right: 20, left: 0, bottom: 0 }} barGap={0} barCategoryGap="20%">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                      <XAxis dataKey="minute" label={{ value: 'Przedział minutowy', position: 'insideBottom', offset: -5 }} tick={{ fontSize: 11 }} angle={-45} textAnchor="end" height={50} />
+                      <YAxis yAxisId="left" allowDecimals={false} />
+                      <YAxis yAxisId="right" orientation="right" />
                       <Tooltip
                         content={({ payload, label }) => {
                           if (!payload || payload.length === 0) return null;
@@ -2184,13 +2438,17 @@ export default function StatystykiZespoluPage() {
                           return (
                             <div className={styles.tooltip}>
                               <p className={styles.tooltipLabel}>{`Przedział: ${label} min`}</p>
-                              <p><strong>Straty:</strong> {data.loses}</p>
+                              <p style={{ color: '#3b82f6' }}><strong>Straty:</strong> {data.loses}</p>
+                              <p style={{ color: '#ef4444' }}><strong>xT w ataku:</strong> {data.xtAttack?.toFixed(3)}</p>
+                              <p style={{ color: '#6b7280' }}><strong>xT w obronie:</strong> {data.xtDefense?.toFixed(3)}</p>
                             </div>
                           );
                         }}
                       />
-                      <Legend />
-                      <Bar dataKey="loses" name="Straty" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                      <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
+                      <Bar yAxisId="left" dataKey="loses" name="Straty" fill="#3b82f6" radius={[4, 4, 0, 0]} opacity={0.85} />
+                      <Bar yAxisId="right" dataKey="xtAttack" name="xT w ataku" fill="#ef4444" radius={[4, 4, 0, 0]} opacity={0.85} />
+                      <Bar yAxisId="right" dataKey="xtDefense" name="xT w obronie" fill="#6b7280" radius={[4, 4, 0, 0]} opacity={0.85} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -2719,7 +2977,7 @@ export default function StatystykiZespoluPage() {
                                 return null;
                               }}
                             />
-                            <Legend />
+                            <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
                             <Line 
                               type="monotone" 
                               dataKey="teamXG" 
@@ -2779,18 +3037,18 @@ export default function StatystykiZespoluPage() {
                                 return null;
                               }}
                             />
-                            <Legend />
-                            <Bar 
-                              dataKey="teamXG" 
-                              fill="#3b82f6" 
-                              name="xG zespołu"
-                              radius={[4, 4, 0, 0]}
-                              opacity={0.8}
-                            />
+                            <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
                             <Bar 
                               dataKey="opponentXG" 
                               fill="#ef4444" 
                               name="xG przeciwnika"
+                              radius={[4, 4, 0, 0]}
+                              opacity={0.8}
+                            />
+                            <Bar 
+                              dataKey="teamXG" 
+                              fill="#3b82f6" 
+                              name="xG zespołu"
                               radius={[4, 4, 0, 0]}
                               opacity={0.8}
                             />
@@ -4113,7 +4371,7 @@ export default function StatystykiZespoluPage() {
                             tick={{ fontSize: 12 }}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend />
+                  <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
                   <Line 
                     yAxisId="left"
                     type="monotone" 
@@ -4152,7 +4410,7 @@ export default function StatystykiZespoluPage() {
                         <h3>Przyrost statystyk co 5 minut</h3>
           </div>
                       <ResponsiveContainer width="100%" height={250}>
-                        <ComposedChart data={teamChartData5Min} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
+                        <ComposedChart data={teamChartData5Min} margin={{ top: 10, right: 30, left: 20, bottom: 5 }} barGap={0} barCategoryGap="20%">
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
                           <XAxis 
                             dataKey="minute" 
@@ -4181,16 +4439,16 @@ export default function StatystykiZespoluPage() {
                                 return (
                                   <div className={styles.tooltip}>
                                     <p className={styles.tooltipLabel}>{`Przedział: ${data.minute} min`}</p>
-                                    <p style={{ color: '#8884d8' }}>xT: {data.xt?.toFixed(3)}</p>
-                                    <p style={{ color: '#82ca9d' }}>PxT: {data.pxt?.toFixed(2)}</p>
-                                    <p style={{ color: '#ffc658' }}>Packing: {data.packing?.toFixed(0)}</p>
+                                    <p style={{ color: '#ef4444' }}>xT: {data.xt?.toFixed(3)}</p>
+                                    <p style={{ color: '#3b82f6' }}>PxT: {data.pxt?.toFixed(2)}</p>
+                                    <p style={{ color: '#6b7280' }}>Packing: {data.packing?.toFixed(0)}</p>
                                   </div>
                                 );
                               }
                               return null;
                             }}
                           />
-                          <Legend />
+                          <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
                           <Bar 
                             yAxisId="left"
                             dataKey="pxt" 
@@ -4202,7 +4460,7 @@ export default function StatystykiZespoluPage() {
                           <Bar 
                             yAxisId="left"
                             dataKey="xt" 
-                            fill="#8b5cf6" 
+                            fill="#ef4444" 
                             name="xT"
                             radius={[4, 4, 0, 0]}
                             opacity={0.8}
@@ -4210,7 +4468,7 @@ export default function StatystykiZespoluPage() {
                           <Bar 
                             yAxisId="right"
                             dataKey="packing" 
-                            fill="#ec4899" 
+                            fill="#6b7280" 
                             name="Packing"
                             radius={[4, 4, 0, 0]}
                             opacity={0.8}

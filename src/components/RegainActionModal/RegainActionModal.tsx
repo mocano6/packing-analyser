@@ -311,6 +311,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   if (!isOpen) return null;
 
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isEditMode) return;
     onMinuteChange(parseInt(e.target.value) || 0);
   };
 
@@ -362,6 +363,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   };
 
   const handleSecondHalfToggle = (value: boolean) => {
+    if (isEditMode) return;
     onSecondHalfToggle(value);
     
     // Jeśli włączamy drugą połowę, a minuta jest mniejsza niż 46, ustawiamy na 46
@@ -477,7 +479,8 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                       e.preventDefault();
                       e.stopPropagation();
                     }}
-                    disabled={false}
+                    disabled={isEditMode}
+                    aria-disabled={isEditMode}
                     style={{ pointerEvents: 'auto', zIndex: 11 }}
                   >
                     P1
@@ -494,7 +497,8 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                       e.preventDefault();
                       e.stopPropagation();
                     }}
-                    disabled={false}
+                    disabled={isEditMode}
+                    aria-disabled={isEditMode}
                     style={{ pointerEvents: 'auto', zIndex: 11 }}
                   >
                     P2
@@ -934,6 +938,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                     onMinuteChange(newMinute);
                   }}
                   title="Zmniejsz minutę"
+                  disabled={isEditMode}
                 >
                   −
                 </button>
@@ -949,8 +954,8 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                   min={isSecondHalf ? 46 : 1}
                   max={isSecondHalf ? 130 : 65}
                   className={styles.minuteField}
-                  readOnly={false}
-                  disabled={false}
+                  readOnly={isEditMode}
+                  disabled={isEditMode}
                   style={{ pointerEvents: 'auto', zIndex: 11 }}
                 />
                 <button
@@ -964,6 +969,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                     onMinuteChange(newMinute);
                   }}
                   title="Zwiększ minutę"
+                  disabled={isEditMode}
                 >
                   +
                 </button>
