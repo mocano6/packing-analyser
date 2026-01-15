@@ -67,6 +67,8 @@ interface ActionModalProps {
   onModeChange?: (mode: "attack" | "defense") => void;
   selectedDefensePlayers?: string[];
   onDefensePlayersChange?: (playerIds: string[]) => void;
+  isControversial: boolean;
+  onControversialToggle: () => void;
 }
 
 const ActionModal: React.FC<ActionModalProps> = ({
@@ -127,6 +129,8 @@ const ActionModal: React.FC<ActionModalProps> = ({
   onModeChange,
   selectedDefensePlayers = [],
   onDefensePlayersChange,
+  isControversial,
+  onControversialToggle,
 }) => {
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
   const isAutoSettingFromVideo = React.useRef(false);
@@ -408,7 +412,12 @@ const ActionModal: React.FC<ActionModalProps> = ({
 
 
   const handleShotToggle = () => {
-    onShotToggle(!isShot);
+    if (isShot) {
+      onShotToggle(false);
+      onGoalToggle(false);
+      return;
+    }
+    onShotToggle(true);
   };
 
   const handleGoalToggle = () => {
@@ -888,6 +897,16 @@ const ActionModal: React.FC<ActionModalProps> = ({
           
           {/* Przyciski kontrolne z polem minuty pomiędzy */}
           <div className={styles.buttonGroup}>
+            <button
+              type="button"
+              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${isControversial ? styles.controversyButtonActive : ""}`}
+              onClick={onControversialToggle}
+              aria-pressed={isControversial}
+              aria-label="Oznacz jako kontrowersja"
+              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
+            >
+              !
+            </button>
             <button
               className={styles.cancelButton}
               onClick={handleCancel}

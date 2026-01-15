@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Action, TeamInfo, Shot } from "@/types";
+import { getOppositeXTValueForZone, getZoneName, zoneNameToIndex, zoneNameToString } from "@/constants/xtValues";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,6 +15,7 @@ import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPitch";
 import XGPitch from "@/components/XGPitch/XGPitch";
+import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
 import { getPlayerFullName } from "@/utils/playerUtils";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import styles from "./statystyki-zespolu.module.css";
@@ -71,16 +73,23 @@ export default function StatystykiZespoluPage() {
     }
   }, [selectedTeam]);
 
-  const [selectedMatch, setSelectedMatch] = useState<string>("");
+  const [selectedMatch, setSelectedMatch] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("teamStats_selectedMatch") || "";
+    }
+    return "";
+  });
   const [allActions, setAllActions] = useState<Action[]>([]);
+  const [allRegainActions, setAllRegainActions] = useState<Action[]>([]);
+  const [allLosesActions, setAllLosesActions] = useState<Action[]>([]);
   const [allShots, setAllShots] = useState<any[]>([]);
   const [allPKEntries, setAllPKEntries] = useState<any[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
-  const [expandedCategory, setExpandedCategory] = useState<'pxt' | 'xg' | 'matchData' | null>(() => {
+  const [expandedCategory, setExpandedCategory] = useState<'pxt' | 'xg' | 'matchData' | 'pkEntries' | 'regains' | 'loses' | null>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('statystykiZespolu_expandedCategory');
-      if (saved && ['pxt', 'xg', 'matchData'].includes(saved)) {
-        return saved as 'pxt' | 'xg' | 'matchData';
+      if (saved && ['pxt', 'xg', 'matchData', 'pkEntries', 'regains', 'loses'].includes(saved)) {
+        return saved as 'pxt' | 'xg' | 'matchData' | 'pkEntries' | 'regains' | 'loses';
       }
       return 'pxt';
     }
@@ -97,13 +106,31 @@ export default function StatystykiZespoluPage() {
       }
     }
   }, [expandedCategory]);
-  const [selectedSeason, setSelectedSeason] = useState<string>("");
+  const [selectedSeason, setSelectedSeason] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("teamStats_selectedSeason") || "";
+    }
+    return "";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("teamStats_selectedSeason", selectedSeason);
+    }
+  }, [selectedSeason]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("teamStats_selectedMatch", selectedMatch);
+    }
+  }, [selectedMatch]);
   const [selectedMetric, setSelectedMetric] = useState<'pxt' | 'xt' | 'packing'>('pxt');
   const [selectedActionType, setSelectedActionType] = useState<'pass' | 'dribble' | 'all'>('all');
   const [heatmapMode, setHeatmapMode] = useState<"pxt" | "count">("pxt");
   const [heatmapDirection, setHeatmapDirection] = useState<"from" | "to">("from");
   const [selectedPxtCategory, setSelectedPxtCategory] = useState<"sender" | "receiver" | "dribbler">("sender");
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
+  const [teamRegainAttackDefenseMode, setTeamRegainAttackDefenseMode] = useState<"attack" | "defense">("defense");
+  const [teamRegainHeatmapMode, setTeamRegainHeatmapMode] = useState<"xt" | "count">("xt");
   const [selectedActionFilter, setSelectedActionFilter] = useState<'p1' | 'p2' | 'p3' | 'pk' | 'shot' | 'goal' | null>(null);
   const [actionsModalOpen, setActionsModalOpen] = useState(false);
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<{ playerId: string; playerName: string; zoneName: string } | null>(null);
@@ -114,6 +141,12 @@ export default function StatystykiZespoluPage() {
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
   const [xgFilter, setXgFilter] = useState<'all' | 'sfg' | 'open_play'>('all');
   const [xgHalf, setXgHalf] = useState<'all' | 'first' | 'second'>('all');
+  const [selectedPKEntryIdForView, setSelectedPKEntryIdForView] = useState<string | undefined>(undefined);
+  const [pkEntryTypeFilter, setPkEntryTypeFilter] = useState<"all" | "pass" | "dribble" | "sfg">("all");
+  const [pkOnlyRegain, setPkOnlyRegain] = useState(false);
+  const [pkOnlyShot, setPkOnlyShot] = useState(false);
+  const [pkOnlyGoal, setPkOnlyGoal] = useState(false);
+  const [pkSide, setPkSide] = useState<"attack" | "defense">("attack");
   const [zoneDetails, setZoneDetails] = useState<{
     zoneName: string;
     players: Array<{
@@ -128,14 +161,18 @@ export default function StatystykiZespoluPage() {
 
   // Inicjalizuj selectedSeason na najnowszy sezon na podstawie meczów
   useEffect(() => {
-    if (!selectedSeason && allMatches.length > 0) {
-      const availableSeasons = getAvailableSeasonsFromMatches(allMatches);
-      if (availableSeasons.length > 0) {
-        // Wybierz najnowszy sezon (pierwszy w posortowanej liście)
-        setSelectedSeason(availableSeasons[0].id);
+    if (allMatches.length === 0) return;
+    const seasons = getAvailableSeasonsFromMatches(allMatches);
+    if (!selectedSeason) {
+      if (seasons.length > 0) {
+        setSelectedSeason(seasons[0].id);
       } else {
         setSelectedSeason("all");
       }
+      return;
+    }
+    if (selectedSeason !== "all" && !seasons.some(season => season.id === selectedSeason)) {
+      setSelectedSeason(seasons.length > 0 ? seasons[0].id : "all");
     }
   }, [selectedSeason, allMatches]);
 
@@ -163,55 +200,94 @@ export default function StatystykiZespoluPage() {
 
   // Wybierz pierwszy mecz domyślnie przy zmianie zespołu
   useEffect(() => {
-    if (teamMatches.length > 0 && teamMatches[0].matchId) {
-      setSelectedMatch(teamMatches[0].matchId);
-    } else {
-      setSelectedMatch("");
+    if (teamMatches.length === 0) {
+      if (selectedMatch) {
+        setSelectedMatch("");
+      }
+      return;
     }
-  }, [teamMatches]);
+
+    const availableMatchIds = new Set(
+      teamMatches
+        .map(match => match.matchId)
+        .filter((matchId): matchId is string => !!matchId)
+    );
+
+    if (selectedMatch && availableMatchIds.has(selectedMatch)) {
+      return;
+    }
+
+    setSelectedMatch(teamMatches[0].matchId || "");
+  }, [teamMatches, selectedMatch]);
 
   // Pobierz akcje dla wybranego meczu
   useEffect(() => {
     const loadActionsForMatch = async () => {
       if (!selectedMatch) {
         setAllActions([]);
+        setAllRegainActions([]);
+        setAllLosesActions([]);
         return;
       }
 
       setIsLoadingActions(true);
 
-             try {
-         if (!db) {
-           console.error("Firebase nie jest zainicjalizowane");
-           setAllActions([]);
-           return;
-         }
+      try {
+        if (!db) {
+          console.error("Firebase nie jest zainicjalizowane");
+          setAllActions([]);
+          setAllRegainActions([]);
+          setAllLosesActions([]);
+          return;
+        }
 
-         const matchDoc = await getDoc(doc(db, "matches", selectedMatch));
+        const matchDoc = await getDoc(doc(db, "matches", selectedMatch));
         
         if (matchDoc.exists()) {
           const matchData = matchDoc.data() as TeamInfo;
-           const actions = matchData.actions_packing || [];
-           const shots = matchData.shots || [];
-           const pkEntries = matchData.pkEntries || [];
-           setAllActions(actions);
-           setAllShots(shots);
-           setAllPKEntries(pkEntries);
+          const actions = matchData.actions_packing || [];
+          const shots = matchData.shots || [];
+          const pkEntries = matchData.pkEntries || [];
+
+          // Pobierz actions_regain i actions_loses BEZPOŚREDNIO z pól dokumentu (nie z subkolekcji!)
+          const regainActions = (matchData.actions_regain || []).map(action => ({
+            ...action,
+            _actionSource: "regain"
+          })) as Action[];
+          
+          const losesActions = (matchData.actions_loses || []).map(action => ({
+            ...action,
+            _actionSource: "loses"
+          })) as Action[];
+
+          console.log('🔍 DEBUG Statystyki zespołu - Regain z dokumentu:', regainActions.length, regainActions.slice(0, 2));
+          console.log('🔍 DEBUG Statystyki zespołu - Loses z dokumentu:', losesActions.length, losesActions.slice(0, 2));
+          console.log('🔍 DEBUG Statystyki zespołu - Wybrany zespół (selectedTeam):', selectedTeam);
+
+          setAllActions(actions);
+          setAllRegainActions(regainActions);
+          setAllLosesActions(losesActions);
+          setAllShots(shots);
+          setAllPKEntries(pkEntries);
         } else {
           setAllActions([]);
+          setAllRegainActions([]);
+          setAllLosesActions([]);
           setAllShots([]);
           setAllPKEntries([]);
         }
       } catch (error) {
         console.error("Błąd podczas pobierania akcji:", error);
         setAllActions([]);
+        setAllRegainActions([]);
+        setAllLosesActions([]);
       } finally {
         setIsLoadingActions(false);
       }
     };
 
     loadActionsForMatch();
-  }, [selectedMatch]);
+  }, [selectedMatch, selectedTeam]);
 
   // Przygotuj dane dla wykresów zespołowych
   const teamChartData = useMemo(() => {
@@ -372,6 +448,60 @@ export default function StatystykiZespoluPage() {
     return teamMatches.find(match => match.matchId === selectedMatch);
   }, [teamMatches, selectedMatch]);
 
+  const pkEntriesSideStats = useMemo(() => {
+    // UWAGA: PKEntryModal zapisuje `teamId` jako matchInfo.team (nasz zespół) również dla wpisów przeciwnika,
+    // a rozróżnienie "nasze vs przeciwnika" jest realizowane przez `teamContext`:
+    // - attack = nasze wejścia
+    // - defense = wejścia przeciwnika (czyli nasza obrona)
+    const entries = (allPKEntries || [])
+      .filter((e: any) => e && e.teamId === selectedTeam)
+      .filter((e: any) => (e.teamContext ?? "attack") === pkSide);
+
+    const total = entries.length;
+    const goals = entries.filter((e: any) => !!e.isGoal).length;
+    const shots = entries.filter((e: any) => !!e.isShot).length;
+    const regains = entries.filter((e: any) => !!e.isRegain).length;
+    const regainPct = total > 0 ? (regains / total) * 100 : 0;
+
+    const partnersSum = entries.reduce((s: number, e: any) => s + (e.pkPlayersCount ?? 0), 0);
+    const oppSum = entries.reduce((s: number, e: any) => s + (e.opponentsInPKCount ?? 0), 0);
+    const avgPartners = total > 0 ? partnersSum / total : 0;
+    const avgOpponents = total > 0 ? oppSum / total : 0;
+    const avgDiffOppMinusPartners = avgOpponents - avgPartners;
+
+    return {
+      entries,
+      total,
+      goals,
+      shots,
+      regains,
+      regainPct,
+      avgPartners,
+      avgOpponents,
+      avgDiffOppMinusPartners,
+    };
+  }, [allPKEntries, selectedTeam, pkSide]);
+
+  const pkEntriesFilteredForView = useMemo(() => {
+    return pkEntriesSideStats.entries.filter((e: any) => {
+      if (pkEntryTypeFilter !== "all" && (e.entryType || "pass") !== pkEntryTypeFilter) return false;
+      if (pkOnlyRegain && !e.isRegain) return false;
+      if (pkOnlyShot && !e.isShot) return false;
+      if (pkOnlyGoal && !e.isGoal) return false;
+      return true;
+    });
+  }, [pkEntriesSideStats.entries, pkEntryTypeFilter, pkOnlyRegain, pkOnlyShot, pkOnlyGoal]);
+
+  const selectedPKEntry = useMemo(() => {
+    if (!selectedPKEntryIdForView) return null;
+    return pkEntriesSideStats.entries.find((e: any) => e.id === selectedPKEntryIdForView) || null;
+  }, [pkEntriesSideStats.entries, selectedPKEntryIdForView]);
+
+  useEffect(() => {
+    // Po zmianie atak/obrona wyczyść selekcję strzałki, żeby nie wskazywać wpisu z innej strony
+    setSelectedPKEntryIdForView(undefined);
+  }, [pkSide]);
+
   // Przygotuj dane dla wykresu skumulowanego xG w czasie (jak w PxT)
   const xgChartData = useMemo(() => {
     if (!selectedMatch || allShots.length === 0 || !selectedMatchInfo) return [];
@@ -485,6 +615,74 @@ export default function StatystykiZespoluPage() {
     return normalized;
   };
 
+  const getOppositeZoneName = (zoneName: string): string | null => {
+    const zoneIndex = zoneNameToIndex(zoneName);
+    if (zoneIndex === null) return null;
+    const row = Math.floor(zoneIndex / 12);
+    const col = zoneIndex % 12;
+    const oppositeRow = 7 - row;
+    const oppositeCol = 11 - col;
+    const oppositeIndex = oppositeRow * 12 + oppositeCol;
+    const oppositeZoneName = getZoneName(oppositeIndex);
+    return oppositeZoneName ? zoneNameToString(oppositeZoneName) : null;
+  };
+
+  const isLosesAction = (action: any): boolean => {
+    const actionSource = action?._actionSource;
+    if (actionSource) {
+      return actionSource === 'lose' || actionSource === 'loses' || actionSource === 'loss';
+    }
+    const hasRegainFields = action.playersBehindBall !== undefined || action.opponentsBehindBall !== undefined;
+    return action.isReaction5s !== undefined ||
+      (action.isBelow8s !== undefined && !hasRegainFields);
+  };
+
+  const isRegainAction = (action: any): boolean => {
+    const actionSource = action?._actionSource;
+    if (actionSource) {
+      return actionSource === 'regain';
+    }
+    const hasRegainFields = action.playersBehindBall !== undefined || action.opponentsBehindBall !== undefined;
+    return hasRegainFields && !isLosesAction(action);
+  };
+
+  const teamActions = useMemo(() => {
+    if (!selectedTeam) return allActions;
+    return allActions.filter(action => !action.teamId || action.teamId === selectedTeam);
+  }, [allActions, selectedTeam]);
+
+  const teamRegainActions = useMemo(() => {
+    console.log('🔍 DEBUG teamRegainActions - allRegainActions.length:', allRegainActions.length);
+    console.log('🔍 DEBUG teamRegainActions - selectedTeam:', selectedTeam);
+    console.log('🔍 DEBUG teamRegainActions - Pierwsze 2 akcje z allRegainActions:', allRegainActions.slice(0, 2));
+    
+    if (!selectedTeam) return allRegainActions;
+    const filtered = allRegainActions.filter(action => !action.teamId || action.teamId === selectedTeam);
+    console.log('🔍 DEBUG teamRegainActions - filtered.length:', filtered.length);
+    console.log('🔍 DEBUG teamRegainActions - Pierwsze 2 po filtrze:', filtered.slice(0, 2));
+    return filtered.length > 0 ? filtered : allRegainActions;
+  }, [allRegainActions, selectedTeam]);
+
+  const teamLosesActions = useMemo(() => {
+    if (!selectedTeam) return allLosesActions;
+    const filtered = allLosesActions.filter(action => !action.teamId || action.teamId === selectedTeam);
+    return filtered.length > 0 ? filtered : allLosesActions;
+  }, [allLosesActions, selectedTeam]);
+
+  const derivedRegainActions = useMemo(() => {
+    console.log('🔍 DEBUG derivedRegainActions - teamRegainActions.length:', teamRegainActions.length);
+    console.log('🔍 DEBUG derivedRegainActions - teamActions.length:', teamActions.length);
+    if (teamRegainActions.length > 0) return teamRegainActions;
+    const filtered = teamActions.filter(action => isRegainAction(action));
+    console.log('🔍 DEBUG derivedRegainActions - filtered from teamActions:', filtered.length);
+    return filtered;
+  }, [teamRegainActions, teamActions]);
+
+  const derivedLosesActions = useMemo(() => {
+    if (teamLosesActions.length > 0) return teamLosesActions;
+    return teamActions.filter(action => isLosesAction(action));
+  }, [teamLosesActions, teamActions]);
+
   // Oblicz statystyki zespołu
   const teamStats = useMemo(() => {
     if (allActions.length === 0) {
@@ -500,6 +698,10 @@ export default function StatystykiZespoluPage() {
         regainsPer90: 0,
         losesPer90: 0,
         pkEntriesPer90: 0,
+        regainsFirstHalf: 0,
+        regainsSecondHalf: 0,
+        losesFirstHalf: 0,
+        losesSecondHalf: 0,
         // Szczegółowe statystyki PxT
         pxtAsSender: 0,
         pxtAsReceiver: 0,
@@ -574,6 +776,10 @@ export default function StatystykiZespoluPage() {
     let totalRegains = 0;
     let totalLoses = 0;
     let totalPKEntries = 0;
+    let regainsFirstHalf = 0;
+    let regainsSecondHalf = 0;
+    let losesFirstHalf = 0;
+    let losesSecondHalf = 0;
 
     // Szczegółowe statystyki PxT
     let pxtAsSender = 0;
@@ -644,6 +850,35 @@ export default function StatystykiZespoluPage() {
     let dribblingShotCountCentral = 0;
     let dribblingGoalCountLateral = 0;
     let dribblingGoalCountCentral = 0;
+
+    // Przechwyty i straty licz z derivedRegainActions i derivedLosesActions
+    derivedRegainActions.forEach(action => {
+      const actionMinute = typeof action.minute === 'number' ? action.minute : Number(action.minute);
+      const hasMinute = Number.isFinite(actionMinute);
+
+      totalRegains += 1;
+      if (hasMinute) {
+        if (actionMinute <= 45) {
+          regainsFirstHalf += 1;
+        } else {
+          regainsSecondHalf += 1;
+        }
+      }
+    });
+
+    derivedLosesActions.forEach(action => {
+      const actionMinute = typeof action.minute === 'number' ? action.minute : Number(action.minute);
+      const hasMinute = Number.isFinite(actionMinute);
+
+      totalLoses += 1;
+      if (hasMinute) {
+        if (actionMinute <= 45) {
+          losesFirstHalf += 1;
+        } else {
+          losesSecondHalf += 1;
+        }
+      }
+    });
 
     // Oblicz PxT z akcji
     // WAŻNE: Liczniki są obliczane tylko dla akcji z wybranej kategorii (selectedPxtCategory),
@@ -822,30 +1057,7 @@ export default function StatystykiZespoluPage() {
         }
       }
 
-      // Regainy
-      if (
-        (action.isBelow8s !== undefined || 
-         action.playersBehindBall !== undefined || 
-         action.opponentsBehindBall !== undefined) &&
-        !action.isReaction5s
-      ) {
-        totalRegains += 1;
-      }
-
-      // Straty
-      if (
-        action.isReaction5s !== undefined ||
-        (action.isBelow8s !== undefined && 
-         action.playersBehindBall === undefined && 
-         action.opponentsBehindBall === undefined)
-      ) {
-        totalLoses += 1;
-      }
-
-      // Wejścia w PK
-      if (action.isPenaltyAreaEntry) {
-        totalPKEntries += 1;
-      }
+      // Wejścia w PK liczymy z dedykowanej kolekcji pkEntries (poniżej), żeby nie dublować
     });
 
     // Oblicz xG z strzałów
@@ -878,6 +1090,10 @@ export default function StatystykiZespoluPage() {
       regainsPer90: totalRegains * per90Multiplier,
       losesPer90: totalLoses * per90Multiplier,
       pkEntriesPer90: totalPKEntries * per90Multiplier,
+      regainsFirstHalf,
+      regainsSecondHalf,
+      losesFirstHalf,
+      losesSecondHalf,
       // Szczegółowe statystyki PxT
       pxtAsSender,
       pxtAsReceiver,
@@ -954,7 +1170,212 @@ export default function StatystykiZespoluPage() {
       dribblingGoalCountLateral,
       dribblingGoalCountCentral,
     };
-  }, [allActions, allShots, allPKEntries, selectedTeam, heatmapDirection, selectedPxtCategory]);
+  }, [allActions, teamActions, allShots, allPKEntries, selectedTeam, heatmapDirection, selectedPxtCategory, derivedRegainActions, derivedLosesActions]);
+
+  const regainsFirstHalfPct = teamStats.totalRegains > 0
+    ? (teamStats.regainsFirstHalf / teamStats.totalRegains) * 100
+    : 0;
+  const regainsSecondHalfPct = teamStats.totalRegains > 0
+    ? (teamStats.regainsSecondHalf / teamStats.totalRegains) * 100
+    : 0;
+  const losesFirstHalfPct = teamStats.totalLoses > 0
+    ? (teamStats.losesFirstHalf / teamStats.totalLoses) * 100
+    : 0;
+  const losesSecondHalfPct = teamStats.totalLoses > 0
+    ? (teamStats.losesSecondHalf / teamStats.totalLoses) * 100
+    : 0;
+  const regainsPer10 = teamStats.totalMinutes > 0
+    ? teamStats.totalRegains / (teamStats.totalMinutes / 10)
+    : 0;
+  const losesPer10 = teamStats.totalMinutes > 0
+    ? teamStats.totalLoses / (teamStats.totalMinutes / 10)
+    : 0;
+  const regainsPer5 = teamStats.totalMinutes > 0
+    ? teamStats.totalRegains / (teamStats.totalMinutes / 5)
+    : 0;
+  const losesPer5 = teamStats.totalMinutes > 0
+    ? teamStats.totalLoses / (teamStats.totalMinutes / 5)
+    : 0;
+
+  const regainLosesTimeline = useMemo(() => {
+    if (derivedRegainActions.length === 0 && derivedLosesActions.length === 0) return [];
+
+    const intervals: { [key: number]: { regains: number; loses: number } } = {};
+    derivedRegainActions.forEach(action => {
+      const minute = typeof action.minute === 'number' ? action.minute : Number(action.minute);
+      if (!Number.isFinite(minute)) return;
+      const interval = Math.floor(minute / 5) * 5;
+      if (!intervals[interval]) {
+        intervals[interval] = { regains: 0, loses: 0 };
+      }
+      intervals[interval].regains += 1;
+    });
+    derivedLosesActions.forEach(action => {
+      const minute = typeof action.minute === 'number' ? action.minute : Number(action.minute);
+      if (!Number.isFinite(minute)) return;
+      const interval = Math.floor(minute / 5) * 5;
+      if (!intervals[interval]) {
+        intervals[interval] = { regains: 0, loses: 0 };
+      }
+      intervals[interval].loses += 1;
+    });
+
+    const data: { minute: string; regains: number; loses: number }[] = [];
+    for (let i = 0; i <= 90; i += 5) {
+      const intervalData = intervals[i] || { regains: 0, loses: 0 };
+      data.push({
+        minute: `${i}-${i + 5}`,
+        regains: intervalData.regains,
+        loses: intervalData.loses,
+      });
+    }
+    return data;
+  }, [derivedRegainActions, derivedLosesActions]);
+
+  const teamRegainStats = useMemo(() => {
+    console.log('🔍 DEBUG teamRegainStats - derivedRegainActions.length:', derivedRegainActions.length);
+    console.log('🔍 DEBUG teamRegainStats - Pierwsze 2 akcje:', derivedRegainActions.slice(0, 2));
+    
+    const attackXTHeatmap = new Map<string, number>();
+    const defenseXTHeatmap = new Map<string, number>();
+    const attackCountHeatmap = new Map<string, number>();
+    const defenseCountHeatmap = new Map<string, number>();
+
+    let totalRegains = 0;
+    let regainAttackCount = 0;
+    let regainDefenseCount = 0;
+    let regainXTInAttack = 0;
+    let regainXTInDefense = 0;
+
+    let attackContextCount = 0;
+    let defenseContextCount = 0;
+    let attackPlayersBehindSum = 0;
+    let attackOpponentsBehindSum = 0;
+    let defensePlayersBehindSum = 0;
+    let defenseOpponentsBehindSum = 0;
+
+    derivedRegainActions.forEach(action => {
+      totalRegains += 1;
+
+      const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+      const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+      const attackZoneName = attackZoneRaw
+        ? convertZoneToName(attackZoneRaw)
+        : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
+
+      const defenseXT = action.regainDefenseXT !== undefined
+        ? action.regainDefenseXT
+        : (action.xTValueEnd ?? action.xTValueStart ?? 0);
+      const attackXT = action.regainAttackXT !== undefined
+        ? action.regainAttackXT
+        : (action.oppositeXT ?? (defenseZoneName && zoneNameToIndex(defenseZoneName) !== null
+          ? getOppositeXTValueForZone(zoneNameToIndex(defenseZoneName)!)
+          : 0));
+
+      if (defenseZoneName) {
+        defenseXTHeatmap.set(defenseZoneName, (defenseXTHeatmap.get(defenseZoneName) || 0) + defenseXT);
+        defenseCountHeatmap.set(defenseZoneName, (defenseCountHeatmap.get(defenseZoneName) || 0) + 1);
+      }
+      if (attackZoneName) {
+        attackXTHeatmap.set(attackZoneName, (attackXTHeatmap.get(attackZoneName) || 0) + attackXT);
+        attackCountHeatmap.set(attackZoneName, (attackCountHeatmap.get(attackZoneName) || 0) + 1);
+      }
+
+      const isAttack = action.isAttack !== undefined ? action.isAttack : defenseXT < 0.02;
+      const playersBehind = action.playersBehindBall ?? 0;
+      const opponentsBehind = action.opponentsBehindBall ?? 0;
+
+      if (isAttack) {
+        regainAttackCount += 1;
+        regainXTInAttack += attackXT;
+        attackContextCount += 1;
+        attackPlayersBehindSum += playersBehind;
+        attackOpponentsBehindSum += opponentsBehind;
+      } else {
+        regainDefenseCount += 1;
+        regainXTInDefense += defenseXT;
+        defenseContextCount += 1;
+        defensePlayersBehindSum += playersBehind;
+        defenseOpponentsBehindSum += opponentsBehind;
+      }
+    });
+
+    const totalContext = attackContextCount + defenseContextCount;
+
+    const result = {
+      totalRegains,
+      regainAttackCount,
+      regainDefenseCount,
+      regainXTInAttack,
+      regainXTInDefense,
+      regainXTInAttackPerAction: regainAttackCount > 0 ? regainXTInAttack / regainAttackCount : 0,
+      regainXTInDefensePerAction: regainDefenseCount > 0 ? regainXTInDefense / regainDefenseCount : 0,
+      attackPct: totalRegains > 0 ? (regainAttackCount / totalRegains) * 100 : 0,
+      defensePct: totalRegains > 0 ? (regainDefenseCount / totalRegains) * 100 : 0,
+      avgPlayersBehindAttack: attackContextCount > 0 ? attackPlayersBehindSum / attackContextCount : 0,
+      avgOpponentsBehindAttack: attackContextCount > 0 ? attackOpponentsBehindSum / attackContextCount : 0,
+      avgPlayerDiffAttack: attackContextCount > 0 ? (attackPlayersBehindSum - attackOpponentsBehindSum) / attackContextCount : 0,
+      avgPlayersBehindDefense: defenseContextCount > 0 ? defensePlayersBehindSum / defenseContextCount : 0,
+      avgOpponentsBehindDefense: defenseContextCount > 0 ? defenseOpponentsBehindSum / defenseContextCount : 0,
+      avgPlayerDiffDefense: defenseContextCount > 0 ? (defensePlayersBehindSum - defenseOpponentsBehindSum) / defenseContextCount : 0,
+      attackXTHeatmap,
+      defenseXTHeatmap,
+      attackCountHeatmap,
+      defenseCountHeatmap,
+    };
+    
+    console.log('🔍 DEBUG teamRegainStats - WYNIK:', result);
+    
+    return result;
+  }, [derivedRegainActions]);
+
+  const losesContextStats = useMemo(() => {
+    if (derivedLosesActions.length === 0) {
+      return {
+        reaction5sCount: 0,
+        below8sCount: 0,
+        unknownCount: 0,
+      };
+    }
+
+    let reaction5sCount = 0;
+    let below8sCount = 0;
+    let unknownCount = 0;
+
+    derivedLosesActions.forEach(action => {
+      if (action.isReaction5s !== undefined) {
+        reaction5sCount += 1;
+      } else if (action.isBelow8s !== undefined) {
+        below8sCount += 1;
+      } else {
+        unknownCount += 1;
+      }
+    });
+
+    return {
+      reaction5sCount,
+      below8sCount,
+      unknownCount,
+    };
+  }, [derivedLosesActions]);
+
+  const teamRegainContext = teamRegainAttackDefenseMode === "attack"
+    ? {
+        playersBehind: teamRegainStats.avgPlayersBehindAttack,
+        opponentsBehind: teamRegainStats.avgOpponentsBehindAttack,
+        playerDiff: teamRegainStats.avgPlayerDiffAttack,
+      }
+    : {
+        playersBehind: teamRegainStats.avgPlayersBehindDefense,
+        opponentsBehind: teamRegainStats.avgOpponentsBehindDefense,
+        playerDiff: teamRegainStats.avgPlayerDiffDefense,
+      };
+
+  const teamRegainHeatmap =
+    teamRegainAttackDefenseMode === "attack"
+      ? (teamRegainHeatmapMode === "xt" ? teamRegainStats.attackXTHeatmap : teamRegainStats.attackCountHeatmap)
+      : (teamRegainHeatmapMode === "xt" ? teamRegainStats.defenseXTHeatmap : teamRegainStats.defenseCountHeatmap);
 
   // Przygotuj dane dla heatmapy zespołu i agregacja danych zawodników
   const teamHeatmapData = useMemo(() => {
@@ -1317,42 +1738,464 @@ export default function StatystykiZespoluPage() {
           <div className={styles.statsLayout}>
             {/* Lista kategorii na górze */}
             <div className={styles.categoriesList}>
-              <div
+              <button
+                type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'pxt' ? styles.active : ''}`}
                 onClick={() => setExpandedCategory(expandedCategory === 'pxt' ? null : 'pxt')}
               >
                 <span className={styles.categoryName}>PxT</span>
-                <span className={styles.categoryValue}>{teamStats.pxtPer90.toFixed(2)}</span>
-              </div>
-              <div
+              </button>
+              <button
+                type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'xg' ? styles.active : ''}`}
                 onClick={() => setExpandedCategory(expandedCategory === 'xg' ? null : 'xg')}
               >
                 <span className={styles.categoryName}>xG</span>
-                <span className={styles.categoryValue}>{teamStats.xgPer90.toFixed(2)}</span>
-          </div>
-              <div
+              </button>
+              <button
+                type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'matchData' ? styles.active : ''}`}
                 onClick={() => setExpandedCategory(expandedCategory === 'matchData' ? null : 'matchData')}
               >
                 <span className={styles.categoryName}>Dane meczowe</span>
-                <span className={styles.categoryValue}>-</span>
-          </div>
-              <div className={styles.categoryItem}>
-                <span className={styles.categoryName}>Regainy</span>
-                <span className={styles.categoryValue}>{teamStats.regainsPer90.toFixed(1)}</span>
-              </div>
-              <div className={styles.categoryItem}>
+              </button>
+              <button
+                type="button"
+                className={`${styles.categoryItem} ${expandedCategory === 'regains' ? styles.active : ''}`}
+                onClick={() => setExpandedCategory(expandedCategory === 'regains' ? null : 'regains')}
+              >
+                <span className={styles.categoryName}>Przechwyty</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.categoryItem} ${expandedCategory === 'loses' ? styles.active : ''}`}
+                onClick={() => setExpandedCategory(expandedCategory === 'loses' ? null : 'loses')}
+              >
                 <span className={styles.categoryName}>Straty</span>
-                <span className={styles.categoryValue}>{teamStats.losesPer90.toFixed(1)}</span>
-              </div>
-              <div className={styles.categoryItem}>
+              </button>
+              <button
+                type="button"
+                className={`${styles.categoryItem} ${expandedCategory === 'pkEntries' ? styles.active : ''}`}
+                onClick={() => setExpandedCategory(expandedCategory === 'pkEntries' ? null : 'pkEntries')}
+              >
                 <span className={styles.categoryName}>Wejścia w PK</span>
-                <span className={styles.categoryValue}>{teamStats.pkEntriesPer90.toFixed(1)}</span>
-              </div>
+              </button>
       </div>
 
             {/* Szczegóły poniżej */}
+            {expandedCategory === 'pkEntries' && selectedMatchInfo && (
+              <div className={styles.detailsPanel}>
+                <h3>Wejścia w PK</h3>
+
+                {/* Przełącznik atak/obrona (atak = nasze wejścia, obrona = wejścia przeciwnika) */}
+                <div className={styles.heatmapModeToggle}>
+                  <button
+                    className={`${styles.heatmapModeButton} ${pkSide === 'attack' ? styles.active : ''}`}
+                    onClick={() => setPkSide('attack')}
+                    type="button"
+                  >
+                    W ataku
+                  </button>
+                  <button
+                    className={`${styles.heatmapModeButton} ${pkSide === 'defense' ? styles.active : ''}`}
+                    onClick={() => setPkSide('defense')}
+                    type="button"
+                  >
+                    W obronie
+                  </button>
+                </div>
+
+                <div className={styles.detailsSection}>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>WEJŚCIA W PK:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}><strong>{pkEntriesSideStats.total}</strong></span>
+                      <span className={styles.valueSecondary}>({pkEntriesSideStats.total.toFixed(1)} / 90 min)</span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>GOLE:</span>
+                    <span className={styles.detailsValue}><span className={styles.valueMain}>{pkEntriesSideStats.goals}</span></span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>STRZAŁY:</span>
+                    <span className={styles.detailsValue}><span className={styles.valueMain}>{pkEntriesSideStats.shots}</span></span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>PRZECHWYT:</span>
+                    <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span className={styles.valueMain}>{pkEntriesSideStats.regains}</span>
+                      <span className={styles.valueSecondary}>({pkEntriesSideStats.regainPct.toFixed(1)}%)</span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>PRZEWAGA W PK:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>
+                        {(pkEntriesSideStats.avgPartners - pkEntriesSideStats.avgOpponents).toFixed(2)}
+                      </span>
+                      <span className={styles.valueSecondary}>
+                        {" "}• Partnerzy: {pkEntriesSideStats.avgPartners.toFixed(2)} • Przeciwnicy: {pkEntriesSideStats.avgOpponents.toFixed(2)}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+
+                <div className={styles.detailsSection}>
+                  <div className={styles.heatmapModeToggle} style={{ flexWrap: 'wrap' }}>
+                    <button
+                      className={`${styles.heatmapModeButton} ${pkEntryTypeFilter === 'all' ? styles.active : ''}`}
+                      onClick={() => setPkEntryTypeFilter('all')}
+                    >
+                      Wszystkie
+                    </button>
+                    <button
+                      className={`${styles.heatmapModeButton} ${pkEntryTypeFilter === 'dribble' ? styles.active : ''}`}
+                      onClick={() => setPkEntryTypeFilter('dribble')}
+                    >
+                      Drybling
+                    </button>
+                    <button
+                      className={`${styles.heatmapModeButton} ${pkEntryTypeFilter === 'pass' ? styles.active : ''}`}
+                      onClick={() => setPkEntryTypeFilter('pass')}
+                    >
+                      Podanie
+                    </button>
+                    <button
+                      className={`${styles.heatmapModeButton} ${pkEntryTypeFilter === 'sfg' ? styles.active : ''}`}
+                      onClick={() => setPkEntryTypeFilter('sfg')}
+                    >
+                      SFG
+                    </button>
+                  </div>
+
+                  <div className={styles.heatmapModeToggle} style={{ marginTop: 8, flexWrap: 'wrap' }}>
+                    <button
+                      className={`${styles.heatmapModeButton} ${pkOnlyRegain ? styles.active : ''}`}
+                      onClick={() => setPkOnlyRegain(!pkOnlyRegain)}
+                    >
+                      Przechwyt
+                    </button>
+                    <button
+                      className={`${styles.heatmapModeButton} ${pkOnlyShot ? styles.active : ''}`}
+                      onClick={() => setPkOnlyShot(!pkOnlyShot)}
+                    >
+                      Strzał
+                    </button>
+                    <button
+                      className={`${styles.heatmapModeButton} ${pkOnlyGoal ? styles.active : ''}`}
+                      onClick={() => setPkOnlyGoal(!pkOnlyGoal)}
+                    >
+                      Gol
+                    </button>
+                  </div>
+                </div>
+
+                <div className={styles.detailsSection}>
+                  <div className={styles.matchChartContainer}>
+                    <div style={{ marginBottom: 8, fontSize: 12, color: '#6b7280', fontWeight: 500 }}>
+                      Kliknij w strzałkę na boisku, aby zobaczyć szczegóły.
+                    </div>
+                    <PKEntriesPitch
+                      pkEntries={pkEntriesFilteredForView}
+                      onEntryClick={(entry) => setSelectedPKEntryIdForView(entry.id)}
+                      selectedEntryId={selectedPKEntryIdForView}
+                      matchInfo={selectedMatchInfo}
+                      allTeams={availableTeams}
+                      hideTeamLogos={true}
+                      hideFlipButton={false}
+                      hideInstructions={true}
+                    />
+                  </div>
+                </div>
+
+                {selectedPKEntry && (
+                  <div className={styles.detailsSection}>
+                    <div className={styles.detailsRow}>
+                      <span className={styles.detailsLabel}>MINUTA:</span>
+                      <span className={styles.detailsValue}><span className={styles.valueMain}>{selectedPKEntry.minute}</span></span>
+                    </div>
+                    <div className={styles.detailsRow}>
+                      <span className={styles.detailsLabel}>TYP:</span>
+                      <span className={styles.detailsValue}><span className={styles.valueMain}>{(selectedPKEntry.entryType || 'pass').toUpperCase()}</span></span>
+                    </div>
+                    <div className={styles.detailsRow}>
+                      <span className={styles.detailsLabel}>FLGI:</span>
+                      <span className={styles.detailsValue}>
+                        <span className={styles.valueMain}>
+                          {(selectedPKEntry.isRegain ? 'Przechwyt ' : '')}
+                          {(selectedPKEntry.isShot ? 'Strzał ' : '')}
+                          {(selectedPKEntry.isGoal ? 'Gol' : '')}
+                        </span>
+                      </span>
+                    </div>
+                    {(selectedPKEntry.senderName || selectedPKEntry.receiverName) && (
+                      <div className={styles.detailsRow}>
+                        <span className={styles.detailsLabel}>ZAWODNICY:</span>
+                        <span className={styles.detailsValue}>
+                          <span className={styles.valueMain}>
+                            {selectedPKEntry.senderName ? selectedPKEntry.senderName : '—'}
+                            {selectedPKEntry.receiverName ? ` → ${selectedPKEntry.receiverName}` : ''}
+                          </span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {expandedCategory === 'regains' && selectedMatchInfo && (
+              <div className={styles.detailsPanel}>
+                <h3>Szczegóły Przechwytów</h3>
+
+                {/* Przełącznik atak/obrona */}
+                <div className={styles.heatmapModeToggle}>
+                  <button
+                    className={`${styles.heatmapModeButton} ${teamRegainAttackDefenseMode === 'defense' ? styles.active : ''}`}
+                    onClick={() => setTeamRegainAttackDefenseMode('defense')}
+                    type="button"
+                  >
+                    W obronie
+                  </button>
+                  <button
+                    className={`${styles.heatmapModeButton} ${teamRegainAttackDefenseMode === 'attack' ? styles.active : ''}`}
+                    onClick={() => setTeamRegainAttackDefenseMode('attack')}
+                    type="button"
+                  >
+                    W ataku
+                  </button>
+                </div>
+
+                {/* Statystyki połówek */}
+                <div className={styles.halfTimeStatsInPanel}>
+                  <h4>Statystyki połówek</h4>
+                  <div className={styles.halfTimeContainerInPanel}>
+                    {/* I połowa */}
+                    <div className={styles.halfTimeCardInPanel}>
+                      <div className={styles.halfTimeLabel}>I połowa</div>
+                      <div className={styles.statRow}>
+                        <div className={styles.statValue}>{teamStats.regainsFirstHalf}</div>
+                        <div className={styles.statLabel}>przechwyty</div>
+                      </div>
+                      <div className={styles.statSubValue}>
+                        {regainsFirstHalfPct.toFixed(1)}%
+                      </div>
+                    </div>
+
+                    {/* II połowa */}
+                    <div className={styles.halfTimeCardInPanel}>
+                      <div className={styles.halfTimeLabel}>II połowa</div>
+                      <div className={styles.statRow}>
+                        <div className={styles.statValue}>{teamStats.regainsSecondHalf}</div>
+                        <div className={styles.statLabel}>przechwyty</div>
+                      </div>
+                      <div className={styles.statSubValue}>
+                        {regainsSecondHalfPct.toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Podstawowe statystyki */}
+                <div className={styles.detailsSection}>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>PRZECHWYTY:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{teamStats.totalRegains}</span> <span className={styles.valueSecondary}>({teamStats.regainsPer90.toFixed(1)} / 90 min)</span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>xT {teamRegainAttackDefenseMode === 'attack' ? 'W ATAKU' : 'W OBRONIE'}:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>
+                        {teamRegainAttackDefenseMode === 'attack'
+                          ? teamRegainStats.regainXTInAttack.toFixed(3)
+                          : teamRegainStats.regainXTInDefense.toFixed(3)}
+                      </span> <span className={styles.valueSecondary}>• {teamRegainAttackDefenseMode === 'attack'
+                          ? teamRegainStats.regainXTInAttackPerAction.toFixed(3)
+                          : teamRegainStats.regainXTInDefensePerAction.toFixed(3)} / akcję</span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>TRYB:</span>
+                    <span className={styles.detailsValue}>
+                      {teamRegainStats.regainAttackCount}W ataku ({teamRegainStats.attackPct.toFixed(1)}%) • {teamRegainStats.regainDefenseCount}W obronie ({teamRegainStats.defensePct.toFixed(1)}%)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Heatmapa */}
+                <div className={styles.detailsSection}>
+                  <div className={styles.heatmapHeaderInPanel}>
+                    <h4>Heatmapa przechwytów</h4>
+                    <div className={styles.heatmapControlsInPanel}>
+                      <div className={styles.heatmapModeToggle}>
+                        <button
+                          className={`${styles.heatmapModeButton} ${teamRegainHeatmapMode === 'xt' ? styles.active : ''}`}
+                          onClick={() => setTeamRegainHeatmapMode('xt')}
+                          type="button"
+                        >
+                          xT odbiorców
+                        </button>
+                        <button
+                          className={`${styles.heatmapModeButton} ${teamRegainHeatmapMode === 'count' ? styles.active : ''}`}
+                          onClick={() => setTeamRegainHeatmapMode('count')}
+                          type="button"
+                        >
+                          Liczba akcji
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className={styles.heatmapWrapperInPanel}>
+                    <div className={styles.heatmapContainerInPanel}>
+                      <PlayerHeatmapPitch
+                        heatmapData={teamRegainHeatmap}
+                        category="regains"
+                        mode={teamRegainHeatmapMode === 'xt' ? 'pxt' : 'count'}
+                        mirrored={false}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Wykres na dole - jak w oryginalnej wersji */}
+                <div className={styles.chartContainerInPanel}>
+                  <div className={styles.chartHeader}>
+                    <h3>Przechwyty i straty co 5 minut</h3>
+                    <span className={styles.chartInfo}>
+                      {teamStats.totalRegains} przechwytów • {teamStats.totalLoses} strat
+                    </span>
+                  </div>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={regainLosesTimeline} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="minute" label={{ value: 'Przedział minutowy', position: 'insideBottom', offset: -5 }} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip
+                        content={({ payload, label }) => {
+                          if (!payload || payload.length === 0) return null;
+                          const data = payload[0]?.payload || {};
+                          return (
+                            <div className={styles.tooltip}>
+                              <p className={styles.tooltipLabel}>{`Przedział: ${label} min`}</p>
+                              <p><strong>Przechwyty:</strong> {data.regains}</p>
+                              <p><strong>Straty:</strong> {data.loses}</p>
+                            </div>
+                          );
+                        }}
+                      />
+                      <Legend />
+                      <Bar dataKey="regains" name="Przechwyty" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="loses" name="Straty" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+            {expandedCategory === 'loses' && selectedMatchInfo && (
+              <div className={styles.detailsPanel}>
+                <h3>Straty</h3>
+
+                {/* Statystyki połówek */}
+                <div className={styles.halfTimeStatsInPanel}>
+                  <h4>Statystyki połówek</h4>
+                  <div className={styles.halfTimeContainerInPanel}>
+                    {/* I połowa */}
+                    <div className={styles.halfTimeCardInPanel}>
+                      <div className={styles.halfTimeLabel}>I połowa</div>
+                      <div className={styles.statRow}>
+                        <div className={styles.statValue}>{teamStats.losesFirstHalf}</div>
+                        <div className={styles.statLabel}>straty</div>
+                      </div>
+                      <div className={styles.statSubValue}>
+                        {losesFirstHalfPct.toFixed(1)}%
+                      </div>
+                    </div>
+
+                    {/* II połowa */}
+                    <div className={styles.halfTimeCardInPanel}>
+                      <div className={styles.halfTimeLabel}>II połowa</div>
+                      <div className={styles.statRow}>
+                        <div className={styles.statValue}>{teamStats.losesSecondHalf}</div>
+                        <div className={styles.statLabel}>straty</div>
+                      </div>
+                      <div className={styles.statSubValue}>
+                        {losesSecondHalfPct.toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Podstawowe statystyki */}
+                <div className={styles.detailsSection}>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>STRATY:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{teamStats.totalLoses}</span> <span className={styles.valueSecondary}>({teamStats.losesPer90.toFixed(1)} / 90 min)</span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>TEMPO STRAT:</span>
+                    <span className={styles.detailsValue}>
+                      {losesPer10.toFixed(2)}/10 min • {losesPer5.toFixed(2)}/5 min
+                    </span>
+                  </div>
+                </div>
+
+                {/* Typy strat */}
+                <div className={styles.detailsSection}>
+                  <h4>Typy strat</h4>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>REAKCJA 5S:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{losesContextStats.reaction5sCount}</span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>PONIŻEJ 8S:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{losesContextStats.below8sCount}</span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>INNE:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{losesContextStats.unknownCount}</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Wykres na dole */}
+                <div className={styles.chartContainerInPanel}>
+                  <div className={styles.chartHeader}>
+                    <h3>Straty co 5 minut</h3>
+                    <span className={styles.chartInfo}>{teamStats.totalLoses} strat</span>
+                  </div>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={regainLosesTimeline} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="minute" label={{ value: 'Przedział minutowy', position: 'insideBottom', offset: -5 }} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip
+                        content={({ payload, label }) => {
+                          if (!payload || payload.length === 0) return null;
+                          const data = payload[0]?.payload || {};
+                          return (
+                            <div className={styles.tooltip}>
+                              <p className={styles.tooltipLabel}>{`Przedział: ${label} min`}</p>
+                              <p><strong>Straty:</strong> {data.loses}</p>
+                            </div>
+                          );
+                        }}
+                      />
+                      <Legend />
+                      <Bar dataKey="loses" name="Straty" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
             {expandedCategory === 'xg' && selectedMatchInfo && (
               <div className={styles.detailsPanel}>
                 <h3>xG</h3>

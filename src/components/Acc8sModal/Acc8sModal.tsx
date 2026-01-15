@@ -33,6 +33,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     isShotUnder8s: false,
     isPKEntryUnder8s: false,
     passingPlayerIds: [] as string[],
+    isControversial: false,
   });
 
   const filteredPlayers = useMemo(() => {
@@ -86,6 +87,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
         isShotUnder8s: editingEntry.isShotUnder8s,
         isPKEntryUnder8s: editingEntry.isPKEntryUnder8s,
         passingPlayerIds: editingEntry.passingPlayerIds || [],
+        isControversial: editingEntry.isControversial || false,
       });
     } else {
       // Pobierz aktualną połowę z localStorage
@@ -182,6 +184,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
       isShotUnder8s: formData.isShotUnder8s,
       isPKEntryUnder8s: formData.isPKEntryUnder8s,
       passingPlayerIds: formData.passingPlayerIds,
+      isControversial: formData.isControversial,
       ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
       ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
     };
@@ -292,6 +295,16 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
           </div>
 
           <div className={styles.buttonGroup}>
+            <button
+              type="button"
+              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${formData.isControversial ? styles.controversyButtonActive : ""}`}
+              onClick={() => setFormData({ ...formData, isControversial: !formData.isControversial })}
+              aria-pressed={formData.isControversial}
+              aria-label="Oznacz jako kontrowersja"
+              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
+            >
+              !
+            </button>
             <button type="button" onClick={onClose} className={styles.cancelButton}>
               Anuluj
             </button>

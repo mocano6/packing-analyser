@@ -94,7 +94,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
               <span className={styles.icon}>📊</span>
               <span>Statystyki zespołu</span>
             </Link>
-            <Link href={players.length > 0 ? `/profile/${players[0].id}` : '/zawodnicy'} className={styles.menuItem}>
+            <Link href={players.length > 0 ? "/profile" : "/zawodnicy"} className={styles.menuItem}>
               <span className={styles.icon}>👤</span>
               <span>Profil zawodnika</span>
             </Link>

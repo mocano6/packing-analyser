@@ -86,6 +86,8 @@ interface LosesActionModalProps {
   // Nowy prop dla liczby zawodników przeciwnika, którzy opuścili boisko
   opponentsLeftField: number;
   onOpponentsLeftFieldChange: (count: number) => void;
+  isControversial: boolean;
+  onControversialToggle: () => void;
 }
 
 const LosesActionModal: React.FC<LosesActionModalProps> = ({
@@ -165,6 +167,8 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   // Nowy prop dla liczby zawodników przeciwnika, którzy opuścili boisko
   opponentsLeftField,
   onOpponentsLeftFieldChange,
+  isControversial,
+  onControversialToggle,
 }) => {
   const clamp0to10 = (value: number) => Math.max(0, Math.min(10, value));
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
@@ -359,7 +363,12 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
 
 
   const handleShotToggle = () => {
-    onShotToggle(!isShot);
+    if (isShot) {
+      onShotToggle(false);
+      onGoalToggle(false);
+      return;
+    }
+    onShotToggle(true);
   };
 
   const handleGoalToggle = () => {
@@ -718,17 +727,16 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                 </button>
               </div>
               <div
-                className={`${styles.actionTypeSelector} ${styles.actionTypeSelectorSecond} ${styles.tooltipTrigger}`}
-                data-tooltip="Kontrpressing (do 20s po stracie)"
+                className={`${styles.actionTypeSelector} ${styles.actionTypeSelectorSecond}`}
               >
                 <button
-                  className={`${styles.actionTypeButton} ${
+                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
                     isReaction5sActive ? styles.active : ""
                   }`}
                   onClick={onReaction5sToggle}
                   aria-pressed={isReaction5sActive}
                   type="button"
-                  title="Kontrpressing (do 20s po stracie)"
+                  data-tooltip={`Kontrpressing (do 5s po stracie).\n• 2 kontakty z piłką lub podanie/strzał (5 sekunda przy pierwszym kontakcie).\n• Sfaulujemy przeciwnika, akcja zostaje przerwana.`}
                 >
                   Reakcja 5s
                 </button>
@@ -744,13 +752,13 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   Aut
                 </button>
                 <button
-                  className={`${styles.actionTypeButton} ${
+                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
                     isReaction5sNotApplicableActive ? styles.active : ""
                   }`}
                   onClick={onReaction5sNotApplicableToggle}
                   aria-pressed={isReaction5sNotApplicableActive}
                   type="button"
-                  title="Nie dotyczy - nie da się zrobić 5s"
+                  data-tooltip={`Nie dotyczy - nie da się zrobić 5s.\n• Przeciwnik poda piłkę do zawodnika znajdującego 2 strefy niżej.\n• Piłka w rękach bramkarza`}
                 >
                   Nie dotyczy
                 </button>
@@ -758,7 +766,10 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
             </div>
 
             {/* Sekcja z przyciskami "przed piłką" - ułożone pionowo */}
-            <div className={styles.verticalButtonsContainer}>
+            <div
+              className={`${styles.verticalButtonsContainer} ${styles.tooltipTrigger}`}
+              data-tooltip="Liczymy zawodników do swojej bramki."
+            >
               {/* Przycisk "Partner przed piłką" */}
               <div 
                 className={styles.compactPointsButton}
@@ -767,7 +778,6 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   e.stopPropagation();
                   onPlayersBehindBallChange(clamp0to10(playersBehindBall + 1));
                 }}
-                title="Kliknij, aby dodać 1 partnera (max 10)"
                 style={{ cursor: 'pointer' }}
               >
                 <span className={styles.compactLabel}>Partner przed piłką</span>
@@ -819,7 +829,6 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   e.stopPropagation();
                   onOpponentsBehindBallChange(clamp0to10(opponentsBehindBall + 1));
                 }}
-                title="Kliknij, aby dodać 1 przeciwnika (max 10)"
                 style={{ cursor: 'pointer' }}
               >
                 <span className={styles.compactLabel}>Przeciwnik przed piłką (bez bramkarza)</span>
@@ -946,13 +955,13 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
 
                 {/* Przycisk "Poniżej 8s" */}
             <button
-              className={`${styles.compactButton} ${
+              className={`${styles.compactButton} ${styles.tooltipTrigger} ${
                 isBelow8sActive ? styles.activeButton : ""
               }`}
               onClick={onBelow8sToggle}
               aria-pressed={isBelow8sActive}
               type="button"
-              title="Poniżej 8 sekund"
+              data-tooltip={`8 sekund od jego rozpoczęcia (1T):\n• wejść w pole karne rywala\n• oddać strzał na bramkę lub strzelić gola`}
             >
               <span className={styles.compactLabel}>Poniżej 8s</span>
             </button>
@@ -962,6 +971,16 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
           
           {/* Przyciski kontrolne z polem minuty pomiędzy */}
           <div className={styles.buttonGroup}>
+            <button
+              type="button"
+              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${isControversial ? styles.controversyButtonActive : ""}`}
+              onClick={onControversialToggle}
+              aria-pressed={isControversial}
+              aria-label="Oznacz jako kontrowersja"
+              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
+            >
+              !
+            </button>
             <button
               className={styles.cancelButton}
               onClick={handleCancel}

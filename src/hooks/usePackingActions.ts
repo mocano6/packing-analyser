@@ -68,6 +68,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   const [isShot, setIsShot] = useState<boolean>(false);
   const [isGoal, setIsGoal] = useState<boolean>(false);
   const [isPenaltyAreaEntry, setIsPenaltyAreaEntry] = useState<boolean>(false);
+  const [isControversial, setIsControversial] = useState<boolean>(false);
   
   // Dodaj stan isSecondHalf
   const [isSecondHalf, setIsSecondHalf] = useState<boolean>(false);
@@ -458,6 +459,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         }),
         // Zawsze zapisujemy informację o połowie meczu (nie jako opcjonalną)
         isSecondHalf: isSecondHalfParam !== undefined ? isSecondHalfParam : isSecondHalf,
+        isControversial: isControversial,
         // Dodajemy tryb akcji i zawodników obrony (tylko dla akcji innych niż regain i loses)
         ...(actionCategory !== "regain" && actionCategory !== "loses" && {
         mode: actionMode,
@@ -1042,6 +1044,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsShot(false);
     setIsGoal(false);
     setIsPenaltyAreaEntry(false);
+    setIsControversial(false);
     // DODANO: Resetujemy także wybór zawodników po zapisaniu akcji
     setSelectedPlayerId(null);
     setSelectedReceiverId(null);
@@ -1068,6 +1071,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsShot(false);
     setIsGoal(false);
     setIsPenaltyAreaEntry(false);
+    setIsControversial(false);
     setIsBelow8sActive(false);
     setIsReaction5sActive(false);
     setIsAutActive(false);
@@ -1125,6 +1129,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsShot,
     setIsGoal,
     setIsPenaltyAreaEntry,
+    isControversial,
+    setIsControversial,
     setIsSecondHalf: setCurrentHalf,
     isBelow8sActive,
     setIsBelow8sActive,

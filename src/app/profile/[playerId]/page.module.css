@@ -505,7 +505,7 @@
 
 .categoryItem {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   padding: 10px 14px;
   background: white;
@@ -514,6 +514,7 @@
   cursor: pointer;
   transition: all 0.2s ease;
   min-height: 44px;
+  text-align: center;
 }
 
 .categoryItem:hover {
@@ -531,7 +532,7 @@
 .categoryName {
   font-weight: 600;
   color: #374151;
-  font-size: 14px;
+  font-size: 12.5px;
 }
 
 .detailsPanel {
@@ -728,7 +729,7 @@
 .detailsLabel {
   font-weight: 600;
   color: #374151;
-  font-size: 12px;
+  font-size: 12.5px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
   margin-bottom: 4px;
@@ -742,6 +743,7 @@
 .detailsValue {
   font-weight: 500;
   color: #1f2937;
+  font-size: 13px;
   line-height: 1.8;
   display: flex;
   flex-wrap: wrap;

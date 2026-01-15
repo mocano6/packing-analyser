@@ -466,21 +466,21 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                   className={`${styles.matchRow} ${isSelected ? styles.selected : ""} ${isHomeMatch ? styles.homeRow : styles.awayRow} ${isBeingDeleted ? styles.deleteInProgress : ""}`}
                   onClick={() => onSelectMatch(match)}
                 >
-                  <div 
-                    className={`${styles.cell} ${isSelected ? styles.clickableDate : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (isSelected && matchInfo) {
-                        setSelectedMatchForData(matchInfo);
-                        setIsCurrentMatchInfoModalOpen(true);
-                      }
-                    }}
-                    style={{ cursor: isSelected ? 'pointer' : 'default' }}
-                  >
+                  <div className={styles.cell}>
                     {match.date}
                   </div>
                   <div className={styles.cell}>
-                    <div className={styles.teamCell}>
+                    <div
+                      className={`${styles.teamCell} ${isSelected ? styles.clickableDate : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isSelected && matchInfo) {
+                          setSelectedMatchForData(matchInfo);
+                          setIsCurrentMatchInfoModalOpen(true);
+                        }
+                      }}
+                      style={{ cursor: isSelected ? 'pointer' : 'default' }}
+                    >
                       {(() => {
                         const team = allAvailableTeams.find(t => t.id === match.team);
                         return team?.logo ? (
