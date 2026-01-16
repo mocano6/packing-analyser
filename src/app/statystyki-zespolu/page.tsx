@@ -84,6 +84,7 @@ export default function StatystykiZespoluPage() {
   const [allLosesActions, setAllLosesActions] = useState<Action[]>([]);
   const [allShots, setAllShots] = useState<any[]>([]);
   const [allPKEntries, setAllPKEntries] = useState<any[]>([]);
+  const [allAcc8sEntries, setAllAcc8sEntries] = useState<any[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<'pxt' | 'xg' | 'matchData' | 'pkEntries' | 'regains' | 'loses' | null>(() => {
     if (typeof window !== 'undefined') {
@@ -248,6 +249,7 @@ export default function StatystykiZespoluPage() {
           const actions = matchData.actions_packing || [];
           const shots = matchData.shots || [];
           const pkEntries = matchData.pkEntries || [];
+          const acc8sEntries = (matchData as any).acc8sEntries || [];
 
           // Pobierz actions_regain i actions_loses BEZPOŚREDNIO z pól dokumentu (nie z subkolekcji!)
           const regainActions = (matchData.actions_regain || []).map(action => ({
@@ -269,12 +271,14 @@ export default function StatystykiZespoluPage() {
           setAllLosesActions(losesActions);
           setAllShots(shots);
           setAllPKEntries(pkEntries);
+          setAllAcc8sEntries(acc8sEntries);
         } else {
           setAllActions([]);
           setAllRegainActions([]);
           setAllLosesActions([]);
           setAllShots([]);
           setAllPKEntries([]);
+          setAllAcc8sEntries([]);
         }
       } catch (error) {
         console.error("Błąd podczas pobierania akcji:", error);
@@ -1330,6 +1334,103 @@ export default function StatystykiZespoluPage() {
     return result;
   }, [derivedRegainActions]);
 
+  // Statystyki po akcjach regain (xG, wejścia w PK, PXT 8s)
+  const regainAfterStats = useMemo(() => {
+    if (!selectedMatch || derivedRegainActions.length === 0) {
+      return {
+        totalXG: 0,
+        totalPKEntries: 0,
+        totalPXT8s: 0,
+        xGPerRegain: 0,
+        pkEntriesPerRegain: 0,
+        pxt8sPerRegain: 0,
+      };
+    }
+
+    let totalXG = 0;
+    let totalPKEntries = 0;
+    let totalPXT8s = 0;
+
+    // Sortuj wszystkie akcje według czasu wideo
+    const allActionsWithTimestamp = allActions
+      .map(action => ({
+        action,
+        timestamp: action.videoTimestampRaw ?? action.videoTimestamp ?? 0,
+      }))
+      .filter(item => item.timestamp > 0)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    const allShotsWithTimestamp = allShots
+      .map(shot => ({
+        shot,
+        timestamp: shot.videoTimestampRaw ?? shot.videoTimestamp ?? 0,
+      }))
+      .filter(item => item.timestamp > 0)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    const allPKEntriesWithTimestamp = allPKEntries
+      .map(entry => ({
+        entry,
+        timestamp: entry.videoTimestampRaw ?? entry.videoTimestamp ?? 0,
+      }))
+      .filter(item => item.timestamp > 0)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    // Sortuj akcje regain według czasu wideo
+    const regainActionsWithTimestamp = derivedRegainActions
+      .map(action => ({
+        action,
+        timestamp: action.videoTimestampRaw ?? action.videoTimestamp ?? 0,
+      }))
+      .filter(item => item.timestamp > 0)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    // Dla każdej akcji regain, znajdź akcje, które nastąpiły po niej (ale przed następną akcją regain)
+    regainActionsWithTimestamp.forEach((regainItem, index) => {
+      const regainTimestamp = regainItem.timestamp;
+      const nextRegainTimestamp = index < regainActionsWithTimestamp.length - 1
+        ? regainActionsWithTimestamp[index + 1].timestamp
+        : Infinity;
+
+      // Znajdź wszystkie strzały po tej akcji regain (ale przed następną)
+      const shotsAfterRegain = allShotsWithTimestamp.filter(
+        item => item.timestamp > regainTimestamp && item.timestamp < nextRegainTimestamp
+      );
+      totalXG += shotsAfterRegain.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+
+      // Znajdź wszystkie wejścia w PK po tej akcji regain (ale przed następną)
+      const pkEntriesAfterRegain = allPKEntriesWithTimestamp.filter(
+        item => item.timestamp > regainTimestamp && item.timestamp < nextRegainTimestamp
+      );
+      totalPKEntries += pkEntriesAfterRegain.length;
+
+      // Znajdź wszystkie akcje packing w ciągu 8 sekund po tej akcji regain
+      const eightSecondsAfterRegain = regainTimestamp + 8;
+      const actionsWithin8s = allActionsWithTimestamp.filter(
+        item => item.timestamp > regainTimestamp && item.timestamp <= eightSecondsAfterRegain && item.timestamp < nextRegainTimestamp
+      );
+
+      // Oblicz PXT z akcji w ciągu 8 sekund
+      actionsWithin8s.forEach(item => {
+        const xTDifference = (item.action.xTValueEnd || 0) - (item.action.xTValueStart || 0);
+        const packingPoints = item.action.packingPoints || 0;
+        const pxtValue = xTDifference * packingPoints;
+        totalPXT8s += pxtValue;
+      });
+    });
+
+    const totalRegains = derivedRegainActions.length;
+
+    return {
+      totalXG,
+      totalPKEntries,
+      totalPXT8s,
+      xGPerRegain: totalRegains > 0 ? totalXG / totalRegains : 0,
+      pkEntriesPerRegain: totalRegains > 0 ? totalPKEntries / totalRegains : 0,
+      pxt8sPerRegain: totalRegains > 0 ? totalPXT8s / totalRegains : 0,
+    };
+  }, [selectedMatch, derivedRegainActions, allActions, allShots, allPKEntries]);
+
   const regainsTimelineXT = useMemo(() => {
     if (derivedRegainActions.length === 0) return [];
     const intervals: { [key: number]: { regains: number; xtAttack: number; xtDefense: number } } = {};
@@ -1475,9 +1576,9 @@ export default function StatystykiZespoluPage() {
     let unknownCount = 0;
 
     derivedLosesActions.forEach(action => {
-      if (action.isReaction5s !== undefined) {
+      if (action.isReaction5s === true) {
         reaction5sCount += 1;
-      } else if (action.isBelow8s !== undefined) {
+      } else if (action.isBelow8s === true) {
         below8sCount += 1;
       } else {
         unknownCount += 1;
@@ -1490,6 +1591,123 @@ export default function StatystykiZespoluPage() {
       unknownCount,
     };
   }, [derivedLosesActions]);
+
+    // Statystyki przeciwnika po stratach (xG, wejścia w PK, regainy w ciągu 8s)
+  const losesAfterStats = useMemo(() => {
+    if (!selectedMatch || !selectedMatchInfo || derivedLosesActions.length === 0) {
+      return {
+        totalOpponentXG: 0,
+        totalOpponentPKEntries: 0,
+        totalOpponentRegains: 0,
+        xGPerLose: 0,
+        pkEntriesPerLose: 0,
+      };
+    }
+
+    const isHome = selectedMatchInfo.isHome;
+    const teamId = isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent;
+    const opponentId = isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team;
+
+    let totalOpponentXG = 0;
+    let totalOpponentPKEntries = 0;
+    let totalOpponentRegains = 0;
+
+    // Sortuj wszystkie akcje według czasu wideo
+    const allShotsWithTimestamp = allShots
+      .map(shot => ({
+        shot,
+        timestamp: shot.videoTimestampRaw ?? shot.videoTimestamp ?? 0,
+      }))
+      .filter(item => item.timestamp > 0)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    const allPKEntriesWithTimestamp = allPKEntries
+      .map(entry => ({
+        entry,
+        timestamp: entry.videoTimestampRaw ?? entry.videoTimestamp ?? 0,
+      }))
+      .filter(item => item.timestamp > 0)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    // Sortuj wszystkie regainy według czasu wideo (allRegainActions zawiera wszystkie regainy z meczu)
+    const allRegainActionsWithTimestamp = allRegainActions
+      .map(action => ({
+        action,
+        timestamp: action.videoTimestampRaw ?? action.videoTimestamp ?? 0,
+      }))
+      .filter(item => item.timestamp > 0)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    // Sortuj akcje loses według czasu wideo
+    const losesActionsWithTimestamp = derivedLosesActions
+      .map(action => ({
+        action,
+        timestamp: action.videoTimestampRaw ?? action.videoTimestamp ?? 0,
+      }))
+      .filter(item => item.timestamp > 0)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    // Dla każdej akcji loses, znajdź akcje przeciwnika w ciągu 8 sekund
+    losesActionsWithTimestamp.forEach((loseItem, index) => {
+      const loseTimestamp = loseItem.timestamp;
+      const nextLoseTimestamp = index < losesActionsWithTimestamp.length - 1
+        ? losesActionsWithTimestamp[index + 1].timestamp
+        : Infinity;
+
+      // Znajdź wszystkie strzały przeciwnika w ciągu 8 sekund po stracie
+      const eightSecondsAfterLose = loseTimestamp + 8;
+      const opponentShotsAfterLose = allShotsWithTimestamp.filter(item => {
+        if (item.timestamp <= loseTimestamp || item.timestamp > eightSecondsAfterLose || item.timestamp >= nextLoseTimestamp) {
+          return false;
+        }
+        
+        // Sprawdź czy strzał jest przeciwnika
+        const shotTeamId = item.shot.teamId || (item.shot.teamContext === 'attack' 
+          ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+          : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+        
+        return shotTeamId === opponentId;
+      });
+      
+      totalOpponentXG += opponentShotsAfterLose.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+
+      // Znajdź wszystkie wejścia w PK przeciwnika w ciągu 8 sekund po stracie
+      const opponentPKEntriesAfterLose = allPKEntriesWithTimestamp.filter(item => {
+        if (item.timestamp <= loseTimestamp || item.timestamp > eightSecondsAfterLose || item.timestamp >= nextLoseTimestamp) {
+          return false;
+        }
+        
+        // Sprawdź czy wejście w PK jest przeciwnika (teamContext === "defense" oznacza przeciwnika)
+        return item.entry.teamContext === "defense" || 
+               (item.entry.teamId && item.entry.teamId !== teamId);
+      });
+      
+      totalOpponentPKEntries += opponentPKEntriesAfterLose.length;
+
+      // Znajdź wszystkie regainy przeciwnika w ciągu 8 sekund po stracie
+      const opponentRegainsAfterLose = allRegainActionsWithTimestamp.filter(item => {
+        if (item.timestamp <= loseTimestamp || item.timestamp > eightSecondsAfterLose || item.timestamp >= nextLoseTimestamp) {
+          return false;
+        }
+        
+        // Sprawdź czy regain jest przeciwnika (teamId przeciwnika)
+        const actionTeamId = item.action.teamId;
+        return actionTeamId === opponentId || (actionTeamId && actionTeamId !== teamId);
+      });
+      
+      totalOpponentRegains += opponentRegainsAfterLose.length;
+    });
+
+    const totalLoses = derivedLosesActions.length;
+
+    return {
+      totalOpponentXG,
+      totalOpponentPKEntries,
+      totalOpponentRegains,
+      xGPerLose: totalLoses > 0 ? totalOpponentXG / totalLoses : 0,
+      pkEntriesPerLose: totalLoses > 0 ? totalOpponentPKEntries / totalLoses : 0,
+    };
+  }, [selectedMatch, selectedMatchInfo, derivedLosesActions, allShots, allPKEntries, allRegainActions]);
 
   // Wykres PK entries co 5 minut (zespół vs przeciwnik)
   const pkEntriesTimeline = useMemo(() => {
@@ -2147,56 +2365,6 @@ export default function StatystykiZespoluPage() {
             )}
             {expandedCategory === 'regains' && selectedMatchInfo && (
               <div className={styles.detailsPanel}>
-                <h3>Szczegóły Przechwytów</h3>
-
-                {/* Przełącznik atak/obrona */}
-                <div className={styles.heatmapModeToggle}>
-                  <button
-                    className={`${styles.heatmapModeButton} ${teamRegainAttackDefenseMode === 'defense' ? styles.active : ''}`}
-                    onClick={() => setTeamRegainAttackDefenseMode('defense')}
-                    type="button"
-                  >
-                    W obronie
-                  </button>
-                  <button
-                    className={`${styles.heatmapModeButton} ${teamRegainAttackDefenseMode === 'attack' ? styles.active : ''}`}
-                    onClick={() => setTeamRegainAttackDefenseMode('attack')}
-                    type="button"
-                  >
-                    W ataku
-                  </button>
-                </div>
-
-                {/* Statystyki połówek */}
-                <div className={styles.halfTimeStatsInPanel}>
-                  <h4>Statystyki połówek</h4>
-                  <div className={styles.halfTimeContainerInPanel}>
-                    {/* I połowa */}
-                    <div className={styles.halfTimeCardInPanel}>
-                      <div className={styles.halfTimeLabel}>I połowa</div>
-                      <div className={styles.statRow}>
-                        <div className={styles.statValue}>{teamStats.regainsFirstHalf}</div>
-                        <div className={styles.statLabel}>przechwyty</div>
-                      </div>
-                      <div className={styles.statSubValue}>
-                        {regainsFirstHalfPct.toFixed(1)}%
-                      </div>
-                    </div>
-
-                    {/* II połowa */}
-                    <div className={styles.halfTimeCardInPanel}>
-                      <div className={styles.halfTimeLabel}>II połowa</div>
-                      <div className={styles.statRow}>
-                        <div className={styles.statValue}>{teamStats.regainsSecondHalf}</div>
-                        <div className={styles.statLabel}>przechwyty</div>
-                      </div>
-                      <div className={styles.statSubValue}>
-                        {regainsSecondHalfPct.toFixed(1)}%
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Podstawowe statystyki */}
                 <div className={styles.detailsSection}>
                   <div className={styles.detailsRow}>
@@ -2219,10 +2387,29 @@ export default function StatystykiZespoluPage() {
                       <span className={styles.valueSecondary}>• {teamRegainStats.regainXTInDefensePerAction.toFixed(3)} / akcję</span>
                     </span>
                   </div>
+                </div>
+
+                {/* Statystyki po akcjach regain */}
+                <div className={styles.detailsSection}>
                   <div className={styles.detailsRow}>
-                    <span className={styles.detailsLabel}>TRYB:</span>
+                    <span className={styles.detailsLabel}><span className={styles.preserveCase}>xG</span>:</span>
                     <span className={styles.detailsValue}>
-                      {teamRegainStats.regainAttackCount}W ataku ({teamRegainStats.attackPct.toFixed(1)}%) • {teamRegainStats.regainDefenseCount}W obronie ({teamRegainStats.defensePct.toFixed(1)}%)
+                      <span className={styles.valueMain}>{regainAfterStats.totalXG.toFixed(3)}</span>
+                      <span className={styles.valueSecondary}>• {regainAfterStats.xGPerRegain.toFixed(3)} / przechwyt</span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>WEJŚCIA W PK:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{regainAfterStats.totalPKEntries}</span>
+                      <span className={styles.valueSecondary}>• {regainAfterStats.pkEntriesPerRegain.toFixed(2)} / przechwyt</span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}><span className={styles.preserveCase}>PXT</span> 8s:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{regainAfterStats.totalPXT8s.toFixed(3)}</span>
+                      <span className={styles.valueSecondary}>• {regainAfterStats.pxt8sPerRegain.toFixed(3)} / przechwyt</span>
                     </span>
                   </div>
                 </div>
@@ -2232,6 +2419,23 @@ export default function StatystykiZespoluPage() {
                   <div className={styles.heatmapHeaderInPanel}>
                     <h4>Heatmapa przechwytów</h4>
                     <div className={styles.heatmapControlsInPanel}>
+                      {/* Przełącznik atak/obrona */}
+                      <div className={styles.heatmapModeToggle}>
+                        <button
+                          className={`${styles.heatmapModeButton} ${teamRegainAttackDefenseMode === 'defense' ? styles.active : ''}`}
+                          onClick={() => setTeamRegainAttackDefenseMode('defense')}
+                          type="button"
+                        >
+                          W obronie
+                        </button>
+                        <button
+                          className={`${styles.heatmapModeButton} ${teamRegainAttackDefenseMode === 'attack' ? styles.active : ''}`}
+                          onClick={() => setTeamRegainAttackDefenseMode('attack')}
+                          type="button"
+                        >
+                          W ataku
+                        </button>
+                      </div>
                       <div className={styles.heatmapModeToggle}>
                         <button
                           className={`${styles.heatmapModeButton} ${teamRegainHeatmapMode === 'xt' ? styles.active : ''}`}
@@ -2259,6 +2463,16 @@ export default function StatystykiZespoluPage() {
                         mirrored={false}
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* Wiersz TRYB */}
+                <div className={styles.detailsSection}>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>TRYB:</span>
+                    <span className={styles.detailsValue}>
+                      {teamRegainStats.regainAttackCount}W ataku ({teamRegainStats.attackPct.toFixed(1)}%) • {teamRegainStats.regainDefenseCount}W obronie ({teamRegainStats.defensePct.toFixed(1)}%)
+                    </span>
                   </div>
                 </div>
 
@@ -2330,38 +2544,6 @@ export default function StatystykiZespoluPage() {
             )}
             {expandedCategory === 'loses' && selectedMatchInfo && (
               <div className={styles.detailsPanel}>
-                <h3>Straty</h3>
-
-                {/* Statystyki połówek */}
-                <div className={styles.halfTimeStatsInPanel}>
-                  <h4>Statystyki połówek</h4>
-                  <div className={styles.halfTimeContainerInPanel}>
-                    {/* I połowa */}
-                    <div className={styles.halfTimeCardInPanel}>
-                      <div className={styles.halfTimeLabel}>I połowa</div>
-                      <div className={styles.statRow}>
-                        <div className={styles.statValue}>{teamStats.losesFirstHalf}</div>
-                        <div className={styles.statLabel}>straty</div>
-                      </div>
-                      <div className={styles.statSubValue}>
-                        {losesFirstHalfPct.toFixed(1)}%
-                      </div>
-                    </div>
-
-                    {/* II połowa */}
-                    <div className={styles.halfTimeCardInPanel}>
-                      <div className={styles.halfTimeLabel}>II połowa</div>
-                      <div className={styles.statRow}>
-                        <div className={styles.statValue}>{teamStats.losesSecondHalf}</div>
-                        <div className={styles.statLabel}>straty</div>
-                      </div>
-                      <div className={styles.statSubValue}>
-                        {losesSecondHalfPct.toFixed(1)}%
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Podstawowe statystyki */}
                 <div className={styles.detailsSection}>
                   <div className={styles.detailsRow}>
@@ -2388,33 +2570,31 @@ export default function StatystykiZespoluPage() {
                       )}
                     </span>
                   </div>
-                  <div className={styles.detailsRow}>
-                    <span className={styles.detailsLabel}>TEMPO STRAT:</span>
-                    <span className={styles.detailsValue}>
-                      {losesPer10.toFixed(2)}/10 min • {losesPer5.toFixed(2)}/5 min
-                    </span>
-                  </div>
                 </div>
 
-                {/* Typy strat */}
+                {/* Konsekwencje strat */}
                 <div className={styles.detailsSection}>
-                  <h4>Typy strat</h4>
+                  <h4>Konsekwencje strat</h4>
                   <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}>REAKCJA 5S:</span>
                     <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>{losesContextStats.reaction5sCount}</span>
+                      <span className={styles.valueMain}>
+                        {teamStats.totalLoses > 0 ? ((losesContextStats.reaction5sCount / teamStats.totalLoses) * 100).toFixed(1) : 0}%
+                      </span>
+                      <span className={styles.valueSecondary}>
+                        • {losesContextStats.reaction5sCount}/{teamStats.totalLoses}
+                      </span>
                     </span>
                   </div>
                   <div className={styles.detailsRow}>
-                    <span className={styles.detailsLabel}>PONIŻEJ 8S:</span>
+                    <span className={styles.detailsLabel}>Akcje do 8s od straty:</span>
                     <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>{losesContextStats.below8sCount}</span>
-                    </span>
-                  </div>
-                  <div className={styles.detailsRow}>
-                    <span className={styles.detailsLabel}>INNE:</span>
-                    <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>{losesContextStats.unknownCount}</span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentXG.toFixed(2)}</span>
+                      <span className={styles.valueSecondary}> xG, </span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentPKEntries}</span>
+                      <span className={styles.valueSecondary}> PK, </span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains}</span>
+                      <span className={styles.valueSecondary}> Regain</span>
                     </span>
                   </div>
                 </div>

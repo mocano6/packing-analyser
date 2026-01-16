@@ -257,6 +257,7 @@ export interface TeamInfo {
   actions_loses?: Action[]; // Tablica akcji loses związanych z tym meczem
   shots?: Shot[]; // Tablica strzałów z mapą xG
   pkEntries?: PKEntry[]; // Tablica wejść w pole karne
+  acc8sEntries?: Acc8sEntry[]; // Tablica akcji 8s ACC
   // Dane meczu
   matchData?: {
     // Czas posiadania (w minutach)
