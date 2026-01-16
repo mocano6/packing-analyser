@@ -1,7 +1,8 @@
 /* components/ActionSection/ActionSection.module.css */
 .actionContainer {
   width: 100%;
-  margin: 0.5rem 0;
+  margin: 0;
+  margin-bottom: 20px;
   position: relative;
 }
 

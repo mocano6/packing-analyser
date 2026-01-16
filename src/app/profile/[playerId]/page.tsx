@@ -150,6 +150,16 @@ export default function PlayerDetailsPage() {
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<{ playerId: string; playerName: string; zoneName: string } | null>(null);
   const [isPlayerSelectModalOpen, setIsPlayerSelectModalOpen] = useState(false);
   const [isMatchSelectModalOpen, setIsMatchSelectModalOpen] = useState(false);
+  // Filtry typów meczów w modalu wyboru meczów
+  const [matchTypeFilters, setMatchTypeFilters] = useState<{
+    liga: boolean;
+    puchar: boolean;
+    towarzyski: boolean;
+  }>({
+    liga: true,
+    puchar: true,
+    towarzyski: true,
+  });
   const [selectedPKEntryIdForView, setSelectedPKEntryIdForView] = useState<string | undefined>(undefined);
   const [pkEntryTypeFilter, setPkEntryTypeFilter] = useState<"all" | "pass" | "dribble" | "sfg">("all");
   const [pkOnlyRegain, setPkOnlyRegain] = useState(false);
@@ -210,6 +220,20 @@ export default function PlayerDetailsPage() {
     
     return matches;
   }, [allMatches, selectedSeason, selectedTeam]);
+
+  // Filtruj mecze według typu (liga, puchar, towarzyski) - używane w modalu wyboru meczów
+  const filteredMatchesByType = useMemo(() => {
+    return filteredMatchesBySeason.filter(match => {
+      const matchType = match.matchType;
+      
+      // Jeśli mecz nie ma typu, traktuj jako "liga" (domyślnie)
+      if (!matchType) {
+        return matchTypeFilters.liga;
+      }
+      
+      return matchTypeFilters[matchType];
+    });
+  }, [filteredMatchesBySeason, matchTypeFilters]);
 
   // Filtrowani zawodnicy według wybranego zespołu
   const filteredPlayers = useMemo(() => {
@@ -6851,31 +6875,61 @@ export default function PlayerDetailsPage() {
               </button>
             </div>
             <div className={styles.matchSelectModalBody}>
-              <div className={styles.matchSelectModalActions}>
-                <button
-                  className={styles.matchSelectActionButton}
-                  onClick={() => {
-                    const allIds = filteredMatchesBySeason
-                      .filter(m => m.matchId)
-                      .map(m => m.matchId!);
-                    setSelectedMatchIds(allIds);
-                    setManuallyDeselectedAll(false);
-                  }}
-                >
-                  Zaznacz wszystkie
-                </button>
-                <button
-                  className={styles.matchSelectActionButton}
-                  onClick={() => {
-                    setSelectedMatchIds([]);
-                    setManuallyDeselectedAll(true);
-                  }}
-                >
-                  Odznacz wszystkie
-                </button>
+              {/* Sekcja filtrów i akcji */}
+              <div className={styles.matchSelectFiltersSection}>
+                <div className={styles.filterGroup}>
+                  <label className={styles.filterLabel}>Typ meczu</label>
+                  <div className={styles.matchTypeFilters}>
+                    <button
+                      className={`${styles.matchTypeFilterButton} ${matchTypeFilters.liga ? styles.matchTypeFilterButtonActive : ''}`}
+                      onClick={() => setMatchTypeFilters(prev => ({ ...prev, liga: !prev.liga }))}
+                      aria-pressed={matchTypeFilters.liga}
+                    >
+                      Liga
+                    </button>
+                    <button
+                      className={`${styles.matchTypeFilterButton} ${matchTypeFilters.puchar ? styles.matchTypeFilterButtonActive : ''}`}
+                      onClick={() => setMatchTypeFilters(prev => ({ ...prev, puchar: !prev.puchar }))}
+                      aria-pressed={matchTypeFilters.puchar}
+                    >
+                      Puchar
+                    </button>
+                    <button
+                      className={`${styles.matchTypeFilterButton} ${matchTypeFilters.towarzyski ? styles.matchTypeFilterButtonActive : ''}`}
+                      onClick={() => setMatchTypeFilters(prev => ({ ...prev, towarzyski: !prev.towarzyski }))}
+                      aria-pressed={matchTypeFilters.towarzyski}
+                    >
+                      Towarzyski
+                    </button>
+                  </div>
+                </div>
+
+                <div className={styles.matchSelectModalActions}>
+                  <button
+                    className={styles.matchSelectActionButton}
+                    onClick={() => {
+                      const allIds = filteredMatchesByType
+                        .filter(m => m.matchId)
+                        .map(m => m.matchId!);
+                      setSelectedMatchIds(allIds);
+                      setManuallyDeselectedAll(false);
+                    }}
+                  >
+                    Zaznacz wszystkie
+                  </button>
+                  <button
+                    className={styles.matchSelectActionButton}
+                    onClick={() => {
+                      setSelectedMatchIds([]);
+                      setManuallyDeselectedAll(true);
+                    }}
+                  >
+                    Odznacz wszystkie
+                  </button>
+                </div>
               </div>
               <div className={styles.matchSelectMatchesList}>
-                {filteredMatchesBySeason.map((match) => {
+                {filteredMatchesByType.map((match) => {
                   const isSelected = selectedMatchIds.includes(match.matchId || "");
                   return (
                     <div

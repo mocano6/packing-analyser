@@ -2477,30 +2477,97 @@
   flex: 1;
 }
 
+/* Sekcja filtrów i akcji */
+.matchSelectFiltersSection {
+  margin-bottom: 20px;
+  padding: 14px;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* Grupa filtra z etykietą */
+.filterGroup {
+  margin-bottom: 12px;
+}
+
+.filterLabel {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+/* Filtry typów meczów */
+.matchTypeFilters {
+  display: flex;
+  gap: 6px;
+  background-color: #f3f4f6;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.matchTypeFilterButton {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background-color: transparent;
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+}
+
+.matchTypeFilterButton:hover {
+  background-color: rgba(59, 130, 246, 0.08);
+  color: #3b82f6;
+}
+
+.matchTypeFilterButtonActive {
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.2);
+}
+
+.matchTypeFilterButtonActive:hover {
+  background-color: #2563eb;
+}
+
 .matchSelectModalActions {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e5e7eb;
 }
 
 .matchSelectActionButton {
-  padding: 8px 16px;
+  flex: 1;
+  padding: 9px 16px;
   background-color: #f3f4f6;
   color: #374151;
-  border: 1px solid #d1d5db;
+  border: none;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
 }
 
 .matchSelectActionButton:hover {
   background-color: #e5e7eb;
-  border-color: #9ca3af;
 }
 
 .matchSelectMatchesList {

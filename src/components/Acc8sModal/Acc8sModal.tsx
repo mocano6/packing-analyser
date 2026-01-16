@@ -6,6 +6,7 @@ import styles from "./Acc8sModal.module.css";
 
 export interface Acc8sModalProps {
   isOpen: boolean;
+  isVideoInternal?: boolean;
   onClose: () => void;
   onSave: (entry: Omit<Acc8sEntry, "id" | "timestamp">) => void;
   onDelete?: (entryId: string) => void;
@@ -18,6 +19,7 @@ export interface Acc8sModalProps {
 
 const Acc8sModal: React.FC<Acc8sModalProps> = ({
   isOpen,
+  isVideoInternal = false,
   onClose,
   onSave,
   onDelete,
@@ -221,7 +223,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={`${styles.overlay} ${isVideoInternal ? styles.overlayInternal : ''}`} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{editingEntry ? "Edytuj akcję 8s ACC" : "Dodaj akcję 8s ACC"}</h3>
@@ -318,7 +320,6 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
               Anuluj
             </button>
             <div className={styles.minuteInput}>
-              <label htmlFor="minute">Minuta:</label>
               <div className={styles.minuteControls}>
                 <button
                   type="button"

@@ -8,6 +8,7 @@ import PlayerCard from "../ActionModal/PlayerCard";
 
 export interface PKEntryModalProps {
   isOpen: boolean;
+  isVideoInternal?: boolean;
   onClose: () => void;
   onSave: (entry: Omit<PKEntry, "id" | "timestamp">) => void;
   onDelete?: (entryId: string) => void;
@@ -24,6 +25,7 @@ export interface PKEntryModalProps {
 
 const PKEntryModal: React.FC<PKEntryModalProps> = ({
   isOpen,
+  isVideoInternal = false,
   onClose,
   onSave,
   onDelete,
@@ -539,7 +541,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={`${styles.overlay} ${isVideoInternal ? styles.overlayInternal : ''}`} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{editingEntry ? "Edytuj wejście PK" : "Dodaj wejście PK"}</h3>
@@ -817,7 +819,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
             </button>
             <div className={styles.minuteAndSave}>
               <div className={styles.minuteInput}>
-                <label htmlFor="minute">Minuta:</label>
                 <div className={styles.minuteControls}>
                   <button
                     type="button"

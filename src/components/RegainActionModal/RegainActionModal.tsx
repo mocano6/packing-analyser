@@ -11,6 +11,7 @@ import { sortPlayersByLastName } from '@/utils/playerUtils';
 
 interface RegainActionModalProps {
   isOpen: boolean;
+  isVideoInternal?: boolean;
   onClose: () => void;
   players: Player[];
   selectedPlayerId: string | null;
@@ -83,6 +84,7 @@ interface RegainActionModalProps {
 
 const RegainActionModal: React.FC<RegainActionModalProps> = ({
   isOpen,
+  isVideoInternal = false,
   onClose,
   players,
   selectedPlayerId,
@@ -420,7 +422,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   };
 
   return (
-    <div className={styles.overlay} onClick={handleCancel}>
+    <div className={`${styles.overlay} ${isVideoInternal ? styles.overlayInternal : ''}`} onClick={handleCancel}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{isEditMode ? "Edytuj akcję Regain" : "Dodaj akcję Regain"}</h3>
@@ -925,7 +927,6 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
             </button>
             
             <div className={styles.minuteInput}>
-              <label htmlFor="action-minute-modal">Minuta:</label>
               <div className={styles.minuteControls}>
                 <button
                   type="button"

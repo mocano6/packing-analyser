@@ -11,6 +11,7 @@ import { sortPlayersByLastName } from '@/utils/playerUtils';
 
 interface LosesActionModalProps {
   isOpen: boolean;
+  isVideoInternal?: boolean;
   onClose: () => void;
   players: Player[];
   selectedPlayerId: string | null;
@@ -92,6 +93,7 @@ interface LosesActionModalProps {
 
 const LosesActionModal: React.FC<LosesActionModalProps> = ({
   isOpen,
+  isVideoInternal = false,
   onClose,
   players,
   selectedPlayerId,
@@ -438,7 +440,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   };
 
   return (
-    <div className={styles.overlay} onClick={handleCancel}>
+    <div className={`${styles.overlay} ${isVideoInternal ? styles.overlayInternal : ''}`} onClick={handleCancel}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{isEditMode ? "Edytuj akcję Loses" : "Dodaj akcję Loses"}</h3>
@@ -998,7 +1000,6 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
             </button>
             
             <div className={styles.minuteInput}>
-              <label htmlFor="action-minute-modal">Minuta:</label>
               <div className={styles.minuteControls}>
                 <button
                   type="button"

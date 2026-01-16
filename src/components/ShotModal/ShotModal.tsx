@@ -7,6 +7,7 @@ import styles from "./ShotModal.module.css";
 
 export interface ShotModalProps {
   isOpen: boolean;
+  isVideoInternal?: boolean;
   onClose: () => void;
   onSave: (shot: Omit<Shot, "id" | "timestamp">) => void;
   onDelete?: (shotId: string) => void;
@@ -22,6 +23,7 @@ export interface ShotModalProps {
 
 const ShotModal: React.FC<ShotModalProps> = ({
   isOpen,
+  isVideoInternal = false,
   onClose,
   onSave,
   onDelete,
@@ -454,7 +456,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={`${styles.overlay} ${isVideoInternal ? styles.overlayInternal : ''}`} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{editingShot ? "Edytuj strzał" : "Dodaj strzał"}</h3>
@@ -989,7 +991,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
             </button>
             <div className={styles.minuteAndSave}>
               <div className={styles.minuteInput}>
-                <label htmlFor="minute">Minuta:</label>
                 <div className={styles.minuteControls}>
                   <button
                     type="button"

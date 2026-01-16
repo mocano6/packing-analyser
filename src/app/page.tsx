@@ -213,6 +213,13 @@ export default function Page() {
     return false;
   });
 
+  // Oblicz czy wideo jest wyświetlane wewnętrznie (nie w zewnętrznym oknie)
+  const isVideoInternal = React.useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
+    return isVideoVisible && !isExternalWindowOpen;
+  }, [isVideoVisible]);
+
   // Zapisz stan widoczności wideo do localStorage przy każdej zmianie
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -2908,6 +2915,7 @@ export default function Page() {
             actionCategory="packing"
             // Propsy do scrollowania do wideo YouTube
             isVideoVisible={isVideoVisible}
+            isVideoInternal={isVideoInternal}
             onScrollToVideo={handleScrollToVideo}
             videoContainerRef={youtubeVideoContainerRef}
             youtubeVideoRef={youtubeVideoRef}
@@ -2991,6 +2999,7 @@ export default function Page() {
             onRegainLosesModeChange={setRegainLosesMode}
             // Propsy do scrollowania do wideo YouTube
             isVideoVisible={isVideoVisible}
+            isVideoInternal={isVideoInternal}
             onScrollToVideo={handleScrollToVideo}
             videoContainerRef={youtubeVideoContainerRef}
             youtubeVideoRef={youtubeVideoRef}
@@ -3000,24 +3009,15 @@ export default function Page() {
 
         {activeTab === "acc8s" && (
           <div className={styles.acc8sSection}>
-            <div className={styles.acc8sHeader}>
-              <h3>Akcje 8s ACC</h3>
-              <button
-                onClick={async () => {
-                  if (!matchInfo?.matchId || !matchInfo?.team) {
-                    alert("Wybierz mecz, aby dodać akcję 8s ACC!");
-                    return;
-                  }
-                  await openAcc8sModalWithVideoTime();
-                }}
-                className={styles.acc8sAddButton}
-                title="Dodaj akcję 8s ACC"
-              >
-                +
-              </button>
-            </div>
             <Acc8sTable
               entries={acc8sEntries}
+              onAddEntry={async () => {
+                if (!matchInfo?.matchId || !matchInfo?.team) {
+                  alert("Wybierz mecz, aby dodać akcję 8s ACC!");
+                  return;
+                }
+                await openAcc8sModalWithVideoTime();
+              }}
               onDeleteEntry={async (entryId) => {
                 if (confirm("Czy na pewno chcesz usunąć tę akcję 8s ACC?")) {
                   await deleteAcc8sEntry(entryId);
@@ -3045,24 +3045,76 @@ export default function Page() {
               youtubeVideoRef={youtubeVideoRef}
               customVideoRef={customVideoRef}
             />
+            {acc8sModalData && (
+              <Acc8sModal
+                isOpen={isAcc8sModalOpen}
+                isVideoInternal={isVideoInternal}
+                onClose={() => {
+                  setIsAcc8sModalOpen(false);
+                  setAcc8sModalData(null);
+                }}
+                onSave={async (entryData) => {
+                  console.log('Page onSave - entryData:', entryData);
+                  if (acc8sModalData.editingEntry) {
+                    const success = await updateAcc8sEntry(acc8sModalData.editingEntry.id, entryData);
+                    console.log('Page onSave - updateAcc8sEntry success:', success);
+                  } else {
+                    const result = await addAcc8sEntry(entryData);
+                    console.log('Page onSave - addAcc8sEntry result:', result);
+                  }
+                  setIsAcc8sModalOpen(false);
+                  setAcc8sModalData(null);
+                }}
+                onDelete={async (entryId) => {
+                  await deleteAcc8sEntry(entryId);
+                  setIsAcc8sModalOpen(false);
+                  setAcc8sModalData(null);
+                }}
+                editingEntry={acc8sModalData.editingEntry}
+                matchId={matchInfo?.matchId || ""}
+                matchInfo={matchInfo}
+                players={players}
+                onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+              />
+            )}
           </div>
         )}
 
         {activeTab === "xg" && (
-          <XGPitch
-            shots={shots}
-            onShotAdd={handleShotAdd}
-            onShotClick={handleShotClick}
-            selectedShotId={selectedShotId}
-            matchInfo={matchInfo || undefined}
-            allTeams={allTeams}
-          />
+          <div style={{ position: 'relative' }}>
+            <XGPitch
+              shots={shots}
+              onShotAdd={handleShotAdd}
+              onShotClick={handleShotClick}
+              selectedShotId={selectedShotId}
+              matchInfo={matchInfo || undefined}
+              allTeams={allTeams}
+            />
+            {shotModalData && (
+              <ShotModal
+                isOpen={isShotModalOpen}
+                isVideoInternal={isVideoInternal}
+                onClose={handleShotModalClose}
+                onSave={handleShotSave}
+                onDelete={handleShotDelete}
+                editingShot={shotModalData.editingShot}
+                x={shotModalData.x}
+                y={shotModalData.y}
+                xG={shotModalData.xG}
+                matchId={matchInfo?.matchId || ""}
+                players={players}
+                matchInfo={matchInfo}
+                onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+              />
+            )}
+          </div>
         )}
 
         {activeTab === "pk_entries" && (
-          <PKEntriesPitch
-            pkEntries={pkEntries}
-            onEntryAdd={async (startX, startY, endX, endY) => {
+          <div style={{ position: 'relative' }}>
+            <PKEntriesPitch
+              pkEntries={pkEntries}
+              onEntryAdd={async (startX, startY, endX, endY) => {
               if (!matchInfo?.matchId || !matchInfo?.team) {
                 alert("Wybierz mecz, aby dodać wejście PK!");
                 return;
@@ -3113,11 +3165,10 @@ export default function Page() {
             matchInfo={matchInfo || undefined}
             allTeams={allTeams}
           />
-        )}
-
-        {activeTab === "pk_entries" && pkEntryModalData && (
-          <PKEntryModal
+          {pkEntryModalData && (
+            <PKEntryModal
             isOpen={isPKEntryModalOpen}
+            isVideoInternal={isVideoInternal}
             onClose={() => {
               setIsPKEntryModalOpen(false);
               setPkEntryModalData(null);
@@ -3149,38 +3200,8 @@ export default function Page() {
             matchInfo={matchInfo}
             onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
           />
-        )}
-
-        {activeTab === "acc8s" && acc8sModalData && (
-          <Acc8sModal
-            isOpen={isAcc8sModalOpen}
-            onClose={() => {
-              setIsAcc8sModalOpen(false);
-              setAcc8sModalData(null);
-            }}
-            onSave={async (entryData) => {
-              console.log('Page onSave - entryData:', entryData);
-              if (acc8sModalData.editingEntry) {
-                const success = await updateAcc8sEntry(acc8sModalData.editingEntry.id, entryData);
-                console.log('Page onSave - updateAcc8sEntry success:', success);
-              } else {
-                const result = await addAcc8sEntry(entryData);
-                console.log('Page onSave - addAcc8sEntry result:', result);
-              }
-              setIsAcc8sModalOpen(false);
-              setAcc8sModalData(null);
-            }}
-            onDelete={async (entryId) => {
-              await deleteAcc8sEntry(entryId);
-              setIsAcc8sModalOpen(false);
-              setAcc8sModalData(null);
-            }}
-            editingEntry={acc8sModalData.editingEntry}
-            matchId={matchInfo?.matchId || ""}
-            matchInfo={matchInfo}
-            players={players}
-            onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
-          />
+          )}
+          </div>
         )}
 
         {/* Popup wyboru Regain/Loses */}
@@ -3337,6 +3358,7 @@ export default function Page() {
         {editingAction && getActionCategory(editingAction) === "loses" ? (
           <LosesActionModal
           isOpen={isActionEditModalOpen}
+          isVideoInternal={isVideoInternal}
           onClose={handleCloseActionEditModal}
           players={players}
           selectedPlayerId={editingAction?.senderId || null}
@@ -3644,6 +3666,7 @@ export default function Page() {
       ) : editingAction && getActionCategory(editingAction) === "regain" ? (
         <RegainActionModal
           isOpen={isActionEditModalOpen}
+          isVideoInternal={isVideoInternal}
           onClose={handleCloseActionEditModal}
           players={players}
           selectedPlayerId={editingAction?.senderId || null}
@@ -3950,6 +3973,7 @@ export default function Page() {
       ) : (
         <ActionModal
           isOpen={isActionEditModalOpen}
+          isVideoInternal={isVideoInternal}
           onClose={handleCloseActionEditModal}
           players={players}
           selectedPlayerId={editingAction?.senderId || null}
@@ -4239,24 +4263,6 @@ export default function Page() {
           onImportError={handleImportError}
           onLogout={handleLogout}
         />
-
-        {/* Modal dla strzałów */}
-        {shotModalData && (
-          <ShotModal
-            isOpen={isShotModalOpen}
-            onClose={handleShotModalClose}
-            onSave={handleShotSave}
-            onDelete={handleShotDelete}
-            editingShot={shotModalData.editingShot}
-            x={shotModalData.x}
-            y={shotModalData.y}
-            xG={shotModalData.xG}
-            matchId={matchInfo?.matchId || ""}
-            players={players}
-            matchInfo={matchInfo}
-            onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
-          />
-        )}
 
         <OfflineStatus />
       </main>
