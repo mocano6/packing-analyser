@@ -118,7 +118,16 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
   if (entries.length === 0) {
     return (
       <div className={styles.emptyMessage}>
-        Brak akcji 8s ACC. Kliknij "+", aby dodać pierwszą akcję.
+        <p>Brak akcji 8s ACC. Kliknij "+", aby dodać pierwszą akcję.</p>
+        {onAddEntry && (
+          <button
+            onClick={onAddEntry}
+            className={styles.addButton}
+            title="Dodaj akcję 8s ACC"
+          >
+            +
+          </button>
+        )}
       </div>
     );
   }

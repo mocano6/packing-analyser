@@ -63,7 +63,7 @@
 
 .tableHeader {
   display: grid;
-  grid-template-columns: minmax(180px, 2fr) minmax(70px, 0.7fr) minmax(70px, 0.7fr) minmax(140px, 1fr) minmax(120px, 0.9fr) minmax(70px, 0.7fr);
+  grid-template-columns: minmax(140px, 1.5fr) minmax(50px, 0.5fr) minmax(50px, 0.6fr) minmax(50px, 0.6fr) minmax(100px, 1fr) minmax(70px, 0.8fr);
   gap: 10px;
   padding: 10px;
   border-bottom: 1px solid #ccc;
@@ -159,10 +159,10 @@
 
 .playerRow {
   display: grid;
-  grid-template-columns: minmax(140px, 1.5fr) minmax(50px, 0.6fr) minmax(50px, 0.6fr) minmax(100px, 1fr) minmax(70px, 0.8fr);
+  grid-template-columns: minmax(140px, 1.5fr) minmax(50px, 0.5fr) minmax(50px, 0.6fr) minmax(50px, 0.6fr) minmax(100px, 1fr) minmax(70px, 0.8fr);
   gap: 8px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 6px 12px;
   border-bottom: 1px solid #f3f4f6;
   transition: background-color 0.2s;
 }
@@ -217,8 +217,8 @@
 
 .timeInput {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  justify-content: center;
 }
 
 .inputLabel {
@@ -234,7 +234,9 @@
   border-radius: 6px;
   text-align: center;
   font-size: 13px;
+  height: 36px;
   transition: all 0.2s;
+  background-color: white;
 }
 
 .numberInput:focus {
@@ -343,12 +345,22 @@
 
 .positionSelect {
   width: 100%;
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding: 8px 4px;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
   background-color: white;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
   height: 36px;
+  text-align: center;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.positionSelect:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 /* Style dla pól statusu */
@@ -365,7 +377,7 @@
   border: 2px solid #d1d5db;
   border-radius: 6px;
   background-color: white;
-  font-size: 12px;
+  font-size: 13px;
   height: 36px;
   transition: all 0.2s;
   cursor: pointer;
