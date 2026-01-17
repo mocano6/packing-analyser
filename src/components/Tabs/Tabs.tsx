@@ -50,6 +50,18 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
         </button>
         <button
           className={`${styles.actionTypeButton} ${
+            activeTab === "pk_entries" ? styles.active : ""
+          }`}
+          onClick={handleTabChange("pk_entries")}
+          role="tab"
+          aria-selected={activeTab === "pk_entries"}
+          aria-controls="pk_entries-panel"
+          id="pk_entries-tab"
+        >
+          Wejścia PK
+        </button>
+        <button
+          className={`${styles.actionTypeButton} ${
             activeTab === "xg" ? styles.active : ""
           }`}
           onClick={handleTabChange("xg")}
@@ -71,18 +83,6 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
           id="regain-loses-tab"
         >
           Regain/Loses
-        </button>
-        <button
-          className={`${styles.actionTypeButton} ${
-            activeTab === "pk_entries" ? styles.active : ""
-          }`}
-          onClick={handleTabChange("pk_entries")}
-          role="tab"
-          aria-selected={activeTab === "pk_entries"}
-          aria-controls="pk_entries-panel"
-          id="pk_entries-tab"
-        >
-          Wejścia PK
         </button>
       </div>
     </div>

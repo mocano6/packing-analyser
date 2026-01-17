@@ -7,6 +7,7 @@ import styles from "./ShotModal.module.css";
 
 export interface ShotModalProps {
   isOpen: boolean;
+  isVideoInternal?: boolean;
   onClose: () => void;
   onSave: (shot: Omit<Shot, "id" | "timestamp">) => void;
   onDelete?: (shotId: string) => void;
@@ -22,6 +23,7 @@ export interface ShotModalProps {
 
 const ShotModal: React.FC<ShotModalProps> = ({
   isOpen,
+  isVideoInternal = false,
   onClose,
   onSave,
   onDelete,
@@ -60,6 +62,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     assistantName: "",
     isControversial: false,
   });
+  const isEditMode = Boolean(editingShot);
 
   // Filtrowanie zawodników grających w danym meczu (podobnie jak w ActionModal)
   const filteredPlayers = useMemo(() => {
@@ -408,6 +411,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     }
 
     const finalXG = calculateFinalXG();
+    const lockedMinute = editingShot ? editingShot.minute : formData.minute;
     
     onSave({
       x: editingShot ? editingShot.x : x,
@@ -415,7 +419,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       xG: finalXG / 100, // Konwersja z procentów na ułamek
       playerId: formData.playerId,
       playerName: formData.playerName,
-      minute: formData.minute,
+      minute: lockedMinute,
       isGoal: formData.shotType === "goal",
       bodyPart: formData.bodyPart,
       shotType: formData.shotType === "goal" ? "on_target" : formData.shotType,
@@ -452,7 +456,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={`${styles.overlay} ${isVideoInternal ? styles.overlayInternal : ''}`} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{editingShot ? "Edytuj strzał" : "Dodaj strzał"}</h3>
@@ -987,7 +991,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
             </button>
             <div className={styles.minuteAndSave}>
               <div className={styles.minuteInput}>
-                <label htmlFor="minute">Minuta:</label>
                 <div className={styles.minuteControls}>
                   <button
                     type="button"
@@ -997,6 +1000,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                       setFormData({...formData, minute: newMinute});
                     }}
                     title="Zmniejsz minutę"
+                    disabled={isEditMode}
                   >
                     −
                   </button>
@@ -1012,6 +1016,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     max="120"
                     className={styles.minuteField}
                     required
+                    readOnly={isEditMode}
+                    disabled={isEditMode}
                   />
                   <button
                     type="button"
@@ -1021,6 +1027,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                       setFormData({...formData, minute: newMinute});
                     }}
                     title="Zwiększ minutę"
+                    disabled={isEditMode}
                   >
                     +
                   </button>

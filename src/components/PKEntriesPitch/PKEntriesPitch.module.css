@@ -2,7 +2,7 @@
 
 .pitchContainer {
   width: 95%;
-  margin: 0 auto;
+  margin: 0 auto 20px auto;
   aspect-ratio: 1.544;  /* 105m/68m - realne proporcje FIFA */
   position: relative;
 }

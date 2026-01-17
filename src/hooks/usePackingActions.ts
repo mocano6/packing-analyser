@@ -484,8 +484,9 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           }
           
           const regainFields: any = {
-            regainAttackZone: regainOppositeZone || formattedStartZone, // Strefa ataku (opposite zone)
-            regainDefenseZone: formattedStartZone, // Strefa obrony (gdzie nastąpił regain)
+            // Zamieniamy zapis atak/obrona: wybrana strefa = atak, opposite = obrona
+            regainAttackZone: formattedStartZone, // Strefa ataku (wybrana strefa)
+            regainDefenseZone: regainOppositeZone || formattedStartZone, // Strefa obrony (opposite zone)
             isBelow8s: isBelow8sActive, 
             playersBehindBall: playersBehindBall, 
             opponentsBehindBall: opponentsBehindBall,
@@ -508,16 +509,12 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
             isPenaltyAreaEntry: isPenaltyAreaEntry === true
           };
           
-          // Dodaj wartości xT dla regainów - ZAMIANA: regainAttackXT to wartość z opposite, regainDefenseXT to wartość z regain zone
-          if (regainOppositeXT !== undefined) {
-            regainFields.regainAttackXT = regainOppositeXT; // Wartość xT w ataku (z opposite zone)
-            console.log(`✅ DEBUG regain - dodano regainAttackXT: ${regainOppositeXT} do obiektu akcji`);
-          }
+          // Dodaj wartości xT dla regainów - zapis odwrócony: atak = strefa wyboru, obrona = opposite
           if (defenseXT !== undefined) {
-            regainFields.regainDefenseXT = defenseXT; // Wartość xT w obronie (z regain zone)
-            console.log(`✅ DEBUG regain - dodano regainDefenseXT: ${defenseXT} do obiektu akcji`);
+            regainFields.regainAttackXT = defenseXT; // Wartość xT w ataku (z wybranej strefy)
+            console.log(`✅ DEBUG regain - dodano regainAttackXT: ${defenseXT} do obiektu akcji`);
           } else if (formattedStartZone) {
-            // Jeśli defenseXT nie jest dostępne, oblicz z strefy
+            // Jeśli attackXT nie jest dostępne, oblicz z wybranej strefy
             const startZoneName = typeof formattedStartZone === 'string' 
               ? formattedStartZone.toUpperCase() 
               : convertZoneNumberToString(formattedStartZone);
@@ -525,10 +522,14 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
             if (zoneIndex !== null) {
               const zoneData = getZoneData(zoneIndex);
               if (zoneData && typeof zoneData.value === 'number') {
-                regainFields.regainDefenseXT = zoneData.value;
-                console.log(`✅ DEBUG regain - Obliczono regainDefenseXT z strefy ${startZoneName}: ${zoneData.value}`);
+                regainFields.regainAttackXT = zoneData.value;
+                console.log(`✅ DEBUG regain - Obliczono regainAttackXT z strefy ${startZoneName}: ${zoneData.value}`);
               }
             }
+          }
+          if (regainOppositeXT !== undefined) {
+            regainFields.regainDefenseXT = regainOppositeXT; // Wartość xT w obronie (z opposite zone)
+            console.log(`✅ DEBUG regain - dodano regainDefenseXT: ${regainOppositeXT} do obiektu akcji`);
           }
           if (regainIsAttack !== undefined) {
             regainFields.isAttack = regainIsAttack;
@@ -543,8 +544,9 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           let defenseXT = xTStart !== undefined ? xTStart : (xTEnd !== undefined ? xTEnd : undefined);
           
           const losesFields: any = {
-            losesAttackZone: losesOppositeZone || formattedStartZone, // Strefa ataku (opposite zone)
-            losesDefenseZone: formattedStartZone, // Strefa obrony (gdzie nastąpiła strata)
+            // Zamieniamy zapis atak/obrona: wybrana strefa = atak, opposite = obrona
+            losesAttackZone: formattedStartZone, // Strefa ataku (wybrana strefa)
+            losesDefenseZone: losesOppositeZone || formattedStartZone, // Strefa obrony (opposite zone)
           isBelow8s: isBelow8sActive, 
           isReaction5s: isReaction5sActive, 
           isAut: isAutActive,
@@ -571,16 +573,12 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
             isPMArea: isPMAreaActive === true
           };
           
-          // Dodaj wartości xT dla loses - zawsze zapisuj, nawet jeśli są 0
-          if (typeof losesOppositeXT === 'number') {
-            losesFields.losesAttackXT = losesOppositeXT; // Wartość xT w ataku (z opposite zone)
-            console.log(`✅ DEBUG loses - dodano losesAttackXT: ${losesOppositeXT} do obiektu akcji`);
-          }
+          // Dodaj wartości xT dla loses - zapis odwrócony: atak = strefa wyboru, obrona = opposite
           if (typeof defenseXT === 'number') {
-            losesFields.losesDefenseXT = defenseXT; // Wartość xT w obronie (z lose zone)
-            console.log(`✅ DEBUG loses - dodano losesDefenseXT: ${defenseXT} do obiektu akcji`);
+            losesFields.losesAttackXT = defenseXT; // Wartość xT w ataku (z wybranej strefy)
+            console.log(`✅ DEBUG loses - dodano losesAttackXT: ${defenseXT} do obiektu akcji`);
           } else if (formattedStartZone) {
-            // Jeśli defenseXT nie jest dostępne, oblicz z strefy
+            // Jeśli attackXT nie jest dostępne, oblicz z wybranej strefy
             const startZoneName = typeof formattedStartZone === 'string' 
               ? formattedStartZone.toUpperCase() 
               : convertZoneNumberToString(formattedStartZone);
@@ -588,10 +586,14 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
             if (zoneIndex !== null) {
               const zoneData = getZoneData(zoneIndex);
               if (zoneData && typeof zoneData.value === 'number') {
-                losesFields.losesDefenseXT = zoneData.value;
-                console.log(`✅ DEBUG loses - Obliczono losesDefenseXT z strefy ${startZoneName}: ${zoneData.value}`);
+                losesFields.losesAttackXT = zoneData.value;
+                console.log(`✅ DEBUG loses - Obliczono losesAttackXT z strefy ${startZoneName}: ${zoneData.value}`);
               }
             }
+          }
+          if (typeof losesOppositeXT === 'number') {
+            losesFields.losesDefenseXT = losesOppositeXT; // Wartość xT w obronie (z opposite zone)
+            console.log(`✅ DEBUG loses - dodano losesDefenseXT: ${losesOppositeXT} do obiektu akcji`);
           }
           
           console.log(`🔍 DEBUG loses - losesFields przed dodaniem:`, losesFields);

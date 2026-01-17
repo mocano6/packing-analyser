@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Acc8sEntry, TeamInfo, Player } from "@/types";
+import { useAuth } from "@/hooks/useAuth";
 import styles from "./Acc8sModal.module.css";
 
 export interface Acc8sModalProps {
   isOpen: boolean;
+  isVideoInternal?: boolean;
   onClose: () => void;
   onSave: (entry: Omit<Acc8sEntry, "id" | "timestamp">) => void;
   onDelete?: (entryId: string) => void;
@@ -18,6 +20,7 @@ export interface Acc8sModalProps {
 
 const Acc8sModal: React.FC<Acc8sModalProps> = ({
   isOpen,
+  isVideoInternal = false,
   onClose,
   onSave,
   onDelete,
@@ -27,6 +30,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
   players,
   onCalculateMinuteFromVideo,
 }) => {
+  const { isAdmin } = useAuth();
   const [formData, setFormData] = useState({
     minute: 1,
     isSecondHalf: false,
@@ -35,6 +39,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     passingPlayerIds: [] as string[],
     isControversial: false,
   });
+  const isEditMode = Boolean(editingEntry);
 
   const filteredPlayers = useMemo(() => {
     if (!matchInfo) return players;
@@ -127,6 +132,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
 
   // Funkcja do obsługi zmiany połowy
   const handleSecondHalfToggle = (value: boolean) => {
+    if (isEditMode) return;
     setFormData((prev) => {
       const newMinute = value 
         ? Math.max(46, prev.minute) 
@@ -142,6 +148,9 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const lockedMinute = isEditMode ? (editingEntry?.minute ?? formData.minute) : formData.minute;
+    const lockedIsSecondHalf = isEditMode ? (editingEntry?.isSecondHalf ?? formData.isSecondHalf) : formData.isSecondHalf;
     
     // Pobierz czas wideo z localStorage (tak jak w packingu)
     const videoTimestamp = typeof window !== 'undefined' 
@@ -167,19 +176,19 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     console.log('Acc8sModal handleSubmit - editingEntry?.videoTimestamp:', editingEntry?.videoTimestamp);
     
     // Przy edycji zachowaj istniejący videoTimestamp, jeśli nowy nie jest dostępny
-    const finalVideoTimestamp = isValidTimestamp 
-      ? parsedVideoTimestamp 
-      : (editingEntry?.videoTimestamp);
+    const finalVideoTimestamp = isEditMode
+      ? editingEntry?.videoTimestamp
+      : (isValidTimestamp ? parsedVideoTimestamp : undefined);
 
-    const finalVideoTimestampRaw = isValidTimestampRaw
-      ? parsedVideoTimestampRaw
-      : (editingEntry as any)?.videoTimestampRaw;
+    const finalVideoTimestampRaw = isEditMode
+      ? (editingEntry as any)?.videoTimestampRaw
+      : (isValidTimestampRaw ? parsedVideoTimestampRaw : undefined);
 
     const entryData = {
       matchId,
       teamId: matchInfo?.team || "",
-      minute: formData.minute,
-      isSecondHalf: formData.isSecondHalf,
+      minute: lockedMinute,
+      isSecondHalf: lockedIsSecondHalf,
       teamContext: "attack" as const, // Zawsze atak
       isShotUnder8s: formData.isShotUnder8s,
       isPKEntryUnder8s: formData.isPKEntryUnder8s,
@@ -216,7 +225,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={`${styles.overlay} ${isVideoInternal ? styles.overlayInternal : ''}`} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{editingEntry ? "Edytuj akcję 8s ACC" : "Dodaj akcję 8s ACC"}</h3>
@@ -232,6 +241,8 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
                 type="button"
                 className={`${styles.halfButton} ${!formData.isSecondHalf ? styles.activeHalf : ''}`}
                 onClick={() => handleSecondHalfToggle(false)}
+                disabled={isEditMode}
+                aria-disabled={isEditMode}
               >
                 P1
               </button>
@@ -239,6 +250,8 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
                 type="button"
                 className={`${styles.halfButton} ${formData.isSecondHalf ? styles.activeHalf : ''}`}
                 onClick={() => handleSecondHalfToggle(true)}
+                disabled={isEditMode}
+                aria-disabled={isEditMode}
               >
                 P2
               </button>
@@ -267,32 +280,34 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
             </button>
           </div>
 
-          {/* Liczba podań */}
-          <div 
-            className={styles.compactPointsButton}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleAddPass();
-            }}
-            title="Liczba podań = liczba wybranych zawodników"
-          >
-            <span className={styles.compactLabel}>Liczba podań</span>
-            <span className={styles.pointsValue}><b>{formData.passingPlayerIds.length}</b></span>
-            <button
-              className={styles.compactSubtractButton}
+          {/* Liczba podań - widoczne tylko dla admina */}
+          {isAdmin && (
+            <div 
+              className={styles.compactPointsButton}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                handleRemovePass();
+                handleAddPass();
               }}
-              title="Odejmij podanie"
-              type="button"
-              disabled={formData.passingPlayerIds.length === 0}
+              title="Liczba podań = liczba wybranych zawodników"
             >
-              −
-            </button>
-          </div>
+              <span className={styles.compactLabel}>Liczba podań</span>
+              <span className={styles.pointsValue}><b>{formData.passingPlayerIds.length}</b></span>
+              <button
+                className={styles.compactSubtractButton}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleRemovePass();
+                }}
+                title="Odejmij podanie"
+                type="button"
+                disabled={formData.passingPlayerIds.length === 0}
+              >
+                −
+              </button>
+            </div>
+          )}
 
           <div className={styles.buttonGroup}>
             <button
@@ -309,7 +324,6 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
               Anuluj
             </button>
             <div className={styles.minuteInput}>
-              <label htmlFor="minute">Minuta:</label>
               <div className={styles.minuteControls}>
                 <button
                   type="button"
@@ -322,6 +336,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
                     setFormData({...formData, minute: newMinute});
                   }}
                   title="Zmniejsz minutę"
+                  disabled={isEditMode}
                 >
                   −
                 </button>
@@ -340,6 +355,8 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
                   max={formData.isSecondHalf ? 130 : 65}
                   className={styles.minuteField}
                   required
+                  readOnly={isEditMode}
+                  disabled={isEditMode}
                 />
                 <button
                   type="button"
@@ -352,6 +369,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
                     setFormData({...formData, minute: newMinute});
                   }}
                   title="Zwiększ minutę"
+                  disabled={isEditMode}
                 >
                   +
                 </button>

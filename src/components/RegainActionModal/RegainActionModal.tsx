@@ -11,6 +11,7 @@ import { sortPlayersByLastName } from '@/utils/playerUtils';
 
 interface RegainActionModalProps {
   isOpen: boolean;
+  isVideoInternal?: boolean;
   onClose: () => void;
   players: Player[];
   selectedPlayerId: string | null;
@@ -83,6 +84,7 @@ interface RegainActionModalProps {
 
 const RegainActionModal: React.FC<RegainActionModalProps> = ({
   isOpen,
+  isVideoInternal = false,
   onClose,
   players,
   selectedPlayerId,
@@ -311,6 +313,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   if (!isOpen) return null;
 
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isEditMode) return;
     onMinuteChange(parseInt(e.target.value) || 0);
   };
 
@@ -362,6 +365,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   };
 
   const handleSecondHalfToggle = (value: boolean) => {
+    if (isEditMode) return;
     onSecondHalfToggle(value);
     
     // Jeśli włączamy drugą połowę, a minuta jest mniejsza niż 46, ustawiamy na 46
@@ -418,7 +422,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   };
 
   return (
-    <div className={styles.overlay} onClick={handleCancel}>
+    <div className={`${styles.overlay} ${isVideoInternal ? styles.overlayInternal : ''}`} onClick={handleCancel}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{isEditMode ? "Edytuj akcję Regain" : "Dodaj akcję Regain"}</h3>
@@ -477,7 +481,8 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                       e.preventDefault();
                       e.stopPropagation();
                     }}
-                    disabled={false}
+                    disabled={isEditMode}
+                    aria-disabled={isEditMode}
                     style={{ pointerEvents: 'auto', zIndex: 11 }}
                   >
                     P1
@@ -494,7 +499,8 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                       e.preventDefault();
                       e.stopPropagation();
                     }}
-                    disabled={false}
+                    disabled={isEditMode}
+                    aria-disabled={isEditMode}
                     style={{ pointerEvents: 'auto', zIndex: 11 }}
                   >
                     P2
@@ -921,7 +927,6 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
             </button>
             
             <div className={styles.minuteInput}>
-              <label htmlFor="action-minute-modal">Minuta:</label>
               <div className={styles.minuteControls}>
                 <button
                   type="button"
@@ -934,6 +939,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                     onMinuteChange(newMinute);
                   }}
                   title="Zmniejsz minutę"
+                  disabled={isEditMode}
                 >
                   −
                 </button>
@@ -949,8 +955,8 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                   min={isSecondHalf ? 46 : 1}
                   max={isSecondHalf ? 130 : 65}
                   className={styles.minuteField}
-                  readOnly={false}
-                  disabled={false}
+                  readOnly={isEditMode}
+                  disabled={isEditMode}
                   style={{ pointerEvents: 'auto', zIndex: 11 }}
                 />
                 <button
@@ -964,6 +970,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                     onMinuteChange(newMinute);
                   }}
                   title="Zwiększ minutę"
+                  disabled={isEditMode}
                 >
                   +
                 </button>

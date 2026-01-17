@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useMemo } from "react";
 import styles from "./Acc8sTable.module.css";
 import { Acc8sEntry } from "@/types";
 import { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
@@ -10,6 +10,7 @@ export interface Acc8sTableProps {
   entries: Acc8sEntry[];
   onDeleteEntry: (entryId: string) => void;
   onEditEntry: (entry: Acc8sEntry) => void;
+  onAddEntry?: () => void;
   onVideoTimeClick?: (timestamp: number) => void;
   youtubeVideoRef?: React.RefObject<YouTubeVideoRef>;
   customVideoRef?: React.RefObject<CustomVideoPlayerRef>;
@@ -19,10 +20,25 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
   entries,
   onDeleteEntry,
   onEditEntry,
+  onAddEntry,
   onVideoTimeClick,
   youtubeVideoRef,
   customVideoRef,
 }) => {
+  // State dla filtra kontrowersyjnego
+  const [showOnlyControversial, setShowOnlyControversial] = useState(false);
+
+  // Liczba akcji kontrowersyjnych
+  const controversialCount = useMemo(() => {
+    return entries.filter(entry => entry.isControversial).length;
+  }, [entries]);
+
+  // Filtrowane wpisy
+  const filteredEntries = useMemo(() => {
+    return showOnlyControversial 
+      ? entries.filter(entry => entry.isControversial)
+      : entries;
+  }, [entries, showOnlyControversial]);
   // Funkcja formatująca czas wideo (sekundy -> mm:ss) - tak jak w ActionsTable
   const formatVideoTime = (seconds?: number): string => {
     if (!seconds && seconds !== 0) return '-';
@@ -109,16 +125,41 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
 
   return (
     <div className={styles.tableContainer}>
-      <div className={styles.tableHeader}>
-        <div className={styles.headerCell}>Połowa</div>
-        <div className={styles.headerCell}>Minuta</div>
-        <div className={styles.headerCell}>Czas wideo</div>
-        <div className={styles.headerCell}>Liczba podań</div>
-        <div className={styles.headerCell}>Wydarzenia</div>
-        <div className={styles.headerCell}>Akcje</div>
+      <div className={styles.headerControls}>
+        <div className={styles.headerTitle}>
+          <h3>Akcje 8s ACC ({showOnlyControversial ? controversialCount : entries.length})</h3>
+          <button
+            type="button"
+            className={`${styles.controversyFilterButton} ${showOnlyControversial ? styles.controversyFilterActive : ''}`}
+            onClick={() => setShowOnlyControversial(!showOnlyControversial)}
+            aria-pressed={showOnlyControversial}
+            aria-label="Filtruj akcje 8s ACC kontrowersyjne"
+            title={`Pokaż tylko kontrowersyjne (${controversialCount})`}
+          >
+            !
+          </button>
+        </div>
+        {onAddEntry && (
+          <button
+            onClick={onAddEntry}
+            className={styles.addButton}
+            title="Dodaj akcję 8s ACC"
+          >
+            +
+          </button>
+        )}
       </div>
-      <div className={styles.tableBody}>
-        {entries.map((entry) => (
+      <div className={styles.table}>
+        <div className={styles.tableHeader}>
+          <div className={styles.headerCell}>Połowa</div>
+          <div className={styles.headerCell}>Minuta</div>
+          <div className={styles.headerCell}>Czas wideo</div>
+          <div className={styles.headerCell}>Liczba podań</div>
+          <div className={styles.headerCell}>Wydarzenia</div>
+          <div className={styles.headerCell}>Akcje</div>
+        </div>
+        <div className={styles.tableBody}>
+          {filteredEntries.map((entry) => (
           <div 
             key={entry.id} 
             className={`${styles.tableRow} ${entry.isSecondHalf ? styles.secondHalfRow : styles.firstHalfRow}`}
@@ -169,6 +210,7 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
             </div>
           </div>
         ))}
+        </div>
       </div>
     </div>
   );

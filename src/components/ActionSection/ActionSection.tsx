@@ -98,6 +98,7 @@ export interface ActionSectionProps {
   onRegainLosesModeChange?: (mode: "regain" | "loses") => void;
   // Propsy do scrollowania do wideo YouTube
   isVideoVisible?: boolean;
+  isVideoInternal?: boolean;
   onScrollToVideo?: () => void;
   videoContainerRef?: React.RefObject<HTMLDivElement>;
   // Refs do odtwarzaczy wideo
@@ -186,6 +187,7 @@ const ActionSection = memo(function ActionSection({
   actionCategory = "packing",
   regainLosesMode = "regain",
   isVideoVisible = false,
+  isVideoInternal = false,
   onScrollToVideo,
   onRegainLosesModeChange,
   videoContainerRef,
@@ -426,7 +428,7 @@ const ActionSection = memo(function ActionSection({
       {/* Tekst informacyjny dla regain i loses */}
       {(actionCategory === "regain" || actionCategory === "loses") && (
         <div className={styles.defenseInfo}>
-          <p>⚠️ Pola kolorowe to bramka, której bronisz</p>
+          <p>⚠️ Pola kolorowe to bramka, którą atakujesz</p>
         </div>
       )}
       {/* Przycisk scrollowania do wideo YouTube - fixed w prawym dolnym rogu */}
@@ -453,6 +455,7 @@ const ActionSection = memo(function ActionSection({
       {actionCategory === "packing" ? (
         <ActionModal
           isOpen={isActionModalOpen}
+          isVideoInternal={isVideoInternal}
           onClose={() => {
             setIsActionModalOpen(false);
             resetActionState();
@@ -593,6 +596,7 @@ const ActionSection = memo(function ActionSection({
       ) : actionCategory === "regain" ? (
         <RegainActionModal
           isOpen={isActionModalOpen}
+          isVideoInternal={isVideoInternal}
           onClose={() => {
             setIsActionModalOpen(false);
             resetActionState();
@@ -744,6 +748,7 @@ const ActionSection = memo(function ActionSection({
       ) : actionCategory === "loses" ? (
         <LosesActionModal
           isOpen={isActionModalOpen}
+          isVideoInternal={isVideoInternal}
           onClose={() => {
             setIsActionModalOpen(false);
             resetActionState();

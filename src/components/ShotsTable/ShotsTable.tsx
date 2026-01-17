@@ -199,6 +199,14 @@ const ShotsTable: React.FC<ShotsTableProps> = ({
     direction: 'asc',
   });
 
+  // State dla filtra kontrowersyjnego
+  const [showOnlyControversial, setShowOnlyControversial] = useState(false);
+
+  // Liczba akcji kontrowersyjnych
+  const controversialCount = useMemo(() => {
+    return shots.filter(shot => shot.isControversial).length;
+  }, [shots]);
+
   const handleSort = (key: keyof Shot | 'playerName' | 'actionTypeLabel') => {
     setSortConfig(prev => ({
       key,
@@ -207,7 +215,12 @@ const ShotsTable: React.FC<ShotsTableProps> = ({
   };
 
   const sortedShots = useMemo(() => {
-    return [...shots].sort((a, b) => {
+    // Filtruj po kontrowersyjności jeśli jest włączony filtr
+    let filteredShots = showOnlyControversial 
+      ? shots.filter(shot => shot.isControversial)
+      : shots;
+
+    return [...filteredShots].sort((a, b) => {
       let aValue: any;
       let bValue: any;
 
@@ -233,7 +246,7 @@ const ShotsTable: React.FC<ShotsTableProps> = ({
       }
       return 0;
     });
-  }, [shots, sortConfig]);
+  }, [shots, sortConfig, showOnlyControversial]);
 
   const getSortIcon = (key: keyof Shot | 'playerName' | 'actionTypeLabel') => {
     if (sortConfig.key !== key) return '';
@@ -242,6 +255,21 @@ const ShotsTable: React.FC<ShotsTableProps> = ({
 
   return (
     <div className={styles.tableContainer}>
+      <div className={styles.headerControls}>
+        <div className={styles.headerTitle}>
+          <h3>Lista strzałów ({showOnlyControversial ? controversialCount : shots.length})</h3>
+          <button
+            type="button"
+            className={`${styles.controversyFilterButton} ${showOnlyControversial ? styles.controversyFilterActive : ''}`}
+            onClick={() => setShowOnlyControversial(!showOnlyControversial)}
+            aria-pressed={showOnlyControversial}
+            aria-label="Filtruj strzały kontrowersyjne"
+            title={`Pokaż tylko kontrowersyjne (${controversialCount})`}
+          >
+            !
+          </button>
+        </div>
+      </div>
       <div className={styles.matchesTable}>
         <div className={styles.tableHeader}>
           <div className={styles.headerCell} onClick={() => handleSort('minute')}>

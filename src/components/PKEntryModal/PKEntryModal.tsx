@@ -8,6 +8,7 @@ import PlayerCard from "../ActionModal/PlayerCard";
 
 export interface PKEntryModalProps {
   isOpen: boolean;
+  isVideoInternal?: boolean;
   onClose: () => void;
   onSave: (entry: Omit<PKEntry, "id" | "timestamp">) => void;
   onDelete?: (entryId: string) => void;
@@ -24,6 +25,7 @@ export interface PKEntryModalProps {
 
 const PKEntryModal: React.FC<PKEntryModalProps> = ({
   isOpen,
+  isVideoInternal = false,
   onClose,
   onSave,
   onDelete,
@@ -54,6 +56,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     isRegain: false,
     isControversial: false,
   });
+  const isEditMode = Boolean(editingEntry);
 
   // Filtrowanie zawodników grających w danym meczu (podobnie jak w ShotModal)
   const filteredPlayers = useMemo(() => {
@@ -337,6 +340,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
 
   // Funkcja do obsługi zmiany połowy
   const handleSecondHalfToggle = (value: boolean) => {
+    if (isEditMode) return;
     setFormData((prev) => {
       const newMinute = value 
         ? Math.max(46, prev.minute) 
@@ -353,6 +357,9 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    const lockedMinute = isEditMode ? (editingEntry?.minute ?? formData.minute) : formData.minute;
+    const lockedIsSecondHalf = isEditMode ? (editingEntry?.isSecondHalf ?? formData.isSecondHalf) : formData.isSecondHalf;
+    
     // Walidacja w zależności od kontekstu zespołu
     // W obronie nie wymagamy wyboru zawodników
     if (formData.teamContext === "defense") {
@@ -364,8 +371,8 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         startY: editingEntry ? editingEntry.startY : startY,
         endX: editingEntry ? editingEntry.endX : endX,
         endY: editingEntry ? editingEntry.endY : endY,
-        minute: formData.minute,
-        isSecondHalf: formData.isSecondHalf,
+        minute: lockedMinute,
+        isSecondHalf: lockedIsSecondHalf,
         senderId: "",
         senderName: "",
         entryType: formData.entryType,
@@ -398,13 +405,13 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         : undefined;
       const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw >= 0;
 
-      const finalVideoTimestamp = isValidTimestamp 
-        ? parsedVideoTimestamp 
-        : (editingEntry?.videoTimestamp);
+      const finalVideoTimestamp = isEditMode
+        ? editingEntry?.videoTimestamp
+        : (isValidTimestamp ? parsedVideoTimestamp : undefined);
 
-      const finalVideoTimestampRaw = isValidTimestampRaw
-        ? parsedVideoTimestampRaw
-        : (editingEntry as any)?.videoTimestampRaw;
+      const finalVideoTimestampRaw = isEditMode
+        ? (editingEntry as any)?.videoTimestampRaw
+        : (isValidTimestampRaw ? parsedVideoTimestampRaw : undefined);
       
       onSave({
         ...entryDataToSave,
@@ -464,13 +471,13 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw >= 0;
     
     // Przy edycji zachowaj istniejący videoTimestamp, jeśli nowy nie jest dostępny
-    const finalVideoTimestamp = isValidTimestamp 
-      ? parsedVideoTimestamp 
-      : (editingEntry?.videoTimestamp);
+    const finalVideoTimestamp = isEditMode
+      ? editingEntry?.videoTimestamp
+      : (isValidTimestamp ? parsedVideoTimestamp : undefined);
 
-    const finalVideoTimestampRaw = isValidTimestampRaw
-      ? parsedVideoTimestampRaw
-      : (editingEntry as any)?.videoTimestampRaw;
+    const finalVideoTimestampRaw = isEditMode
+      ? (editingEntry as any)?.videoTimestampRaw
+      : (isValidTimestampRaw ? parsedVideoTimestampRaw : undefined);
 
     // Przygotuj obiekt do zapisania
     const entryDataToSave = {
@@ -480,8 +487,8 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
       startY: editingEntry ? editingEntry.startY : startY,
       endX: editingEntry ? editingEntry.endX : endX,
       endY: editingEntry ? editingEntry.endY : endY,
-      minute: formData.minute,
-      isSecondHalf: formData.isSecondHalf,
+      minute: lockedMinute,
+      isSecondHalf: lockedIsSecondHalf,
       senderId: formData.senderId,
       senderName: formData.senderName,
       entryType: formData.entryType,
@@ -534,7 +541,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={`${styles.overlay} ${isVideoInternal ? styles.overlayInternal : ''}`} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{editingEntry ? "Edytuj wejście PK" : "Dodaj wejście PK"}</h3>
@@ -542,6 +549,11 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
+          {/* Informacja o czasie wideo */}
+          <div className={styles.videoTimeInfo}>
+            ⏱️ Czas wideo musi zaczynać się w momencie 1 kontaktu w PK
+          </div>
+          
           {/* Przełącznik atak/obrona */}
           <div className={styles.teamContextToggle}>
             <button
@@ -575,6 +587,8 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                 type="button"
                 className={`${styles.halfButton} ${!formData.isSecondHalf ? styles.activeHalf : ''}`}
                 onClick={() => handleSecondHalfToggle(false)}
+                disabled={isEditMode}
+                aria-disabled={isEditMode}
               >
                 P1
               </button>
@@ -582,6 +596,8 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                 type="button"
                 className={`${styles.halfButton} ${formData.isSecondHalf ? styles.activeHalf : ''}`}
                 onClick={() => handleSecondHalfToggle(true)}
+                disabled={isEditMode}
+                aria-disabled={isEditMode}
               >
                 P2
               </button>
@@ -803,7 +819,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
             </button>
             <div className={styles.minuteAndSave}>
               <div className={styles.minuteInput}>
-                <label htmlFor="minute">Minuta:</label>
                 <div className={styles.minuteControls}>
                   <button
                     type="button"
@@ -816,6 +831,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                       setFormData({...formData, minute: newMinute});
                     }}
                     title="Zmniejsz minutę"
+                  disabled={isEditMode}
                   >
                     −
                   </button>
@@ -834,6 +850,8 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                     max="120"
                     className={styles.minuteField}
                     required
+                  readOnly={isEditMode}
+                  disabled={isEditMode}
                   />
                   <button
                     type="button"
@@ -846,6 +864,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                       setFormData({...formData, minute: newMinute});
                     }}
                     title="Zwiększ minutę"
+                  disabled={isEditMode}
                   >
                     +
                   </button>

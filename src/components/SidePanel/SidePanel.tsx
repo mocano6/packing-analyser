@@ -52,7 +52,6 @@ const SidePanel: React.FC<SidePanelProps> = ({
         onClick={() => setIsOpen(!isOpen)}
       >
         <span className={styles.triggerIcon}>☰</span>
-        <span className={styles.triggerText}>Menu</span>
       </div>
 
       {/* Overlay */}

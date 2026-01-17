@@ -11,6 +11,7 @@ import { sortPlayersByLastName } from '@/utils/playerUtils';
 
 interface LosesActionModalProps {
   isOpen: boolean;
+  isVideoInternal?: boolean;
   onClose: () => void;
   players: Player[];
   selectedPlayerId: string | null;
@@ -92,6 +93,7 @@ interface LosesActionModalProps {
 
 const LosesActionModal: React.FC<LosesActionModalProps> = ({
   isOpen,
+  isVideoInternal = false,
   onClose,
   players,
   selectedPlayerId,
@@ -329,6 +331,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   if (!isOpen) return null;
 
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isEditMode) return;
     onMinuteChange(parseInt(e.target.value) || 0);
   };
 
@@ -380,6 +383,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   };
 
   const handleSecondHalfToggle = (value: boolean) => {
+    if (isEditMode) return;
     onSecondHalfToggle(value);
     
     // Jeśli włączamy drugą połowę, a minuta jest mniejsza niż 46, ustawiamy na 46
@@ -436,7 +440,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   };
 
   return (
-    <div className={styles.overlay} onClick={handleCancel}>
+    <div className={`${styles.overlay} ${isVideoInternal ? styles.overlayInternal : ''}`} onClick={handleCancel}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{isEditMode ? "Edytuj akcję Loses" : "Dodaj akcję Loses"}</h3>
@@ -482,12 +486,18 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   <button
                     className={`${styles.halfButton} ${!isSecondHalf ? styles.activeHalf : ''}`}
                     onClick={() => handleSecondHalfToggle(false)}
+                    disabled={isEditMode}
+                    aria-disabled={isEditMode}
+                    type="button"
                   >
                     P1
                   </button>
                   <button
                     className={`${styles.halfButton} ${isSecondHalf ? styles.activeHalf : ''}`}
                     onClick={() => handleSecondHalfToggle(true)}
+                    disabled={isEditMode}
+                    aria-disabled={isEditMode}
+                    type="button"
                   >
                     P2
                   </button>
@@ -990,7 +1000,6 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
             </button>
             
             <div className={styles.minuteInput}>
-              <label htmlFor="action-minute-modal">Minuta:</label>
               <div className={styles.minuteControls}>
                 <button
                   type="button"
@@ -1003,6 +1012,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                     onMinuteChange(newMinute);
                   }}
                   title="Zmniejsz minutę"
+                  disabled={isEditMode}
                 >
                   −
                 </button>
@@ -1014,6 +1024,8 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   min={isSecondHalf ? 46 : 1}
                   max={isSecondHalf ? 130 : 65}
                   className={styles.minuteField}
+                  readOnly={isEditMode}
+                  disabled={isEditMode}
                 />
                 <button
                   type="button"
@@ -1026,6 +1038,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                     onMinuteChange(newMinute);
                   }}
                   title="Zwiększ minutę"
+                  disabled={isEditMode}
                 >
                   +
                 </button>

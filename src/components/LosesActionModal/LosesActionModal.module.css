@@ -14,6 +14,15 @@
   padding: 24px 16px;
 }
 
+.overlayInternal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: auto;
+  min-height: 100%;
+}
+
 .modal {
   background: white;
   border-radius: 12px;
@@ -143,6 +152,13 @@
   border-color: rgba(239, 68, 68, 0.4);
   color: #b91c1c;
   box-shadow: 0 6px 16px rgba(239, 68, 68, 0.2);
+}
+
+.controversyButtonActive:hover {
+  background-color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #991b1b;
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
 }
 
 .formGroup {
@@ -1017,7 +1033,7 @@
 
 .tooltipTrigger {
   position: relative;
-  cursor: help;
+  cursor: pointer;
   z-index: 50;
   isolation: isolate;
 }
@@ -1029,52 +1045,49 @@
 .tooltipTrigger[data-tooltip]::before {
   content: attr(data-tooltip);
   position: absolute;
-  bottom: 100%;
+  bottom: calc(100% + 8px);
   left: 50%;
-  transform: translateX(-50%) translateY(-6px);
-  padding: 10px 12px;
-  background-color: rgba(255, 255, 255, 0.98);
-  color: #0f172a;
+  transform: translateX(-50%);
+  background-color: rgba(15, 23, 42, 0.92);
+  color: white;
+  padding: 10px 14px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
-  border-radius: 8px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  line-height: 1.5;
+  white-space: pre-line;
+  max-width: 300px;
+  width: max-content;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  z-index: 1000001;
-  min-width: 180px;
-  max-width: 360px;
-  white-space: pre-line;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  z-index: 100000;
   text-align: left;
-  line-height: 1.4;
-  word-wrap: break-word;
-  backdrop-filter: blur(10px);
 }
 
 .tooltipTrigger[data-tooltip]:hover::before {
   opacity: 1;
-  transform: translateX(-50%) translateY(-10px);
+  transform: translateX(-50%) translateY(-4px);
 }
 
 .tooltipTrigger[data-tooltip]::after {
   content: '';
   position: absolute;
-  bottom: 100%;
+  bottom: calc(100% + 2px);
   left: 50%;
-  transform: translateX(-50%) translateY(-2px);
+  transform: translateX(-50%);
   border: 6px solid transparent;
-  border-top-color: rgba(255, 255, 255, 0.98);
+  border-top-color: rgba(15, 23, 42, 0.92);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  z-index: 1000001;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 100000;
 }
 
 .tooltipTrigger[data-tooltip]:hover::after {
   opacity: 1;
-  transform: translateX(-50%) translateY(-6px);
+  transform: translateX(-50%) translateY(-4px);
 }
 
 .actionTypeSelector {

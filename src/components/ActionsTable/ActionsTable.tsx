@@ -582,6 +582,9 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   // Dodajemy state do śledzenia, czy jakieś akcje mają brakujące dane graczy
   const [hasMissingPlayerData, setHasMissingPlayerData] = useState(false);
 
+  // State dla filtra kontrowersyjnego
+  const [showOnlyControversial, setShowOnlyControversial] = useState(false);
+
   // Sprawdzamy czy jakieś akcje mają brakujące dane graczy
   useEffect(() => {
     if (!actions || !actions.length) return;
@@ -659,10 +662,15 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
     }));
   };
 
+  // Liczba akcji kontrowersyjnych
+  const controversialCount = useMemo(() => {
+    return actions.filter(action => action.isControversial).length;
+  }, [actions]);
+
   // Posortowane akcje z wykorzystaniem useMemo dla optymalizacji wydajności
   const sortedActions = useMemo(() => {
     // Filtrujemy akcje według trybu lub kategorii
-    const filteredActions = actions.filter(action => {
+    let filteredActions = actions.filter(action => {
       if (actionCategory === "regain" || actionCategory === "loses") {
         // Dla regain/loses używamy funkcji getActionCategory do identyfikacji kategorii akcji
         const actionCat = getActionCategory(action);
@@ -678,6 +686,11 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         return actionMode === actionModeFilter;
       }
     });
+
+    // Filtruj po kontrowersyjności jeśli jest włączony filtr
+    if (showOnlyControversial) {
+      filteredActions = filteredActions.filter(action => action.isControversial);
+    }
     
     const result = [...filteredActions];
     const { key, direction } = sortConfig;
@@ -763,12 +776,24 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
 
       return comparison * multiplier;
     });
-  }, [actions, sortConfig, actionModeFilter, actionCategory]);
+  }, [actions, sortConfig, actionModeFilter, actionCategory, showOnlyControversial]);
 
   return (
     <div className={styles.tableContainer}>
       <div className={styles.headerControls}>
-        <h3>Lista akcji ({actions.length})</h3>
+        <div className={styles.headerTitle}>
+          <h3>Lista akcji ({showOnlyControversial ? controversialCount : actions.length})</h3>
+          <button
+            type="button"
+            className={`${styles.controversyFilterButton} ${showOnlyControversial ? styles.controversyFilterActive : ''}`}
+            onClick={() => setShowOnlyControversial(!showOnlyControversial)}
+            aria-pressed={showOnlyControversial}
+            aria-label="Filtruj akcje kontrowersyjne"
+            title={`Pokaż tylko kontrowersyjne (${controversialCount})`}
+          >
+            !
+          </button>
+        </div>
         <div className={styles.headerButtons}>
           
           {/* Przełącznik trybu akcji */}

@@ -78,6 +78,15 @@ export default function Instructions() {
             </div>
             
             <div className={styles.cardInfo}>
+              <h4>Definicje podań P3, P2, P1</h4>
+              <ul>
+                <li><strong>P3:</strong> W maksymalnie 2 kontakcie zawodnik ma znaleźć się za linią obrony, inaczej P2.</li>
+                <li><strong>P2:</strong> Pomiędzy linią obrony, a pomocy. Patrzymy, żeby był za 6ką najbliżej linii obrony.</li>
+                <li><strong>P1:</strong> Przestrzeń za napastnikami, ale przed ŚP (środkowym pomocnikiem).</li>
+              </ul>
+            </div>
+            
+            <div className={styles.cardInfo}>
               <h4>Dodatkowe metryki</h4>
               <ul>
                 <li><strong>Podania P3:</strong> Podania za linię obrony (wyższy współczynnik)</li>

@@ -185,6 +185,14 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
     direction: 'asc',
   });
 
+  // State dla filtra kontrowersyjnego
+  const [showOnlyControversial, setShowOnlyControversial] = useState(false);
+
+  // Liczba akcji kontrowersyjnych
+  const controversialCount = useMemo(() => {
+    return pkEntries.filter(entry => entry.isControversial).length;
+  }, [pkEntries]);
+
   const handleSort = (key: keyof PKEntry | 'senderName' | 'receiverName' | 'entryTypeLabel') => {
     setSortConfig(prev => ({
       key,
@@ -193,7 +201,12 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
   };
 
   const sortedEntries = useMemo(() => {
-    return [...pkEntries].sort((a, b) => {
+    // Filtruj po kontrowersyjności jeśli jest włączony filtr
+    let filteredEntries = showOnlyControversial 
+      ? pkEntries.filter(entry => entry.isControversial)
+      : pkEntries;
+
+    return [...filteredEntries].sort((a, b) => {
       let aValue: any;
       let bValue: any;
 
@@ -223,7 +236,7 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
       }
       return 0;
     });
-  }, [pkEntries, sortConfig]);
+  }, [pkEntries, sortConfig, showOnlyControversial]);
 
   const getSortIcon = (key: keyof PKEntry | 'senderName' | 'receiverName' | 'entryTypeLabel') => {
     if (sortConfig.key !== key) return '';
@@ -296,6 +309,21 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
 
   return (
     <div className={styles.tableContainer}>
+      <div className={styles.headerControls}>
+        <div className={styles.headerTitle}>
+          <h3>Lista wejść PK ({showOnlyControversial ? controversialCount : pkEntries.length})</h3>
+          <button
+            type="button"
+            className={`${styles.controversyFilterButton} ${showOnlyControversial ? styles.controversyFilterActive : ''}`}
+            onClick={() => setShowOnlyControversial(!showOnlyControversial)}
+            aria-pressed={showOnlyControversial}
+            aria-label="Filtruj wejścia PK kontrowersyjne"
+            title={`Pokaż tylko kontrowersyjne (${controversialCount})`}
+          >
+            !
+          </button>
+        </div>
+      </div>
       <div className={styles.matchesTable}>
         <div className={styles.tableHeader}>
           <div className={styles.headerCell} onClick={() => handleSort('minute')}>
