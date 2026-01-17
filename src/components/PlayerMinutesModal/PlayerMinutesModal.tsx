@@ -274,6 +274,14 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
         </div>
         
         <form className={styles.modalForm} onSubmit={handleSubmit}>
+          <div className={styles.tableHeader}>
+            <div className={styles.headerCell}>Zawodnik</div>
+            <div className={styles.headerCell}>Pozycja</div>
+            <div className={styles.headerCell}>Od</div>
+            <div className={styles.headerCell}>Do</div>
+            <div className={styles.headerCell}>Status</div>
+            <div className={styles.headerCell}>Czas gry</div>
+          </div>
           <div className={styles.playersList}>
             {teamPlayersByPosition.sortedPositions.map(position => {
               const positionPlayers = teamPlayersByPosition.byPosition[position];
@@ -305,8 +313,23 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
                           <span className={styles.testPlayerBadge}>T</span>
                         )}
                       </div>
+                      <div className={styles.positionInput}>
+                        <select
+                          value={minutes.position || getDefaultPosition(player.position)}
+                          onChange={(e) => handlePositionChange(
+                            player.id,
+                            e.target.value
+                          )}
+                          className={styles.positionSelect}
+                        >
+                          {POSITIONS.map(pos => (
+                            <option key={pos.value} value={pos.value}>
+                              {pos.value}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <div className={styles.timeInput}>
-                        <label className={styles.inputLabel}>Od</label>
                         <input
                           type="number"
                           min="0"
@@ -322,7 +345,6 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
                         />
                       </div>
                       <div className={styles.timeInput}>
-                        <label className={styles.inputLabel}>Do</label>
                         <input
                           type="number"
                           min="0"

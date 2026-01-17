@@ -89,10 +89,19 @@
 }
 
 .emptyMessage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px 20px;
   text-align: center;
   color: #6b7280;
-  padding: 40px;
   font-size: 14px;
+}
+
+.emptyMessage p {
+  margin: 0;
 }
 
 .table {
