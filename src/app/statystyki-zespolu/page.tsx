@@ -132,6 +132,8 @@ export default function StatystykiZespoluPage() {
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [teamRegainAttackDefenseMode, setTeamRegainAttackDefenseMode] = useState<"attack" | "defense">("defense");
   const [teamRegainHeatmapMode, setTeamRegainHeatmapMode] = useState<"xt" | "count">("xt");
+  const [teamLosesAttackDefenseMode, setTeamLosesAttackDefenseMode] = useState<"attack" | "defense">("defense");
+  const [teamLosesHeatmapMode, setTeamLosesHeatmapMode] = useState<"xt" | "count">("xt");
   const [selectedActionFilter, setSelectedActionFilter] = useState<'p1' | 'p2' | 'p3' | 'pk' | 'shot' | 'goal' | null>(null);
   const [actionsModalOpen, setActionsModalOpen] = useState(false);
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<{ playerId: string; playerName: string; zoneName: string } | null>(null);
@@ -1475,8 +1477,17 @@ export default function StatystykiZespoluPage() {
         losesXTInDefense: 0,
         losesAttackCount: 0,
         losesDefenseCount: 0,
+        attackXTHeatmap: new Map<string, number>(),
+        defenseXTHeatmap: new Map<string, number>(),
+        attackCountHeatmap: new Map<string, number>(),
+        defenseCountHeatmap: new Map<string, number>(),
       };
     }
+
+    const attackXTHeatmap = new Map<string, number>();
+    const defenseXTHeatmap = new Map<string, number>();
+    const attackCountHeatmap = new Map<string, number>();
+    const defenseCountHeatmap = new Map<string, number>();
 
     let losesXTInAttack = 0;
     let losesXTInDefense = 0;
@@ -1486,6 +1497,10 @@ export default function StatystykiZespoluPage() {
     derivedLosesActions.forEach(action => {
       const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
       const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+      const attackZoneRaw = action.losesAttackZone || action.oppositeZone;
+      const attackZoneName = attackZoneRaw
+        ? convertZoneToName(attackZoneRaw)
+        : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
 
       const defenseXT = action.losesDefenseXT !== undefined
         ? action.losesDefenseXT
@@ -1504,6 +1519,15 @@ export default function StatystykiZespoluPage() {
               return idx !== null ? getOppositeXTValueForZone(idx) : 0;
             })());
 
+      if (defenseZoneName) {
+        defenseXTHeatmap.set(defenseZoneName, (defenseXTHeatmap.get(defenseZoneName) || 0) + defenseXT);
+        defenseCountHeatmap.set(defenseZoneName, (defenseCountHeatmap.get(defenseZoneName) || 0) + 1);
+      }
+      if (attackZoneName) {
+        attackXTHeatmap.set(attackZoneName, (attackXTHeatmap.get(attackZoneName) || 0) + attackXT);
+        attackCountHeatmap.set(attackZoneName, (attackCountHeatmap.get(attackZoneName) || 0) + 1);
+      }
+
       losesXTInDefense += defenseXT;
       losesDefenseCount += 1;
       losesXTInAttack += attackXT;
@@ -1515,6 +1539,10 @@ export default function StatystykiZespoluPage() {
       losesXTInDefense,
       losesAttackCount,
       losesDefenseCount,
+      attackXTHeatmap,
+      defenseXTHeatmap,
+      attackCountHeatmap,
+      defenseCountHeatmap,
     };
   }, [derivedLosesActions]);
 
@@ -1568,15 +1596,24 @@ export default function StatystykiZespoluPage() {
         reaction5sCount: 0,
         below8sCount: 0,
         unknownCount: 0,
+        totalLosesForReaction5s: 0, // Całkowita liczba strat bez isAut i isReaction5sNotApplicable
       };
     }
 
     let reaction5sCount = 0;
     let below8sCount = 0;
     let unknownCount = 0;
+    let totalLosesForReaction5s = 0;
 
     derivedLosesActions.forEach(action => {
-      if (action.isReaction5s === true) {
+      // Wyklucz akcje z isAut lub isReaction5sNotApplicable z liczenia dla reaction5s
+      const isExcluded = action.isAut === true || action.isReaction5sNotApplicable === true;
+      
+      if (!isExcluded) {
+        totalLosesForReaction5s += 1;
+      }
+
+      if (action.isReaction5s === true && !isExcluded) {
         reaction5sCount += 1;
       } else if (action.isBelow8s === true) {
         below8sCount += 1;
@@ -1589,28 +1626,42 @@ export default function StatystykiZespoluPage() {
       reaction5sCount,
       below8sCount,
       unknownCount,
+      totalLosesForReaction5s,
     };
   }, [derivedLosesActions]);
 
-    // Statystyki przeciwnika po stratach (xG, wejścia w PK, regainy w ciągu 8s)
+    // Statystyki przeciwnika po stratach (xG, wejścia w PK, regainy w ciągu 5s, 8s, 15s)
   const losesAfterStats = useMemo(() => {
     if (!selectedMatch || !selectedMatchInfo || derivedLosesActions.length === 0) {
       return {
-        totalOpponentXG: 0,
-        totalOpponentPKEntries: 0,
-        totalOpponentRegains: 0,
+        totalOpponentXG5s: 0,
+        totalOpponentPKEntries5s: 0,
+        totalOpponentRegains5s: 0,
+        totalOpponentXG8s: 0,
+        totalOpponentPKEntries8s: 0,
+        totalOpponentRegains8s: 0,
+        totalOpponentXG15s: 0,
+        totalOpponentPKEntries15s: 0,
+        totalOpponentRegains15s: 0,
         xGPerLose: 0,
         pkEntriesPerLose: 0,
       };
     }
 
     const isHome = selectedMatchInfo.isHome;
-    const teamId = isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent;
-    const opponentId = isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team;
+    // teamId to zawsze nasz zespół (selectedTeam), opponentId to przeciwnik
+    const teamId = selectedMatchInfo.team; // Nasz zespół
+    const opponentId = selectedMatchInfo.opponent; // Przeciwnik
 
-    let totalOpponentXG = 0;
-    let totalOpponentPKEntries = 0;
-    let totalOpponentRegains = 0;
+    let totalOpponentXG5s = 0;
+    let totalOpponentPKEntries5s = 0;
+    let totalOpponentRegains5s = 0;
+    let totalOpponentXG8s = 0;
+    let totalOpponentPKEntries8s = 0;
+    let totalOpponentRegains8s = 0;
+    let totalOpponentXG15s = 0;
+    let totalOpponentPKEntries15s = 0;
+    let totalOpponentRegains15s = 0;
 
     // Sortuj wszystkie akcje według czasu wideo
     const allShotsWithTimestamp = allShots
@@ -1629,8 +1680,8 @@ export default function StatystykiZespoluPage() {
       .filter(item => item.timestamp > 0)
       .sort((a, b) => a.timestamp - b.timestamp);
 
-    // Sortuj wszystkie regainy według czasu wideo (allRegainActions zawiera wszystkie regainy z meczu)
-    const allRegainActionsWithTimestamp = allRegainActions
+    // Sortuj regainy naszego zespołu według czasu wideo (derivedRegainActions zawiera tylko regainy naszego zespołu)
+    const allRegainActionsWithTimestamp = derivedRegainActions
       .map(action => ({
         action,
         timestamp: action.videoTimestampRaw ?? action.videoTimestamp ?? 0,
@@ -1647,67 +1698,94 @@ export default function StatystykiZespoluPage() {
       .filter(item => item.timestamp > 0)
       .sort((a, b) => a.timestamp - b.timestamp);
 
-    // Dla każdej akcji loses, znajdź akcje przeciwnika w ciągu 8 sekund
+    // Dla każdej akcji loses, znajdź akcje przeciwnika w ciągu 5s, 8s i 15s
     losesActionsWithTimestamp.forEach((loseItem, index) => {
       const loseTimestamp = loseItem.timestamp;
       const nextLoseTimestamp = index < losesActionsWithTimestamp.length - 1
         ? losesActionsWithTimestamp[index + 1].timestamp
         : Infinity;
 
-      // Znajdź wszystkie strzały przeciwnika w ciągu 8 sekund po stracie
+      const fiveSecondsAfterLose = loseTimestamp + 5;
       const eightSecondsAfterLose = loseTimestamp + 8;
-      const opponentShotsAfterLose = allShotsWithTimestamp.filter(item => {
-        if (item.timestamp <= loseTimestamp || item.timestamp > eightSecondsAfterLose || item.timestamp >= nextLoseTimestamp) {
-          return false;
-        }
-        
-        // Sprawdź czy strzał jest przeciwnika
-        const shotTeamId = item.shot.teamId || (item.shot.teamContext === 'attack' 
-          ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
-          : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
-        
-        return shotTeamId === opponentId;
-      });
-      
-      totalOpponentXG += opponentShotsAfterLose.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+      const fifteenSecondsAfterLose = loseTimestamp + 15;
 
-      // Znajdź wszystkie wejścia w PK przeciwnika w ciągu 8 sekund po stracie
-      const opponentPKEntriesAfterLose = allPKEntriesWithTimestamp.filter(item => {
-        if (item.timestamp <= loseTimestamp || item.timestamp > eightSecondsAfterLose || item.timestamp >= nextLoseTimestamp) {
-          return false;
-        }
-        
-        // Sprawdź czy wejście w PK jest przeciwnika (teamContext === "defense" oznacza przeciwnika)
-        return item.entry.teamContext === "defense" || 
-               (item.entry.teamId && item.entry.teamId !== teamId);
-      });
-      
-      totalOpponentPKEntries += opponentPKEntriesAfterLose.length;
+      // Funkcja pomocnicza do filtrowania strzałów przeciwnika
+      const filterOpponentShots = (maxTimestamp: number) => {
+        return allShotsWithTimestamp.filter(item => {
+          if (item.timestamp <= loseTimestamp || item.timestamp > maxTimestamp || item.timestamp >= nextLoseTimestamp) {
+            return false;
+          }
+          const shotTeamId = item.shot.teamId || (item.shot.teamContext === 'attack' 
+            ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+            : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+          return shotTeamId === opponentId;
+        });
+      };
 
-      // Znajdź wszystkie regainy przeciwnika w ciągu 8 sekund po stracie
-      const opponentRegainsAfterLose = allRegainActionsWithTimestamp.filter(item => {
-        if (item.timestamp <= loseTimestamp || item.timestamp > eightSecondsAfterLose || item.timestamp >= nextLoseTimestamp) {
-          return false;
-        }
-        
-        // Sprawdź czy regain jest przeciwnika (teamId przeciwnika)
-        const actionTeamId = item.action.teamId;
-        return actionTeamId === opponentId || (actionTeamId && actionTeamId !== teamId);
-      });
-      
-      totalOpponentRegains += opponentRegainsAfterLose.length;
+      // Funkcja pomocnicza do filtrowania wejść w PK przeciwnika
+      const filterOpponentPKEntries = (maxTimestamp: number) => {
+        return allPKEntriesWithTimestamp.filter(item => {
+          if (item.timestamp <= loseTimestamp || item.timestamp > maxTimestamp || item.timestamp >= nextLoseTimestamp) {
+            return false;
+          }
+          return item.entry.teamContext === "defense" || 
+                 (item.entry.teamId && item.entry.teamId !== teamId);
+        });
+      };
+
+      // Funkcja pomocnicza do filtrowania regainów naszego zespołu
+      // derivedRegainActions już zawiera tylko regainy naszego zespołu, więc nie musimy dodatkowo filtrować po teamId
+      const filterTeamRegains = (maxTimestamp: number) => {
+        return allRegainActionsWithTimestamp.filter(item => {
+          if (item.timestamp <= loseTimestamp || item.timestamp > maxTimestamp || item.timestamp >= nextLoseTimestamp) {
+            return false;
+          }
+          // Wszystkie regainy w allRegainActionsWithTimestamp są już naszego zespołu (z derivedRegainActions)
+          return true;
+        });
+      };
+
+      // 5 sekund
+      const shots5s = filterOpponentShots(fiveSecondsAfterLose);
+      const pkEntries5s = filterOpponentPKEntries(fiveSecondsAfterLose);
+      const regains5s = filterTeamRegains(fiveSecondsAfterLose);
+      totalOpponentXG5s += shots5s.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+      totalOpponentPKEntries5s += pkEntries5s.length;
+      totalOpponentRegains5s += regains5s.length;
+
+      // 8 sekund
+      const shots8s = filterOpponentShots(eightSecondsAfterLose);
+      const pkEntries8s = filterOpponentPKEntries(eightSecondsAfterLose);
+      const regains8s = filterTeamRegains(eightSecondsAfterLose);
+      totalOpponentXG8s += shots8s.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+      totalOpponentPKEntries8s += pkEntries8s.length;
+      totalOpponentRegains8s += regains8s.length;
+
+      // 15 sekund
+      const shots15s = filterOpponentShots(fifteenSecondsAfterLose);
+      const pkEntries15s = filterOpponentPKEntries(fifteenSecondsAfterLose);
+      const regains15s = filterTeamRegains(fifteenSecondsAfterLose);
+      totalOpponentXG15s += shots15s.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+      totalOpponentPKEntries15s += pkEntries15s.length;
+      totalOpponentRegains15s += regains15s.length;
     });
 
     const totalLoses = derivedLosesActions.length;
 
     return {
-      totalOpponentXG,
-      totalOpponentPKEntries,
-      totalOpponentRegains,
-      xGPerLose: totalLoses > 0 ? totalOpponentXG / totalLoses : 0,
-      pkEntriesPerLose: totalLoses > 0 ? totalOpponentPKEntries / totalLoses : 0,
+      totalOpponentXG5s,
+      totalOpponentPKEntries5s,
+      totalOpponentRegains5s,
+      totalOpponentXG8s,
+      totalOpponentPKEntries8s,
+      totalOpponentRegains8s,
+      totalOpponentXG15s,
+      totalOpponentPKEntries15s,
+      totalOpponentRegains15s,
+      xGPerLose: totalLoses > 0 ? totalOpponentXG8s / totalLoses : 0,
+      pkEntriesPerLose: totalLoses > 0 ? totalOpponentPKEntries8s / totalLoses : 0,
     };
-  }, [selectedMatch, selectedMatchInfo, derivedLosesActions, allShots, allPKEntries, allRegainActions]);
+  }, [selectedMatch, selectedMatchInfo, selectedTeam, derivedLosesActions, derivedRegainActions, allShots, allPKEntries]);
 
   // Wykres PK entries co 5 minut (zespół vs przeciwnik)
   const pkEntriesTimeline = useMemo(() => {
@@ -1762,6 +1840,11 @@ export default function StatystykiZespoluPage() {
     teamRegainAttackDefenseMode === "attack"
       ? (teamRegainHeatmapMode === "xt" ? teamRegainStats.attackXTHeatmap : teamRegainStats.attackCountHeatmap)
       : (teamRegainHeatmapMode === "xt" ? teamRegainStats.defenseXTHeatmap : teamRegainStats.defenseCountHeatmap);
+
+  const teamLosesHeatmap =
+    teamLosesAttackDefenseMode === "attack"
+      ? (teamLosesHeatmapMode === "xt" ? teamLosesStats.attackXTHeatmap : teamLosesStats.attackCountHeatmap)
+      : (teamLosesHeatmapMode === "xt" ? teamLosesStats.defenseXTHeatmap : teamLosesStats.defenseCountHeatmap);
 
   // Przygotuj dane dla heatmapy zespołu i agregacja danych zawodników
   const teamHeatmapData = useMemo(() => {
@@ -2576,26 +2659,104 @@ export default function StatystykiZespoluPage() {
                 <div className={styles.detailsSection}>
                   <h4>Konsekwencje strat</h4>
                   <div className={styles.detailsRow}>
-                    <span className={styles.detailsLabel}>REAKCJA 5S:</span>
+                    <span className={styles.detailsLabel}>Kontrpressing 5s:</span>
                     <span className={styles.detailsValue}>
                       <span className={styles.valueMain}>
-                        {teamStats.totalLoses > 0 ? ((losesContextStats.reaction5sCount / teamStats.totalLoses) * 100).toFixed(1) : 0}%
+                        {losesContextStats.totalLosesForReaction5s > 0 ? ((losesContextStats.reaction5sCount / losesContextStats.totalLosesForReaction5s) * 100).toFixed(1) : 0}%
                       </span>
                       <span className={styles.valueSecondary}>
-                        • {losesContextStats.reaction5sCount}/{teamStats.totalLoses}
-                      </span>
+                        • {losesContextStats.reaction5sCount}/{losesContextStats.totalLosesForReaction5s} | </span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains5s}</span>
+                      <span className={styles.valueSecondary}> Nasz Regain</span>
                     </span>
                   </div>
                   <div className={styles.detailsRow}>
-                    <span className={styles.detailsLabel}>Akcje do 8s od straty:</span>
+                    <span className={styles.detailsLabel}>Przeciwnik 8s od straty:</span>
                     <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentXG.toFixed(2)}</span>
-                      <span className={styles.valueSecondary}> xG, </span>
-                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentPKEntries}</span>
-                      <span className={styles.valueSecondary}> PK, </span>
-                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains}</span>
-                      <span className={styles.valueSecondary}> Regain</span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentXG8s.toFixed(2)}</span>
+                      <span className={styles.valueSecondary}> xG | </span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentPKEntries8s}</span>
+                      <span className={styles.valueSecondary}> PK | </span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains8s}</span>
+                      <span className={styles.valueSecondary}> Nasz Regain</span>
                     </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>Przeciwnik 15s od straty:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentXG15s.toFixed(2)}</span>
+                      <span className={styles.valueSecondary}> xG | </span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentPKEntries15s}</span>
+                      <span className={styles.valueSecondary}> PK | </span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains15s}</span>
+                      <span className={styles.valueSecondary}> Nasz Regain</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Heatmapa strat */}
+                <div className={styles.detailsSection}>
+                  <div className={styles.heatmapHeaderInPanel}>
+                    <h4>Heatmapa strat</h4>
+                    <div className={styles.heatmapControlsInPanel}>
+                      {/* Przełącznik atak/obrona */}
+                      <div className={styles.heatmapModeToggle}>
+                        <button
+                          className={`${styles.heatmapModeButton} ${teamLosesAttackDefenseMode === 'defense' ? styles.active : ''}`}
+                          onClick={() => setTeamLosesAttackDefenseMode('defense')}
+                          type="button"
+                        >
+                          W obronie
+                        </button>
+                        <button
+                          className={`${styles.heatmapModeButton} ${teamLosesAttackDefenseMode === 'attack' ? styles.active : ''}`}
+                          onClick={() => setTeamLosesAttackDefenseMode('attack')}
+                          type="button"
+                        >
+                          W ataku
+                        </button>
+                      </div>
+                      <div className={styles.heatmapModeToggle}>
+                        <button
+                          className={`${styles.heatmapModeButton} ${teamLosesHeatmapMode === 'xt' ? styles.active : ''}`}
+                          onClick={() => setTeamLosesHeatmapMode('xt')}
+                          type="button"
+                        >
+                          xT odbiorców
+                        </button>
+                        <button
+                          className={`${styles.heatmapModeButton} ${teamLosesHeatmapMode === 'count' ? styles.active : ''}`}
+                          onClick={() => setTeamLosesHeatmapMode('count')}
+                          type="button"
+                        >
+                          Liczba akcji
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className={styles.heatmapWrapperInPanel}>
+                    <div className={styles.heatmapContainerInPanel}>
+                      <PlayerHeatmapPitch
+                        heatmapData={teamLosesHeatmap}
+                        category="loses"
+                        mode={teamLosesHeatmapMode === 'xt' ? 'pxt' : 'count'}
+                        mirrored={false}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mapa strat nad wykresem */}
+                <div className={styles.detailsSection}>
+                  <div className={styles.heatmapWrapperInPanel}>
+                    <div className={styles.heatmapContainerInPanel}>
+                      <PlayerHeatmapPitch
+                        heatmapData={teamLosesHeatmap}
+                        category="loses"
+                        mode={teamLosesHeatmapMode === 'xt' ? 'pxt' : 'count'}
+                        mirrored={false}
+                      />
+                    </div>
                   </div>
                 </div>
 

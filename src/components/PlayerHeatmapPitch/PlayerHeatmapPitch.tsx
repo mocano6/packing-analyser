@@ -8,7 +8,7 @@ import { getXTColor } from "@/components/FootballPitch/utils";
 
 export interface PlayerHeatmapPitchProps {
   heatmapData: Map<string, number>; // Map<zoneName, xTValue or count>
-  category: "sender" | "receiver" | "dribbler" | "regains";
+  category: "sender" | "receiver" | "dribbler" | "regains" | "loses";
   mode?: "pxt" | "count"; // Tryb wyświetlania: PxT lub liczba akcji
   onZoneClick?: (zoneName: string) => void; // Callback przy kliknięciu na strefę
   mirrored?: boolean; // Czy mapa ma być odwrócona (lustrzane odbicie)
