@@ -134,6 +134,7 @@ export default function StatystykiZespoluPage() {
   const [teamRegainHeatmapMode, setTeamRegainHeatmapMode] = useState<"xt" | "count">("xt");
   const [teamLosesAttackDefenseMode, setTeamLosesAttackDefenseMode] = useState<"attack" | "defense">("defense");
   const [teamLosesHeatmapMode, setTeamLosesHeatmapMode] = useState<"xt" | "count">("xt");
+  const [losesHalfFilter, setLosesHalfFilter] = useState<"all" | "own" | "opponent" | "pm">("own");
   const [selectedActionFilter, setSelectedActionFilter] = useState<'p1' | 'p2' | 'p3' | 'pk' | 'shot' | 'goal' | null>(null);
   const [actionsModalOpen, setActionsModalOpen] = useState(false);
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<{ playerId: string; playerName: string; zoneName: string } | null>(null);
@@ -1545,13 +1546,57 @@ export default function StatystykiZespoluPage() {
     return data;
   }, [derivedRegainActions]);
 
+  // Funkcja pomocnicza do określenia czy strefa jest na własnej połowie (A-H, 1-6) czy połowie przeciwnika (A-H, 7-12)
+  const isOwnHalf = (zoneName: string | null | undefined): boolean => {
+    if (!zoneName) return false;
+    const normalized = convertZoneToName(zoneName);
+    if (!normalized) return false;
+    const zoneIndex = zoneNameToIndex(normalized);
+    if (zoneIndex === null) return false;
+    // Kolumna (0-11): 0-5 to własna połowa, 6-11 to połowa przeciwnika
+    const col = zoneIndex % 12;
+    return col <= 5; // Własna połowa: kolumny 0-5 (strefy 1-6)
+  };
+
+  // Funkcja pomocnicza do określenia czy strefa jest w PM Area (C5-8, D5-8, E5-8, F5-8)
+  const isPMArea = (zoneName: string | null | undefined): boolean => {
+    if (!zoneName) return false;
+    const normalized = convertZoneToName(zoneName);
+    if (!normalized) return false;
+    // PM Area to strefy: C5, C6, C7, C8, D5, D6, D7, D8, E5, E6, E7, E8, F5, F6, F7, F8
+    const pmZones = ['C5', 'C6', 'C7', 'C8', 'D5', 'D6', 'D7', 'D8', 'E5', 'E6', 'E7', 'E8', 'F5', 'F6', 'F7', 'F8'];
+    return pmZones.includes(normalized);
+  };
+
   const teamLosesStats = useMemo(() => {
-    if (derivedLosesActions.length === 0) {
+    // Filtruj straty według wybranej połowy
+    const filteredLosesActions = losesHalfFilter === "all"
+      ? derivedLosesActions
+      : losesHalfFilter === "pm"
+      ? derivedLosesActions.filter(action => {
+          const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+          const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+          return isPMArea(defenseZoneName);
+        })
+      : derivedLosesActions.filter(action => {
+          const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+          const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+          
+          if (!defenseZoneName) return false;
+          
+          const isOwn = isOwnHalf(defenseZoneName);
+          
+          return losesHalfFilter === "own" ? isOwn : !isOwn;
+        });
+
+    if (filteredLosesActions.length === 0) {
       return {
         losesXTInAttack: 0,
         losesXTInDefense: 0,
         losesAttackCount: 0,
         losesDefenseCount: 0,
+        totalLosesOwnHalf: 0,
+        totalLosesOpponentHalf: 0,
         attackXTHeatmap: new Map<string, number>(),
         defenseXTHeatmap: new Map<string, number>(),
         attackCountHeatmap: new Map<string, number>(),
@@ -1568,10 +1613,21 @@ export default function StatystykiZespoluPage() {
     let losesXTInDefense = 0;
     let losesAttackCount = 0;
     let losesDefenseCount = 0;
+    let totalLosesOwnHalf = 0;
+    let totalLosesOpponentHalf = 0;
 
-    derivedLosesActions.forEach(action => {
+    filteredLosesActions.forEach(action => {
       const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
       const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+      
+      // Policz straty według połowy boiska
+      if (defenseZoneName) {
+        if (isOwnHalf(defenseZoneName)) {
+          totalLosesOwnHalf += 1;
+        } else {
+          totalLosesOpponentHalf += 1;
+        }
+      }
       const attackZoneRaw = action.losesAttackZone || action.oppositeZone;
       const attackZoneName = attackZoneRaw
         ? convertZoneToName(attackZoneRaw)
@@ -1614,10 +1670,49 @@ export default function StatystykiZespoluPage() {
       losesXTInDefense,
       losesAttackCount,
       losesDefenseCount,
+      totalLosesOwnHalf,
+      totalLosesOpponentHalf,
       attackXTHeatmap,
       defenseXTHeatmap,
       attackCountHeatmap,
       defenseCountHeatmap,
+    };
+  }, [derivedLosesActions, losesHalfFilter]);
+
+  // Oblicz całkowite xT dla wszystkich strat w meczu (bez filtra)
+  const totalLosesXT = useMemo(() => {
+    let totalXTInAttack = 0;
+    let totalXTInDefense = 0;
+
+    derivedLosesActions.forEach(action => {
+      const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+
+      const defenseXT = action.losesDefenseXT !== undefined
+        ? action.losesDefenseXT
+        : (() => {
+            const idx = defenseZoneName ? zoneNameToIndex(defenseZoneName) : null;
+            if (idx !== null) return getXTValueForZone(idx);
+            return action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0);
+          })();
+
+      const attackXT = action.losesAttackXT !== undefined
+        ? action.losesAttackXT
+        : (action.oppositeXT !== undefined
+          ? action.oppositeXT
+          : (() => {
+              const idx = defenseZoneName ? zoneNameToIndex(defenseZoneName) : null;
+              return idx !== null ? getOppositeXTValueForZone(idx) : 0;
+            })());
+
+      totalXTInDefense += defenseXT;
+      totalXTInAttack += attackXT;
+    });
+
+    return {
+      totalXTInAttack,
+      totalXTInDefense,
+      totalXT: totalXTInAttack + totalXTInDefense,
     };
   }, [derivedLosesActions]);
 
@@ -1666,7 +1761,30 @@ export default function StatystykiZespoluPage() {
   }, [derivedLosesActions]);
 
   const losesContextStats = useMemo(() => {
-    if (derivedLosesActions.length === 0) {
+    // Filtruj straty według wybranej połowy
+    const filteredLosesActions = losesHalfFilter === "all"
+      ? derivedLosesActions
+      : losesHalfFilter === "pm"
+      ? derivedLosesActions.filter(action => {
+          const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+          const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+          return isPMArea(defenseZoneName);
+        })
+      : derivedLosesActions.filter(action => {
+          const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+          const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+          
+          if (!defenseZoneName) return false;
+          
+          const isOwn = isOwnHalf(defenseZoneName);
+          
+          if (losesHalfFilter === "own") return isOwn;
+          if (losesHalfFilter === "opponent") return !isOwn;
+          
+          return false;
+        });
+
+    if (filteredLosesActions.length === 0) {
       return {
         reaction5sCount: 0,
         below8sCount: 0,
@@ -1680,7 +1798,7 @@ export default function StatystykiZespoluPage() {
     let unknownCount = 0;
     let totalLosesForReaction5s = 0;
 
-    derivedLosesActions.forEach(action => {
+    filteredLosesActions.forEach(action => {
       // Wyklucz akcje z isAut lub isReaction5sNotApplicable z liczenia dla reaction5s
       const isExcluded = action.isAut === true || action.isReaction5sNotApplicable === true;
       
@@ -1703,21 +1821,47 @@ export default function StatystykiZespoluPage() {
       unknownCount,
       totalLosesForReaction5s,
     };
-  }, [derivedLosesActions]);
+  }, [derivedLosesActions, losesHalfFilter]);
 
     // Statystyki przeciwnika po stratach (xG, wejścia w PK, regainy w ciągu 5s, 8s, 15s)
   const losesAfterStats = useMemo(() => {
-    if (!selectedMatch || !selectedMatchInfo || derivedLosesActions.length === 0) {
+    // Filtruj straty według wybranej połowy
+    const filteredLosesActions = losesHalfFilter === "all"
+      ? derivedLosesActions
+      : losesHalfFilter === "pm"
+      ? derivedLosesActions.filter(action => {
+          const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+          const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+          return isPMArea(defenseZoneName);
+        })
+      : derivedLosesActions.filter(action => {
+          const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+          const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+          
+          if (!defenseZoneName) return false;
+          
+          const isOwn = isOwnHalf(defenseZoneName);
+          
+          if (losesHalfFilter === "own") return isOwn;
+          if (losesHalfFilter === "opponent") return !isOwn;
+          
+          return false;
+        });
+
+    if (!selectedMatch || !selectedMatchInfo || filteredLosesActions.length === 0) {
       return {
         totalOpponentXG5s: 0,
         totalOpponentPKEntries5s: 0,
         totalOpponentRegains5s: 0,
+        totalOpponentShots5s: 0,
         totalOpponentXG8s: 0,
         totalOpponentPKEntries8s: 0,
         totalOpponentRegains8s: 0,
+        totalOpponentShots8s: 0,
         totalOpponentXG15s: 0,
         totalOpponentPKEntries15s: 0,
         totalOpponentRegains15s: 0,
+        totalOpponentShots15s: 0,
         xGPerLose: 0,
         pkEntriesPerLose: 0,
       };
@@ -1731,12 +1875,15 @@ export default function StatystykiZespoluPage() {
     let totalOpponentXG5s = 0;
     let totalOpponentPKEntries5s = 0;
     let totalOpponentRegains5s = 0;
+    let totalOpponentShots5s = 0;
     let totalOpponentXG8s = 0;
     let totalOpponentPKEntries8s = 0;
     let totalOpponentRegains8s = 0;
+    let totalOpponentShots8s = 0;
     let totalOpponentXG15s = 0;
     let totalOpponentPKEntries15s = 0;
     let totalOpponentRegains15s = 0;
+    let totalOpponentShots15s = 0;
 
     // Sortuj wszystkie akcje według czasu wideo
     const allShotsWithTimestamp = allShots
@@ -1764,8 +1911,8 @@ export default function StatystykiZespoluPage() {
       .filter(item => item.timestamp > 0)
       .sort((a, b) => a.timestamp - b.timestamp);
 
-    // Sortuj akcje loses według czasu wideo
-    const losesActionsWithTimestamp = derivedLosesActions
+    // Sortuj akcje loses według czasu wideo (używamy przefiltrowanych akcji)
+    const losesActionsWithTimestamp = filteredLosesActions
       .map(action => ({
         action,
         timestamp: action.videoTimestampRaw ?? action.videoTimestamp ?? 0,
@@ -1825,6 +1972,7 @@ export default function StatystykiZespoluPage() {
       const pkEntries5s = filterOpponentPKEntries(fiveSecondsAfterLose);
       const regains5s = filterTeamRegains(fiveSecondsAfterLose);
       totalOpponentXG5s += shots5s.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+      totalOpponentShots5s += shots5s.length;
       totalOpponentPKEntries5s += pkEntries5s.length;
       totalOpponentRegains5s += regains5s.length;
 
@@ -1833,6 +1981,7 @@ export default function StatystykiZespoluPage() {
       const pkEntries8s = filterOpponentPKEntries(eightSecondsAfterLose);
       const regains8s = filterTeamRegains(eightSecondsAfterLose);
       totalOpponentXG8s += shots8s.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+      totalOpponentShots8s += shots8s.length;
       totalOpponentPKEntries8s += pkEntries8s.length;
       totalOpponentRegains8s += regains8s.length;
 
@@ -1841,6 +1990,7 @@ export default function StatystykiZespoluPage() {
       const pkEntries15s = filterOpponentPKEntries(fifteenSecondsAfterLose);
       const regains15s = filterTeamRegains(fifteenSecondsAfterLose);
       totalOpponentXG15s += shots15s.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+      totalOpponentShots15s += shots15s.length;
       totalOpponentPKEntries15s += pkEntries15s.length;
       totalOpponentRegains15s += regains15s.length;
     });
@@ -1851,16 +2001,19 @@ export default function StatystykiZespoluPage() {
       totalOpponentXG5s,
       totalOpponentPKEntries5s,
       totalOpponentRegains5s,
+      totalOpponentShots5s,
       totalOpponentXG8s,
       totalOpponentPKEntries8s,
       totalOpponentRegains8s,
+      totalOpponentShots8s,
       totalOpponentXG15s,
       totalOpponentPKEntries15s,
       totalOpponentRegains15s,
+      totalOpponentShots15s,
       xGPerLose: totalLoses > 0 ? totalOpponentXG8s / totalLoses : 0,
       pkEntriesPerLose: totalLoses > 0 ? totalOpponentPKEntries8s / totalLoses : 0,
     };
-  }, [selectedMatch, selectedMatchInfo, selectedTeam, derivedLosesActions, derivedRegainActions, allShots, allPKEntries]);
+  }, [selectedMatch, selectedMatchInfo, selectedTeam, derivedLosesActions, derivedRegainActions, allShots, allPKEntries, losesHalfFilter]);
 
   // Wykres PK entries co 5 minut (zespół vs przeciwnik)
   const pkEntriesTimeline = useMemo(() => {
@@ -2528,7 +2681,9 @@ export default function StatystykiZespoluPage() {
                   <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}>PRZECHWYTY:</span>
                     <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>{teamStats.totalRegains}</span> <span className={styles.valueSecondary}>({teamStats.regainsPer90.toFixed(1)} / 90 min)</span>
+                      <span className={styles.valueMain}>{teamStats.totalRegains}</span>
+                      <span className={styles.valueSecondary}>/{teamStats.totalRegains} (100.0%)</span>
+                      <span className={styles.valueSecondary}> • ({teamStats.regainsPer90.toFixed(1)} / 90)</span>
                     </span>
                   </div>
                   <div className={styles.detailsRow}>
@@ -2704,12 +2859,50 @@ export default function StatystykiZespoluPage() {
             )}
             {expandedCategory === 'loses' && selectedMatchInfo && (
               <div className={styles.detailsPanel}>
+                {/* Przełącznik połowy boiska */}
+                <div className={styles.detailsSection}>
+                  <div className={styles.heatmapModeToggle}>
+                    <button
+                      className={`${styles.heatmapModeButton} ${losesHalfFilter === 'all' ? styles.active : ''}`}
+                      onClick={() => setLosesHalfFilter('all')}
+                      type="button"
+                    >
+                      Całe boisko
+                    </button>
+                    <button
+                      className={`${styles.heatmapModeButton} ${losesHalfFilter === 'own' ? styles.active : ''}`}
+                      onClick={() => setLosesHalfFilter('own')}
+                      type="button"
+                    >
+                      Własna połowa
+                    </button>
+                    <button
+                      className={`${styles.heatmapModeButton} ${losesHalfFilter === 'opponent' ? styles.active : ''}`}
+                      onClick={() => setLosesHalfFilter('opponent')}
+                      type="button"
+                    >
+                      Połowa przeciwnika
+                    </button>
+                    <button
+                      className={`${styles.heatmapModeButton} ${losesHalfFilter === 'pm' ? styles.active : ''}`}
+                      onClick={() => setLosesHalfFilter('pm')}
+                      type="button"
+                    >
+                      PM Area
+                    </button>
+                  </div>
+                </div>
+
                 {/* Podstawowe statystyki */}
                 <div className={styles.detailsSection}>
                   <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}>STRATY:</span>
                     <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>{teamStats.totalLoses}</span> <span className={styles.valueSecondary}>({teamStats.losesPer90.toFixed(1)} / 90 min)</span>
+                      <span className={styles.valueMain}>{teamLosesStats.totalLosesOwnHalf + teamLosesStats.totalLosesOpponentHalf}</span>
+                      {teamStats.totalLoses > 0 && (
+                        <span className={styles.valueSecondary}>/{teamStats.totalLoses} ({(((teamLosesStats.totalLosesOwnHalf + teamLosesStats.totalLosesOpponentHalf) / teamStats.totalLoses) * 100).toFixed(1)}%)</span>
+                      )}
+                      <span className={styles.valueSecondary}> • ({teamStats.losesPer90.toFixed(1)} / 90)</span>
                     </span>
                   </div>
                   <div className={styles.detailsRow}>
@@ -2719,6 +2912,9 @@ export default function StatystykiZespoluPage() {
                       {teamLosesStats.losesAttackCount > 0 && (
                         <span className={styles.valueSecondary}>• {(teamLosesStats.losesXTInAttack / teamLosesStats.losesAttackCount).toFixed(3)} / akcję</span>
                       )}
+                      {totalLosesXT.totalXTInAttack > 0 && (
+                        <span className={styles.valueSecondary}> • {((teamLosesStats.losesXTInAttack / totalLosesXT.totalXTInAttack) * 100).toFixed(1)}% z xT</span>
+                      )}
                     </span>
                   </div>
                   <div className={styles.detailsRow}>
@@ -2727,6 +2923,9 @@ export default function StatystykiZespoluPage() {
                       <span className={styles.valueMain}>{teamLosesStats.losesXTInDefense.toFixed(3)}</span>
                       {teamLosesStats.losesDefenseCount > 0 && (
                         <span className={styles.valueSecondary}>• {(teamLosesStats.losesXTInDefense / teamLosesStats.losesDefenseCount).toFixed(3)} / akcję</span>
+                      )}
+                      {totalLosesXT.totalXTInDefense > 0 && (
+                        <span className={styles.valueSecondary}> • {((teamLosesStats.losesXTInDefense / totalLosesXT.totalXTInDefense) * 100).toFixed(1)}% z xT</span>
                       )}
                     </span>
                   </div>
@@ -2751,7 +2950,7 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.detailsLabel}>Przeciwnik 8s od straty:</span>
                     <span className={styles.detailsValue}>
                       <span className={styles.valueMain}>{losesAfterStats.totalOpponentXG8s.toFixed(2)}</span>
-                      <span className={styles.valueSecondary}> xG • </span>
+                      <span className={styles.valueSecondary}> xG ({losesAfterStats.totalOpponentShots8s}) • </span>
                       <span className={styles.valueMain}>{losesAfterStats.totalOpponentPKEntries8s}</span>
                       <span className={styles.valueSecondary}> PK • </span>
                       <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains8s}</span>
@@ -2762,7 +2961,7 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.detailsLabel}>Przeciwnik 15s od straty:</span>
                     <span className={styles.detailsValue}>
                       <span className={styles.valueMain}>{losesAfterStats.totalOpponentXG15s.toFixed(2)}</span>
-                      <span className={styles.valueSecondary}> xG • </span>
+                      <span className={styles.valueSecondary}> xG ({losesAfterStats.totalOpponentShots15s}) • </span>
                       <span className={styles.valueMain}>{losesAfterStats.totalOpponentPKEntries15s}</span>
                       <span className={styles.valueSecondary}> PK • </span>
                       <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains15s}</span>
@@ -2811,20 +3010,6 @@ export default function StatystykiZespoluPage() {
                       </div>
                     </div>
                   </div>
-                  <div className={styles.heatmapWrapperInPanel}>
-                    <div className={styles.heatmapContainerInPanel}>
-                      <PlayerHeatmapPitch
-                        heatmapData={teamLosesHeatmap}
-                        category="loses"
-                        mode={teamLosesHeatmapMode === 'xt' ? 'pxt' : 'count'}
-                        mirrored={false}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mapa strat nad wykresem */}
-                <div className={styles.detailsSection}>
                   <div className={styles.heatmapWrapperInPanel}>
                     <div className={styles.heatmapContainerInPanel}>
                       <PlayerHeatmapPitch
