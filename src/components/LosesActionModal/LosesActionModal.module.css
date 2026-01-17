@@ -10,8 +10,19 @@
   justify-content: center;
   z-index: 1000;
   backdrop-filter: blur(4px);
-  overflow-y: auto;
+  overflow: visible;
   padding: 24px 16px;
+}
+
+.overlayInternal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: auto;
+  min-height: 100%;
+  overflow-y: auto;
+  overflow-x: visible;
 }
 
 .overlayInternal {
@@ -33,6 +44,7 @@
   overflow: visible;
   animation: modalIn 0.3s ease-out;
   position: relative;
+  z-index: 1001;
 }
 
 @keyframes modalIn {
@@ -121,6 +133,7 @@
   overflow: visible;
   position: relative;
   z-index: 1;
+  isolation: isolate;
 }
 
 .controversyButton {
@@ -1046,8 +1059,9 @@
   content: attr(data-tooltip);
   position: absolute;
   bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: -5%;
+  transform: translateX(0);
+  margin-left: 8px;
   background-color: rgba(15, 23, 42, 0.92);
   color: white;
   padding: 10px 14px;
@@ -1062,32 +1076,33 @@
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
-  z-index: 100000;
+  z-index: 999999;
   text-align: left;
 }
 
 .tooltipTrigger[data-tooltip]:hover::before {
   opacity: 1;
-  transform: translateX(-50%) translateY(-4px);
+  transform: translateX(0) translateY(-4px);
 }
 
 .tooltipTrigger[data-tooltip]::after {
   content: '';
   position: absolute;
   bottom: calc(100% + 2px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: -5%;
+  transform: translateX(0);
+  margin-left: 8px;
   border: 6px solid transparent;
   border-top-color: rgba(15, 23, 42, 0.92);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
-  z-index: 100000;
+  z-index: 999999;
 }
 
 .tooltipTrigger[data-tooltip]:hover::after {
   opacity: 1;
-  transform: translateX(-50%) translateY(-4px);
+  transform: translateX(0) translateY(-4px);
 }
 
 .actionTypeSelector {

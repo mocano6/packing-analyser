@@ -790,7 +790,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                 }}
                 style={{ cursor: 'pointer' }}
               >
-                <span className={styles.compactLabel}>Partner przed piłką</span>
+                <span className={styles.compactLabel}>Partner pod piłką (bez bramkarza)</span>
                 <input
                   className={styles.compactNumberInput}
                   type="number"
@@ -841,7 +841,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                 }}
                 style={{ cursor: 'pointer' }}
               >
-                <span className={styles.compactLabel}>Przeciwnik przed piłką (bez bramkarza)</span>
+                <span className={styles.compactLabel}>Przeciwnik pod piłką</span>
                 <input
                   className={styles.compactNumberInput}
                   type="number"
