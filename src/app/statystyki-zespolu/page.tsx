@@ -1336,22 +1336,32 @@ export default function StatystykiZespoluPage() {
     return result;
   }, [derivedRegainActions]);
 
-  // Statystyki po akcjach regain (xG, wejścia w PK, PXT 8s)
+  // Statystyki po akcjach regain (xG, wejścia w PK, PXT 8s, 15s)
   const regainAfterStats = useMemo(() => {
-    if (!selectedMatch || derivedRegainActions.length === 0) {
+    if (!selectedMatch || !selectedMatchInfo || derivedRegainActions.length === 0) {
       return {
-        totalXG: 0,
-        totalPKEntries: 0,
+        totalXG8s: 0,
+        totalPKEntries8s: 0,
         totalPXT8s: 0,
+        totalXG15s: 0,
+        totalPKEntries15s: 0,
+        totalPXT15s: 0,
         xGPerRegain: 0,
         pkEntriesPerRegain: 0,
         pxt8sPerRegain: 0,
       };
     }
 
-    let totalXG = 0;
-    let totalPKEntries = 0;
+    const isHome = selectedMatchInfo.isHome;
+    const teamId = selectedMatchInfo.team; // Nasz zespół
+    const opponentId = selectedMatchInfo.opponent; // Przeciwnik
+
+    let totalXG8s = 0;
+    let totalPKEntries8s = 0;
     let totalPXT8s = 0;
+    let totalXG15s = 0;
+    let totalPKEntries15s = 0;
+    let totalPXT15s = 0;
 
     // Sortuj wszystkie akcje według czasu wideo
     const allActionsWithTimestamp = allActions
@@ -1387,27 +1397,48 @@ export default function StatystykiZespoluPage() {
       .filter(item => item.timestamp > 0)
       .sort((a, b) => a.timestamp - b.timestamp);
 
-    // Dla każdej akcji regain, znajdź akcje, które nastąpiły po niej (ale przed następną akcją regain)
+    // Dla każdej akcji regain, znajdź nasze akcje (xG, PK) w ciągu 8s i 15s
     regainActionsWithTimestamp.forEach((regainItem, index) => {
       const regainTimestamp = regainItem.timestamp;
       const nextRegainTimestamp = index < regainActionsWithTimestamp.length - 1
         ? regainActionsWithTimestamp[index + 1].timestamp
         : Infinity;
 
-      // Znajdź wszystkie strzały po tej akcji regain (ale przed następną)
-      const shotsAfterRegain = allShotsWithTimestamp.filter(
-        item => item.timestamp > regainTimestamp && item.timestamp < nextRegainTimestamp
-      );
-      totalXG += shotsAfterRegain.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+      const eightSecondsAfterRegain = regainTimestamp + 8;
+      const fifteenSecondsAfterRegain = regainTimestamp + 15;
 
-      // Znajdź wszystkie wejścia w PK po tej akcji regain (ale przed następną)
-      const pkEntriesAfterRegain = allPKEntriesWithTimestamp.filter(
-        item => item.timestamp > regainTimestamp && item.timestamp < nextRegainTimestamp
-      );
-      totalPKEntries += pkEntriesAfterRegain.length;
+      // Funkcja pomocnicza do filtrowania strzałów naszego zespołu
+      const filterTeamShots = (maxTimestamp: number) => {
+        return allShotsWithTimestamp.filter(item => {
+          if (item.timestamp <= regainTimestamp || item.timestamp > maxTimestamp || item.timestamp >= nextRegainTimestamp) {
+            return false;
+          }
+          const shotTeamId = item.shot.teamId || (item.shot.teamContext === 'attack' 
+            ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+            : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+          return shotTeamId === teamId;
+        });
+      };
+
+      // Funkcja pomocnicza do filtrowania wejść w PK naszego zespołu
+      const filterTeamPKEntries = (maxTimestamp: number) => {
+        return allPKEntriesWithTimestamp.filter(item => {
+          if (item.timestamp <= regainTimestamp || item.timestamp > maxTimestamp || item.timestamp >= nextRegainTimestamp) {
+            return false;
+          }
+          // teamContext === "attack" oznacza nasze wejścia
+          return item.entry.teamContext === "attack" || 
+                 (item.entry.teamId && item.entry.teamId === teamId);
+        });
+      };
+
+      // 8 sekund
+      const shots8s = filterTeamShots(eightSecondsAfterRegain);
+      const pkEntries8s = filterTeamPKEntries(eightSecondsAfterRegain);
+      totalXG8s += shots8s.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+      totalPKEntries8s += pkEntries8s.length;
 
       // Znajdź wszystkie akcje packing w ciągu 8 sekund po tej akcji regain
-      const eightSecondsAfterRegain = regainTimestamp + 8;
       const actionsWithin8s = allActionsWithTimestamp.filter(
         item => item.timestamp > regainTimestamp && item.timestamp <= eightSecondsAfterRegain && item.timestamp < nextRegainTimestamp
       );
@@ -1419,19 +1450,41 @@ export default function StatystykiZespoluPage() {
         const pxtValue = xTDifference * packingPoints;
         totalPXT8s += pxtValue;
       });
+
+      // 15 sekund
+      const shots15s = filterTeamShots(fifteenSecondsAfterRegain);
+      const pkEntries15s = filterTeamPKEntries(fifteenSecondsAfterRegain);
+      totalXG15s += shots15s.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+      totalPKEntries15s += pkEntries15s.length;
+
+      // Znajdź wszystkie akcje packing w ciągu 15 sekund po tej akcji regain
+      const actionsWithin15s = allActionsWithTimestamp.filter(
+        item => item.timestamp > regainTimestamp && item.timestamp <= fifteenSecondsAfterRegain && item.timestamp < nextRegainTimestamp
+      );
+
+      // Oblicz PXT z akcji w ciągu 15 sekund
+      actionsWithin15s.forEach(item => {
+        const xTDifference = (item.action.xTValueEnd || 0) - (item.action.xTValueStart || 0);
+        const packingPoints = item.action.packingPoints || 0;
+        const pxtValue = xTDifference * packingPoints;
+        totalPXT15s += pxtValue;
+      });
     });
 
     const totalRegains = derivedRegainActions.length;
 
     return {
-      totalXG,
-      totalPKEntries,
+      totalXG8s,
+      totalPKEntries8s,
       totalPXT8s,
-      xGPerRegain: totalRegains > 0 ? totalXG / totalRegains : 0,
-      pkEntriesPerRegain: totalRegains > 0 ? totalPKEntries / totalRegains : 0,
+      totalXG15s,
+      totalPKEntries15s,
+      totalPXT15s,
+      xGPerRegain: totalRegains > 0 ? totalXG8s / totalRegains : 0,
+      pkEntriesPerRegain: totalRegains > 0 ? totalPKEntries8s / totalRegains : 0,
       pxt8sPerRegain: totalRegains > 0 ? totalPXT8s / totalRegains : 0,
     };
-  }, [selectedMatch, derivedRegainActions, allActions, allShots, allPKEntries]);
+  }, [selectedMatch, selectedMatchInfo, derivedRegainActions, allActions, allShots, allPKEntries]);
 
   const regainsTimelineXT = useMemo(() => {
     if (derivedRegainActions.length === 0) return [];
@@ -2472,27 +2525,29 @@ export default function StatystykiZespoluPage() {
                   </div>
                 </div>
 
-                {/* Statystyki po akcjach regain */}
+                {/* Konsekwencje Przechwytów */}
                 <div className={styles.detailsSection}>
+                  <h4>Konsekwencje Przechwytów</h4>
                   <div className={styles.detailsRow}>
-                    <span className={styles.detailsLabel}><span className={styles.preserveCase}>xG</span>:</span>
+                    <span className={styles.detailsLabel}>8s od przechwytu:</span>
                     <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>{regainAfterStats.totalXG.toFixed(3)}</span>
-                      <span className={styles.valueSecondary}>• {regainAfterStats.xGPerRegain.toFixed(3)} / przechwyt</span>
-                    </span>
-                  </div>
-                  <div className={styles.detailsRow}>
-                    <span className={styles.detailsLabel}>WEJŚCIA W PK:</span>
-                    <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>{regainAfterStats.totalPKEntries}</span>
-                      <span className={styles.valueSecondary}>• {regainAfterStats.pkEntriesPerRegain.toFixed(2)} / przechwyt</span>
-                    </span>
-                  </div>
-                  <div className={styles.detailsRow}>
-                    <span className={styles.detailsLabel}><span className={styles.preserveCase}>PXT</span> 8s:</span>
-                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{regainAfterStats.totalXG8s.toFixed(2)}</span>
+                      <span className={styles.valueSecondary}> xG • </span>
+                      <span className={styles.valueMain}>{regainAfterStats.totalPKEntries8s}</span>
+                      <span className={styles.valueSecondary}> PK • </span>
                       <span className={styles.valueMain}>{regainAfterStats.totalPXT8s.toFixed(3)}</span>
-                      <span className={styles.valueSecondary}>• {regainAfterStats.pxt8sPerRegain.toFixed(3)} / przechwyt</span>
+                      <span className={styles.valueSecondary}> <span className={styles.preserveCase}>PXT</span></span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>15s od przechwytu:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{regainAfterStats.totalXG15s.toFixed(2)}</span>
+                      <span className={styles.valueSecondary}> xG • </span>
+                      <span className={styles.valueMain}>{regainAfterStats.totalPKEntries15s}</span>
+                      <span className={styles.valueSecondary}> PK • </span>
+                      <span className={styles.valueMain}>{regainAfterStats.totalPXT15s.toFixed(3)}</span>
+                      <span className={styles.valueSecondary}> <span className={styles.preserveCase}>PXT</span></span>
                     </span>
                   </div>
                 </div>
@@ -2665,30 +2720,8 @@ export default function StatystykiZespoluPage() {
                         {losesContextStats.totalLosesForReaction5s > 0 ? ((losesContextStats.reaction5sCount / losesContextStats.totalLosesForReaction5s) * 100).toFixed(1) : 0}%
                       </span>
                       <span className={styles.valueSecondary}>
-                        • {losesContextStats.reaction5sCount}/{losesContextStats.totalLosesForReaction5s} | </span>
+                        • {losesContextStats.reaction5sCount}/{losesContextStats.totalLosesForReaction5s} • </span>
                       <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains5s}</span>
-                      <span className={styles.valueSecondary}> Nasz Regain</span>
-                    </span>
-                  </div>
-                  <div className={styles.detailsRow}>
-                    <span className={styles.detailsLabel}>Przeciwnik 8s od straty:</span>
-                    <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentXG8s.toFixed(2)}</span>
-                      <span className={styles.valueSecondary}> xG | </span>
-                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentPKEntries8s}</span>
-                      <span className={styles.valueSecondary}> PK | </span>
-                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains8s}</span>
-                      <span className={styles.valueSecondary}> Nasz Regain</span>
-                    </span>
-                  </div>
-                  <div className={styles.detailsRow}>
-                    <span className={styles.detailsLabel}>Przeciwnik 15s od straty:</span>
-                    <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentXG15s.toFixed(2)}</span>
-                      <span className={styles.valueSecondary}> xG | </span>
-                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentPKEntries15s}</span>
-                      <span className={styles.valueSecondary}> PK | </span>
-                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains15s}</span>
                       <span className={styles.valueSecondary}> Nasz Regain</span>
                     </span>
                   </div>
