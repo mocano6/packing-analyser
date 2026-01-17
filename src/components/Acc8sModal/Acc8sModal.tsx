@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Acc8sEntry, TeamInfo, Player } from "@/types";
+import { useAuth } from "@/hooks/useAuth";
 import styles from "./Acc8sModal.module.css";
 
 export interface Acc8sModalProps {
@@ -29,6 +30,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
   players,
   onCalculateMinuteFromVideo,
 }) => {
+  const { isAdmin } = useAuth();
   const [formData, setFormData] = useState({
     minute: 1,
     isSecondHalf: false,
@@ -278,32 +280,34 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
             </button>
           </div>
 
-          {/* Liczba podań */}
-          <div 
-            className={styles.compactPointsButton}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleAddPass();
-            }}
-            title="Liczba podań = liczba wybranych zawodników"
-          >
-            <span className={styles.compactLabel}>Liczba podań</span>
-            <span className={styles.pointsValue}><b>{formData.passingPlayerIds.length}</b></span>
-            <button
-              className={styles.compactSubtractButton}
+          {/* Liczba podań - widoczne tylko dla admina */}
+          {isAdmin && (
+            <div 
+              className={styles.compactPointsButton}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                handleRemovePass();
+                handleAddPass();
               }}
-              title="Odejmij podanie"
-              type="button"
-              disabled={formData.passingPlayerIds.length === 0}
+              title="Liczba podań = liczba wybranych zawodników"
             >
-              −
-            </button>
-          </div>
+              <span className={styles.compactLabel}>Liczba podań</span>
+              <span className={styles.pointsValue}><b>{formData.passingPlayerIds.length}</b></span>
+              <button
+                className={styles.compactSubtractButton}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleRemovePass();
+                }}
+                title="Odejmij podanie"
+                type="button"
+                disabled={formData.passingPlayerIds.length === 0}
+              >
+                −
+              </button>
+            </div>
+          )}
 
           <div className={styles.buttonGroup}>
             <button
