@@ -1341,11 +1341,15 @@ export default function StatystykiZespoluPage() {
     if (!selectedMatch || !selectedMatchInfo || derivedRegainActions.length === 0) {
       return {
         totalXG8s: 0,
+        totalShots8s: 0,
         totalPKEntries8s: 0,
         totalPXT8s: 0,
+        totalPasses8s: 0,
         totalXG15s: 0,
+        totalShots15s: 0,
         totalPKEntries15s: 0,
         totalPXT15s: 0,
+        totalPasses15s: 0,
         xGPerRegain: 0,
         pkEntriesPerRegain: 0,
         pxt8sPerRegain: 0,
@@ -1357,11 +1361,15 @@ export default function StatystykiZespoluPage() {
     const opponentId = selectedMatchInfo.opponent; // Przeciwnik
 
     let totalXG8s = 0;
+    let totalShots8s = 0;
     let totalPKEntries8s = 0;
     let totalPXT8s = 0;
+    let totalPasses8s = 0;
     let totalXG15s = 0;
+    let totalShots15s = 0;
     let totalPKEntries15s = 0;
     let totalPXT15s = 0;
+    let totalPasses15s = 0;
 
     // Sortuj wszystkie akcje według czasu wideo
     const allActionsWithTimestamp = allActions
@@ -1436,12 +1444,17 @@ export default function StatystykiZespoluPage() {
       const shots8s = filterTeamShots(eightSecondsAfterRegain);
       const pkEntries8s = filterTeamPKEntries(eightSecondsAfterRegain);
       totalXG8s += shots8s.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+      totalShots8s += shots8s.length;
       totalPKEntries8s += pkEntries8s.length;
 
       // Znajdź wszystkie akcje packing w ciągu 8 sekund po tej akcji regain
       const actionsWithin8s = allActionsWithTimestamp.filter(
         item => item.timestamp > regainTimestamp && item.timestamp <= eightSecondsAfterRegain && item.timestamp < nextRegainTimestamp
       );
+
+      // Policz podania (akcje typu "pass")
+      const passes8s = actionsWithin8s.filter(item => item.action.actionType === 'pass');
+      totalPasses8s += passes8s.length;
 
       // Oblicz PXT z akcji w ciągu 8 sekund
       actionsWithin8s.forEach(item => {
@@ -1455,12 +1468,17 @@ export default function StatystykiZespoluPage() {
       const shots15s = filterTeamShots(fifteenSecondsAfterRegain);
       const pkEntries15s = filterTeamPKEntries(fifteenSecondsAfterRegain);
       totalXG15s += shots15s.reduce((sum, item) => sum + (item.shot.xG || 0), 0);
+      totalShots15s += shots15s.length;
       totalPKEntries15s += pkEntries15s.length;
 
       // Znajdź wszystkie akcje packing w ciągu 15 sekund po tej akcji regain
       const actionsWithin15s = allActionsWithTimestamp.filter(
         item => item.timestamp > regainTimestamp && item.timestamp <= fifteenSecondsAfterRegain && item.timestamp < nextRegainTimestamp
       );
+
+      // Policz podania (akcje typu "pass")
+      const passes15s = actionsWithin15s.filter(item => item.action.actionType === 'pass');
+      totalPasses15s += passes15s.length;
 
       // Oblicz PXT z akcji w ciągu 15 sekund
       actionsWithin15s.forEach(item => {
@@ -1475,11 +1493,15 @@ export default function StatystykiZespoluPage() {
 
     return {
       totalXG8s,
+      totalShots8s,
       totalPKEntries8s,
       totalPXT8s,
+      totalPasses8s,
       totalXG15s,
+      totalShots15s,
       totalPKEntries15s,
       totalPXT15s,
+      totalPasses15s,
       xGPerRegain: totalRegains > 0 ? totalXG8s / totalRegains : 0,
       pkEntriesPerRegain: totalRegains > 0 ? totalPKEntries8s / totalRegains : 0,
       pxt8sPerRegain: totalRegains > 0 ? totalPXT8s / totalRegains : 0,
@@ -2532,22 +2554,22 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.detailsLabel}>8s od przechwytu:</span>
                     <span className={styles.detailsValue}>
                       <span className={styles.valueMain}>{regainAfterStats.totalXG8s.toFixed(2)}</span>
-                      <span className={styles.valueSecondary}> xG • </span>
+                      <span className={styles.valueSecondary}> xG ({regainAfterStats.totalShots8s}) • </span>
                       <span className={styles.valueMain}>{regainAfterStats.totalPKEntries8s}</span>
                       <span className={styles.valueSecondary}> PK • </span>
                       <span className={styles.valueMain}>{regainAfterStats.totalPXT8s.toFixed(3)}</span>
-                      <span className={styles.valueSecondary}> <span className={styles.preserveCase}>PXT</span></span>
+                      <span className={styles.valueSecondary}> <span className={styles.preserveCase}>PxT</span> ({regainAfterStats.totalPasses8s})</span>
                     </span>
                   </div>
                   <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}>15s od przechwytu:</span>
                     <span className={styles.detailsValue}>
                       <span className={styles.valueMain}>{regainAfterStats.totalXG15s.toFixed(2)}</span>
-                      <span className={styles.valueSecondary}> xG • </span>
+                      <span className={styles.valueSecondary}> xG ({regainAfterStats.totalShots15s}) • </span>
                       <span className={styles.valueMain}>{regainAfterStats.totalPKEntries15s}</span>
                       <span className={styles.valueSecondary}> PK • </span>
                       <span className={styles.valueMain}>{regainAfterStats.totalPXT15s.toFixed(3)}</span>
-                      <span className={styles.valueSecondary}> <span className={styles.preserveCase}>PXT</span></span>
+                      <span className={styles.valueSecondary}> <span className={styles.preserveCase}>PxT</span> ({regainAfterStats.totalPasses15s})</span>
                     </span>
                   </div>
                 </div>
@@ -2722,6 +2744,28 @@ export default function StatystykiZespoluPage() {
                       <span className={styles.valueSecondary}>
                         • {losesContextStats.reaction5sCount}/{losesContextStats.totalLosesForReaction5s} • </span>
                       <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains5s}</span>
+                      <span className={styles.valueSecondary}> Nasz Regain</span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>Przeciwnik 8s od straty:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentXG8s.toFixed(2)}</span>
+                      <span className={styles.valueSecondary}> xG • </span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentPKEntries8s}</span>
+                      <span className={styles.valueSecondary}> PK • </span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains8s}</span>
+                      <span className={styles.valueSecondary}> Nasz Regain</span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>Przeciwnik 15s od straty:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentXG15s.toFixed(2)}</span>
+                      <span className={styles.valueSecondary}> xG • </span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentPKEntries15s}</span>
+                      <span className={styles.valueSecondary}> PK • </span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains15s}</span>
                       <span className={styles.valueSecondary}> Nasz Regain</span>
                     </span>
                   </div>
