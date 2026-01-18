@@ -2413,14 +2413,22 @@ export default function Page() {
 
       const db = getDB();
 
-      // Zablokuj czas akcji podczas edycji (minuta/połowa/timestamp)
+      // Zablokuj minuta i połowa podczas edycji, ale pozwól na zmianę timestamp
       const originalAction = actions.find(a => a.id === editedAction.id);
+      
+      // Pobierz nowy timestamp z localStorage jeśli został zmieniony
+      const tempVideoTimestamp = localStorage.getItem('tempVideoTimestamp');
+      const tempVideoTimestampRaw = localStorage.getItem('tempVideoTimestampRaw');
+      const parsedVideoTimestamp = tempVideoTimestamp ? parseInt(tempVideoTimestamp) : undefined;
+      const parsedVideoTimestampRaw = tempVideoTimestampRaw ? parseInt(tempVideoTimestampRaw) : undefined;
+      
       const lockedEditedAction = originalAction ? {
         ...editedAction,
         minute: originalAction.minute,
         isSecondHalf: originalAction.isSecondHalf,
-        videoTimestamp: originalAction.videoTimestamp,
-        videoTimestampRaw: (originalAction as any)?.videoTimestampRaw
+        // Użyj nowego timestamp z localStorage jeśli jest dostępny, w przeciwnym razie zachowaj oryginalny
+        videoTimestamp: parsedVideoTimestamp !== undefined ? parsedVideoTimestamp : originalAction.videoTimestamp,
+        videoTimestampRaw: parsedVideoTimestampRaw !== undefined ? parsedVideoTimestampRaw : (originalAction as any)?.videoTimestampRaw
       } : editedAction;
       
       // Określamy kategorię akcji i odpowiednią kolekcję

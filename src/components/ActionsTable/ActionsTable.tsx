@@ -149,7 +149,7 @@ const ActionRow = ({
 
   // Funkcja formatująca czas wideo (sekundy -> mm:ss)
   const formatVideoTime = (seconds?: number): string => {
-    if (!seconds) return '-';
+    if (seconds === undefined || seconds === null) return '-';
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -181,7 +181,7 @@ const ActionRow = ({
         &nbsp;{action.minute}'
       </div>
       <div className={styles.cell}>
-        {action.videoTimestamp ? (
+        {action.videoTimestamp !== undefined && action.videoTimestamp !== null ? (
           <span 
             className={styles.videoTimeLink}
             onClick={(e) => {

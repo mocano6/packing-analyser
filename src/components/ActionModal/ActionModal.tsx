@@ -21,6 +21,7 @@ interface ActionModalProps {
   actionMinute: number;
   onMinuteChange: (minute: number) => void;
   onCalculateMinuteFromVideo?: () => Promise<{ minute: number; isSecondHalf: boolean } | null>;
+  onGetVideoTime?: () => Promise<number>; // Funkcja do pobierania surowego czasu z wideo w sekundach
   actionType: "pass" | "dribble";
   onActionTypeChange: (type: "pass" | "dribble") => void;
   currentPoints: number;
@@ -84,6 +85,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
   actionMinute,
   onMinuteChange,
   onCalculateMinuteFromVideo,
+  onGetVideoTime,
   actionType,
   onActionTypeChange,
   currentPoints,
@@ -136,6 +138,8 @@ const ActionModal: React.FC<ActionModalProps> = ({
 }) => {
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
   const isAutoSettingFromVideo = React.useRef(false);
+  const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
+  const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
 
   // Ładujemy ostatnio wybraną opcję trybu
   useEffect(() => {
@@ -168,6 +172,79 @@ const ActionModal: React.FC<ActionModalProps> = ({
 
   // Określamy czy jesteśmy w trybie edycji
   const isEditMode = !!editingAction;
+
+  // Funkcje pomocnicze do konwersji czasu
+  const secondsToMMSS = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const mmssToSeconds = (mmss: string): number => {
+    const [mins, secs] = mmss.split(':').map(Number);
+    if (isNaN(mins) || isNaN(secs)) return 0;
+    return mins * 60 + secs;
+  };
+
+  // Pobieranie czasu z wideo przy otwarciu modalu
+  useEffect(() => {
+    if (isOpen) {
+      if (isEditMode && editingAction) {
+        // W trybie edycji - używamy zapisanego czasu z akcji
+        // Preferujemy videoTimestampRaw (surowy czas), jeśli nie ma, obliczamy z videoTimestamp (czas z korektą -10s)
+        let savedTime: number | undefined;
+        if (editingAction.videoTimestampRaw !== undefined && editingAction.videoTimestampRaw > 0) {
+          savedTime = editingAction.videoTimestampRaw;
+        } else if (editingAction.videoTimestamp !== undefined && editingAction.videoTimestamp > 0) {
+          // Jeśli mamy tylko videoTimestamp (z korektą -10s), dodajemy 10 sekund z powrotem
+          savedTime = editingAction.videoTimestamp + 10;
+        }
+        
+        if (savedTime !== undefined && savedTime > 0) {
+          setVideoTimeMMSS(secondsToMMSS(savedTime));
+        } else {
+          // Jeśli nie ma zapisanego czasu, spróbuj pobrać z wideo
+          if (onGetVideoTime) {
+            onGetVideoTime().then((time) => {
+              if (time > 0) {
+                setVideoTimeMMSS(secondsToMMSS(time));
+              }
+            }).catch((error) => {
+              console.warn('Nie udało się pobrać czasu z wideo:', error);
+            });
+          }
+        }
+      } else if (!isEditMode && onGetVideoTime) {
+        // W trybie dodawania - pobieramy aktualny czas z wideo
+        onGetVideoTime().then((time) => {
+          if (time > 0) {
+            setVideoTimeMMSS(secondsToMMSS(time));
+          }
+        }).catch((error) => {
+          console.warn('Nie udało się pobrać czasu z wideo:', error);
+        });
+      }
+    }
+  }, [isOpen, isEditMode, editingAction, onGetVideoTime]);
+
+  // Aktualizacja aktualnej minuty meczu na podstawie czasu wideo
+  useEffect(() => {
+    if (isOpen && onCalculateMinuteFromVideo && !isEditMode) {
+      const updateMatchMinute = async () => {
+        const result = await onCalculateMinuteFromVideo();
+        if (result !== null && result.minute > 0) {
+          setCurrentMatchMinute(result.minute);
+        }
+      };
+      updateMatchMinute();
+      // Aktualizuj co sekundę
+      const interval = setInterval(updateMatchMinute, 1000);
+      return () => clearInterval(interval);
+    } else if (isEditMode && editingAction) {
+      // W trybie edycji - używamy minuty z akcji
+      setCurrentMatchMinute(editingAction.minute);
+    }
+  }, [isOpen, isEditMode, editingAction, onCalculateMinuteFromVideo]);
 
   // Automatycznie ustaw sugerowaną wartość minuty na podstawie czasu wideo przy otwarciu modalu
   useEffect(() => {
@@ -335,6 +412,54 @@ const ActionModal: React.FC<ActionModalProps> = ({
     onMinuteChange(parseInt(e.target.value) || 0);
   };
 
+  const handleVideoTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    
+    // Pozwól na częściowe wpisywanie podczas edycji
+    // Akceptuj: puste, liczby, format z dwukropkiem (np. "1:", "01:", "01:4", "01:47")
+    const partialPattern = /^([0-5]?[0-9]?)?(:([0-5]?[0-9]?)?)?$/;
+    
+    // Pełny format MM:SS
+    const fullPattern = /^([0-5]?[0-9]):([0-5][0-9])$/;
+    
+    if (value === '' || partialPattern.test(value) || fullPattern.test(value)) {
+      setVideoTimeMMSS(value);
+    }
+  };
+
+  const handleVideoTimeBlur = () => {
+    // Upewnij się, że format jest poprawny
+    if (!/^([0-5]?[0-9]):([0-5][0-9])$/.test(videoTimeMMSS)) {
+      // Jeśli format jest niepoprawny, przywróć poprzednią wartość lub pobierz z wideo
+      if (isEditMode && editingAction) {
+        // W trybie edycji - przywróć zapisany czas
+        let savedTime: number | undefined;
+        if (editingAction.videoTimestampRaw !== undefined && editingAction.videoTimestampRaw > 0) {
+          savedTime = editingAction.videoTimestampRaw;
+        } else if (editingAction.videoTimestamp !== undefined && editingAction.videoTimestamp > 0) {
+          savedTime = editingAction.videoTimestamp + 10;
+        }
+        
+        if (savedTime !== undefined && savedTime > 0) {
+          setVideoTimeMMSS(secondsToMMSS(savedTime));
+        } else if (onGetVideoTime) {
+          onGetVideoTime().then((time) => {
+            if (time > 0) {
+              setVideoTimeMMSS(secondsToMMSS(time));
+            }
+          });
+        }
+      } else if (onGetVideoTime) {
+        // W trybie dodawania - pobierz z wideo
+        onGetVideoTime().then((time) => {
+          if (time > 0) {
+            setVideoTimeMMSS(secondsToMMSS(time));
+          }
+        });
+      }
+    }
+  };
+
   const handleActionTypeChange = (type: "pass" | "dribble") => {
     onActionTypeChange(type);
     
@@ -470,6 +595,23 @@ const ActionModal: React.FC<ActionModalProps> = ({
       if (actionType === "pass" && !selectedReceiverId) {
         alert("Wybierz zawodnika kończącego podanie!");
         return;
+      }
+    }
+
+    // Zapisz videoTimestamp z pola MM:SS do localStorage
+    const videoTimeSeconds = mmssToSeconds(videoTimeMMSS);
+    if (videoTimeSeconds >= 0) {
+      // Zapisujemy surowy czas (videoTimestampRaw) - bez korekty (może być 0)
+      localStorage.setItem('tempVideoTimestampRaw', videoTimeSeconds.toString());
+      // Zapisujemy czas z korektą -10s (videoTimestamp) - maksymalnie do 0, nie może być poniżej 0
+      // Jeśli czas jest poniżej 10s, odejmujemy maksymalnie do 0
+      const correctedTime = Math.max(0, videoTimeSeconds - 10);
+      localStorage.setItem('tempVideoTimestamp', correctedTime.toString());
+    } else if (isEditMode && editingAction?.videoTimestamp !== undefined) {
+      // W trybie edycji, jeśli pole jest puste lub niepoprawne, zachowaj istniejący timestamp
+      localStorage.setItem('tempVideoTimestamp', editingAction.videoTimestamp.toString());
+      if (editingAction.videoTimestampRaw !== undefined) {
+        localStorage.setItem('tempVideoTimestampRaw', editingAction.videoTimestampRaw.toString());
       }
     }
 
@@ -924,48 +1066,23 @@ const ActionModal: React.FC<ActionModalProps> = ({
             </button>
             
             <div className={styles.minuteInput}>
-              <div className={styles.minuteControls}>
-                <button
-                  type="button"
-                  className={styles.minuteButton}
-                  onClick={() => {
-                    const newMinute = Math.max(
-                      isSecondHalf ? 46 : 1, 
-                      actionMinute - 1
-                    );
-                    onMinuteChange(newMinute);
-                  }}
-                  title="Zmniejsz minutę"
-                  disabled={isEditMode}
-                >
-                  −
-                </button>
+              <div className={styles.videoTimeWrapper}>
                 <input
-                  id="action-minute-modal"
-                  type="number"
-                  value={actionMinute}
-                  onChange={handleMinuteChange}
-                  min={isSecondHalf ? 46 : 1}
-                  max={isSecondHalf ? 130 : 65}
-                  className={styles.minuteField}
-                  readOnly={isEditMode}
-                  disabled={isEditMode}
+                  id="video-time-input"
+                  type="text"
+                  value={videoTimeMMSS}
+                  onChange={handleVideoTimeChange}
+                  onBlur={handleVideoTimeBlur}
+                  placeholder="MM:SS"
+                  pattern="^([0-5]?[0-9]):([0-5][0-9])$"
+                  className={styles.videoTimeField}
+                  maxLength={5}
                 />
-                <button
-                  type="button"
-                  className={styles.minuteButton}
-                  onClick={() => {
-                    const newMinute = Math.min(
-                      isSecondHalf ? 130 : 65, 
-                      actionMinute + 1
-                    );
-                    onMinuteChange(newMinute);
-                  }}
-                  title="Zwiększ minutę"
-                  disabled={isEditMode}
-                >
-                  +
-                </button>
+                {currentMatchMinute !== null && (
+                  <span className={styles.matchMinuteInfo}>
+                    {currentMatchMinute}'
+                  </span>
+                )}
               </div>
             </div>
             

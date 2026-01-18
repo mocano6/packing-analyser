@@ -315,6 +315,62 @@ const ActionSection = memo(function ActionSection({
     }
   }, [matchInfo, youtubeVideoRef, customVideoRef]);
 
+  // Funkcja do pobierania surowego czasu z wideo (w sekundach)
+  const getVideoTime = React.useCallback(async (): Promise<number> => {
+    try {
+      // Sprawdź zewnętrzne okno wideo
+      const externalWindow = (window as any).externalVideoWindow;
+      const isExternalWindowOpen = externalWindow && !externalWindow.closed;
+      const isExternalWindowOpenFromStorage = localStorage.getItem('externalVideoWindowOpen') === 'true';
+      
+      if (isExternalWindowOpen) {
+        // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
+        externalWindow.postMessage({
+          type: 'GET_CURRENT_TIME'
+        }, '*');
+        
+        // Czekaj na odpowiedź z zewnętrznego okna
+        const timeFromExternal = await new Promise<number | null>((resolve) => {
+          const handleTimeResponse = (event: MessageEvent) => {
+            if (event.data.type === 'CURRENT_TIME_RESPONSE' || event.data.type === 'VIDEO_TIME_RESPONSE') {
+              window.removeEventListener('message', handleTimeResponse);
+              resolve(event.data.time);
+            }
+          };
+          window.addEventListener('message', handleTimeResponse);
+          setTimeout(() => {
+            window.removeEventListener('message', handleTimeResponse);
+            resolve(null); // timeout
+          }, 2000);
+        });
+        
+        if (timeFromExternal !== null && timeFromExternal !== undefined) {
+          return timeFromExternal;
+        }
+      } else if (youtubeVideoRef?.current) {
+        try {
+          const time = await youtubeVideoRef.current.getCurrentTime();
+          return time;
+        } catch (error) {
+          console.warn('ActionSection getVideoTime: błąd pobierania czasu z YouTube:', error);
+          return 0;
+        }
+      } else if (customVideoRef?.current) {
+        try {
+          const time = await customVideoRef.current.getCurrentTime();
+          return time;
+        } catch (error) {
+          console.warn('ActionSection getVideoTime: błąd pobierania czasu z CustomVideo:', error);
+          return 0;
+        }
+      }
+      return 0;
+    } catch (error) {
+      console.warn('ActionSection getVideoTime: błąd pobierania czasu z wideo:', error);
+      return 0;
+    }
+  }, [youtubeVideoRef, customVideoRef]);
+
   // Stan do śledzenia, czy wideo jest wyśrodkowane na ekranie
   const [isVideoCentered, setIsVideoCentered] = React.useState(false);
   const [showScrollButton, setShowScrollButton] = React.useState(true);
@@ -486,6 +542,7 @@ const ActionSection = memo(function ActionSection({
           actionMinute={actionMinute}
           onMinuteChange={setActionMinute}
           onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+          onGetVideoTime={getVideoTime}
           actionType={actionType}
           onActionTypeChange={setActionType}
           currentPoints={currentPoints}
@@ -627,6 +684,7 @@ const ActionSection = memo(function ActionSection({
           actionMinute={actionMinute}
           onMinuteChange={setActionMinute}
           onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+          onGetVideoTime={getVideoTime}
           actionType={actionType}
           onActionTypeChange={setActionType}
           currentPoints={currentPoints}
@@ -779,6 +837,7 @@ const ActionSection = memo(function ActionSection({
           actionMinute={actionMinute}
           onMinuteChange={setActionMinute}
           onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+          onGetVideoTime={getVideoTime}
           actionType={actionType}
           onActionTypeChange={setActionType}
           currentPoints={currentPoints}
@@ -960,6 +1019,7 @@ const ActionSection = memo(function ActionSection({
           actionMinute={actionMinute}
           onMinuteChange={setActionMinute}
           onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+          onGetVideoTime={getVideoTime}
           actionType={actionType}
           onActionTypeChange={setActionType}
           currentPoints={currentPoints}
