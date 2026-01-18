@@ -7,7 +7,7 @@ import ActionModal from "../ActionModal/ActionModal";
 import RegainActionModal from "../RegainActionModal/RegainActionModal";
 import LosesActionModal from "../LosesActionModal/LosesActionModal";
 import styles from "./ActionSection.module.css";
-import { Player, TeamInfo } from "@/types";
+import { Player, TeamInfo, Action } from "@/types";
 
 export interface ActionSectionProps {
   selectedZone: string | number | null;
@@ -104,6 +104,15 @@ export interface ActionSectionProps {
   // Refs do odtwarzaczy wideo
   youtubeVideoRef?: React.RefObject<{ getCurrentTime: () => Promise<number> }>;
   customVideoRef?: React.RefObject<{ getCurrentTime: () => Promise<number> }>;
+  // Propsy dla modali edycji
+  editingAction?: Action | null;
+  isActionEditModalOpen?: boolean;
+  onCloseActionEditModal?: () => void;
+  onSaveEditedAction?: (action: Action) => void;
+  allMatches?: TeamInfo[];
+  actions?: Action[];
+  onEditingActionChange?: (action: Action | null) => void;
+  getActionCategory?: (action: Action) => "packing" | "regain" | "loses";
 }
 
 const ActionSection = memo(function ActionSection({
@@ -193,6 +202,15 @@ const ActionSection = memo(function ActionSection({
   videoContainerRef,
   youtubeVideoRef,
   customVideoRef,
+  // Propsy dla modali edycji
+  editingAction,
+  isActionEditModalOpen = false,
+  onCloseActionEditModal,
+  onSaveEditedAction,
+  allMatches = [],
+  actions = [],
+  onEditingActionChange,
+  getActionCategory
 }: ActionSectionProps) {
   // Funkcja do obliczania minuty meczu na podstawie czasu wideo
   const calculateMatchMinuteFromVideoTime = React.useCallback(async (): Promise<{ minute: number; isSecondHalf: boolean } | null> => {
@@ -1069,6 +1087,881 @@ const ActionSection = memo(function ActionSection({
           onDefensePlayersChange={onDefensePlayersChange}
         />
       )}
+
+      {/* Modale edycji akcji - renderowane wewnątrz ActionSection dla poprawnego pozycjonowania */}
+      {isActionEditModalOpen && editingAction && getActionCategory && getActionCategory(editingAction) === "loses" ? (
+        <LosesActionModal
+          isOpen={isActionEditModalOpen}
+          isVideoInternal={isVideoInternal}
+          onClose={onCloseActionEditModal || (() => {})}
+          players={players}
+          selectedPlayerId={editingAction?.senderId || null}
+          selectedReceiverId={editingAction?.receiverId || null}
+          onSenderSelect={(id) => {
+            if (editingAction && onEditingActionChange) {
+              const player = players.find(p => p.id === id);
+              onEditingActionChange({
+                ...editingAction,
+                senderId: id || '',
+                senderName: player?.name || '',
+                senderNumber: player?.number || 0
+              });
+            }
+          }}
+          onReceiverSelect={(id) => {
+            if (editingAction && onEditingActionChange) {
+              const player = players.find(p => p.id === id);
+              onEditingActionChange({
+                ...editingAction,
+                receiverId: id || '',
+                receiverName: player?.name || '',
+                receiverNumber: player?.number || 0
+              });
+            }
+          }}
+          actionMinute={editingAction?.minute || 0}
+          onMinuteChange={(minute) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                minute
+              });
+            }
+          }}
+          onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+          actionType={editingAction?.actionType as "pass" | "dribble" || 'pass'}
+          onActionTypeChange={(type) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                actionType: type
+              });
+            }
+          }}
+          currentPoints={editingAction?.packingPoints || 0}
+          onAddPoints={(points) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                packingPoints: (editingAction.packingPoints || 0) + points
+              });
+            }
+          }}
+          isP0Active={editingAction?.isP0 || false}
+          onP0Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP0Active = !editingAction.isP0;
+              onEditingActionChange({
+                ...editingAction,
+                isP0: newIsP0Active,
+                isP1: newIsP0Active ? false : editingAction.isP1,
+                isP2: newIsP0Active ? false : editingAction.isP2,
+                isP3: newIsP0Active ? false : editingAction.isP3
+              });
+            }
+          }}
+          isP1Active={editingAction?.isP1 || false}
+          onP1Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP1Active = !editingAction.isP1;
+              onEditingActionChange({
+                ...editingAction,
+                isP1: newIsP1Active,
+                isP0: newIsP1Active ? false : editingAction.isP0,
+                isP2: newIsP1Active ? false : editingAction.isP2,
+                isP3: newIsP1Active ? false : editingAction.isP3
+              });
+            }
+          }}
+          isP2Active={editingAction?.isP2 || false}
+          onP2Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP2Active = !editingAction.isP2;
+              onEditingActionChange({
+                ...editingAction,
+                isP2: newIsP2Active,
+                isP0: newIsP2Active ? false : editingAction.isP0,
+                isP1: newIsP2Active ? false : editingAction.isP1,
+                isP3: newIsP2Active ? false : editingAction.isP3
+              });
+            }
+          }}
+          isP3Active={editingAction?.isP3 || false}
+          onP3Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP3Active = !editingAction.isP3;
+              onEditingActionChange({
+                ...editingAction,
+                isP3: newIsP3Active,
+                isP0: newIsP3Active ? false : editingAction.isP0,
+                isP1: newIsP3Active ? false : editingAction.isP1,
+                isP2: newIsP3Active ? false : editingAction.isP2
+              });
+            }
+          }}
+          isContact1Active={editingAction?.isContact1 || false}
+          onContact1Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newValue = !editingAction.isContact1;
+              onEditingActionChange({
+                ...editingAction,
+                isContact1: newValue,
+                isContact2: newValue ? false : editingAction.isContact2,
+                isContact3Plus: newValue ? false : editingAction.isContact3Plus
+              });
+            }
+          }}
+          isContact2Active={editingAction?.isContact2 || false}
+          onContact2Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newValue = !editingAction.isContact2;
+              onEditingActionChange({
+                ...editingAction,
+                isContact2: newValue,
+                isContact1: newValue ? false : editingAction.isContact1,
+                isContact3Plus: newValue ? false : editingAction.isContact3Plus
+              });
+            }
+          }}
+          isContact3PlusActive={editingAction?.isContact3Plus || false}
+          onContact3PlusToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newValue = !editingAction.isContact3Plus;
+              onEditingActionChange({
+                ...editingAction,
+                isContact3Plus: newValue,
+                isContact1: newValue ? false : editingAction.isContact1,
+                isContact2: newValue ? false : editingAction.isContact2
+              });
+            }
+          }}
+          isShot={editingAction?.isShot || false}
+          onShotToggle={(checked) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isShot: checked
+              });
+            }
+          }}
+          isGoal={editingAction?.isGoal || false}
+          onGoalToggle={(checked) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isGoal: checked
+              });
+            }
+          }}
+          isPenaltyAreaEntry={editingAction?.isPenaltyAreaEntry || false}
+          onPenaltyAreaEntryToggle={(checked) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isPenaltyAreaEntry: checked
+              });
+            }
+          }}
+          isSecondHalf={editingAction?.isSecondHalf || false}
+          onSecondHalfToggle={(checked) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isSecondHalf: checked
+              });
+            }
+          }}
+          onSaveAction={() => {
+            if (editingAction && onSaveEditedAction) {
+              onSaveEditedAction(editingAction);
+            }
+          }}
+          onReset={() => {
+            if (editingAction && actions && actions.length > 0 && onEditingActionChange) {
+              const originalAction = actions.find(a => a.id === editingAction.id);
+              if (originalAction) {
+                onEditingActionChange({ ...originalAction });
+              }
+            }
+          }}
+          onResetPoints={resetActionPoints}
+          editingAction={editingAction}
+          allMatches={allMatches}
+          selectedMatchId={editingAction?.matchId || null}
+          onMatchSelect={(matchId) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                matchId
+              });
+            }
+          }}
+          matchInfo={matchInfo}
+          isBelow8sActive={editingAction?.isBelow8s || false}
+          onBelow8sToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isBelow8s: !editingAction.isBelow8s
+              });
+            }
+          }}
+          isReaction5sActive={editingAction?.isReaction5s || false}
+          onReaction5sToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newValue = !editingAction.isReaction5s;
+              onEditingActionChange({
+                ...editingAction,
+                isReaction5s: newValue,
+                isAut: newValue ? false : editingAction.isAut,
+                isReaction5sNotApplicable: newValue ? false : editingAction.isReaction5sNotApplicable
+              });
+            }
+          }}
+          isAutActive={editingAction?.isAut || false}
+          onAutToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newValue = !editingAction.isAut;
+              onEditingActionChange({
+                ...editingAction,
+                isAut: newValue,
+                isReaction5s: newValue ? false : editingAction.isReaction5s,
+                isReaction5sNotApplicable: newValue ? false : editingAction.isReaction5sNotApplicable
+              });
+            }
+          }}
+          isReaction5sNotApplicableActive={editingAction?.isReaction5sNotApplicable || false}
+          onReaction5sNotApplicableToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newValue = !editingAction.isReaction5sNotApplicable;
+              onEditingActionChange({
+                ...editingAction,
+                isReaction5sNotApplicable: newValue,
+                isReaction5s: newValue ? false : editingAction.isReaction5s,
+                isAut: newValue ? false : editingAction.isAut
+              });
+            }
+          }}
+          playersBehindBall={editingAction?.playersBehindBall || 0}
+          onPlayersBehindBallChange={(count) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                playersBehindBall: count
+              });
+            }
+          }}
+          opponentsBehindBall={editingAction?.opponentsBehindBall || 0}
+          onOpponentsBehindBallChange={(count) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                opponentsBehindBall: count
+              });
+            }
+          }}
+          playersLeftField={editingAction?.playersLeftField || (editingAction?.totalPlayersOnField !== undefined ? 11 - editingAction.totalPlayersOnField : 0)}
+          onPlayersLeftFieldChange={(count) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                playersLeftField: count,
+                totalPlayersOnField: 11 - count
+              });
+            }
+          }}
+          opponentsLeftField={editingAction?.opponentsLeftField || (editingAction?.totalOpponentsOnField !== undefined ? 11 - editingAction.totalOpponentsOnField : 0)}
+          onOpponentsLeftFieldChange={(count) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                opponentsLeftField: count,
+                totalOpponentsOnField: 11 - count
+              });
+            }
+          }}
+          isControversial={editingAction?.isControversial || false}
+          onControversialToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isControversial: !editingAction.isControversial
+              });
+            }
+          }}
+        />
+      ) : isActionEditModalOpen && editingAction && getActionCategory && getActionCategory(editingAction) === "regain" ? (
+        <RegainActionModal
+          isOpen={isActionEditModalOpen}
+          isVideoInternal={isVideoInternal}
+          onClose={onCloseActionEditModal || (() => {})}
+          players={players}
+          selectedPlayerId={editingAction?.senderId || null}
+          selectedReceiverId={editingAction?.receiverId || null}
+          onSenderSelect={(id) => {
+            if (editingAction && onEditingActionChange) {
+              const player = players.find(p => p.id === id);
+              onEditingActionChange({
+                ...editingAction,
+                senderId: id || '',
+                senderName: player?.name || '',
+                senderNumber: player?.number || 0
+              });
+            }
+          }}
+          onReceiverSelect={(id) => {
+            if (editingAction && onEditingActionChange) {
+              const player = players.find(p => p.id === id);
+              onEditingActionChange({
+                ...editingAction,
+                receiverId: id || '',
+                receiverName: player?.name || '',
+                receiverNumber: player?.number || 0
+              });
+            }
+          }}
+          actionMinute={editingAction?.minute || 0}
+          onMinuteChange={(minute) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                minute
+              });
+            }
+          }}
+          onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+          actionType={editingAction?.actionType as "pass" | "dribble" || 'pass'}
+          onActionTypeChange={(type) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                actionType: type
+              });
+            }
+          }}
+          currentPoints={editingAction?.packingPoints || 0}
+          onAddPoints={(points) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                packingPoints: (editingAction.packingPoints || 0) + points
+              });
+            }
+          }}
+          isP0StartActive={editingAction?.isP0Start || false}
+          onP0StartToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isP0Start: !editingAction.isP0Start
+              });
+            }
+          }}
+          isP1StartActive={editingAction?.isP1Start || false}
+          onP1StartToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isP1Start: !editingAction.isP1Start
+              });
+            }
+          }}
+          isP2StartActive={editingAction?.isP2Start || false}
+          onP2StartToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isP2Start: !editingAction.isP2Start
+              });
+            }
+          }}
+          isP3StartActive={editingAction?.isP3Start || false}
+          onP3StartToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isP3Start: !editingAction.isP3Start
+              });
+            }
+          }}
+          isP0Active={editingAction?.isP0 || false}
+          onP0Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP0Active = !editingAction.isP0;
+              onEditingActionChange({
+                ...editingAction,
+                isP0: newIsP0Active,
+                isP1: newIsP0Active ? false : editingAction.isP1,
+                isP2: newIsP0Active ? false : editingAction.isP2,
+                isP3: newIsP0Active ? false : editingAction.isP3
+              });
+            }
+          }}
+          isP1Active={editingAction?.isP1 || false}
+          onP1Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP1Active = !editingAction.isP1;
+              onEditingActionChange({
+                ...editingAction,
+                isP1: newIsP1Active,
+                isP0: newIsP1Active ? false : editingAction.isP0,
+                isP2: newIsP1Active ? false : editingAction.isP2,
+                isP3: newIsP1Active ? false : editingAction.isP3
+              });
+            }
+          }}
+          isP2Active={editingAction?.isP2 || false}
+          onP2Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP2Active = !editingAction.isP2;
+              onEditingActionChange({
+                ...editingAction,
+                isP2: newIsP2Active,
+                isP0: newIsP2Active ? false : editingAction.isP0,
+                isP1: newIsP2Active ? false : editingAction.isP1,
+                isP3: newIsP2Active ? false : editingAction.isP3
+              });
+            }
+          }}
+          isP3Active={editingAction?.isP3 || false}
+          onP3Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP3Active = !editingAction.isP3;
+              onEditingActionChange({
+                ...editingAction,
+                isP3: newIsP3Active,
+                isP0: newIsP3Active ? false : editingAction.isP0,
+                isP1: newIsP3Active ? false : editingAction.isP1,
+                isP2: newIsP3Active ? false : editingAction.isP2
+              });
+            }
+          }}
+          isContact1Active={editingAction?.isContact1 || false}
+          onContact1Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newValue = !editingAction.isContact1;
+              onEditingActionChange({
+                ...editingAction,
+                isContact1: newValue,
+                isContact2: newValue ? false : editingAction.isContact2,
+                isContact3Plus: newValue ? false : editingAction.isContact3Plus
+              });
+            }
+          }}
+          isContact2Active={editingAction?.isContact2 || false}
+          onContact2Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newValue = !editingAction.isContact2;
+              onEditingActionChange({
+                ...editingAction,
+                isContact2: newValue,
+                isContact1: newValue ? false : editingAction.isContact1,
+                isContact3Plus: newValue ? false : editingAction.isContact3Plus
+              });
+            }
+          }}
+          isContact3PlusActive={editingAction?.isContact3Plus || false}
+          onContact3PlusToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newValue = !editingAction.isContact3Plus;
+              onEditingActionChange({
+                ...editingAction,
+                isContact3Plus: newValue,
+                isContact1: newValue ? false : editingAction.isContact1,
+                isContact2: newValue ? false : editingAction.isContact2
+              });
+            }
+          }}
+          isShot={editingAction?.isShot || false}
+          onShotToggle={(checked) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isShot: checked
+              });
+            }
+          }}
+          isGoal={editingAction?.isGoal || false}
+          onGoalToggle={(checked) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isGoal: checked
+              });
+            }
+          }}
+          isPenaltyAreaEntry={editingAction?.isPenaltyAreaEntry || false}
+          onPenaltyAreaEntryToggle={(checked) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isPenaltyAreaEntry: checked
+              });
+            }
+          }}
+          isSecondHalf={editingAction?.isSecondHalf || false}
+          onSecondHalfToggle={(checked) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isSecondHalf: checked
+              });
+            }
+          }}
+          onSaveAction={() => {
+            if (editingAction && onSaveEditedAction) {
+              onSaveEditedAction(editingAction);
+            }
+          }}
+          onReset={() => {
+            if (editingAction && actions && actions.length > 0 && onEditingActionChange) {
+              const originalAction = actions.find(a => a.id === editingAction.id);
+              if (originalAction) {
+                onEditingActionChange({ ...originalAction });
+              }
+            }
+          }}
+          onResetPoints={resetActionPoints}
+          editingAction={editingAction}
+          allMatches={allMatches}
+          selectedMatchId={editingAction?.matchId || null}
+          onMatchSelect={(matchId) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                matchId
+              });
+            }
+          }}
+          matchInfo={matchInfo}
+          isBelow8sActive={editingAction?.isBelow8s || false}
+          onBelow8sToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isBelow8s: !editingAction.isBelow8s
+              });
+            }
+          }}
+          playersBehindBall={editingAction?.playersBehindBall || 0}
+          onPlayersBehindBallChange={(count) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                playersBehindBall: count
+              });
+            }
+          }}
+          opponentsBehindBall={editingAction?.opponentsBehindBall || 0}
+          onOpponentsBehindBallChange={(count) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                opponentsBehindBall: count
+              });
+            }
+          }}
+          playersLeftField={editingAction?.playersLeftField || (editingAction?.totalPlayersOnField !== undefined ? 11 - editingAction.totalPlayersOnField : 0)}
+          onPlayersLeftFieldChange={(count) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                playersLeftField: count,
+                totalPlayersOnField: 11 - count
+              });
+            }
+          }}
+          opponentsLeftField={editingAction?.opponentsLeftField || (editingAction?.totalOpponentsOnField !== undefined ? 11 - editingAction.totalOpponentsOnField : 0)}
+          onOpponentsLeftFieldChange={(count) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                opponentsLeftField: count,
+                totalOpponentsOnField: 11 - count
+              });
+            }
+          }}
+          isControversial={editingAction?.isControversial || false}
+          onControversialToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isControversial: !editingAction.isControversial
+              });
+            }
+          }}
+        />
+      ) : isActionEditModalOpen && editingAction ? (
+        <ActionModal
+          isOpen={isActionEditModalOpen}
+          isVideoInternal={isVideoInternal}
+          onClose={onCloseActionEditModal || (() => {})}
+          players={players}
+          selectedPlayerId={editingAction?.senderId || null}
+          selectedReceiverId={editingAction?.receiverId || null}
+          onSenderSelect={(id) => {
+            if (editingAction && onEditingActionChange) {
+              const player = players.find(p => p.id === id);
+              onEditingActionChange({
+                ...editingAction,
+                senderId: id || '',
+                senderName: player?.name || '',
+                senderNumber: player?.number || 0
+              });
+            }
+          }}
+          onReceiverSelect={(id) => {
+            if (editingAction && onEditingActionChange) {
+              const player = players.find(p => p.id === id);
+              onEditingActionChange({
+                ...editingAction,
+                receiverId: id || '',
+                receiverName: player?.name || '',
+                receiverNumber: player?.number || 0
+              });
+            }
+          }}
+          actionMinute={editingAction?.minute || 0}
+          onMinuteChange={(minute) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                minute
+              });
+            }
+          }}
+          onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+          actionType={editingAction?.actionType as "pass" | "dribble" || 'pass'}
+          onActionTypeChange={(type) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                actionType: type
+              });
+            }
+          }}
+          currentPoints={editingAction?.packingPoints || 0}
+          onAddPoints={(points) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                packingPoints: (editingAction.packingPoints || 0) + points
+              });
+            }
+          }}
+          isP0StartActive={editingAction?.isP0Start || false}
+          onP0StartToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP0StartActive = !editingAction.isP0Start;
+              onEditingActionChange({
+                ...editingAction,
+                isP0Start: newIsP0StartActive,
+                isP1Start: newIsP0StartActive ? false : editingAction.isP1Start,
+                isP2Start: newIsP0StartActive ? false : editingAction.isP2Start,
+                isP3Start: newIsP0StartActive ? false : editingAction.isP3Start
+              });
+            }
+          }}
+          isP1StartActive={editingAction?.isP1Start || false}
+          onP1StartToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP1StartActive = !editingAction.isP1Start;
+              onEditingActionChange({
+                ...editingAction,
+                isP1Start: newIsP1StartActive,
+                isP0Start: newIsP1StartActive ? false : editingAction.isP0Start,
+                isP2Start: newIsP1StartActive ? false : editingAction.isP2Start,
+                isP3Start: newIsP1StartActive ? false : editingAction.isP3Start
+              });
+            }
+          }}
+          isP2StartActive={editingAction?.isP2Start || false}
+          onP2StartToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP2StartActive = !editingAction.isP2Start;
+              onEditingActionChange({
+                ...editingAction,
+                isP2Start: newIsP2StartActive,
+                isP0Start: newIsP2StartActive ? false : editingAction.isP0Start,
+                isP1Start: newIsP2StartActive ? false : editingAction.isP1Start,
+                isP3Start: newIsP2StartActive ? false : editingAction.isP3Start
+              });
+            }
+          }}
+          isP3StartActive={editingAction?.isP3Start || false}
+          onP3StartToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP3StartActive = !editingAction.isP3Start;
+              onEditingActionChange({
+                ...editingAction,
+                isP3Start: newIsP3StartActive,
+                isP0Start: newIsP3StartActive ? false : editingAction.isP0Start,
+                isP1Start: newIsP3StartActive ? false : editingAction.isP1Start,
+                isP2Start: newIsP3StartActive ? false : editingAction.isP2Start
+              });
+            }
+          }}
+          isP0Active={editingAction?.isP0 || false}
+          onP0Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP0Active = !editingAction.isP0;
+              onEditingActionChange({
+                ...editingAction,
+                isP0: newIsP0Active,
+                isP1: newIsP0Active ? false : editingAction.isP1,
+                isP2: newIsP0Active ? false : editingAction.isP2,
+                isP3: newIsP0Active ? false : editingAction.isP3
+              });
+            }
+          }}
+          isP1Active={editingAction?.isP1 || false}
+          onP1Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP1Active = !editingAction.isP1;
+              onEditingActionChange({
+                ...editingAction,
+                isP1: newIsP1Active,
+                isP0: newIsP1Active ? false : editingAction.isP0,
+                isP2: newIsP1Active ? false : editingAction.isP2,
+                isP3: newIsP1Active ? false : editingAction.isP3
+              });
+            }
+          }}
+          isP2Active={editingAction?.isP2 || false}
+          onP2Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP2Active = !editingAction.isP2;
+              onEditingActionChange({
+                ...editingAction,
+                isP2: newIsP2Active,
+                isP0: newIsP2Active ? false : editingAction.isP0,
+                isP1: newIsP2Active ? false : editingAction.isP1,
+                isP3: newIsP2Active ? false : editingAction.isP3
+              });
+            }
+          }}
+          isP3Active={editingAction?.isP3 || false}
+          onP3Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newIsP3Active = !editingAction.isP3;
+              onEditingActionChange({
+                ...editingAction,
+                isP3: newIsP3Active,
+                isP0: newIsP3Active ? false : editingAction.isP0,
+                isP1: newIsP3Active ? false : editingAction.isP1,
+                isP2: newIsP3Active ? false : editingAction.isP2
+              });
+            }
+          }}
+          isContact1Active={editingAction?.isContact1 || false}
+          onContact1Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newValue = !editingAction.isContact1;
+              onEditingActionChange({
+                ...editingAction,
+                isContact1: newValue,
+                isContact2: newValue ? false : editingAction.isContact2,
+                isContact3Plus: newValue ? false : editingAction.isContact3Plus
+              });
+            }
+          }}
+          isContact2Active={editingAction?.isContact2 || false}
+          onContact2Toggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newValue = !editingAction.isContact2;
+              onEditingActionChange({
+                ...editingAction,
+                isContact2: newValue,
+                isContact1: newValue ? false : editingAction.isContact1,
+                isContact3Plus: newValue ? false : editingAction.isContact3Plus
+              });
+            }
+          }}
+          isContact3PlusActive={editingAction?.isContact3Plus || false}
+          onContact3PlusToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              const newValue = !editingAction.isContact3Plus;
+              onEditingActionChange({
+                ...editingAction,
+                isContact3Plus: newValue,
+                isContact1: newValue ? false : editingAction.isContact1,
+                isContact2: newValue ? false : editingAction.isContact2
+              });
+            }
+          }}
+          isShot={editingAction?.isShot || false}
+          onShotToggle={(checked) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isShot: checked
+              });
+            }
+          }}
+          isGoal={editingAction?.isGoal || false}
+          onGoalToggle={(checked) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isGoal: checked
+              });
+            }
+          }}
+          isPenaltyAreaEntry={editingAction?.isPenaltyAreaEntry || false}
+          onPenaltyAreaEntryToggle={(checked) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isPenaltyAreaEntry: checked
+              });
+            }
+          }}
+          isSecondHalf={editingAction?.isSecondHalf || false}
+          onSecondHalfToggle={(checked) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isSecondHalf: checked
+              });
+            }
+          }}
+          onSaveAction={() => {
+            if (editingAction && onSaveEditedAction) {
+              onSaveEditedAction(editingAction);
+            }
+          }}
+          onReset={() => {
+            if (editingAction && actions && actions.length > 0 && onEditingActionChange) {
+              const originalAction = actions.find(a => a.id === editingAction.id);
+              if (originalAction) {
+                onEditingActionChange({ ...originalAction });
+              }
+            }
+          }}
+          onResetPoints={resetActionPoints}
+          editingAction={editingAction}
+          allMatches={allMatches}
+          selectedMatchId={editingAction?.matchId || null}
+          onMatchSelect={(matchId) => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                matchId
+              });
+            }
+          }}
+          matchInfo={matchInfo}
+          isControversial={editingAction?.isControversial || false}
+          onControversialToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isControversial: !editingAction.isControversial
+              });
+            }
+          }}
+        />
+      ) : null}
     </section>
   );
 });
