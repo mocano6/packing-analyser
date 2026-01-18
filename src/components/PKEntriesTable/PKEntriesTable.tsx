@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { PKEntry, Player } from "@/types";
 import { getPlayerFullName } from "@/utils/playerUtils";
+import { useAuth } from "@/hooks/useAuth";
 import styles from "./PKEntriesTable.module.css";
 
 interface PKEntriesTableProps {
@@ -21,10 +22,37 @@ interface SortConfig {
 }
 
 const formatVideoTime = (seconds?: number): string => {
-  if (!seconds && seconds !== 0) return '-';
+  if (seconds === undefined || seconds === null) return '-';
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
+// Komponent do wyświetlania czasu wideo z surowym czasem dla admina
+const VideoTimeCell: React.FC<{
+  videoTimestamp: number;
+  videoTimestampRaw?: number;
+  onVideoTimeClick: (timestamp: number) => void;
+}> = ({ videoTimestamp, videoTimestampRaw, onVideoTimeClick }) => {
+  const { isAdmin } = useAuth();
+  
+  return (
+    <div className={styles.videoTimeContainer}>
+      <span 
+        className={styles.videoTimeLink}
+        onClick={(e) => {
+          e.stopPropagation();
+          onVideoTimeClick(videoTimestamp);
+        }}
+        title="Kliknij aby przejść do tego momentu w wideo"
+      >
+        {formatVideoTime(videoTimestamp)}
+      </span>
+      {isAdmin && videoTimestampRaw !== undefined && videoTimestampRaw !== null && (
+        <span className={styles.rawTimestamp}>{formatVideoTime(videoTimestampRaw)}</span>
+      )}
+    </div>
+  );
 };
 
 const getEntryTypeLabel = (entryType?: string): string => {
@@ -100,24 +128,23 @@ const PKEntryRow = ({
       </div>
       <div className={styles.cell}>
         {entry.videoTimestamp !== undefined && entry.videoTimestamp !== null ? (
-          <span 
-            className={styles.videoTimeLink}
-            onClick={(e) => {
-              e.stopPropagation();
-              // videoTimestamp jest w milisekundach, konwertujemy na sekundy
-              const timestampInSeconds = typeof entry.videoTimestamp === 'number' 
-                ? (entry.videoTimestamp > 1000000 ? entry.videoTimestamp / 1000 : entry.videoTimestamp)
-                : 0;
-              onVideoTimeClick?.(timestampInSeconds);
-            }}
-            title="Kliknij aby przejść do tego momentu w wideo"
-          >
-            {formatVideoTime(
+          <VideoTimeCell
+            videoTimestamp={
               typeof entry.videoTimestamp === 'number' 
                 ? (entry.videoTimestamp > 1000000 ? entry.videoTimestamp / 1000 : entry.videoTimestamp)
                 : 0
-            )}
-          </span>
+            }
+            videoTimestampRaw={
+              entry.videoTimestampRaw !== undefined && entry.videoTimestampRaw !== null
+                ? (typeof entry.videoTimestampRaw === 'number' 
+                    ? (entry.videoTimestampRaw > 1000000 ? entry.videoTimestampRaw / 1000 : entry.videoTimestampRaw)
+                    : 0)
+                : undefined
+            }
+            onVideoTimeClick={(timestamp) => {
+              onVideoTimeClick?.(timestamp);
+            }}
+          />
         ) : (
           <span>-</span>
         )}

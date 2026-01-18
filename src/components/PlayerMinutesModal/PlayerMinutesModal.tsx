@@ -341,7 +341,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
                             parseInt(e.target.value) || 0
                           )}
                           className={styles.numberInput}
-                          disabled={minutes.status === 'kontuzja' || minutes.status === 'brak_powolania'}
+                          disabled={minutes.status === 'kontuzja' || minutes.status === 'brak_powolania' || minutes.status === 'inny_zespol'}
                         />
                       </div>
                       <div className={styles.timeInput}>
@@ -356,7 +356,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
                             parseInt(e.target.value) || 0
                           )}
                           className={styles.numberInput}
-                          disabled={minutes.status === 'kontuzja' || minutes.status === 'brak_powolania'}
+                          disabled={minutes.status === 'kontuzja' || minutes.status === 'brak_powolania' || minutes.status === 'inny_zespol'}
                         />
                       </div>
                       <div className={styles.statusInput}>

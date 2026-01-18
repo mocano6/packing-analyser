@@ -737,29 +737,39 @@ export default function Page() {
     try {
       // Pobierz czas z YouTube z localStorage
       const videoTimestamp = localStorage.getItem('tempVideoTimestamp');
-      const parsedVideoTimestamp = videoTimestamp ? parseInt(videoTimestamp) : undefined;
-      const isValidTimestamp = parsedVideoTimestamp !== undefined && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp > 0;
+      const parsedVideoTimestamp = videoTimestamp !== null && videoTimestamp !== '' 
+        ? parseInt(videoTimestamp, 10) 
+        : undefined;
+      const isValidTimestamp = parsedVideoTimestamp !== undefined && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp >= 0;
 
       const videoTimestampRaw = localStorage.getItem('tempVideoTimestampRaw');
-      const parsedVideoTimestampRaw = videoTimestampRaw ? parseInt(videoTimestampRaw) : undefined;
-      const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw > 0;
+      const parsedVideoTimestampRaw = videoTimestampRaw !== null && videoTimestampRaw !== ''
+        ? parseInt(videoTimestampRaw, 10)
+        : undefined;
+      const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw >= 0;
       
       const isEditMode = Boolean(shotModalData?.editingShot);
       
-      // Dodaj videoTimestamp do danych strzału
-      // Przy edycji zawsze zachowaj istniejący timestamp
+      // W trybie edycji używamy nowych wartości z localStorage, jeśli są dostępne, w przeciwnym razie starych z editingShot
       const finalVideoTimestamp = isEditMode
-        ? shotModalData?.editingShot?.videoTimestamp
+        ? (isValidTimestamp ? parsedVideoTimestamp : shotModalData?.editingShot?.videoTimestamp)
         : (isValidTimestamp ? parsedVideoTimestamp : undefined);
 
       const finalVideoTimestampRaw = isEditMode
-        ? (shotModalData?.editingShot as any)?.videoTimestampRaw
+        ? (isValidTimestampRaw ? parsedVideoTimestampRaw : (shotModalData?.editingShot as any)?.videoTimestampRaw)
         : (isValidTimestampRaw ? parsedVideoTimestampRaw : undefined);
       
+      // Użyj wartości z shotData (które już zawierają videoTimestamp z ShotModal), jeśli są dostępne
+      // W przeciwnym razie użyj wartości z localStorage (dla kompatybilności wstecznej)
       const shotDataWithTimestamp = {
         ...shotData,
-        ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
-        ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
+        // Priorytet: wartości z shotData (z ShotModal), potem z localStorage
+        ...(shotData.videoTimestamp !== undefined && shotData.videoTimestamp !== null 
+          ? { videoTimestamp: shotData.videoTimestamp }
+          : (finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp })),
+        ...(shotData.videoTimestampRaw !== undefined && shotData.videoTimestampRaw !== null
+          ? { videoTimestampRaw: shotData.videoTimestampRaw }
+          : (finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw })),
       };
       
       // Debug: sprawdź czy videoTimestamp jest zapisywany
@@ -2928,6 +2938,7 @@ export default function Page() {
             videoContainerRef={youtubeVideoContainerRef}
             youtubeVideoRef={youtubeVideoRef}
             customVideoRef={customVideoRef}
+            onGetVideoTime={getActiveVideoTime}
             // Propsy dla modali edycji
             editingAction={editingAction}
             isActionEditModalOpen={isActionEditModalOpen}
@@ -3021,6 +3032,7 @@ export default function Page() {
             videoContainerRef={youtubeVideoContainerRef}
             youtubeVideoRef={youtubeVideoRef}
             customVideoRef={customVideoRef}
+            onGetVideoTime={getActiveVideoTime}
             // Propsy dla modali edycji
             editingAction={editingAction}
             isActionEditModalOpen={isActionEditModalOpen}
@@ -3101,6 +3113,7 @@ export default function Page() {
                 matchInfo={matchInfo}
                 players={players}
                 onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+                onGetVideoTime={getActiveVideoTime}
               />
             )}
           </div>
@@ -3131,6 +3144,7 @@ export default function Page() {
                 players={players}
                 matchInfo={matchInfo}
                 onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+                onGetVideoTime={getActiveVideoTime}
               />
             )}
           </div>
@@ -3225,6 +3239,7 @@ export default function Page() {
             players={players}
             matchInfo={matchInfo}
             onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+            onGetVideoTime={getActiveVideoTime}
           />
           )}
           </div>

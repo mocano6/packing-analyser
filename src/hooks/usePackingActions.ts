@@ -328,13 +328,13 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       // Pobierz czas z YouTube z localStorage
       const videoTimestamp = localStorage.getItem('tempVideoTimestamp');
-      const parsedVideoTimestamp = videoTimestamp ? parseInt(videoTimestamp) : undefined;
-      const isValidTimestamp = parsedVideoTimestamp && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp > 0;
+      const parsedVideoTimestamp = videoTimestamp !== null && videoTimestamp !== '' ? parseInt(videoTimestamp, 10) : undefined;
+      const isValidTimestamp = parsedVideoTimestamp !== undefined && !isNaN(parsedVideoTimestamp) && parsedVideoTimestamp >= 0;
 
       // Surowy timestamp bez korekty (-10s)
       const videoTimestampRaw = localStorage.getItem('tempVideoTimestampRaw');
-      const parsedVideoTimestampRaw = videoTimestampRaw ? parseInt(videoTimestampRaw) : undefined;
-      const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw > 0;
+      const parsedVideoTimestampRaw = videoTimestampRaw !== null && videoTimestampRaw !== '' ? parseInt(videoTimestampRaw, 10) : undefined;
+      const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw >= 0;
       
       // PxT będzie obliczane dynamicznie na froncie
       

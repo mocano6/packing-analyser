@@ -281,33 +281,36 @@
 .halvesTimeContainer {
   display: flex;
   flex-direction: row;
-  gap: 20px;
+  gap: 16px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .halfTimeRow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
+  min-width: 0;
 }
 
 .halfLabel {
-  font-size: 13px;
+  font-size: 12px;
   color: #6b7280;
   font-weight: 500;
-  min-width: 65px;
+  min-width: 55px;
+  white-space: nowrap;
 }
 
 .timeInputContainer {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .timeInput {
-  width: 60px;
-  padding: 6px 8px;
+  width: 55px;
+  padding: 6px 4px;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   font-size: 14px;
@@ -315,12 +318,28 @@
   background-color: #fff;
   color: #1f2937;
   text-align: center;
+  /* Usuń strzałki spinnera */
+  -moz-appearance: textfield;
+}
+
+.timeInput::-webkit-inner-spin-button,
+.timeInput::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .timeInputSeconds {
   width: 50px;
   padding: 6px 4px;
   min-width: 50px;
+  /* Usuń strzałki spinnera */
+  -moz-appearance: textfield;
+}
+
+.timeInputSeconds::-webkit-inner-spin-button,
+.timeInputSeconds::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .timeInput:hover {
@@ -335,10 +354,11 @@
 }
 
 .timeSeparator {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: #374151;
   user-select: none;
+  margin: 0 2px;
 }
 
 .tooltipTrigger {

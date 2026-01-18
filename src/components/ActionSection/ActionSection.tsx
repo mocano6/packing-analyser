@@ -104,6 +104,8 @@ export interface ActionSectionProps {
   // Refs do odtwarzaczy wideo
   youtubeVideoRef?: React.RefObject<{ getCurrentTime: () => Promise<number> }>;
   customVideoRef?: React.RefObject<{ getCurrentTime: () => Promise<number> }>;
+  // Funkcja do pobierania surowego czasu z wideo
+  onGetVideoTime?: () => Promise<number>;
   // Propsy dla modali edycji
   editingAction?: Action | null;
   isActionEditModalOpen?: boolean;
@@ -202,6 +204,7 @@ const ActionSection = memo(function ActionSection({
   videoContainerRef,
   youtubeVideoRef,
   customVideoRef,
+  onGetVideoTime,
   // Propsy dla modali edycji
   editingAction,
   isActionEditModalOpen = false,

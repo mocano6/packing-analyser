@@ -5,6 +5,7 @@ import styles from "./Acc8sTable.module.css";
 import { Acc8sEntry } from "@/types";
 import { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import { CustomVideoPlayerRef } from "@/components/CustomVideoPlayer/CustomVideoPlayer";
+import { useAuth } from "@/hooks/useAuth";
 
 export interface Acc8sTableProps {
   entries: Acc8sEntry[];
@@ -41,10 +42,37 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
   }, [entries, showOnlyControversial]);
   // Funkcja formatująca czas wideo (sekundy -> mm:ss) - tak jak w ActionsTable
   const formatVideoTime = (seconds?: number): string => {
-    if (!seconds && seconds !== 0) return '-';
+    if (seconds === undefined || seconds === null) return '-';
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Komponent do wyświetlania czasu wideo z surowym czasem dla admina
+  const VideoTimeCell: React.FC<{
+    videoTimestamp: number;
+    videoTimestampRaw?: number;
+    onVideoTimeClick: (timestamp: number) => void;
+  }> = ({ videoTimestamp, videoTimestampRaw, onVideoTimeClick }) => {
+    const { isAdmin } = useAuth();
+    
+    return (
+      <div className={styles.videoTimeContainer}>
+        <span 
+          className={styles.videoTimeLink}
+          onClick={(e) => {
+            e.stopPropagation();
+            onVideoTimeClick(videoTimestamp);
+          }}
+          title="Kliknij aby przejść do tego momentu w wideo"
+        >
+          {formatVideoTime(videoTimestamp)}
+        </span>
+        {isAdmin && videoTimestampRaw !== undefined && videoTimestampRaw !== null && (
+          <span className={styles.rawTimestamp}>{formatVideoTime(videoTimestampRaw)}</span>
+        )}
+      </div>
+    );
   };
 
   // Funkcja do generowania wydarzeń (jak w ActionsTable)
@@ -182,17 +210,12 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
               {entry.minute}'
             </div>
             <div className={styles.cell}>
-              {entry.videoTimestamp ? (
-                <span 
-                  className={styles.videoTimeLink}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleVideoTimeClick(entry.videoTimestamp);
-                  }}
-                  title="Kliknij aby przejść do tego momentu w wideo"
-                >
-                  {formatVideoTime(entry.videoTimestamp)}
-                </span>
+              {entry.videoTimestamp !== undefined && entry.videoTimestamp !== null ? (
+                <VideoTimeCell 
+                  videoTimestamp={entry.videoTimestamp}
+                  videoTimestampRaw={entry.videoTimestampRaw}
+                  onVideoTimeClick={handleVideoTimeClick}
+                />
               ) : (
                 <span>-</span>
               )}

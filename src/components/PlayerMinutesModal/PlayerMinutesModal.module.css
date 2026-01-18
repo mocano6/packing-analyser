@@ -237,6 +237,14 @@
   height: 36px;
   transition: all 0.2s;
   background-color: white;
+  /* Usuń strzałki spinnera */
+  -moz-appearance: textfield;
+}
+
+.numberInput::-webkit-inner-spin-button,
+.numberInput::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .numberInput:focus {

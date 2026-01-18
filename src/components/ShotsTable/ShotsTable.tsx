@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { Shot, Player } from "@/types";
 import { getPlayerFullName } from "@/utils/playerUtils";
+import { useAuth } from "@/hooks/useAuth";
 import styles from "./ShotsTable.module.css";
 
 interface ShotsTableProps {
@@ -18,10 +19,38 @@ interface SortConfig {
   direction: 'asc' | 'desc';
 }
 
-const formatVideoTime = (seconds: number): string => {
+const formatVideoTime = (seconds?: number): string => {
+  if (seconds === undefined || seconds === null) return '-';
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
+// Komponent do wyświetlania czasu wideo z surowym czasem dla admina
+const VideoTimeCell: React.FC<{
+  videoTimestamp: number;
+  videoTimestampRaw?: number;
+  onVideoTimeClick: (timestamp: number) => void;
+}> = ({ videoTimestamp, videoTimestampRaw, onVideoTimeClick }) => {
+  const { isAdmin } = useAuth();
+  
+  return (
+    <div className={styles.videoTimeContainer}>
+      <span 
+        className={styles.videoTimeLink}
+        onClick={(e) => {
+          e.stopPropagation();
+          onVideoTimeClick(videoTimestamp);
+        }}
+        title="Kliknij aby przejść do tego momentu w wideo"
+      >
+        {formatVideoTime(videoTimestamp)}
+      </span>
+      {isAdmin && videoTimestampRaw !== undefined && videoTimestampRaw !== null && (
+        <span className={styles.rawTimestamp}>{formatVideoTime(videoTimestampRaw)}</span>
+      )}
+    </div>
+  );
 };
 
 const getActionTypeLabel = (actionType?: string, sfgSubtype?: string, actionPhase?: string): string => {
@@ -97,30 +126,17 @@ const ShotRow = ({
         &nbsp;{shot.minute}'
       </div>
       <div className={styles.cell}>
-        {(() => {
-          // Sprawdź czy strzał ma videoTimestamp
-          const hasVideoTimestamp = shot.videoTimestamp !== undefined && 
-                                   shot.videoTimestamp !== null && 
-                                   shot.videoTimestamp > 0;
-          
-          if (hasVideoTimestamp) {
-            return (
-              <span 
-                className={styles.videoTimeLink}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // videoTimestamp jest w sekundach, przekazujemy bezpośrednio
-                  onVideoTimeClick?.(shot.videoTimestamp!);
-                }}
-                title="Kliknij aby przejść do tego momentu w wideo"
-              >
-                {formatVideoTime(shot.videoTimestamp)}
-              </span>
-            );
-          }
-          
-          return <span className={styles.noVideoTime}>-</span>;
-        })()}
+        {shot.videoTimestamp !== undefined && shot.videoTimestamp !== null ? (
+          <VideoTimeCell
+            videoTimestamp={shot.videoTimestamp}
+            videoTimestampRaw={shot.videoTimestampRaw}
+            onVideoTimeClick={(timestamp) => {
+              onVideoTimeClick?.(timestamp);
+            }}
+          />
+        ) : (
+          <span className={styles.noVideoTime}>-</span>
+        )}
       </div>
       <div className={styles.cell}>
         {shot.playerName || 'Nieznany zawodnik'}

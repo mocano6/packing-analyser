@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Acc8sEntry, TeamInfo, Player } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import styles from "./Acc8sModal.module.css";
@@ -16,6 +16,7 @@ export interface Acc8sModalProps {
   matchInfo?: TeamInfo | null;
   players: Player[];
   onCalculateMinuteFromVideo?: () => Promise<{ minute: number; isSecondHalf: boolean } | null>;
+  onGetVideoTime?: () => Promise<number>; // Funkcja do pobierania surowego czasu z wideo w sekundach
 }
 
 const Acc8sModal: React.FC<Acc8sModalProps> = ({
@@ -29,6 +30,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
   matchInfo,
   players,
   onCalculateMinuteFromVideo,
+  onGetVideoTime,
 }) => {
   const { isAdmin } = useAuth();
   const [formData, setFormData] = useState({
@@ -40,6 +42,116 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     isControversial: false,
   });
   const isEditMode = Boolean(editingEntry);
+  const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
+  const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
+
+  // Funkcje pomocnicze do konwersji czasu
+  const secondsToMMSS = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const mmssToSeconds = (mmss: string): number => {
+    const [mins, secs] = mmss.split(':').map(Number);
+    if (isNaN(mins) || isNaN(secs)) return 0;
+    return mins * 60 + secs;
+  };
+
+  // Pobieranie czasu z wideo przy otwarciu modalu
+  useEffect(() => {
+    if (isOpen) {
+      if (isEditMode && editingEntry) {
+        // W trybie edycji - używamy zapisanego czasu z akcji
+        let savedTime: number | undefined;
+        if (editingEntry.videoTimestampRaw !== undefined && editingEntry.videoTimestampRaw !== null) {
+          savedTime = editingEntry.videoTimestampRaw;
+        } else if (editingEntry.videoTimestamp !== undefined && editingEntry.videoTimestamp !== null) {
+          // Jeśli mamy tylko videoTimestamp (z korektą -10s), dodajemy 10 sekund z powrotem
+          savedTime = editingEntry.videoTimestamp + 10;
+        }
+        
+        if (savedTime !== undefined && savedTime >= 0) {
+          setVideoTimeMMSS(secondsToMMSS(savedTime));
+        } else if (onGetVideoTime) {
+          // Jeśli nie ma zapisanego czasu, spróbuj pobrać z wideo
+          onGetVideoTime().then((time) => {
+            if (time >= 0) {
+              setVideoTimeMMSS(secondsToMMSS(time));
+            }
+          }).catch((error) => {
+            console.warn('Nie udało się pobrać czasu z wideo:', error);
+          });
+        }
+      } else if (!isEditMode && onGetVideoTime) {
+        // W trybie dodawania - pobieramy aktualny czas z wideo
+        onGetVideoTime().then((time) => {
+          if (time >= 0) {
+            setVideoTimeMMSS(secondsToMMSS(time));
+          }
+        }).catch((error) => {
+          console.warn('Nie udało się pobrać czasu z wideo:', error);
+        });
+      }
+    }
+  }, [isOpen, isEditMode, editingEntry?.id, editingEntry?.videoTimestampRaw, editingEntry?.videoTimestamp, onGetVideoTime]);
+
+  // Dodatkowy useEffect do aktualizacji videoTimeMMSS gdy editingEntry się zmienia (np. po zapisaniu)
+  // Użyj ref do śledzenia poprzednich wartości, aby uniknąć nadpisywania podczas edycji
+  const prevVideoTimestampRawRef = useRef<number | undefined>(undefined);
+  const prevVideoTimestampRef = useRef<number | undefined>(undefined);
+  
+  useEffect(() => {
+    if (isOpen && isEditMode && editingEntry) {
+      const currentVideoTimestampRaw = editingEntry.videoTimestampRaw;
+      const currentVideoTimestamp = editingEntry.videoTimestamp;
+      
+      // Sprawdź czy wartości się zmieniły (np. po zapisaniu)
+      const hasChanged = 
+        currentVideoTimestampRaw !== prevVideoTimestampRawRef.current ||
+        currentVideoTimestamp !== prevVideoTimestampRef.current;
+      
+      if (hasChanged) {
+        let savedTime: number | undefined;
+        if (currentVideoTimestampRaw !== undefined && currentVideoTimestampRaw !== null) {
+          savedTime = currentVideoTimestampRaw;
+        } else if (currentVideoTimestamp !== undefined && currentVideoTimestamp !== null) {
+          savedTime = currentVideoTimestamp + 10;
+        }
+        
+        if (savedTime !== undefined && savedTime >= 0) {
+          const newTimeMMSS = secondsToMMSS(savedTime);
+          // Aktualizuj tylko jeśli wartość faktycznie się zmieniła
+          if (newTimeMMSS !== videoTimeMMSS) {
+            setVideoTimeMMSS(newTimeMMSS);
+          }
+        }
+        
+        // Zaktualizuj refs
+        prevVideoTimestampRawRef.current = currentVideoTimestampRaw;
+        prevVideoTimestampRef.current = currentVideoTimestamp;
+      }
+    }
+  }, [isOpen, isEditMode, editingEntry?.videoTimestampRaw, editingEntry?.videoTimestamp, videoTimeMMSS]);
+
+  // Aktualizacja aktualnej minuty meczu na podstawie czasu wideo
+  useEffect(() => {
+    if (isOpen && onCalculateMinuteFromVideo && !isEditMode) {
+      const updateMatchMinute = async () => {
+        const result = await onCalculateMinuteFromVideo();
+        if (result !== null && result.minute > 0) {
+          setCurrentMatchMinute(result.minute);
+        }
+      };
+      updateMatchMinute();
+      // Aktualizuj co sekundę
+      const interval = setInterval(updateMatchMinute, 1000);
+      return () => clearInterval(interval);
+    } else if (isEditMode && editingEntry) {
+      // W trybie edycji - używamy minuty z akcji
+      setCurrentMatchMinute(editingEntry.minute);
+    }
+  }, [isOpen, isEditMode, editingEntry?.id, editingEntry?.minute, onCalculateMinuteFromVideo]);
 
   const filteredPlayers = useMemo(() => {
     if (!matchInfo) return players;
@@ -83,6 +195,25 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
       });
     }
   }, [isOpen, editingEntry, onCalculateMinuteFromVideo]);
+
+  // Aktualizacja aktualnej minuty meczu na podstawie czasu wideo (dodatkowy useEffect dla currentMatchMinute)
+  useEffect(() => {
+    if (isOpen && onCalculateMinuteFromVideo && !isEditMode) {
+      const updateMatchMinute = async () => {
+        const result = await onCalculateMinuteFromVideo();
+        if (result !== null && result.minute > 0) {
+          setCurrentMatchMinute(result.minute);
+        }
+      };
+      updateMatchMinute();
+      // Aktualizuj co sekundę
+      const interval = setInterval(updateMatchMinute, 1000);
+      return () => clearInterval(interval);
+    } else if (isEditMode && editingEntry) {
+      // W trybie edycji - używamy minuty z akcji
+      setCurrentMatchMinute(editingEntry.minute);
+    }
+  }, [isOpen, isEditMode, editingEntry, onCalculateMinuteFromVideo]);
 
   useEffect(() => {
     if (editingEntry) {
@@ -146,11 +277,72 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     });
   };
 
+  const handleVideoTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    
+    // Pozwól na częściowe wpisywanie podczas edycji
+    const partialPattern = /^([0-5]?[0-9]?)?(:([0-5]?[0-9]?)?)?$/;
+    const fullPattern = /^([0-5]?[0-9]):([0-5][0-9])$/;
+    
+    if (value === '' || partialPattern.test(value) || fullPattern.test(value)) {
+      setVideoTimeMMSS(value);
+    }
+  };
+
+  const handleVideoTimeBlur = () => {
+    // Upewnij się, że format jest poprawny
+    if (!/^([0-5]?[0-9]):([0-5][0-9])$/.test(videoTimeMMSS)) {
+      // Jeśli format jest niepoprawny, przywróć poprzednią wartość lub pobierz z wideo
+      if (isEditMode && editingEntry) {
+        // W trybie edycji - przywróć zapisany czas
+        let savedTime: number | undefined;
+        if (editingEntry.videoTimestampRaw !== undefined && editingEntry.videoTimestampRaw !== null) {
+          savedTime = editingEntry.videoTimestampRaw;
+        } else if (editingEntry.videoTimestamp !== undefined && editingEntry.videoTimestamp !== null) {
+          savedTime = editingEntry.videoTimestamp + 10;
+        }
+        
+        if (savedTime !== undefined && savedTime >= 0) {
+          setVideoTimeMMSS(secondsToMMSS(savedTime));
+        } else if (onGetVideoTime) {
+          onGetVideoTime().then((time) => {
+            if (time >= 0) {
+              setVideoTimeMMSS(secondsToMMSS(time));
+            }
+          });
+        }
+      } else if (onGetVideoTime) {
+        // W trybie dodawania - pobierz z wideo
+        onGetVideoTime().then((time) => {
+          if (time >= 0) {
+            setVideoTimeMMSS(secondsToMMSS(time));
+          }
+        });
+      }
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     const lockedMinute = isEditMode ? (editingEntry?.minute ?? formData.minute) : formData.minute;
     const lockedIsSecondHalf = isEditMode ? (editingEntry?.isSecondHalf ?? formData.isSecondHalf) : formData.isSecondHalf;
+    
+    // Zapisz videoTimestamp z pola MM:SS do localStorage
+    const videoTimeSeconds = mmssToSeconds(videoTimeMMSS);
+    if (videoTimeSeconds >= 0) {
+      // Zapisujemy surowy czas (videoTimestampRaw) - bez korekty (może być 0)
+      localStorage.setItem('tempVideoTimestampRaw', videoTimeSeconds.toString());
+      // Zapisujemy czas z korektą -10s (videoTimestamp) - maksymalnie do 0, nie może być poniżej 0
+      const correctedTime = Math.max(0, videoTimeSeconds - 10);
+      localStorage.setItem('tempVideoTimestamp', correctedTime.toString());
+    } else if (isEditMode && editingEntry?.videoTimestamp !== undefined) {
+      // W trybie edycji, jeśli pole jest puste lub niepoprawne, zachowaj istniejący timestamp
+      localStorage.setItem('tempVideoTimestamp', editingEntry.videoTimestamp.toString());
+      if (editingEntry.videoTimestampRaw !== undefined) {
+        localStorage.setItem('tempVideoTimestampRaw', editingEntry.videoTimestampRaw.toString());
+      }
+    }
     
     // Pobierz czas wideo z localStorage (tak jak w packingu)
     const videoTimestamp = typeof window !== 'undefined' 
@@ -175,13 +367,13 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     console.log('Acc8sModal handleSubmit - isValidTimestamp:', isValidTimestamp);
     console.log('Acc8sModal handleSubmit - editingEntry?.videoTimestamp:', editingEntry?.videoTimestamp);
     
-    // Przy edycji zachowaj istniejący videoTimestamp, jeśli nowy nie jest dostępny
+    // W trybie edycji używamy nowych wartości z localStorage, jeśli są dostępne, w przeciwnym razie starych z editingEntry
     const finalVideoTimestamp = isEditMode
-      ? editingEntry?.videoTimestamp
+      ? (isValidTimestamp ? parsedVideoTimestamp : editingEntry?.videoTimestamp)
       : (isValidTimestamp ? parsedVideoTimestamp : undefined);
 
     const finalVideoTimestampRaw = isEditMode
-      ? (editingEntry as any)?.videoTimestampRaw
+      ? (isValidTimestampRaw ? parsedVideoTimestampRaw : (editingEntry as any)?.videoTimestampRaw)
       : (isValidTimestampRaw ? parsedVideoTimestampRaw : undefined);
 
     const entryData = {
@@ -324,55 +516,23 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
               Anuluj
             </button>
             <div className={styles.minuteInput}>
-              <div className={styles.minuteControls}>
-                <button
-                  type="button"
-                  className={styles.minuteButton}
-                  onClick={() => {
-                    const newMinute = Math.max(
-                      formData.isSecondHalf ? 46 : 1,
-                      formData.minute - 1
-                    );
-                    setFormData({...formData, minute: newMinute});
-                  }}
-                  title="Zmniejsz minutę"
-                  disabled={isEditMode}
-                >
-                  −
-                </button>
+              <div className={styles.videoTimeWrapper}>
                 <input
-                  id="minute"
-                  type="number"
-                  value={formData.minute}
-                  onChange={(e) => {
-                    const newMinute = parseInt(e.target.value) || (formData.isSecondHalf ? 46 : 1);
-                    setFormData({
-                      ...formData,
-                      minute: formData.isSecondHalf ? Math.max(46, newMinute) : Math.min(45, newMinute),
-                    });
-                  }}
-                  min={formData.isSecondHalf ? 46 : 1}
-                  max={formData.isSecondHalf ? 130 : 65}
-                  className={styles.minuteField}
-                  required
-                  readOnly={isEditMode}
-                  disabled={isEditMode}
+                  id="video-time-input"
+                  type="text"
+                  value={videoTimeMMSS}
+                  onChange={handleVideoTimeChange}
+                  onBlur={handleVideoTimeBlur}
+                  placeholder="MM:SS"
+                  pattern="^([0-5]?[0-9]):([0-5][0-9])$"
+                  className={styles.videoTimeField}
+                  maxLength={5}
                 />
-                <button
-                  type="button"
-                  className={styles.minuteButton}
-                  onClick={() => {
-                    const newMinute = Math.min(
-                      formData.isSecondHalf ? 130 : 65,
-                      formData.minute + 1
-                    );
-                    setFormData({...formData, minute: newMinute});
-                  }}
-                  title="Zwiększ minutę"
-                  disabled={isEditMode}
-                >
-                  +
-                </button>
+                {currentMatchMinute !== null && (
+                  <span className={styles.matchMinuteInfo}>
+                    {currentMatchMinute}'
+                  </span>
+                )}
               </div>
             </div>
             <button type="submit" className={styles.saveButton}>

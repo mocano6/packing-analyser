@@ -6,6 +6,7 @@ import styles from "./ActionsTable.module.css";
 import { ActionsTableProps } from "@/components/ActionsTable/ActionsTable.types";
 import { Player, Action } from "@/types";
 import { getOppositeXTValueForZone, zoneNameToIndex, getZoneData, getZoneName, zoneNameToString } from "@/constants/xtValues";
+import { useAuth } from "@/hooks/useAuth";
 
 // Funkcja do określenia kategorii akcji (spójna z page.tsx)
 const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
@@ -102,6 +103,7 @@ const ActionRow = ({
   players: Player[];
   actionCategory?: "packing" | "regain" | "loses";
 }) => {
+  const { isAdmin } = useAuth();
   const getEvents = () => {
     const events = [];
     
@@ -182,16 +184,21 @@ const ActionRow = ({
       </div>
       <div className={styles.cell}>
         {action.videoTimestamp !== undefined && action.videoTimestamp !== null ? (
-          <span 
-            className={styles.videoTimeLink}
-            onClick={(e) => {
-              e.stopPropagation();
-              onVideoTimeClick?.(action.videoTimestamp);
-            }}
-            title="Kliknij aby przejść do tego momentu w wideo"
-          >
-            {formatVideoTime(action.videoTimestamp)}
-          </span>
+          <div className={styles.videoTimeContainer}>
+            <span 
+              className={styles.videoTimeLink}
+              onClick={(e) => {
+                e.stopPropagation();
+                onVideoTimeClick?.(action.videoTimestamp);
+              }}
+              title="Kliknij aby przejść do tego momentu w wideo"
+            >
+              {formatVideoTime(action.videoTimestamp)}
+            </span>
+            {isAdmin && action.videoTimestampRaw !== undefined && action.videoTimestampRaw !== null && (
+              <span className={styles.rawTimestamp}>{formatVideoTime(action.videoTimestampRaw)}</span>
+            )}
+          </div>
         ) : (
           <span>-</span>
         )}
