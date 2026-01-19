@@ -136,7 +136,7 @@ export default function StatystykiZespoluPage() {
   const [teamLosesHeatmapMode, setTeamLosesHeatmapMode] = useState<"xt" | "count">("xt");
   const [losesHalfFilter, setLosesHalfFilter] = useState<"all" | "own" | "opponent" | "pm">("own");
   const [regainHalfFilter, setRegainHalfFilter] = useState<"all" | "own" | "opponent" | "pm">("own");
-  const [selectedActionFilter, setSelectedActionFilter] = useState<'p1' | 'p2' | 'p3' | 'pk' | 'shot' | 'goal' | null>(null);
+  const [selectedActionFilter, setSelectedActionFilter] = useState<Array<'p1' | 'p2' | 'p3' | 'p0start' | 'p1start' | 'p2start' | 'p3start' | 'pk' | 'shot' | 'goal'>>([]);
   const [actionsModalOpen, setActionsModalOpen] = useState(false);
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<{ playerId: string; playerName: string; zoneName: string } | null>(null);
   const [matchDataPeriod, setMatchDataPeriod] = useState<'total' | 'firstHalf' | 'secondHalf'>('total');
@@ -161,6 +161,63 @@ export default function StatystykiZespoluPage() {
       passes: number;
     }>;
   } | null>(null);
+
+  // Helpery do filtrów akcji (Start/Koniec)
+  const isFilterActive = (filter: 'p1' | 'p2' | 'p3' | 'p0start' | 'p1start' | 'p2start' | 'p3start' | 'pk' | 'shot' | 'goal'): boolean => {
+    return Array.isArray(selectedActionFilter) && selectedActionFilter.includes(filter);
+  };
+
+  const hasStartFilterSelected = (): boolean => {
+    const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+    return filters.some(f => ['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+  };
+
+  const hasEndFilterSelected = (): boolean => {
+    const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+    return filters.some(f => ['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+  };
+
+  const matchesSelectedActionFilter = (action: Action): boolean => {
+    const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+    if (filters.length === 0) return true;
+
+    const startFilters = filters.filter(f => ['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+    const endFilters = filters.filter(f => ['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+
+    let matchesStartFilter = startFilters.length === 0;
+    let matchesEndFilter = endFilters.length === 0;
+
+    if (startFilters.length > 0) {
+      matchesStartFilter = startFilters.some(filter => {
+        if (filter === 'p0start') return action.isP0Start;
+        if (filter === 'p1start') return action.isP1Start;
+        if (filter === 'p2start') return action.isP2Start;
+        if (filter === 'p3start') return action.isP3Start;
+        return false;
+      });
+    }
+
+    if (endFilters.length > 0) {
+      const isP1 = action.isP1 || action.isP1Start;
+      const isP2 = action.isP2 || action.isP2Start;
+      const isP3 = action.isP3 || action.isP3Start;
+      const isPK = action.isPenaltyAreaEntry;
+      const isShot = action.isShot;
+      const isGoal = action.isGoal;
+
+      matchesEndFilter = endFilters.some(filter => {
+        if (filter === 'p1') return isP1;
+        if (filter === 'p2') return isP2;
+        if (filter === 'p3') return isP3;
+        if (filter === 'pk') return isPK;
+        if (filter === 'shot') return isShot;
+        if (filter === 'goal') return isGoal;
+        return false;
+      });
+    }
+
+    return matchesStartFilter && matchesEndFilter;
+  };
 
   const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
 
@@ -720,6 +777,18 @@ export default function StatystykiZespoluPage() {
         senderPassCount: 0,
         receiverPassCount: 0,
         // Liczniki akcji jako podający
+        senderP0StartCount: 0,
+        senderP1StartCount: 0,
+        senderP2StartCount: 0,
+        senderP3StartCount: 0,
+        senderP0StartCountLateral: 0,
+        senderP0StartCountCentral: 0,
+        senderP1StartCountLateral: 0,
+        senderP1StartCountCentral: 0,
+        senderP2StartCountLateral: 0,
+        senderP2StartCountCentral: 0,
+        senderP3StartCountLateral: 0,
+        senderP3StartCountCentral: 0,
         senderP1Count: 0,
         senderP2Count: 0,
         senderP3Count: 0,
@@ -800,6 +869,18 @@ export default function StatystykiZespoluPage() {
     let receiverPassCount = 0;
 
     // Liczniki akcji jako podający
+    let senderP0StartCount = 0;
+    let senderP1StartCount = 0;
+    let senderP2StartCount = 0;
+    let senderP3StartCount = 0;
+    let senderP0StartCountLateral = 0;
+    let senderP0StartCountCentral = 0;
+    let senderP1StartCountLateral = 0;
+    let senderP1StartCountCentral = 0;
+    let senderP2StartCountLateral = 0;
+    let senderP2StartCountCentral = 0;
+    let senderP3StartCountLateral = 0;
+    let senderP3StartCountCentral = 0;
     let senderP1Count = 0;
     let senderP2Count = 0;
     let senderP3Count = 0;
@@ -895,6 +976,7 @@ export default function StatystykiZespoluPage() {
       // Filtruj akcje według kategorii (tak jak w heatmapie)
       if (selectedPxtCategory === 'dribbler' && action.actionType !== 'dribble') return;
       if (selectedPxtCategory !== 'dribbler' && action.actionType === 'dribble') return;
+      if (!matchesSelectedActionFilter(action)) return;
       
       const packingPoints = action.packingPoints || 0;
       const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
@@ -914,43 +996,112 @@ export default function StatystykiZespoluPage() {
         const senderZoneName = heatmapDirection === "from" 
           ? convertZoneToName(action.fromZone || action.startZone)
           : convertZoneToName(action.toZone ?? action.endZone ?? undefined);
-        
+
+        const startZoneName = convertZoneToName(action.fromZone || action.startZone);
+
+        const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+        const startFilters = filters.filter(f => ['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+        const endFilters = filters.filter(f => ['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+
+        let matchesStartFilterForCounts = startFilters.length === 0;
+        let matchesEndFilterForCounts = endFilters.length === 0;
+
+        if (startFilters.length > 0) {
+          matchesStartFilterForCounts = startFilters.some(filter => {
+            if (filter === 'p0start') return action.isP0Start;
+            if (filter === 'p1start') return action.isP1Start;
+            if (filter === 'p2start') return action.isP2Start;
+            if (filter === 'p3start') return action.isP3Start;
+            return false;
+          });
+        }
+
+        if (endFilters.length > 0) {
+          const isP1 = action.isP1 || action.isP1Start;
+          const isP2 = action.isP2 || action.isP2Start;
+          const isP3 = action.isP3 || action.isP3Start;
+          const isPK = action.isPenaltyAreaEntry;
+          const isShot = action.isShot;
+          const isGoal = action.isGoal;
+
+          matchesEndFilterForCounts = endFilters.some(filter => {
+            if (filter === 'p1') return isP1;
+            if (filter === 'p2') return isP2;
+            if (filter === 'p3') return isP3;
+            if (filter === 'pk') return isPK;
+            if (filter === 'shot') return isShot;
+            if (filter === 'goal') return isGoal;
+            return false;
+          });
+        }
+
+        const matchesFiltersForEndCounts =
+          (startFilters.length > 0 && endFilters.length > 0)
+            ? (matchesStartFilterForCounts && matchesEndFilterForCounts)
+            : (startFilters.length > 0 ? matchesStartFilterForCounts : matchesEndFilterForCounts);
+
+        // Miejsca startowe (P0-P3 Start) – zawsze używamy strefy startowej
+        if (startZoneName && senderZoneName) {
+          const startZoneIsLateral = isLateralZone(startZoneName);
+          const matchesEndFilterForStartCounts = endFilters.length === 0 || matchesEndFilterForCounts;
+
+          if (action.isP0Start && matchesEndFilterForStartCounts) {
+            senderP0StartCount += 1;
+            if (startZoneIsLateral) senderP0StartCountLateral += 1;
+            else senderP0StartCountCentral += 1;
+          }
+          if (action.isP1Start && matchesEndFilterForStartCounts) {
+            senderP1StartCount += 1;
+            if (startZoneIsLateral) senderP1StartCountLateral += 1;
+            else senderP1StartCountCentral += 1;
+          }
+          if (action.isP2Start && matchesEndFilterForStartCounts) {
+            senderP2StartCount += 1;
+            if (startZoneIsLateral) senderP2StartCountLateral += 1;
+            else senderP2StartCountCentral += 1;
+          }
+          if (action.isP3Start && matchesEndFilterForStartCounts) {
+            senderP3StartCount += 1;
+            if (startZoneIsLateral) senderP3StartCountLateral += 1;
+            else senderP3StartCountCentral += 1;
+          }
+        }
+
         // Licz tylko akcje, które mają strefę (tak jak heatmapa)
         if (senderZoneName) {
           const senderIsLateral = isLateralZone(senderZoneName);
 
           // PK może być jednocześnie strzałem, więc sprawdzamy oba warunki niezależnie
-          if (action.isPenaltyAreaEntry) {
+          if (action.isPenaltyAreaEntry && matchesFiltersForEndCounts) {
             senderPKCount += 1;
             if (senderIsLateral) senderPKCountLateral += 1;
             else senderPKCountCentral += 1;
           }
-          
+
           // Strzał może być jednocześnie PK, więc sprawdzamy niezależnie
-          if (action.isShot) {
+          if (action.isShot && matchesFiltersForEndCounts) {
             senderShotCount += 1;
             if (senderIsLateral) senderShotCountLateral += 1;
             else senderShotCountCentral += 1;
-            if (action.isGoal) {
+            if (action.isGoal && matchesFiltersForEndCounts) {
               senderGoalCount += 1;
               if (senderIsLateral) senderGoalCountLateral += 1;
               else senderGoalCountCentral += 1;
             }
           }
-          
+
           // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
-          // Użyj tej samej logiki co w profilu zawodnika (action.isP1 || action.isP1Start)
-          if (action.isP3 || action.isP3Start) {
+          if ((action.isP3 || action.isP3Start) && matchesFiltersForEndCounts) {
             senderP3Count += 1;
             if (senderIsLateral) senderP3CountLateral += 1;
             else senderP3CountCentral += 1;
           }
-          if (action.isP2 || action.isP2Start) {
+          if ((action.isP2 || action.isP2Start) && matchesFiltersForEndCounts) {
             senderP2Count += 1;
             if (senderIsLateral) senderP2CountLateral += 1;
             else senderP2CountCentral += 1;
           }
-          if (action.isP1 || action.isP1Start) {
+          if ((action.isP1 || action.isP1Start) && matchesFiltersForEndCounts) {
             senderP1Count += 1;
             if (senderIsLateral) senderP1CountLateral += 1;
             else senderP1CountCentral += 1;
@@ -1177,6 +1328,18 @@ export default function StatystykiZespoluPage() {
       dribblingShotCountCentral,
       dribblingGoalCountLateral,
       dribblingGoalCountCentral,
+      senderP0StartCount,
+      senderP1StartCount,
+      senderP2StartCount,
+      senderP3StartCount,
+      senderP0StartCountLateral,
+      senderP0StartCountCentral,
+      senderP1StartCountLateral,
+      senderP1StartCountCentral,
+      senderP2StartCountLateral,
+      senderP2StartCountCentral,
+      senderP3StartCountLateral,
+      senderP3StartCountCentral,
     };
   }, [allActions, teamActions, allShots, allPKEntries, selectedTeam, heatmapDirection, selectedPxtCategory, derivedRegainActions, derivedLosesActions]);
 
@@ -2259,23 +2422,8 @@ export default function StatystykiZespoluPage() {
       if (selectedPxtCategory === 'dribbler' && action.actionType !== 'dribble') return;
       if (selectedPxtCategory !== 'dribbler' && action.actionType === 'dribble') return;
 
-      // Filtruj akcje według wybranego typu akcji (P1, P2, P3, PK, Strzał, Gol)
-      if (selectedActionFilter) {
-        // Użyj tej samej logiki co w profilu zawodnika (action.isP1 || action.isP1Start)
-        const isP1 = action.isP1 || action.isP1Start || false;
-        const isP2 = action.isP2 || action.isP2Start || false;
-        const isP3 = action.isP3 || action.isP3Start || false;
-        const isPK = action.isPenaltyAreaEntry || false;
-        const isShot = action.isShot || false;
-        const isGoal = action.isGoal || false;
-
-        if (selectedActionFilter === 'p1' && !isP1) return;
-        if (selectedActionFilter === 'p2' && !isP2) return;
-        if (selectedActionFilter === 'p3' && !isP3) return;
-        if (selectedActionFilter === 'pk' && !isPK) return;
-        if (selectedActionFilter === 'shot' && !isShot) return;
-        if (selectedActionFilter === 'goal' && !isGoal) return;
-      }
+      // Filtruj akcje według wybranych filtrów Start/Koniec
+      if (!matchesSelectedActionFilter(action)) return;
 
       let zone: string | undefined;
       if (selectedPxtCategory === 'dribbler') {
@@ -2323,23 +2471,8 @@ export default function StatystykiZespoluPage() {
       // Filtruj akcje według kategorii
       if (selectedPxtCategory === 'dribbler' && action.actionType !== 'dribble') return;
       
-      // Filtruj akcje według wybranego typu akcji (P1, P2, P3, PK, Strzał, Gol)
-      if (selectedActionFilter) {
-        // Użyj tej samej logiki co w profilu zawodnika (action.isP1 || action.isP1Start)
-        const isP1 = action.isP1 || action.isP1Start || false;
-        const isP2 = action.isP2 || action.isP2Start || false;
-        const isP3 = action.isP3 || action.isP3Start || false;
-        const isPK = action.isPenaltyAreaEntry || false;
-        const isShot = action.isShot || false;
-        const isGoal = action.isGoal || false;
-
-        if (selectedActionFilter === 'p1' && !isP1) return;
-        if (selectedActionFilter === 'p2' && !isP2) return;
-        if (selectedActionFilter === 'p3' && !isP3) return;
-        if (selectedActionFilter === 'pk' && !isPK) return;
-        if (selectedActionFilter === 'shot' && !isShot) return;
-        if (selectedActionFilter === 'goal' && !isGoal) return;
-      }
+      // Filtruj akcje według wybranych filtrów Start/Koniec
+      if (!matchesSelectedActionFilter(action)) return;
       
       if (selectedPxtCategory === 'dribbler' && action.actionType === 'dribble') {
         // Dla dryblingu zawsze używamy startZone i senderId
@@ -4708,7 +4841,7 @@ export default function StatystykiZespoluPage() {
                           className={`${styles.actionTypeButton} ${selectedActionType === 'all' ? styles.active : ''}`}
                           onClick={() => {
                             setSelectedActionType('all');
-                            setSelectedActionFilter(null);
+                            setSelectedActionFilter([]);
                           }}
                         >
                           Wszystkie
@@ -4717,7 +4850,7 @@ export default function StatystykiZespoluPage() {
                           className={`${styles.actionTypeButton} ${selectedActionType === 'pass' ? styles.active : ''}`}
                           onClick={() => {
                             setSelectedActionType('pass');
-                            setSelectedActionFilter(null);
+                            setSelectedActionFilter([]);
                           }}
                         >
                           Podanie
@@ -4726,7 +4859,7 @@ export default function StatystykiZespoluPage() {
                           className={`${styles.actionTypeButton} ${selectedActionType === 'dribble' ? styles.active : ''}`}
                           onClick={() => {
                             setSelectedActionType('dribble');
-                            setSelectedActionFilter(null);
+                            setSelectedActionFilter([]);
                           }}
                         >
                           Drybling
@@ -4941,90 +5074,273 @@ export default function StatystykiZespoluPage() {
 
           {/* Szczegółowe dane o punktach */}
           <div className={styles.actionCounts}>
-            {selectedActionType === 'pass' && (
-              <>
-                <div className={styles.countItem}>
-                  <span className={styles.countLabel}>P1:</span>
-                  <span className={styles.countValue}>{teamStats.senderP1Count}</span>
-                  <div className={styles.zoneBreakdown}>
-                    <span className={styles.zoneLabel}>Strefy boczne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderP1CountLateral}</span>
-                    <span className={styles.zoneLabel}>Strefy centralne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderP1CountCentral}</span>
+            {(selectedActionType === 'pass' || selectedActionType === 'all') && (
+              <div className={styles.countItemsWrapper} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 300px) minmax(0, 1fr)', gap: '16px', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxWidth: '100%' }}>
+                  <div 
+                    className={`${styles.countItem} ${isFilterActive('p0start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p0start') ? styles.countItemDisabled : ''}`}
+                    onClick={() => {
+                      if (hasStartFilterSelected() && !isFilterActive('p0start')) return;
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
+                        const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                        if (filters.includes('p0start')) return withoutStartFilters;
+                        return [...withoutStartFilters, 'p0start'];
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>P0 Start:</span>
+                    <span className={styles.countValue}>{teamStats.senderP0StartCount}</span>
+                    <div className={styles.zoneBreakdown}>
+                      <span className={styles.zoneLabel}>Strefy boczne:</span>
+                      <span className={styles.zoneValue}>{teamStats.senderP0StartCountLateral}</span>
+                      <span className={styles.zoneLabel}>Strefy centralne:</span>
+                      <span className={styles.zoneValue}>{teamStats.senderP0StartCountCentral}</span>
+                    </div>
+                  </div>
+                  <div 
+                    className={`${styles.countItem} ${isFilterActive('p1start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p1start') ? styles.countItemDisabled : ''}`}
+                    onClick={() => {
+                      if (hasStartFilterSelected() && !isFilterActive('p1start')) return;
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
+                        const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                        if (filters.includes('p1start')) return withoutStartFilters;
+                        return [...withoutStartFilters, 'p1start'];
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>P1 Start:</span>
+                    <span className={styles.countValue}>{teamStats.senderP1StartCount}</span>
+                    <div className={styles.zoneBreakdown}>
+                      <span className={styles.zoneLabel}>Strefy boczne:</span>
+                      <span className={styles.zoneValue}>{teamStats.senderP1StartCountLateral}</span>
+                      <span className={styles.zoneLabel}>Strefy centralne:</span>
+                      <span className={styles.zoneValue}>{teamStats.senderP1StartCountCentral}</span>
+                    </div>
+                  </div>
+                  <div 
+                    className={`${styles.countItem} ${isFilterActive('p2start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p2start') ? styles.countItemDisabled : ''}`}
+                    onClick={() => {
+                      if (hasStartFilterSelected() && !isFilterActive('p2start')) return;
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
+                        const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                        if (filters.includes('p2start')) return withoutStartFilters;
+                        return [...withoutStartFilters, 'p2start'];
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>P2 Start:</span>
+                    <span className={styles.countValue}>{teamStats.senderP2StartCount}</span>
+                    <div className={styles.zoneBreakdown}>
+                      <span className={styles.zoneLabel}>Strefy boczne:</span>
+                      <span className={styles.zoneValue}>{teamStats.senderP2StartCountLateral}</span>
+                      <span className={styles.zoneLabel}>Strefy centralne:</span>
+                      <span className={styles.zoneValue}>{teamStats.senderP2StartCountCentral}</span>
+                    </div>
+                  </div>
+                  <div 
+                    className={`${styles.countItem} ${isFilterActive('p3start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p3start') ? styles.countItemDisabled : ''}`}
+                    onClick={() => {
+                      if (hasStartFilterSelected() && !isFilterActive('p3start')) return;
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
+                        const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                        if (filters.includes('p3start')) return withoutStartFilters;
+                        return [...withoutStartFilters, 'p3start'];
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>P3 Start:</span>
+                    <span className={styles.countValue}>{teamStats.senderP3StartCount}</span>
+                    <div className={styles.zoneBreakdown}>
+                      <span className={styles.zoneLabel}>Strefy boczne:</span>
+                      <span className={styles.zoneValue}>{teamStats.senderP3StartCountLateral}</span>
+                      <span className={styles.zoneLabel}>Strefy centralne:</span>
+                      <span className={styles.zoneValue}>{teamStats.senderP3StartCountCentral}</span>
+                    </div>
                   </div>
                 </div>
-                <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'p2' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2' ? null : 'p2')}
-                >
-                  <span className={styles.countLabel}>P2:</span>
-                  <span className={styles.countValue}>{teamStats.senderP2Count}</span>
-                  <div className={styles.zoneBreakdown}>
-                    <span className={styles.zoneLabel}>Strefy boczne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderP2CountLateral}</span>
-                    <span className={styles.zoneLabel}>Strefy centralne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderP2CountCentral}</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', minWidth: 0 }}>
+                  <div 
+                    className={`${styles.countItem} ${isFilterActive('p1') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p1') ? styles.countItemDisabled : ''}`}
+                    onClick={() => {
+                      if (hasEndFilterSelected() && !isFilterActive('p1')) return;
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
+                        const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                        if (filters.includes('p1')) return withoutEndFilters;
+                        return [...withoutEndFilters, 'p1'];
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>P1:</span>
+                    <span className={styles.countValue}>
+                      {selectedActionType === 'all' ? teamStats.senderP1Count + teamStats.dribblingP1Count : teamStats.senderP1Count}
+                    </span>
+                    <div className={styles.zoneBreakdown}>
+                      <span className={styles.zoneLabel}>Strefy boczne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP1CountLateral + teamStats.dribblingP1CountLateral : teamStats.senderP1CountLateral}
+                      </span>
+                      <span className={styles.zoneLabel}>Strefy centralne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP1CountCentral + teamStats.dribblingP1CountCentral : teamStats.senderP1CountCentral}
+                      </span>
+                    </div>
+                  </div>
+                  <div 
+                    className={`${styles.countItem} ${isFilterActive('p2') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p2') ? styles.countItemDisabled : ''}`}
+                    onClick={() => {
+                      if (hasEndFilterSelected() && !isFilterActive('p2')) return;
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
+                        const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                        if (filters.includes('p2')) return withoutEndFilters;
+                        return [...withoutEndFilters, 'p2'];
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>P2:</span>
+                    <span className={styles.countValue}>
+                      {selectedActionType === 'all' ? teamStats.senderP2Count + teamStats.dribblingP2Count : teamStats.senderP2Count}
+                    </span>
+                    <div className={styles.zoneBreakdown}>
+                      <span className={styles.zoneLabel}>Strefy boczne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP2CountLateral + teamStats.dribblingP2CountLateral : teamStats.senderP2CountLateral}
+                      </span>
+                      <span className={styles.zoneLabel}>Strefy centralne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP2CountCentral + teamStats.dribblingP2CountCentral : teamStats.senderP2CountCentral}
+                      </span>
+                    </div>
+                  </div>
+                  <div 
+                    className={`${styles.countItem} ${isFilterActive('p3') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p3') ? styles.countItemDisabled : ''}`}
+                    onClick={() => {
+                      if (hasEndFilterSelected() && !isFilterActive('p3')) return;
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
+                        const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                        if (filters.includes('p3')) return withoutEndFilters;
+                        return [...withoutEndFilters, 'p3'];
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>P3:</span>
+                    <span className={styles.countValue}>
+                      {selectedActionType === 'all' ? teamStats.senderP3Count + teamStats.dribblingP3Count : teamStats.senderP3Count}
+                    </span>
+                    <div className={styles.zoneBreakdown}>
+                      <span className={styles.zoneLabel}>Strefy boczne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP3CountLateral + teamStats.dribblingP3CountLateral : teamStats.senderP3CountLateral}
+                      </span>
+                      <span className={styles.zoneLabel}>Strefy centralne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP3CountCentral + teamStats.dribblingP3CountCentral : teamStats.senderP3CountCentral}
+                      </span>
+                    </div>
+                  </div>
+                  <div 
+                    className={`${styles.countItem} ${isFilterActive('pk') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('pk') ? styles.countItemDisabled : ''}`}
+                    onClick={() => {
+                      if (hasEndFilterSelected() && !isFilterActive('pk')) return;
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
+                        const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                        if (filters.includes('pk')) return withoutEndFilters;
+                        return [...withoutEndFilters, 'pk'];
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>PK:</span>
+                    <span className={styles.countValue}>
+                      {selectedActionType === 'all' ? teamStats.senderPKCount + teamStats.dribblingPKCount : teamStats.senderPKCount}
+                    </span>
+                    <div className={styles.zoneBreakdown}>
+                      <span className={styles.zoneLabel}>Strefy boczne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderPKCountLateral + teamStats.dribblingPKCountLateral : teamStats.senderPKCountLateral}
+                      </span>
+                      <span className={styles.zoneLabel}>Strefy centralne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderPKCountCentral + teamStats.dribblingPKCountCentral : teamStats.senderPKCountCentral}
+                      </span>
+                    </div>
+                  </div>
+                  <div 
+                    className={`${styles.countItem} ${isFilterActive('shot') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('shot') ? styles.countItemDisabled : ''}`}
+                    onClick={() => {
+                      if (hasEndFilterSelected() && !isFilterActive('shot')) return;
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
+                        const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                        if (filters.includes('shot')) return withoutEndFilters;
+                        return [...withoutEndFilters, 'shot'];
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>Strzał:</span>
+                    <span className={styles.countValue}>
+                      {selectedActionType === 'all' ? teamStats.senderShotCount + teamStats.dribblingShotCount : teamStats.senderShotCount}
+                    </span>
+                    <div className={styles.zoneBreakdown}>
+                      <span className={styles.zoneLabel}>Strefy boczne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderShotCountLateral + teamStats.dribblingShotCountLateral : teamStats.senderShotCountLateral}
+                      </span>
+                      <span className={styles.zoneLabel}>Strefy centralne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderShotCountCentral + teamStats.dribblingShotCountCentral : teamStats.senderShotCountCentral}
+                      </span>
+                    </div>
+                  </div>
+                  <div 
+                    className={`${styles.countItem} ${isFilterActive('goal') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('goal') ? styles.countItemDisabled : ''}`}
+                    onClick={() => {
+                      if (hasEndFilterSelected() && !isFilterActive('goal')) return;
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
+                        const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                        if (filters.includes('goal')) return withoutEndFilters;
+                        return [...withoutEndFilters, 'goal'];
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>Gol:</span>
+                    <span className={styles.countValue}>
+                      {selectedActionType === 'all' ? teamStats.senderGoalCount + teamStats.dribblingGoalCount : teamStats.senderGoalCount}
+                    </span>
+                    <div className={styles.zoneBreakdown}>
+                      <span className={styles.zoneLabel}>Strefy boczne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderGoalCountLateral + teamStats.dribblingGoalCountLateral : teamStats.senderGoalCountLateral}
+                      </span>
+                      <span className={styles.zoneLabel}>Strefy centralne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderGoalCountCentral + teamStats.dribblingGoalCountCentral : teamStats.senderGoalCountCentral}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'p3' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3' ? null : 'p3')}
-                >
-                  <span className={styles.countLabel}>P3:</span>
-                  <span className={styles.countValue}>{teamStats.senderP3Count}</span>
-                  <div className={styles.zoneBreakdown}>
-                    <span className={styles.zoneLabel}>Strefy boczne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderP3CountLateral}</span>
-                    <span className={styles.zoneLabel}>Strefy centralne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderP3CountCentral}</span>
-                  </div>
-                </div>
-                <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'pk' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'pk' ? null : 'pk')}
-                >
-                  <span className={styles.countLabel}>PK:</span>
-                  <span className={styles.countValue}>{teamStats.senderPKCount}</span>
-                  <div className={styles.zoneBreakdown}>
-                    <span className={styles.zoneLabel}>Strefy boczne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderPKCountLateral}</span>
-                    <span className={styles.zoneLabel}>Strefy centralne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderPKCountCentral}</span>
-                  </div>
-                </div>
-                <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'shot' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'shot' ? null : 'shot')}
-                >
-                  <span className={styles.countLabel}>Strzał:</span>
-                  <span className={styles.countValue}>{teamStats.senderShotCount}</span>
-                  <div className={styles.zoneBreakdown}>
-                    <span className={styles.zoneLabel}>Strefy boczne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderShotCountLateral}</span>
-                    <span className={styles.zoneLabel}>Strefy centralne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderShotCountCentral}</span>
-                  </div>
-                </div>
-                <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'goal' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'goal' ? null : 'goal')}
-                >
-                  <span className={styles.countLabel}>Gol:</span>
-                  <span className={styles.countValue}>{teamStats.senderGoalCount}</span>
-                  <div className={styles.zoneBreakdown}>
-                    <span className={styles.zoneLabel}>Strefy boczne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderGoalCountLateral}</span>
-                    <span className={styles.zoneLabel}>Strefy centralne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderGoalCountCentral}</span>
-                  </div>
-                </div>
-              </>
+              </div>
             )}
             {selectedActionType === 'dribble' && (
-              <>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', minWidth: 0 }}>
                 <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'p1' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1' ? null : 'p1')}
+                  className={`${styles.countItem} ${isFilterActive('p1') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p1') ? styles.countItemDisabled : ''}`}
+                  onClick={() => {
+                    if (hasEndFilterSelected() && !isFilterActive('p1')) return;
+                    setSelectedActionFilter(prev => {
+                      const filters = Array.isArray(prev) ? prev : [];
+                      const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                      if (filters.includes('p1')) return withoutEndFilters;
+                      return [...withoutEndFilters, 'p1'];
+                    });
+                  }}
                 >
                   <span className={styles.countLabel}>P1:</span>
                   <span className={styles.countValue}>{teamStats.dribblingP1Count}</span>
@@ -5036,8 +5352,16 @@ export default function StatystykiZespoluPage() {
                   </div>
                 </div>
                 <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'p2' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2' ? null : 'p2')}
+                  className={`${styles.countItem} ${isFilterActive('p2') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p2') ? styles.countItemDisabled : ''}`}
+                  onClick={() => {
+                    if (hasEndFilterSelected() && !isFilterActive('p2')) return;
+                    setSelectedActionFilter(prev => {
+                      const filters = Array.isArray(prev) ? prev : [];
+                      const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                      if (filters.includes('p2')) return withoutEndFilters;
+                      return [...withoutEndFilters, 'p2'];
+                    });
+                  }}
                 >
                   <span className={styles.countLabel}>P2:</span>
                   <span className={styles.countValue}>{teamStats.dribblingP2Count}</span>
@@ -5049,8 +5373,16 @@ export default function StatystykiZespoluPage() {
                   </div>
                 </div>
                 <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'p3' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3' ? null : 'p3')}
+                  className={`${styles.countItem} ${isFilterActive('p3') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p3') ? styles.countItemDisabled : ''}`}
+                  onClick={() => {
+                    if (hasEndFilterSelected() && !isFilterActive('p3')) return;
+                    setSelectedActionFilter(prev => {
+                      const filters = Array.isArray(prev) ? prev : [];
+                      const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                      if (filters.includes('p3')) return withoutEndFilters;
+                      return [...withoutEndFilters, 'p3'];
+                    });
+                  }}
                 >
                   <span className={styles.countLabel}>P3:</span>
                   <span className={styles.countValue}>{teamStats.dribblingP3Count}</span>
@@ -5062,8 +5394,16 @@ export default function StatystykiZespoluPage() {
                   </div>
                 </div>
                 <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'pk' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'pk' ? null : 'pk')}
+                  className={`${styles.countItem} ${isFilterActive('pk') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('pk') ? styles.countItemDisabled : ''}`}
+                  onClick={() => {
+                    if (hasEndFilterSelected() && !isFilterActive('pk')) return;
+                    setSelectedActionFilter(prev => {
+                      const filters = Array.isArray(prev) ? prev : [];
+                      const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                      if (filters.includes('pk')) return withoutEndFilters;
+                      return [...withoutEndFilters, 'pk'];
+                    });
+                  }}
                 >
                   <span className={styles.countLabel}>PK:</span>
                   <span className={styles.countValue}>{teamStats.dribblingPKCount}</span>
@@ -5075,8 +5415,16 @@ export default function StatystykiZespoluPage() {
                   </div>
                 </div>
                 <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'shot' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'shot' ? null : 'shot')}
+                  className={`${styles.countItem} ${isFilterActive('shot') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('shot') ? styles.countItemDisabled : ''}`}
+                  onClick={() => {
+                    if (hasEndFilterSelected() && !isFilterActive('shot')) return;
+                    setSelectedActionFilter(prev => {
+                      const filters = Array.isArray(prev) ? prev : [];
+                      const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                      if (filters.includes('shot')) return withoutEndFilters;
+                      return [...withoutEndFilters, 'shot'];
+                    });
+                  }}
                 >
                   <span className={styles.countLabel}>Strzał:</span>
                   <span className={styles.countValue}>{teamStats.dribblingShotCount}</span>
@@ -5088,8 +5436,16 @@ export default function StatystykiZespoluPage() {
                   </div>
                 </div>
                 <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'goal' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'goal' ? null : 'goal')}
+                  className={`${styles.countItem} ${isFilterActive('goal') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('goal') ? styles.countItemDisabled : ''}`}
+                  onClick={() => {
+                    if (hasEndFilterSelected() && !isFilterActive('goal')) return;
+                    setSelectedActionFilter(prev => {
+                      const filters = Array.isArray(prev) ? prev : [];
+                      const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                      if (filters.includes('goal')) return withoutEndFilters;
+                      return [...withoutEndFilters, 'goal'];
+                    });
+                  }}
                 >
                   <span className={styles.countLabel}>Gol:</span>
                   <span className={styles.countValue}>{teamStats.dribblingGoalCount}</span>
@@ -5100,89 +5456,7 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.zoneValue}>{teamStats.dribblingGoalCountCentral}</span>
                   </div>
                 </div>
-              </>
-            )}
-            {selectedActionType === 'all' && (
-              <>
-                <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'p1' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1' ? null : 'p1')}
-                >
-                  <span className={styles.countLabel}>P1:</span>
-                  <span className={styles.countValue}>{teamStats.senderP1Count + teamStats.dribblingP1Count}</span>
-                  <div className={styles.zoneBreakdown}>
-                    <span className={styles.zoneLabel}>Strefy boczne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderP1CountLateral + teamStats.dribblingP1CountLateral}</span>
-                    <span className={styles.zoneLabel}>Strefy centralne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderP1CountCentral + teamStats.dribblingP1CountCentral}</span>
-                  </div>
-                </div>
-                <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'p2' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2' ? null : 'p2')}
-                >
-                  <span className={styles.countLabel}>P2:</span>
-                  <span className={styles.countValue}>{teamStats.senderP2Count + teamStats.dribblingP2Count}</span>
-                  <div className={styles.zoneBreakdown}>
-                    <span className={styles.zoneLabel}>Strefy boczne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderP2CountLateral + teamStats.dribblingP2CountLateral}</span>
-                    <span className={styles.zoneLabel}>Strefy centralne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderP2CountCentral + teamStats.dribblingP2CountCentral}</span>
-                  </div>
-                </div>
-                <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'p3' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3' ? null : 'p3')}
-                >
-                  <span className={styles.countLabel}>P3:</span>
-                  <span className={styles.countValue}>{teamStats.senderP3Count + teamStats.dribblingP3Count}</span>
-                  <div className={styles.zoneBreakdown}>
-                    <span className={styles.zoneLabel}>Strefy boczne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderP3CountLateral + teamStats.dribblingP3CountLateral}</span>
-                    <span className={styles.zoneLabel}>Strefy centralne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderP3CountCentral + teamStats.dribblingP3CountCentral}</span>
-                  </div>
-                </div>
-                <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'pk' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'pk' ? null : 'pk')}
-                >
-                  <span className={styles.countLabel}>PK:</span>
-                  <span className={styles.countValue}>{teamStats.senderPKCount + teamStats.dribblingPKCount}</span>
-                  <div className={styles.zoneBreakdown}>
-                    <span className={styles.zoneLabel}>Strefy boczne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderPKCountLateral + teamStats.dribblingPKCountLateral}</span>
-                    <span className={styles.zoneLabel}>Strefy centralne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderPKCountCentral + teamStats.dribblingPKCountCentral}</span>
-                  </div>
-                </div>
-                <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'shot' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'shot' ? null : 'shot')}
-                >
-                  <span className={styles.countLabel}>Strzał:</span>
-                  <span className={styles.countValue}>{teamStats.senderShotCount + teamStats.dribblingShotCount}</span>
-                  <div className={styles.zoneBreakdown}>
-                    <span className={styles.zoneLabel}>Strefy boczne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderShotCountLateral + teamStats.dribblingShotCountLateral}</span>
-                    <span className={styles.zoneLabel}>Strefy centralne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderShotCountCentral + teamStats.dribblingShotCountCentral}</span>
-                  </div>
-                </div>
-                <div 
-                  className={`${styles.countItem} ${selectedActionFilter === 'goal' ? styles.countItemSelected : ''}`}
-                  onClick={() => setSelectedActionFilter(selectedActionFilter === 'goal' ? null : 'goal')}
-                >
-                  <span className={styles.countLabel}>Gol:</span>
-                  <span className={styles.countValue}>{teamStats.senderGoalCount + teamStats.dribblingGoalCount}</span>
-                  <div className={styles.zoneBreakdown}>
-                    <span className={styles.zoneLabel}>Strefy boczne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderGoalCountLateral + teamStats.dribblingGoalCountLateral}</span>
-                    <span className={styles.zoneLabel}>Strefy centralne:</span>
-                    <span className={styles.zoneValue}>{teamStats.senderGoalCountCentral + teamStats.dribblingGoalCountCentral}</span>
-                  </div>
-                </div>
-              </>
+              </div>
             )}
           </div>
         </div>

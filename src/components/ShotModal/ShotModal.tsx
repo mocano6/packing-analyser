@@ -785,7 +785,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
               />
               {formData.teamContext === "attack" && (
                 <div className={styles.linePlayersCountInput}>
-                  <label htmlFor="line-players-count">Zawodnicy na linii strzału:</label>
+                  <label htmlFor="line-players-count">Przeciwnik na linii strzału:</label>
                   <input
                     type="number"
                     id="line-players-count"
@@ -896,7 +896,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
           {/* Zawodnicy na linii strzału (tylko w obronie) */}
           {formData.teamContext === "defense" && (
             <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
-              <label>Zawodnicy na linii strzału:</label>
+              <label>Przeciwnik na linii strzału:</label>
               <div className={styles.playersGridContainer}>
                 {(() => {
                   // Filtruj bramkarzy - w obronie bramkarz nie liczy się w linii strzału
