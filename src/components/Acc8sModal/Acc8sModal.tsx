@@ -97,14 +97,12 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
         }
       } else if (!isEditMode && onGetVideoTime) {
         // W trybie dodawania - pobieramy aktualny czas z wideo
-        console.log('Acc8sModal: Pobieranie czasu z wideo...');
         onGetVideoTime().then((time) => {
-          console.log('Acc8sModal: Otrzymany czas z wideo:', time);
           if (time >= 0) {
             setVideoTimeMMSS(secondsToMMSS(time));
           }
         }).catch((error) => {
-          console.warn('Acc8sModal: Nie udało się pobrać czasu z wideo:', error);
+          console.warn('Nie udało się pobrać czasu z wideo:', error);
         });
       }
     }

@@ -123,14 +123,12 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         }
       } else if (!isEditMode && onGetVideoTime) {
         // W trybie dodawania - pobieramy aktualny czas z wideo
-        console.log('PKEntryModal: Pobieranie czasu z wideo...');
         onGetVideoTime().then((time) => {
-          console.log('PKEntryModal: Otrzymany czas z wideo:', time);
           if (time >= 0) {
             setVideoTimeMMSS(secondsToMMSS(time));
           }
         }).catch((error) => {
-          console.warn('PKEntryModal: Nie udało się pobrać czasu z wideo:', error);
+          console.warn('Nie udało się pobrać czasu z wideo:', error);
         });
       }
     } else {

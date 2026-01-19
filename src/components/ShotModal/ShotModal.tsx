@@ -129,14 +129,12 @@ const ShotModal: React.FC<ShotModalProps> = ({
         }
       } else if (!isEditMode && onGetVideoTime) {
         // W trybie dodawania - pobieramy aktualny czas z wideo
-        console.log('ShotModal: Pobieranie czasu z wideo...');
         onGetVideoTime().then((time) => {
-          console.log('ShotModal: Otrzymany czas z wideo:', time);
           if (time >= 0) {
             setVideoTimeMMSS(secondsToMMSS(time));
           }
         }).catch((error) => {
-          console.warn('ShotModal: Nie udało się pobrać czasu z wideo:', error);
+          console.warn('Nie udało się pobrać czasu z wideo:', error);
         });
       }
     } else {
