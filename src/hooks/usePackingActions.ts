@@ -1138,7 +1138,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     // NIE resetujemy: selectedPlayerId, selectedReceiverId, actionMinute, isSecondHalf, selectedZone
   }, []);
 
-
   return {
     // Stany
     actions,

@@ -1630,6 +1630,12 @@ export default function Page() {
           setSelectedReceiverId(null);
           setSelectedDefensePlayers([]);
           
+          // DODANO: Resetujemy przyciski kompaktowe po zapisaniu (tylko jeśli nie jesteśmy w trybie edycji)
+          // Sprawdzamy czy nie ma editingAction - jeśli nie ma, to znaczy że dodajemy nową akcję
+          if (!editingAction) {
+            resetActionPoints();
+          }
+          
           // DODANO: Przenieś focus do okna z wideo po zapisaniu akcji (tylko jeśli jest otwarte)
           const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
           if (isExternalWindowOpen) {

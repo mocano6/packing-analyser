@@ -3714,6 +3714,13 @@ export default function StatystykiZespoluPage() {
                       
                       const teamXG = teamShots.reduce((sum, shot) => sum + (shot.xG || 0), 0);
                       const opponentXG = opponentShots.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                      
+                      // xG bez rzutów karnych (NP xG)
+                      const teamShotsNoPenalty = teamShots.filter(shot => shot.actionType !== 'penalty');
+                      const opponentShotsNoPenalty = opponentShots.filter(shot => shot.actionType !== 'penalty');
+                      const teamXGNoPenalty = teamShotsNoPenalty.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                      const opponentXGNoPenalty = opponentShotsNoPenalty.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                      
                       const teamShotsCount = teamShots.length;
                       const opponentShotsCount = opponentShots.length;
                       const teamXGPerShotValue = teamShotsCount > 0 ? (teamXG / teamShotsCount) : 0;
@@ -3814,6 +3821,12 @@ export default function StatystykiZespoluPage() {
                               {/* Nagłówek tabeli */}
                               <div className={styles.xgTableHeaderRow}>
                                 <div className={styles.xgTableHeaderCell}></div>
+                                <div 
+                                  className={`${styles.xgTableHeaderCell} ${styles.tooltipTrigger}`}
+                                  data-tooltip="xG bez karnych"
+                                >
+                                  NP xG
+                                </div>
                                 <div className={styles.xgTableHeaderCell}>xG</div>
                                 <div 
                                   className={`${styles.xgTableHeaderCell} ${styles.tooltipTrigger}`}
@@ -3848,6 +3861,7 @@ export default function StatystykiZespoluPage() {
                                 <div className={styles.xgTableTeamCell}>
                                   {availableTeams.find(t => t.id === selectedTeam)?.name || 'ZESPÓŁ'}
                                 </div>
+                                <div className={styles.xgTableValueCell}>{teamXGNoPenalty.toFixed(2)}</div>
                                 <div className={styles.xgTableValueCell}>{teamXG.toFixed(2)}</div>
                                 <div 
                                   className={styles.xgTableValueCell}
@@ -3874,6 +3888,7 @@ export default function StatystykiZespoluPage() {
                               {/* Wiersz przeciwnika */}
                               <div className={styles.xgTableDataRow}>
                                 <div className={styles.xgTableTeamCell}>PRZECIWNIK</div>
+                                <div className={styles.xgTableValueCell}>{opponentXGNoPenalty.toFixed(2)}</div>
                                 <div className={styles.xgTableValueCell}>{opponentXG.toFixed(2)}</div>
                                 <div 
                                   className={styles.xgTableValueCell}

@@ -455,6 +455,17 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
       localStorage.removeItem('tempVideoTimestampRaw');
     }
 
+    // Resetuj wartości przycisków kompaktowych po zapisaniu (tylko jeśli nie jesteśmy w trybie edycji)
+    if (!isEditMode) {
+      setFormData(prev => ({
+        ...prev,
+        isShotUnder8s: false,
+        isPKEntryUnder8s: false,
+        passingPlayerIds: [],
+        isControversial: false,
+      }));
+    }
+
     onClose();
   };
 
