@@ -129,12 +129,14 @@ const ShotModal: React.FC<ShotModalProps> = ({
         }
       } else if (!isEditMode && onGetVideoTime) {
         // W trybie dodawania - pobieramy aktualny czas z wideo
+        console.log('ShotModal: Pobieranie czasu z wideo...');
         onGetVideoTime().then((time) => {
+          console.log('ShotModal: Otrzymany czas z wideo:', time);
           if (time >= 0) {
             setVideoTimeMMSS(secondsToMMSS(time));
           }
         }).catch((error) => {
-          console.warn('Nie udało się pobrać czasu z wideo:', error);
+          console.warn('ShotModal: Nie udało się pobrać czasu z wideo:', error);
         });
       }
     } else {
@@ -279,8 +281,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
           const words = name.trim().split(/\s+/);
           return words[words.length - 1].toLowerCase();
         };
-        const lastNameA = getLastName(a.name);
-        const lastNameB = getLastName(b.name);
+        const lastNameA = getLastName(a.name || '');
+        const lastNameB = getLastName(b.name || '');
         return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
       });
     });
@@ -541,8 +543,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
     const value = e.target.value;
     
     // Kompatybilność wsteczna: pozwól na format MM:SS lub tylko liczby (minuty)
-    const partialPattern = /^([0-5]?[0-9]?)?(:([0-5]?[0-9]?)?)?$/;
-    const fullPattern = /^([0-5]?[0-9]):([0-5][0-9])$/;
+    const partialPattern = /^([0-9]?[0-9]?)?(:([0-5]?[0-9]?)?)?$/;
+    const fullPattern = /^([0-9]{1,2}):([0-5][0-9])$/;
     const minutesOnlyPattern = /^[0-9]{1,3}$/; // Stary format: tylko minuty (1-999)
     
     if (value === '' || partialPattern.test(value) || fullPattern.test(value) || minutesOnlyPattern.test(value)) {
@@ -552,7 +554,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
 
   const handleVideoTimeBlur = () => {
     // Upewnij się, że format jest poprawny
-    const fullPattern = /^([0-5]?[0-9]):([0-5][0-9])$/;
+    const fullPattern = /^([0-9]{1,2}):([0-5][0-9])$/;
     
     if (!fullPattern.test(videoTimeMMSS)) {
       // Kompatybilność wsteczna: jeśli to tylko liczba (stary format - minuty), konwertuj na MM:SS
@@ -628,7 +630,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     }
 
     // Walidacja i normalizacja formatu czasu wideo przed zapisem (z kompatybilnością wsteczną)
-    const fullPattern = /^([0-5]?[0-9]):([0-5][0-9])$/;
+    const fullPattern = /^([0-9]{1,2}):([0-5][0-9])$/;
     const minutesOnlyPattern = /^[0-9]{1,3}$/;
     
     // Normalizuj wartość - konwertuj stary format (tylko minuty) na MM:SS

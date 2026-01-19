@@ -70,12 +70,12 @@ const YouTubeVideoExternal: React.FC<YouTubeVideoExternalProps> = ({
               if (event.source) {
                 (event.source as Window).postMessage({
                   type: 'CURRENT_TIME_RESPONSE',
-                  time: Math.floor(currentTime)
+                  time: currentTime
                 }, (typeof event.origin === 'string' && event.origin.length > 0 ? event.origin : '*'));
               } else if (window.opener) {
                 window.opener.postMessage({
                   type: 'CURRENT_TIME_RESPONSE',
-                  time: Math.floor(currentTime)
+                  time: currentTime
                 }, '*');
               } else {
                 console.warn('YouTubeVideoExternal - brak event.source i window.opener');
@@ -126,7 +126,7 @@ const YouTubeVideoExternal: React.FC<YouTubeVideoExternalProps> = ({
             if (window.opener) {
               window.opener.postMessage({
                 type: 'VIDEO_TIME_UPDATE',
-                time: Math.floor(currentTime)
+                time: currentTime
               }, '*');
             }
           }

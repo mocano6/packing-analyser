@@ -152,11 +152,48 @@ export default function Page() {
 
   // Funkcja pomocnicza do pobierania czasu z aktywnego odtwarzacza
   const getActiveVideoTime = async (): Promise<number> => {
+    // Sprawdź zewnętrzne okno wideo
+    const externalWindow = (window as any).externalVideoWindow;
+    const isExternalWindowOpen = externalWindow && !externalWindow.closed;
+    const isExternalWindowOpenFromStorage = localStorage.getItem('externalVideoWindowOpen') === 'true';
+    
+    if (isExternalWindowOpen || isExternalWindowOpenFromStorage) {
+      // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
+      if (externalWindow && !externalWindow.closed) {
+        externalWindow.postMessage({
+          type: 'GET_CURRENT_TIME'
+        }, '*');
+      } else {
+        window.postMessage({
+          type: 'GET_CURRENT_TIME'
+        }, '*');
+      }
+      
+      // Czekaj na odpowiedź z zewnętrznego okna
+      const timeFromExternal = await new Promise<number | null>((resolve) => {
+        const handleTimeResponse = (event: MessageEvent) => {
+          if (event.data.type === 'CURRENT_TIME_RESPONSE' || event.data.type === 'VIDEO_TIME_RESPONSE') {
+            window.removeEventListener('message', handleTimeResponse);
+            resolve(event.data.time);
+          }
+        };
+        window.addEventListener('message', handleTimeResponse);
+        setTimeout(() => {
+          window.removeEventListener('message', handleTimeResponse);
+          resolve(null); // timeout
+        }, 2000);
+      });
+      
+      if (timeFromExternal !== null && timeFromExternal !== undefined) {
+        return timeFromExternal;
+      }
+    }
+    
     // Najpierw sprawdź własny odtwarzacz
-      if (customVideoRef.current) {
+    if (customVideoRef.current) {
       try {
         const time = await customVideoRef.current.getCurrentTime();
-        if (time > 0) {
+        if (time >= 0) {
           return time;
         }
       } catch (error) {
@@ -167,7 +204,7 @@ export default function Page() {
     if (youtubeVideoRef.current) {
       try {
         const time = await youtubeVideoRef.current.getCurrentTime();
-        if (time > 0) {
+        if (time >= 0) {
           return time;
         }
       } catch (error) {
@@ -646,71 +683,16 @@ export default function Page() {
 
   // Funkcje obsługi strzałów
   const handleShotAdd = async (x: number, y: number, xG: number) => {
-    // Pobierz czas wideo przed otwarciem modala (podobnie jak w openActionModalWithVideoTime)
-    const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
-    const hasExternalVideoTime = externalVideoTime > 0;
-    
-    if (isExternalWindowOpen || hasExternalVideoTime) {
-      // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
-      const externalWindow = (window as any).externalVideoWindow;
-      if (externalWindow && !externalWindow.closed) {
-        externalWindow.postMessage({
-          type: 'GET_CURRENT_TIME'
-        }, '*');
-      } else {
-        window.postMessage({
-          type: 'GET_CURRENT_TIME'
-        }, '*');
-      }
-      
-      // Czekaj na odpowiedź z zewnętrznego okna
-      const waitForTime = new Promise<number | null>((resolve) => {
-        const handleTimeResponse = (event: MessageEvent) => {
-          if (event.data.type === 'CURRENT_TIME_RESPONSE') {
-            window.removeEventListener('message', handleTimeResponse);
-            resolve(event.data.time);
-          }
-        };
-        window.addEventListener('message', handleTimeResponse);
-        setTimeout(() => {
-          window.removeEventListener('message', handleTimeResponse);
-          resolve(null); // null oznacza timeout
-        }, 1000);
-      });
-      
-      const time = await waitForTime;
-      if (time === null) {
-        if (hasExternalVideoTime) {
-          // Użyj ostatniego znanego czasu z zewnętrznego okna, cofnij o 10s
-          const rawTime = Math.max(0, externalVideoTime);
-          const adjustedTime = Math.max(0, rawTime - 10);
-          localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
-          localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
-        } else {
-          localStorage.setItem('tempVideoTimestamp', '0');
-          localStorage.setItem('tempVideoTimestampRaw', '0');
-        }
-      } else if (time > 0) {
-        // Cofnij czas o 10 sekund
-        const rawTime = Math.max(0, time);
-        const adjustedTime = Math.max(0, rawTime - 10);
-        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
-        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
-      } else if (externalVideoTime > 0) {
-        // Fallback do ostatniego znanego czasu, cofnij o 10s
-        const rawTime = Math.max(0, externalVideoTime);
-        const adjustedTime = Math.max(0, rawTime - 10);
-        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
-        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
-      }
+    // Pobierz czas wideo przed otwarciem modala (używając getActiveVideoTime który obsługuje zewnętrzne okno)
+    const currentTime = await getActiveVideoTime();
+    if (currentTime > 0) {
+      const rawTime = Math.max(0, currentTime);
+      const adjustedTime = Math.max(0, rawTime - 10);
+      localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+      localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
     } else {
-      const currentTime = await getActiveVideoTime();
-      if (currentTime > 0) {
-        const rawTime = Math.max(0, currentTime);
-        const adjustedTime = Math.max(0, rawTime - 10);
-        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
-        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
-      }
+      localStorage.setItem('tempVideoTimestamp', '0');
+      localStorage.setItem('tempVideoTimestampRaw', '0');
     }
     
     setShotModalData({ x, y, xG });
@@ -3160,30 +3142,17 @@ export default function Page() {
                 return;
               }
               
-              // Pobierz czas wideo przed otwarciem modala (podobnie jak w openActionModalWithVideoTime)
-              const isExternalWindowOpen = localStorage.getItem('externalVideoWindowOpen') === 'true';
-              const hasExternalVideoTime = externalVideoTime > 0;
-              
-              if (isExternalWindowOpen || hasExternalVideoTime) {
-                // Jeśli mamy zewnętrzne okno lub externalVideoTime, użyj tego i odejmij 10s
-                const rawTime = hasExternalVideoTime ? externalVideoTime : 0;
+              // Pobierz czas wideo przed otwarciem modala (tak jak w openAcc8sModalWithVideoTime)
+              const currentTime = await getActiveVideoTime();
+              if (currentTime > 0) {
+                const rawTime = Math.max(0, currentTime);
                 const adjustedTime = Math.max(0, rawTime - 10);
                 localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
                 localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
               } else {
-                // Spróbuj pobrać czas z aktywnego playera
-                const currentTime = await getActiveVideoTime();
-                if (currentTime > 0) {
-                  // Odejmij 15 sekund od czasu wideo
-                  const rawTime = Math.max(0, currentTime);
-                  const adjustedTime = Math.max(0, rawTime - 10);
-                  localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
-                  localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
-                } else {
-                  // Fallback - ustaw 0
-                  localStorage.setItem('tempVideoTimestamp', '0');
-                  localStorage.setItem('tempVideoTimestampRaw', '0');
-                }
+                // Fallback - ustaw 0
+                localStorage.setItem('tempVideoTimestamp', '0');
+                localStorage.setItem('tempVideoTimestampRaw', '0');
               }
               
               // Otwórz modal z danymi wejścia PK

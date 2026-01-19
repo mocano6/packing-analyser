@@ -61,6 +61,11 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
   const isEditMode = Boolean(editingEntry);
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
   const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
+  
+  // Refs do śledzenia poprzednich wartości, aby uniknąć nadpisywania podczas edycji
+  const prevVideoTimestampRawRef = useRef<number | undefined>(undefined);
+  const prevVideoTimestampRef = useRef<number | undefined>(undefined);
+  const prevEditingEntryIdRef = useRef<string | undefined>(undefined);
 
   // Funkcje pomocnicze do konwersji czasu
   const secondsToMMSS = (seconds: number): string => {
@@ -70,15 +75,22 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
   };
 
   const mmssToSeconds = (mmss: string): number => {
+    // Kompatybilność wsteczna: obsługa starego formatu (tylko minuty) i nowego (MM:SS)
+    if (!mmss || mmss.trim() === '') return 0;
+    
+    // Jeśli nie ma dwukropka, traktuj jako minuty (stary format)
+    if (!mmss.includes(':')) {
+      const mins = parseInt(mmss, 10);
+      if (isNaN(mins)) return 0;
+      return mins * 60; // Konwertuj minuty na sekundy
+    }
+    
+    // Nowy format MM:SS
     const [mins, secs] = mmss.split(':').map(Number);
-    if (isNaN(mins) || isNaN(secs)) return 0;
+    if (isNaN(mins)) return 0;
+    if (isNaN(secs)) return mins * 60; // Jeśli sekundy są niepoprawne, traktuj jako minuty
     return mins * 60 + secs;
   };
-
-  // Refs do śledzenia poprzednich wartości, aby uniknąć nadpisywania podczas edycji
-  const prevVideoTimestampRawRef = useRef<number | undefined>(undefined);
-  const prevVideoTimestampRef = useRef<number | undefined>(undefined);
-  const prevEditingEntryIdRef = useRef<string | undefined>(undefined);
 
   // Pobieranie czasu z wideo przy otwarciu modalu
   useEffect(() => {
@@ -111,12 +123,14 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         }
       } else if (!isEditMode && onGetVideoTime) {
         // W trybie dodawania - pobieramy aktualny czas z wideo
+        console.log('PKEntryModal: Pobieranie czasu z wideo...');
         onGetVideoTime().then((time) => {
+          console.log('PKEntryModal: Otrzymany czas z wideo:', time);
           if (time >= 0) {
             setVideoTimeMMSS(secondsToMMSS(time));
           }
         }).catch((error) => {
-          console.warn('Nie udało się pobrać czasu z wideo:', error);
+          console.warn('PKEntryModal: Nie udało się pobrać czasu z wideo:', error);
         });
       }
     } else {
@@ -485,19 +499,53 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
   const handleVideoTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
-    // Pozwól na częściowe wpisywanie podczas edycji
-    const partialPattern = /^([0-5]?[0-9]?)?(:([0-5]?[0-9]?)?)?$/;
-    const fullPattern = /^([0-5]?[0-9]):([0-5][0-9])$/;
+    // Kompatybilność wsteczna: pozwól na format MM:SS lub tylko liczby (minuty)
+    const partialPattern = /^([0-9]?[0-9]?)?(:([0-5]?[0-9]?)?)?$/;
+    const fullPattern = /^([0-9]{1,2}):([0-5][0-9])$/;
+    const minutesOnlyPattern = /^[0-9]{1,3}$/; // Stary format: tylko minuty (1-999)
     
-    if (value === '' || partialPattern.test(value) || fullPattern.test(value)) {
+    if (value === '' || partialPattern.test(value) || fullPattern.test(value) || minutesOnlyPattern.test(value)) {
       setVideoTimeMMSS(value);
     }
   };
 
   const handleVideoTimeBlur = () => {
     // Upewnij się, że format jest poprawny
-    if (!/^([0-5]?[0-9]):([0-5][0-9])$/.test(videoTimeMMSS)) {
-      // Jeśli format jest niepoprawny, przywróć poprzednią wartość lub pobierz z wideo
+    const fullPattern = /^([0-9]{1,2}):([0-5][0-9])$/;
+    
+    if (!fullPattern.test(videoTimeMMSS)) {
+      // Kompatybilność wsteczna: jeśli to tylko liczba (stary format - minuty), konwertuj na MM:SS
+      if (!videoTimeMMSS.includes(':') && /^[0-9]{1,3}$/.test(videoTimeMMSS)) {
+        const mins = parseInt(videoTimeMMSS, 10);
+        if (!isNaN(mins) && mins >= 0) {
+          // Konwertuj minuty na format MM:SS (sekundy = 0)
+          const formatted = `${Math.min(99, mins).toString().padStart(2, '0')}:00`;
+          setVideoTimeMMSS(formatted);
+          return;
+        }
+      }
+      
+      // Próbuj naprawić format - sprawdź czy jest dwukropek
+      if (videoTimeMMSS.includes(':')) {
+        const parts = videoTimeMMSS.split(':');
+        let mins = parseInt(parts[0] || '0', 10);
+        let secs = parseInt(parts[1] || '0', 10);
+        
+        // Walidacja i korekta wartości
+        if (isNaN(mins)) mins = 0;
+        if (isNaN(secs)) secs = 0;
+        
+        // Ograniczenia: minuty 0-99 (dla kompatybilności), sekundy 0-59
+        mins = Math.max(0, Math.min(99, mins));
+        secs = Math.max(0, Math.min(59, secs));
+        
+        // Formatuj z zerami wiodącymi
+        const formatted = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        setVideoTimeMMSS(formatted);
+        return;
+      }
+      
+      // Jeśli nie ma dwukropka lub format jest całkowicie niepoprawny, przywróć poprzednią wartość
       if (isEditMode && editingEntry) {
         // W trybie edycji - przywróć zapisany czas
         let savedTime: number | undefined;
@@ -509,15 +557,13 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         
         if (savedTime !== undefined && savedTime >= 0) {
           setVideoTimeMMSS(secondsToMMSS(savedTime));
-          // Zaktualizuj refs przy pierwszym otwarciu
-          prevVideoTimestampRawRef.current = editingEntry.videoTimestampRaw;
-          prevVideoTimestampRef.current = editingEntry.videoTimestamp;
-          prevEditingEntryIdRef.current = editingEntry.id;
         } else if (onGetVideoTime) {
           onGetVideoTime().then((time) => {
             if (time >= 0) {
               setVideoTimeMMSS(secondsToMMSS(time));
             }
+          }).catch((error) => {
+            console.warn('Nie udało się pobrać czasu z wideo:', error);
           });
         }
       } else if (onGetVideoTime) {
@@ -526,7 +572,12 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
           if (time >= 0) {
             setVideoTimeMMSS(secondsToMMSS(time));
           }
+        }).catch((error) => {
+          console.warn('Nie udało się pobrać czasu z wideo:', error);
         });
+      } else {
+        // Jeśli nie ma żadnej wartości, ustaw domyślną
+        setVideoTimeMMSS('00:00');
       }
     }
   };
@@ -1021,7 +1072,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                     onChange={handleVideoTimeChange}
                     onBlur={handleVideoTimeBlur}
                     placeholder="MM:SS"
-                    pattern="^([0-5]?[0-9]):([0-5][0-9])$"
+                    pattern="^([0-9]{1,2}):([0-5][0-9])$"
                     className={styles.videoTimeField}
                     maxLength={5}
                   />
