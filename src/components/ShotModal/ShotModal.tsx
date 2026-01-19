@@ -76,8 +76,20 @@ const ShotModal: React.FC<ShotModalProps> = ({
   };
 
   const mmssToSeconds = (mmss: string): number => {
+    // Kompatybilność wsteczna: obsługa starego formatu (tylko minuty) i nowego (MM:SS)
+    if (!mmss || mmss.trim() === '') return 0;
+    
+    // Jeśli nie ma dwukropka, traktuj jako minuty (stary format)
+    if (!mmss.includes(':')) {
+      const mins = parseInt(mmss, 10);
+      if (isNaN(mins)) return 0;
+      return mins * 60; // Konwertuj minuty na sekundy
+    }
+    
+    // Nowy format MM:SS
     const [mins, secs] = mmss.split(':').map(Number);
-    if (isNaN(mins) || isNaN(secs)) return 0;
+    if (isNaN(mins)) return 0;
+    if (isNaN(secs)) return mins * 60; // Jeśli sekundy są niepoprawne, traktuj jako minuty
     return mins * 60 + secs;
   };
 
@@ -474,7 +486,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       finalXG *= 1.65;
     }
     
-    return Math.max(0, Math.round(finalXG)); // Minimum 0, zaokrąglij do całej liczby
+    return Math.max(1, Math.round(finalXG)); // Minimum 1%, zaokrąglij do całej liczby
   };
 
   const handleActionCategoryChange = (category: "open_play" | "sfg") => {
@@ -528,19 +540,53 @@ const ShotModal: React.FC<ShotModalProps> = ({
   const handleVideoTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
-    // Pozwól na częściowe wpisywanie podczas edycji
+    // Kompatybilność wsteczna: pozwól na format MM:SS lub tylko liczby (minuty)
     const partialPattern = /^([0-5]?[0-9]?)?(:([0-5]?[0-9]?)?)?$/;
     const fullPattern = /^([0-5]?[0-9]):([0-5][0-9])$/;
+    const minutesOnlyPattern = /^[0-9]{1,3}$/; // Stary format: tylko minuty (1-999)
     
-    if (value === '' || partialPattern.test(value) || fullPattern.test(value)) {
+    if (value === '' || partialPattern.test(value) || fullPattern.test(value) || minutesOnlyPattern.test(value)) {
       setVideoTimeMMSS(value);
     }
   };
 
   const handleVideoTimeBlur = () => {
     // Upewnij się, że format jest poprawny
-    if (!/^([0-5]?[0-9]):([0-5][0-9])$/.test(videoTimeMMSS)) {
-      // Jeśli format jest niepoprawny, przywróć poprzednią wartość lub pobierz z wideo
+    const fullPattern = /^([0-5]?[0-9]):([0-5][0-9])$/;
+    
+    if (!fullPattern.test(videoTimeMMSS)) {
+      // Kompatybilność wsteczna: jeśli to tylko liczba (stary format - minuty), konwertuj na MM:SS
+      if (!videoTimeMMSS.includes(':') && /^[0-9]{1,3}$/.test(videoTimeMMSS)) {
+        const mins = parseInt(videoTimeMMSS, 10);
+        if (!isNaN(mins) && mins >= 0) {
+          // Konwertuj minuty na format MM:SS (sekundy = 0)
+          const formatted = `${Math.min(99, mins).toString().padStart(2, '0')}:00`;
+          setVideoTimeMMSS(formatted);
+          return;
+        }
+      }
+      
+      // Próbuj naprawić format - sprawdź czy jest dwukropek
+      if (videoTimeMMSS.includes(':')) {
+        const parts = videoTimeMMSS.split(':');
+        let mins = parseInt(parts[0] || '0', 10);
+        let secs = parseInt(parts[1] || '0', 10);
+        
+        // Walidacja i korekta wartości
+        if (isNaN(mins)) mins = 0;
+        if (isNaN(secs)) secs = 0;
+        
+        // Ograniczenia: minuty 0-99 (dla kompatybilności), sekundy 0-59
+        mins = Math.max(0, Math.min(99, mins));
+        secs = Math.max(0, Math.min(59, secs));
+        
+        // Formatuj z zerami wiodącymi
+        const formatted = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        setVideoTimeMMSS(formatted);
+        return;
+      }
+      
+      // Jeśli nie ma dwukropka lub format jest całkowicie niepoprawny, przywróć poprzednią wartość
       if (isEditMode && editingShot) {
         // W trybie edycji - przywróć zapisany czas
         let savedTime: number | undefined;
@@ -566,6 +612,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
             setVideoTimeMMSS(secondsToMMSS(time));
           }
         });
+      } else {
+        // Jeśli nie ma żadnej wartości, ustaw domyślną
+        setVideoTimeMMSS('00:00');
       }
     }
   };
@@ -578,8 +627,45 @@ const ShotModal: React.FC<ShotModalProps> = ({
       return;
     }
 
+    // Walidacja i normalizacja formatu czasu wideo przed zapisem (z kompatybilnością wsteczną)
+    const fullPattern = /^([0-5]?[0-9]):([0-5][0-9])$/;
+    const minutesOnlyPattern = /^[0-9]{1,3}$/;
+    
+    // Normalizuj wartość - konwertuj stary format (tylko minuty) na MM:SS
+    let normalizedVideoTime = videoTimeMMSS;
+    if (minutesOnlyPattern.test(videoTimeMMSS) && !videoTimeMMSS.includes(':')) {
+      // Stary format: tylko minuty - konwertuj na MM:SS
+      const mins = parseInt(videoTimeMMSS, 10);
+      if (!isNaN(mins) && mins >= 0) {
+        normalizedVideoTime = `${Math.min(99, mins).toString().padStart(2, '0')}:00`;
+        // Zaktualizuj state dla przyszłości
+        setVideoTimeMMSS(normalizedVideoTime);
+      }
+    } else if (!fullPattern.test(videoTimeMMSS)) {
+      // Jeśli format jest niepoprawny, spróbuj naprawić
+      if (videoTimeMMSS.includes(':')) {
+        // Próbuj naprawić format z dwukropkiem
+        const parts = videoTimeMMSS.split(':');
+        let mins = parseInt(parts[0] || '0', 10);
+        let secs = parseInt(parts[1] || '0', 10);
+        
+        if (isNaN(mins)) mins = 0;
+        if (isNaN(secs)) secs = 0;
+        
+        mins = Math.max(0, Math.min(99, mins));
+        secs = Math.max(0, Math.min(59, secs));
+        
+        normalizedVideoTime = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        setVideoTimeMMSS(normalizedVideoTime);
+      } else {
+        alert("Niepoprawny format czasu wideo. Użyj formatu MM:SS (np. 65:03) lub tylko minuty (np. 65)");
+        handleVideoTimeBlur();
+        return;
+      }
+    }
+
     // Zapisz videoTimestamp z pola MM:SS do localStorage
-    const videoTimeSeconds = mmssToSeconds(videoTimeMMSS);
+    const videoTimeSeconds = mmssToSeconds(normalizedVideoTime);
     if (videoTimeSeconds >= 0) {
       // Zapisujemy surowy czas (videoTimestampRaw) - bez korekty (może być 0)
       localStorage.setItem('tempVideoTimestampRaw', videoTimeSeconds.toString());
@@ -1217,7 +1303,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     onChange={handleVideoTimeChange}
                     onBlur={handleVideoTimeBlur}
                     placeholder="MM:SS"
-                    pattern="^([0-5]?[0-9]):([0-5][0-9])$"
                     className={styles.videoTimeField}
                     maxLength={5}
                   />

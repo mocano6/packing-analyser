@@ -137,6 +137,9 @@ const XGPitch = memo(function XGPitch({
             displayX = 100 - shot.x;
           }
           
+          // Sprawdź, czy to strzał z asystą
+          const isAssist = !!shot.assistantId;
+          
           // Oblicz rozmiar kropki na podstawie xG (min 12px, max 36px)
           // Im wyższy xG, tym większa kropka
           const dotSize = Math.max(12, Math.min(36, 12 + (shot.xG * 24)));
@@ -195,11 +198,12 @@ const XGPitch = memo(function XGPitch({
                 background: xGColor,
                 opacity: 1,
                 border: 'none',
+                borderRadius: '50%',
                 transform: 'translate(-50%, -50%)',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
               }}
               onClick={(e) => handleShotClick(e, shot)}
-              title={`${shot.playerName || 'Nieznany'} - ${shot.minute}' - xG: ${shot.xG.toFixed(2)} ${shot.isGoal ? '⚽' : ''} - ${shot.actionType || 'open_play'}`}
+              title={`${isAssist ? '⚽ Asysta: ' : ''}${shot.playerName || 'Nieznany'} - ${shot.minute}' - xG: ${shot.xG.toFixed(2)} ${shot.isGoal ? '⚽' : ''} - ${shot.actionType || 'open_play'}`}
             >
               <div className={styles.shotInner}>
                 <span 

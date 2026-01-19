@@ -131,7 +131,7 @@ export default function PlayerDetailsPage() {
   const [partnerStatsMode, setPartnerStatsMode] = useState<"sender" | "receiver">("sender");
   const [partnerSortMode, setPartnerSortMode] = useState<"passes" | "pxt">("passes");
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
-  const [selectedActionFilter, setSelectedActionFilter] = useState<'p0' | 'p1' | 'p2' | 'p3' | 'p0start' | 'p1start' | 'p2start' | 'p3start' | 'pk' | 'shot' | 'goal' | null>(null);
+  const [selectedActionFilter, setSelectedActionFilter] = useState<Array<'p0' | 'p1' | 'p2' | 'p3' | 'p0start' | 'p1start' | 'p2start' | 'p3start' | 'pk' | 'shot' | 'goal'>>([]);
   const [zoneDetails, setZoneDetails] = useState<{
     zoneName: string;
     players: Array<{ playerId: string; playerName: string; passes: number; pxt: number; p1Count: number; p2Count: number; p3Count: number; pkCount: number; shotCount: number; goalCount: number }>;
@@ -437,6 +437,19 @@ export default function PlayerDetailsPage() {
     const xgSharePct = teamXG > 0 ? (playerXG / teamXG) * 100 : 0;
     const shotSharePct = teamCount > 0 ? (playerCount / teamCount) * 100 : 0;
 
+    // Oblicz xG z asyst - znajdź wszystkie strzały, gdzie zawodnik był asystentem
+    const assistShotsAll = teamShotsAll.filter(s => {
+      if (!s) return false;
+      if (s.assistantId !== targetPlayerId) return false;
+      if (selectedMatchIds.length > 0) {
+        return selectedSet.has((s.matchId || "") as string);
+      }
+      return true;
+    });
+    const assistShots = filterByType(filterByHalf(assistShotsAll));
+    const playerAssistXG = assistShots.reduce((sum, s) => sum + (s.xG || 0), 0);
+    const assistXgSharePct = teamXG > 0 ? (playerAssistXG / teamXG) * 100 : 0;
+
     const headerMatch = relevantMatches.length === 1 ? relevantMatches[0] : null;
 
     return {
@@ -455,6 +468,9 @@ export default function PlayerDetailsPage() {
       teamCount,
       xgSharePct,
       shotSharePct,
+      assistShots,
+      playerAssistXG,
+      assistXgSharePct,
       headerMatch,
     };
   }, [allShots, filteredMatchesBySeason, playerId, selectedMatchIds, selectedPlayerForView, selectedTeam, xgHalf, xgFilter]);
@@ -996,6 +1012,23 @@ export default function PlayerDetailsPage() {
     return null;
   };
 
+  // Helper function do sprawdzania, czy filtr jest aktywny
+  const isFilterActive = (filter: 'p0' | 'p1' | 'p2' | 'p3' | 'p0start' | 'p1start' | 'p2start' | 'p3start' | 'pk' | 'shot' | 'goal'): boolean => {
+    return Array.isArray(selectedActionFilter) && selectedActionFilter.includes(filter);
+  };
+
+  // Helper function do sprawdzania, czy w grupie Start jest już wybrany filtr
+  const hasStartFilterSelected = (): boolean => {
+    const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+    return filters.some(f => ['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+  };
+
+  // Helper function do sprawdzania, czy w grupie końcowych jest już wybrany filtr
+  const hasEndFilterSelected = (): boolean => {
+    const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+    return filters.some(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+  };
+
   // Oblicz statystyki zawodnika
   const playerStats = useMemo(() => {
     if (!player) return null;
@@ -1010,6 +1043,42 @@ export default function PlayerDetailsPage() {
         selectedMatchIds.includes(action.matchId || "")
       );
     }
+
+    // Filtruj akcje według wybranych filtrów Start/Końcowych (spójnie dla wszystkich statystyk)
+    const matchesSelectedActionFilter = (action: Action): boolean => {
+      const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+      if (filters.length === 0) return true;
+
+      const startFilters = filters.filter(f => ['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+      const endFilters = filters.filter(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+
+      const matchesStartFilter =
+        startFilters.length === 0 ||
+        startFilters.some(filter => {
+          if (filter === 'p0start') return action.isP0Start;
+          if (filter === 'p1start') return action.isP1Start;
+          if (filter === 'p2start') return action.isP2Start;
+          if (filter === 'p3start') return action.isP3Start;
+          return false;
+        });
+
+      const matchesEndFilter =
+        endFilters.length === 0 ||
+        endFilters.some(filter => {
+          if (filter === 'p0') return action.isP0;
+          if (filter === 'p1') return action.isP1;
+          if (filter === 'p2') return action.isP2;
+          if (filter === 'p3') return action.isP3;
+          if (filter === 'pk') return action.isPenaltyAreaEntry;
+          if (filter === 'shot') return action.isShot;
+          if (filter === 'goal') return action.isGoal;
+          return false;
+        });
+
+      return matchesStartFilter && matchesEndFilter;
+    };
+
+    const selectedFilteredActions = filteredActions.filter(matchesSelectedActionFilter);
 
     let totalPxT = 0;
     let pxtAsSender = 0; // PxT jako podający
@@ -1161,7 +1230,25 @@ export default function PlayerDetailsPage() {
     let pxtReceiverFromP1 = 0;
     let pxtReceiverFromOther = 0;
     
-    // Liczniki akcji jako przyjmujący
+    // Liczniki akcji jako przyjmujący - miejsca startowe (P0-P3 Start)
+    let receiverP0StartCount = 0;
+    let receiverP1StartCount = 0;
+    let receiverP2StartCount = 0;
+    let receiverP3StartCount = 0;
+    
+    // Liczniki akcji jako przyjmujący - miejsca startowe - strefy boczne
+    let receiverP0StartCountLateral = 0;
+    let receiverP1StartCountLateral = 0;
+    let receiverP2StartCountLateral = 0;
+    let receiverP3StartCountLateral = 0;
+    
+    // Liczniki akcji jako przyjmujący - miejsca startowe - strefy centralne
+    let receiverP0StartCountCentral = 0;
+    let receiverP1StartCountCentral = 0;
+    let receiverP2StartCountCentral = 0;
+    let receiverP3StartCountCentral = 0;
+    
+    // Liczniki akcji jako przyjmujący - miejsca końcowe (P0-P3)
     let receiverP1Count = 0;
     let receiverP2Count = 0;
     let receiverP3Count = 0;
@@ -1177,7 +1264,25 @@ export default function PlayerDetailsPage() {
     let pxtDribblingFromP1 = 0;
     let pxtDribblingFromOther = 0;
     
-    // Liczniki akcji z dryblingu
+    // Liczniki akcji z dryblingu - miejsca startowe (P0-P3 Start)
+    let dribblingP0StartCount = 0;
+    let dribblingP1StartCount = 0;
+    let dribblingP2StartCount = 0;
+    let dribblingP3StartCount = 0;
+    
+    // Liczniki akcji z dryblingu - miejsca startowe - strefy boczne
+    let dribblingP0StartCountLateral = 0;
+    let dribblingP1StartCountLateral = 0;
+    let dribblingP2StartCountLateral = 0;
+    let dribblingP3StartCountLateral = 0;
+    
+    // Liczniki akcji z dryblingu - miejsca startowe - strefy centralne
+    let dribblingP0StartCountCentral = 0;
+    let dribblingP1StartCountCentral = 0;
+    let dribblingP2StartCountCentral = 0;
+    let dribblingP3StartCountCentral = 0;
+    
+    // Liczniki akcji z dryblingu - miejsca końcowe (P0-P3)
     let dribblingP1Count = 0;
     let dribblingP2Count = 0;
     let dribblingP3Count = 0;
@@ -1411,17 +1516,80 @@ export default function PlayerDetailsPage() {
       });
     });
     
-    filteredActions.forEach((action) => {
+    selectedFilteredActions.forEach((action) => {
+      // Filtruj akcje według wybranego typu akcji (P0-P3 Start, P0-P3, PK, Strzał, Gol)
+      // Filtr wpływa na wszystkie statystyki (liczniki, PxT, itd.)
+      const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+      if (filters.length > 0) {
+        // Użyj tej samej logiki co w drugiej pętli - sprawdź isP0, isP1, isP2, isP3, isP0Start, isP1Start, isP2Start, isP3Start
+        const isP0Start = action.isP0Start || false;
+        const isP1Start = action.isP1Start || false;
+        const isP2Start = action.isP2Start || false;
+        const isP3Start = action.isP3Start || false;
+        const isP0 = action.isP0 || false;
+        const isP1 = action.isP1 || false;
+        const isP2 = action.isP2 || false;
+        const isP3 = action.isP3 || false;
+        const isPK = action.isPenaltyAreaEntry || false;
+        const isShot = action.isShot || false;
+        const isGoal = action.isGoal || false;
+
+        // Podziel filtry na dwie grupy: Start (p0start-p3start) i końcowe (p0-p3, pk, shot, goal)
+        const startFilters = filters.filter(f => ['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+        const endFilters = filters.filter(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+        
+        // Jeśli są filtry z obu grup, użyj AND (akcja musi spełniać oba warunki)
+        // Jeśli są tylko z jednej grupy, użyj OR (akcja musi spełniać którykolwiek z filtrów w tej grupie)
+        let matchesStartFilter = startFilters.length === 0; // Jeśli nie ma filtrów Start, akceptuj wszystkie (true)
+        let matchesEndFilter = endFilters.length === 0; // Jeśli nie ma filtrów końcowych, akceptuj wszystkie (true)
+        
+        if (startFilters.length > 0) {
+          matchesStartFilter = startFilters.some(filter => {
+            if (filter === 'p0start') return isP0Start;
+            if (filter === 'p1start') return isP1Start;
+            if (filter === 'p2start') return isP2Start;
+            if (filter === 'p3start') return isP3Start;
+            return false;
+          });
+        }
+        
+        if (endFilters.length > 0) {
+          matchesEndFilter = endFilters.some(filter => {
+            if (filter === 'p0') return isP0;
+            if (filter === 'p1') return isP1;
+            if (filter === 'p2') return isP2;
+            if (filter === 'p3') return isP3;
+            if (filter === 'pk') return isPK;
+            if (filter === 'shot') return isShot;
+            if (filter === 'goal') return isGoal;
+            return false;
+          });
+        }
+        
+        // Akcja musi spełniać wszystkie wymagane grupy filtrów (AND między grupami)
+        // Jeśli nie ma filtrów z danej grupy, to matchesXFilter jest true (akceptujemy wszystkie)
+        // Jeśli są filtry z danej grupy, to matchesXFilter musi być true (akcja musi spełniać filtr)
+        if (!matchesStartFilter || !matchesEndFilter) return;
+      }
+
       // PxT i xT
       const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
       const packingPoints = action.packingPoints || 0;
       const pxtValue = xTDifference * packingPoints;
 
+      // Jeśli akcja przeszła przez filtr w linii 1536, to znaczy że spełnia wszystkie wymagane filtry
+      // Używamy tej samej logiki - jeśli akcja jest tutaj, to znaczy że matchesStartFilter && matchesEndFilter są true
+      // Więc shouldIncludePxT powinno być true (akcja już przeszła przez filtr)
+      const shouldIncludePxT = true; // Akcja już przeszła przez filtr w linii 1536, więc uwzględniamy ją w PxT
+
       // PxT jako podający (sender) - tylko dla podań
       if (action.senderId === targetPlayerId && action.actionType === 'pass') {
-        pxtAsSender += pxtValue;
-        totalPxT += pxtValue;
-        totalXT += xTDifference;
+        // Dodaj wartości PxT tylko jeśli akcja spełnia wszystkie filtry
+        if (shouldIncludePxT) {
+          pxtAsSender += pxtValue;
+          totalPxT += pxtValue;
+          totalXT += xTDifference;
+        }
         senderActionsCount += 1;
         // Strefa źródłowa (z której podawał)
         const fromZoneName = convertZoneToName(action.fromZone || action.startZone);
@@ -1446,22 +1614,41 @@ export default function PlayerDetailsPage() {
             const startZoneIsLateral = isLateralZone(startZoneName);
             const hasPStartFlag = action.isP0Start || action.isP1Start || action.isP2Start || action.isP3Start;
             
-            if (action.isP0Start) {
+            // Sprawdź, czy akcja spełnia wybrane filtry końcowe (jeśli są wybrane)
+            // Jeśli są filtry z obu grup (Start i końcowe), liczniki Start również powinny być filtrowane
+            const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+            const endFilters = filters.filter(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+            let matchesEndFilterForStartCounts = endFilters.length === 0; // Jeśli nie ma filtrów końcowych, akceptuj wszystkie
+            
+            if (endFilters.length > 0) {
+              matchesEndFilterForStartCounts = endFilters.some(filter => {
+                if (filter === 'p0') return action.isP0;
+                if (filter === 'p1') return action.isP1;
+                if (filter === 'p2') return action.isP2;
+                if (filter === 'p3') return action.isP3;
+                if (filter === 'pk') return action.isPenaltyAreaEntry;
+                if (filter === 'shot') return action.isShot;
+                if (filter === 'goal') return action.isGoal;
+                return false;
+              });
+            }
+            
+            if (action.isP0Start && matchesEndFilterForStartCounts) {
               senderP0StartCount += 1;
               if (startZoneIsLateral) senderP0StartCountLateral += 1;
               else senderP0StartCountCentral += 1;
             }
-            if (action.isP1Start) {
+            if (action.isP1Start && matchesEndFilterForStartCounts) {
               senderP1StartCount += 1;
               if (startZoneIsLateral) senderP1StartCountLateral += 1;
               else senderP1StartCountCentral += 1;
             }
-            if (action.isP2Start) {
+            if (action.isP2Start && matchesEndFilterForStartCounts) {
               senderP2StartCount += 1;
               if (startZoneIsLateral) senderP2StartCountLateral += 1;
               else senderP2StartCountCentral += 1;
             }
-            if (action.isP3Start) {
+            if (action.isP3Start && matchesEndFilterForStartCounts) {
               senderP3StartCount += 1;
               if (startZoneIsLateral) senderP3StartCountLateral += 1;
               else senderP3StartCountCentral += 1;
@@ -1473,9 +1660,54 @@ export default function PlayerDetailsPage() {
         // Licz tylko akcje, które mają strefę (tak jak heatmapa)
         if (zoneForBreakdown) {
           const senderIsLateral = isLateralZone(zoneForBreakdown);
+          
+          // Sprawdź, czy akcja spełnia wybrane filtry (Start i końcowe)
+          // Jeśli są filtry z obu grup, akcja musi spełniać OBA warunki (AND)
+          const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+          const startFilters = filters.filter(f => ['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+          const endFilters = filters.filter(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+          
+          let matchesStartFilterForCounts = startFilters.length === 0; // Jeśli nie ma filtrów Start, akceptuj wszystkie
+          let matchesEndFilterForCounts = endFilters.length === 0; // Jeśli nie ma filtrów końcowych, akceptuj wszystkie
+          
+          if (startFilters.length > 0) {
+            matchesStartFilterForCounts = startFilters.some(filter => {
+              if (filter === 'p0start') return action.isP0Start;
+              if (filter === 'p1start') return action.isP1Start;
+              if (filter === 'p2start') return action.isP2Start;
+              if (filter === 'p3start') return action.isP3Start;
+              return false;
+            });
+          }
+          
+          if (endFilters.length > 0) {
+            matchesEndFilterForCounts = endFilters.some(filter => {
+              if (filter === 'p0') return action.isP0;
+              if (filter === 'p1') return action.isP1;
+              if (filter === 'p2') return action.isP2;
+              if (filter === 'p3') return action.isP3;
+              if (filter === 'pk') return action.isPenaltyAreaEntry;
+              if (filter === 'shot') return action.isShot;
+              if (filter === 'goal') return action.isGoal;
+              return false;
+            });
+          }
+          
+          // Dla liczników końcowych (P0-P3, PK, Strzał, Gol):
+          // - Jeśli są filtry startowe I końcowe: akcja musi spełniać oba (AND)
+          // - Jeśli są tylko filtry startowe: akcja musi spełniać filtry startowe (pokazuj wszystkie akcje spełniające filtry startowe)
+          // - Jeśli są tylko filtry końcowe: akcja musi spełniać filtry końcowe (pokazuj wszystkie akcje spełniające filtry końcowe)
+          // - Jeśli nie ma żadnych filtrów: pokazuj wszystkie akcje
+          const matchesFiltersForEndCounts = 
+            (startFilters.length > 0 && endFilters.length > 0) 
+              ? (matchesStartFilterForCounts && matchesEndFilterForCounts) // Oba filtry - AND
+              : (startFilters.length > 0 
+                  ? matchesStartFilterForCounts // Tylko filtry startowe - pokazuj wszystkie akcje spełniające filtry startowe
+                  : matchesEndFilterForCounts); // Tylko filtry końcowe lub brak filtrów - pokazuj wszystkie akcje spełniające filtry końcowe (lub wszystkie jeśli brak)
 
           // PK może być jednocześnie strzałem, więc sprawdzamy oba warunki niezależnie
-          if (action.isPenaltyAreaEntry) {
+          // Licznik PK pokazuje akcje z isPenaltyAreaEntry, które spełniają filtry startowe (jeśli są) i końcowe (jeśli są)
+          if (action.isPenaltyAreaEntry && matchesFiltersForEndCounts) {
             pxtSenderFromPK += pxtValue;
             senderPKCount += 1;
             if (senderIsLateral) senderPKCountLateral += 1;
@@ -1483,7 +1715,8 @@ export default function PlayerDetailsPage() {
           }
           
           // Strzał może być jednocześnie PK, więc sprawdzamy niezależnie
-          if (action.isShot) {
+          // Licznik Strzał pokazuje akcje z isShot, które spełniają filtry startowe (jeśli są) i końcowe (jeśli są)
+          if (action.isShot && matchesFiltersForEndCounts) {
             pxtSenderFromShot += pxtValue;
             senderShotCount += 1;
             if (senderIsLateral) senderShotCountLateral += 1;
@@ -1496,19 +1729,20 @@ export default function PlayerDetailsPage() {
           }
           
           // Miejsca końcowe (P1-P3) - używamy strefy docelowej (toZone/endZone) - tylko isP1, isP2, isP3 (bez Start)
-          if (action.isP3) {
+          // Liczniki P0-P3 pokazują akcje, które spełniają filtry startowe (jeśli są) i końcowe (jeśli są)
+          if (action.isP3 && matchesFiltersForEndCounts) {
             pxtSenderFromP3 += pxtValue;
             senderP3Count += 1;
             if (senderIsLateral) senderP3CountLateral += 1;
             else senderP3CountCentral += 1;
           }
-          if (action.isP2) {
+          if (action.isP2 && matchesFiltersForEndCounts) {
             pxtSenderFromP2 += pxtValue;
             senderP2Count += 1;
             if (senderIsLateral) senderP2CountLateral += 1;
             else senderP2CountCentral += 1;
           }
-          if (action.isP1) {
+          if (action.isP1 && matchesFiltersForEndCounts) {
             pxtSenderFromP1 += pxtValue;
             senderP1Count += 1;
             if (senderIsLateral) senderP1CountLateral += 1;
@@ -1524,9 +1758,12 @@ export default function PlayerDetailsPage() {
 
       // PxT jako przyjmujący (receiver) - tylko dla podań
       if (action.receiverId === targetPlayerId && action.actionType === 'pass') {
-        pxtAsReceiver += pxtValue;
-        totalPxT += pxtValue;
-        totalXT += xTDifference;
+        // Dodaj wartości PxT tylko jeśli akcja spełnia wszystkie filtry
+        if (shouldIncludePxT) {
+          pxtAsReceiver += pxtValue;
+          totalPxT += pxtValue;
+          totalXT += xTDifference;
+        }
         receiverActionsCount += 1;
         receiverPassCount += 1;
         
@@ -1540,11 +1777,97 @@ export default function PlayerDetailsPage() {
           ? toZoneName
           : fromZoneName;
         
+        // Miejsca startowe (P0-P3 Start) - używamy strefy źródłowej (fromZone/startZone)
+        // Licz podania tylko jeśli mają strefę startową (dla spójności z licznikami P0-P3 Start)
+        const startZoneName = convertZoneToName(action.fromZone || action.startZone);
+        if (startZoneName) {
+          // Licz tylko akcje, które mają strefę (tak jak heatmapa)
+          if (zoneForBreakdown) {
+            const startZoneIsLateral = isLateralZone(startZoneName);
+            
+            // Sprawdź, czy akcja spełnia wybrane filtry końcowe (jeśli są wybrane)
+            // Jeśli są filtry z obu grup (Start i końcowe), liczniki Start również powinny być filtrowane
+            const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+            const endFilters = filters.filter(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+            let matchesEndFilterForStartCounts = endFilters.length === 0; // Jeśli nie ma filtrów końcowych, akceptuj wszystkie
+            
+            if (endFilters.length > 0) {
+              matchesEndFilterForStartCounts = endFilters.some(filter => {
+                if (filter === 'p0') return action.isP0;
+                if (filter === 'p1') return action.isP1;
+                if (filter === 'p2') return action.isP2;
+                if (filter === 'p3') return action.isP3;
+                if (filter === 'pk') return action.isPenaltyAreaEntry;
+                if (filter === 'shot') return action.isShot;
+                if (filter === 'goal') return action.isGoal;
+                return false;
+              });
+            }
+            
+            if (action.isP0Start && matchesEndFilterForStartCounts) {
+              receiverP0StartCount += 1;
+              if (startZoneIsLateral) receiverP0StartCountLateral += 1;
+              else receiverP0StartCountCentral += 1;
+            }
+            if (action.isP1Start && matchesEndFilterForStartCounts) {
+              receiverP1StartCount += 1;
+              if (startZoneIsLateral) receiverP1StartCountLateral += 1;
+              else receiverP1StartCountCentral += 1;
+            }
+            if (action.isP2Start && matchesEndFilterForStartCounts) {
+              receiverP2StartCount += 1;
+              if (startZoneIsLateral) receiverP2StartCountLateral += 1;
+              else receiverP2StartCountCentral += 1;
+            }
+            if (action.isP3Start && matchesEndFilterForStartCounts) {
+              receiverP3StartCount += 1;
+              if (startZoneIsLateral) receiverP3StartCountLateral += 1;
+              else receiverP3StartCountCentral += 1;
+            }
+          }
+        }
+        
         if (zoneForBreakdown) {
           const receiverIsLateral = isLateralZone(zoneForBreakdown);
+          
+          // Sprawdź, czy akcja spełnia wybrane filtry (Start i końcowe)
+          // Jeśli są filtry z obu grup, akcja musi spełniać OBA warunki (AND)
+          const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+          const startFilters = filters.filter(f => ['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+          const endFilters = filters.filter(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+          
+          let matchesStartFilterForCounts = startFilters.length === 0; // Jeśli nie ma filtrów Start, akceptuj wszystkie
+          let matchesEndFilterForCounts = endFilters.length === 0; // Jeśli nie ma filtrów końcowych, akceptuj wszystkie
+          
+          if (startFilters.length > 0) {
+            matchesStartFilterForCounts = startFilters.some(filter => {
+              if (filter === 'p0start') return action.isP0Start;
+              if (filter === 'p1start') return action.isP1Start;
+              if (filter === 'p2start') return action.isP2Start;
+              if (filter === 'p3start') return action.isP3Start;
+              return false;
+            });
+          }
+          
+          if (endFilters.length > 0) {
+            matchesEndFilterForCounts = endFilters.some(filter => {
+              if (filter === 'p0') return action.isP0;
+              if (filter === 'p1') return action.isP1;
+              if (filter === 'p2') return action.isP2;
+              if (filter === 'p3') return action.isP3;
+              if (filter === 'pk') return action.isPenaltyAreaEntry;
+              if (filter === 'shot') return action.isShot;
+              if (filter === 'goal') return action.isGoal;
+              return false;
+            });
+          }
+          
+          // Akcja musi spełniać wszystkie wymagane grupy filtrów (AND między grupami)
+          const matchesAllFilters = matchesStartFilterForCounts && matchesEndFilterForCounts;
 
           // PK może być jednocześnie strzałem, więc sprawdzamy oba warunki niezależnie
-          if (action.isPenaltyAreaEntry) {
+          // Ale tylko jeśli akcja spełnia wszystkie wybrane filtry
+          if (action.isPenaltyAreaEntry && matchesAllFilters) {
             pxtReceiverFromPK += pxtValue;
             receiverPKCount += 1;
             if (receiverIsLateral) receiverPKCountLateral += 1;
@@ -1552,7 +1875,8 @@ export default function PlayerDetailsPage() {
           }
           
           // Strzał może być jednocześnie PK, więc sprawdzamy niezależnie
-          if (action.isShot) {
+          // Ale tylko jeśli akcja spełnia wszystkie wybrane filtry
+          if (action.isShot && matchesAllFilters) {
             pxtReceiverFromShot += pxtValue;
             receiverShotCount += 1;
             if (receiverIsLateral) receiverShotCountLateral += 1;
@@ -1566,19 +1890,20 @@ export default function PlayerDetailsPage() {
           
           // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
           // Używamy tylko isP3, isP2, isP1 (bez Start) dla miejsc końcowych
-          if (action.isP3) {
+          // Ale tylko jeśli akcja spełnia wszystkie wybrane filtry
+          if (action.isP3 && matchesAllFilters) {
             pxtReceiverFromP3 += pxtValue;
             receiverP3Count += 1;
             if (receiverIsLateral) receiverP3CountLateral += 1;
             else receiverP3CountCentral += 1;
           }
-          if (action.isP2) {
+          if (action.isP2 && matchesAllFilters) {
             pxtReceiverFromP2 += pxtValue;
             receiverP2Count += 1;
             if (receiverIsLateral) receiverP2CountLateral += 1;
             else receiverP2CountCentral += 1;
           }
-          if (action.isP1) {
+          if (action.isP1 && matchesAllFilters) {
             pxtReceiverFromP1 += pxtValue;
             receiverP1Count += 1;
             if (receiverIsLateral) receiverP1CountLateral += 1;
@@ -1594,9 +1919,12 @@ export default function PlayerDetailsPage() {
 
       // PxT z dryblingu
       if (action.senderId === targetPlayerId && action.actionType === 'dribble') {
-        pxtAsDribbler += pxtValue;
-        totalPxT += pxtValue;
-        totalXT += xTDifference;
+        // Dodaj wartości PxT tylko jeśli akcja spełnia wszystkie filtry
+        if (shouldIncludePxT) {
+          pxtAsDribbler += pxtValue;
+          totalPxT += pxtValue;
+          totalXT += xTDifference;
+        }
         dribblingActionsCount += 1;
         // Strefa źródłowa (z której dryblował)
         const fromZoneName = convertZoneToName(action.fromZone ?? action.startZone ?? undefined);
@@ -1607,12 +1935,99 @@ export default function PlayerDetailsPage() {
         const zoneForBreakdown = heatmapDirection === 'from' 
           ? fromZoneName
           : toZoneName;
+        
+        // Miejsca startowe (P0-P3 Start) - używamy strefy źródłowej (fromZone/startZone)
+        // Licz dryblingi tylko jeśli mają strefę startową (dla spójności z licznikami P0-P3 Start)
+        const startZoneName = convertZoneToName(action.fromZone || action.startZone);
+        if (startZoneName) {
+          // Licz tylko akcje, które mają strefę (tak jak heatmapa)
+          if (zoneForBreakdown) {
+            const startZoneIsLateral = isLateralZone(startZoneName);
+            
+            // Sprawdź, czy akcja spełnia wybrane filtry końcowe (jeśli są wybrane)
+            // Jeśli są filtry z obu grup (Start i końcowe), liczniki Start również powinny być filtrowane
+            const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+            const endFilters = filters.filter(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+            let matchesEndFilterForStartCounts = endFilters.length === 0; // Jeśli nie ma filtrów końcowych, akceptuj wszystkie
+            
+            if (endFilters.length > 0) {
+              matchesEndFilterForStartCounts = endFilters.some(filter => {
+                if (filter === 'p0') return action.isP0;
+                if (filter === 'p1') return action.isP1;
+                if (filter === 'p2') return action.isP2;
+                if (filter === 'p3') return action.isP3;
+                if (filter === 'pk') return action.isPenaltyAreaEntry;
+                if (filter === 'shot') return action.isShot;
+                if (filter === 'goal') return action.isGoal;
+                return false;
+              });
+            }
+            
+            if (action.isP0Start && matchesEndFilterForStartCounts) {
+              dribblingP0StartCount += 1;
+              if (startZoneIsLateral) dribblingP0StartCountLateral += 1;
+              else dribblingP0StartCountCentral += 1;
+            }
+            if (action.isP1Start && matchesEndFilterForStartCounts) {
+              dribblingP1StartCount += 1;
+              if (startZoneIsLateral) dribblingP1StartCountLateral += 1;
+              else dribblingP1StartCountCentral += 1;
+            }
+            if (action.isP2Start && matchesEndFilterForStartCounts) {
+              dribblingP2StartCount += 1;
+              if (startZoneIsLateral) dribblingP2StartCountLateral += 1;
+              else dribblingP2StartCountCentral += 1;
+            }
+            if (action.isP3Start && matchesEndFilterForStartCounts) {
+              dribblingP3StartCount += 1;
+              if (startZoneIsLateral) dribblingP3StartCountLateral += 1;
+              else dribblingP3StartCountCentral += 1;
+            }
+          }
+        }
+        
         const dribblingIsLateral = isLateralZone(zoneForBreakdown);
 
         // Breakdown PxT z dryblingu według typu akcji z podziałem na strefy boczne/centralne
         if (zoneForBreakdown) {
+          // Sprawdź, czy akcja spełnia wybrane filtry (Start i końcowe)
+          // Jeśli są filtry z obu grup, akcja musi spełniać OBA warunki (AND)
+          const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+          const startFilters = filters.filter(f => ['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+          const endFilters = filters.filter(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+          
+          let matchesStartFilterForCounts = startFilters.length === 0; // Jeśli nie ma filtrów Start, akceptuj wszystkie
+          let matchesEndFilterForCounts = endFilters.length === 0; // Jeśli nie ma filtrów końcowych, akceptuj wszystkie
+          
+          if (startFilters.length > 0) {
+            matchesStartFilterForCounts = startFilters.some(filter => {
+              if (filter === 'p0start') return action.isP0Start;
+              if (filter === 'p1start') return action.isP1Start;
+              if (filter === 'p2start') return action.isP2Start;
+              if (filter === 'p3start') return action.isP3Start;
+              return false;
+            });
+          }
+          
+          if (endFilters.length > 0) {
+            matchesEndFilterForCounts = endFilters.some(filter => {
+              if (filter === 'p0') return action.isP0;
+              if (filter === 'p1') return action.isP1;
+              if (filter === 'p2') return action.isP2;
+              if (filter === 'p3') return action.isP3;
+              if (filter === 'pk') return action.isPenaltyAreaEntry;
+              if (filter === 'shot') return action.isShot;
+              if (filter === 'goal') return action.isGoal;
+              return false;
+            });
+          }
+          
+          // Akcja musi spełniać wszystkie wymagane grupy filtrów (AND między grupami)
+          const matchesAllFilters = matchesStartFilterForCounts && matchesEndFilterForCounts;
+          
           // PK może być jednocześnie strzałem, więc sprawdzamy oba warunki niezależnie
-          if (action.isPenaltyAreaEntry) {
+          // Ale tylko jeśli akcja spełnia wszystkie wybrane filtry
+          if (action.isPenaltyAreaEntry && matchesAllFilters) {
             pxtDribblingFromPK += pxtValue;
             dribblingPKCount += 1;
             if (dribblingIsLateral) dribblingPKCountLateral += 1;
@@ -1620,7 +2035,8 @@ export default function PlayerDetailsPage() {
           }
           
           // Strzał może być jednocześnie PK, więc sprawdzamy niezależnie
-          if (action.isShot) {
+          // Ale tylko jeśli akcja spełnia wszystkie wybrane filtry
+          if (action.isShot && matchesAllFilters) {
             pxtDribblingFromShot += pxtValue;
             dribblingShotCount += 1;
             if (dribblingIsLateral) dribblingShotCountLateral += 1;
@@ -1634,19 +2050,20 @@ export default function PlayerDetailsPage() {
           
           // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
           // Używamy tylko isP3, isP2, isP1 (bez Start) dla miejsc końcowych
-          if (action.isP3) {
+          // Ale tylko jeśli akcja spełnia wszystkie wybrane filtry
+          if (action.isP3 && matchesAllFilters) {
             pxtDribblingFromP3 += pxtValue;
             dribblingP3Count += 1;
             if (dribblingIsLateral) dribblingP3CountLateral += 1;
             else dribblingP3CountCentral += 1;
           }
-          if (action.isP2) {
+          if (action.isP2 && matchesAllFilters) {
             pxtDribblingFromP2 += pxtValue;
             dribblingP2Count += 1;
             if (dribblingIsLateral) dribblingP2CountLateral += 1;
             else dribblingP2CountCentral += 1;
           }
-          if (action.isP1) {
+          if (action.isP1 && matchesAllFilters) {
             pxtDribblingFromP1 += pxtValue;
             dribblingP1Count += 1;
             if (dribblingIsLateral) dribblingP1CountLateral += 1;
@@ -1662,10 +2079,11 @@ export default function PlayerDetailsPage() {
     });
 
     // DRUGA PĘTLA: Wypełnij heatmapę i statystyki partnerów (z filtrowaniem)
-    filteredActions.forEach((action) => {
+    selectedFilteredActions.forEach((action) => {
       // Filtruj akcje według wybranego typu akcji (P1, P2, P3, PK, Strzał, Gol)
       // Filtr wpływa tylko na heatmapę, nie na liczniki (które są już obliczone powyżej)
-      if (selectedActionFilter) {
+      const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
+      if (filters.length > 0) {
         // Użyj tej samej logiki co w licznikach - sprawdź isP0, isP1, isP2, isP3, isP0Start, isP1Start, isP2Start, isP3Start
         const isP0Start = action.isP0Start || false;
         const isP1Start = action.isP1Start || false;
@@ -1679,19 +2097,42 @@ export default function PlayerDetailsPage() {
         const isShot = action.isShot || false;
         const isGoal = action.isGoal || false;
 
-        // Filtry dla P0-P3 Start (używają isP0Start, isP1Start, isP2Start, isP3Start)
-        if (selectedActionFilter === 'p0start' && !isP0Start) return;
-        if (selectedActionFilter === 'p1start' && !isP1Start) return;
-        if (selectedActionFilter === 'p2start' && !isP2Start) return;
-        if (selectedActionFilter === 'p3start' && !isP3Start) return;
-        // Filtry dla P0-P3 (używają isP0, isP1, isP2, isP3)
-        if (selectedActionFilter === 'p0' && !isP0) return;
-        if (selectedActionFilter === 'p1' && !isP1) return;
-        if (selectedActionFilter === 'p2' && !isP2) return;
-        if (selectedActionFilter === 'p3' && !isP3) return;
-        if (selectedActionFilter === 'pk' && !isPK) return;
-        if (selectedActionFilter === 'shot' && !isShot) return;
-        if (selectedActionFilter === 'goal' && !isGoal) return;
+        // Podziel filtry na dwie grupy: Start (p0start-p3start) i końcowe (p0-p3, pk, shot, goal)
+        const startFilters = filters.filter(f => ['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+        const endFilters = filters.filter(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+        
+        // Jeśli są filtry z obu grup, użyj AND (akcja musi spełniać oba warunki)
+        // Jeśli są tylko z jednej grupy, użyj OR (akcja musi spełniać którykolwiek z filtrów w tej grupie)
+        let matchesStartFilter = startFilters.length === 0; // Jeśli nie ma filtrów Start, akceptuj wszystkie (true)
+        let matchesEndFilter = endFilters.length === 0; // Jeśli nie ma filtrów końcowych, akceptuj wszystkie (true)
+        
+        if (startFilters.length > 0) {
+          matchesStartFilter = startFilters.some(filter => {
+            if (filter === 'p0start') return isP0Start;
+            if (filter === 'p1start') return isP1Start;
+            if (filter === 'p2start') return isP2Start;
+            if (filter === 'p3start') return isP3Start;
+            return false;
+          });
+        }
+        
+        if (endFilters.length > 0) {
+          matchesEndFilter = endFilters.some(filter => {
+            if (filter === 'p0') return isP0;
+            if (filter === 'p1') return isP1;
+            if (filter === 'p2') return isP2;
+            if (filter === 'p3') return isP3;
+            if (filter === 'pk') return isPK;
+            if (filter === 'shot') return isShot;
+            if (filter === 'goal') return isGoal;
+            return false;
+          });
+        }
+        
+        // Akcja musi spełniać wszystkie wymagane grupy filtrów (AND między grupami)
+        // Jeśli nie ma filtrów z danej grupy, to matchesXFilter jest true (akceptujemy wszystkie)
+        // Jeśli są filtry z danej grupy, to matchesXFilter musi być true (akcja musi spełniać filtr)
+        if (!matchesStartFilter || !matchesEndFilter) return;
       }
 
       // PxT i xT
@@ -1701,11 +2142,15 @@ export default function PlayerDetailsPage() {
       
       // Dla goli, jeśli pxtValue jest 0, ale akcja jest golem, ustaw minimalną wartość > 0
       // aby była widoczna w trybie "PxT" (komponent PlayerHeatmapPitch wyświetla tylko wartości > 0)
-      if (action.isGoal && pxtValue === 0 && selectedActionFilter === 'goal') {
+      if (action.isGoal && pxtValue === 0 && filters.includes('goal')) {
         // Ustaw minimalną wartość, aby gol był widoczny w trybie "PxT"
         // Używamy bardzo małej wartości > 0, aby była widoczna, ale nie zniekształcała skali
         pxtValue = 0.001;
       }
+
+      // Sprawdź, czy są filtry Start i końcowe - potrzebne dla wszystkich kategorii
+      const hasStartFilters = filters.some(f => ['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+      const hasEndFilters = filters.some(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
 
       // PxT jako podający (sender) - tylko dla podań
       // Podstawowe statystyki (pxtAsSender, totalPxT, etc.) są już obliczone w pierwszej pętli
@@ -1713,8 +2158,9 @@ export default function PlayerDetailsPage() {
 
         // Strefa źródłowa (z której podawał)
         const fromZoneName = convertZoneToName(action.fromZone || action.startZone);
-        // Wypełnij heatmapę tylko jeśli heatmapDirection === 'from' (aby zgadzało się z licznikami)
-        if (fromZoneName && heatmapDirection === 'from') {
+        // Sprawdź, czy są filtry Start - jeśli tak, dodaj do heatmapy "from" niezależnie od heatmapDirection
+        // Wypełnij heatmapę jeśli heatmapDirection === 'from' LUB jeśli są filtry Start (dla spójności z licznikami)
+        if (fromZoneName && (heatmapDirection === 'from' || hasStartFilters)) {
           const currentValue = senderFromHeatmap.get(fromZoneName) || 0;
           // Dla goli (i innych akcji) zawsze dodajemy wartość, nawet jeśli pxtValue jest 0
           // W trybie "PxT" wartość 0 nie będzie wyświetlana, ale w trybie "Liczba akcji" będzie
@@ -1761,8 +2207,8 @@ export default function PlayerDetailsPage() {
 
         // Strefa docelowa (do której podawał)
         const toZoneName = convertZoneToName(action.toZone ?? action.endZone ?? undefined);
-        // Wypełnij heatmapę tylko jeśli heatmapDirection === 'to' (aby zgadzało się z licznikami)
-        if (toZoneName && heatmapDirection === 'to') {
+        // Wypełnij heatmapę jeśli heatmapDirection === 'to' LUB jeśli są filtry końcowe (dla spójności z licznikami)
+        if (toZoneName && (heatmapDirection === 'to' || hasEndFilters)) {
           const currentValue = senderToHeatmap.get(toZoneName) || 0;
           senderToHeatmap.set(toZoneName, currentValue + pxtValue);
           const currentCount = senderToActionCountHeatmap.get(toZoneName) || 0;
@@ -1828,10 +2274,9 @@ export default function PlayerDetailsPage() {
       }
 
       // PxT jako przyjmujący (receiver) - tylko dla podań
+      // Podstawowe statystyki (pxtAsReceiver, totalPxT, etc.) są już obliczone w pierwszej pętli
       if (action.receiverId === targetPlayerId && action.actionType === 'pass') {
-        pxtAsReceiver += pxtValue;
-        totalPxT += pxtValue;
-        totalXT += xTDifference;
+        // Nie dodawaj wartości PxT tutaj - są już obliczone w pierwszej pętli z filtrowaniem
         receiverActionsCount += 1;
         receiverPassCount += 1;
 
@@ -2038,12 +2483,60 @@ export default function PlayerDetailsPage() {
         isRegainAction(action) &&
         action.senderId === targetPlayerId
       ) {
-        totalRegains += 1;
+        // Sprawdź, czy akcja spełnia wybrany filtr (jeśli jest wybrany)
+        // Filtr wpływa na statystyki (totalRegains, xT, wykresy, heatmapy), ale NIE na liczniki w kafelkach
+        const packingFieldMap: { [key: string]: keyof Action } = {
+          'P0': 'isP0',
+          'P1': 'isP1',
+          'P2': 'isP2',
+          'P3': 'isP3'
+        };
         
-        // Strefa, w której zawodnik odzyskał piłkę - używamy nowych pól
+        let matchesFilter = true;
+        if (selectedRegainPackingFilter) {
+          const packingField = packingFieldMap[selectedRegainPackingFilter];
+          if (packingField) {
+            matchesFilter = action[packingField] === true || action[`${packingField}Start` as keyof Action] === true;
+          }
+        }
+        
+        // Liczniki w kafelkach - zawsze obliczamy dla wszystkich akcji (bez filtrowania)
         const regainDefenseZone = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
         const regainZoneName = convertZoneToName(regainDefenseZone);
         
+        if (regainZoneName) {
+          // Liczniki według stref (P0, P1, P2, P3) - BEZ filtrowania
+          const isLateral = isLateralZone(regainZoneName);
+          
+          if (action.isP0 || action.isP0Start) {
+            regainP0Count += 1;
+            if (isLateral) regainP0CountLateral += 1;
+            else regainP0CountCentral += 1;
+          }
+          if (action.isP1 || action.isP1Start) {
+            regainP1Count += 1;
+            if (isLateral) regainP1CountLateral += 1;
+            else regainP1CountCentral += 1;
+          }
+          if (action.isP2 || action.isP2Start) {
+            regainP2Count += 1;
+            if (isLateral) regainP2CountLateral += 1;
+            else regainP2CountCentral += 1;
+          }
+          if (action.isP3 || action.isP3Start) {
+            regainP3Count += 1;
+            if (isLateral) regainP3CountLateral += 1;
+            else regainP3CountCentral += 1;
+          }
+        }
+        
+        // Jeśli akcja nie spełnia filtra, pomiń ją w statystykach (totalRegains, xT, wykresy, heatmapy)
+        if (!matchesFilter) return;
+        
+        totalRegains += 1;
+        
+        // Strefa, w której zawodnik odzyskał piłkę - używamy nowych pól
+        // (regainDefenseZone i regainZoneName już obliczone powyżej dla liczników)
         if (regainZoneName) {
           // Liczba akcji
           const currentCount = regainActionCountHeatmap.get(regainZoneName) || 0;
@@ -2168,30 +2661,6 @@ export default function PlayerDetailsPage() {
             regainZoneStats.set(regainZoneName, []);
           }
           regainZoneStats.get(regainZoneName)!.push(action);
-          
-          // Liczniki według stref (P0, P1, P2, P3)
-          const isLateral = isLateralZone(regainZoneName);
-          
-          if (action.isP0 || action.isP0Start) {
-            regainP0Count += 1;
-            if (isLateral) regainP0CountLateral += 1;
-            else regainP0CountCentral += 1;
-          }
-          if (action.isP1 || action.isP1Start) {
-            regainP1Count += 1;
-            if (isLateral) regainP1CountLateral += 1;
-            else regainP1CountCentral += 1;
-          }
-          if (action.isP2 || action.isP2Start) {
-            regainP2Count += 1;
-            if (isLateral) regainP2CountLateral += 1;
-            else regainP2CountCentral += 1;
-          }
-          if (action.isP3 || action.isP3Start) {
-            regainP3Count += 1;
-            if (isLateral) regainP3CountLateral += 1;
-            else regainP3CountCentral += 1;
-          }
         }
         
         // Statystyki według pozycji
@@ -2247,12 +2716,60 @@ export default function PlayerDetailsPage() {
         isLosesAction(action) &&
         action.senderId === targetPlayerId
       ) {
-        totalLoses += 1;
+        // Sprawdź, czy akcja spełnia wybrany filtr (jeśli jest wybrany)
+        // Filtr wpływa na statystyki (totalLoses, xT, wykresy, heatmapy), ale NIE na liczniki w kafelkach
+        const packingFieldMap: { [key: string]: keyof Action } = {
+          'P0': 'isP0',
+          'P1': 'isP1',
+          'P2': 'isP2',
+          'P3': 'isP3'
+        };
         
-        // Strefa, w której zawodnik stracił piłkę - używamy nowych pól
+        let matchesFilter = true;
+        if (selectedLosesPackingFilter) {
+          const packingField = packingFieldMap[selectedLosesPackingFilter];
+          if (packingField) {
+            matchesFilter = action[packingField] === true || action[`${packingField}Start` as keyof Action] === true;
+          }
+        }
+        
+        // Liczniki w kafelkach - zawsze obliczamy dla wszystkich akcji (bez filtrowania)
         const losesDefenseZone = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
         const losesZoneName = convertZoneToName(losesDefenseZone);
         
+        if (losesZoneName) {
+          // Liczniki według stref (P0, P1, P2, P3) - BEZ filtrowania
+          const isLateral = isLateralZone(losesZoneName);
+          
+          if (action.isP0 || action.isP0Start) {
+            losesP0Count += 1;
+            if (isLateral) losesP0CountLateral += 1;
+            else losesP0CountCentral += 1;
+          }
+          if (action.isP1 || action.isP1Start) {
+            losesP1Count += 1;
+            if (isLateral) losesP1CountLateral += 1;
+            else losesP1CountCentral += 1;
+          }
+          if (action.isP2 || action.isP2Start) {
+            losesP2Count += 1;
+            if (isLateral) losesP2CountLateral += 1;
+            else losesP2CountCentral += 1;
+          }
+          if (action.isP3 || action.isP3Start) {
+            losesP3Count += 1;
+            if (isLateral) losesP3CountLateral += 1;
+            else losesP3CountCentral += 1;
+          }
+        }
+        
+        // Jeśli akcja nie spełnia filtra, pomiń ją w statystykach (totalLoses, xT, wykresy, heatmapy)
+        if (!matchesFilter) return;
+        
+        totalLoses += 1;
+        
+        // Strefa, w której zawodnik stracił piłkę - używamy nowych pól
+        // (losesDefenseZone i losesZoneName już obliczone powyżej dla liczników)
         if (losesZoneName) {
           // Liczba akcji
           const currentCount = losesActionCountHeatmap.get(losesZoneName) || 0;
@@ -2339,30 +2856,6 @@ export default function PlayerDetailsPage() {
             losesZoneStats.set(losesZoneName, []);
           }
           losesZoneStats.get(losesZoneName)!.push(action);
-          
-          // Liczniki według stref (P0, P1, P2, P3)
-          const isLateral = isLateralZone(losesZoneName);
-          
-          if (action.isP0 || action.isP0Start) {
-            losesP0Count += 1;
-            if (isLateral) losesP0CountLateral += 1;
-            else losesP0CountCentral += 1;
-          }
-          if (action.isP1 || action.isP1Start) {
-            losesP1Count += 1;
-            if (isLateral) losesP1CountLateral += 1;
-            else losesP1CountCentral += 1;
-          }
-          if (action.isP2 || action.isP2Start) {
-            losesP2Count += 1;
-            if (isLateral) losesP2CountLateral += 1;
-            else losesP2CountCentral += 1;
-          }
-          if (action.isP3 || action.isP3Start) {
-            losesP3Count += 1;
-            if (isLateral) losesP3CountLateral += 1;
-            else losesP3CountCentral += 1;
-          }
         }
       }
 
@@ -2523,7 +3016,7 @@ export default function PlayerDetailsPage() {
       totalRegains,
       totalLoses,
       totalPKEntries,
-      actionsCount: filteredActions.length,
+      actionsCount: selectedFilteredActions.length,
       matchesCount: playerMatches.length,
       totalMinutes,
       // Wartości per 90 minut
@@ -2633,7 +3126,22 @@ export default function PlayerDetailsPage() {
       senderPKCountCentral,
       senderShotCountCentral,
       senderGoalCountCentral,
-      // Liczniki akcji jako przyjmujący
+      // Liczniki akcji jako przyjmujący - miejsca startowe (P0-P3 Start)
+      receiverP0StartCount,
+      receiverP1StartCount,
+      receiverP2StartCount,
+      receiverP3StartCount,
+      // Liczniki akcji jako przyjmujący - miejsca startowe - strefy boczne
+      receiverP0StartCountLateral,
+      receiverP1StartCountLateral,
+      receiverP2StartCountLateral,
+      receiverP3StartCountLateral,
+      // Liczniki akcji jako przyjmujący - miejsca startowe - strefy centralne
+      receiverP0StartCountCentral,
+      receiverP1StartCountCentral,
+      receiverP2StartCountCentral,
+      receiverP3StartCountCentral,
+      // Liczniki akcji jako przyjmujący - miejsca końcowe (P0-P3)
       receiverP1Count,
       receiverP2Count,
       receiverP3Count,
@@ -2654,7 +3162,22 @@ export default function PlayerDetailsPage() {
       receiverPKCountCentral,
       receiverShotCountCentral,
       receiverGoalCountCentral,
-      // Liczniki akcji z dryblingu
+      // Liczniki akcji z dryblingu - miejsca startowe (P0-P3 Start)
+      dribblingP0StartCount,
+      dribblingP1StartCount,
+      dribblingP2StartCount,
+      dribblingP3StartCount,
+      // Liczniki akcji z dryblingu - miejsca startowe - strefy boczne
+      dribblingP0StartCountLateral,
+      dribblingP1StartCountLateral,
+      dribblingP2StartCountLateral,
+      dribblingP3StartCountLateral,
+      // Liczniki akcji z dryblingu - miejsca startowe - strefy centralne
+      dribblingP0StartCountCentral,
+      dribblingP1StartCountCentral,
+      dribblingP2StartCountCentral,
+      dribblingP3StartCountCentral,
+      // Liczniki akcji z dryblingu - miejsca końcowe (P0-P3)
       dribblingP1Count,
       dribblingP2Count,
       dribblingP3Count,
@@ -2757,7 +3280,7 @@ export default function PlayerDetailsPage() {
       partnerStatsAsSender: new Map(partnerStatsAsSender),
       partnerStatsAsReceiver: new Map(partnerStatsAsReceiver),
     };
-  }, [player, allActions, filteredMatchesBySeason, selectedMatchIds, totalMinutes, positionMinutes, selectedPlayerForView, heatmapDirection]);
+  }, [player, allActions, filteredMatchesBySeason, selectedMatchIds, totalMinutes, positionMinutes, selectedPlayerForView, heatmapDirection, selectedActionFilter, selectedRegainPackingFilter, selectedLosesPackingFilter]);
 
   // Oblicz ranking w zespole dla statystyk zawodnika
   const teamRanking = useMemo(() => {
@@ -3584,11 +4107,21 @@ export default function PlayerDetailsPage() {
                         <h4>Strzały i jakość</h4>
 
                         <div className={styles.detailsRow}>
-                          <span className={styles.detailsLabel}>xG:</span>
+                          <span className={styles.detailsLabel}><span className={styles.preserveCase}>xG</span>:</span>
                           <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             <span className={styles.valueMain}><strong>{xgStats.playerXG.toFixed(2)}</strong></span>
                             {xgStats.teamXG > 0 && (
                               <span className={styles.valueSecondary}>({xgStats.xgSharePct.toFixed(1)}% xG zespołu)</span>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}><span className={styles.preserveCase}>xG</span> kiedy asystował:</span>
+                          <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span className={styles.valueMain}><strong>{xgStats.playerAssistXG.toFixed(2)}</strong></span>
+                            {xgStats.teamXG > 0 && (
+                              <span className={styles.valueSecondary}>({xgStats.assistXgSharePct.toFixed(1)}% xG zespołu)</span>
                             )}
                           </span>
                         </div>
@@ -3604,14 +4137,14 @@ export default function PlayerDetailsPage() {
                         </div>
 
                         <div className={styles.detailsRow}>
-                          <span className={styles.detailsLabel}>xG/strzał:</span>
+                          <span className={styles.detailsLabel}><span className={styles.preserveCase}>xG</span>/strzał:</span>
                           <span className={styles.detailsValue}>
                             <span className={styles.valueMain}><strong>{xgStats.playerXGPerShot.toFixed(2)}</strong></span>
                           </span>
                         </div>
 
                         <div className={styles.detailsRow}>
-                          <span className={styles.detailsLabel}>xG OT:</span>
+                          <span className={styles.detailsLabel}><span className={styles.preserveCase}>xG</span> OT:</span>
                           <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             <span className={styles.valueMain}><strong>{xgStats.playerXGOT.toFixed(2)}</strong></span>
                             <span className={styles.valueSecondary}>({xgStats.playerOnTargetCount}/{xgStats.playerCount} celne/gole)</span>
@@ -3627,7 +4160,7 @@ export default function PlayerDetailsPage() {
                         </div>
 
                         <div className={styles.detailsRow}>
-                          <span className={styles.detailsLabel}>xG zablokowane:</span>
+                          <span className={styles.detailsLabel}><span className={styles.preserveCase}>xG</span> zablokowane:</span>
                           <span className={styles.detailsValue}>
                             <span className={styles.valueMain}><strong>{xgStats.playerXGBlocked.toFixed(2)}</strong></span>
                           </span>
@@ -3651,14 +4184,14 @@ export default function PlayerDetailsPage() {
                       </div>
 
                       <div className={styles.xgPitchPanel}>
-                        {xgStats.playerShots.length === 0 ? (
+                        {xgStats.playerShots.length === 0 && xgStats.assistShots.length === 0 ? (
                           <div className={styles.noData}>
                             Brak strzałów dla wybranych filtrów.
                           </div>
                         ) : (
                           <>
                             <XGPitch
-                              shots={xgStats.playerShots}
+                              shots={[...xgStats.playerShots, ...xgStats.assistShots]}
                               onShotClick={(shot) => {
                                 setSelectedXGShotIdForView(shot.id);
                                 setSelectedXGShotForView(shot);
@@ -3692,7 +4225,7 @@ export default function PlayerDetailsPage() {
                                 <div className={styles.zoneDetailsPanel} style={{ marginTop: 12 }}>
                                   <div className={styles.zoneDetailsHeader}>
                                     <h4>
-                                      Strzał • {selectedShot.xG.toFixed(2)} xG
+                                      Strzał • {selectedShot.xG.toFixed(2)} <span className={styles.preserveCase}>xG</span>
                                       {selectedShot.minute !== undefined && ` • ${selectedShot.minute}'${selectedShot.isSecondHalf ? ' (II)' : ' (I)'}`}
                                     </h4>
                                     <button
@@ -3707,71 +4240,104 @@ export default function PlayerDetailsPage() {
                                     </button>
                                   </div>
                                   <div className={styles.zoneDetailsBody}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                                      <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                        <span className={styles.detailsLabel}>xG:</span>
-                                        <span className={styles.detailsValue}>
-                                          <span className={styles.valueMain}><strong>{selectedShot.xG.toFixed(2)}</strong></span>
-                                        </span>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
+                                        <div className={styles.detailsRow} style={{ padding: '8px 12px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                                          <span className={styles.detailsLabel}><span className={styles.preserveCase}>xG</span>:</span>
+                                          <span className={styles.detailsValue}>
+                                            <span className={styles.valueMain}><strong>{selectedShot.xG.toFixed(2)}</strong></span>
+                                          </span>
+                                        </div>
+                                        {selectedShot.xGOT !== undefined && (
+                                          <div className={styles.detailsRow} style={{ padding: '8px 12px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                                            <span className={styles.detailsLabel}><span className={styles.preserveCase}>xG</span> OT:</span>
+                                            <span className={styles.detailsValue}>
+                                              <span className={styles.valueMain}><strong>{selectedShot.xGOT.toFixed(2)}</strong></span>
+                                            </span>
+                                          </div>
+                                        )}
+                                        {(() => {
+                                          const isGoal = !!selectedShot.isGoal || selectedShot.shotType === "goal";
+                                          const isBlocked = !!selectedShot.isBlocked || selectedShot.shotType === "blocked";
+                                          const isOnTarget = !!selectedShot.isOnTarget || selectedShot.shotType === "on_target";
+                                          const isOffTarget = selectedShot.shotType === "off_target";
+
+                                          const status = isGoal
+                                            ? "GOL"
+                                            : isBlocked
+                                              ? "ZABLOKOWANY"
+                                              : isOnTarget
+                                                ? "CELNY"
+                                                : isOffTarget
+                                                  ? "NIECELNY"
+                                                  : "-";
+
+                                          // Delikatne podświetlenie dla goli
+                                          const statusBg = isGoal ? "#dcfce7" : "#f9fafb";
+                                          const statusBorder = isGoal ? "#86efac" : "#e5e7eb";
+
+                                          return (
+                                            <div className={styles.detailsRow} style={{ padding: "8px 12px", backgroundColor: statusBg, borderRadius: "6px", border: `1px solid ${statusBorder}` }}>
+                                              <span className={styles.detailsLabel}>Wynik strzału:</span>
+                                              <span className={styles.detailsValue} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                                <span className={styles.valueMain}>
+                                                  <strong>{status}</strong>
+                                                </span>
+                                                {(selectedShot.playerName || selectedShot.assistantName) && (
+                                                  <span className={styles.valueSecondary} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "11px" }}>
+                                                    {selectedShot.playerName && <span>Strzał: {selectedShot.playerName}</span>}
+                                                    {selectedShot.assistantName && <span>Asysta: {selectedShot.assistantName}</span>}
+                                                  </span>
+                                                )}
+                                              </span>
+                                            </div>
+                                          );
+                                        })()}
+                                        {selectedShot.actionType && (
+                                          <div className={styles.detailsRow} style={{ padding: '8px 12px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                                            <span className={styles.detailsLabel}>Typ:</span>
+                                            <span className={styles.detailsValue} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                              <span className={styles.valueMain}>
+                                                <strong>
+                                                  {(() => {
+                                                    const at = selectedShot.actionType;
+                                                    if (!at) return "-";
+                                                    const sfgTypes = new Set(["corner", "free_kick", "direct_free_kick", "penalty", "throw_in"]);
+                                                    if (sfgTypes.has(at)) {
+                                                      if (at === "corner") return "Rożny";
+                                                      if (at === "free_kick") return "Wolny";
+                                                      if (at === "direct_free_kick") return "Bezpośredni wolny";
+                                                      if (at === "penalty") return "Karny";
+                                                      if (at === "throw_in") return "Rzut za autu";
+                                                      return "SFG";
+                                                    }
+                                                    if (at === "open_play") return "Otwarta gra";
+                                                    if (at === "counter") return "Kontra";
+                                                    if (at === "regain") return "Regain";
+                                                    return at;
+                                                  })()}
+                                                </strong>
+                                              </span>
+                                              {(selectedShot.isContact1 || selectedShot.isContact2 || selectedShot.isContact3Plus) && (
+                                                <span className={styles.valueSecondary}>
+                                                  Kontakty:{" "}
+                                                  {selectedShot.isContact1 ? "1T" : selectedShot.isContact2 ? "2T" : selectedShot.isContact3Plus ? "3T+" : "-"}
+                                                </span>
+                                              )}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {selectedShot.playersOnLine !== undefined && (
+                                          <div className={styles.detailsRow} style={{ padding: '8px 12px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                                            <span className={styles.detailsLabel}>Zawodnicy na linii:</span>
+                                            <span className={styles.detailsValue}>
+                                              <span className={styles.valueMain}>
+                                                <strong>{selectedShot.playersOnLine}</strong>
+                                              </span>
+                                            </span>
+                                          </div>
+                                        )}
                                       </div>
-                                      {selectedShot.xGOT !== undefined && (
-                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                          <span className={styles.detailsLabel}>xG OT:</span>
-                                          <span className={styles.detailsValue}>
-                                            <span className={styles.valueMain}><strong>{selectedShot.xGOT.toFixed(2)}</strong></span>
-                                          </span>
-                                        </div>
-                                      )}
-                                      {selectedShot.isGoal !== undefined && (
-                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                          <span className={styles.detailsLabel}>Gol:</span>
-                                          <span className={styles.detailsValue}>
-                                            <span className={styles.valueMain}>
-                                              <strong>{selectedShot.isGoal ? "Tak" : "Nie"}</strong>
-                                            </span>
-                                          </span>
-                                        </div>
-                                      )}
-                                      {selectedShot.isOnTarget !== undefined && (
-                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                          <span className={styles.detailsLabel}>Celny:</span>
-                                          <span className={styles.detailsValue}>
-                                            <span className={styles.valueMain}>
-                                              <strong>{selectedShot.isOnTarget ? "Tak" : "Nie"}</strong>
-                                            </span>
-                                          </span>
-                                        </div>
-                                      )}
-                                      {selectedShot.isBlocked !== undefined && (
-                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                          <span className={styles.detailsLabel}>Zablokowany:</span>
-                                          <span className={styles.detailsValue}>
-                                            <span className={styles.valueMain}>
-                                              <strong>{selectedShot.isBlocked ? "Tak" : "Nie"}</strong>
-                                            </span>
-                                          </span>
-                                        </div>
-                                      )}
-                                      {selectedShot.actionType && (
-                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                          <span className={styles.detailsLabel}>Typ:</span>
-                                          <span className={styles.detailsValue}>
-                                            <span className={styles.valueMain}>
-                                              <strong>{selectedShot.actionType === 'sfg' ? 'SFG' : 'Otwarta gra'}</strong>
-                                            </span>
-                                          </span>
-                                        </div>
-                                      )}
-                                      {selectedShot.playersOnLine !== undefined && (
-                                        <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                          <span className={styles.detailsLabel}>Zawodnicy na linii:</span>
-                                          <span className={styles.detailsValue}>
-                                            <span className={styles.valueMain}>
-                                              <strong>{selectedShot.playersOnLine}</strong>
-                                            </span>
-                                          </span>
-                                        </div>
-                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -4128,8 +4694,21 @@ export default function PlayerDetailsPage() {
                             {/* Miejsca startowe (P0-P3 Start) - po lewej stronie */}
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxWidth: '100%' }}>
                               <div 
-                                className={`${styles.countItem} ${selectedActionFilter === 'p0start' ? styles.countItemSelected : ''}`}
-                                onClick={() => setSelectedActionFilter(selectedActionFilter === 'p0start' ? null : 'p0start')}
+                                className={`${styles.countItem} ${isFilterActive('p0start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p0start') ? styles.countItemDisabled : ''}`}
+                                onClick={() => {
+                                  if (hasStartFilterSelected() && !isFilterActive('p0start')) return;
+                                  setSelectedActionFilter(prev => {
+                                    const filters = Array.isArray(prev) ? prev : [];
+                                    // Usuń wszystkie P0-P3 Start filtry
+                                    const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                                    // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                    if (filters.includes('p0start')) {
+                                      return withoutStartFilters;
+                                    }
+                                    // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3 Start)
+                                    return [...withoutStartFilters, 'p0start'];
+                                  });
+                                }}
                               >
                                 <span className={styles.countLabel}>P0 Start:</span>
                                 <span className={styles.countValue}>{playerStats.senderP0StartCount}</span>
@@ -4141,8 +4720,21 @@ export default function PlayerDetailsPage() {
                                 </div>
                               </div>
                               <div 
-                                className={`${styles.countItem} ${selectedActionFilter === 'p1start' ? styles.countItemSelected : ''}`}
-                                onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1start' ? null : 'p1start')}
+                                className={`${styles.countItem} ${isFilterActive('p1start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p1start') ? styles.countItemDisabled : ''}`}
+                                onClick={() => {
+                                  if (hasStartFilterSelected() && !isFilterActive('p1start')) return;
+                                  setSelectedActionFilter(prev => {
+                                    const filters = Array.isArray(prev) ? prev : [];
+                                    // Usuń wszystkie P0-P3 Start filtry
+                                    const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                                    // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                    if (filters.includes('p1start')) {
+                                      return withoutStartFilters;
+                                    }
+                                    // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3 Start)
+                                    return [...withoutStartFilters, 'p1start'];
+                                  });
+                                }}
                               >
                                 <span className={styles.countLabel}>P1 Start:</span>
                                 <span className={styles.countValue}>{playerStats.senderP1StartCount}</span>
@@ -4154,8 +4746,21 @@ export default function PlayerDetailsPage() {
                                 </div>
                               </div>
                               <div 
-                                className={`${styles.countItem} ${selectedActionFilter === 'p2start' ? styles.countItemSelected : ''}`}
-                                onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2start' ? null : 'p2start')}
+                                className={`${styles.countItem} ${isFilterActive('p2start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p2start') ? styles.countItemDisabled : ''}`}
+                                onClick={() => {
+                                  if (hasStartFilterSelected() && !isFilterActive('p2start')) return;
+                                  setSelectedActionFilter(prev => {
+                                    const filters = Array.isArray(prev) ? prev : [];
+                                    // Usuń wszystkie P0-P3 Start filtry
+                                    const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                                    // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                    if (filters.includes('p2start')) {
+                                      return withoutStartFilters;
+                                    }
+                                    // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3 Start)
+                                    return [...withoutStartFilters, 'p2start'];
+                                  });
+                                }}
                               >
                                 <span className={styles.countLabel}>P2 Start:</span>
                                 <span className={styles.countValue}>{playerStats.senderP2StartCount}</span>
@@ -4167,8 +4772,21 @@ export default function PlayerDetailsPage() {
                                 </div>
                               </div>
                               <div 
-                                className={`${styles.countItem} ${selectedActionFilter === 'p3start' ? styles.countItemSelected : ''}`}
-                                onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3start' ? null : 'p3start')}
+                                className={`${styles.countItem} ${isFilterActive('p3start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p3start') ? styles.countItemDisabled : ''}`}
+                                onClick={() => {
+                                  if (hasStartFilterSelected() && !isFilterActive('p3start')) return;
+                                  setSelectedActionFilter(prev => {
+                                    const filters = Array.isArray(prev) ? prev : [];
+                                    // Usuń wszystkie P0-P3 Start filtry
+                                    const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                                    // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                    if (filters.includes('p3start')) {
+                                      return withoutStartFilters;
+                                    }
+                                    // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3 Start)
+                                    return [...withoutStartFilters, 'p3start'];
+                                  });
+                                }}
                               >
                                 <span className={styles.countLabel}>P3 Start:</span>
                                 <span className={styles.countValue}>{playerStats.senderP3StartCount}</span>
@@ -4183,8 +4801,21 @@ export default function PlayerDetailsPage() {
                             {/* Miejsca końcowe (P1-P3) - po prawej stronie */}
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', minWidth: 0 }}>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'p1' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1' ? null : 'p1')}
+                              className={`${styles.countItem} ${isFilterActive('p1') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p1') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('p1')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('p1')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'p1'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>P1:</span>
                               <span className={styles.countValue}>{playerStats.senderP1Count}</span>
@@ -4196,8 +4827,21 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'p2' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2' ? null : 'p2')}
+                              className={`${styles.countItem} ${isFilterActive('p2') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p2') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('p2')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('p2')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'p2'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>P2:</span>
                               <span className={styles.countValue}>{playerStats.senderP2Count}</span>
@@ -4209,8 +4853,21 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'p3' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3' ? null : 'p3')}
+                              className={`${styles.countItem} ${isFilterActive('p3') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p3') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('p3')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('p3')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'p3'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>P3:</span>
                               <span className={styles.countValue}>{playerStats.senderP3Count}</span>
@@ -4222,8 +4879,21 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'pk' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'pk' ? null : 'pk')}
+                              className={`${styles.countItem} ${isFilterActive('pk') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('pk') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('pk')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('pk')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'pk'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>PK:</span>
                               <span className={styles.countValue}>{playerStats.senderPKCount}</span>
@@ -4235,8 +4905,21 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'shot' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'shot' ? null : 'shot')}
+                              className={`${styles.countItem} ${isFilterActive('shot') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('shot') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('shot')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('shot')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'shot'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>Strzał:</span>
                               <span className={styles.countValue}>{playerStats.senderShotCount}</span>
@@ -4248,8 +4931,21 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'goal' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'goal' ? null : 'goal')}
+                              className={`${styles.countItem} ${isFilterActive('goal') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('goal') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('goal')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('goal')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'goal'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>Gol:</span>
                               <span className={styles.countValue}>{playerStats.senderGoalCount}</span>
@@ -4319,10 +5015,132 @@ export default function PlayerDetailsPage() {
                           </div>
                         </div>
                         <div className={styles.actionCounts}>
-                          <div className={styles.countItemsWrapper}>
+                          <div className={styles.countItemsWrapper} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 300px) minmax(0, 1fr)', gap: '16px', alignItems: 'flex-start' }}>
+                            {/* Miejsca startowe (P0-P3 Start) - po lewej stronie */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxWidth: '100%' }}>
+                              <div 
+                                className={`${styles.countItem} ${isFilterActive('p0start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p0start') ? styles.countItemDisabled : ''}`}
+                                onClick={() => {
+                                  if (hasStartFilterSelected() && !isFilterActive('p0start')) return;
+                                  setSelectedActionFilter(prev => {
+                                    const filters = Array.isArray(prev) ? prev : [];
+                                    // Usuń wszystkie P0-P3 Start filtry
+                                    const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                                    // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                    if (filters.includes('p0start')) {
+                                      return withoutStartFilters;
+                                    }
+                                    // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3 Start)
+                                    return [...withoutStartFilters, 'p0start'];
+                                  });
+                                }}
+                              >
+                                <span className={styles.countLabel}>P0 Start:</span>
+                                <span className={styles.countValue}>{playerStats.receiverP0StartCount}</span>
+                                <div className={styles.zoneBreakdown}>
+                                  <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.receiverP0StartCountLateral}</span>
+                                  <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.receiverP0StartCountCentral}</span>
+                                </div>
+                              </div>
+                              <div 
+                                className={`${styles.countItem} ${isFilterActive('p1start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p1start') ? styles.countItemDisabled : ''}`}
+                                onClick={() => {
+                                  if (hasStartFilterSelected() && !isFilterActive('p1start')) return;
+                                  setSelectedActionFilter(prev => {
+                                    const filters = Array.isArray(prev) ? prev : [];
+                                    // Usuń wszystkie P0-P3 Start filtry
+                                    const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                                    // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                    if (filters.includes('p1start')) {
+                                      return withoutStartFilters;
+                                    }
+                                    // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3 Start)
+                                    return [...withoutStartFilters, 'p1start'];
+                                  });
+                                }}
+                              >
+                                <span className={styles.countLabel}>P1 Start:</span>
+                                <span className={styles.countValue}>{playerStats.receiverP1StartCount}</span>
+                                <div className={styles.zoneBreakdown}>
+                                  <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.receiverP1StartCountLateral}</span>
+                                  <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.receiverP1StartCountCentral}</span>
+                                </div>
+                              </div>
+                              <div 
+                                className={`${styles.countItem} ${isFilterActive('p2start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p2start') ? styles.countItemDisabled : ''}`}
+                                onClick={() => {
+                                  if (hasStartFilterSelected() && !isFilterActive('p2start')) return;
+                                  setSelectedActionFilter(prev => {
+                                    const filters = Array.isArray(prev) ? prev : [];
+                                    // Usuń wszystkie P0-P3 Start filtry
+                                    const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                                    // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                    if (filters.includes('p2start')) {
+                                      return withoutStartFilters;
+                                    }
+                                    // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3 Start)
+                                    return [...withoutStartFilters, 'p2start'];
+                                  });
+                                }}
+                              >
+                                <span className={styles.countLabel}>P2 Start:</span>
+                                <span className={styles.countValue}>{playerStats.receiverP2StartCount}</span>
+                                <div className={styles.zoneBreakdown}>
+                                  <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.receiverP2StartCountLateral}</span>
+                                  <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.receiverP2StartCountCentral}</span>
+                                </div>
+                              </div>
+                              <div 
+                                className={`${styles.countItem} ${isFilterActive('p3start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p3start') ? styles.countItemDisabled : ''}`}
+                                onClick={() => {
+                                  if (hasStartFilterSelected() && !isFilterActive('p3start')) return;
+                                  setSelectedActionFilter(prev => {
+                                    const filters = Array.isArray(prev) ? prev : [];
+                                    // Usuń wszystkie P0-P3 Start filtry
+                                    const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                                    // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                    if (filters.includes('p3start')) {
+                                      return withoutStartFilters;
+                                    }
+                                    // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3 Start)
+                                    return [...withoutStartFilters, 'p3start'];
+                                  });
+                                }}
+                              >
+                                <span className={styles.countLabel}>P3 Start:</span>
+                                <span className={styles.countValue}>{playerStats.receiverP3StartCount}</span>
+                                <div className={styles.zoneBreakdown}>
+                                  <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.receiverP3StartCountLateral}</span>
+                                  <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.receiverP3StartCountCentral}</span>
+                                </div>
+                              </div>
+                            </div>
+                            {/* Miejsca końcowe (P1-P3) - po prawej stronie */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', minWidth: 0 }}>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'p1' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1' ? null : 'p1')}
+                              className={`${styles.countItem} ${isFilterActive('p1') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p1') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('p1')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('p1')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'p1'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>P1:</span>
                               <span className={styles.countValue}>{playerStats.receiverP1Count}</span>
@@ -4334,8 +5152,21 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'p2' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2' ? null : 'p2')}
+                              className={`${styles.countItem} ${isFilterActive('p2') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p2') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('p2')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('p2')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'p2'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>P2:</span>
                               <span className={styles.countValue}>{playerStats.receiverP2Count}</span>
@@ -4347,8 +5178,21 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'p3' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3' ? null : 'p3')}
+                              className={`${styles.countItem} ${isFilterActive('p3') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p3') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('p3')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('p3')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'p3'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>P3:</span>
                               <span className={styles.countValue}>{playerStats.receiverP3Count}</span>
@@ -4360,8 +5204,21 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'pk' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'pk' ? null : 'pk')}
+                              className={`${styles.countItem} ${isFilterActive('pk') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('pk') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('pk')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('pk')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'pk'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>PK:</span>
                               <span className={styles.countValue}>{playerStats.receiverPKCount}</span>
@@ -4373,8 +5230,21 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'shot' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'shot' ? null : 'shot')}
+                              className={`${styles.countItem} ${isFilterActive('shot') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('shot') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('shot')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('shot')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'shot'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>Strzał:</span>
                               <span className={styles.countValue}>{playerStats.receiverShotCount}</span>
@@ -4386,8 +5256,21 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'goal' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'goal' ? null : 'goal')}
+                              className={`${styles.countItem} ${isFilterActive('goal') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('goal') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('goal')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('goal')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'goal'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>Gol:</span>
                               <span className={styles.countValue}>{playerStats.receiverGoalCount}</span>
@@ -4397,6 +5280,7 @@ export default function PlayerDetailsPage() {
                                 <span className={styles.zoneLabel}>Strefy centralne:</span>
                                 <span className={styles.zoneValue}>{playerStats.receiverGoalCountCentral}</span>
                               </div>
+                            </div>
                             </div>
                           </div>
                         </div>
@@ -4447,10 +5331,132 @@ export default function PlayerDetailsPage() {
                           </div>
                         </div>
                         <div className={styles.actionCounts}>
-                          <div className={styles.countItemsWrapper}>
+                          <div className={styles.countItemsWrapper} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 300px) minmax(0, 1fr)', gap: '16px', alignItems: 'flex-start' }}>
+                            {/* Miejsca startowe (P0-P3 Start) - po lewej stronie */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxWidth: '100%' }}>
+                              <div 
+                                className={`${styles.countItem} ${isFilterActive('p0start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p0start') ? styles.countItemDisabled : ''}`}
+                                onClick={() => {
+                                  if (hasStartFilterSelected() && !isFilterActive('p0start')) return;
+                                  setSelectedActionFilter(prev => {
+                                    const filters = Array.isArray(prev) ? prev : [];
+                                    // Usuń wszystkie P0-P3 Start filtry
+                                    const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                                    // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                    if (filters.includes('p0start')) {
+                                      return withoutStartFilters;
+                                    }
+                                    // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3 Start)
+                                    return [...withoutStartFilters, 'p0start'];
+                                  });
+                                }}
+                              >
+                                <span className={styles.countLabel}>P0 Start:</span>
+                                <span className={styles.countValue}>{playerStats.dribblingP0StartCount ?? 0}</span>
+                                <div className={styles.zoneBreakdown}>
+                                  <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.dribblingP0StartCountLateral ?? 0}</span>
+                                  <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.dribblingP0StartCountCentral ?? 0}</span>
+                                </div>
+                              </div>
+                              <div 
+                                className={`${styles.countItem} ${isFilterActive('p1start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p1start') ? styles.countItemDisabled : ''}`}
+                                onClick={() => {
+                                  if (hasStartFilterSelected() && !isFilterActive('p1start')) return;
+                                  setSelectedActionFilter(prev => {
+                                    const filters = Array.isArray(prev) ? prev : [];
+                                    // Usuń wszystkie P0-P3 Start filtry
+                                    const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                                    // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                    if (filters.includes('p1start')) {
+                                      return withoutStartFilters;
+                                    }
+                                    // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3 Start)
+                                    return [...withoutStartFilters, 'p1start'];
+                                  });
+                                }}
+                              >
+                                <span className={styles.countLabel}>P1 Start:</span>
+                                <span className={styles.countValue}>{playerStats.dribblingP1StartCount ?? 0}</span>
+                                <div className={styles.zoneBreakdown}>
+                                  <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.dribblingP1StartCountLateral ?? 0}</span>
+                                  <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.dribblingP1StartCountCentral ?? 0}</span>
+                                </div>
+                              </div>
+                              <div 
+                                className={`${styles.countItem} ${isFilterActive('p2start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p2start') ? styles.countItemDisabled : ''}`}
+                                onClick={() => {
+                                  if (hasStartFilterSelected() && !isFilterActive('p2start')) return;
+                                  setSelectedActionFilter(prev => {
+                                    const filters = Array.isArray(prev) ? prev : [];
+                                    // Usuń wszystkie P0-P3 Start filtry
+                                    const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                                    // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                    if (filters.includes('p2start')) {
+                                      return withoutStartFilters;
+                                    }
+                                    // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3 Start)
+                                    return [...withoutStartFilters, 'p2start'];
+                                  });
+                                }}
+                              >
+                                <span className={styles.countLabel}>P2 Start:</span>
+                                <span className={styles.countValue}>{playerStats.dribblingP2StartCount ?? 0}</span>
+                                <div className={styles.zoneBreakdown}>
+                                  <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.dribblingP2StartCountLateral ?? 0}</span>
+                                  <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.dribblingP2StartCountCentral ?? 0}</span>
+                                </div>
+                              </div>
+                              <div 
+                                className={`${styles.countItem} ${isFilterActive('p3start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p3start') ? styles.countItemDisabled : ''}`}
+                                onClick={() => {
+                                  if (hasStartFilterSelected() && !isFilterActive('p3start')) return;
+                                  setSelectedActionFilter(prev => {
+                                    const filters = Array.isArray(prev) ? prev : [];
+                                    // Usuń wszystkie P0-P3 Start filtry
+                                    const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                                    // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                    if (filters.includes('p3start')) {
+                                      return withoutStartFilters;
+                                    }
+                                    // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3 Start)
+                                    return [...withoutStartFilters, 'p3start'];
+                                  });
+                                }}
+                              >
+                                <span className={styles.countLabel}>P3 Start:</span>
+                                <span className={styles.countValue}>{playerStats.dribblingP3StartCount ?? 0}</span>
+                                <div className={styles.zoneBreakdown}>
+                                  <span className={styles.zoneLabel}>Strefy boczne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.dribblingP3StartCountLateral ?? 0}</span>
+                                  <span className={styles.zoneLabel}>Strefy centralne:</span>
+                                  <span className={styles.zoneValue}>{playerStats.dribblingP3StartCountCentral ?? 0}</span>
+                                </div>
+                              </div>
+                            </div>
+                            {/* Miejsca końcowe (P1-P3) - po prawej stronie */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', minWidth: 0 }}>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'p1' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p1' ? null : 'p1')}
+                              className={`${styles.countItem} ${isFilterActive('p1') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p1') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('p1')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('p1')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'p1'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>P1:</span>
                               <span className={styles.countValue}>{playerStats.dribblingP1Count ?? 0}</span>
@@ -4462,8 +5468,20 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'p2' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p2' ? null : 'p2')}
+                              className={`${styles.countItem} ${isFilterActive('p2') ? styles.countItemSelected : ''}`}
+                              onClick={() => {
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('p2')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'p2'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>P2:</span>
                               <span className={styles.countValue}>{playerStats.dribblingP2Count ?? 0}</span>
@@ -4475,8 +5493,21 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'p3' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'p3' ? null : 'p3')}
+                              className={`${styles.countItem} ${isFilterActive('p3') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p3') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('p3')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('p3')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'p3'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>P3:</span>
                               <span className={styles.countValue}>{playerStats.dribblingP3Count ?? 0}</span>
@@ -4487,7 +5518,23 @@ export default function PlayerDetailsPage() {
                                 <span className={styles.zoneValue}>{playerStats.dribblingP3CountCentral ?? 0}</span>
                               </div>
                             </div>
-                            <div className={styles.countItem}>
+                            <div 
+                              className={`${styles.countItem} ${isFilterActive('pk') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('pk') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('pk')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('pk')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'pk'];
+                                });
+                              }}
+                            >
                               <span className={styles.countLabel}>PK:</span>
                               <span className={styles.countValue}>{playerStats.dribblingPKCount ?? 0}</span>
                               <div className={styles.zoneBreakdown}>
@@ -4498,8 +5545,21 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'shot' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'shot' ? null : 'shot')}
+                              className={`${styles.countItem} ${isFilterActive('shot') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('shot') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('shot')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('shot')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'shot'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>Strzał:</span>
                               <span className={styles.countValue}>{playerStats.dribblingShotCount ?? 0}</span>
@@ -4511,8 +5571,21 @@ export default function PlayerDetailsPage() {
                               </div>
                             </div>
                             <div 
-                              className={`${styles.countItem} ${selectedActionFilter === 'goal' ? styles.countItemSelected : ''}`}
-                              onClick={() => setSelectedActionFilter(selectedActionFilter === 'goal' ? null : 'goal')}
+                              className={`${styles.countItem} ${isFilterActive('goal') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('goal') ? styles.countItemDisabled : ''}`}
+                              onClick={() => {
+                                if (hasEndFilterSelected() && !isFilterActive('goal')) return;
+                                setSelectedActionFilter(prev => {
+                                  const filters = Array.isArray(prev) ? prev : [];
+                                  // Usuń wszystkie P0-P3/PK/Strzał/Gol filtry (miejsca końcowe)
+                                  const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                                  // Jeśli kliknięty filtr jest już aktywny, usuń go (odznacz)
+                                  if (filters.includes('goal')) {
+                                    return withoutEndFilters;
+                                  }
+                                  // W przeciwnym razie dodaj tylko ten filtr (zastąp inne P0-P3/PK/Strzał/Gol)
+                                  return [...withoutEndFilters, 'goal'];
+                                });
+                              }}
                             >
                               <span className={styles.countLabel}>Gol:</span>
                               <span className={styles.countValue}>{playerStats.dribblingGoalCount ?? 0}</span>
@@ -4522,6 +5595,7 @@ export default function PlayerDetailsPage() {
                                 <span className={styles.zoneLabel}>Strefy centralne:</span>
                                 <span className={styles.zoneValue}>{playerStats.dribblingGoalCountCentral ?? 0}</span>
                               </div>
+                            </div>
                             </div>
                           </div>
                         </div>
@@ -5417,7 +6491,7 @@ export default function PlayerDetailsPage() {
                           let currentMode: 'pxt' | 'count';
                           
                           // Funkcja pomocnicza do filtrowania heatmapy po P0-P3
-                          const filterHeatmapByPacking = (heatmap: Map<string, number>, packingFilter: "P0" | "P1" | "P2" | "P3" | null): Map<string, number> => {
+                          const filterHeatmapByPacking = (heatmap: Map<string, number>, packingFilter: "P0" | "P1" | "P2" | "P3" | null, mode: 'pxt' | 'count', attackDefenseMode: 'attack' | 'defense' | null): Map<string, number> => {
                             if (!packingFilter || !playerStats?.regainZoneStats) return heatmap;
                             
                             const filteredHeatmap = new Map<string, number>();
@@ -5432,22 +6506,60 @@ export default function PlayerDetailsPage() {
                             if (!packingField) return heatmap;
                             
                             // Przejdź przez wszystkie strefy i akcje
-                            playerStats.regainZoneStats.forEach((actions, zoneName) => {
+                            // Dla trybu "atak" musimy użyć opposite zone, dla "obrona" i "normalny" używamy regainDefenseZone
+                            playerStats.regainZoneStats.forEach((actions, defenseZoneName) => {
                               const filteredActions = actions.filter(action => action[packingField] === true);
                               if (filteredActions.length > 0) {
+                                // Dla trybu "atak" używamy opposite zone, dla innych trybów używamy defense zone
+                                const targetZoneName = attackDefenseMode === 'attack' 
+                                  ? (() => {
+                                      // Oblicz opposite zone dla pierwszej akcji (wszystkie akcje w tej strefie mają ten sam opposite zone)
+                                      const firstAction = filteredActions[0];
+                                      const regainAttackZone = firstAction.regainAttackZone || firstAction.oppositeZone;
+                                      if (regainAttackZone) {
+                                        return convertZoneToName(regainAttackZone);
+                                      }
+                                      // Fallback: oblicz opposite zone z defense zone
+                                      return getOppositeZoneName(defenseZoneName);
+                                    })()
+                                  : defenseZoneName;
+                                
+                                if (!targetZoneName) return;
+                                
                                 // Oblicz sumę xT lub liczbę akcji dla tej strefy
-                                if (currentMode === 'pxt') {
+                                if (mode === 'pxt') {
                                   const sumXT = filteredActions.reduce((sum, action: any) => {
-                                    const receiverXT = action.regainDefenseXT !== undefined 
-                                      ? action.regainDefenseXT 
-                                      : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+                                    let receiverXT = 0;
+                                    if (attackDefenseMode === 'attack') {
+                                      // W ataku - używamy regainAttackXT (oppositeXT)
+                                      receiverXT = action.regainAttackXT !== undefined 
+                                        ? action.regainAttackXT 
+                                        : (action.oppositeXT !== undefined 
+                                          ? action.oppositeXT 
+                                          : (() => {
+                                              const zoneIndex = zoneNameToIndex(targetZoneName);
+                                              return zoneIndex !== null ? getOppositeXTValueForZone(zoneIndex) : 0;
+                                            })());
+                                    } else if (attackDefenseMode === 'defense') {
+                                      // W obronie - używamy regainDefenseXT
+                                      receiverXT = action.regainDefenseXT !== undefined 
+                                        ? action.regainDefenseXT 
+                                        : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+                                    } else {
+                                      // Tryb normalny - używamy regainDefenseXT (xT odbiorców)
+                                      receiverXT = action.regainDefenseXT !== undefined 
+                                        ? action.regainDefenseXT 
+                                        : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+                                    }
                                     return sum + receiverXT;
                                   }, 0);
                                   if (sumXT > 0) {
-                                    filteredHeatmap.set(zoneName, sumXT);
+                                    filteredHeatmap.set(targetZoneName, sumXT);
                                   }
                                 } else {
-                                  filteredHeatmap.set(zoneName, filteredActions.length);
+                                  // Dla liczby akcji, dodaj do istniejącej wartości jeśli już istnieje
+                                  const currentCount = filteredHeatmap.get(targetZoneName) || 0;
+                                  filteredHeatmap.set(targetZoneName, currentCount + filteredActions.length);
                                 }
                               }
                             });
@@ -5486,7 +6598,7 @@ export default function PlayerDetailsPage() {
                           
                           // Zastosuj filtr P0-P3 jeśli jest wybrany
                           if (selectedRegainPackingFilter) {
-                            currentHeatmap = filterHeatmapByPacking(currentHeatmap, selectedRegainPackingFilter);
+                            currentHeatmap = filterHeatmapByPacking(currentHeatmap, selectedRegainPackingFilter, currentMode, regainAttackDefenseMode);
                           }
                           
                           return (
@@ -6297,18 +7409,69 @@ export default function PlayerDetailsPage() {
                         </div>
                       </div>
                       <div className={styles.heatmapWrapper}>
-                        <div className={styles.heatmapContainer}>
-                          <PlayerHeatmapPitch
-                            heatmapData={playerStats.losesHeatmap || new Map<string, number>()}
-                            category="loses"
-                            mode={regainHeatmapMode === 'xt' ? 'pxt' : 'count'}
-                            mirrored={false}
-                            onZoneClick={(zoneName) => {
-                              // TODO: Implementacja kliknięcia na strefę dla strat
-                              setSelectedLosesZone(zoneName);
-                            }}
-                          />
-                        </div>
+                        {(() => {
+                          // Funkcja pomocnicza do filtrowania heatmapy strat po P0-P3
+                          const filterLosesHeatmapByPacking = (heatmap: Map<string, number>, packingFilter: "P0" | "P1" | "P2" | "P3" | null, mode: 'pxt' | 'count'): Map<string, number> => {
+                            if (!packingFilter || !playerStats?.losesZoneStats) return heatmap;
+                            
+                            const filteredHeatmap = new Map<string, number>();
+                            const packingFieldMap: { [key: string]: keyof Action } = {
+                              'P0': 'isP0',
+                              'P1': 'isP1',
+                              'P2': 'isP2',
+                              'P3': 'isP3'
+                            };
+                            
+                            const packingField = packingFieldMap[packingFilter];
+                            if (!packingField) return heatmap;
+                            
+                            // Przejdź przez wszystkie strefy i akcje
+                            playerStats.losesZoneStats.forEach((actions, zoneName) => {
+                              const filteredActions = actions.filter(action => action[packingField] === true);
+                              if (filteredActions.length > 0) {
+                                // Oblicz sumę xT lub liczbę akcji dla tej strefy
+                                if (mode === 'pxt') {
+                                  const sumXT = filteredActions.reduce((sum, action: any) => {
+                                    const receiverXT = action.losesDefenseXT !== undefined 
+                                      ? action.losesDefenseXT 
+                                      : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+                                    return sum + receiverXT;
+                                  }, 0);
+                                  if (sumXT > 0) {
+                                    filteredHeatmap.set(zoneName, sumXT);
+                                  }
+                                } else {
+                                  filteredHeatmap.set(zoneName, filteredActions.length);
+                                }
+                              }
+                            });
+                            
+                            return filteredHeatmap;
+                          };
+                          
+                          const currentMode = regainHeatmapMode === 'xt' ? 'pxt' : 'count';
+                          let currentHeatmap = playerStats.losesHeatmap || new Map<string, number>();
+                          
+                          // Zastosuj filtr P0-P3 jeśli jest wybrany
+                          if (selectedLosesPackingFilter) {
+                            currentHeatmap = filterLosesHeatmapByPacking(currentHeatmap, selectedLosesPackingFilter, currentMode);
+                          }
+                          
+                          return (
+                            <div className={styles.heatmapContainer}>
+                              <PlayerHeatmapPitch
+                                heatmapData={currentHeatmap}
+                                category="loses"
+                                mode={currentMode}
+                                mirrored={false}
+                                onZoneClick={(zoneName) => {
+                                  // TODO: Implementacja kliknięcia na strefę dla strat
+                                  setSelectedLosesZone(zoneName);
+                                }}
+                              />
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 

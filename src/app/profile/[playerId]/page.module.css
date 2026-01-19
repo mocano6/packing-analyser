@@ -1880,6 +1880,17 @@
   border-color: #2563eb !important;
 }
 
+.countItemDisabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+.countItemDisabled:hover {
+  background-color: #f9fafb !important;
+  border-color: #e5e7eb !important;
+}
+
 .countLabel {
   font-weight: 600;
   color: #374151;

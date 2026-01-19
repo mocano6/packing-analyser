@@ -310,6 +310,60 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         return false;
       }
     }
+
+    // Dodatkowa walidacja biznesowa dla akcji packing w ataku:
+    // - xT nie może być ujemne ani równe 0
+    // - liczba miniętych przeciwników (packingValue / currentPoints) musi być >= 1
+    // - musi być zaznaczona co najmniej jedna z opcji P0–P3 (Start lub koniec) LUB liczba kontaktów (1T/2T/3T+)
+    if (actionCategory === "packing" && actionMode === "attack") {
+      // Oblicz różnicę xT (jak w PxT: xTEnd - xTStart)
+      const xTStart = typeof startZoneXT === "number" ? startZoneXT : undefined;
+      const xTEnd = typeof endZoneXT === "number" ? endZoneXT : undefined;
+      const xTDifference =
+        xTStart !== undefined && xTEnd !== undefined
+          ? xTEnd - xTStart
+          : xTEnd !== undefined
+            ? xTEnd
+            : undefined;
+
+      const packingPoints = typeof packingValue === "number" ? packingValue : currentPoints;
+
+      const hasPStart =
+        isP0StartActive ||
+        isP1StartActive ||
+        isP2StartActive ||
+        isP3StartActive;
+
+      const hasPEnd =
+        isP0Active ||
+        isP1Active ||
+        isP2Active ||
+        isP3Active;
+
+      const hasContact =
+        isContact1Active ||
+        isContact2Active ||
+        isContact3PlusActive;
+
+      // Wymagamy co najmniej jednej z grup P-start / P-end / Contact
+      if (!hasPStart && !hasPEnd && !hasContact) {
+        if (typeof window !== "undefined") {
+          alert("Akcja musi mieć zaznaczoną co najmniej jedną opcję P0–P3 (Start lub Koniec) lub liczbę kontaktów (1T / 2T / 3T+).");
+        }
+        return false;
+      }
+
+      // Sprawdzenie wartości xT oraz liczby miniętych przeciwników
+      const isXTInvalid = xTDifference !== undefined && xTDifference <= 0;
+      const hasTooFewBypassedOpponents = packingPoints < 1;
+
+      if (isXTInvalid || hasTooFewBypassedOpponents) {
+        if (typeof window !== "undefined") {
+          alert("Akcja o ujemnej wartości, lub brak miniętych przeciwników. Sprawdź poprawność wartości, lub pomiń akcję");
+        }
+        return false;
+      }
+    }
     
     try {
       // Konwertujemy strefy na format literowo-liczbowy, jeśli podano liczby
