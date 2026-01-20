@@ -3,6 +3,7 @@
 
 import React, { useMemo, useState, useEffect } from "react";
 import styles from "./ActionsTable.module.css";
+import sharedStyles from "@/styles/sharedTableStyles.module.css";
 import { ActionsTableProps } from "@/components/ActionsTable/ActionsTable.types";
 import { Player, Action } from "@/types";
 import { getOppositeXTValueForZone, zoneNameToIndex, getZoneData, getZoneName, zoneNameToString } from "@/constants/xtValues";
@@ -75,7 +76,7 @@ const HeaderCell: React.FC<SortableHeaderProps> = ({
   const isActive = sortKey === currentSortKey;
   return (
     <div 
-      className={styles.headerCell} 
+      className={sharedStyles.headerCell} 
       onClick={() => onSort(sortKey)}
     >
       {label} {isActive && (sortDirection === "asc" ? "↑" : "↓")}
@@ -161,32 +162,32 @@ const ActionRow = ({
   const gridColumns = (() => {
     // Dla regain i loses: 10 kolumn (bez "Zawodnik koniec" i "PxT", z "Partnerzy przed piłką" i "Atak xT")
     if (actionCategory === "regain" || actionCategory === "loses") {
-      return "1fr 80px 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px";
+      return "0.4fr 80px 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 120px";
     }
     // Dla packing: 10 kolumn (z "Zawodnik koniec" i "PxT", bez "Partnerzy przed piłką")
     if (actionModeFilter === 'attack') {
-      return "1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px";
+      return "0.4fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 120px";
     }
     // Dla defense: 9 kolumn (bez "Zawodnik koniec")
-    return "1fr 80px 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px";
+    return "0.4fr 80px 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 120px";
   })();
 
   return (
     <div 
-      className={`${styles.actionRow} ${isSecondHalf ? styles.secondHalfRow : styles.firstHalfRow}`}
+      className={`${sharedStyles.actionRow} ${styles.actionRow} ${isSecondHalf ? sharedStyles.secondHalfRow : sharedStyles.firstHalfRow}`}
       style={{ gridTemplateColumns: gridColumns }}
     >
-      <div className={styles.cell}>
-        <span className={isSecondHalf ? styles.secondHalf : styles.firstHalf}>
+      <div className={sharedStyles.cell}>
+        <span className={isSecondHalf ? sharedStyles.secondHalf : sharedStyles.firstHalf}>
           {isSecondHalf ? 'P2' : 'P1'}
         </span>
         &nbsp;{action.minute}'
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         {action.videoTimestamp !== undefined && action.videoTimestamp !== null ? (
-          <div className={styles.videoTimeContainer}>
+          <div className={sharedStyles.videoTimeContainer}>
             <span 
-              className={styles.videoTimeLink}
+              className={sharedStyles.videoTimeLink}
               onClick={(e) => {
                 e.stopPropagation();
                 onVideoTimeClick?.(action.videoTimestamp);
@@ -196,28 +197,28 @@ const ActionRow = ({
               {formatVideoTime(action.videoTimestamp)}
             </span>
             {isAdmin && action.videoTimestampRaw !== undefined && action.videoTimestampRaw !== null && (
-              <span className={styles.rawTimestamp}>{formatVideoTime(action.videoTimestampRaw)}</span>
+              <span className={sharedStyles.rawTimestamp}>{formatVideoTime(action.videoTimestampRaw)}</span>
             )}
           </div>
         ) : (
           <span>-</span>
         )}
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         {senderDisplay}
       </div>
       {/* Ukryj kolumnę "Zawodnik koniec" dla regain i loses oraz unpacking */}
       {actionCategory === "packing" && actionModeFilter === 'attack' && (
-        <div className={styles.cell}>
+        <div className={sharedStyles.cell}>
           {receiverDisplay}
         </div>
       )}
-      <div className={styles.cell}>
-        <span className={action.actionType === "pass" ? styles.pass : styles.dribble}>
+      <div className={sharedStyles.cell}>
+        <span className={action.actionType === "pass" ? sharedStyles.pass : sharedStyles.dribble}>
           {action.actionType === "pass" ? "Podanie" : "Drybling"}
         </span>
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         {(() => {
           // Określ kategorię akcji dla tej konkretnej akcji
           const currentActionCategory = getActionCategory(action);
@@ -321,7 +322,7 @@ const ActionRow = ({
       {(() => {
         const currentActionCategory = getActionCategory(action);
         return (currentActionCategory === "regain" || currentActionCategory === "loses") && (
-        <div className={styles.cell}>
+        <div className={sharedStyles.cell}>
           {(() => {
               if (currentActionCategory === "regain") {
               // Dla regain: użyj nowych pól lub oblicz z strefy
@@ -453,7 +454,7 @@ const ActionRow = ({
         </div>
         );
       })()}
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         {/* Dla regain i loses wyświetlamy "przed/za piłką" zamiast packingPoints */}
         {actionCategory === "regain" || actionCategory === "loses" ? (
           (() => {
@@ -468,7 +469,7 @@ const ActionRow = ({
       </div>
       {/* Dla regain i loses dodajemy kolumnę "Partnerzy przed piłką" */}
       {(actionCategory === "regain" || actionCategory === "loses") && (
-        <div className={styles.cell}>
+        <div className={sharedStyles.cell}>
           {(() => {
             const playersBefore = action.playersBehindBall ?? 0;
             const totalPlayers = action.totalPlayersOnField ?? 11;
@@ -479,7 +480,7 @@ const ActionRow = ({
       )}
       {/* Ukryj kolumnę PxT dla regain i loses */}
       {(actionCategory === "packing") && (
-        <div className={styles.cell}>
+        <div className={sharedStyles.cell}>
           {(() => {
             // Obliczamy PxT dynamicznie: (xTEnd - xTStart) * packingPoints
             const xTStart = action.xTValueStart || 0;
@@ -491,18 +492,27 @@ const ActionRow = ({
           })()}
         </div>
       )}
-      <div className={styles.cell}>{getEvents()}</div>
-      <div className={styles.cellActions}>
+      <div className={sharedStyles.cell}>{getEvents()}</div>
+      <div className={`${sharedStyles.cellActions} ${styles.cellActions}`}>
+        {action.isControversial && action.controversyNote && (
+          <span
+            className={sharedStyles.controversyIcon}
+            title={action.controversyNote}
+            style={{ cursor: 'help' }}
+          >
+            !
+          </span>
+        )}
         {onEdit && (
           <button 
             onClick={() => onEdit(action)} 
-            className={styles.editBtn} 
+            className={sharedStyles.editBtn} 
             title="Edytuj akcję"
           >
             ✎
           </button>
         )}
-        <button onClick={() => onDelete(action.id)} className={styles.deleteBtn} title="Usuń akcję">
+        <button onClick={() => onDelete(action.id)} className={sharedStyles.deleteBtn} title="Usuń akcję">
           ✕
         </button>
       </div>
@@ -776,13 +786,13 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   }, [actions, sortConfig, actionModeFilter, actionCategory, showOnlyControversial]);
 
   return (
-    <div className={styles.tableContainer}>
-      <div className={styles.headerControls}>
-        <div className={styles.headerTitle}>
+    <div className={sharedStyles.tableContainer}>
+      <div className={sharedStyles.headerControls}>
+        <div className={sharedStyles.headerTitle}>
           <h3>Lista akcji ({showOnlyControversial ? controversialCount : actions.length})</h3>
           <button
             type="button"
-            className={`${styles.controversyFilterButton} ${showOnlyControversial ? styles.controversyFilterActive : ''}`}
+            className={`${sharedStyles.controversyFilterButton} ${showOnlyControversial ? sharedStyles.controversyFilterActive : ''}`}
             onClick={() => setShowOnlyControversial(!showOnlyControversial)}
             aria-pressed={showOnlyControversial}
             aria-label="Filtruj akcje kontrowersyjne"
@@ -838,26 +848,26 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         </div>
       </div>
 
-      <div className={styles.matchesTable}>
+      <div className={sharedStyles.matchesTable}>
         <div 
-          className={styles.tableHeader}
+          className={`${sharedStyles.tableHeader} ${styles.tableHeader}`}
           style={{
             gridTemplateColumns: (() => {
               // Dla regain i loses: 10 kolumn (bez "Zawodnik koniec" i "PxT", z "Partnerzy przed piłką" i "Atak xT")
               if (actionCategory === "regain" || actionCategory === "loses") {
-                return "1fr 80px 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px";
+                return "0.4fr 80px 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 120px";
               }
               // Dla packing: 10 kolumn (z "Zawodnik koniec" i "PxT", bez "Partnerzy przed piłką")
               if (actionModeFilter === 'attack') {
-                return "1fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px";
+                return "0.4fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 120px";
               }
               // Dla defense: 9 kolumn (bez "Zawodnik koniec")
-              return "1fr 80px 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px";
+              return "0.4fr 80px 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 120px";
             })()
           }}
         >
           <HeaderCell
-            label="Połowa / Min"
+            label="Min"
             sortKey="minute"
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}
@@ -945,11 +955,11 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             sortDirection={sortConfig.direction}
             onSort={handleSort}
           />
-          <div className={styles.headerCell}>Akcje</div>
+          <div className={sharedStyles.headerCell}>Akcje</div>
         </div>
-        <div className={styles.tableBody}>
+        <div className={sharedStyles.tableBody}>
           {sortedActions.length === 0 ? (
-            <div className={styles.noActions}>Brak akcji</div>
+            <div className={sharedStyles.noEntries}>Brak akcji</div>
           ) : (
             sortedActions.map((action) => (
               <ActionRow

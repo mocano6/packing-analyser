@@ -61,6 +61,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
   const isEditMode = Boolean(editingEntry);
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
   const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
+  const [controversyNote, setControversyNote] = useState<string>(""); // Notatka dotycząca kontrowersyjnej akcji
   
   // Refs do śledzenia poprzednich wartości, aby uniknąć nadpisywania podczas edycji
   const prevVideoTimestampRawRef = useRef<number | undefined>(undefined);
@@ -314,6 +315,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         isRegain: editingEntry.isRegain || false,
         isControversial: editingEntry.isControversial || false,
       });
+      setControversyNote(editingEntry.controversyNote || "");
     } else {
       // Pobierz aktualną połowę z localStorage
       const savedHalf = typeof window !== 'undefined' ? localStorage.getItem('currentHalf') : null;
@@ -339,8 +341,16 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         isGoal: false,
         isRegain: false,
       });
+      setControversyNote("");
     }
   }, [editingEntry, isOpen, startX]);
+
+  // Reset controversyNote gdy modal się zamyka
+  useEffect(() => {
+    if (!isOpen) {
+      setControversyNote("");
+    }
+  }, [isOpen]);
 
   const handlePlayerClick = (playerId: string) => {
     const player = filteredPlayers.find(p => p.id === playerId);
@@ -624,6 +634,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         isGoal: formData.isGoal,
         isRegain: formData.isRegain,
         isControversial: formData.isControversial,
+        ...(formData.isControversial && controversyNote && controversyNote.trim() ? { controversyNote: controversyNote.trim() } : {}),
         receiverId: undefined,
         receiverName: undefined,
       };
@@ -741,6 +752,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
       isGoal: formData.isGoal,
       isRegain: formData.isRegain,
       isControversial: formData.isControversial,
+      ...(formData.isControversial && controversyNote && controversyNote.trim() ? { controversyNote: controversyNote.trim() } : {}),
       ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
       ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
     };
@@ -1048,13 +1060,44 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
             <button
               type="button"
               className={`${styles.controversyButton} ${styles.tooltipTrigger} ${formData.isControversial ? styles.controversyButtonActive : ""}`}
-              onClick={() => setFormData({ ...formData, isControversial: !formData.isControversial })}
+              onClick={() => {
+                const newIsControversial = !formData.isControversial;
+                setFormData({ ...formData, isControversial: newIsControversial });
+                // Resetuj notatkę gdy odznaczamy kontrowersję
+                if (!newIsControversial) {
+                  setControversyNote("");
+                }
+              }}
               aria-pressed={formData.isControversial}
               aria-label="Oznacz jako kontrowersja"
               data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
             >
               !
             </button>
+          </div>
+          
+          {/* Pole notatki kontrowersyjnej - pojawia się gdy isControversial jest true */}
+          {formData.isControversial && (
+            <div className={styles.controversyNoteContainer}>
+              <label htmlFor="controversy-note" className={styles.controversyNoteLabel}>
+                Notatka dotycząca problemu:
+              </label>
+              <textarea
+                id="controversy-note"
+                className={styles.controversyNoteInput}
+                value={controversyNote}
+                onChange={(e) => setControversyNote(e.target.value)}
+                placeholder="Opisz problem z interpretacją wejścia PK..."
+                rows={3}
+                maxLength={500}
+              />
+              <div className={styles.controversyNoteCounter}>
+                {controversyNote.length}/500
+              </div>
+            </div>
+          )}
+
+          <div className={styles.buttonGroup}>
             <button type="button" onClick={onClose} className={styles.cancelButton}>
               Anuluj
             </button>
