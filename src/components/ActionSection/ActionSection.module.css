@@ -7,15 +7,15 @@
 }
 
 .defenseInfo {
-  margin-top: 0;
-  margin-bottom: 8px;
+  margin: 0;
   padding: 6px 12px;
   background-color: rgba(33, 150, 243, 0.08);
   border-left: 2px solid #2196F3;
   border-radius: 4px;
   width: fit-content;
   max-width: 100%;
-  display: block;
+  display: flex;
+  align-items: center;
   position: relative;
   z-index: 10;
 }

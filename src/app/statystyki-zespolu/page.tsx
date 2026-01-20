@@ -2853,6 +2853,97 @@ export default function StatystykiZespoluPage() {
                     ? (losesInPMAreaCount / allLoses.length) * 100 
                     : 0;
                   
+                  // Oblicz statystyki 8s ACC
+                  // allAcc8sEntries są już przefiltrowane dla wybranego meczu w useEffect
+                  const all8sAccEntries = (allAcc8sEntries || []).filter((entry: any) => entry);
+                  const total8sAcc = all8sAccEntries.length;
+                  
+                  const pk8sEntries = all8sAccEntries.filter((entry: any) => entry.isPKEntryUnder8s === true);
+                  const pk8sCount = pk8sEntries.length;
+                  const pk8sPercentage = total8sAcc > 0 ? (pk8sCount / total8sAcc) * 100 : 0;
+                  
+                  const shot8sEntries = all8sAccEntries.filter((entry: any) => entry.isShotUnder8s === true);
+                  const shot8sCount = shot8sEntries.length;
+                  const shot8sPercentage = total8sAcc > 0 ? (shot8sCount / total8sAcc) * 100 : 0;
+                  
+                  // Strzały i PK 8s - suma liczbową PK 8s + Strzały 8s (nawet jeśli niektóre akcje są w obu kategoriach)
+                  // To jest suma wszystkich akcji z flagą strzału LUB PK (unikalne akcje)
+                  const shotAndPK8sEntries = all8sAccEntries.filter((entry: any) => 
+                    entry.isShotUnder8s === true || entry.isPKEntryUnder8s === true
+                  );
+                  const shotAndPK8sCount = shotAndPK8sEntries.length;
+                  const shotAndPK8sPercentage = total8sAcc > 0 ? (shotAndPK8sCount / total8sAcc) * 100 : 0;
+                  
+                  // Oblicz wejścia w PK w odległości 8s i 9s od akcji 8s ACC
+                  // Dla każdej akcji 8s ACC z videoTimestampRaw, znajdź wejścia w PK w przedziale [czas_8s_acc, czas_8s_acc + Xs]
+                  const acc8sWithTimestamp = all8sAccEntries.filter((entry: any) => 
+                    entry.videoTimestampRaw !== undefined && entry.videoTimestampRaw !== null
+                  );
+                  
+                  const pkEntriesWithTimestamp = (allPKEntries || []).filter((entry: any) => 
+                    entry && (entry.videoTimestampRaw !== undefined && entry.videoTimestampRaw !== null || 
+                              entry.videoTimestamp !== undefined && entry.videoTimestamp !== null)
+                  );
+                  
+                  const shotsWithTimestamp = (allShots || []).filter((entry: any) => 
+                    entry && (entry.videoTimestampRaw !== undefined && entry.videoTimestampRaw !== null || 
+                              entry.videoTimestamp !== undefined && entry.videoTimestamp !== null)
+                  );
+                  
+                  // Zlicz akcje 8s ACC, które mają wejścia w PK LUB strzały w przedziale 8s
+                  const acc8sWithPKOrShot8s = acc8sWithTimestamp.filter((acc8sEntry: any) => {
+                    const acc8sTime = acc8sEntry.videoTimestampRaw;
+                    const timeWindowEnd8s = acc8sTime + 8;
+                    
+                    // Sprawdź czy jest wejście w PK w przedziale 8s
+                    const hasPK = pkEntriesWithTimestamp.some((pkEntry: any) => {
+                      let pkTime: number | null = null;
+                      if (pkEntry.videoTimestampRaw !== undefined && pkEntry.videoTimestampRaw !== null) {
+                        pkTime = pkEntry.videoTimestampRaw;
+                      } else if (pkEntry.videoTimestamp !== undefined && pkEntry.videoTimestamp !== null) {
+                        pkTime = pkEntry.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
+                      }
+                      if (pkTime === null) return false;
+                      return pkTime >= acc8sTime && pkTime <= timeWindowEnd8s;
+                    });
+                    
+                    // Sprawdź czy jest strzał w przedziale 8s
+                    const hasShot = shotsWithTimestamp.some((shot: any) => {
+                      let shotTime: number | null = null;
+                      if (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null) {
+                        shotTime = shot.videoTimestampRaw;
+                      } else if (shot.videoTimestamp !== undefined && shot.videoTimestamp !== null) {
+                        shotTime = shot.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
+                      }
+                      if (shotTime === null) return false;
+                      return shotTime >= acc8sTime && shotTime <= timeWindowEnd8s;
+                    });
+                    
+                    return hasPK || hasShot;
+                  });
+                  
+                  const pkEntriesWithin8sCount = acc8sWithPKOrShot8s.length;
+                  const pkEntriesWithin8sPercentage = total8sAcc > 0 ? (pkEntriesWithin8sCount / total8sAcc) * 100 : 0;
+                  
+                  // Zlicz unikalne wejścia w PK, które są w odległości <= 9s od jakiejkolwiek akcji 8s ACC
+                  const pkEntriesWithin9s = new Set<string>(); // Używamy Set, aby uniknąć duplikatów
+                  
+                  acc8sWithTimestamp.forEach((acc8sEntry: any) => {
+                    const acc8sTime = acc8sEntry.videoTimestampRaw;
+                    const timeWindowEnd9s = acc8sTime + 9; // 9 sekund od akcji 8s ACC
+                    
+                    pkEntriesWithTimestamp.forEach((pkEntry: any) => {
+                      const pkTime = pkEntry.videoTimestampRaw;
+                      // Wejście w PK musi być w przedziale [czas_8s_acc, czas_8s_acc + 9s]
+                      if (pkTime >= acc8sTime && pkTime <= timeWindowEnd9s) {
+                        pkEntriesWithin9s.add(pkEntry.id || pkEntry.timestamp?.toString() || Math.random().toString());
+                      }
+                    });
+                  });
+                  
+                  const pkEntriesWithin9sCount = pkEntriesWithin9s.size;
+                  const pkEntriesWithin9sPercentage = total8sAcc > 0 ? (pkEntriesWithin9sCount / total8sAcc) * 100 : 0;
+                  
                   // Przygotuj dane dla spidermapy
                   // Normalizujemy wartości do skali 0-100 dla lepszej wizualizacji
                   // Zakładamy maksymalne wartości: xG = 3.0, xG/strzał = 0.15, wejścia w PK = 20, % = 100
@@ -2955,6 +3046,217 @@ export default function StatystykiZespoluPage() {
                           />
                         </RadarChart>
                       </ResponsiveContainer>
+                      
+                      {/* Sekcja KPI 8s ACC pod spidermapą */}
+                      <div className={styles.detailsSection} style={{ marginTop: '24px' }}>
+                        <h4 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>8s ACC - Statystyki</h4>
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>Udane wejścia:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}><strong>{shotAndPK8sPercentage.toFixed(1)}%</strong></span>
+                            <span className={styles.valueSecondary}> ({shotAndPK8sCount}/{total8sAcc})</span>
+                          </span>
+                        </div>
+                        {shotAndPK8sCount > 0 && (
+                          <details style={{ marginTop: '8px', marginLeft: '0' }}>
+                            <summary style={{ cursor: 'pointer', color: '#2196f3', fontSize: '14px', fontWeight: '500' }}>
+                              Pokaż czasy eventów ({shotAndPK8sCount})
+                            </summary>
+                            <div style={{ marginTop: '8px', paddingLeft: '16px', maxHeight: '200px', overflowY: 'auto' }}>
+                              {shotAndPK8sEntries
+                                .filter((entry: any) => entry.videoTimestampRaw !== undefined && entry.videoTimestampRaw !== null)
+                                .sort((a: any, b: any) => (a.videoTimestampRaw || 0) - (b.videoTimestampRaw || 0))
+                                .map((entry: any, index: number) => {
+                                  // Użyj videoTimestampRaw dla czasu 8s ACC
+                                  const acc8sTimeRaw = entry.videoTimestampRaw;
+                                  const minutes = Math.floor(acc8sTimeRaw / 60);
+                                  const seconds = Math.floor(acc8sTimeRaw % 60);
+                                  const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                                  const flags = [];
+                                  if (entry.isShotUnder8s) flags.push('Strzał');
+                                  if (entry.isPKEntryUnder8s) flags.push('PK');
+                                  
+                                  // Znajdź najbliższe wejście w PK LUB strzał (następujące po czasie 8s ACC, bez limitu czasu)
+                                  // Szukaj w wejściach PK (używamy videoTimestampRaw, jeśli nie ma, użyj videoTimestamp + 10s)
+                                  const followingPKEntries = (allPKEntries || []).filter((pkEntry: any) => {
+                                    if (!pkEntry) return false;
+                                    let pkTime: number | null = null;
+                                    if (pkEntry.videoTimestampRaw !== undefined && pkEntry.videoTimestampRaw !== null) {
+                                      pkTime = pkEntry.videoTimestampRaw;
+                                    } else if (pkEntry.videoTimestamp !== undefined && pkEntry.videoTimestamp !== null) {
+                                      pkTime = pkEntry.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
+                                    }
+                                    if (pkTime === null) return false;
+                                    return pkTime >= acc8sTimeRaw; // Następuje po (bez limitu)
+                                  });
+                                  
+                                  // Szukaj w strzałach (używamy videoTimestampRaw, jeśli nie ma, użyj videoTimestamp + 10s)
+                                  const followingShots = (allShots || []).filter((shot: any) => {
+                                    if (!shot) return false;
+                                    let shotTime: number | null = null;
+                                    if (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null) {
+                                      shotTime = shot.videoTimestampRaw;
+                                    } else if (shot.videoTimestamp !== undefined && shot.videoTimestamp !== null) {
+                                      shotTime = shot.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
+                                    }
+                                    if (shotTime === null) return false;
+                                    return shotTime >= acc8sTimeRaw; // Następuje po (bez limitu)
+                                  });
+                                  
+                                  // Znajdź najbliższe wejście w PK
+                                  let nearestPK: { time: number; diff: number } | null = null;
+                                  followingPKEntries.forEach((pkEntry: any) => {
+                                    let pkTime: number;
+                                    if (pkEntry.videoTimestampRaw !== undefined && pkEntry.videoTimestampRaw !== null) {
+                                      pkTime = pkEntry.videoTimestampRaw;
+                                    } else {
+                                      pkTime = pkEntry.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
+                                    }
+                                    const diff = pkTime - acc8sTimeRaw;
+                                    if (!nearestPK || diff < nearestPK.diff) {
+                                      nearestPK = { time: pkTime, diff };
+                                    }
+                                  });
+                                  
+                                  // Znajdź najbliższy strzał
+                                  let nearestShot: { time: number; diff: number } | null = null;
+                                  followingShots.forEach((shot: any) => {
+                                    let shotTime: number;
+                                    if (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null) {
+                                      shotTime = shot.videoTimestampRaw;
+                                    } else {
+                                      shotTime = shot.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
+                                    }
+                                    const diff = shotTime - acc8sTimeRaw;
+                                    if (!nearestShot || diff < nearestShot.diff) {
+                                      nearestShot = { time: shotTime, diff };
+                                    }
+                                  });
+                                  
+                                  // Wybierz najbliższe zdarzenie (albo PK, albo strzał - to które jest bliżej)
+                                  let nearestEvent: { time: number; diff: number; type: string } | null = null;
+                                  
+                                  if (nearestPK && nearestShot) {
+                                    // Jeśli są oba, wybierz to które jest bliżej
+                                    nearestEvent = nearestPK.diff <= nearestShot.diff ? 
+                                      { ...nearestPK, type: 'PK' } : 
+                                      { ...nearestShot, type: 'Strzał' };
+                                  } else if (nearestPK) {
+                                    nearestEvent = { ...nearestPK, type: 'PK' };
+                                  } else if (nearestShot) {
+                                    nearestEvent = { ...nearestShot, type: 'Strzał' };
+                                  }
+                                  
+                                  let nearestEventString = '';
+                                  if (nearestEvent) {
+                                    const eventMinutes = Math.floor(nearestEvent.time / 60);
+                                    const eventSeconds = Math.floor(nearestEvent.time % 60);
+                                    const eventTimeString = `${eventMinutes}:${eventSeconds.toString().padStart(2, '0')}`;
+                                    nearestEventString = ` → ${eventTimeString} (${nearestEvent.type}, +${nearestEvent.diff}s)`;
+                                  }
+                                  
+                                  return (
+                                    <div key={entry.id || index} style={{ padding: '4px 0', fontSize: '13px', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
+                                      <span>{timeString} - {flags.join(', ')}</span>
+                                      {nearestEventString && (
+                                        <span style={{ color: '#2196f3', marginLeft: '16px' }}>{nearestEventString}</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          </details>
+                        )}
+                        <div className={styles.detailsRow}>
+                          <span className={styles.detailsLabel}>Wejścia w PK w 8s od akcji 8s ACC:</span>
+                          <span className={styles.detailsValue}>
+                            <span className={styles.valueMain}><strong>{pkEntriesWithin8sPercentage.toFixed(1)}%</strong></span>
+                            <span className={styles.valueSecondary}> ({pkEntriesWithin8sCount}/{total8sAcc})</span>
+                          </span>
+                        </div>
+                        {pkEntriesWithin8sCount > 0 && (
+                          <details style={{ marginTop: '8px', marginLeft: '0' }}>
+                            <summary style={{ cursor: 'pointer', color: '#2196f3', fontSize: '14px', fontWeight: '500' }}>
+                              Pokaż czasy eventów 8s ({pkEntriesWithin8sCount})
+                            </summary>
+                            <div style={{ marginTop: '8px', paddingLeft: '16px', maxHeight: '200px', overflowY: 'auto' }}>
+                              {acc8sWithPKOrShot8s
+                                .map((acc8sEntry: any) => {
+                                  const acc8sTimeRaw = acc8sEntry.videoTimestampRaw;
+                                  const timeWindowEnd = acc8sTimeRaw + 8;
+                                  
+                                  // Znajdź wejścia w PK w przedziale 8s (używamy videoTimestampRaw, jeśli nie ma, użyj videoTimestamp + 10s)
+                                  const nearbyPKEntries = pkEntriesWithTimestamp.filter((pkEntry: any) => {
+                                    let pkTime: number | null = null;
+                                    if (pkEntry.videoTimestampRaw !== undefined && pkEntry.videoTimestampRaw !== null) {
+                                      pkTime = pkEntry.videoTimestampRaw;
+                                    } else if (pkEntry.videoTimestamp !== undefined && pkEntry.videoTimestamp !== null) {
+                                      pkTime = pkEntry.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
+                                    }
+                                    if (pkTime === null) return false;
+                                    return pkTime >= acc8sTimeRaw && pkTime <= timeWindowEnd;
+                                  });
+                                  
+                                  // Znajdź strzały w przedziale 8s (używamy videoTimestampRaw, jeśli nie ma, użyj videoTimestamp + 10s)
+                                  const nearbyShots = shotsWithTimestamp.filter((shot: any) => {
+                                    let shotTime: number | null = null;
+                                    if (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null) {
+                                      shotTime = shot.videoTimestampRaw;
+                                    } else if (shot.videoTimestamp !== undefined && shot.videoTimestamp !== null) {
+                                      shotTime = shot.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
+                                    }
+                                    if (shotTime === null) return false;
+                                    return shotTime >= acc8sTimeRaw && shotTime <= timeWindowEnd;
+                                  });
+                                  
+                                  if (nearbyPKEntries.length === 0 && nearbyShots.length === 0) return null;
+                                  
+                                  const acc8sMinutes = Math.floor(acc8sTimeRaw / 60);
+                                  const acc8sSeconds = Math.floor(acc8sTimeRaw % 60);
+                                  const acc8sTimeString = `${acc8sMinutes}:${acc8sSeconds.toString().padStart(2, '0')}`;
+                                  
+                                  const eventStrings: string[] = [];
+                                  
+                                  if (nearbyPKEntries.length > 0) {
+                                    const pkTimes = nearbyPKEntries.map((pkEntry: any) => {
+                                      const pkTime = pkEntry.videoTimestampRaw !== undefined && pkEntry.videoTimestampRaw !== null
+                                        ? pkEntry.videoTimestampRaw
+                                        : pkEntry.videoTimestamp + 10;
+                                      const pkMinutes = Math.floor(pkTime / 60);
+                                      const pkSeconds = Math.floor(pkTime % 60);
+                                      const pkTimeString = `${pkMinutes}:${pkSeconds.toString().padStart(2, '0')}`;
+                                      const diff = Math.floor(pkTime - acc8sTimeRaw);
+                                      return `${pkTimeString} (+${diff}s)`;
+                                    });
+                                    eventStrings.push(`PK: ${pkTimes.join(', ')}`);
+                                  }
+                                  
+                                  if (nearbyShots.length > 0) {
+                                    const shotTimes = nearbyShots.map((shot: any) => {
+                                      const shotTime = shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null
+                                        ? shot.videoTimestampRaw
+                                        : shot.videoTimestamp + 10;
+                                      const shotMinutes = Math.floor(shotTime / 60);
+                                      const shotSeconds = Math.floor(shotTime % 60);
+                                      const shotTimeString = `${shotMinutes}:${shotSeconds.toString().padStart(2, '0')}`;
+                                      const diff = Math.floor(shotTime - acc8sTimeRaw);
+                                      return `${shotTimeString} (+${diff}s)`;
+                                    });
+                                    eventStrings.push(`Strzał: ${shotTimes.join(', ')}`);
+                                  }
+                                  
+                                  return (
+                                    <div key={acc8sEntry.id} style={{ padding: '4px 0', fontSize: '13px', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
+                                      <span>{acc8sTimeString}</span>
+                                      <span style={{ color: '#2196f3', marginLeft: '16px' }}>→ {eventStrings.join(', ')}</span>
+                                    </div>
+                                  );
+                                })
+                                .filter(Boolean)}
+                            </div>
+                          </details>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}

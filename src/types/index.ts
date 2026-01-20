@@ -91,6 +91,7 @@ export interface Action {
   isGoal?: boolean;
   isPenaltyAreaEntry?: boolean;
   isControversial?: boolean;
+  controversyNote?: string; // Notatka analityka dotycząca kontrowersyjnej akcji
   isSecondHalf: boolean;
   mode?: "attack" | "defense"; // Tryb akcji: Atak lub Obrona
   defensePlayers?: string[]; // Lista zawodników obrony (tylko dla trybu obrona)
@@ -190,6 +191,8 @@ export interface Shot {
   assistantId?: string; // ID asystenta (tylko dla goli)
   assistantName?: string; // Nazwa asystenta (tylko dla goli)
   isControversial?: boolean;
+  controversyNote?: string; // Notatka analityka dotycząca kontrowersyjnego strzału
+  previousShotId?: string; // ID poprzedniego strzału (dla dobitki) - xG jest obliczane jako xG * (1 - xG_previous/100)
 }
 
 export interface PKEntry {
@@ -217,6 +220,7 @@ export interface PKEntry {
   isGoal?: boolean; // Czy po wejściu w PK był gol
   isRegain?: boolean; // Czy był przechwyt piłki
   isControversial?: boolean;
+  controversyNote?: string; // Notatka analityka dotycząca kontrowersyjnego wejścia PK
   timestamp: number;
 }
 
@@ -231,6 +235,7 @@ export interface Acc8sEntry {
   isPKEntryUnder8s: boolean; // Wejście w PK do 8s
   passingPlayerIds: string[]; // ID zawodników biorących udział w akcji (wielokrotny wybór)
   isControversial?: boolean;
+  controversyNote?: string; // Notatka analityka dotycząca kontrowersyjnej akcji 8s ACC
   videoTimestamp?: number; // Czas wideo w sekundach (po korekcie -10s)
   videoTimestampRaw?: number; // Surowy czas wideo w sekundach (bez korekty)
   timestamp: number;

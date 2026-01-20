@@ -3,6 +3,8 @@
 import React, { memo, useEffect, useRef, useState, useCallback } from "react";
 import { PKEntry } from "@/types";
 import styles from "./PKEntriesPitch.module.css";
+import PitchHeader from "../PitchHeader/PitchHeader";
+import pitchHeaderStyles from "../PitchHeader/PitchHeader.module.css";
 
 export interface PKEntriesPitchProps {
   pkEntries?: PKEntry[];
@@ -39,6 +41,8 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
 }: PKEntriesPitchProps) {
   // Stan przełącznika orientacji boiska
   const [isFlipped, setIsFlipped] = useState(false);
+  // Stan przełącznika widoczności strzałek
+  const [showArrows, setShowArrows] = useState(true);
 
   // Rozmiar boiska w pikselach (do rysowania SVG bez zniekształceń)
   const pitchRef = useRef<HTMLDivElement | null>(null);
@@ -56,6 +60,11 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
   // Obsługa przełączania orientacji
   const handleFlipToggle = () => {
     setIsFlipped(!isFlipped);
+  };
+
+  // Obsługa przełączania widoczności strzałek
+  const handleToggleArrows = () => {
+    setShowArrows(!showArrows);
   };
 
   // Funkcja konwersji współrzędnych dla orientacji odbitej
@@ -367,86 +376,38 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
 
   return (
     <div className={styles.pitchContainer}>
-      {/* Loga zespołów - zamieniają się miejscami gdy boisko jest odwrócone */}
-      {!hideTeamLogos && (
-        <div className={styles.teamLogos}>
-          {isFlipped ? (
-            <>
-              <div className={styles.teamLogo}>
-                {(() => {
-                  const teamData = allTeams.find(team => team.id === matchInfo?.team);
-                  return teamData?.logo ? (
-                    <img 
-                      src={teamData.logo} 
-                      alt="Logo zespołu" 
-                      className={styles.teamLogoImage}
-                    />
-                  ) : null;
-                })()}
-                <span className={styles.teamName}>{(() => {
-                  const teamData = allTeams.find(team => team.id === matchInfo?.team);
-                  return teamData?.name || matchInfo?.team || 'Nasz zespół';
-                })()}</span>
-              </div>
-              <div className={styles.vs}>VS</div>
-              <div className={styles.teamLogo}>
-                {matchInfo?.opponentLogo && (
-                  <img 
-                    src={matchInfo.opponentLogo} 
-                    alt="Logo przeciwnika" 
-                    className={styles.teamLogoImage}
-                  />
-                )}
-                <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className={styles.teamLogo}>
-                {matchInfo?.opponentLogo && (
-                  <img 
-                    src={matchInfo.opponentLogo} 
-                    alt="Logo przeciwnika" 
-                    className={styles.teamLogoImage}
-                  />
-                )}
-                <span className={styles.teamName}>{matchInfo?.opponent || 'Przeciwnik'}</span>
-              </div>
-              <div className={styles.vs}>VS</div>
-              <div className={styles.teamLogo}>
-                {(() => {
-                  const teamData = allTeams.find(team => team.id === matchInfo?.team);
-                  return teamData?.logo ? (
-                    <img 
-                      src={teamData.logo} 
-                      alt="Logo zespołu" 
-                      className={styles.teamLogoImage}
-                    />
-                  ) : null;
-                })()}
-                <span className={styles.teamName}>{(() => {
-                  const teamData = allTeams.find(team => team.id === matchInfo?.team);
-                  return teamData?.name || matchInfo?.team || 'Nasz zespół';
-                })()}</span>
-              </div>
-            </>
-          )}
-        </div>
-      )}
+      <PitchHeader
+        matchInfo={matchInfo}
+        allTeams={allTeams}
+        isFlipped={isFlipped}
+        hideTeamLogos={hideTeamLogos}
+        rightContent={
+          <>
+            {!!onEntryAdd && (
+              <button
+                className={`${pitchHeaderStyles.headerButton} ${showArrows ? pitchHeaderStyles.headerButtonActive : ""}`}
+                onClick={handleToggleArrows}
+                type="button"
+                aria-pressed={showArrows}
+                title="Pokaż/ukryj strzałki"
+              >
+                Strzałki: {showArrows ? "ON" : "OFF"}
+              </button>
+            )}
 
-      {/* Przycisk przełączania orientacji */}
-      {!hideFlipButton && (
-        <button
-          className={styles.flipButton}
-          onClick={handleFlipToggle}
-          title="Obróć boisko"
-          type="button"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 12h-4M3 12h4M12 3v4M12 17v4M7 7l10 10M7 17l10-10" />
-          </svg>
-        </button>
-      )}
+            {!hideFlipButton && (
+              <button
+                className={pitchHeaderStyles.headerButton}
+                onClick={handleFlipToggle}
+                title="Obróć boisko"
+                type="button"
+              >
+                Obróć
+              </button>
+            )}
+          </>
+        }
+      />
 
       {/* Instrukcja */}
       {!hideInstructions && !!onEntryAdd && (
@@ -464,14 +425,15 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
         </>
       )}
 
-      <div
-        className={`${styles.pitch} ${isFlipped ? styles.flipped : ''}`}
-        role="grid"
-        aria-label="Boisko piłkarskie do analizy wejść w pole karne"
-        onClick={handlePitchClick}
-        onMouseMove={handlePitchMouseMove}
-        ref={pitchRef}
-      >
+      <div className={styles.pitchWrapper}>
+        <div
+          className={`${styles.pitch} ${isFlipped ? styles.flipped : ''}`}
+          role="grid"
+          aria-label="Boisko piłkarskie do analizy wejść w pole karne"
+          onClick={handlePitchClick}
+          onMouseMove={handlePitchMouseMove}
+          ref={pitchRef}
+        >
         <div className={styles.pitchLines} aria-hidden="true">
           <div className={styles.centerLine} />
           <div className={styles.centerCircle} />
@@ -489,10 +451,11 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
         </div>
 
         {/* Renderowanie strzałek */}
-        {pkEntries.map(entry => renderArrow(entry))}
+        {showArrows && pkEntries.map(entry => renderArrow(entry))}
         
         {/* Tymczasowa strzałka podczas rysowania */}
         {renderTemporaryArrow()}
+        </div>
       </div>
     </div>
   );

@@ -28,8 +28,6 @@ export const clearFirestoreCache = async (db: Firestore): Promise<boolean> => {
             return;
           }
           
-            firestoreDbs.map(db => db.name));
-          
           // Usuń wszystkie znalezione bazy danych Firestore
           let completed = 0;
           let success = true;

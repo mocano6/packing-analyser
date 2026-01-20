@@ -1115,11 +1115,9 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                     className={styles.videoTimeField}
                     maxLength={5}
                   />
-                  {currentMatchMinute !== null && (
-                    <span className={styles.matchMinuteInfo}>
-                      {currentMatchMinute}'
-                    </span>
-                  )}
+                  <span className={styles.matchMinuteInfo}>
+                    {currentMatchMinute !== null ? currentMatchMinute : (editingEntry?.minute || formData.minute)}'
+                  </span>
                 </div>
               </div>
               <button type="submit" className={styles.saveButton}>

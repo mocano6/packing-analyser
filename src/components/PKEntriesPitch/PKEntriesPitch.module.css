@@ -3,85 +3,15 @@
 .pitchContainer {
   width: 95%;
   margin: 0 auto 20px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Wrapper boiska utrzymujący proporcje */
+.pitchWrapper {
   aspect-ratio: 1.544;  /* 105m/68m - realne proporcje FIFA */
   position: relative;
-}
-
-/* Loga zespołów */
-.teamLogos {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 8px 16px;
-  border-radius: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  backdrop-filter: blur(4px);
-}
-
-.teamLogo {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.teamLogoImage {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-  border-radius: 2px;
-}
-
-.teamName {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-}
-
-.vs {
-  font-size: 11px;
-  font-weight: 500;
-  color: #6b7280;
-}
-
-/* Przycisk przełączania orientacji */
-.flipButton {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 20;
-  width: 44px;
-  height: 44px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(33, 150, 243, 0.9);
-  color: white;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  backdrop-filter: blur(4px);
-}
-
-.flipButton:hover {
-  background: rgba(33, 150, 243, 1);
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
-}
-
-.flipButton:active {
-  transform: scale(0.95);
-}
-
-.flipButton svg {
-  transition: transform 0.3s ease;
 }
 
 /* Instrukcja */

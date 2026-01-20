@@ -25,7 +25,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
   const [showAddUserModal, setShowAddUserModal] = useState<boolean>(false);
   const [newUserEmail, setNewUserEmail] = useState<string>("");
   const [newUserPassword, setNewUserPassword] = useState<string>("");
-  const [newUserRole, setNewUserRole] = useState<'user' | 'admin'>('user');
+  const [newUserRole, setNewUserRole] = useState<'user' | 'admin' | 'coach'>('user');
   const [newUserTeams, setNewUserTeams] = useState<string[]>([]);
   const [isCreatingUser, setIsCreatingUser] = useState<boolean>(false);
 
@@ -101,7 +101,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
   };
 
   // Zmiana roli użytkownika
-  const updateUserRole = async (userId: string, newRole: 'user' | 'admin') => {
+  const updateUserRole = async (userId: string, newRole: 'user' | 'admin' | 'coach') => {
     try {
       const db = getDB();
       const userRef = doc(db, "users", userId);
@@ -354,7 +354,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                   <td style={{ padding: "12px", border: "1px solid #ddd" }}>
                     <select
                       value={user.role}
-                      onChange={(e) => updateUserRole(user.id, e.target.value as 'user' | 'admin')}
+                      onChange={(e) => updateUserRole(user.id, e.target.value as 'user' | 'admin' | 'coach')}
                       style={{
                         padding: "4px 8px",
                         border: "1px solid #ddd",
@@ -363,6 +363,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                     >
                       <option value="user">User</option>
                       <option value="admin">Admin</option>
+                      <option value="coach">Coach</option>
                     </select>
                   </td>
                   <td style={{ padding: "12px", border: "1px solid #ddd" }}>
@@ -476,7 +477,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
               </label>
               <select
                 value={newUserRole}
-                onChange={(e) => setNewUserRole(e.target.value as 'user' | 'admin')}
+                onChange={(e) => setNewUserRole(e.target.value as 'user' | 'admin' | 'coach')}
                 style={{
                   width: "100%",
                   padding: "8px",
@@ -488,6 +489,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
               >
                 <option value="user">User</option>
                 <option value="admin">Admin</option>
+                <option value="coach">Coach</option>
               </select>
             </div>
 

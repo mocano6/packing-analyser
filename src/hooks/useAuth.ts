@@ -9,7 +9,7 @@ import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 export interface UserData {
   email: string;
   allowedTeams: string[];
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'coach';
   createdAt: Date;
   lastLogin: Date;
 }

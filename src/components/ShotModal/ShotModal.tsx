@@ -20,6 +20,7 @@ export interface ShotModalProps {
   matchInfo?: TeamInfo | null;
   onCalculateMinuteFromVideo?: () => Promise<{ minute: number; isSecondHalf: boolean } | null>;
   onGetVideoTime?: () => Promise<number>; // Funkcja do pobierania surowego czasu z wideo w sekundach
+  shots?: Shot[]; // Tablica wszystkich strzałów w meczu (dla dobitki)
 }
 
 const ShotModal: React.FC<ShotModalProps> = ({
@@ -37,6 +38,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
   matchInfo,
   onCalculateMinuteFromVideo,
   onGetVideoTime,
+  shots = [],
 }) => {
   const [formData, setFormData] = useState({
     playerId: "",
@@ -63,10 +65,12 @@ const ShotModal: React.FC<ShotModalProps> = ({
     assistantId: "",
     assistantName: "",
     isControversial: false,
+    previousShotId: "",
   });
   const isEditMode = Boolean(editingShot);
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
   const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
+  const [controversyNote, setControversyNote] = useState<string>(""); // Notatka dotycząca kontrowersyjnej akcji
 
   // Funkcje pomocnicze do konwersji czasu
   const secondsToMMSS = (seconds: number): string => {
@@ -336,7 +340,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
         playerId: editingShot.playerId || "",
         playerName: editingShot.playerName || "",
         minute: editingShot.minute,
-        xG: Math.round(editingShot.xG * 100), // Konwersja z ułamka na całe procenty
+        // Odwróć modyfikatory, aby uzyskać bazowe xG (przed modyfikatorami)
+        xG: reverseFinalXG(Math.round(editingShot.xG * 100), editingShot),
         bodyPart: editingShot.bodyPart || "foot",
         shotType: editingShot.isGoal ? "goal" : (editingShot.shotType || "on_target"),
         teamContext: editingShot.teamContext || "attack",
@@ -357,7 +362,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
         assistantId: (editingShot as any)?.assistantId || "",
         assistantName: (editingShot as any)?.assistantName || "",
         isControversial: editingShot.isControversial || false,
+        previousShotId: editingShot.previousShotId || "",
       });
+      setControversyNote(editingShot.controversyNote || "");
     } else {
       // Automatyczne wykrywanie kontekstu zespołu na podstawie pozycji
       // Lewa strona boiska (x < 50%) = obrona, prawa strona (x >= 50%) = atak
@@ -389,6 +396,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         assistantId: "",
         assistantName: "",
         isControversial: false,
+        previousShotId: "",
       });
     }
   }, [editingShot, isOpen, matchInfo, xG, x]);
@@ -426,12 +434,12 @@ const ShotModal: React.FC<ShotModalProps> = ({
     setFormData(prev => ({
       ...prev,
       shotType,
-      blockingPlayers: shotType === "blocked" ? prev.blockingPlayers : [], // Reset jeśli nie zablokowany
-      linePlayers: shotType === "blocked" ? prev.linePlayers : [], // Reset jeśli nie zablokowany
-      linePlayersCount: shotType === "blocked" ? prev.linePlayersCount : 0, // Reset jeśli nie zablokowany
-      pkPlayersCount: shotType === "blocked" ? prev.pkPlayersCount : 1, // Reset jeśli nie zablokowany
-      isP1Active: shotType === "blocked" ? prev.isP1Active : true,
-      isP2Active: shotType === "blocked" ? prev.isP2Active : false,
+      // Dla strzałów zablokowanych zachowujemy informacje o blokujących,
+      // dla pozostałych typów czyścimy tylko dane stricte związane z blokadą.
+      blockingPlayers: shotType === "blocked" ? prev.blockingPlayers : [],
+      linePlayers: shotType === "blocked" ? prev.linePlayers : [],
+      linePlayersCount: shotType === "blocked" ? prev.linePlayersCount : 0,
+      // NIE zmieniamy pkPlayersCount ani wyboru 1P/2P przy zmianie typu strzału
     }));
   };
 
@@ -468,7 +476,123 @@ const ShotModal: React.FC<ShotModalProps> = ({
     }));
   };
 
-  // Oblicz finalny xG z uwzględnieniem zawodników na linii i SFG bezpośredni
+  // Funkcja pomocnicza do budowania łańcucha dobitek dla wyświetlenia
+  // Funkcja odwracająca modyfikatory xG (używana przy ładowaniu edytowanego strzału)
+  const reverseFinalXG = (finalXG: number, shot: Shot): number => {
+    let baseXG = finalXG;
+    
+    // Odwróć obniżenie o 27% dla strzałów głową lub inną częścią ciała
+    if (shot.bodyPart === "head" || shot.bodyPart === "other") {
+      baseXG = baseXG / 0.73; // Odwróć * 0.73
+    }
+    
+    // Odwróć modyfikację dla dobitki
+    if (shot.previousShotId) {
+      const shotChain: Shot[] = [];
+      const visitedIds = new Set<string>(); // Zabezpieczenie przed cyklicznymi referencjami
+      let currentShotId: string | undefined = shot.previousShotId;
+      const maxDepth = 100; // Maksymalna głębokość łańcucha
+      
+      let depth = 0;
+      while (currentShotId && depth < maxDepth) {
+        // Sprawdź czy nie ma cyklicznej referencji
+        if (visitedIds.has(currentShotId)) {
+          console.warn(`Cyclic reference detected in reverseFinalXG: ${currentShotId}`);
+          break;
+        }
+        
+        visitedIds.add(currentShotId);
+        
+        const prevShot = shots.find(s => s.id === currentShotId);
+        if (!prevShot) break;
+        shotChain.push(prevShot);
+        currentShotId = prevShot.previousShotId;
+        depth++;
+      }
+      
+      if (depth >= maxDepth) {
+        console.warn(`Maximum chain depth reached in reverseFinalXG for shot: ${shot.id}`);
+      }
+      
+      // Odwróć: xG_dobitki = xG_base * (1 - xG_prev1/100) * (1 - xG_prev2/100) * ...
+      // Więc: xG_base = xG_dobitki / ((1 - xG_prev1/100) * (1 - xG_prev2/100) * ...)
+      let remainingProbability = 1;
+      for (const chainShot of shotChain.reverse()) {
+        const chainXG = chainShot.xG * 100;
+        remainingProbability *= (1 - chainXG / 100);
+      }
+      if (remainingProbability > 0) {
+        baseXG = baseXG / remainingProbability;
+      }
+    }
+    
+    // Odwróć mnożenie przez 1.65 dla bezpośredni wolny + bezpośredni SFG
+    if (shot.actionType === "direct_free_kick" && (shot as any)?.sfgSubtype === "direct") {
+      baseXG = baseXG / 1.65;
+    }
+    
+    // Odwróć obniżenie za zawodników na linii
+    if (shot.teamContext === "defense") {
+      const linePlayers = (shot as any)?.linePlayers || [];
+      baseXG += linePlayers.length;
+    } else if (shot.teamContext === "attack") {
+      const linePlayersCount = (shot as any)?.linePlayersCount || 0;
+      baseXG += linePlayersCount;
+    }
+    
+    return Math.max(1, Math.round(baseXG)); // Minimum 1%, zaokrąglij do całej liczby
+  };
+
+  const getShotChain = (shotId: string): Shot[] => {
+    const chain: Shot[] = [];
+    const visitedIds = new Set<string>(); // Zabezpieczenie przed cyklicznymi referencjami
+    let currentShotId: string | undefined = shotId;
+    const maxDepth = 100; // Maksymalna głębokość łańcucha (zabezpieczenie)
+    
+    let depth = 0;
+    while (currentShotId && depth < maxDepth) {
+      // Sprawdź czy nie ma cyklicznej referencji
+      if (visitedIds.has(currentShotId)) {
+        console.warn(`Cyclic reference detected in shot chain: ${currentShotId}`);
+        break;
+      }
+      
+      visitedIds.add(currentShotId);
+      
+      const shot = shots.find(s => s.id === currentShotId);
+      if (!shot) break;
+      
+      chain.push(shot);
+      currentShotId = shot.previousShotId;
+      depth++;
+    }
+    
+    if (depth >= maxDepth) {
+      console.warn(`Maximum chain depth reached for shot: ${shotId}`);
+    }
+    
+    return chain.reverse(); // Odwróć, aby pokazać od pierwszego do ostatniego
+  };
+
+  // Funkcja do formatowania tekstu strzału z łańcuchem dobitek
+  const formatShotLabel = (shot: Shot): string => {
+    const chain = getShotChain(shot.id);
+    if (chain.length > 1) {
+      // Jeśli jest łańcuch, pokaż go
+      const chainText = chain.map(s => `${s.minute}'`).join(' → ');
+      return `${chainText} | ${shot.playerName || "Brak"} | xG: ${Math.round(shot.xG * 100)}%`;
+    }
+    return `${shot.minute}' | ${shot.playerName || "Brak"} | xG: ${Math.round(shot.xG * 100)}%`;
+  };
+
+  const handlePreviousShotSelect = (shotId: string) => {
+    setFormData({
+      ...formData,
+      previousShotId: shotId,
+    });
+  };
+
+  // Oblicz finalny xG z uwzględnieniem zawodników na linii, SFG bezpośredni, dobitki i części ciała
   const calculateFinalXG = () => {
     let finalXG = formData.xG;
     
@@ -482,6 +606,51 @@ const ShotModal: React.FC<ShotModalProps> = ({
     // Mnożenie przez 1.65 tylko dla bezpośredni wolny + bezpośredni SFG
     if (formData.actionType === "direct_free_kick" && formData.sfgSubtype === "direct") {
       finalXG *= 1.65;
+    }
+    
+    // Oblicz xG dla dobitki: p2 * (1-p1) gdzie p1 to poprzedni strzał
+    // Obsługujemy łańcuch dobitek: p3 * (1-p2) * (1-p1), itd.
+    if (formData.previousShotId) {
+      // Znajdź poprzedni strzał i wszystkie poprzedzające go w łańcuchu
+      const shotChain: Shot[] = [];
+      const visitedIds = new Set<string>(); // Zabezpieczenie przed cyklicznymi referencjami
+      let currentShotId: string | undefined = formData.previousShotId;
+      const maxDepth = 100; // Maksymalna głębokość łańcucha
+      
+      let depth = 0;
+      while (currentShotId && depth < maxDepth) {
+        // Sprawdź czy nie ma cyklicznej referencji
+        if (visitedIds.has(currentShotId)) {
+          console.warn(`Cyclic reference detected in calculateFinalXG: ${currentShotId}`);
+          break;
+        }
+        
+        visitedIds.add(currentShotId);
+        
+        const prevShot = shots.find(s => s.id === currentShotId);
+        if (!prevShot) break;
+        shotChain.push(prevShot);
+        currentShotId = prevShot.previousShotId;
+        depth++;
+      }
+      
+      if (depth >= maxDepth) {
+        console.warn(`Maximum chain depth reached in calculateFinalXG`);
+      }
+      
+      // Oblicz xG dla dobitki: xG_dobitki = xG_current * (1 - xG_prev1/100) * (1 - xG_prev2/100) * ...
+      // gdzie xG jest w procentach
+      let remainingProbability = 1;
+      for (const chainShot of shotChain.reverse()) {
+        const chainXG = chainShot.xG * 100; // Konwersja z ułamka na procenty
+        remainingProbability *= (1 - chainXG / 100);
+      }
+      finalXG = finalXG * remainingProbability;
+    }
+    
+    // Obniżenie o 27% dla strzałów głową lub inną częścią ciała
+    if (formData.bodyPart === "head" || formData.bodyPart === "other") {
+      finalXG *= 0.73; // -27% = * 0.73
     }
     
     return Math.max(1, Math.round(finalXG)); // Minimum 1%, zaokrąglij do całej liczby
@@ -732,6 +901,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
       assistantId: formData.assistantId || undefined,
       assistantName: formData.assistantName || undefined,
       isControversial: formData.isControversial,
+      controversyNote: formData.isControversial && controversyNote.trim() ? controversyNote.trim() : undefined,
+      previousShotId: formData.previousShotId || undefined,
       matchId,
       ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
       ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
@@ -1225,6 +1396,75 @@ const ShotModal: React.FC<ShotModalProps> = ({
             </div>
           </div>
 
+          {/* Wybór poprzedniego strzału (dobitka) */}
+          <div className={styles.fieldGroup}>
+            <label>Dobitki:</label>
+            <div className={styles.actionTypeSelector}>
+              <button
+                type="button"
+                className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
+                  formData.previousShotId === "" ? styles.active : ''
+                }`}
+                onClick={() => handlePreviousShotSelect("")}
+                data-tooltip="Pierwszy strzał w akcji - nie jest dobitką. xG pozostaje bez zmian."
+              >
+                Brak (pierwszy strzał)
+              </button>
+              {(() => {
+                // Użyj minuty aktualnego strzału jako referencji
+                const currentMinute = editingShot?.minute || formData.minute;
+                
+                // Filtruj tylko strzały z tej samej minuty (dobitki są zwykle w tej samej minucie)
+                // Jeśli nie ma strzałów w tej minucie, pokaż też z minuty wcześniejszej
+                const availableShots = shots
+                  .filter(shot => {
+                    // Wyklucz aktualnie edytowany strzał
+                    if (shot.id === editingShot?.id) return false;
+                    // Pokazuj tylko strzały z tej samej minuty lub maksymalnie 1 minutę wstecz
+                    return shot.minute >= currentMinute - 1 && shot.minute <= currentMinute;
+                  })
+                  // Jeśli są strzały w tej samej minucie, pokaż tylko je
+                  .filter(shot => {
+                    const sameMinuteShots = shots.filter(s => s.minute === currentMinute && s.id !== editingShot?.id);
+                    if (sameMinuteShots.length > 0) {
+                      return shot.minute === currentMinute;
+                    }
+                    return true; // Jeśli nie ma strzałów w tej minucie, pokaż z minuty wcześniejszej
+                  })
+                  .sort((a, b) => {
+                    // Sortuj po minucie (od najnowszych), potem po timestamp
+                    if (a.minute !== b.minute) return b.minute - a.minute;
+                    return (b.timestamp || 0) - (a.timestamp || 0);
+                  });
+
+                return availableShots.map(shot => {
+                  const chain = getShotChain(shot.id);
+                  const isChain = chain.length > 1;
+                  const tooltipText = isChain 
+                    ? `Dobitka - wybierz ten strzał jako poprzedni. Łańcuch dobitek: ${chain.map(s => `${s.minute}'`).join(' → ')}. xG tego strzału będzie obliczone jako: xG * (1 - xG_poprzedni/100)`
+                    : `Dobitka - wybierz ten strzał jako poprzedni. xG tego strzału będzie obliczone jako: xG * (1 - xG_poprzedni/100)`;
+                  // Czytelniejszy tekst: minuta, zawodnik i xG z separatorami
+                  const playerName = shot.playerName || "Brak";
+                  const xgValue = Math.round(shot.xG * 100);
+                  const buttonText = `${shot.minute}' - ${playerName} (xG: ${xgValue}%)`;
+                  return (
+                    <button
+                      key={shot.id}
+                      type="button"
+                      className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
+                        formData.previousShotId === shot.id ? styles.active : ''
+                      }`}
+                      onClick={() => handlePreviousShotSelect(shot.id)}
+                      data-tooltip={tooltipText}
+                    >
+                      {buttonText}
+                    </button>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+
           {/* Zawodnicy blokujący (tylko w obronie i gdy typ strzału to zablokowany) */}
           {formData.teamContext === "defense" && formData.shotType === "blocked" && (
             <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
@@ -1288,6 +1528,30 @@ const ShotModal: React.FC<ShotModalProps> = ({
             >
               !
             </button>
+          </div>
+          
+          {/* Pole notatki kontrowersyjnej - pojawia się gdy isControversial jest true */}
+          {formData.isControversial && (
+            <div className={styles.controversyNoteContainer}>
+              <label htmlFor="controversy-note" className={styles.controversyNoteLabel}>
+                Notatka dotycząca problemu:
+              </label>
+              <textarea
+                id="controversy-note"
+                className={styles.controversyNoteInput}
+                value={controversyNote}
+                onChange={(e) => setControversyNote(e.target.value)}
+                placeholder="Opisz problem z interpretacją strzału..."
+                rows={3}
+                maxLength={500}
+              />
+              <div className={styles.controversyNoteCounter}>
+                {controversyNote.length}/500
+              </div>
+            </div>
+          )}
+
+          <div className={styles.buttonGroup}>
             <button type="button" onClick={onClose} className={styles.cancelButton}>
               Anuluj
             </button>
@@ -1304,11 +1568,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     className={styles.videoTimeField}
                     maxLength={5}
                   />
-                  {currentMatchMinute !== null && (
-                    <span className={styles.matchMinuteInfo}>
-                      {currentMatchMinute}'
-                    </span>
-                  )}
+                  <span className={styles.matchMinuteInfo}>
+                    {currentMatchMinute !== null ? currentMatchMinute : (editingShot?.minute || formData.minute)}'
+                  </span>
                 </div>
               </div>
               <button type="submit" className={styles.saveButton}>

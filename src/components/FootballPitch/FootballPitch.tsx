@@ -5,6 +5,8 @@ import React, { useCallback, memo, useEffect, useState } from "react";
 import styles from "./FootballPitch.module.css";
 import { getXTValueFromMatrix, getZoneName, zoneNameToString, zoneNameToIndex } from "@/constants/xtValues";
 import ZoneCell from "./ZoneCell";
+import PitchHeader from "../PitchHeader/PitchHeader";
+import pitchHeaderStyles from "../PitchHeader/PitchHeader.module.css";
 
 export interface FootballPitchProps {
   selectedZone: string | number | null;
@@ -17,6 +19,21 @@ export interface FootballPitchProps {
   startZone: number | null;
   endZone: number | null;
   actionCategory?: "packing" | "regain" | "loses";
+  // Propsy dla headera
+  leftInfo?: React.ReactNode;
+  matchInfo?: {
+    team?: string;
+    opponent?: string;
+    teamName?: string;
+    opponentName?: string;
+    opponentLogo?: string;
+  };
+  allTeams?: Array<{
+    id: string;
+    name: string;
+    logo?: string;
+  }>;
+  hideTeamLogos?: boolean;
 }
 
 const FootballPitch = memo(function FootballPitch({
@@ -25,6 +42,10 @@ const FootballPitch = memo(function FootballPitch({
   startZone,
   endZone,
   actionCategory = "packing",
+  leftInfo,
+  matchInfo,
+  allTeams = [],
+  hideTeamLogos = false,
 }: FootballPitchProps) {
   // Stan przełącznika orientacji boiska - wczytujemy z localStorage
   const [isFlipped, setIsFlipped] = useState(() => {
@@ -151,36 +172,31 @@ const FootballPitch = memo(function FootballPitch({
 
   return (
     <div className={styles.pitchContainer}>
-      {/* Przycisk przełączania orientacji */}
-      <button 
-        className={styles.flipButton}
-        onClick={handleFlipToggle}
-        title={isFlipped ? "Przełącz na orientację standardową (→)" : "Przełącz na orientację odbita (←)"}
-        aria-label={isFlipped ? "Przełącz na orientację standardową" : "Przełącz na orientację odbita"}
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          {/* Ikona boiska z bramkami */}
-          <rect x="2" y="6" width="20" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-          <rect x="2" y="9" width="3" height="6" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-          <rect x="19" y="9" width="3" height="6" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-          <line x1="12" y1="6" x2="12" y2="18" stroke="currentColor" strokeWidth="1"/>
-          
-          {/* Strzałka pokazująca kierunek */}
-          {isFlipped ? (
-            // Strzałka w lewo
-            <path d="M8 12L14 8V10H16V14H14V16L8 12Z" fill="currentColor"/>
-          ) : (
-            // Strzałka w prawo  
-            <path d="M16 12L10 8V10H8V14H10V16L16 12Z" fill="currentColor"/>
-          )}
-        </svg>
-      </button>
+      <PitchHeader
+        leftContent={leftInfo}
+        matchInfo={matchInfo}
+        allTeams={allTeams}
+        isFlipped={isFlipped}
+        hideTeamLogos={hideTeamLogos}
+        rightContent={
+          <button
+            type="button"
+            className={pitchHeaderStyles.headerButton}
+            onClick={handleFlipToggle}
+            title={isFlipped ? "Przełącz na orientację standardową (→)" : "Przełącz na orientację odbita (←)"}
+            aria-label={isFlipped ? "Przełącz na orientację standardową" : "Przełącz na orientację odbita"}
+          >
+            Obróć
+          </button>
+        }
+      />
 
-      <div
-        className={`${styles.pitch} ${isFlipped ? styles.flipped : ''}`}
-        role="grid"
-        aria-label="Boisko piłkarskie podzielone na strefy"
-      >
+      <div className={styles.pitchWrapper}>
+        <div
+          className={`${styles.pitch} ${isFlipped ? styles.flipped : ''}`}
+          role="grid"
+          aria-label="Boisko piłkarskie podzielone na strefy"
+        >
         <div className={styles.grid}>{cells}</div>
         <div className={styles.pitchLines} aria-hidden="true">
           <div className={styles.centerLine} />
@@ -197,6 +213,7 @@ const FootballPitch = memo(function FootballPitch({
           <div className={styles.goalLeft} />
           <div className={styles.goalRight} />
         </div>
+      </div>
       </div>
     </div>
   );

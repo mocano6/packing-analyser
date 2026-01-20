@@ -140,6 +140,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
   const isAutoSettingFromVideo = React.useRef(false);
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
   const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
+  const [controversyNote, setControversyNote] = useState<string>(""); // Notatka dotycząca kontrowersyjnej akcji
   
   // Refs do śledzenia poprzednich wartości, aby uniknąć nadpisywania podczas edycji
   const prevVideoTimestampRawRef = React.useRef<number | undefined>(undefined);
@@ -202,6 +203,19 @@ const ActionModal: React.FC<ActionModalProps> = ({
     if (isNaN(secs)) return mins * 60; // Jeśli sekundy są niepoprawne, traktuj jako minuty
     return mins * 60 + secs;
   };
+
+  // Inicjalizacja notatki przy otwarciu modalu lub zmianie akcji
+  useEffect(() => {
+    if (isOpen) {
+      if (isEditMode && editingAction) {
+        setControversyNote(editingAction.controversyNote || "");
+      } else {
+        setControversyNote("");
+      }
+    } else {
+      setControversyNote("");
+    }
+  }, [isOpen, isEditMode, editingAction?.id, editingAction?.controversyNote]);
 
   // Pobieranie czasu z wideo przy otwarciu modalu
   useEffect(() => {
@@ -718,6 +732,13 @@ const ActionModal: React.FC<ActionModalProps> = ({
       }
     }
 
+    // Zapisz notatkę kontrowersyjną do localStorage
+    if (isControversial && controversyNote.trim()) {
+      localStorage.setItem('tempControversyNote', controversyNote.trim());
+    } else {
+      localStorage.removeItem('tempControversyNote');
+    }
+
     // W trybie edycji nie sprawdzamy stref z localStorage
     if (!isEditMode) {
       // Sprawdzamy czy strefy są zapisane w localStorage (tylko dla nowych akcji)
@@ -1148,6 +1169,27 @@ const ActionModal: React.FC<ActionModalProps> = ({
           </div>
           </div>
           
+          {/* Pole notatki kontrowersyjnej - pojawia się gdy isControversial jest true */}
+          {isControversial && (
+            <div className={styles.controversyNoteContainer}>
+              <label htmlFor="controversy-note" className={styles.controversyNoteLabel}>
+                Notatka dotycząca problemu:
+              </label>
+              <textarea
+                id="controversy-note"
+                className={styles.controversyNoteInput}
+                value={controversyNote}
+                onChange={(e) => setControversyNote(e.target.value)}
+                placeholder="Opisz problem z interpretacją akcji..."
+                rows={3}
+                maxLength={500}
+              />
+              <div className={styles.controversyNoteCounter}>
+                {controversyNote.length}/500
+              </div>
+            </div>
+          )}
+
           {/* Przyciski kontrolne z polem minuty pomiędzy */}
           <div className={styles.buttonGroup}>
             <button
@@ -1181,11 +1223,9 @@ const ActionModal: React.FC<ActionModalProps> = ({
                   className={styles.videoTimeField}
                   maxLength={5}
                 />
-                {currentMatchMinute !== null && (
-                  <span className={styles.matchMinuteInfo}>
-                    {currentMatchMinute}'
-                  </span>
-                )}
+                <span className={styles.matchMinuteInfo}>
+                  {currentMatchMinute !== null ? currentMatchMinute : (editingAction?.minute || actionMinute)}'
+                </span>
               </div>
             </div>
             

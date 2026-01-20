@@ -5,12 +5,14 @@ import { PKEntry, Player } from "@/types";
 import { getPlayerFullName } from "@/utils/playerUtils";
 import { useAuth } from "@/hooks/useAuth";
 import styles from "./PKEntriesTable.module.css";
+import sharedStyles from "@/styles/sharedTableStyles.module.css";
 
 interface PKEntriesTableProps {
   pkEntries: PKEntry[];
   players: Player[];
   onDeleteEntry?: (entryId: string) => void;
   onEditEntry?: (entry: PKEntry) => void;
+  onUpdateEntry?: (entryId: string, entryData: Partial<PKEntry>) => Promise<boolean>;
   onVideoTimeClick?: (timestamp: number) => void;
   youtubeVideoRef?: React.RefObject<YouTubeVideoRef>;
   customVideoRef?: React.RefObject<CustomVideoPlayerRef>;
@@ -37,9 +39,9 @@ const VideoTimeCell: React.FC<{
   const { isAdmin } = useAuth();
   
   return (
-    <div className={styles.videoTimeContainer}>
+    <div className={sharedStyles.videoTimeContainer}>
       <span 
-        className={styles.videoTimeLink}
+        className={sharedStyles.videoTimeLink}
         onClick={(e) => {
           e.stopPropagation();
           onVideoTimeClick(videoTimestamp);
@@ -49,7 +51,7 @@ const VideoTimeCell: React.FC<{
         {formatVideoTime(videoTimestamp)}
       </span>
       {isAdmin && videoTimestampRaw !== undefined && videoTimestampRaw !== null && (
-        <span className={styles.rawTimestamp}>{formatVideoTime(videoTimestampRaw)}</span>
+        <span className={sharedStyles.rawTimestamp}>{formatVideoTime(videoTimestampRaw)}</span>
       )}
     </div>
   );
@@ -84,15 +86,18 @@ const PKEntryRow = ({
   entry,
   onDelete,
   onEdit,
+  onUpdateEntry,
   onVideoTimeClick,
   players,
 }: {
   entry: PKEntry;
   onDelete?: (entryId: string) => void;
   onEdit?: (entry: PKEntry) => void;
+  onUpdateEntry?: (entryId: string, entryData: Partial<PKEntry>) => Promise<boolean>;
   onVideoTimeClick?: (timestamp: number) => void;
   players: Player[];
 }) => {
+  const { isAdmin } = useAuth();
   const isSecondHalf = entry.isSecondHalf;
 
   // Znajdź zawodników
@@ -102,31 +107,47 @@ const PKEntryRow = ({
   const senderDisplay = entry.senderName || (senderPlayer ? getPlayerFullName(senderPlayer) : 'Nieznany');
   const receiverDisplay = entry.receiverName || (receiverPlayer ? getPlayerFullName(receiverPlayer) : null) || '-';
 
+  // Funkcja do zamiany strony wejścia (odbicie współrzędnych)
+  const handleFlipSide = async () => {
+    if (!isAdmin || !onUpdateEntry) return;
+    
+    if (confirm("Czy na pewno chcesz zamienić stronę tego wejścia PK? (z prawej na lewą lub odwrotnie)")) {
+      const flippedEntry = {
+        startX: 100 - entry.startX,
+        startY: 100 - entry.startY,
+        endX: 100 - entry.endX,
+        endY: 100 - entry.endY,
+      };
+      
+      await onUpdateEntry(entry.id, flippedEntry);
+    }
+  };
+
   // Określ klasę CSS dla typu akcji
   const getEntryTypeClass = (entryType?: string) => {
     switch (entryType) {
       case 'pass':
-        return styles.pass;
+        return sharedStyles.pass;
       case 'dribble':
-        return styles.dribble;
+        return sharedStyles.dribble;
       case 'sfg':
-        return styles.sfg;
+        return sharedStyles.sfg;
       case 'regain':
-        return styles.regain;
+        return sharedStyles.regain;
       default:
-        return styles.pass;
+        return sharedStyles.pass;
     }
   };
 
   return (
-    <div className={`${styles.actionRow} ${isSecondHalf ? styles.secondHalfRow : styles.firstHalfRow}`}>
-      <div className={styles.cell}>
-        <span className={isSecondHalf ? styles.secondHalf : styles.firstHalf}>
+    <div className={`${sharedStyles.actionRow} ${styles.actionRow} ${isSecondHalf ? sharedStyles.secondHalfRow : sharedStyles.firstHalfRow}`}>
+      <div className={sharedStyles.cell}>
+        <span className={isSecondHalf ? sharedStyles.secondHalf : sharedStyles.firstHalf}>
           {isSecondHalf ? 'P2' : 'P1'}
         </span>
         &nbsp;{entry.minute}'
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         {entry.videoTimestamp !== undefined && entry.videoTimestamp !== null ? (
           <VideoTimeCell
             videoTimestamp={
@@ -149,26 +170,35 @@ const PKEntryRow = ({
           <span>-</span>
         )}
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         {senderDisplay}
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         {receiverDisplay}
       </div>
-      <div className={styles.cell}>
-        <span className={entry.teamContext === 'attack' ? styles.attack : styles.defense}>
+      <div className={sharedStyles.cell}>
+        <span className={entry.teamContext === 'attack' ? sharedStyles.attack : sharedStyles.defense}>
           {getTeamContextLabel(entry.teamContext)}
         </span>
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         <span className={getEntryTypeClass(entry.entryType)}>
           {getEntryTypeLabel(entry.entryType)}
         </span>
       </div>
-      <div className={styles.cellActions}>
+      <div className={`${sharedStyles.cellActions} ${styles.cellActions}`}>
+        {entry.isControversial && entry.controversyNote && (
+          <span
+            className={sharedStyles.controversyIcon}
+            title={entry.controversyNote}
+            style={{ cursor: 'help' }}
+          >
+            !
+          </span>
+        )}
         {onEdit && (
           <button
-            className={styles.editBtn}
+            className={sharedStyles.editBtn}
             onClick={(e) => {
               e.stopPropagation();
               onEdit(entry);
@@ -180,7 +210,7 @@ const PKEntryRow = ({
         )}
         {onDelete && (
           <button
-            className={styles.deleteBtn}
+            className={sharedStyles.deleteBtn}
             onClick={(e) => {
               e.stopPropagation();
               if (confirm("Czy na pewno chcesz usunąć to wejście PK?")) {
@@ -190,6 +220,18 @@ const PKEntryRow = ({
             title="Usuń wejście PK"
           >
             ✕
+          </button>
+        )}
+        {isAdmin && onUpdateEntry && (
+          <button
+            className={styles.flipBtn}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleFlipSide();
+            }}
+            title="Zamień stronę wejścia (z prawej na lewą lub odwrotnie)"
+          >
+            ⇄
           </button>
         )}
       </div>
@@ -203,6 +245,7 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
   players,
   onDeleteEntry,
   onEditEntry,
+  onUpdateEntry,
   onVideoTimeClick,
   youtubeVideoRef,
   customVideoRef,
@@ -214,6 +257,9 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
 
   // State dla filtra kontrowersyjnego
   const [showOnlyControversial, setShowOnlyControversial] = useState(false);
+  
+  // State dla filtra atak/obrona
+  const [teamContextFilter, setTeamContextFilter] = useState<'all' | 'attack' | 'defense'>('all');
 
   // Liczba akcji kontrowersyjnych
   const controversialCount = useMemo(() => {
@@ -232,6 +278,11 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
     let filteredEntries = showOnlyControversial 
       ? pkEntries.filter(entry => entry.isControversial)
       : pkEntries;
+    
+    // Filtruj po kontekście zespołu (atak/obrona)
+    if (teamContextFilter !== 'all') {
+      filteredEntries = filteredEntries.filter(entry => entry.teamContext === teamContextFilter);
+    }
 
     return [...filteredEntries].sort((a, b) => {
       let aValue: any;
@@ -263,7 +314,7 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
       }
       return 0;
     });
-  }, [pkEntries, sortConfig, showOnlyControversial]);
+  }, [pkEntries, sortConfig, showOnlyControversial, teamContextFilter]);
 
   const getSortIcon = (key: keyof PKEntry | 'senderName' | 'receiverName' | 'entryTypeLabel') => {
     if (sortConfig.key !== key) return '';
@@ -324,47 +375,75 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
   };
 
   return (
-    <div className={styles.tableContainer}>
-      <div className={styles.headerControls}>
-        <div className={styles.headerTitle}>
-          <h3>Lista wejść PK ({showOnlyControversial ? controversialCount : pkEntries.length})</h3>
-          <button
-            type="button"
-            className={`${styles.controversyFilterButton} ${showOnlyControversial ? styles.controversyFilterActive : ''}`}
-            onClick={() => setShowOnlyControversial(!showOnlyControversial)}
-            aria-pressed={showOnlyControversial}
-            aria-label="Filtruj wejścia PK kontrowersyjne"
-            title={`Pokaż tylko kontrowersyjne (${controversialCount})`}
-          >
-            !
-          </button>
+    <div className={sharedStyles.tableContainer}>
+      <div className={sharedStyles.headerControls}>
+        <div className={sharedStyles.headerTitle}>
+          <h3>Lista wejść PK ({sortedEntries.length})</h3>
+          <div className={styles.filtersGroup}>
+            <div className={styles.filterButtons}>
+              <button
+                type="button"
+                className={`${styles.filterButton} ${teamContextFilter === 'all' ? styles.filterButtonActive : ''}`}
+                onClick={() => setTeamContextFilter('all')}
+                title="Pokaż wszystkie"
+              >
+                Wszystkie
+              </button>
+              <button
+                type="button"
+                className={`${styles.filterButton} ${teamContextFilter === 'attack' ? styles.filterButtonActive : ''}`}
+                onClick={() => setTeamContextFilter('attack')}
+                title="Pokaż tylko atak"
+              >
+                Atak
+              </button>
+              <button
+                type="button"
+                className={`${styles.filterButton} ${teamContextFilter === 'defense' ? styles.filterButtonActive : ''}`}
+                onClick={() => setTeamContextFilter('defense')}
+                title="Pokaż tylko obrona"
+              >
+                Obrona
+              </button>
+            </div>
+            <button
+              type="button"
+              className={`${sharedStyles.controversyFilterButton} ${showOnlyControversial ? sharedStyles.controversyFilterActive : ''}`}
+              onClick={() => setShowOnlyControversial(!showOnlyControversial)}
+              aria-pressed={showOnlyControversial}
+              aria-label="Filtruj wejścia PK kontrowersyjne"
+              title={`Pokaż tylko kontrowersyjne (${controversialCount})`}
+            >
+              !
+            </button>
+          </div>
         </div>
       </div>
-      <div className={styles.matchesTable}>
-        <div className={styles.tableHeader}>
-          <div className={styles.headerCell} onClick={() => handleSort('minute')}>
+      <div className={sharedStyles.matchesTable}>
+        <div className={`${sharedStyles.tableHeader} ${styles.tableHeader}`}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('minute')}>
             Połowa / Min {getSortIcon('minute')}
           </div>
-          <div className={styles.headerCell} onClick={() => handleSort('videoTimestamp')}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('videoTimestamp')}>
             Czas wideo {getSortIcon('videoTimestamp')}
           </div>
-          <div className={styles.headerCell} onClick={() => handleSort('senderName')}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('senderName')}>
             Zawodnik podający {getSortIcon('senderName')}
           </div>
-          <div className={styles.headerCell} onClick={() => handleSort('receiverName')}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('receiverName')}>
             Zawodnik otrzymujący {getSortIcon('receiverName')}
           </div>
-          <div className={styles.headerCell} onClick={() => handleSort('teamContext')}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('teamContext')}>
             Kontekst {getSortIcon('teamContext')}
           </div>
-          <div className={styles.headerCell} onClick={() => handleSort('entryTypeLabel')}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('entryTypeLabel')}>
             Typ akcji {getSortIcon('entryTypeLabel')}
           </div>
-          <div className={styles.headerCell}>Akcje</div>
+          <div className={sharedStyles.headerCell}>Akcje</div>
         </div>
-        <div className={styles.tableBody}>
+        <div className={sharedStyles.tableBody}>
           {sortedEntries.length === 0 ? (
-            <div className={styles.noEntries}>Brak wejść PK</div>
+            <div className={sharedStyles.noEntries}>Brak wejść PK</div>
           ) : (
             sortedEntries.map((entry) => (
               <PKEntryRow
@@ -372,6 +451,7 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
                 entry={entry}
                 onDelete={onDeleteEntry}
                 onEdit={onEditEntry}
+                onUpdateEntry={onUpdateEntry}
                 onVideoTimeClick={(timestamp) => {
                   handleVideoTimeClick(timestamp);
                 }}

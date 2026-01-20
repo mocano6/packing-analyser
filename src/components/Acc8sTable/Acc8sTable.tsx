@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import styles from "./Acc8sTable.module.css";
+import sharedStyles from "@/styles/sharedTableStyles.module.css";
 import { Acc8sEntry } from "@/types";
 import { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import { CustomVideoPlayerRef } from "@/components/CustomVideoPlayer/CustomVideoPlayer";
@@ -15,6 +16,19 @@ export interface Acc8sTableProps {
   onVideoTimeClick?: (timestamp: number) => void;
   youtubeVideoRef?: React.RefObject<YouTubeVideoRef>;
   customVideoRef?: React.RefObject<CustomVideoPlayerRef>;
+  matchInfo?: {
+    team?: string;
+    opponent?: string;
+    teamName?: string;
+    opponentName?: string;
+    opponentLogo?: string;
+  };
+  allTeams?: Array<{
+    id: string;
+    name: string;
+    logo?: string;
+  }>;
+  hideTeamLogos?: boolean;
 }
 
 const Acc8sTable: React.FC<Acc8sTableProps> = ({
@@ -25,6 +39,9 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
   onVideoTimeClick,
   youtubeVideoRef,
   customVideoRef,
+  matchInfo,
+  allTeams = [],
+  hideTeamLogos = false,
 }) => {
   // State dla filtra kontrowersyjnego
   const [showOnlyControversial, setShowOnlyControversial] = useState(false);
@@ -57,9 +74,9 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
     const { isAdmin } = useAuth();
     
     return (
-      <div className={styles.videoTimeContainer}>
+      <div className={sharedStyles.videoTimeContainer}>
         <span 
-          className={styles.videoTimeLink}
+          className={sharedStyles.videoTimeLink}
           onClick={(e) => {
             e.stopPropagation();
             onVideoTimeClick(videoTimestamp);
@@ -69,7 +86,7 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
           {formatVideoTime(videoTimestamp)}
         </span>
         {isAdmin && videoTimestampRaw !== undefined && videoTimestampRaw !== null && (
-          <span className={styles.rawTimestamp}>{formatVideoTime(videoTimestampRaw)}</span>
+          <span className={sharedStyles.rawTimestamp}>{formatVideoTime(videoTimestampRaw)}</span>
         )}
       </div>
     );
@@ -134,7 +151,7 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
 
   if (entries.length === 0) {
     return (
-      <div className={styles.emptyMessage}>
+      <div className={sharedStyles.emptyMessage}>
         <p>Brak akcji 8s ACC. Kliknij "+", aby dodać pierwszą akcję.</p>
         {onAddEntry && (
           <button
@@ -150,13 +167,13 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
   }
 
   return (
-    <div className={styles.tableContainer}>
-      <div className={styles.headerControls}>
-        <div className={styles.headerTitle}>
+    <div className={sharedStyles.tableContainer}>
+      <div className={sharedStyles.headerControls}>
+        <div className={sharedStyles.headerTitle}>
           <h3>Akcje 8s ACC ({showOnlyControversial ? controversialCount : entries.length})</h3>
           <button
             type="button"
-            className={`${styles.controversyFilterButton} ${showOnlyControversial ? styles.controversyFilterActive : ''}`}
+            className={`${sharedStyles.controversyFilterButton} ${showOnlyControversial ? sharedStyles.controversyFilterActive : ''}`}
             onClick={() => setShowOnlyControversial(!showOnlyControversial)}
             aria-pressed={showOnlyControversial}
             aria-label="Filtruj akcje 8s ACC kontrowersyjne"
@@ -175,30 +192,30 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
           </button>
         )}
       </div>
-      <div className={styles.table}>
-        <div className={styles.tableHeader}>
-          <div className={styles.headerCell}>Połowa</div>
-          <div className={styles.headerCell}>Minuta</div>
-          <div className={styles.headerCell}>Czas wideo</div>
-          <div className={styles.headerCell}>Liczba podań</div>
-          <div className={styles.headerCell}>Wydarzenia</div>
-          <div className={styles.headerCell}>Akcje</div>
+      <div className={sharedStyles.matchesTable}>
+        <div className={`${sharedStyles.tableHeader} ${styles.tableHeader}`}>
+          <div className={sharedStyles.headerCell}>Połowa</div>
+          <div className={sharedStyles.headerCell}>Minuta</div>
+          <div className={sharedStyles.headerCell}>Czas wideo</div>
+          <div className={sharedStyles.headerCell}>Liczba podań</div>
+          <div className={sharedStyles.headerCell}>Wydarzenia</div>
+          <div className={sharedStyles.headerCell}>Akcje</div>
         </div>
-        <div className={styles.tableBody}>
+        <div className={sharedStyles.tableBody}>
           {filteredEntries.map((entry) => (
           <div 
             key={entry.id} 
-            className={`${styles.tableRow} ${entry.isSecondHalf ? styles.secondHalfRow : styles.firstHalfRow}`}
+            className={`${sharedStyles.tableRow} ${styles.tableRow} ${entry.isSecondHalf ? sharedStyles.secondHalfRow : sharedStyles.firstHalfRow}`}
           >
-            <div className={styles.cell}>
-              <span className={entry.isSecondHalf ? styles.secondHalf : styles.firstHalf}>
+            <div className={sharedStyles.cell}>
+              <span className={entry.isSecondHalf ? sharedStyles.secondHalf : sharedStyles.firstHalf}>
                 {entry.isSecondHalf ? 'P2' : 'P1'}
               </span>
             </div>
-            <div className={styles.cell}>
+            <div className={sharedStyles.cell}>
               {entry.minute}'
             </div>
-            <div className={styles.cell}>
+            <div className={sharedStyles.cell}>
               {entry.videoTimestamp !== undefined && entry.videoTimestamp !== null ? (
                 <VideoTimeCell 
                   videoTimestamp={entry.videoTimestamp}
@@ -209,21 +226,30 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                 <span>-</span>
               )}
             </div>
-                <div className={styles.cell}>
+                <div className={sharedStyles.cell}>
                   {entry.passingPlayerIds?.length || 0}
                 </div>
-            <div className={styles.cell}>{getEvents(entry)}</div>
-            <div className={styles.cellActions}>
+            <div className={sharedStyles.cell}>{getEvents(entry)}</div>
+            <div className={`${sharedStyles.cellActions} ${styles.cellActions}`}>
+              {entry.isControversial && entry.controversyNote && (
+                <span
+                  className={sharedStyles.controversyIcon}
+                  title={entry.controversyNote}
+                  style={{ cursor: 'help' }}
+                >
+                  !
+                </span>
+              )}
               <button 
                 onClick={() => onEditEntry(entry)} 
-                className={styles.editBtn} 
+                className={sharedStyles.editBtn} 
                 title="Edytuj akcję"
               >
                 ✎
               </button>
               <button 
                 onClick={() => onDeleteEntry(entry.id)} 
-                className={styles.deleteBtn} 
+                className={sharedStyles.deleteBtn} 
                 title="Usuń akcję"
               >
                 ✕

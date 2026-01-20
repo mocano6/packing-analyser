@@ -79,9 +79,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   // Dodaj stan isReaction5sActive dla loses
   const [isReaction5sActive, setIsReaction5sActive] = useState<boolean>(false);
   
-  // Dodaj stan isAutActive dla loses
-  const [isAutActive, setIsAutActive] = useState<boolean>(false);
-  
   // Dodaj stan isReaction5sNotApplicableActive dla loses
   const [isReaction5sNotApplicableActive, setIsReaction5sNotApplicableActive] = useState<boolean>(false);
   
@@ -390,6 +387,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       const parsedVideoTimestampRaw = videoTimestampRaw !== null && videoTimestampRaw !== '' ? parseInt(videoTimestampRaw, 10) : undefined;
       const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw >= 0;
       
+      // Pobierz notatkę kontrowersyjną z localStorage
+      const tempControversyNote = localStorage.getItem('tempControversyNote');
+      const controversyNote = tempControversyNote && tempControversyNote.trim() ? tempControversyNote.trim() : undefined;
+      
       // PxT będzie obliczane dynamicznie na froncie
       
       // Oblicz opposite wartości dla regain i loses PRZED utworzeniem obiektu akcji
@@ -503,6 +504,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         // Zawsze zapisujemy informację o połowie meczu (nie jako opcjonalną)
         isSecondHalf: isSecondHalfParam !== undefined ? isSecondHalfParam : isSecondHalf,
         isControversial: isControversial,
+        ...(isControversial && controversyNote && { controversyNote }),
         // Dodajemy tryb akcji i zawodników obrony (tylko dla akcji innych niż regain i loses)
         ...(actionCategory !== "regain" && actionCategory !== "loses" && {
         mode: actionMode,
@@ -587,7 +589,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
             losesDefenseZone: losesOppositeZone || formattedStartZone, // Strefa obrony (opposite zone)
           isBelow8s: isBelow8sActive, 
           isReaction5s: isReaction5sActive, 
-          isAut: isAutActive,
           isReaction5sNotApplicable: isReaction5sNotApplicableActive,
           playersBehindBall: playersBehindBall, 
             opponentsBehindBall: opponentsBehindBall,
@@ -817,7 +818,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       return false;
     }
-  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP0StartActive, isP1StartActive, isP2StartActive, isP3StartActive, isP0Active, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf, isBelow8sActive, isReaction5sActive, isAutActive, isReaction5sNotApplicableActive, isPMAreaActive, playersBehindBall, opponentsBehindBall, playersLeftField, opponentsLeftField, actionCategory, actionMode, selectedDefensePlayers, loadActionsForMatch]);
+  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP0StartActive, isP1StartActive, isP2StartActive, isP3StartActive, isP0Active, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf, isBelow8sActive, isReaction5sActive, isReaction5sNotApplicableActive, isPMAreaActive, playersBehindBall, opponentsBehindBall, playersLeftField, opponentsLeftField, actionCategory, actionMode, selectedDefensePlayers, loadActionsForMatch]);
 
   // Funkcja pomocnicza do określenia kategorii akcji
   const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
@@ -1027,6 +1028,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     // Wyczyść zapisany czas YouTube
     localStorage.removeItem('tempVideoTimestamp');
     localStorage.removeItem('tempVideoTimestampRaw');
+    localStorage.removeItem('tempControversyNote');
     // Nie resetujemy isSecondHalf, bo połowa meczu jest utrzymywana między akcjami
   }, []);
 
@@ -1050,7 +1052,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsControversial(false);
     setIsBelow8sActive(false);
     setIsReaction5sActive(false);
-    setIsAutActive(false);
     setIsReaction5sNotApplicableActive(false);
     setIsPMAreaActive(false);
     setPlayersBehindBall(0);
@@ -1111,8 +1112,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsBelow8sActive,
     isReaction5sActive,
     setIsReaction5sActive,
-    isAutActive,
-    setIsAutActive,
     isReaction5sNotApplicableActive,
     setIsReaction5sNotApplicableActive,
     isPMAreaActive,

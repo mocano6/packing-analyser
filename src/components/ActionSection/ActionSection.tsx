@@ -64,8 +64,6 @@ export interface ActionSectionProps {
   setIsBelow8sActive: React.Dispatch<React.SetStateAction<boolean>>;
   isReaction5sActive: boolean;
   setIsReaction5sActive: React.Dispatch<React.SetStateAction<boolean>>;
-  isAutActive: boolean;
-  setIsAutActive: React.Dispatch<React.SetStateAction<boolean>>;
   isReaction5sNotApplicableActive: boolean;
   setIsReaction5sNotApplicableActive: React.Dispatch<React.SetStateAction<boolean>>;
   isPMAreaActive: boolean;
@@ -115,6 +113,11 @@ export interface ActionSectionProps {
   actions?: Action[];
   onEditingActionChange?: (action: Action | null) => void;
   getActionCategory?: (action: Action) => "packing" | "regain" | "loses";
+  allTeams?: Array<{
+    id: string;
+    name: string;
+    logo?: string;
+  }>;
 }
 
 const ActionSection = memo(function ActionSection({
@@ -167,8 +170,6 @@ const ActionSection = memo(function ActionSection({
   setIsBelow8sActive,
   isReaction5sActive,
   setIsReaction5sActive,
-  isAutActive,
-  setIsAutActive,
   isReaction5sNotApplicableActive,
   setIsReaction5sNotApplicableActive,
   isPMAreaActive,
@@ -213,7 +214,8 @@ const ActionSection = memo(function ActionSection({
   allMatches = [],
   actions = [],
   onEditingActionChange,
-  getActionCategory
+  getActionCategory,
+  allTeams = []
 }: ActionSectionProps) {
   // Funkcja do obliczania minuty meczu na podstawie czasu wideo
   const calculateMatchMinuteFromVideoTime = React.useCallback(async (): Promise<{ minute: number; isSecondHalf: boolean } | null> => {
@@ -491,37 +493,14 @@ const ActionSection = memo(function ActionSection({
 
   return (
     <section className={styles.actionContainer}>
-      {/* Tekst informacyjny dla packing (atak) */}
-      {actionCategory === "packing" && mode === "attack" && (
-        <div className={styles.defenseInfo}>
-          <p>⚠️ Pola kolorowe to bramka, którą atakujesz</p>
-        </div>
-      )}
-      {/* Tekst informacyjny dla regain i loses */}
-      {(actionCategory === "regain" || actionCategory === "loses") && (
-        <div className={styles.defenseInfo}>
-          <p>⚠️ Pola kolorowe to bramka, którą atakujesz</p>
-        </div>
-      )}
-      {/* Przycisk scrollowania do wideo YouTube - fixed w prawym dolnym rogu */}
-      {isVideoVisible && onScrollToVideo && showScrollButton && (
-        <button
-          className={styles.scrollToVideoButtonFixed}
-          onClick={handleScrollButtonClick}
-          title="Przewiń do wideo YouTube"
-          aria-label="Przewiń do wideo YouTube"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" fill="#FF0000"/>
-          </svg>
-        </button>
-      )}
       <FootballPitch
         selectedZone={selectedZone}
         onZoneSelect={handlePitchZoneSelect}
         startZone={startZone}
         endZone={endZone}
         actionCategory={actionCategory}
+        matchInfo={matchInfo || undefined}
+        allTeams={allTeams}
       />
       
       {actionCategory === "packing" ? (
@@ -957,34 +936,22 @@ const ActionSection = memo(function ActionSection({
           // Nowy prop dla przycisku "Poniżej 8s"
           isBelow8sActive={isBelow8sActive}
           onBelow8sToggle={() => setIsBelow8sActive(!isBelow8sActive)}
-          // Nowy prop dla przycisku "Reakcja 5s"
+          // Nowy prop dla przycisku "5s"
           isReaction5sActive={isReaction5sActive}
           onReaction5sToggle={() => {
             const newValue = !isReaction5sActive;
             setIsReaction5sActive(newValue);
             if (newValue) {
-              setIsAutActive(false);
               setIsReaction5sNotApplicableActive(false);
             }
           }}
-          // Nowy prop dla przycisku "Aut"
-          isAutActive={isAutActive}
-          onAutToggle={() => {
-            const newValue = !isAutActive;
-            setIsAutActive(newValue);
-            if (newValue) {
-              setIsReaction5sActive(false);
-              setIsReaction5sNotApplicableActive(false);
-            }
-          }}
-          // Nowy prop dla przycisku "Nie dotyczy" (reakcja 5s)
+          // Nowy prop dla przycisku "Brak 5s" (nie dotyczy)
           isReaction5sNotApplicableActive={isReaction5sNotApplicableActive}
           onReaction5sNotApplicableToggle={() => {
             const newValue = !isReaction5sNotApplicableActive;
             setIsReaction5sNotApplicableActive(newValue);
             if (newValue) {
               setIsReaction5sActive(false);
-              setIsAutActive(false);
             }
           }}
           // Nowy prop dla liczby partnerów przed piłką
@@ -1331,7 +1298,18 @@ const ActionSection = memo(function ActionSection({
           }}
           onSaveAction={() => {
             if (editingAction && onSaveEditedAction) {
-              onSaveEditedAction(editingAction);
+              // Pobierz notatkę kontrowersyjną z localStorage
+              const tempControversyNote = typeof window !== 'undefined' ? localStorage.getItem('tempControversyNote') : null;
+              const controversyNote = tempControversyNote && tempControversyNote.trim() ? tempControversyNote.trim() : undefined;
+              
+              // Zaktualizuj editingAction z controversyNote
+              const updatedAction = {
+                ...editingAction,
+                ...(editingAction.isControversial && controversyNote && { controversyNote }),
+                ...(!editingAction.isControversial && { controversyNote: undefined })
+              };
+              
+              onSaveEditedAction(updatedAction);
             }
           }}
           onReset={() => {
@@ -1371,19 +1349,6 @@ const ActionSection = memo(function ActionSection({
               onEditingActionChange({
                 ...editingAction,
                 isReaction5s: newValue,
-                isAut: newValue ? false : editingAction.isAut,
-                isReaction5sNotApplicable: newValue ? false : editingAction.isReaction5sNotApplicable
-              });
-            }
-          }}
-          isAutActive={editingAction?.isAut || false}
-          onAutToggle={() => {
-            if (editingAction && onEditingActionChange) {
-              const newValue = !editingAction.isAut;
-              onEditingActionChange({
-                ...editingAction,
-                isAut: newValue,
-                isReaction5s: newValue ? false : editingAction.isReaction5s,
                 isReaction5sNotApplicable: newValue ? false : editingAction.isReaction5sNotApplicable
               });
             }
@@ -1395,8 +1360,7 @@ const ActionSection = memo(function ActionSection({
               onEditingActionChange({
                 ...editingAction,
                 isReaction5sNotApplicable: newValue,
-                isReaction5s: newValue ? false : editingAction.isReaction5s,
-                isAut: newValue ? false : editingAction.isAut
+                isReaction5s: newValue ? false : editingAction.isReaction5s
               });
             }
           }}
@@ -1668,7 +1632,18 @@ const ActionSection = memo(function ActionSection({
           }}
           onSaveAction={() => {
             if (editingAction && onSaveEditedAction) {
-              onSaveEditedAction(editingAction);
+              // Pobierz notatkę kontrowersyjną z localStorage
+              const tempControversyNote = typeof window !== 'undefined' ? localStorage.getItem('tempControversyNote') : null;
+              const controversyNote = tempControversyNote && tempControversyNote.trim() ? tempControversyNote.trim() : undefined;
+              
+              // Zaktualizuj editingAction z controversyNote
+              const updatedAction = {
+                ...editingAction,
+                ...(editingAction.isControversial && controversyNote && { controversyNote }),
+                ...(!editingAction.isControversial && { controversyNote: undefined })
+              };
+              
+              onSaveEditedAction(updatedAction);
             }
           }}
           onReset={() => {
@@ -1985,7 +1960,18 @@ const ActionSection = memo(function ActionSection({
           }}
           onSaveAction={() => {
             if (editingAction && onSaveEditedAction) {
-              onSaveEditedAction(editingAction);
+              // Pobierz notatkę kontrowersyjną z localStorage
+              const tempControversyNote = typeof window !== 'undefined' ? localStorage.getItem('tempControversyNote') : null;
+              const controversyNote = tempControversyNote && tempControversyNote.trim() ? tempControversyNote.trim() : undefined;
+              
+              // Zaktualizuj editingAction z controversyNote
+              const updatedAction = {
+                ...editingAction,
+                ...(editingAction.isControversial && controversyNote && { controversyNote }),
+                ...(!editingAction.isControversial && { controversyNote: undefined })
+              };
+              
+              onSaveEditedAction(updatedAction);
             }
           }}
           onReset={() => {

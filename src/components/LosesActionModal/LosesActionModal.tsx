@@ -67,13 +67,10 @@ interface LosesActionModalProps {
   // Nowy prop dla przycisku "Poniżej 8s"
   isBelow8sActive: boolean;
   onBelow8sToggle: () => void;
-  // Nowy prop dla przycisku "Reakcja 5s"
+  // Nowy prop dla przycisku "5s"
   isReaction5sActive: boolean;
   onReaction5sToggle: () => void;
-  // Nowy prop dla przycisku "Aut"
-  isAutActive: boolean;
-  onAutToggle: () => void;
-  // Nowy prop dla przycisku "Nie dotyczy" (reakcja 5s)
+  // Nowy prop dla przycisku "Brak 5s" (nie dotyczy)
   isReaction5sNotApplicableActive: boolean;
   onReaction5sNotApplicableToggle: () => void;
   // Nowy prop dla liczby partnerów przed piłką
@@ -150,13 +147,10 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   // Nowy prop dla przycisku "Poniżej 8s"
   isBelow8sActive,
   onBelow8sToggle,
-  // Nowy prop dla przycisku "Reakcja 5s"
+  // Nowy prop dla przycisku "5s"
   isReaction5sActive,
   onReaction5sToggle,
-  // Nowy prop dla przycisku "Aut"
-  isAutActive,
-  onAutToggle,
-  // Nowy prop dla przycisku "Nie dotyczy" (reakcja 5s)
+  // Nowy prop dla przycisku "Brak 5s" (nie dotyczy)
   isReaction5sNotApplicableActive,
   onReaction5sNotApplicableToggle,
   // Nowy prop dla liczby partnerów przed piłką
@@ -177,16 +171,66 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   const clamp0to10 = (value: number) => Math.max(0, Math.min(10, value));
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
 
+  const renderCountRow = useCallback(
+    (
+      label: string,
+      value: number,
+      onChange: (next: number) => void,
+      ariaLabelPrefix: string
+    ) => {
+      const values = Array.from({ length: 11 }, (_, i) => i); // 0..10
+
+      return (
+        <div className={styles.countRow}>
+          <div className={styles.countRowLabel}>{label}</div>
+          <div className={styles.countButtons} role="group" aria-label={ariaLabelPrefix}>
+            {values.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`${styles.countButton} ${value === n ? styles.countButtonActive : ""}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onChange(n);
+                }}
+                aria-pressed={value === n}
+                title={`Ustaw ${n}`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    },
+    []
+  );
+
 
   // Określamy czy jesteśmy w trybie edycji
   const isEditMode = !!editingAction;
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
   const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
+  const [controversyNote, setControversyNote] = useState<string>(""); // Notatka dotycząca kontrowersyjnej akcji
   
   // Refs do śledzenia poprzednich wartości, aby uniknąć nadpisywania podczas edycji
   const prevVideoTimestampRawRef = React.useRef<number | undefined>(undefined);
   const prevVideoTimestampRef = React.useRef<number | undefined>(undefined);
   const prevEditingActionIdRef = React.useRef<string | undefined>(undefined);
+  const wasOpenRef = React.useRef<boolean>(false);
+
+  // Reset przycisków P0-P3 i 1T-3T+ przy otwieraniu modalu (tylko gdy nie jest tryb edycji)
+  useEffect(() => {
+    if (isOpen && !isEditMode && !wasOpenRef.current) {
+      // Reset przycisków używając onResetPoints - resetuje wszystkie przyciski kompaktowe
+      onResetPoints();
+      wasOpenRef.current = true;
+    } else if (!isOpen) {
+      wasOpenRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, isEditMode]);
 
   // Funkcje pomocnicze do konwersji czasu
   const secondsToMMSS = (seconds: number): string => {
@@ -260,6 +304,19 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
     }
   }, [isOpen, isEditMode, editingAction?.id, editingAction?.videoTimestampRaw, editingAction?.videoTimestamp, onGetVideoTime]);
 
+  // Inicjalizacja notatki przy otwarciu modalu lub zmianie akcji
+  useEffect(() => {
+    if (isOpen) {
+      if (isEditMode && editingAction) {
+        setControversyNote(editingAction.controversyNote || "");
+      } else {
+        setControversyNote("");
+      }
+    } else {
+      setControversyNote("");
+    }
+  }, [isOpen, isEditMode, editingAction?.id, editingAction?.controversyNote]);
+  
   // Dodatkowy useEffect do aktualizacji videoTimeMMSS gdy editingAction się zmienia (np. po zapisaniu)
   useEffect(() => {
     if (isOpen && isEditMode && editingAction) {
@@ -661,6 +718,13 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       }
     }
 
+    // Zapisz notatkę kontrowersyjną do localStorage
+    if (isControversial && controversyNote.trim()) {
+      localStorage.setItem('tempControversyNote', controversyNote.trim());
+    } else {
+      localStorage.removeItem('tempControversyNote');
+    }
+
     // Wywołaj funkcję zapisującą akcję, ale nie zamykaj modalu od razu
     // Komponent nadrzędny sam zadecyduje czy i kiedy zamknąć modal
     onSaveAction();
@@ -991,18 +1055,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   type="button"
                   data-tooltip={`Kontrpressing (do 5s po stracie).\n• 2 kontakty z piłką lub podanie/strzał (5 sekunda przy pierwszym kontakcie).\n• Sfaulujemy przeciwnika, akcja zostaje przerwana.`}
                 >
-                  Reakcja 5s
-                </button>
-                <button
-                  className={`${styles.actionTypeButton} ${
-                    isAutActive ? styles.active : ""
-                  }`}
-                  onClick={onAutToggle}
-                  aria-pressed={isAutActive}
-                  type="button"
-                  title="Aut"
-                >
-                  Aut
+                  5s
                 </button>
                 <button
                   className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
@@ -1011,119 +1064,30 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   onClick={onReaction5sNotApplicableToggle}
                   aria-pressed={isReaction5sNotApplicableActive}
                   type="button"
-                  data-tooltip={`Nie dotyczy - nie da się zrobić 5s.\n• Przeciwnik poda piłkę do zawodnika znajdującego 2 strefy niżej.\n• Piłka w rękach bramkarza`}
+                  data-tooltip={`Brak 5s - nie da się zrobić 5s.\n• Przeciwnik poda piłkę do zawodnika znajdującego 2 strefy niżej.\n• Piłka w rękach bramkarza`}
                 >
-                  Nie dotyczy
+                  Brak 5s
                 </button>
               </div>
             </div>
 
-            {/* Sekcja z przyciskami "przed piłką" - ułożone pionowo */}
+            {/* Sekcja z szybkimi wyborami liczby zawodników "pod piłką" */}
             <div
-              className={`${styles.verticalButtonsContainer} ${styles.tooltipTrigger}`}
+              className={`${styles.countSelectorContainer} ${styles.tooltipTrigger}`}
               data-tooltip="Liczymy zawodników do swojej bramki."
             >
-              {/* Przycisk "Partner przed piłką" */}
-              <div 
-                className={styles.compactPointsButton}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onPlayersBehindBallChange(clamp0to10(playersBehindBall + 1));
-                }}
-                style={{ cursor: 'pointer' }}
-              >
-                <span className={styles.compactLabel}>Partner pod piłką (bez bramkarza)</span>
-                <input
-                  className={styles.compactNumberInput}
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={10}
-                  step={1}
-                  value={playersBehindBall}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  onChange={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const raw = e.target.value;
-                    const next = raw === "" ? 0 : Number(raw);
-                    onPlayersBehindBallChange(clamp0to10(Number.isFinite(next) ? next : 0));
-                  }}
-                  onWheel={(e) => {
-                    (e.currentTarget as HTMLInputElement).blur();
-                  }}
-                  aria-label="Partnerzy przed piłką (0-10)"
-                  title="Wpisz liczbę 0–10"
-                />
-                <button
-                  className={styles.compactSubtractButton}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onPlayersBehindBallChange(clamp0to10(playersBehindBall - 1));
-                  }}
-                  title="Odejmij 1 partnera"
-                  type="button"
-                  disabled={playersBehindBall <= 0}
-                >
-                  −
-                </button>
-              </div>
-
-              {/* Przycisk "Przeciwnik przed piłką" */}
-              <div 
-                className={styles.compactPointsButton}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onOpponentsBehindBallChange(clamp0to10(opponentsBehindBall + 1));
-                }}
-                style={{ cursor: 'pointer' }}
-              >
-                <span className={styles.compactLabel}>Przeciwnik pod piłką</span>
-                <input
-                  className={styles.compactNumberInput}
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={10}
-                  step={1}
-                  value={opponentsBehindBall}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  onChange={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const raw = e.target.value;
-                    const next = raw === "" ? 0 : Number(raw);
-                    onOpponentsBehindBallChange(clamp0to10(Number.isFinite(next) ? next : 0));
-                  }}
-                  onWheel={(e) => {
-                    (e.currentTarget as HTMLInputElement).blur();
-                  }}
-                  aria-label="Przeciwnicy przed piłką (0-10)"
-                  title="Wpisz liczbę 0–10"
-                />
-                <button
-                  className={styles.compactSubtractButton}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onOpponentsBehindBallChange(clamp0to10(opponentsBehindBall - 1));
-                  }}
-                  title="Odejmij 1 przeciwnika"
-                  type="button"
-                  disabled={opponentsBehindBall <= 0}
-                >
-                  −
-                </button>
-              </div>
+              {renderCountRow(
+                "Partner (bez bramkarza)",
+                clamp0to10(playersBehindBall),
+                (n) => onPlayersBehindBallChange(clamp0to10(n)),
+                "Partnerzy pod piłką (0-10)"
+              )}
+              {renderCountRow(
+                "Przeciwnik",
+                clamp0to10(opponentsBehindBall),
+                (n) => onOpponentsBehindBallChange(clamp0to10(n)),
+                "Przeciwnicy pod piłką (0-10)"
+              )}
             </div>
 
             {/* Pozostałe przyciski punktów (bez "Minięty przeciwnik") */}
@@ -1234,6 +1198,30 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
             >
               !
             </button>
+          </div>
+          
+          {/* Pole notatki kontrowersyjnej - pojawia się gdy isControversial jest true */}
+          {isControversial && (
+            <div className={styles.controversyNoteContainer}>
+              <label htmlFor="controversy-note" className={styles.controversyNoteLabel}>
+                Notatka dotycząca problemu:
+              </label>
+              <textarea
+                id="controversy-note"
+                className={styles.controversyNoteInput}
+                value={controversyNote}
+                onChange={(e) => setControversyNote(e.target.value)}
+                placeholder="Opisz problem z interpretacją akcji loses..."
+                rows={3}
+                maxLength={500}
+              />
+              <div className={styles.controversyNoteCounter}>
+                {controversyNote.length}/500
+              </div>
+            </div>
+          )}
+
+          <div className={styles.buttonGroup}>
             <button
               className={styles.cancelButton}
               onClick={handleCancel}
@@ -1255,11 +1243,9 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   className={styles.videoTimeField}
                   maxLength={5}
                 />
-                {currentMatchMinute !== null && (
-                  <span className={styles.matchMinuteInfo}>
-                    {currentMatchMinute}'
-                  </span>
-                )}
+                <span className={styles.matchMinuteInfo}>
+                  {currentMatchMinute !== null ? currentMatchMinute : (editingAction?.minute || actionMinute)}'
+                </span>
               </div>
             </div>
             

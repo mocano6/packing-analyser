@@ -125,6 +125,48 @@
   box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
 }
 
+.controversyNoteContainer {
+  margin-top: 16px;
+  padding: 16px;
+  background-color: #fef2f2;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+}
+
+.controversyNoteLabel {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #991b1b;
+}
+
+.controversyNoteInput {
+  width: 100%;
+  min-height: 80px;
+  padding: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  background-color: white;
+  color: #1f2937;
+}
+
+.controversyNoteInput:focus {
+  outline: none;
+  border-color: rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.controversyNoteCounter {
+  margin-top: 6px;
+  text-align: right;
+  font-size: 12px;
+  color: #6b7280;
+}
+
 .tooltipTrigger {
   position: relative;
   cursor: pointer;

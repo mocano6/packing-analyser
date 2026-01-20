@@ -298,6 +298,81 @@ export default function Page() {
   const [pendingZoneSelection, setPendingZoneSelection] = useState<{zoneId: number, xT?: number} | null>(null);
   const [isTeamsSelectorExpanded, setIsTeamsSelectorExpanded] = useState<boolean>(false);
 
+  // Stan do śledzenia, czy wideo jest wyśrodkowane na ekranie (dla przycisku scrollowania)
+  const [isVideoCentered, setIsVideoCentered] = React.useState(false);
+  const [showScrollToVideoButton, setShowScrollToVideoButton] = React.useState(true);
+
+  // Funkcja sprawdzająca, czy wideo jest wyśrodkowane
+  const checkIfVideoCentered = React.useCallback(() => {
+    if (!youtubeVideoContainerRef.current || !isVideoVisible) {
+      setIsVideoCentered(false);
+      setShowScrollToVideoButton(false);
+      return;
+    }
+
+    const containerRect = youtubeVideoContainerRef.current.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const containerCenter = containerRect.top + containerRect.height / 2;
+    const viewportCenter = viewportHeight / 2;
+    
+    // Sprawdzamy, czy środek kontenera jest w zakresie ±20% wysokości viewportu od środka
+    const threshold = viewportHeight * 0.2;
+    const isCentered = Math.abs(containerCenter - viewportCenter) < threshold;
+    
+    setIsVideoCentered(isCentered);
+    
+    // Jeśli wideo jest wyśrodkowane, ukryj przycisk
+    if (isCentered) {
+      setShowScrollToVideoButton(false);
+    } else {
+      setShowScrollToVideoButton(true);
+    }
+  }, [isVideoVisible]);
+
+  // Listener na scroll, który sprawdza pozycję wideo
+  React.useEffect(() => {
+    if (!isVideoVisible || !isVideoInternal) {
+      setShowScrollToVideoButton(false);
+      return;
+    }
+
+    // Sprawdź pozycję przy pierwszym renderze
+    checkIfVideoCentered();
+
+    // Debounce dla scroll event
+    let scrollTimeout: NodeJS.Timeout;
+    const handleScroll = () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        checkIfVideoCentered();
+      }, 100); // Sprawdzamy co 100ms podczas scrollowania
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll, { passive: true });
+
+    return () => {
+      clearTimeout(scrollTimeout);
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [isVideoVisible, isVideoInternal, checkIfVideoCentered]);
+
+  // Funkcja obsługująca kliknięcie przycisku scrollowania
+  const handleScrollToVideoButtonClick = React.useCallback(() => {
+    handleScrollToVideo();
+    // Sprawdź pozycję wielokrotnie po scrollowaniu (smooth scroll może trwać różnie)
+    const checkInterval = setInterval(() => {
+      checkIfVideoCentered();
+    }, 100);
+    
+    // Zatrzymaj sprawdzanie po 2 sekundach
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      checkIfVideoCentered();
+    }, 2000);
+  }, [handleScrollToVideo, checkIfVideoCentered]);
+
   // Funkcja do otwierania ActionModal z zapisaniem czasu YouTube
   const openActionModalWithVideoTime = async () => {
     // Sprawdź czy mamy otwarte zewnętrzne okno wideo - tylko jeśli jest NAPRAWDĘ otwarte
@@ -2358,8 +2433,10 @@ export default function Page() {
       // Pobierz nowy timestamp z localStorage jeśli został zmieniony
       const tempVideoTimestamp = localStorage.getItem('tempVideoTimestamp');
       const tempVideoTimestampRaw = localStorage.getItem('tempVideoTimestampRaw');
+      const tempControversyNote = localStorage.getItem('tempControversyNote');
       const parsedVideoTimestamp = tempVideoTimestamp ? parseInt(tempVideoTimestamp) : undefined;
       const parsedVideoTimestampRaw = tempVideoTimestampRaw ? parseInt(tempVideoTimestampRaw) : undefined;
+      const controversyNote = tempControversyNote && tempControversyNote.trim() ? tempControversyNote.trim() : undefined;
       
       const lockedEditedAction = originalAction ? {
         ...editedAction,
@@ -2367,8 +2444,13 @@ export default function Page() {
         isSecondHalf: originalAction.isSecondHalf,
         // Użyj nowego timestamp z localStorage jeśli jest dostępny, w przeciwnym razie zachowaj oryginalny
         videoTimestamp: parsedVideoTimestamp !== undefined ? parsedVideoTimestamp : originalAction.videoTimestamp,
-        videoTimestampRaw: parsedVideoTimestampRaw !== undefined ? parsedVideoTimestampRaw : (originalAction as any)?.videoTimestampRaw
-      } : editedAction;
+        videoTimestampRaw: parsedVideoTimestampRaw !== undefined ? parsedVideoTimestampRaw : (originalAction as any)?.videoTimestampRaw,
+        // Użyj nowej notatki z localStorage jeśli jest dostępna, w przeciwnym razie zachowaj oryginalną
+        controversyNote: controversyNote !== undefined ? controversyNote : editedAction.controversyNote
+      } : {
+        ...editedAction,
+        ...(controversyNote !== undefined && { controversyNote })
+      };
       
       // Określamy kategorię akcji i odpowiednią kolekcję
       const actionCategory = getActionCategory(lockedEditedAction);
@@ -2875,6 +2957,7 @@ export default function Page() {
             actions={actions}
             onEditingActionChange={setEditingAction}
             getActionCategory={getActionCategory}
+            allTeams={allTeams}
           />
         )}
 
@@ -2969,6 +3052,7 @@ export default function Page() {
             actions={actions}
             onEditingActionChange={setEditingAction}
             getActionCategory={getActionCategory}
+            allTeams={allTeams}
           />
         )}
 
@@ -2976,6 +3060,8 @@ export default function Page() {
           <div className={styles.acc8sSection}>
             <Acc8sTable
               entries={acc8sEntries}
+              matchInfo={matchInfo || undefined}
+              allTeams={allTeams}
               onAddEntry={async () => {
                 if (!matchInfo?.matchId || !matchInfo?.team) {
                   alert("Wybierz mecz, aby dodać akcję 8s ACC!");
@@ -3078,6 +3164,7 @@ export default function Page() {
                 matchId={matchInfo?.matchId || ""}
                 players={players}
                 matchInfo={matchInfo}
+                shots={shots}
                 onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
                 onGetVideoTime={async () => {
                   // Najpierw sprawdź localStorage (ustawiony przez handleShotAdd)
@@ -3244,6 +3331,9 @@ export default function Page() {
             onDeleteEntry={async (entryId) => {
               await deletePKEntry(entryId);
             }}
+            onUpdateEntry={async (entryId, entryData) => {
+              await updatePKEntry(entryId, entryData);
+            }}
             onEditEntry={(entry) => {
               setSelectedPKEntryId(entry.id);
               setPkEntryModalData({
@@ -3354,6 +3444,20 @@ export default function Page() {
         />
 
         <OfflineStatus />
+
+        {/* Przycisk scrollowania do wideo YouTube - fixed w prawym dolnym rogu */}
+        {isVideoVisible && isVideoInternal && showScrollToVideoButton && (
+          <button
+            className={styles.scrollToVideoButtonFixed}
+            onClick={handleScrollToVideoButtonClick}
+            title="Przewiń do wideo YouTube"
+            aria-label="Przewiń do wideo YouTube"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" fill="#FF0000"/>
+            </svg>
+          </button>
+        )}
       </main>
     </div>
   );

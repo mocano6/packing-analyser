@@ -5,6 +5,7 @@ import { Shot, Player } from "@/types";
 import { getPlayerFullName } from "@/utils/playerUtils";
 import { useAuth } from "@/hooks/useAuth";
 import styles from "./ShotsTable.module.css";
+import sharedStyles from "@/styles/sharedTableStyles.module.css";
 
 interface ShotsTableProps {
   shots: Shot[];
@@ -35,9 +36,9 @@ const VideoTimeCell: React.FC<{
   const { isAdmin } = useAuth();
   
   return (
-    <div className={styles.videoTimeContainer}>
+    <div className={sharedStyles.videoTimeContainer}>
       <span 
-        className={styles.videoTimeLink}
+        className={sharedStyles.videoTimeLink}
         onClick={(e) => {
           e.stopPropagation();
           onVideoTimeClick(videoTimestamp);
@@ -47,7 +48,7 @@ const VideoTimeCell: React.FC<{
         {formatVideoTime(videoTimestamp)}
       </span>
       {isAdmin && videoTimestampRaw !== undefined && videoTimestampRaw !== null && (
-        <span className={styles.rawTimestamp}>{formatVideoTime(videoTimestampRaw)}</span>
+        <span className={sharedStyles.rawTimestamp}>{formatVideoTime(videoTimestampRaw)}</span>
       )}
     </div>
   );
@@ -118,14 +119,14 @@ const ShotRow = ({
   const isSecondHalf = shot.minute > 45;
 
   return (
-    <div className={`${styles.shotRow} ${isSecondHalf ? styles.secondHalfRow : styles.firstHalfRow}`}>
-      <div className={styles.cell}>
-        <span className={isSecondHalf ? styles.secondHalf : styles.firstHalf}>
+    <div className={`${sharedStyles.shotRow} ${styles.shotRow} ${isSecondHalf ? sharedStyles.secondHalfRow : sharedStyles.firstHalfRow}`}>
+      <div className={sharedStyles.cell}>
+        <span className={isSecondHalf ? sharedStyles.secondHalf : sharedStyles.firstHalf}>
           {isSecondHalf ? 'P2' : 'P1'}
         </span>
         &nbsp;{shot.minute}'
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         {shot.videoTimestamp !== undefined && shot.videoTimestamp !== null ? (
           <VideoTimeCell
             videoTimestamp={shot.videoTimestamp}
@@ -138,42 +139,51 @@ const ShotRow = ({
           <span className={styles.noVideoTime}>-</span>
         )}
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         {shot.playerName || 'Nieznany zawodnik'}
       </div>
-      <div className={styles.cell}>
-        <span className={shot.teamContext === 'attack' ? styles.attack : styles.defense}>
+      <div className={sharedStyles.cell}>
+        <span className={shot.teamContext === 'attack' ? sharedStyles.attack : sharedStyles.defense}>
           {getTeamContextLabel(shot.teamContext)}
         </span>
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         <span className={styles.actionType}>
           {getActionTypeLabel(shot.actionType, (shot as any)?.sfgSubtype, (shot as any)?.actionPhase)}
         </span>
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         <span className={styles.xgValue}>
           {(shot.xG * 100).toFixed(0)}%
         </span>
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         <span className={shot.isGoal ? styles.goal : styles.shot}>
           {getShotTypeLabel(shot.shotType, shot.isGoal)}
         </span>
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         {shot.bodyPart === 'foot' ? 'Noga' : shot.bodyPart === 'head' ? 'Głowa' : 'Inne'}
       </div>
-      <div className={styles.cell}>
+      <div className={sharedStyles.cell}>
         {shot.blockingPlayers && shot.blockingPlayers.length > 0 
           ? `${shot.blockingPlayers.length} zawodnik(ów)`
           : '-'
         }
       </div>
-      <div className={styles.cellActions}>
+      <div className={`${sharedStyles.cellActions} ${styles.cellActions}`}>
+        {shot.isControversial && shot.controversyNote && (
+          <span
+            className={sharedStyles.controversyIcon}
+            title={shot.controversyNote}
+            style={{ cursor: 'help' }}
+          >
+            !
+          </span>
+        )}
         {onEdit && (
           <button
-            className={styles.editBtn}
+            className={sharedStyles.editBtn}
             onClick={(e) => {
               e.stopPropagation();
               onEdit(shot);
@@ -185,7 +195,7 @@ const ShotRow = ({
         )}
         {onDelete && (
           <button
-            className={styles.deleteBtn}
+            className={sharedStyles.deleteBtn}
             onClick={(e) => {
               e.stopPropagation();
               if (confirm("Czy na pewno chcesz usunąć ten strzał?")) {
@@ -270,13 +280,13 @@ const ShotsTable: React.FC<ShotsTableProps> = ({
   };
 
   return (
-    <div className={styles.tableContainer}>
-      <div className={styles.headerControls}>
-        <div className={styles.headerTitle}>
+    <div className={sharedStyles.tableContainer}>
+      <div className={sharedStyles.headerControls}>
+        <div className={sharedStyles.headerTitle}>
           <h3>Lista strzałów ({showOnlyControversial ? controversialCount : shots.length})</h3>
           <button
             type="button"
-            className={`${styles.controversyFilterButton} ${showOnlyControversial ? styles.controversyFilterActive : ''}`}
+            className={`${sharedStyles.controversyFilterButton} ${showOnlyControversial ? sharedStyles.controversyFilterActive : ''}`}
             onClick={() => setShowOnlyControversial(!showOnlyControversial)}
             aria-pressed={showOnlyControversial}
             aria-label="Filtruj strzały kontrowersyjne"
@@ -286,40 +296,40 @@ const ShotsTable: React.FC<ShotsTableProps> = ({
           </button>
         </div>
       </div>
-      <div className={styles.matchesTable}>
-        <div className={styles.tableHeader}>
-          <div className={styles.headerCell} onClick={() => handleSort('minute')}>
-            Minuta {getSortIcon('minute')}
+      <div className={sharedStyles.matchesTable}>
+        <div className={`${sharedStyles.tableHeader} ${styles.tableHeader}`}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('minute')}>
+            Połowa / Min {getSortIcon('minute')}
           </div>
-          <div className={styles.headerCell} onClick={() => handleSort('timestamp')}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('timestamp')}>
             Czas wideo {getSortIcon('timestamp')}
           </div>
-          <div className={styles.headerCell} onClick={() => handleSort('playerName')}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('playerName')}>
             Zawodnik {getSortIcon('playerName')}
           </div>
-          <div className={styles.headerCell} onClick={() => handleSort('teamContext')}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('teamContext')}>
             Kontekst {getSortIcon('teamContext')}
           </div>
-          <div className={styles.headerCell} onClick={() => handleSort('actionTypeLabel')}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('actionTypeLabel')}>
             Rodzaj akcji {getSortIcon('actionTypeLabel')}
           </div>
-          <div className={styles.headerCell} onClick={() => handleSort('xG')}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('xG')}>
             xG {getSortIcon('xG')}
           </div>
-          <div className={styles.headerCell} onClick={() => handleSort('shotType')}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('shotType')}>
             Typ strzału {getSortIcon('shotType')}
           </div>
-          <div className={styles.headerCell} onClick={() => handleSort('bodyPart')}>
+          <div className={sharedStyles.headerCell} onClick={() => handleSort('bodyPart')}>
             Część ciała {getSortIcon('bodyPart')}
           </div>
-          <div className={styles.headerCell}>
+          <div className={sharedStyles.headerCell}>
             Blokujący
           </div>
-          <div className={styles.headerCell}>Akcje</div>
+          <div className={sharedStyles.headerCell}>Akcje</div>
         </div>
-        <div className={styles.tableBody}>
+        <div className={sharedStyles.tableBody}>
           {sortedShots.length === 0 ? (
-            <div className={styles.noShots}>Brak strzałów</div>
+            <div className={sharedStyles.noEntries}>Brak strzałów</div>
           ) : (
             sortedShots.map((shot) => (
               <ShotRow

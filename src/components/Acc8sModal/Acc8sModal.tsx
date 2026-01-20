@@ -44,6 +44,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
   const isEditMode = Boolean(editingEntry);
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
   const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
+  const [controversyNote, setControversyNote] = useState<string>(""); // Notatka dotycząca kontrowersyjnej akcji
 
   // Funkcje pomocnicze do konwersji czasu
   const secondsToMMSS = (seconds: number): string => {
@@ -235,6 +236,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
         passingPlayerIds: editingEntry.passingPlayerIds || [],
         isControversial: editingEntry.isControversial || false,
       });
+      setControversyNote(editingEntry.controversyNote || "");
     } else {
       // Pobierz aktualną połowę z localStorage
       const savedHalf = typeof window !== 'undefined' ? localStorage.getItem('currentHalf') : null;
@@ -432,6 +434,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
       isPKEntryUnder8s: formData.isPKEntryUnder8s,
       passingPlayerIds: formData.passingPlayerIds,
       isControversial: formData.isControversial,
+      controversyNote: formData.isControversial && controversyNote.trim() ? controversyNote.trim() : undefined,
       ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
       ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
     };
@@ -565,6 +568,30 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
             >
               !
             </button>
+          </div>
+          
+          {/* Pole notatki kontrowersyjnej - pojawia się gdy isControversial jest true */}
+          {formData.isControversial && (
+            <div className={styles.controversyNoteContainer}>
+              <label htmlFor="controversy-note" className={styles.controversyNoteLabel}>
+                Notatka dotycząca problemu:
+              </label>
+              <textarea
+                id="controversy-note"
+                className={styles.controversyNoteInput}
+                value={controversyNote}
+                onChange={(e) => setControversyNote(e.target.value)}
+                placeholder="Opisz problem z interpretacją akcji 8s ACC..."
+                rows={3}
+                maxLength={500}
+              />
+              <div className={styles.controversyNoteCounter}>
+                {controversyNote.length}/500
+              </div>
+            </div>
+          )}
+
+          <div className={styles.buttonGroup}>
             <button type="button" onClick={onClose} className={styles.cancelButton}>
               Anuluj
             </button>
@@ -581,11 +608,9 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
                   className={styles.videoTimeField}
                   maxLength={5}
                 />
-                {currentMatchMinute !== null && (
-                  <span className={styles.matchMinuteInfo}>
-                    {currentMatchMinute}'
-                  </span>
-                )}
+                <span className={styles.matchMinuteInfo}>
+                  {currentMatchMinute !== null ? currentMatchMinute : (editingEntry?.minute || formData.minute)}'
+                </span>
               </div>
             </div>
             <button type="submit" className={styles.saveButton}>

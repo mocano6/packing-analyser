@@ -3,6 +3,8 @@
 import React, { memo, useState } from "react";
 import { Shot } from "@/types";
 import styles from "./XGPitch.module.css";
+import PitchHeader from "../PitchHeader/PitchHeader";
+import pitchHeaderStyles from "../PitchHeader/PitchHeader.module.css";
 
 export interface XGPitchProps {
   shots?: Shot[];
@@ -65,13 +67,24 @@ const XGPitch = memo(function XGPitch({
   onShotAdd,
   onShotClick,
   selectedShotId,
+  matchInfo,
+  allTeams = [],
+  hideTeamLogos = false,
+  hideToggleButton = false,
 }: XGPitchProps) {
   // Stan przełącznika orientacji boiska
   const [isFlipped, setIsFlipped] = useState(false);
+  // Stan przełącznika widoczności strzałów
+  const [showShots, setShowShots] = useState(true);
 
   // Obsługa przełączania orientacji
   const handleFlipToggle = () => {
     setIsFlipped(!isFlipped);
+  };
+
+  // Obsługa przełączania widoczności strzałów
+  const handleToggleShots = () => {
+    setShowShots(prev => !prev);
   };
 
   // Obsługa kliknięcia na boisko
@@ -105,12 +118,41 @@ const XGPitch = memo(function XGPitch({
 
   return (
     <div className={styles.pitchContainer}>
-      <div
-        className={`${styles.pitch} ${isFlipped ? styles.flipped : ''}`}
-        role="grid"
-        aria-label="Boisko piłkarskie do analizy xG"
-        onClick={handlePitchClick}
-      >
+      <PitchHeader
+        matchInfo={matchInfo}
+        allTeams={allTeams}
+        isFlipped={isFlipped}
+        hideTeamLogos={hideTeamLogos}
+        rightContent={
+          <>
+            {!hideToggleButton && (
+              <button
+                type="button"
+                className={`${pitchHeaderStyles.headerButton} ${showShots ? pitchHeaderStyles.headerButtonActive : ""}`}
+                onClick={handleToggleShots}
+                aria-pressed={showShots}
+              >
+                Strzały: {showShots ? "ON" : "OFF"}
+              </button>
+            )}
+            <button
+              type="button"
+              className={pitchHeaderStyles.headerButton}
+              onClick={handleFlipToggle}
+            >
+              Obróć
+            </button>
+          </>
+        }
+      />
+
+      <div className={styles.pitchWrapper}>
+        <div
+          className={`${styles.pitch} ${isFlipped ? styles.flipped : ''}`}
+          role="grid"
+          aria-label="Boisko piłkarskie do analizy xG"
+          onClick={handlePitchClick}
+        >
         <div className={styles.pitchLines} aria-hidden="true">
           <div className={styles.centerLine} />
           <div className={styles.centerCircle} />
@@ -128,7 +170,7 @@ const XGPitch = memo(function XGPitch({
         </div>
 
         {/* Renderowanie strzałów */}
-        {shots.map((shot) => {
+        {showShots && shots.map((shot) => {
           let displayX = shot.x;
           let displayY = shot.y;
           
@@ -221,6 +263,7 @@ const XGPitch = memo(function XGPitch({
             </div>
           );
         })}
+        </div>
       </div>
     </div>
   );
