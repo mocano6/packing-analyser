@@ -7,7 +7,6 @@ import { doc, setDoc, getDoc, deleteDoc } from "firebase/firestore";
  */
 export const testFirebaseConnection = async (): Promise<boolean> => {
   try {
-    console.log("🔍 Uruchamiam test połączenia z Firestore...");
     
     // 1. Tworzymy testowy dokument
     const testDocRef = doc(db, "permission_tests", "test_connection");
@@ -17,21 +16,15 @@ export const testFirebaseConnection = async (): Promise<boolean> => {
     };
     
     // 2. Zapisujemy dokument
-    console.log("💾 Próba zapisu testowego dokumentu...");
     await setDoc(testDocRef, testData);
-    console.log("✅ Zapis testowego dokumentu udany");
     
     // 3. Odczytujemy dokument
-    console.log("📖 Próba odczytu testowego dokumentu...");
     const docSnap = await getDoc(testDocRef);
     
     if (docSnap.exists()) {
-      console.log("✅ Odczyt testowego dokumentu udany");
       
       // 4. Usuwamy dokument
-      console.log("🗑️ Próba usunięcia testowego dokumentu...");
       await deleteDoc(testDocRef);
-      console.log("✅ Usunięcie testowego dokumentu udane");
       
       return true;
     } else {
@@ -62,7 +55,6 @@ export const testFirebaseConnection = async (): Promise<boolean> => {
  */
 export const testCollectionAccess = async (collectionPath: string): Promise<boolean> => {
   try {
-    console.log(`🔍 Sprawdzam dostęp do kolekcji: ${collectionPath}...`);
     
     // Tworzymy testowy dokument w podanej kolekcji
     const testDocRef = doc(db, collectionPath, `test_access_${Date.now()}`);
@@ -73,16 +65,13 @@ export const testCollectionAccess = async (collectionPath: string): Promise<bool
     
     // Próba zapisu
     await setDoc(testDocRef, testData);
-    console.log(`✅ Zapis testowy do kolekcji ${collectionPath} udany`);
     
     // Próba odczytu
     const docSnap = await getDoc(testDocRef);
     if (docSnap.exists()) {
-      console.log(`✅ Odczyt testowy z kolekcji ${collectionPath} udany`);
       
       // Usuwamy dokument testowy
       await deleteDoc(testDocRef);
-      console.log(`✅ Usunięcie testowego dokumentu z kolekcji ${collectionPath} udane`);
       
       return true;
     } else {
@@ -114,9 +103,7 @@ export const testAllCollections = async (): Promise<Record<string, boolean>> => 
   }
   
   // Wyświetlamy podsumowanie
-  console.log("📊 Podsumowanie testów dostępu do kolekcji:");
   for (const [collection, result] of Object.entries(results)) {
-    console.log(`${result ? "✅" : "❌"} ${collection}: ${result ? "Dostęp OK" : "Brak dostępu"}`);
   }
   
   return results;

@@ -23,8 +23,6 @@ export const useAcc8sEntries = (matchId: string) => {
       if (matchDoc.exists()) {
         const matchData = matchDoc.data();
         const rawEntries = matchData.acc8sEntries || [];
-        console.log('fetchAcc8sEntries - rawEntries:', rawEntries);
-        console.log('fetchAcc8sEntries - videoTimestamps:', rawEntries.map((e: Acc8sEntry) => ({ id: e.id, videoTimestamp: e.videoTimestamp })));
         setAcc8sEntries(rawEntries);
       } else {
         setAcc8sEntries([]);
@@ -50,9 +48,6 @@ export const useAcc8sEntries = (matchId: string) => {
         ? updatedEntries(acc8sEntries)
         : updatedEntries;
       
-      console.log('saveAcc8sEntries - entriesToSave:', entriesToSave);
-      console.log('saveAcc8sEntries - liczba wpisów:', entriesToSave.length);
-      
       // Usuń wartości undefined z wpisów przed zapisem
       const cleanedEntries = entriesToSave.map(entry => {
         const cleaned: any = {};
@@ -64,15 +59,12 @@ export const useAcc8sEntries = (matchId: string) => {
         return cleaned;
       });
       
-      console.log('saveAcc8sEntries - cleanedEntries:', cleanedEntries);
-      
       const db = getDB();
       const matchRef = doc(db, "matches", matchId);
       await updateDoc(matchRef, {
         acc8sEntries: cleanedEntries
       });
       setAcc8sEntries(entriesToSave);
-      console.log('saveAcc8sEntries - zapisano pomyślnie');
       return true;
     } catch (err) {
       console.error("Błąd podczas zapisywania akcji 8s ACC:", err);
@@ -94,56 +86,15 @@ export const useAcc8sEntries = (matchId: string) => {
       timestamp: Date.now(),
     };
 
-    console.log('addAcc8sEntry - newEntry:', newEntry);
-    console.log('addAcc8sEntry - videoTimestamp:', newEntry.videoTimestamp);
-
     try {
-      // Pobierz aktualne wpisy
-      const db = getDB();
-      const matchDoc = await getDoc(doc(db, "matches", matchId));
-      const currentEntries: Acc8sEntry[] = matchDoc.exists() 
-        ? (matchDoc.data().acc8sEntries || [])
-        : [];
-
-      console.log('addAcc8sEntry - currentEntries przed dodaniem:', currentEntries);
-
-      // Dodaj nowy wpis
-      const updatedEntries = [...currentEntries, newEntry];
-
-      console.log('addAcc8sEntry - updatedEntries:', updatedEntries);
-
-      // Usuń wartości undefined z wpisów przed zapisem (ale zachowaj 0 dla videoTimestamp)
-      const cleanedEntries = updatedEntries.map(entry => {
-        const cleaned: any = {};
-        Object.keys(entry).forEach(key => {
-          const value = entry[key as keyof Acc8sEntry];
-          // Zachowaj wartość jeśli nie jest undefined (w tym 0, false, null, pusty string)
-          if (value !== undefined) {
-            cleaned[key] = value;
-          }
-        });
-        return cleaned;
-      });
-
-      console.log('addAcc8sEntry - cleanedEntries z videoTimestamp:', cleanedEntries.map(e => ({ id: e.id, videoTimestamp: e.videoTimestamp })));
-
-      // Zapisz do Firebase
-      const matchRef = doc(db, "matches", matchId);
-      await updateDoc(matchRef, {
-        acc8sEntries: cleanedEntries
-      });
-
-      // Zaktualizuj stan lokalny
-      setAcc8sEntries(updatedEntries);
-      
-      console.log('addAcc8sEntry - zapisano pomyślnie');
-      return newEntry;
+      const success = await saveAcc8sEntries(prevEntries => [...prevEntries, newEntry]);
+      return success ? newEntry : null;
     } catch (err) {
       console.error("Błąd podczas dodawania akcji 8s ACC:", err);
       setError("Nie udało się dodać akcji 8s ACC");
       return null;
     }
-  }, [matchId]);
+  }, [matchId, saveAcc8sEntries]);
 
   // Zaktualizuj akcję 8s ACC
   const updateAcc8sEntry = useCallback(async (entryId: string, entryData: Partial<Acc8sEntry>) => {
@@ -151,56 +102,17 @@ export const useAcc8sEntries = (matchId: string) => {
       console.error('updateAcc8sEntry - brak matchId');
       return false;
     }
-
-    console.log('updateAcc8sEntry - entryId:', entryId);
-    console.log('updateAcc8sEntry - entryData:', entryData);
     
     try {
-      // Pobierz aktualne wpisy
-      const db = getDB();
-      const matchDoc = await getDoc(doc(db, "matches", matchId));
-      const currentEntries: Acc8sEntry[] = matchDoc.exists() 
-        ? (matchDoc.data().acc8sEntries || [])
-        : [];
-
-      const updatedEntries = currentEntries.map(entry => 
-        entry.id === entryId ? { ...entry, ...entryData } : entry
+      return await saveAcc8sEntries(prevEntries =>
+        prevEntries.map(entry => entry.id === entryId ? { ...entry, ...entryData } : entry)
       );
-      
-      console.log('updateAcc8sEntry - updatedEntries:', updatedEntries);
-
-      // Usuń wartości undefined z wpisów przed zapisem (ale zachowaj 0 dla videoTimestamp)
-      const cleanedEntries = updatedEntries.map(entry => {
-        const cleaned: any = {};
-        Object.keys(entry).forEach(key => {
-          const value = entry[key as keyof Acc8sEntry];
-          // Zachowaj wartość jeśli nie jest undefined (w tym 0, false, null, pusty string)
-          if (value !== undefined) {
-            cleaned[key] = value;
-          }
-        });
-        return cleaned;
-      });
-      
-      console.log('updateAcc8sEntry - cleanedEntries z videoTimestamp:', cleanedEntries.map(e => ({ id: e.id, videoTimestamp: e.videoTimestamp })));
-
-      // Zapisz do Firebase
-      const matchRef = doc(db, "matches", matchId);
-      await updateDoc(matchRef, {
-        acc8sEntries: cleanedEntries
-      });
-
-      // Zaktualizuj stan lokalny
-      setAcc8sEntries(updatedEntries);
-      
-      console.log('updateAcc8sEntry - zapisano pomyślnie');
-      return true;
     } catch (err) {
       console.error("Błąd podczas aktualizacji akcji 8s ACC:", err);
       setError("Nie udało się zaktualizować akcji 8s ACC");
       return false;
     }
-  }, [matchId]);
+  }, [matchId, saveAcc8sEntries]);
 
   // Usuń akcję 8s ACC
   const deleteAcc8sEntry = useCallback(async (entryId: string) => {
@@ -210,45 +122,13 @@ export const useAcc8sEntries = (matchId: string) => {
     }
 
     try {
-      // Pobierz aktualne wpisy
-      const db = getDB();
-      const matchDoc = await getDoc(doc(db, "matches", matchId));
-      const currentEntries: Acc8sEntry[] = matchDoc.exists() 
-        ? (matchDoc.data().acc8sEntries || [])
-        : [];
-
-      const updatedEntries = currentEntries.filter(entry => entry.id !== entryId);
-      
-      console.log('deleteAcc8sEntry - updatedEntries:', updatedEntries);
-
-      // Usuń wartości undefined z wpisów przed zapisem
-      const cleanedEntries = updatedEntries.map(entry => {
-        const cleaned: any = {};
-        Object.keys(entry).forEach(key => {
-          if (entry[key as keyof Acc8sEntry] !== undefined) {
-            cleaned[key] = entry[key as keyof Acc8sEntry];
-          }
-        });
-        return cleaned;
-      });
-
-      // Zapisz do Firebase
-      const matchRef = doc(db, "matches", matchId);
-      await updateDoc(matchRef, {
-        acc8sEntries: cleanedEntries
-      });
-
-      // Zaktualizuj stan lokalny
-      setAcc8sEntries(updatedEntries);
-      
-      console.log('deleteAcc8sEntry - zapisano pomyślnie');
-      return true;
+      return await saveAcc8sEntries(prevEntries => prevEntries.filter(entry => entry.id !== entryId));
     } catch (err) {
       console.error("Błąd podczas usuwania akcji 8s ACC:", err);
       setError("Nie udało się usunąć akcji 8s ACC");
       return false;
     }
-  }, [matchId]);
+  }, [matchId, saveAcc8sEntries]);
 
   // Pobierz akcje 8s ACC przy załadowaniu lub zmianie matchId
   useEffect(() => {

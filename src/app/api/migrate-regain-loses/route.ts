@@ -37,8 +37,6 @@ function convertZoneToName(zone: string | number | undefined): string | null {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('🚀 Rozpoczynam migrację akcji regain i loses...');
-
     // Inicjalizuj Firestore dla serwera
     const db = getServerFirestore();
 
@@ -49,8 +47,6 @@ export async function POST(request: NextRequest) {
       id: doc.id,
       ...doc.data()
     }));
-
-    console.log(`📋 Pobrano ${matches.length} meczów`);
 
     if (matches.length === 0) {
       return NextResponse.json({ 
@@ -183,7 +179,6 @@ export async function POST(request: NextRequest) {
             actions_regain: updatedRegainActions,
             actions_loses: updatedLosesActions
           });
-          console.log(`✅ Zaktualizowano mecz ${match.id}`);
           totalMatchesUpdated++;
         } catch (error: any) {
           const errorMsg = `Błąd podczas aktualizacji meczu ${match.id}: ${error.message}`;

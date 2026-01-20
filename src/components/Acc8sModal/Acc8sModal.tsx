@@ -192,9 +192,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
   // Automatycznie ustaw sugerowaną wartość minuty i połowy na podstawie czasu wideo przy otwarciu modalu
   useEffect(() => {
     if (isOpen && !editingEntry && onCalculateMinuteFromVideo) {
-      console.log('Acc8sModal: wywołuję onCalculateMinuteFromVideo');
       onCalculateMinuteFromVideo().then((result) => {
-        console.log('Acc8sModal: wynik obliczenia:', result);
         if (result !== null && result.minute > 0) {
           setFormData(prev => ({
             ...prev,
@@ -415,11 +413,6 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
       : undefined;
     const isValidTimestampRaw = parsedVideoTimestampRaw !== undefined && !isNaN(parsedVideoTimestampRaw) && parsedVideoTimestampRaw >= 0;
     
-    console.log('Acc8sModal handleSubmit - videoTimestamp z localStorage:', videoTimestamp);
-    console.log('Acc8sModal handleSubmit - parsedVideoTimestamp:', parsedVideoTimestamp);
-    console.log('Acc8sModal handleSubmit - isValidTimestamp:', isValidTimestamp);
-    console.log('Acc8sModal handleSubmit - editingEntry?.videoTimestamp:', editingEntry?.videoTimestamp);
-    
     // W trybie edycji używamy nowych wartości z localStorage, jeśli są dostępne, w przeciwnym razie starych z editingEntry
     const finalVideoTimestamp = isEditMode
       ? (isValidTimestamp ? parsedVideoTimestamp : editingEntry?.videoTimestamp)
@@ -442,10 +435,6 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
       ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
       ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
     };
-
-    console.log('Acc8sModal handleSubmit - entryData:', entryData);
-    console.log('Acc8sModal handleSubmit - isSecondHalf:', entryData.isSecondHalf);
-    console.log('Acc8sModal handleSubmit - videoTimestamp w entryData:', entryData.videoTimestamp);
 
     onSave(entryData);
 

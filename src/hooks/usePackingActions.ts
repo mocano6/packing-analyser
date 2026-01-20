@@ -400,9 +400,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       let losesOppositeZone: string | undefined;
       
       if (actionCategory === "regain" || actionCategory === "loses") {
-        console.log(`🔍 DEBUG regain START - formattedStartZone: "${formattedStartZone}", type: ${typeof formattedStartZone}`);
-        console.log(`🔍 DEBUG regain START - startZone param: ${startZone}, endZone param: ${endZone}`);
-        console.log(`🔍 DEBUG regain START - xTEnd: ${xTEnd}`);
         
         // Używamy formattedStartZone - dla regain startZone i endZone są takie same
         const zoneToProcess = formattedStartZone;
@@ -413,11 +410,9 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
             ? zoneToProcess.toUpperCase() 
             : convertZoneNumberToString(zoneToProcess);
           
-          console.log(`🔍 DEBUG regain - startZoneName: ${startZoneName}`);
           
           // Oblicz opposite strefę
           const zoneIndex = zoneNameToIndex(startZoneName);
-          console.log(`🔍 DEBUG regain - zoneIndex: ${zoneIndex}`);
           
           if (zoneIndex !== null) {
             // Oblicz opposite indeks
@@ -427,16 +422,13 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
             const oppositeCol = 11 - col;
             const oppositeIndex = oppositeRow * 12 + oppositeCol;
             
-            console.log(`🔍 DEBUG regain - row: ${row}, col: ${col}, oppositeRow: ${oppositeRow}, oppositeCol: ${oppositeCol}, oppositeIndex: ${oppositeIndex}`);
             
             // Pobierz opposite strefę i xT
             const oppositeZoneData = getZoneName(oppositeIndex);
-            console.log(`🔍 DEBUG regain - oppositeZoneData:`, oppositeZoneData);
             
             if (oppositeZoneData) {
               regainOppositeZone = zoneNameToString(oppositeZoneData);
               regainOppositeXT = getOppositeXTValueForZone(zoneIndex);
-              console.log(`✅ DEBUG regain - oppositeZone: ${regainOppositeZone}, oppositeXT: ${regainOppositeXT}`);
             } else {
               console.warn(`⚠️ DEBUG regain - nie można pobrać oppositeZoneData dla indeksu ${oppositeIndex}`);
             }
@@ -451,13 +443,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         // Określ czy to atak czy obrona na podstawie xT odbiorców
         const receiverXT = xTEnd !== undefined ? xTEnd : 0;
         regainIsAttack = receiverXT < 0.02; // xT < 0.02 to atak
-        console.log(`🔍 DEBUG regain - receiverXT: ${receiverXT}, isAttack: ${regainIsAttack}`);
-        console.log(`🔍 DEBUG regain END - regainOppositeXT: ${regainOppositeXT}, regainOppositeZone: ${regainOppositeZone}, regainIsAttack: ${regainIsAttack}`);
         } else if (actionCategory === "loses") {
           // Dla loses używamy tych samych wartości co dla regain
           losesOppositeXT = regainOppositeXT;
           losesOppositeZone = regainOppositeZone;
-          console.log(`🔍 DEBUG loses - losesOppositeXT: ${losesOppositeXT}, losesOppositeZone: ${losesOppositeZone}`);
         }
       }
       
@@ -566,7 +555,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           // Dodaj wartości xT dla regainów - zapis odwrócony: atak = strefa wyboru, obrona = opposite
           if (defenseXT !== undefined) {
             regainFields.regainAttackXT = defenseXT; // Wartość xT w ataku (z wybranej strefy)
-            console.log(`✅ DEBUG regain - dodano regainAttackXT: ${defenseXT} do obiektu akcji`);
           } else if (formattedStartZone) {
             // Jeśli attackXT nie jest dostępne, oblicz z wybranej strefy
             const startZoneName = typeof formattedStartZone === 'string' 
@@ -577,20 +565,16 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
               const zoneData = getZoneData(zoneIndex);
               if (zoneData && typeof zoneData.value === 'number') {
                 regainFields.regainAttackXT = zoneData.value;
-                console.log(`✅ DEBUG regain - Obliczono regainAttackXT z strefy ${startZoneName}: ${zoneData.value}`);
               }
             }
           }
           if (regainOppositeXT !== undefined) {
             regainFields.regainDefenseXT = regainOppositeXT; // Wartość xT w obronie (z opposite zone)
-            console.log(`✅ DEBUG regain - dodano regainDefenseXT: ${regainOppositeXT} do obiektu akcji`);
           }
           if (regainIsAttack !== undefined) {
             regainFields.isAttack = regainIsAttack;
-            console.log(`✅ DEBUG regain - dodano isAttack: ${regainIsAttack} do obiektu akcji`);
           }
           
-          console.log(`🔍 DEBUG regain - regainFields przed dodaniem:`, regainFields);
           return regainFields;
         })()),
         ...(actionCategory === "loses" && (() => {
@@ -630,7 +614,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           // Dodaj wartości xT dla loses - zapis odwrócony: atak = strefa wyboru, obrona = opposite
           if (typeof defenseXT === 'number') {
             losesFields.losesAttackXT = defenseXT; // Wartość xT w ataku (z wybranej strefy)
-            console.log(`✅ DEBUG loses - dodano losesAttackXT: ${defenseXT} do obiektu akcji`);
           } else if (formattedStartZone) {
             // Jeśli attackXT nie jest dostępne, oblicz z wybranej strefy
             const startZoneName = typeof formattedStartZone === 'string' 
@@ -641,16 +624,13 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
               const zoneData = getZoneData(zoneIndex);
               if (zoneData && typeof zoneData.value === 'number') {
                 losesFields.losesAttackXT = zoneData.value;
-                console.log(`✅ DEBUG loses - Obliczono losesAttackXT z strefy ${startZoneName}: ${zoneData.value}`);
               }
             }
           }
           if (typeof losesOppositeXT === 'number') {
             losesFields.losesDefenseXT = losesOppositeXT; // Wartość xT w obronie (z opposite zone)
-            console.log(`✅ DEBUG loses - dodano losesDefenseXT: ${losesOppositeXT} do obiektu akcji`);
           }
           
-          console.log(`🔍 DEBUG loses - losesFields przed dodaniem:`, losesFields);
           return losesFields;
         })())
       };
@@ -674,19 +654,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       }
       
       // DEBUG: Sprawdzamy wartości stanu przed zapisem
-      console.log("🔍 DEBUG - Wartości stanu przed zapisem:");
-      console.log("  - isP0Active:", isP0Active);
-      console.log("  - isP1Active:", isP1Active);
-      console.log("  - isP2Active:", isP2Active);
-      console.log("  - isP3Active:", isP3Active);
-      console.log("  - isContact1Active:", isContact1Active);
-      console.log("  - isContact2Active:", isContact2Active);
-      console.log("  - isContact3PlusActive:", isContact3PlusActive);
-      console.log("  - isShot:", isShot);
-      console.log("  - isGoal:", isGoal);
-      console.log("  - isPenaltyAreaEntry:", isPenaltyAreaEntry);
       if (actionCategory === "loses") {
-        console.log("  - isPMAreaActive:", isPMAreaActive);
       }
       
       // Usuwamy pola undefined z obiektu akcji przed zapisem
@@ -757,53 +725,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       }
       
       // DEBUG: Wypisujemy strukturę obiektu akcji do konsoli
-      console.log("🔍 DEBUG - Struktura obiektu akcji przed zapisem do Firebase:");
       if (actionCategory === "regain") {
-        console.log("🔍 DEBUG regain - regainAttackZone:", (cleanedAction as any).regainAttackZone);
-        console.log("🔍 DEBUG regain - regainDefenseZone:", (cleanedAction as any).regainDefenseZone);
-        console.log("🔍 DEBUG regain - regainAttackXT:", (cleanedAction as any).regainAttackXT);
-        console.log("🔍 DEBUG regain - regainDefenseXT:", (cleanedAction as any).regainDefenseXT);
-        console.log("🔍 DEBUG regain - isAttack:", (cleanedAction as any).isAttack);
-        console.log("🔍 DEBUG regain - isP0:", (cleanedAction as any).isP0);
-        console.log("🔍 DEBUG regain - isP1:", (cleanedAction as any).isP1);
-        console.log("🔍 DEBUG regain - isP2:", (cleanedAction as any).isP2);
-        console.log("🔍 DEBUG regain - isP3:", (cleanedAction as any).isP3);
-        console.log("🔍 DEBUG regain - isContact1:", (cleanedAction as any).isContact1);
-        console.log("🔍 DEBUG regain - isContact2:", (cleanedAction as any).isContact2);
-        console.log("🔍 DEBUG regain - isContact3Plus:", (cleanedAction as any).isContact3Plus);
-        console.log("🔍 DEBUG regain - isShot:", (cleanedAction as any).isShot);
-        console.log("🔍 DEBUG regain - isGoal:", (cleanedAction as any).isGoal);
-        console.log("🔍 DEBUG regain - isPenaltyAreaEntry:", (cleanedAction as any).isPenaltyAreaEntry);
       }
       if (actionCategory === "loses") {
-        console.log("🔍 DEBUG loses - Pełna struktura obiektu loses:");
-        console.log(JSON.stringify(cleanedAction, null, 2));
-        console.log("🔍 DEBUG loses - isP0:", (cleanedAction as any).isP0);
-        console.log("🔍 DEBUG loses - isP1:", (cleanedAction as any).isP1);
-        console.log("🔍 DEBUG loses - isP2:", (cleanedAction as any).isP2);
-        console.log("🔍 DEBUG loses - isP3:", (cleanedAction as any).isP3);
-        console.log("🔍 DEBUG loses - isContact1:", (cleanedAction as any).isContact1);
-        console.log("🔍 DEBUG loses - isContact2:", (cleanedAction as any).isContact2);
-        console.log("🔍 DEBUG loses - isContact3Plus:", (cleanedAction as any).isContact3Plus);
-        console.log("🔍 DEBUG loses - isShot:", (cleanedAction as any).isShot);
-        console.log("🔍 DEBUG loses - isGoal:", (cleanedAction as any).isGoal);
-        console.log("🔍 DEBUG loses - isPenaltyAreaEntry:", (cleanedAction as any).isPenaltyAreaEntry);
-        console.log("🔍 DEBUG loses - isPMArea:", (cleanedAction as any).isPMArea);
       }
-      console.log("📋 Pełny obiekt akcji:", JSON.stringify(cleanedAction, null, 2));
-      console.log("📊 Szczegóły akcji:");
-      console.log("  - ID akcji:", cleanedAction.id);
-      console.log("  - Tryb:", cleanedAction.mode);
-      console.log("  - Zawodnik start:", cleanedAction.senderName);
-      console.log("  - Zawodnik koniec:", cleanedAction.receiverName);
-      console.log("  - Punkty packing:", cleanedAction.packingPoints);
-      console.log("  - P1:", cleanedAction.isP1);
-      console.log("  - P2:", cleanedAction.isP2);
-      console.log("  - P3:", cleanedAction.isP3);
-      console.log("  - 1T:", cleanedAction.isContact1);
-      console.log("  - 2T:", cleanedAction.isContact2);
-      console.log("  - 3T+:", cleanedAction.isContact3Plus);
-      console.log("  - Zawodnicy obrony:", cleanedAction.defensePlayers);
       
       // Zapisujemy do Firebase
       try {
@@ -854,14 +779,9 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           });
           
           // Console log z całym obiektem zapisanej akcji
-          console.log("✅ Zapisano akcję - pełny obiekt:", actionToSave);
-          console.log("📋 Zapisano akcję - JSON:", JSON.stringify(actionToSave, null, 2));
-          console.log("🔍 DEBUG - isP0:", actionToSave.isP0, "isP1:", actionToSave.isP1, "isContact1:", actionToSave.isContact1);
           
           // Specjalny console log dla akcji loses
           if (actionCategory === "loses") {
-            console.log("🔴 LOSES - Pełna struktura obiektu po zapisaniu:");
-            console.log(JSON.stringify(cleanedAction, null, 2));
           }
           
           // Akcje są teraz przechowywane tylko w matches - nie duplikujemy w players

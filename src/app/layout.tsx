@@ -3,6 +3,7 @@ import './globals.css';
 import { Inter } from 'next/font/google';
 import type { Metadata } from 'next';
 import AuthGuard from '@/components/AuthGuard/AuthGuard';
+import ConsoleSilencer from '@/components/ConsoleSilencer/ConsoleSilencer';
 import { Toaster } from 'react-hot-toast';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -72,6 +73,7 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
       </head>
       <body className={inter.className} suppressHydrationWarning={true}>
+        <ConsoleSilencer />
         <AuthGuard>
           {children}
         </AuthGuard>

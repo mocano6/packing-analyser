@@ -609,31 +609,24 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   const handleVideoTimeClick = async (videoTimestamp?: number) => {
     if (!videoTimestamp) return;
     
-    console.log('handleVideoTimeClick - videoTimestamp:', videoTimestamp);
-    console.log('handleVideoTimeClick - youtubeVideoRef:', youtubeVideoRef);
-    console.log('handleVideoTimeClick - customVideoRef:', customVideoRef);
     
     // Sprawdź czy mamy otwarte zewnętrzne okno wideo (sprawdzamy bezpośrednio externalWindow, a nie localStorage)
     const externalWindow = (window as any).externalVideoWindow;
     const isExternalWindowOpen = externalWindow && !externalWindow.closed;
     
     if (isExternalWindowOpen) {
-      console.log('handleVideoTimeClick - używam zewnętrznego okna');
       // Wyślij wiadomość do zewnętrznego okna
       try {
         externalWindow.postMessage({
           type: 'SEEK_TO_TIME',
           time: videoTimestamp
         }, '*');
-        console.log('handleVideoTimeClick - wiadomość wysłana do zewnętrznego okna');
       } catch (error) {
         console.error('handleVideoTimeClick - błąd podczas wysyłania wiadomości:', error);
       }
     } else if (youtubeVideoRef?.current) {
-      console.log('handleVideoTimeClick - używam youtubeVideoRef, current:', youtubeVideoRef.current);
       try {
         await youtubeVideoRef.current.seekTo(videoTimestamp);
-        console.log('handleVideoTimeClick - youtubeVideoRef.seekTo zakończone');
       } catch (error) {
         console.warn('Nie udało się przewinąć wideo do czasu:', videoTimestamp, error);
         // Spróbuj ponownie po krótkim czasie
@@ -641,7 +634,6 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           if (youtubeVideoRef?.current) {
             try {
               await youtubeVideoRef.current.seekTo(videoTimestamp);
-              console.log('handleVideoTimeClick - youtubeVideoRef.seekTo (retry) zakończone');
             } catch (retryError) {
               console.warn('Nie udało się przewinąć wideo do czasu (retry):', videoTimestamp, retryError);
             }
@@ -649,10 +641,8 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         }, 500);
       }
     } else if (customVideoRef?.current) {
-      console.log('handleVideoTimeClick - używam customVideoRef');
       try {
         await customVideoRef.current.seekTo(videoTimestamp);
-        console.log('handleVideoTimeClick - customVideoRef.seekTo zakończone');
       } catch (error) {
         console.warn('Nie udało się przewinąć własnego odtwarzacza do czasu:', videoTimestamp, error);
       }

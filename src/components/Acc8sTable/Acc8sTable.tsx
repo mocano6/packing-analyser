@@ -89,20 +89,13 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
   const handleVideoTimeClick = async (videoTimestamp?: number) => {
     if (!videoTimestamp) return;
     
-    console.log('Acc8sTable handleVideoTimeClick - timestamp:', videoTimestamp);
-    console.log('Acc8sTable handleVideoTimeClick - customVideoRef?.current:', customVideoRef?.current);
-    console.log('Acc8sTable handleVideoTimeClick - youtubeVideoRef?.current:', youtubeVideoRef?.current);
     
     // Sprawdź czy mamy otwarte zewnętrzne okno wideo (sprawdzamy bezpośrednio externalWindow, a nie localStorage)
     const externalWindow = (window as any).externalVideoWindow;
     const isExternalWindowOpen = externalWindow && !externalWindow.closed;
     
-    console.log('Acc8sTable handleVideoTimeClick - externalWindow:', externalWindow);
-    console.log('Acc8sTable handleVideoTimeClick - externalWindow?.closed:', externalWindow?.closed);
-    console.log('Acc8sTable handleVideoTimeClick - isExternalWindowOpen:', isExternalWindowOpen);
     
     if (isExternalWindowOpen) {
-      console.log('Acc8sTable - wysyłam SEEK_TO_TIME do zewnętrznego okna, timestamp:', videoTimestamp);
       try {
         // Wyślij wiadomość do zewnętrznego okna (używamy window.location.origin dla bezpieczeństwa)
         const targetOrigin = window.location.origin;
@@ -110,7 +103,6 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
           type: 'SEEK_TO_TIME',
           time: videoTimestamp
         }, targetOrigin);
-        console.log('Acc8sTable - wiadomość wysłana pomyślnie do origin:', targetOrigin);
       } catch (error) {
         console.error('Acc8sTable - błąd podczas wysyłania wiadomości do zewnętrznego okna:', error);
         // Fallback - spróbuj z '*' jako origin
@@ -119,20 +111,17 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
             type: 'SEEK_TO_TIME',
             time: videoTimestamp
           }, '*');
-          console.log('Acc8sTable - wiadomość wysłana z fallback origin "*"');
         } catch (fallbackError) {
           console.error('Acc8sTable - błąd również przy fallback:', fallbackError);
         }
       }
     } else if (youtubeVideoRef?.current) {
-      console.log('Acc8sTable - używam youtubeVideoRef');
       try {
         await youtubeVideoRef.current.seekTo(videoTimestamp);
       } catch (error) {
         console.warn('Nie udało się przewinąć YouTube do czasu:', videoTimestamp, error);
       }
     } else if (customVideoRef?.current) {
-      console.log('Acc8sTable - używam customVideoRef');
       try {
         await customVideoRef.current.seekTo(videoTimestamp);
       } catch (error) {

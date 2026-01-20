@@ -11,12 +11,9 @@ import toast from "react-hot-toast";
  */
 export const initializeTeams = async (): Promise<boolean> => {
   try {
-    console.log("Rozpoczynam inicjalizację kolekcji teams w Firebase...");
-    
     // Sprawdź, czy tryb offline jest aktywny
     const isOfflineMode = typeof window !== 'undefined' && localStorage.getItem('firestore_offline_mode') === 'true';
     if (isOfflineMode) {
-      console.log("📴 Aplikacja jest w trybie offline - pomijam inicjalizację zespołów w Firebase");
       return true; // Zwracamy true, aby aplikacja mogła kontynuować działanie
     }
     
@@ -28,7 +25,6 @@ export const initializeTeams = async (): Promise<boolean> => {
       const teamDoc = await getDoc(teamDocRef);
       
       if (teamDoc.exists()) {
-        console.log(`Dokument team o ID ${firstTeamId} już istnieje, pomijanie inicjalizacji.`);
         return false;
       }
     } catch (permissionError) {
@@ -39,7 +35,6 @@ export const initializeTeams = async (): Promise<boolean> => {
         
         // Wykrywamy błąd uprawnień i przełączamy na tryb offline
         if (permissionError.message.includes("Missing or insufficient permissions")) {
-          console.log("🔒 Wykryto brak uprawnień do kolekcji teams, przełączam na tryb offline");
           if (typeof window !== 'undefined') {
             localStorage.setItem('firestore_offline_mode', 'true');
             toast.error("Brak uprawnień do kolekcji teams. Aplikacja działa w trybie offline.");
@@ -155,7 +150,6 @@ export const forceInitializeTeams = async (): Promise<boolean> => {
     
     // Jeśli to błąd uprawnień, włączamy tryb offline i pozwalamy aplikacji działać dalej
     if (error instanceof Error && error.message.includes("Missing or insufficient permissions")) {
-      console.log("🔒 Wykryto brak uprawnień, przełączam na tryb offline");
       if (typeof window !== 'undefined') {
         localStorage.setItem('firestore_offline_mode', 'true');
         toast.error("Brak dostępu do bazy danych. Aplikacja działa w trybie offline.");

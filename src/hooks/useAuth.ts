@@ -55,8 +55,6 @@ export function useAuth(): UseAuthReturnType {
 
       if (!userDoc.exists()) {
         // Jeśli użytkownik nie istnieje, tworzymy nowy dokument
-        console.log('Tworzenie nowego użytkownika w bazie danych');
-        console.log('Email z parametru:', userEmail);
         
         const newUserData: UserData = {
           email: userEmail || '',
@@ -66,14 +64,12 @@ export function useAuth(): UseAuthReturnType {
           lastLogin: new Date()
         };
 
-        console.log('Dane nowego użytkownika:', newUserData);
 
         await setDoc(userRef, newUserData).catch(error => {
           handleFirestoreError(error, db);
           throw error;
         });
 
-        console.log('Użytkownik został utworzony w Firestore');
         return newUserData;
       }
 
@@ -89,7 +85,6 @@ export function useAuth(): UseAuthReturnType {
       
       if (needsEmailUpdate) {
         updateData.email = userEmail;
-        console.log('Aktualizuję email dla istniejącego użytkownika:', userEmail);
       }
       
       await setDoc(userRef, updateData, { merge: true }).catch(error => {

@@ -43,7 +43,6 @@ export const forceOfflineMode = async () => {
     try {
       await disableNetwork(db);
       localStorage.setItem('firestore_offline_mode', 'true');
-      console.log('📴 Tryb offline wymuszony pomyślnie');
       return true;
     } catch (err) {
       console.error('❌ Błąd przy wymuszaniu trybu offline:', err);
@@ -59,7 +58,6 @@ export const enableOnlineMode = async () => {
     try {
       await enableNetwork(db);
       localStorage.removeItem('firestore_offline_mode');
-      console.log('🌐 Tryb online przywrócony pomyślnie');
       return true;
     } catch (err) {
       console.error('❌ Błąd przy przywracaniu trybu online:', err);

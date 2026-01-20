@@ -323,10 +323,6 @@ export default function StatystykiZespoluPage() {
             _actionSource: "loses"
           })) as Action[];
 
-          console.log('🔍 DEBUG Statystyki zespołu - Regain z dokumentu:', regainActions.length, regainActions.slice(0, 2));
-          console.log('🔍 DEBUG Statystyki zespołu - Loses z dokumentu:', losesActions.length, losesActions.slice(0, 2));
-          console.log('🔍 DEBUG Statystyki zespołu - Wybrany zespół (selectedTeam):', selectedTeam);
-
           setAllActions(actions);
           setAllRegainActions(regainActions);
           setAllLosesActions(losesActions);
@@ -717,14 +713,8 @@ export default function StatystykiZespoluPage() {
   }, [allActions, selectedTeam]);
 
   const teamRegainActions = useMemo(() => {
-    console.log('🔍 DEBUG teamRegainActions - allRegainActions.length:', allRegainActions.length);
-    console.log('🔍 DEBUG teamRegainActions - selectedTeam:', selectedTeam);
-    console.log('🔍 DEBUG teamRegainActions - Pierwsze 2 akcje z allRegainActions:', allRegainActions.slice(0, 2));
-    
     if (!selectedTeam) return allRegainActions;
     const filtered = allRegainActions.filter(action => !action.teamId || action.teamId === selectedTeam);
-    console.log('🔍 DEBUG teamRegainActions - filtered.length:', filtered.length);
-    console.log('🔍 DEBUG teamRegainActions - Pierwsze 2 po filtrze:', filtered.slice(0, 2));
     return filtered.length > 0 ? filtered : allRegainActions;
   }, [allRegainActions, selectedTeam]);
 
@@ -735,11 +725,8 @@ export default function StatystykiZespoluPage() {
   }, [allLosesActions, selectedTeam]);
 
   const derivedRegainActions = useMemo(() => {
-    console.log('🔍 DEBUG derivedRegainActions - teamRegainActions.length:', teamRegainActions.length);
-    console.log('🔍 DEBUG derivedRegainActions - teamActions.length:', teamActions.length);
     if (teamRegainActions.length > 0) return teamRegainActions;
     const filtered = teamActions.filter(action => isRegainAction(action));
-    console.log('🔍 DEBUG derivedRegainActions - filtered from teamActions:', filtered.length);
     return filtered;
   }, [teamRegainActions, teamActions]);
 
@@ -1446,10 +1433,6 @@ export default function StatystykiZespoluPage() {
           return regainHalfFilter === "own" ? isOwn : !isOwn;
         });
 
-    console.log('🔍 DEBUG teamRegainStats - derivedRegainActions.length:', derivedRegainActions.length);
-    console.log('🔍 DEBUG teamRegainStats - filteredRegainActions.length:', filteredRegainActions.length);
-    console.log('🔍 DEBUG teamRegainStats - Pierwsze 2 akcje:', derivedRegainActions.slice(0, 2));
-    
     const attackXTHeatmap = new Map<string, number>();
     const defenseXTHeatmap = new Map<string, number>();
     const attackCountHeatmap = new Map<string, number>();
@@ -1552,8 +1535,6 @@ export default function StatystykiZespoluPage() {
       attackCountHeatmap,
       defenseCountHeatmap,
     };
-    
-    console.log('🔍 DEBUG teamRegainStats - WYNIK:', result);
     
     return result;
   }, [derivedRegainActions, regainHalfFilter]);
@@ -3766,28 +3747,6 @@ export default function StatystykiZespoluPage() {
                       const opponentShotsBlocked = opponentShots.filter(shot => shot.shotType === 'blocked');
                       const teamXGBlocked = teamShotsBlocked.reduce((sum, shot) => sum + (shot.xG || 0), 0);
                       const opponentXGBlocked = opponentShotsBlocked.reduce((sum, shot) => sum + (shot.xG || 0), 0);
-                      
-                      // Debug: sprawdź dane dla przeciwnika
-                      if (opponentShotsBlocked.length > 0) {
-                        console.log('Opponent blocked shots:', opponentShotsBlocked.map(s => ({
-                          xG: s.xG,
-                          shotType: s.shotType,
-                          teamContext: s.teamContext,
-                          linePlayers: (s as any).linePlayers,
-                          linePlayersCount: (s as any).linePlayersCount
-                        })));
-                      }
-                      if (opponentShots.length > 0) {
-                        console.log('Opponent shots with line players:', opponentShots.filter(s => 
-                          ((s as any).linePlayers?.length > 0) || ((s as any).linePlayersCount > 0)
-                        ).map(s => ({
-                          xG: s.xG,
-                          shotType: s.shotType,
-                          teamContext: s.teamContext,
-                          linePlayers: (s as any).linePlayers,
-                          linePlayersCount: (s as any).linePlayersCount
-                        })));
-                      }
                       
                       // Średnia liczba zawodników na linii strzału/strzał
                       // Dla ataku używamy linePlayersCount, dla obrony używamy długości tablicy linePlayers

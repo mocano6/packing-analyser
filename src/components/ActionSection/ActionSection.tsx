@@ -267,21 +267,16 @@ const ActionSection = memo(function ActionSection({
       } else if (youtubeVideoRef?.current) {
         try {
           currentVideoTime = await youtubeVideoRef.current.getCurrentTime();
-          console.log('ActionSection calculateMatchMinuteFromVideoTime: pobrano czas z YouTube:', currentVideoTime);
         } catch (error) {
-          console.warn('ActionSection calculateMatchMinuteFromVideoTime: błąd pobierania czasu z YouTube:', error);
           return null;
         }
       } else if (customVideoRef?.current) {
         try {
           currentVideoTime = await customVideoRef.current.getCurrentTime();
-          console.log('ActionSection calculateMatchMinuteFromVideoTime: pobrano czas z CustomVideo:', currentVideoTime);
         } catch (error) {
-          console.warn('ActionSection calculateMatchMinuteFromVideoTime: błąd pobierania czasu z CustomVideo:', error);
           return null;
         }
       } else {
-        console.log('ActionSection calculateMatchMinuteFromVideoTime: brak dostępnych refów wideo (youtubeVideoRef:', !!youtubeVideoRef?.current, ', customVideoRef:', !!customVideoRef?.current, ')');
         return null;
       }
 

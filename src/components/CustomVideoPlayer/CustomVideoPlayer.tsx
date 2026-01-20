@@ -39,11 +39,8 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerRef, CustomVideoPlayerProp
       return 0;
     },
     seekTo: async (seconds: number): Promise<void> => {
-      console.log('CustomVideoPlayer seekTo - seconds:', seconds, 'videoRef.current:', videoRef.current);
       if (videoRef.current) {
-        console.log('CustomVideoPlayer seekTo - ustawiam currentTime na:', seconds);
         videoRef.current.currentTime = seconds;
-        console.log('CustomVideoPlayer seekTo - currentTime po ustawieniu:', videoRef.current.currentTime);
       } else {
         console.warn('CustomVideoPlayer seekTo - videoRef.current jest null');
       }

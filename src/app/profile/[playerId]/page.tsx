@@ -1473,49 +1473,6 @@ export default function PlayerDetailsPage() {
              action.senderId === targetPlayerId;
     });
     
-    // Console log wszystkich regainów dla zawodnika
-    console.log(`🔍 Regainy dla zawodnika ${targetPlayerId}:`, regainActionsForPlayer);
-    console.log(`📊 Liczba regainów: ${regainActionsForPlayer.length}`);
-    regainActionsForPlayer.forEach((regain, index) => {
-      console.log(`\n📋 Regain ${index + 1}:`, {
-        id: regain.id,
-        matchId: regain.matchId,
-        minute: regain.minute,
-        // Nowe pola dla regain
-        regainDefenseZone: regain.regainDefenseZone || regain.fromZone || regain.toZone || regain.startZone,
-        regainAttackZone: regain.regainAttackZone || regain.oppositeZone,
-        regainDefenseXT: regain.regainDefenseXT || regain.xTValueStart || regain.xTValueEnd,
-        regainAttackXT: regain.regainAttackXT || regain.oppositeXT,
-        // Stare pola dla backward compatibility
-        fromZone: regain.fromZone,
-        startZone: regain.startZone,
-        toZone: regain.toZone,
-        endZone: regain.endZone,
-        senderId: regain.senderId,
-        senderName: regain.senderName,
-        receiverId: regain.receiverId,
-        receiverName: regain.receiverName,
-        xTValueStart: regain.xTValueStart,
-        xTValueEnd: regain.xTValueEnd,
-        // Wartości opposite (po przekątnej) - deprecated
-        oppositeXT: regain.oppositeXT,
-        oppositeZone: regain.oppositeZone,
-        isAttack: regain.isAttack,
-        // Obliczenia dla debugowania
-        calculatedIsAttack: (regain.regainDefenseXT || regain.xTValueEnd) !== undefined ? ((regain.regainDefenseXT || regain.xTValueEnd || 0) < 0.02) : undefined,
-        isBelow8s: regain.isBelow8s,
-        playersBehindBall: regain.playersBehindBall,
-        opponentsBehindBall: regain.opponentsBehindBall,
-        totalPlayersOnField: regain.totalPlayersOnField,
-        totalOpponentsOnField: regain.totalOpponentsOnField,
-        playersLeftField: regain.playersLeftField,
-        opponentsLeftField: regain.opponentsLeftField,
-        actionType: regain.actionType,
-        isSecondHalf: regain.isSecondHalf,
-        videoTimestamp: regain.videoTimestamp
-      });
-    });
-    
     selectedFilteredActions.forEach((action) => {
       // Filtruj akcje według wybranego typu akcji (P0-P3 Start, P0-P3, PK, Strzał, Gol)
       // Filtr wpływa na wszystkie statystyki (liczniki, PxT, itd.)

@@ -29,11 +29,7 @@ const VideoUploadInput: React.FC<VideoUploadInputProps> = ({
   useEffect(() => {
     if (!storage) {
       console.error("⚠️ Firebase Storage nie jest zainicjalizowane!");
-      console.log("Sprawdź czy zmienne środowiskowe Firebase są ustawione:");
-      console.log("- NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET");
-      console.log("- NEXT_PUBLIC_FIREBASE_PROJECT_ID");
     } else {
-      console.log("✅ Firebase Storage jest dostępne");
     }
   }, []);
 
@@ -71,7 +67,6 @@ const VideoUploadInput: React.FC<VideoUploadInputProps> = ({
         try {
           const oldVideoRef = ref(storage, currentVideoPath);
           await deleteObject(oldVideoRef);
-          console.log("Stare wideo zostało usunięte");
         } catch (deleteError: any) {
           // Ignoruj błąd jeśli plik nie istnieje
           if (deleteError?.code !== 'storage/object-not-found') {
@@ -85,14 +80,6 @@ const VideoUploadInput: React.FC<VideoUploadInputProps> = ({
       const fileExtension = file.name.split('.').pop() || 'mp4';
       const fileName = `video_${Date.now()}.${fileExtension}`;
       const storagePath = `matches/${matchIdForPath}/${fileName}`;
-      
-      console.log("Rozpoczynam upload:", {
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-        storagePath,
-        storageBucket: storage.app.options.storageBucket
-      });
 
       const storageRef = ref(storage, storagePath);
 
@@ -149,9 +136,7 @@ const VideoUploadInput: React.FC<VideoUploadInputProps> = ({
         async () => {
           // Upload zakończony pomyślnie
           try {
-            console.log("Upload zakończony, pobieram URL...");
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            console.log("URL wideo pobrany:", downloadURL);
             onUploadComplete(storagePath, downloadURL);
             setIsUploading(false);
             setUploadProgress(0);
@@ -194,7 +179,6 @@ const VideoUploadInput: React.FC<VideoUploadInputProps> = ({
       try {
         const videoRef = ref(storage, currentVideoPath);
         await deleteObject(videoRef);
-        console.log("Wideo zostało usunięte z Storage");
         onRemove();
       } catch (error: any) {
         console.error("Błąd podczas usuwania wideo:", error);

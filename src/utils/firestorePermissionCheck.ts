@@ -10,7 +10,6 @@ export const checkFirestoreWritePermission = async (): Promise<{canWrite: boolea
   const testCollectionName = "permission_tests";
   
   try {
-    console.log(`Sprawdzanie uprawnień Firestore z użyciem testowego dokumentu ${testDocId}...`);
     
     // Test 1: Próba dodania dokumentu
     const testDoc = await addDoc(collection(db, testCollectionName), {
@@ -18,11 +17,9 @@ export const checkFirestoreWritePermission = async (): Promise<{canWrite: boolea
       testId: testDocId
     });
     
-    console.log(`✅ Dodanie dokumentu powiodło się: ${testDoc.id}`);
     
     // Test 2: Próba usunięcia dokumentu
     await deleteDoc(doc(db, testCollectionName, testDoc.id));
-    console.log(`✅ Usunięcie dokumentu powiodło się`);
     
     return { canWrite: true };
   } catch (error) {

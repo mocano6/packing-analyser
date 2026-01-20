@@ -281,9 +281,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
   // Automatycznie ustaw sugerowaną wartość minuty i połowy na podstawie czasu wideo przy otwarciu modalu
   useEffect(() => {
     if (isOpen && !editingEntry && onCalculateMinuteFromVideo) {
-      console.log('PKEntryModal: wywołuję onCalculateMinuteFromVideo');
       onCalculateMinuteFromVideo().then((result) => {
-        console.log('PKEntryModal: wynik obliczenia:', result);
         if (result !== null && result.minute > 0) {
           setFormData(prev => ({
             ...prev,

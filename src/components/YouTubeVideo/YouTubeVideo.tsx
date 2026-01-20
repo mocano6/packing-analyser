@@ -61,13 +61,10 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
       return 0;
     },
     seekTo: async (seconds: number): Promise<void> => {
-      console.log('YouTubeVideo.seekTo - seconds:', seconds, 'playerRef.current:', playerRef.current);
       if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
         try {
-          console.log('YouTubeVideo.seekTo - wywołuję playerRef.current.seekTo');
           // seekTo w YouTube IFrame API jest synchroniczne, nie zwraca Promise
           playerRef.current.seekTo(seconds, true); // true = allowSeekAhead
-          console.log('YouTubeVideo.seekTo - zakończone');
         } catch (error) {
           console.warn('Nie udało się przewinąć YouTube playera do czasu:', seconds, error);
         }
@@ -94,7 +91,6 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
     try {
       playerRef.current = event.target;
       setPlayerError(null);
-      console.log('YouTubeVideo.onReady - playerRef.current ustawione:', playerRef.current);
     } catch (error) {
       console.error('Błąd podczas inicjalizacji playera:', error);
       setPlayerError('Błąd inicjalizacji playera');

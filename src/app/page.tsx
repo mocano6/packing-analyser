@@ -531,21 +531,16 @@ export default function Page() {
       } else if (youtubeVideoRef?.current) {
         try {
         currentVideoTime = await youtubeVideoRef.current.getCurrentTime();
-          console.log('calculateMatchMinuteFromVideoTime: pobrano czas z YouTube:', currentVideoTime);
         } catch (error) {
-          console.warn('calculateMatchMinuteFromVideoTime: błąd pobierania czasu z YouTube:', error);
           return null;
         }
       } else if (customVideoRef?.current) {
         try {
         currentVideoTime = await customVideoRef.current.getCurrentTime();
-          console.log('calculateMatchMinuteFromVideoTime: pobrano czas z CustomVideo:', currentVideoTime);
         } catch (error) {
-          console.warn('calculateMatchMinuteFromVideoTime: błąd pobierania czasu z CustomVideo:', error);
           return null;
         }
       } else {
-        console.log('calculateMatchMinuteFromVideoTime: brak dostępnych refów wideo (youtubeVideoRef:', !!youtubeVideoRef?.current, ', customVideoRef:', !!customVideoRef?.current, ')');
         return null;
       }
 
@@ -706,13 +701,6 @@ export default function Page() {
           ? { videoTimestampRaw: shotData.videoTimestampRaw }
           : (finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw })),
       };
-      
-      // Debug: sprawdź czy videoTimestamp jest zapisywany
-      console.log('handleShotSave - videoTimestamp z localStorage:', videoTimestamp);
-      console.log('handleShotSave - parsedVideoTimestamp:', parsedVideoTimestamp);
-      console.log('handleShotSave - isValidTimestamp:', isValidTimestamp);
-      console.log('handleShotSave - finalVideoTimestamp:', finalVideoTimestamp);
-      console.log('handleShotSave - shotDataWithTimestamp:', shotDataWithTimestamp);
 
       if (shotModalData?.editingShot) {
         const success = await updateShot(shotModalData.editingShot.id, shotDataWithTimestamp);
@@ -2528,8 +2516,6 @@ export default function Page() {
             })
           } : {})
         };
-        console.log("🔍 DEBUG - Zapisywana akcja z polami boolean:", JSON.stringify(actionWithBooleans, null, 2));
-        console.log("🔍 DEBUG - editedAction.isP3:", editedAction.isP3, "editedAction.isContact3Plus:", editedAction.isContact3Plus);
         updatedActions[actionIndex] = actionWithBooleans;
 
         await updateDoc(matchRef, {
@@ -3033,13 +3019,10 @@ export default function Page() {
                   setAcc8sModalData(null);
                 }}
                 onSave={async (entryData) => {
-                  console.log('Page onSave - entryData:', entryData);
                   if (acc8sModalData.editingEntry) {
-                    const success = await updateAcc8sEntry(acc8sModalData.editingEntry.id, entryData);
-                    console.log('Page onSave - updateAcc8sEntry success:', success);
+                    await updateAcc8sEntry(acc8sModalData.editingEntry.id, entryData);
                   } else {
-                    const result = await addAcc8sEntry(entryData);
-                    console.log('Page onSave - addAcc8sEntry result:', result);
+                    await addAcc8sEntry(entryData);
                   }
                   setIsAcc8sModalOpen(false);
                   setAcc8sModalData(null);

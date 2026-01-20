@@ -315,9 +315,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
   // Automatycznie ustaw sugerowaną wartość minuty i połowy na podstawie czasu wideo przy otwarciu modalu
   useEffect(() => {
     if (isOpen && !editingShot && onCalculateMinuteFromVideo) {
-      console.log('ShotModal: wywołuję onCalculateMinuteFromVideo');
       onCalculateMinuteFromVideo().then((result) => {
-        console.log('ShotModal: wynik obliczenia:', result);
         if (result !== null && result.minute > 0) {
           setFormData(prev => ({
             ...prev,

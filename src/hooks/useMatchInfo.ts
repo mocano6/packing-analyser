@@ -22,6 +22,7 @@ declare global {
 
 // Klucz dla localStorage
 const LOCAL_MATCHES_CACHE_KEY = 'packing_matches_cache';
+const PERMISSION_CHECK_TTL_MS = 60 * 1000;
 
 // Funkcja do generowania unikalnych ID
 function generateId() {
@@ -130,6 +131,7 @@ export function useMatchInfo() {
     data: [],
     timestamp: 0
   });
+  const permissionCheckRef = useRef<{ checkedAt: number; ok: boolean } | null>(null);
   
   // Sprawdzamy połączenie sieciowe
   useEffect(() => {
@@ -482,49 +484,63 @@ export function useMatchInfo() {
         
         // Przed próbą pobrania danych, sprawdzamy, czy mamy dostęp do Firebase
         try {
-          // Użycie try/catch zamiast await dla operacji sprawdzenia uprawnień,
-          // aby natychmiast obsłużyć błąd offline
-          const testPermissions = async () => {
-            try {
-              // Sprawdzenie, czy możemy uzyskać dostęp do kolekcji "matches"
-              const testDoc = doc(getDB(), "matches", "test_permissions");
-              return await getDoc(testDoc);
-            } catch (error) {
-              // Rozszerzona obsługa błędów offline
-              if (String(error).includes("client is offline") || String(error).includes("Failed to get document because the client is offline")) {
-                setIsOfflineMode(true);
-                
-                // Zapisz informację o trybie offline do localStorage
-        if (typeof window !== "undefined") {
-                  localStorage.setItem('firestore_offline_mode', 'true');
-                }
-                
-                notifyUser("Wykryto tryb offline. Aplikacja działa z lokalnym cache.", "info");
-                
-                return null;
-              }
-              throw error; // Przekazujemy inne błędy dalej
-            }
-          };
-          
-          // Wykonaj test uprawnień z timeout - jeśli trwa zbyt długo, zakładamy problemy z połączeniem
-          const timeoutPromise = new Promise((_resolve, reject) => {
-            setTimeout(() => reject(new Error("Timeout przy próbie połączenia z Firebase")), 5000);
-          });
-          
-          const testResult = await Promise.race([testPermissions(), timeoutPromise])
-            .catch(error => {
-              if (String(error).includes("Timeout")) {
-                // Przekroczono czas oczekiwania na Firebase, przełączam na tryb offline
-                setIsOfflineMode(true);
-                return null;
-              }
-              throw error;
-            });
-          
-          // Jeśli test zwrócił null lub undefined, oznacza to że jesteśmy offline lub wystąpił timeout
-          if (!testResult) {
+          const lastCheck = permissionCheckRef.current;
+          const isRecentCheck = lastCheck && (Date.now() - lastCheck.checkedAt < PERMISSION_CHECK_TTL_MS);
+
+          if (isRecentCheck && lastCheck && !lastCheck.ok) {
             return filteredMatches;
+          }
+
+          if (!isRecentCheck) {
+            // Użycie try/catch zamiast await dla operacji sprawdzenia uprawnień,
+            // aby natychmiast obsłużyć błąd offline
+            const testPermissions = async () => {
+              try {
+                // Sprawdzenie, czy możemy uzyskać dostęp do kolekcji "matches"
+                const testDoc = doc(getDB(), "matches", "test_permissions");
+                return await getDoc(testDoc);
+              } catch (error) {
+                // Rozszerzona obsługa błędów offline
+                if (String(error).includes("client is offline") || String(error).includes("Failed to get document because the client is offline")) {
+                  setIsOfflineMode(true);
+                  
+                  // Zapisz informację o trybie offline do localStorage
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem('firestore_offline_mode', 'true');
+                  }
+                  
+                  notifyUser("Wykryto tryb offline. Aplikacja działa z lokalnym cache.", "info");
+                  
+                  return null;
+                }
+                throw error; // Przekazujemy inne błędy dalej
+              }
+            };
+            
+            // Wykonaj test uprawnień z timeout - jeśli trwa zbyt długo, zakładamy problemy z połączeniem
+            const timeoutPromise = new Promise((_resolve, reject) => {
+              setTimeout(() => reject(new Error("Timeout przy próbie połączenia z Firebase")), 5000);
+            });
+            
+            const testResult = await Promise.race([testPermissions(), timeoutPromise])
+              .catch(error => {
+                if (String(error).includes("Timeout")) {
+                  // Przekroczono czas oczekiwania na Firebase, przełączam na tryb offline
+                  setIsOfflineMode(true);
+                  return null;
+                }
+                throw error;
+              });
+            
+            permissionCheckRef.current = {
+              checkedAt: Date.now(),
+              ok: Boolean(testResult)
+            };
+
+            // Jeśli test zwrócił null lub undefined, oznacza to że jesteśmy offline lub wystąpił timeout
+            if (!testResult) {
+              return filteredMatches;
+            }
           }
         
           // Jeśli nie wystąpił błąd uprawnień, kontynuujemy pobieranie danych
@@ -589,6 +605,7 @@ export function useMatchInfo() {
         } catch (permissionError) {
           // Obsługa błędu uprawnień podczas testu
           console.error("🔒 Błąd podczas testowania uprawnień Firebase:", permissionError);
+          permissionCheckRef.current = { checkedAt: Date.now(), ok: false };
           
           if (String(permissionError).includes("client is offline") || String(permissionError).includes("Failed to get document because the client is offline")) {
             // Klient jest offline - pomijam synchronizację z Firebase

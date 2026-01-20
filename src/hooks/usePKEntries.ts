@@ -93,24 +93,10 @@ export const usePKEntries = (matchId: string) => {
       timestamp: Date.now(),
     };
 
-    // Używamy funkcjonalnej aktualizacji stanu, aby uniknąć problemów z starym stanem
-    let updatedEntries: PKEntry[] = [];
-    setPkEntries(prevEntries => {
-      updatedEntries = [...prevEntries, newEntry];
-      return updatedEntries;
-    });
-    
+    const updatedEntries = [...pkEntries, newEntry];
     const success = await savePKEntries(updatedEntries);
-    
-    // Po zapisaniu odśwież dane z Firebase, aby upewnić się, że mamy najnowsze dane
-    if (success) {
-      await fetchPKEntries();
-      // Wyświetl zapisany obiekt w konsoli
-      console.log('✅ PK Entry zapisany:', newEntry);
-    }
-    
     return success ? newEntry : null;
-  }, [savePKEntries, fetchPKEntries]);
+  }, [pkEntries, savePKEntries]);
 
   // Zaktualizuj wejście PK
   const updatePKEntry = useCallback(async (entryId: string, entryData: Partial<PKEntry>) => {
@@ -118,27 +104,15 @@ export const usePKEntries = (matchId: string) => {
       entry.id === entryId ? { ...entry, ...entryData } : entry
     );
     const success = await savePKEntries(updatedEntries);
-    
-    // Po zapisaniu odśwież dane z Firebase
-    if (success) {
-      await fetchPKEntries();
-    }
-    
     return success;
-  }, [pkEntries, savePKEntries, fetchPKEntries]);
+  }, [pkEntries, savePKEntries]);
 
   // Usuń wejście PK
   const deletePKEntry = useCallback(async (entryId: string) => {
     const updatedEntries = pkEntries.filter(entry => entry.id !== entryId);
     const success = await savePKEntries(updatedEntries);
-    
-    // Po zapisaniu odśwież dane z Firebase
-    if (success) {
-      await fetchPKEntries();
-    }
-    
     return success;
-  }, [pkEntries, savePKEntries, fetchPKEntries]);
+  }, [pkEntries, savePKEntries]);
 
   // Pobierz wejścia PK przy załadowaniu lub zmianie matchId
   useEffect(() => {

@@ -7,7 +7,6 @@ import { disableNetwork, enableNetwork, Firestore, clearIndexedDbPersistence } f
  */
 export const clearFirestoreCache = async (db: Firestore): Promise<boolean> => {
   try {
-    console.log("🔄 Próba wyczyszczenia cache Firestore...");
     
     // Najpierw wyłącz sieć, aby uniknąć synchronizacji podczas czyszczenia
     await disableNetwork(db);
@@ -25,12 +24,10 @@ export const clearFirestoreCache = async (db: Firestore): Promise<boolean> => {
           );
           
           if (firestoreDbs.length === 0) {
-            console.log("⚠️ Nie znaleziono baz danych Firestore w IndexedDB");
             resolve(false);
             return;
           }
           
-          console.log(`🔍 Znaleziono ${firestoreDbs.length} baz danych Firestore:`, 
             firestoreDbs.map(db => db.name));
           
           // Usuń wszystkie znalezione bazy danych Firestore
@@ -43,7 +40,6 @@ export const clearFirestoreCache = async (db: Firestore): Promise<boolean> => {
             const req = indexedDB.deleteDatabase(database.name);
             
             req.onsuccess = () => {
-              console.log(`✅ Baza ${database.name} została pomyślnie wyczyszczona`);
               completed++;
               if (completed === firestoreDbs.length) {
                 resolve(success);
@@ -75,7 +71,6 @@ export const clearFirestoreCache = async (db: Firestore): Promise<boolean> => {
     // Ponownie włącz sieć
     try {
       await enableNetwork(db);
-      console.log("✅ Sieć dla Firestore została ponownie włączona");
     } catch (err) {
       console.error("❌ Błąd podczas ponownego włączania sieci:", err);
       // Nie zwracaj błędu, kontynuuj
@@ -105,12 +100,10 @@ export const clearFirestoreCache = async (db: Firestore): Promise<boolean> => {
  * @returns Promise<boolean> Czy operacja się powiodła
  */
 export const resetFirestoreConnection = async (db: Firestore): Promise<void> => {
-  console.log('Rozpoczynam reset połączenia z Firestore...');
   
   try {
     // Najpierw rozłączamy się z siecią
     await disableNetwork(db);
-    console.log('Sieć Firestore wyłączona');
     
     // Odczekaj chwilę
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -118,7 +111,6 @@ export const resetFirestoreConnection = async (db: Firestore): Promise<void> => 
     // Próbujemy wyczyścić dane IndexedDB (to może się nie udać, jeśli są otwarte połączenia)
     try {
       await clearIndexedDbPersistence(db);
-      console.log('Cache IndexedDB wyczyszczone');
     } catch (err) {
       console.warn('Nie udało się wyczyścić IndexedDB. To normalne, jeśli są aktywne połączenia:', err);
       // Nie przerywamy dalszego procesu - to jest opcjonalny krok
@@ -126,7 +118,6 @@ export const resetFirestoreConnection = async (db: Firestore): Promise<void> => 
     
     // Ponownie łączymy się z siecią
     await enableNetwork(db);
-    console.log('Sieć Firestore ponownie włączona');
     
     return;
   } catch (error) {
@@ -154,7 +145,6 @@ export const handleFirestoreError = async (error: any, db: Firestore): Promise<b
     // Użyj bardziej gruntownego resetu połączenia
     await resetFirestoreConnection(db);
     
-    console.log("✅ Połączenie Firestore zostało zresetowane, zalecane jest odświeżenie strony");
     
     // Możemy wyświetlić użytkownikowi powiadomienie o konieczności odświeżenia
     if (typeof window !== 'undefined' && window.confirm(
@@ -174,7 +164,6 @@ export const handleFirestoreError = async (error: any, db: Firestore): Promise<b
         console.warn("⚠️ Serwer Firestore jest niedostępny - przełączanie w tryb offline");
         try {
           await disableNetwork(db);
-          console.log("✅ Przełączono w tryb offline");
           return true;
         } catch (err) {
           console.error("❌ Błąd podczas przełączania w tryb offline:", err);
@@ -256,7 +245,6 @@ export const registerFirestoreErrorHandlers = (db: Firestore): void => {
       console.warn("🚨 Przechwycono błąd wewnętrznego stanu Firestore");
       handleFirestoreError(event.error, db).then(handled => {
         if (handled) {
-          console.log("✅ Błąd został obsłużony");
         } else {
           console.error("❌ Nie udało się obsłużyć błędu");
           showResetButton(db);
@@ -333,7 +321,6 @@ export const registerFirestoreErrorHandlers = (db: Firestore): void => {
   
   // Obserwator stanu sieci
   window.addEventListener('online', () => {
-    console.log("🌐 Przywrócono połączenie z siecią");
     enableNetwork(db).catch(err => {
       console.error("❌ Błąd podczas włączania sieci dla Firestore:", err);
       handleFirestoreError(err, db);
@@ -341,7 +328,6 @@ export const registerFirestoreErrorHandlers = (db: Firestore): void => {
   });
   
   window.addEventListener('offline', () => {
-    console.log("🔌 Utracono połączenie z siecią");
     disableNetwork(db).catch(err => {
       console.error("❌ Błąd podczas wyłączania sieci dla Firestore:", err);
     });
@@ -364,7 +350,6 @@ export const clearAllFirestoreCache = (): Promise<void> => {
               return new Promise<void>((res, rej) => {
                 const request = indexedDB.deleteDatabase(db.name as string);
                 request.onsuccess = () => {
-                  console.log(`Usunięto bazę: ${db.name}`);
                   res();
                 };
                 request.onerror = () => {
@@ -376,7 +361,6 @@ export const clearAllFirestoreCache = (): Promise<void> => {
           
           Promise.all(deletePromises)
             .then(() => {
-              console.log('Wszystkie bazy IndexedDB Firestore zostały wyczyszczone');
               resolve();
             })
             .catch(err => {
