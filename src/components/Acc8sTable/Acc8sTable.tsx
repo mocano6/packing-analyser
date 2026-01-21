@@ -29,6 +29,9 @@ export interface Acc8sTableProps {
     logo?: string;
   }>;
   hideTeamLogos?: boolean;
+  onBulkUpdateEntries?: (updates: Array<{ id: string; isShotUnder8s: boolean; isPKEntryUnder8s: boolean }>) => Promise<void>;
+  allPKEntries?: any[];
+  allShots?: any[];
 }
 
 const Acc8sTable: React.FC<Acc8sTableProps> = ({
@@ -42,9 +45,22 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
   matchInfo,
   allTeams = [],
   hideTeamLogos = false,
+  onBulkUpdateEntries,
+  allPKEntries = [],
+  allShots = [],
 }) => {
   // State dla filtra kontrowersyjnego
   const [showOnlyControversial, setShowOnlyControversial] = useState(false);
+  
+  // State dla modalu z podglądem zmian automatycznych flag
+  const [showAutoFlagsModal, setShowAutoFlagsModal] = useState(false);
+  const [pendingUpdates, setPendingUpdates] = useState<Array<{ 
+    entry: Acc8sEntry; 
+    isShotUnder8s: boolean; 
+    isPKEntryUnder8s: boolean;
+    shotTime?: string;
+    pkTime?: string;
+  }>>([]);
 
   // Liczba akcji kontrowersyjnych
   const controversialCount = useMemo(() => {
@@ -182,15 +198,107 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
             !
           </button>
         </div>
-        {onAddEntry && (
-          <button
-            onClick={onAddEntry}
-            className={styles.addButton}
-            title="Dodaj akcję 8s ACC"
-          >
-            +
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {onBulkUpdateEntries && entries.length > 0 && (
+            <button
+              onClick={() => {
+                // Oblicz flagi dla wszystkich akcji 8s ACC
+                const updates: Array<{ 
+                  entry: Acc8sEntry; 
+                  isShotUnder8s: boolean; 
+                  isPKEntryUnder8s: boolean;
+                  shotTime?: string;
+                  pkTime?: string;
+                }> = [];
+                
+                entries.forEach((entry) => {
+                  const acc8sTimeRaw = entry.videoTimestampRaw !== undefined && entry.videoTimestampRaw !== null
+                    ? entry.videoTimestampRaw
+                    : (entry.videoTimestamp !== undefined && entry.videoTimestamp !== null ? entry.videoTimestamp + 10 : null);
+                  
+                  if (acc8sTimeRaw === null) return;
+                  
+                  const timeWindowEnd = acc8sTimeRaw + 8;
+                  
+                  // Sprawdź wejścia w PK w przedziale 8s
+                  let hasPK = false;
+                  let pkTime: string | undefined;
+                  for (const pkEntry of allPKEntries) {
+                    let pkTimeRaw: number | null = null;
+                    if (pkEntry.videoTimestampRaw !== undefined && pkEntry.videoTimestampRaw !== null) {
+                      pkTimeRaw = pkEntry.videoTimestampRaw;
+                    } else if (pkEntry.videoTimestamp !== undefined && pkEntry.videoTimestamp !== null) {
+                      pkTimeRaw = pkEntry.videoTimestamp + 10;
+                    }
+                    if (pkTimeRaw === null) continue;
+                    
+                    if (pkTimeRaw >= acc8sTimeRaw && pkTimeRaw <= timeWindowEnd) {
+                      hasPK = true;
+                      const pkMinutes = Math.floor(pkTimeRaw / 60);
+                      const pkSeconds = Math.floor(pkTimeRaw % 60);
+                      pkTime = `${pkMinutes}:${pkSeconds.toString().padStart(2, '0')}`;
+                      break;
+                    }
+                  }
+                  
+                  // Sprawdź strzały w przedziale 8s
+                  let hasShot = false;
+                  let shotTime: string | undefined;
+                  for (const shot of allShots) {
+                    let shotTimeRaw: number | null = null;
+                    if (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null) {
+                      shotTimeRaw = shot.videoTimestampRaw;
+                    } else if (shot.videoTimestamp !== undefined && shot.videoTimestamp !== null) {
+                      shotTimeRaw = shot.videoTimestamp + 10;
+                    }
+                    if (shotTimeRaw === null) continue;
+                    
+                    if (shotTimeRaw >= acc8sTimeRaw && shotTimeRaw <= timeWindowEnd) {
+                      hasShot = true;
+                      const shotMinutes = Math.floor(shotTimeRaw / 60);
+                      const shotSeconds = Math.floor(shotTimeRaw % 60);
+                      shotTime = `${shotMinutes}:${shotSeconds.toString().padStart(2, '0')}`;
+                      break;
+                    }
+                  }
+                  
+                  // Dodaj do listy tylko jeśli flagi się zmienią
+                  if (hasPK !== entry.isPKEntryUnder8s || hasShot !== entry.isShotUnder8s) {
+                    updates.push({
+                      entry,
+                      isShotUnder8s: hasShot,
+                      isPKEntryUnder8s: hasPK,
+                      shotTime,
+                      pkTime,
+                    });
+                  }
+                });
+                
+                if (updates.length === 0) {
+                  alert('Nie znaleziono żadnych zmian do zastosowania.');
+                  return;
+                }
+                
+                setPendingUpdates(updates);
+                setShowAutoFlagsModal(true);
+              }}
+              className={styles.autoFlagsButton}
+              title="Automatycznie ustaw flagi na podstawie wejść w PK i strzałów w 8s"
+            >
+              <span className={styles.autoFlagsButtonIcon}>✓</span>
+              <span>Weryfikuj</span>
+            </button>
+          )}
+          {onAddEntry && (
+            <button
+              onClick={onAddEntry}
+              className={styles.addButton}
+              title="Dodaj akcję 8s ACC"
+            >
+              +
+            </button>
+          )}
+        </div>
       </div>
       <div className={sharedStyles.matchesTable}>
         <div className={`${sharedStyles.tableHeader} ${styles.tableHeader}`}>
@@ -259,6 +367,92 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
         ))}
         </div>
       </div>
+      
+      {/* Modal z podglądem zmian automatycznych flag */}
+      {showAutoFlagsModal && (
+        <div className={styles.modalOverlay} onClick={() => setShowAutoFlagsModal(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Podgląd zmian automatycznych flag</h3>
+              <button className={styles.closeButton} onClick={() => setShowAutoFlagsModal(false)}>×</button>
+            </div>
+            <div className={styles.modalContent}>
+              <p>Znaleziono <strong>{pendingUpdates.length}</strong> akcji 8s ACC do zaktualizowania:</p>
+              <div className={styles.updatesList}>
+                {pendingUpdates.map((update, index) => {
+                  const acc8sTimeRaw = update.entry.videoTimestampRaw !== undefined && update.entry.videoTimestampRaw !== null
+                    ? update.entry.videoTimestampRaw
+                    : (update.entry.videoTimestamp !== undefined && update.entry.videoTimestamp !== null ? update.entry.videoTimestamp + 10 : null);
+                  const acc8sMinutes = acc8sTimeRaw ? Math.floor(acc8sTimeRaw / 60) : 0;
+                  const acc8sSeconds = acc8sTimeRaw ? Math.floor(acc8sTimeRaw % 60) : 0;
+                  const acc8sTimeString = `${acc8sMinutes}:${acc8sSeconds.toString().padStart(2, '0')}`;
+                  
+                  return (
+                    <div key={update.entry.id || index} className={styles.updateItem}>
+                      <div className={styles.updateItemHeader}>
+                        <span className={styles.updateItemTime}>{acc8sTimeString}</span>
+                        <span className={styles.updateItemMinute}>Minuta {update.entry.minute}'</span>
+                      </div>
+                      <div className={styles.updateItemFlags}>
+                        {update.entry.isShotUnder8s !== update.isShotUnder8s && (
+                          <div className={styles.updateItemFlag}>
+                            <span className={styles.updateItemFlagLabel}>Strzał 8s:</span>
+                            <span className={styles.updateItemFlagChange}>
+                              <span className={styles.updateItemFlagIcon}>{update.entry.isShotUnder8s ? '✓' : '✗'}</span>
+                              <span>→</span>
+                              <span className={styles.updateItemFlagIcon}>{update.isShotUnder8s ? '✓' : '✗'}</span>
+                              {update.shotTime && (
+                                <span className={styles.updateItemFlagTime}>({update.shotTime})</span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {update.entry.isPKEntryUnder8s !== update.isPKEntryUnder8s && (
+                          <div className={styles.updateItemFlag}>
+                            <span className={styles.updateItemFlagLabel}>PK 8s:</span>
+                            <span className={styles.updateItemFlagChange}>
+                              <span className={styles.updateItemFlagIcon}>{update.entry.isPKEntryUnder8s ? '✓' : '✗'}</span>
+                              <span>→</span>
+                              <span className={styles.updateItemFlagIcon}>{update.isPKEntryUnder8s ? '✓' : '✗'}</span>
+                              {update.pkTime && (
+                                <span className={styles.updateItemFlagTime}>({update.pkTime})</span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className={styles.modalFooter}>
+              <button
+                onClick={() => setShowAutoFlagsModal(false)}
+                className={`${styles.modalFooterButton} ${styles.modalFooterCancel}`}
+              >
+                Anuluj
+              </button>
+              <button
+                onClick={async () => {
+                  if (onBulkUpdateEntries) {
+                    await onBulkUpdateEntries(pendingUpdates.map(u => ({
+                      id: u.entry.id,
+                      isShotUnder8s: u.isShotUnder8s,
+                      isPKEntryUnder8s: u.isPKEntryUnder8s,
+                    })));
+                  }
+                  setShowAutoFlagsModal(false);
+                  setPendingUpdates([]);
+                }}
+                className={`${styles.modalFooterButton} ${styles.modalFooterSave}`}
+              >
+                Zatwierdź zmiany
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

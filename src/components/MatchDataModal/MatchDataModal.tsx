@@ -21,6 +21,47 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
   currentMatch,
   allAvailableTeams = [],
 }) => {
+  // Helpery do konwersji czasu posiadania
+  const secondsToMMSS = (seconds?: number): string => {
+    if (seconds === undefined || seconds === null || Number.isNaN(seconds)) return "";
+    const totalSeconds = Math.max(0, Math.round(seconds));
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const minutesDecimalToMMSS = (minutes?: number): string => {
+    if (minutes === undefined || minutes === null || Number.isNaN(minutes)) return "";
+    const totalSeconds = Math.max(0, Math.round(minutes * 60));
+    return secondsToMMSS(totalSeconds);
+  };
+
+  const mmssToMinutesDecimal = (mmss: string): number | undefined => {
+    if (!mmss || !mmss.trim()) return undefined;
+    const trimmed = mmss.trim();
+    if (!trimmed.includes(":")) {
+      // Jeśli użytkownik wpisze tylko minuty, traktujemy je jako pełne minuty
+      const mins = Number(trimmed);
+      if (Number.isNaN(mins) || mins < 0) return undefined;
+      return mins;
+    }
+
+    const [minsStr, secsStr] = trimmed.split(":");
+    const mins = Number(minsStr);
+    const secs = Number(secsStr);
+    if (
+      Number.isNaN(mins) ||
+      Number.isNaN(secs) ||
+      mins < 0 ||
+      secs < 0 ||
+      secs >= 60
+    ) {
+      return undefined;
+    }
+    const totalSeconds = mins * 60 + secs;
+    return totalSeconds / 60;
+  };
+
   // Funkcja do pobierania nazwy zespołu
   const getTeamName = (teamId: string) => {
     const team = allAvailableTeams.find(t => t.id === teamId);
@@ -65,6 +106,19 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Lokalne wartości tekstowe dla pól czasu posiadania (format MM:SS)
+  const [possessionTimeInputs, setPossessionTimeInputs] = useState<{
+    teamFirstHalf: string;
+    opponentFirstHalf: string;
+    teamSecondHalf: string;
+    opponentSecondHalf: string;
+  }>({
+    teamFirstHalf: "",
+    opponentFirstHalf: "",
+    teamSecondHalf: "",
+    opponentSecondHalf: "",
+  });
+
   // Reset formularza przy otwarciu modalu
   useEffect(() => {
     if (currentMatch?.matchData) {
@@ -100,6 +154,14 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
           opponentSecondHalf: currentMatch.matchData.passesInOpponentHalfInaccurate?.opponentSecondHalf,
         },
       });
+
+      // Zainicjalizuj pola tekstowe czasu posiadania na podstawie istniejących wartości (minuty dziesiętne -> MM:SS)
+      setPossessionTimeInputs({
+        teamFirstHalf: minutesDecimalToMMSS(currentMatch.matchData.possession?.teamFirstHalf),
+        opponentFirstHalf: minutesDecimalToMMSS(currentMatch.matchData.possession?.opponentFirstHalf),
+        teamSecondHalf: minutesDecimalToMMSS(currentMatch.matchData.possession?.teamSecondHalf),
+        opponentSecondHalf: minutesDecimalToMMSS(currentMatch.matchData.possession?.opponentSecondHalf),
+      });
     } else {
       setFormData({
         possession: {
@@ -133,8 +195,44 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
           opponentSecondHalf: undefined,
         },
       });
+      setPossessionTimeInputs({
+        teamFirstHalf: "",
+        opponentFirstHalf: "",
+        teamSecondHalf: "",
+        opponentSecondHalf: "",
+      });
     }
   }, [currentMatch, isOpen]);
+
+  const handlePossessionTimeChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { name, value } = e.target; // name w formacie "possession.teamFirstHalf"
+    const parts = name.split(".");
+    const field = parts[1] as keyof typeof possessionTimeInputs | undefined;
+
+    if (!field) return;
+
+    const safeValue = value.toUpperCase();
+
+    // Aktualizuj lokalny tekst (żeby użytkownik widział dokładnie to, co wpisuje)
+    setPossessionTimeInputs((prev) => ({
+      ...prev,
+      [field]: safeValue,
+    }));
+
+    // Spróbuj sparsować do minut dziesiętnych i zaktualizować formData
+    const minutesDecimal = mmssToMinutesDecimal(safeValue);
+
+    setFormData((prev) => {
+      const newData = { ...prev };
+      newData.possession = {
+        ...newData.possession,
+        [field]: minutesDecimal,
+      };
+      return newData;
+    });
+  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement>
@@ -239,42 +337,34 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
               <input
                 className={styles.tableInput}
                 name="possession.teamFirstHalf"
-                type="number"
-                min="0"
-                step="0.1"
-                value={formData.possession?.teamFirstHalf || ''}
-                onChange={handleChange}
-                placeholder="0"
+                type="text"
+                value={possessionTimeInputs.teamFirstHalf}
+                onChange={handlePossessionTimeChange}
+                placeholder="MM:SS"
               />
               <input
                 className={styles.tableInput}
                 name="possession.opponentFirstHalf"
-                type="number"
-                min="0"
-                step="0.1"
-                value={formData.possession?.opponentFirstHalf || ''}
-                onChange={handleChange}
-                placeholder="0"
+                type="text"
+                value={possessionTimeInputs.opponentFirstHalf}
+                onChange={handlePossessionTimeChange}
+                placeholder="MM:SS"
               />
               <input
                 className={styles.tableInput}
                 name="possession.teamSecondHalf"
-                type="number"
-                min="0"
-                step="0.1"
-                value={formData.possession?.teamSecondHalf || ''}
-                onChange={handleChange}
-                placeholder="0"
+                type="text"
+                value={possessionTimeInputs.teamSecondHalf}
+                onChange={handlePossessionTimeChange}
+                placeholder="MM:SS"
               />
               <input
                 className={styles.tableInput}
                 name="possession.opponentSecondHalf"
-                type="number"
-                min="0"
-                step="0.1"
-                value={formData.possession?.opponentSecondHalf || ''}
-                onChange={handleChange}
-                placeholder="0"
+                type="text"
+                value={possessionTimeInputs.opponentSecondHalf}
+                onChange={handlePossessionTimeChange}
+                placeholder="MM:SS"
               />
             </div>
 

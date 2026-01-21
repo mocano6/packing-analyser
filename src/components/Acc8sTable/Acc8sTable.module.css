@@ -61,6 +61,41 @@
 }
 
 /* Przycisk dodawania - specyficzny dla Acc8sTable */
+.autoFlagsButton {
+  padding: 6px 12px;
+  border-radius: 6px;
+  background-color: #f8fafc;
+  color: #475569;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  gap: 4px;
+  line-height: 1;
+}
+
+.autoFlagsButton:hover {
+  border-color: rgba(15, 23, 42, 0.3);
+  color: #0f172a;
+  background-color: #ffffff;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+}
+
+.autoFlagsButton:active {
+  transform: scale(0.98);
+}
+
+.autoFlagsButtonIcon {
+  font-size: 12px;
+  line-height: 1;
+  color: #10b981;
+}
+
 .addButton {
   width: 32px;
   height: 32px;
@@ -98,6 +133,227 @@
   flex-direction: row;
   gap: 6px;
   padding: 14px 12px;
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 700px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-radius: 16px 16px 0 0;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.closeButton:hover {
+  background: rgba(107, 114, 128, 0.1);
+  color: #374151;
+  transform: scale(1.1);
+}
+
+.closeButton:active {
+  transform: scale(0.95);
+}
+
+.modalContent {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modalContent > p {
+  margin: 0 0 16px 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.updatesList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.updateItem {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 16px;
+  transition: all 0.2s ease;
+}
+
+.updateItem:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.updateItemHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.updateItemTime {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.updateItemMinute {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.updateItemFlags {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.updateItemFlag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 4px 0;
+}
+
+.updateItemFlagLabel {
+  font-weight: 500;
+  color: #374151;
+  min-width: 80px;
+}
+
+.updateItemFlagChange {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #6b7280;
+}
+
+.updateItemFlagIcon {
+  font-size: 12px;
+}
+
+.updateItemFlagTime {
+  color: #3b82f6;
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.modalFooter {
+  padding: 20px 24px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  background: #f9fafb;
+}
+
+.modalFooterButton {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.modalFooterCancel {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.modalFooterCancel:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.modalFooterSave {
+  background: #2196f3;
+  color: white;
+}
+
+.modalFooterSave:hover {
+  background: #1976d2;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
 }
 
 .deleteBtn {

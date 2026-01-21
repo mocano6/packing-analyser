@@ -2960,6 +2960,10 @@ export default function StatystykiZespoluPage() {
                   const normalizedReaction5sPercentage = Math.min((reaction5sPercentage / maxPercentage) * 100, 100);
                   const normalizedLosesInPMAreaPercentage = Math.min((losesInPMAreaPercentage / maxPercentage) * 100, 100);
                   
+                  // Normalizacja dla "Udane wejścia" - cel to 25%, więc normalizujemy do skali gdzie 25% = 100%
+                  const target8sAcc = 25;
+                  const normalized8sAcc = Math.min((shotAndPK8sPercentage / target8sAcc) * 100, 100);
+                  
                   const radarData = [
                     {
                       subject: 'xG - xG przeciwnika',
@@ -2986,6 +2990,11 @@ export default function StatystykiZespoluPage() {
                       value: normalizedLosesInPMAreaPercentage,
                       fullMark: 100,
                     },
+                    {
+                      subject: '8s ACC',
+                      value: normalized8sAcc,
+                      fullMark: 100,
+                    },
                   ];
                   
                   return (
@@ -2996,7 +3005,8 @@ export default function StatystykiZespoluPage() {
                           xG przeciwnika: {opponentXG.toFixed(2)} • xG/strzał: {opponentXGPerShot.toFixed(3)} ({opponentShotsCount} strzałów) • 
                           PK przeciwnik: {opponentPKEntriesCount} • 
                           5s: {reaction5sPercentage.toFixed(1)}% ({reaction5sLoses.length}/{losesExcludingNotApplicableAndAut.length}) • 
-                          Straty PM Area: {losesInPMAreaPercentage.toFixed(1)}% ({losesInPMAreaCount}/{allLoses.length})
+                          Straty PM Area: {losesInPMAreaPercentage.toFixed(1)}% ({losesInPMAreaCount}/{allLoses.length}) • 
+                          Udane wejścia: {shotAndPK8sPercentage.toFixed(1)}% ({shotAndPK8sCount}/{total8sAcc}) [Cel: 25%]
                         </span>
                       </div>
                       <ResponsiveContainer width="100%" height={400}>
@@ -3021,6 +3031,8 @@ export default function StatystykiZespoluPage() {
                                 displayValue = `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesExcludingNotApplicableAndAut.length})`;
                               } else if (data.subject === 'Straty PM Area') {
                                 displayValue = `${losesInPMAreaPercentage.toFixed(1)}% (${losesInPMAreaCount}/${allLoses.length})`;
+                              } else if (data.subject === '8s ACC') {
+                                displayValue = `${shotAndPK8sPercentage.toFixed(1)}% (${shotAndPK8sCount}/${total8sAcc}) [Cel: 25%]`;
                               }
                               
                               return (
@@ -3049,12 +3061,25 @@ export default function StatystykiZespoluPage() {
                       
                       {/* Sekcja KPI 8s ACC pod spidermapą */}
                       <div className={styles.detailsSection} style={{ marginTop: '24px' }}>
-                        <h4 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>8s ACC - Statystyki</h4>
+                        <h4 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>Statystyki</h4>
                         <div className={styles.detailsRow}>
                           <span className={styles.detailsLabel}>Udane wejścia:</span>
                           <span className={styles.detailsValue}>
                             <span className={styles.valueMain}><strong>{shotAndPK8sPercentage.toFixed(1)}%</strong></span>
                             <span className={styles.valueSecondary}> ({shotAndPK8sCount}/{total8sAcc})</span>
+                            {shotAndPK8sPercentage < target8sAcc ? (
+                              <span style={{ color: '#ef4444', marginLeft: '8px', fontSize: '13px' }}>
+                                -{(target8sAcc - shotAndPK8sPercentage).toFixed(1)}%
+                              </span>
+                            ) : shotAndPK8sPercentage > target8sAcc ? (
+                              <span style={{ color: '#10b981', marginLeft: '8px', fontSize: '13px' }}>
+                                +{(shotAndPK8sPercentage - target8sAcc).toFixed(1)}%
+                              </span>
+                            ) : (
+                              <span style={{ color: '#10b981', marginLeft: '8px', fontSize: '13px' }}>
+                                [Cel osiągnięty]
+                              </span>
+                            )}
                           </span>
                         </div>
                         {shotAndPK8sCount > 0 && (

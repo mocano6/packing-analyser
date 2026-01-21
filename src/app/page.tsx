@@ -3062,6 +3062,8 @@ export default function Page() {
               entries={acc8sEntries}
               matchInfo={matchInfo || undefined}
               allTeams={allTeams}
+              allPKEntries={pkEntries}
+              allShots={shots}
               onAddEntry={async () => {
                 if (!matchInfo?.matchId || !matchInfo?.team) {
                   alert("Wybierz mecz, aby dodać akcję 8s ACC!");
@@ -3077,6 +3079,26 @@ export default function Page() {
               onEditEntry={(entry) => {
                 setAcc8sModalData({ editingEntry: entry });
                 setIsAcc8sModalOpen(true);
+              }}
+              onBulkUpdateEntries={async (updates) => {
+                if (!matchInfo?.matchId) return;
+                
+                try {
+                  for (const update of updates) {
+                    const entry = acc8sEntries.find(e => e.id === update.id);
+                    if (entry) {
+                      await updateAcc8sEntry(update.id, {
+                        ...entry,
+                        isShotUnder8s: update.isShotUnder8s,
+                        isPKEntryUnder8s: update.isPKEntryUnder8s,
+                      } as any);
+                    }
+                  }
+                  alert(`Zaktualizowano ${updates.length} akcji 8s ACC.`);
+                } catch (error) {
+                  console.error('Błąd podczas masowej aktualizacji:', error);
+                  alert('Wystąpił błąd podczas aktualizacji. Spróbuj ponownie.');
+                }
               }}
               onVideoTimeClick={async (timestamp) => {
                 // Sprawdź czy mamy otwarte zewnętrzne okno wideo (tak jak w ShotsTable)

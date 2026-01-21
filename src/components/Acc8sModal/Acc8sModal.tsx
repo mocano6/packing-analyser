@@ -506,8 +506,8 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
             </div>
           </div>
 
-          {/* Buttony dla checkboxów */}
-          <div className={styles.compactButtonsRow}>
+          {/* Buttony dla checkboxów - ukryte, flagi są ustawiane automatycznie */}
+          <div className={styles.compactButtonsRow} style={{ display: 'none' }}>
             <button
               type="button"
               className={`${styles.compactButton} ${formData.isShotUnder8s ? styles.activeButton : ""}`}
@@ -526,6 +526,33 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
             >
               <span className={styles.compactLabel}>PK 8s</span>
             </button>
+          </div>
+          
+          {/* Wyświetl aktualne flagi jako informacja tylko do odczytu */}
+          <div className={styles.fieldGroup}>
+            <label>Flagi (ustawiane automatycznie):</label>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <div style={{ 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                background: formData.isShotUnder8s ? '#10b981' : '#e5e7eb',
+                color: formData.isShotUnder8s ? 'white' : '#6b7280',
+                fontSize: '13px',
+                fontWeight: '500'
+              }}>
+                Strzał 8s: {formData.isShotUnder8s ? 'Tak' : 'Nie'}
+              </div>
+              <div style={{ 
+                padding: '8px 12px', 
+                borderRadius: '6px', 
+                background: formData.isPKEntryUnder8s ? '#10b981' : '#e5e7eb',
+                color: formData.isPKEntryUnder8s ? 'white' : '#6b7280',
+                fontSize: '13px',
+                fontWeight: '500'
+              }}>
+                PK 8s: {formData.isPKEntryUnder8s ? 'Tak' : 'Nie'}
+              </div>
+            </div>
           </div>
 
           {/* Liczba podań - widoczne tylko dla admina */}
