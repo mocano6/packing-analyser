@@ -343,7 +343,6 @@ Wszystkie obiekty są zapisywane w kolekcji `matches/{matchId}` jako tablice:
   
   // SFG (Standardowe Fragmenty Gry)
   sfgSubtype?: 'direct' | 'combination'; // Podrodzaj SFG: bezpośredni, kombinacyjny
-  actionPhase?: 'phase1' | 'phase2' | 'under8s' | 'over8s'; // Faza akcji
   
   // Zawodnicy na linii/obronie
   blockingPlayers?: string[];   // ID zawodników blokujących strzał
@@ -359,6 +358,13 @@ Wszystkie obiekty są zapisywane w kolekcji `matches/{matchId}` jako tablice:
   // Asysta (tylko dla goli)
   assistantId?: string;         // ID asystenta
   assistantName?: string;       // Nazwa asystenta
+  
+  // Dobitki
+  previousShotId?: string;      // ID poprzedniego strzału (dla dobitki) - xG jest obliczane jako xG * (1 - xG_previous/100)
+  
+  // Kontrowersje
+  isControversial?: boolean;    // Czy sytuacja jest kontrowersyjna
+  controversyNote?: string;     // Notatka analityka dotycząca kontrowersyjnego strzału
   
   // Czas wideo
   videoTimestamp?: number;     // Czas wideo w sekundach (po korekcie -10s)

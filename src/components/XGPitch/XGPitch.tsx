@@ -25,6 +25,7 @@ export interface XGPitchProps {
   }>;
   hideToggleButton?: boolean; // Ukryj przycisk przełączania widoczności tagów
   hideTeamLogos?: boolean; // Ukryj loga zespołów
+  rightExtraContent?: React.ReactNode; // Dodatkowa zawartość po prawej stronie nagłówka
 }
 
 // Funkcja obliczania xG na podstawie pozycji
@@ -71,6 +72,7 @@ const XGPitch = memo(function XGPitch({
   allTeams = [],
   hideTeamLogos = false,
   hideToggleButton = false,
+  rightExtraContent,
 }: XGPitchProps) {
   // Stan przełącznika orientacji boiska
   const [isFlipped, setIsFlipped] = useState(false);
@@ -125,6 +127,7 @@ const XGPitch = memo(function XGPitch({
         hideTeamLogos={hideTeamLogos}
         rightContent={
           <>
+            {rightExtraContent}
             {!hideToggleButton && (
               <button
                 type="button"

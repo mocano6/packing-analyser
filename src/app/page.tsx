@@ -714,6 +714,15 @@ export default function Page() {
     timeDiffSeconds?: number;
   }>>([]);
 
+  // Stan dla weryfikacji strzałów
+  const [showShotsVerifyModal, setShowShotsVerifyModal] = useState(false);
+  const [pendingShotsUpdates, setPendingShotsUpdates] = useState<Array<{
+    shot: Shot;
+    actionType: 'open_play' | 'counter' | 'corner' | 'free_kick' | 'direct_free_kick' | 'penalty' | 'throw_in' | 'regain';
+    regainTime?: string;
+    timeDiffSeconds?: number;
+  }>>([]);
+
   // Funkcje obsługi strzałów
   const handleShotAdd = async (x: number, y: number, xG: number) => {
     // Pobierz czas wideo przed otwarciem modala (używając getActiveVideoTime który obsługuje zewnętrzne okno)
@@ -3181,6 +3190,221 @@ export default function Page() {
               selectedShotId={selectedShotId}
               matchInfo={matchInfo || undefined}
               allTeams={allTeams}
+              rightExtraContent={
+                shots.length > 0 ? (
+                  <button
+                    className={pitchHeaderStyles.headerButton}
+                    type="button"
+                    title="Automatycznie ustaw actionType na 'regain' dla strzałów po regainie na połowie przeciwnika w 8s"
+                    onClick={async () => {
+                      console.log("=== PRZYCISK WERYFIKUJ STRZAŁY KLIKNIĘTY ===");
+                      console.log("matchInfo:", matchInfo);
+                      
+                      if (!matchInfo?.team || !matchInfo?.matchId) {
+                        console.log("Brak matchInfo.team lub matchInfo.matchId");
+                        alert("Wybierz mecz, aby zweryfikować strzały.");
+                        return;
+                      }
+
+                      console.log("Rozpoczynam weryfikację strzałów...");
+
+                      try {
+
+                      const updates: Array<{
+                        shot: Shot;
+                        actionType: 'open_play' | 'counter' | 'corner' | 'free_kick' | 'direct_free_kick' | 'penalty' | 'throw_in' | 'regain';
+                        regainTime?: string;
+                        timeDiffSeconds?: number;
+                      }> = [];
+
+                      const normalizeZoneName = (zone: string | number | null | undefined): string | null => {
+                        if (zone === null || zone === undefined) return null;
+                        if (typeof zone === "string") {
+                          return zone.toUpperCase().replace(/\s+/g, "");
+                        }
+                        const name = getZoneName(zone);
+                        return name ? zoneNameToString(name).toUpperCase() : null;
+                      };
+
+                      const isOpponentHalf = (zoneName: string | null | undefined): boolean => {
+                        if (!zoneName) return false;
+                        const zoneIndex = zoneNameToIndex(zoneName);
+                        if (zoneIndex === null) return false;
+                        const col = zoneIndex % 12;
+                        return col >= 6; // Kolumny 6-11 = połowa przeciwnika
+                      };
+
+                      // Pobierz strzały bezpośrednio z Firebase
+                      let shotsFromFirebase: Shot[] = [];
+                      let regainActionsForTeam: Action[] = [];
+                      let losesActionsForTeam: Action[] = [];
+                      
+                      try {
+                        const db = getDB();
+                        const matchDoc = await getDoc(doc(db, "matches", matchInfo.matchId));
+                        
+                        if (matchDoc.exists()) {
+                          const matchData = matchDoc.data() as TeamInfo;
+                          
+                          // Pobierz strzały z Firebase
+                          shotsFromFirebase = (matchData.shots || []) as Shot[];
+                          console.log("Strzały z Firebase:", shotsFromFirebase.length);
+                          
+                          // Pobierz regains
+                          const allRegainActions = (matchData.actions_regain || []).map(action => ({
+                            ...action,
+                            _actionSource: "regain"
+                          })) as Action[];
+                          
+                          regainActionsForTeam = allRegainActions.filter(action => {
+                            if (!action.teamId) return true;
+                            return action.teamId === matchInfo.team;
+                          });
+                          
+                          // Pobierz loses
+                          const allLosesActions = (matchData.actions_loses || []).map(action => ({
+                            ...action,
+                            _actionSource: "loses"
+                          })) as Action[];
+                          
+                          losesActionsForTeam = allLosesActions.filter(action => {
+                            if (!action.teamId) return true;
+                            return action.teamId === matchInfo.team;
+                          });
+                        } else {
+                          alert("Nie znaleziono meczu w bazie danych.");
+                          return;
+                        }
+                      } catch (error) {
+                        console.error("Błąd podczas pobierania danych z Firebase:", error);
+                        alert("Nie udało się pobrać danych z bazy danych.");
+                        return;
+                      }
+
+                      // Filtruj tylko strzały w ataku (teamContext === "attack")
+                      const shotsAttack = shotsFromFirebase.filter(shot => {
+                        return shot.teamContext === "attack";
+                      });
+
+                      console.log(`\n=== DEBUG: Weryfikacja strzałów ===`);
+                      console.log(`Wszystkie strzały z Firebase: ${shotsFromFirebase.length}`);
+                      console.log(`Strzały w ataku: ${shotsAttack.length}`);
+
+                      shotsAttack.forEach((shot) => {
+                        // Używamy TYLKO videoTimestampRaw
+                        if (shot.videoTimestampRaw === undefined || shot.videoTimestampRaw === null) {
+                          return;
+                        }
+                        const shotTimeRaw = shot.videoTimestampRaw;
+                        const shotMinutes = Math.floor(shotTimeRaw / 60);
+                        const shotSeconds = Math.floor(shotTimeRaw % 60);
+                        const shotTimeString = `${shotMinutes}:${shotSeconds.toString().padStart(2, "0")}`;
+
+                        console.log(`\n=== DEBUG: Sprawdzanie strzału ${shotTimeString} (${shotTimeRaw}s) ===`);
+
+                        // Znajdź regains na połowie przeciwnika przed strzałem
+                        const regainsBeforeShot = regainActionsForTeam
+                          .filter((regain: any) => {
+                            if (regain.videoTimestampRaw === undefined || regain.videoTimestampRaw === null) {
+                              return false;
+                            }
+                            const regainTimeRaw = regain.videoTimestampRaw;
+                            
+                            // Tylko regains PRZED strzałem
+                            if (regainTimeRaw >= shotTimeRaw) {
+                              return false;
+                            }
+
+                            // Sprawdź, czy regain był na połowie przeciwnika
+                            const attackZoneRaw = regain.regainAttackZone || regain.oppositeZone || regain.toZone;
+                            const attackZoneName = normalizeZoneName(attackZoneRaw);
+                            
+                            if (!attackZoneName) {
+                              return false;
+                            }
+
+                            return isOpponentHalf(attackZoneName);
+                          })
+                          .map((regain: any) => ({
+                            regain,
+                            timestamp: regain.videoTimestampRaw,
+                          }))
+                          .sort((a, b) => b.timestamp - a.timestamp); // Sortuj od najnowszej
+
+                        console.log(`  Znaleziono ${regainsBeforeShot.length} regainów na połowie przeciwnika przed strzałem`);
+
+                        let shouldBeRegain = false;
+                        let timeDiff: number | undefined;
+                        let regainTimeString: string | undefined;
+
+                        if (regainsBeforeShot.length > 0) {
+                          const lastRegain = regainsBeforeShot[0];
+                          timeDiff = shotTimeRaw - lastRegain.timestamp;
+                          
+                          console.log(`  Ostatni regain: ${lastRegain.timestamp}s, różnica: ${timeDiff.toFixed(1)}s`);
+
+                          // Sprawdzamy czy różnica czasu jest <= 8 sekund (i dodatnia)
+                          if (timeDiff > 0 && timeDiff <= 8) {
+                            console.log(`  Różnica <= 8s - sprawdzam loses między regainem a strzałem`);
+                            
+                            // Sprawdzamy czy nie było loses między regainem a strzałem
+                            const losesBetween = losesActionsForTeam.filter((lose: any) => {
+                              if (lose.videoTimestampRaw === undefined || lose.videoTimestampRaw === null) return false;
+                              const loseTimeRaw = lose.videoTimestampRaw;
+                              return loseTimeRaw > lastRegain.timestamp && loseTimeRaw < shotTimeRaw;
+                            });
+
+                            console.log(`  Znaleziono ${losesBetween.length} strat między regainem a strzałem`);
+                            
+                            // Jeśli nie ma loses między regainem a strzałem, to powinno być actionType = 'regain'
+                            shouldBeRegain = losesBetween.length === 0;
+                            
+                            if (shouldBeRegain) {
+                              const regainMinutes = Math.floor(lastRegain.timestamp / 60);
+                              const regainSeconds = Math.floor(lastRegain.timestamp % 60);
+                              regainTimeString = `${regainMinutes}:${regainSeconds.toString().padStart(2, "0")}`;
+                            }
+                          } else {
+                            console.log(`  Różnica > 8s lub <= 0 - nie kwalifikuje się`);
+                          }
+                        } else {
+                          console.log(`  Brak regainów na połowie przeciwnika przed strzałem`);
+                        }
+
+                        // Sprawdź czy trzeba zaktualizować actionType
+                        const currentActionType = shot.actionType || 'open_play';
+                        const needsUpdate = shouldBeRegain && currentActionType !== 'regain';
+
+                        console.log(`  Wynik: shouldBeRegain = ${shouldBeRegain}, currentActionType = ${currentActionType}, needsUpdate = ${needsUpdate}`);
+
+                        if (needsUpdate) {
+                          updates.push({
+                            shot,
+                            actionType: 'regain',
+                            regainTime: regainTimeString,
+                            timeDiffSeconds: timeDiff,
+                          });
+                        }
+                      });
+
+                      if (updates.length === 0) {
+                        alert("Nie znaleziono żadnych zmian do zastosowania.");
+                        return;
+                      }
+
+                        console.log("Updates przed zapisaniem:", updates.length);
+                        setPendingShotsUpdates(updates);
+                        setShowShotsVerifyModal(true);
+                      } catch (error) {
+                        console.error("Błąd podczas weryfikacji strzałów:", error);
+                        alert("Nie udało się zweryfikować strzałów.");
+                      }
+                    }}
+                >
+                  ✓ Weryfikuj
+                </button>
+              ) : null
+              }
             />
             {shotModalData && (
               <ShotModal
@@ -4186,6 +4410,101 @@ export default function Page() {
                   }}
                 >
                   Anuluj
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showShotsVerifyModal && (
+          <div className={styles.pkVerifyOverlay} onClick={() => setShowShotsVerifyModal(false)}>
+            <div className={styles.pkVerifyModal} onClick={(e) => e.stopPropagation()}>
+              <div className={styles.pkVerifyHeader}>
+                <h3>Podgląd zmian automatycznych actionType dla strzałów</h3>
+                <button
+                  className={styles.pkVerifyClose}
+                  onClick={() => setShowShotsVerifyModal(false)}
+                >
+                  ×
+                </button>
+              </div>
+              <div className={styles.pkVerifyBody}>
+                <p>
+                  Znaleziono <strong>{pendingShotsUpdates.length}</strong> strzałów do zaktualizowania:
+                </p>
+                <div className={styles.pkVerifyList}>
+                  {pendingShotsUpdates.map((update, index) => {
+                    if (update.shot.videoTimestampRaw === undefined || update.shot.videoTimestampRaw === null) return null;
+                    const shotTimeRaw = update.shot.videoTimestampRaw;
+                    const shotMinutes = Math.floor(shotTimeRaw / 60);
+                    const shotSeconds = Math.floor(shotTimeRaw % 60);
+                    const shotTimeString = `${shotMinutes}:${shotSeconds.toString().padStart(2, "0")}`;
+
+                    return (
+                      <div key={update.shot.id || index} className={styles.pkVerifyItem}>
+                        <div className={styles.pkVerifyItemHeader}>
+                          <span className={styles.pkVerifyTime}>{shotTimeString}</span>
+                          <span className={styles.pkVerifyMinute}>Minuta {update.shot.minute}'</span>
+                        </div>
+                        <div className={styles.pkVerifyFlags}>
+                          <span className={styles.pkVerifyLabel}>actionType:</span>
+                          <span className={styles.pkVerifyChange}>
+                            <span className={styles.pkVerifyIcon}>{(update.shot.actionType || 'open_play') === 'regain' ? "✓" : "✗"}</span>
+                            <span>→</span>
+                            <span className={styles.pkVerifyIcon}>✓</span>
+                            {update.regainTime && update.timeDiffSeconds !== undefined && (
+                              <span className={styles.pkVerifyTimeHint}>
+                                (Regain: {update.regainTime}, {update.timeDiffSeconds >= 0 ? '+' : ''}{update.timeDiffSeconds.toFixed(1)}s)
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className={styles.pkVerifyFooter}>
+                <button
+                  className={styles.pkVerifyCancel}
+                  onClick={() => setShowShotsVerifyModal(false)}
+                >
+                  Anuluj
+                </button>
+                <button
+                  className={styles.pkVerifySave}
+                  onClick={async () => {
+                    if (!matchInfo?.matchId) {
+                      alert("Wybierz mecz, aby zapisać zmiany.");
+                      return;
+                    }
+
+                    try {
+                      const updatedShots = shots.map(shot => {
+                        const update = pendingShotsUpdates.find(u => u.shot.id === shot.id);
+                        if (update) {
+                          return { 
+                            ...shot, 
+                            actionType: update.actionType,
+                          };
+                        }
+                        return shot;
+                      });
+
+                      const db = getDB();
+                      await updateDoc(doc(db, "matches", matchInfo.matchId), {
+                        shots: updatedShots
+                      });
+
+                      setShowShotsVerifyModal(false);
+                      setPendingShotsUpdates([]);
+                    } catch (error) {
+                      console.error("Błąd podczas aktualizacji strzałów:", error);
+                      alert("Nie udało się zaktualizować strzałów.");
+                    }
+                  }}
+                >
+                  Zatwierdź zmiany
                 </button>
               </div>
             </div>

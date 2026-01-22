@@ -52,7 +52,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
     actionType: "open_play" as "open_play" | "counter" | "corner" | "free_kick" | "direct_free_kick" | "penalty" | "throw_in" | "regain",
     actionCategory: "open_play" as "open_play" | "sfg",
     sfgSubtype: "direct" as "direct" | "combination",
-    actionPhase: "phase1" as "phase1" | "phase2" | "under8s" | "over8s",
     blockingPlayers: [] as string[],
     linePlayers: [] as string[],
     linePlayersCount: 0,
@@ -349,7 +348,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
         actionType: editingShot.actionType || "open_play",
         actionCategory: editingShot.actionType && ["corner", "free_kick", "direct_free_kick", "penalty", "throw_in"].includes(editingShot.actionType) ? "sfg" : "open_play",
         sfgSubtype: (editingShot as any)?.sfgSubtype || "direct",
-        actionPhase: (editingShot as any)?.actionPhase || (editingShot.actionType && ["corner", "free_kick", "direct_free_kick", "penalty", "throw_in"].includes(editingShot.actionType) ? "phase1" : "under8s"),
         blockingPlayers: editingShot.blockingPlayers || [],
         linePlayers: (editingShot as any)?.linePlayers || [],
         linePlayersCount: (editingShot as any)?.linePlayersCount || 0,
@@ -383,7 +381,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
         actionType: "open_play",
         actionCategory: "open_play",
         sfgSubtype: "direct",
-        actionPhase: "under8s",
         blockingPlayers: [],
         linePlayers: [],
         linePlayersCount: 0,
@@ -661,7 +658,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
       ...prev,
       actionCategory: category,
       actionType: category === "open_play" ? "open_play" : "corner", // Reset to default for category
-      actionPhase: category === "open_play" ? "under8s" : "phase1" // Reset phase based on category
     }));
   };
 
@@ -688,20 +684,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
       { value: "direct", label: "Bezpośredni" },
       { value: "combination", label: "Kombinacyjny" }
     ];
-  };
-
-  const getActionPhases = (): Array<{value: string, label: string}> => {
-    if (formData.actionCategory === "sfg") {
-      return [
-        { value: "phase1", label: "I faza" },
-        { value: "phase2", label: "II faza" }
-      ];
-    } else {
-      return [
-        { value: "under8s", label: "Do 8s" },
-        { value: "over8s", label: "Powyżej 8s" }
-      ];
-    }
   };
 
   const handleVideoTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -890,7 +872,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
       teamId: formData.teamId,
       actionType: formData.actionType,
       sfgSubtype: formData.sfgSubtype,
-      actionPhase: formData.actionPhase,
       blockingPlayers: formData.blockingPlayers,
       linePlayers: formData.linePlayers,
       linePlayersCount: formData.linePlayersCount,
@@ -1157,25 +1138,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     onClick={() => setFormData({...formData, sfgSubtype: subtype.value as any})}
                   >
                     {subtype.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Faza akcji */}
-          {formData.actionType !== "penalty" && (
-            <div className={styles.fieldGroup}>
-              <label>Faza akcji:</label>
-              <div className={styles.actionTypeSelector}>
-                {getActionPhases().map((phase) => (
-                  <button
-                    key={phase.value}
-                    type="button"
-                    className={`${styles.actionTypeButton} ${formData.actionPhase === phase.value ? styles.active : ""}`}
-                    onClick={() => setFormData({...formData, actionPhase: phase.value as any})}
-                  >
-                    {phase.label}
                   </button>
                 ))}
               </div>
