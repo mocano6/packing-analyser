@@ -1111,20 +1111,6 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
             })}
           </div>
           
-          {/* Przyciski kontrolne z polem minuty pomiędzy */}
-          <div className={styles.buttonGroup}>
-            <button
-              type="button"
-              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${isControversial ? styles.controversyButtonActive : ""}`}
-              onClick={onControversialToggle}
-              aria-pressed={isControversial}
-              aria-label="Oznacz jako kontrowersja"
-              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
-            >
-              !
-            </button>
-          </div>
-          
           {/* Pole notatki kontrowersyjnej - pojawia się gdy isControversial jest true */}
           {isControversial && (
             <div className={styles.controversyNoteContainer}>
@@ -1146,7 +1132,18 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
             </div>
           )}
 
+          {/* Przyciski kontrolne z polem minuty pomiędzy */}
           <div className={styles.buttonGroup}>
+            <button
+              type="button"
+              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${isControversial ? styles.controversyButtonActive : ""}`}
+              onClick={onControversialToggle}
+              aria-pressed={isControversial}
+              aria-label="Oznacz jako kontrowersja"
+              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
+            >
+              !
+            </button>
             <button
               className={styles.cancelButton}
               onClick={handleCancel}

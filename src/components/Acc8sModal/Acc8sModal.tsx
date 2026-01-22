@@ -506,8 +506,8 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
             </div>
           </div>
 
-          {/* Buttony dla checkboxów - ukryte, flagi są ustawiane automatycznie */}
-          <div className={styles.compactButtonsRow} style={{ display: 'none' }}>
+          {/* Buttony dla checkboxów - możliwość ręcznej zmiany */}
+          <div className={styles.compactButtonsRow}>
             <button
               type="button"
               className={`${styles.compactButton} ${formData.isShotUnder8s ? styles.activeButton : ""}`}
@@ -526,33 +526,6 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
             >
               <span className={styles.compactLabel}>PK 8s</span>
             </button>
-          </div>
-          
-          {/* Wyświetl aktualne flagi jako informacja tylko do odczytu */}
-          <div className={styles.fieldGroup}>
-            <label>Flagi (ustawiane automatycznie):</label>
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-              <div style={{ 
-                padding: '8px 12px', 
-                borderRadius: '6px', 
-                background: formData.isShotUnder8s ? '#10b981' : '#e5e7eb',
-                color: formData.isShotUnder8s ? 'white' : '#6b7280',
-                fontSize: '13px',
-                fontWeight: '500'
-              }}>
-                Strzał 8s: {formData.isShotUnder8s ? 'Tak' : 'Nie'}
-              </div>
-              <div style={{ 
-                padding: '8px 12px', 
-                borderRadius: '6px', 
-                background: formData.isPKEntryUnder8s ? '#10b981' : '#e5e7eb',
-                color: formData.isPKEntryUnder8s ? 'white' : '#6b7280',
-                fontSize: '13px',
-                fontWeight: '500'
-              }}>
-                PK 8s: {formData.isPKEntryUnder8s ? 'Tak' : 'Nie'}
-              </div>
-            </div>
           </div>
 
           {/* Liczba podań - widoczne tylko dla admina */}
@@ -584,19 +557,6 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
             </div>
           )}
 
-          <div className={styles.buttonGroup}>
-            <button
-              type="button"
-              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${formData.isControversial ? styles.controversyButtonActive : ""}`}
-              onClick={() => setFormData({ ...formData, isControversial: !formData.isControversial })}
-              aria-pressed={formData.isControversial}
-              aria-label="Oznacz jako kontrowersja"
-              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
-            >
-              !
-            </button>
-          </div>
-          
           {/* Pole notatki kontrowersyjnej - pojawia się gdy isControversial jest true */}
           {formData.isControversial && (
             <div className={styles.controversyNoteContainer}>
@@ -619,6 +579,16 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
           )}
 
           <div className={styles.buttonGroup}>
+            <button
+              type="button"
+              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${formData.isControversial ? styles.controversyButtonActive : ""}`}
+              onClick={() => setFormData({ ...formData, isControversial: !formData.isControversial })}
+              aria-pressed={formData.isControversial}
+              aria-label="Oznacz jako kontrowersja"
+              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
+            >
+              !
+            </button>
             <button type="button" onClick={onClose} className={styles.cancelButton}>
               Anuluj
             </button>

@@ -1518,16 +1518,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
                 Usuń strzał
               </button>
             )}
-            <button
-              type="button"
-              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${formData.isControversial ? styles.controversyButtonActive : ""}`}
-              onClick={() => setFormData({ ...formData, isControversial: !formData.isControversial })}
-              aria-pressed={formData.isControversial}
-              aria-label="Oznacz jako kontrowersja"
-              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
-            >
-              !
-            </button>
           </div>
           
           {/* Pole notatki kontrowersyjnej - pojawia się gdy isControversial jest true */}
@@ -1552,6 +1542,16 @@ const ShotModal: React.FC<ShotModalProps> = ({
           )}
 
           <div className={styles.buttonGroup}>
+            <button
+              type="button"
+              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${formData.isControversial ? styles.controversyButtonActive : ""}`}
+              onClick={() => setFormData({ ...formData, isControversial: !formData.isControversial })}
+              aria-pressed={formData.isControversial}
+              aria-label="Oznacz jako kontrowersja"
+              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
+            >
+              !
+            </button>
             <button type="button" onClick={onClose} className={styles.cancelButton}>
               Anuluj
             </button>

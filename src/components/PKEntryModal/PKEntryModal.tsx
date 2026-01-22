@@ -1057,23 +1057,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                 Usuń wejście
               </button>
             )}
-            <button
-              type="button"
-              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${formData.isControversial ? styles.controversyButtonActive : ""}`}
-              onClick={() => {
-                const newIsControversial = !formData.isControversial;
-                setFormData({ ...formData, isControversial: newIsControversial });
-                // Resetuj notatkę gdy odznaczamy kontrowersję
-                if (!newIsControversial) {
-                  setControversyNote("");
-                }
-              }}
-              aria-pressed={formData.isControversial}
-              aria-label="Oznacz jako kontrowersja"
-              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
-            >
-              !
-            </button>
           </div>
           
           {/* Pole notatki kontrowersyjnej - pojawia się gdy isControversial jest true */}
@@ -1098,6 +1081,23 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
           )}
 
           <div className={styles.buttonGroup}>
+            <button
+              type="button"
+              className={`${styles.controversyButton} ${styles.tooltipTrigger} ${formData.isControversial ? styles.controversyButtonActive : ""}`}
+              onClick={() => {
+                const newIsControversial = !formData.isControversial;
+                setFormData({ ...formData, isControversial: newIsControversial });
+                // Resetuj notatkę gdy odznaczamy kontrowersję
+                if (!newIsControversial) {
+                  setControversyNote("");
+                }
+              }}
+              aria-pressed={formData.isControversial}
+              aria-label="Oznacz jako kontrowersja"
+              data-tooltip="Sytuacja kontrowersyjna - zaznacz, aby omówić później."
+            >
+              !
+            </button>
             <button type="button" onClick={onClose} className={styles.cancelButton}>
               Anuluj
             </button>
