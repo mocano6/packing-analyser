@@ -3261,7 +3261,7 @@ export default function Page() {
                 <button
                   className={pitchHeaderStyles.headerButton}
                   type="button"
-                  title="Automatycznie ustaw flagę isRegain na podstawie regainów na połowie przeciwnika w 8s"
+                  title="Automatycznie ustaw flagi isRegain, isShot i isGoal na podstawie regainów, strzałów i goli"
                   onClick={async () => {
                     console.log("=== PRZYCISK WERYFIKUJ KLIKNIĘTY ===");
                     console.log("matchInfo:", matchInfo);
@@ -3279,6 +3279,10 @@ export default function Page() {
                       isRegain: boolean;
                       regainTime?: string;
                       timeDiffSeconds?: number;
+                      isShot?: boolean;
+                      isGoal?: boolean;
+                      shotTime?: string;
+                      shotTimeDiff?: number;
                     }> = [];
 
                     const normalizeZoneName = (zone: string | number | null | undefined): string | null => {
@@ -3301,9 +3305,9 @@ export default function Page() {
                     console.log("\n=== DEBUG: Weryfikacja PK entries ===");
                     console.log("matchInfo.team:", matchInfo.team);
                     console.log("matchInfo.matchId:", matchInfo.matchId);
-                    console.log("pkEntries.length:", pkEntries.length);
 
-                    // Pobierz regains bezpośrednio z Firebase (z actions_regain)
+                    // Pobierz pkEntries bezpośrednio z Firebase, aby mieć aktualne dane
+                    let pkEntriesFromFirebase: PKEntry[] = [];
                     let regainActionsForTeam: Action[] = [];
                     try {
                       const db = getDB();
@@ -3313,6 +3317,21 @@ export default function Page() {
                       
                       if (matchDoc.exists()) {
                         const matchData = matchDoc.data() as TeamInfo;
+                        
+                        // Pobierz pkEntries bezpośrednio z Firebase
+                        pkEntriesFromFirebase = (matchData.pkEntries || []) as PKEntry[];
+                        console.log("PK entries z Firebase:", pkEntriesFromFirebase.length);
+                        console.log("Przykładowe PK entries:", pkEntriesFromFirebase.slice(0, 3));
+                        // Sprawdź wartości isShot i isGoal dla wszystkich entries
+                        pkEntriesFromFirebase.forEach((entry, idx) => {
+                          if (entry.videoTimestampRaw && Math.floor(entry.videoTimestampRaw / 60) === 29 && Math.floor(entry.videoTimestampRaw % 60) === 58) {
+                            console.log(`\n=== DEBUG: Znaleziono entry 29:58 (indeks ${idx}) ===`);
+                            console.log("Pełny obiekt entry:", JSON.stringify(entry, null, 2));
+                            console.log("entry.isShot:", entry.isShot, "typ:", typeof entry.isShot);
+                            console.log("entry.isGoal:", entry.isGoal, "typ:", typeof entry.isGoal);
+                            console.log("entry.isRegain:", entry.isRegain, "typ:", typeof entry.isRegain);
+                          }
+                        });
                         console.log("Dane dokumentu:", {
                           hasActionsRegain: !!matchData.actions_regain,
                           actionsRegainType: typeof matchData.actions_regain,
@@ -3377,6 +3396,20 @@ export default function Page() {
                       }
                     } catch (error) {
                       console.error("Błąd podczas pobierania loses z Firebase:", error);
+                    }
+
+                    // Pobierz strzały bezpośrednio z Firebase (z shots)
+                    let allShotsForMatch: Shot[] = [];
+                    try {
+                      const db = getDB();
+                      const matchDoc = await getDoc(doc(db, "matches", matchInfo.matchId));
+                      if (matchDoc.exists()) {
+                        const matchData = matchDoc.data() as TeamInfo;
+                        allShotsForMatch = (matchData.shots || []) as Shot[];
+                        console.log("Pobrano strzały z Firebase:", allShotsForMatch.length);
+                      }
+                    } catch (error) {
+                      console.error("Błąd podczas pobierania strzałów z Firebase:", error);
                     }
 
                     // Filtruj regains na połowie przeciwnika i wypisz w konsoli
@@ -3467,13 +3500,14 @@ export default function Page() {
                     }
 
                     // Filtruj tylko wejścia w PK w ataku (teamContext === "attack")
-                    const pkEntriesAttack = pkEntries.filter(entry => {
+                    // Używamy pkEntriesFromFirebase zamiast pkEntries z hooka, aby mieć aktualne dane
+                    const pkEntriesAttack = pkEntriesFromFirebase.filter(entry => {
                       // Jeśli nie ma teamContext, domyślnie uznajemy za atak (dla kompatybilności wstecznej)
                       return !entry.teamContext || entry.teamContext === "attack";
                     });
 
                     console.log(`\n=== DEBUG: Filtrowanie PK entries ===`);
-                    console.log(`Wszystkie PK entries: ${pkEntries.length}`);
+                    console.log(`Wszystkie PK entries z Firebase: ${pkEntriesFromFirebase.length}`);
                     console.log(`PK entries w ataku: ${pkEntriesAttack.length}`);
 
                     pkEntriesAttack.forEach((entry) => {
@@ -3490,6 +3524,16 @@ export default function Page() {
                       const pkTimeString = `${pkMinutes}:${pkSeconds.toString().padStart(2, "0")}`;
 
                       console.log(`\n=== DEBUG: Sprawdzanie PK entry ${pkTimeString} (${pkTimeRaw}s) ===`);
+                      console.log(`  Aktualne wartości z Firebase:`, {
+                        isShot: entry.isShot,
+                        isGoal: entry.isGoal,
+                        isRegain: entry.isRegain,
+                        isShotType: typeof entry.isShot,
+                        isGoalType: typeof entry.isGoal,
+                        isRegainType: typeof entry.isRegain,
+                        entryId: entry.id,
+                        entryFull: entry
+                      });
 
                       const regainsBeforePK = regainsOnOpponentHalf
                         .filter((regain: any) => {
@@ -3556,19 +3600,104 @@ export default function Page() {
 
                       console.log(`  Wynik: shouldBeRegain = ${shouldBeRegain}, entry.isRegain = ${entry.isRegain}`);
 
+                      // Sprawdź strzały do 5s po wejściu w PK (dla flag)
+                      // Znajdź też najbliższy strzał (nawet poza 5s) dla kontekstu
+                      let hasShot = false;
+                      let hasGoal = false;
+                      let shotTime: string | undefined;
+                      let shotTimeDiff: number | undefined;
+                      let closestShotTimeRaw: number | null = null;
+                      let closestShotTimeDiff: number | null = null;
+                      
+                      if (pkTimeRaw !== null && pkTimeRaw !== undefined) {
+                        const shotWindowEnd = pkTimeRaw + 5; // Do 5s po wejściu w PK
+                        
+                        for (const shot of allShotsForMatch) {
+                          let shotTimeRaw: number | null = null;
+                          if (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null) {
+                            shotTimeRaw = shot.videoTimestampRaw;
+                          }
+                          if (shotTimeRaw === null) continue;
+                          
+                          // Tylko strzały po wejściu w PK
+                          if (shotTimeRaw < pkTimeRaw) continue;
+                          
+                          const timeDiff = shotTimeRaw - pkTimeRaw;
+                          
+                          // Sprawdź czy strzał jest w przedziale do 5s po wejściu w PK (dla flag)
+                          if (shotTimeRaw >= pkTimeRaw && shotTimeRaw <= shotWindowEnd) {
+                            if (closestShotTimeRaw === null || timeDiff < closestShotTimeDiff!) {
+                              closestShotTimeRaw = shotTimeRaw;
+                              closestShotTimeDiff = timeDiff;
+                              hasShot = true;
+                              if (shot.isGoal === true) {
+                                hasGoal = true;
+                              }
+                              const shotMinutes = Math.floor(shotTimeRaw / 60);
+                              const shotSeconds = Math.floor(shotTimeRaw % 60);
+                              shotTime = `${shotMinutes}:${shotSeconds.toString().padStart(2, '0')}`;
+                              shotTimeDiff = timeDiff;
+                            }
+                          } else {
+                            // Jeśli jest poza przedziałem 5s, ale jest najbliższy, zapisz dla kontekstu
+                            if (closestShotTimeRaw === null || timeDiff < closestShotTimeDiff!) {
+                              closestShotTimeRaw = shotTimeRaw;
+                              closestShotTimeDiff = timeDiff;
+                              const shotMinutes = Math.floor(shotTimeRaw / 60);
+                              const shotSeconds = Math.floor(shotTimeRaw % 60);
+                              shotTime = `${shotMinutes}:${shotSeconds.toString().padStart(2, '0')}`;
+                              shotTimeDiff = timeDiff;
+                            }
+                          }
+                        }
+                      }
+
+                      // Sprawdź czy trzeba zaktualizować flagi
+                      // Weryfikujemy, czy istniejące flagi są poprawne:
+                      // - jeśli w bazie jest isShot=true, ale strzał jest poza 5s → powinno być false
+                      // - jeśli w bazie jest isShot=false, ale strzał jest w przedziale 5s → powinno być true
+                      // - jeśli w bazie jest isGoal=true, ale strzał jest poza 5s lub nie ma gola → powinno być false
+                      // - jeśli w bazie jest isGoal=false, ale strzał jest w przedziale 5s i jest gol → powinno być true
+                      
+                      // Normalizuj wartości z Firebase (undefined/null → false)
+                      const entryIsShot = entry.isShot === true;
+                      const entryIsGoal = entry.isGoal === true;
+                      const entryIsRegain = entry.isRegain === true;
+                      
+                      console.log(`  Porównanie wartości:`, {
+                        entryIsShot,
+                        hasShot,
+                        entryIsGoal,
+                        hasGoal,
+                        entryIsRegain,
+                        shouldBeRegain,
+                        isShotDiffers: entryIsShot !== hasShot,
+                        isGoalDiffers: entryIsGoal !== hasGoal,
+                        isRegainDiffers: entryIsRegain !== shouldBeRegain
+                      });
+                      
+                      const needsUpdate = entryIsRegain !== shouldBeRegain || 
+                                        entryIsShot !== hasShot || 
+                                        entryIsGoal !== hasGoal;
+
                       // Dodajemy do updates tylko jeśli wartość się zmienia
-                      if (entry.isRegain !== shouldBeRegain) {
+                      if (needsUpdate) {
                         updates.push({
                           entry,
                           isRegain: shouldBeRegain,
                           regainTime: regainTimeString, // Zawsze pokazuj czas ostatniego regaina, jeśli istnieje
                           timeDiffSeconds: timeDiff, // Zawsze pokazuj różnicę czasu, jeśli jest zdefiniowana
+                          isShot: hasShot,
+                          isGoal: hasGoal,
+                          shotTime,
+                          shotTimeDiff,
                         });
                       }
                     });
 
                     // Filtruj tylko wejścia w PK w defensywie (teamContext === "defense")
-                    const pkEntriesDefense = pkEntries.filter(entry => {
+                    // Używamy pkEntriesFromFirebase zamiast pkEntries z hooka, aby mieć aktualne dane
+                    const pkEntriesDefense = pkEntriesFromFirebase.filter(entry => {
                       return entry.teamContext === "defense";
                     });
 
@@ -3679,16 +3808,100 @@ export default function Page() {
 
                       console.log(`  Wynik: shouldBeRegain = ${shouldBeRegain}, entry.isRegain = ${entry.isRegain}`);
 
-                      // Dodajemy do updates jeśli wartość się zmienia
+                      // Sprawdź strzały do 5s po wejściu w PK (dla flag)
+                      // Znajdź też najbliższy strzał (nawet poza 5s) dla kontekstu
+                      let hasShot = false;
+                      let hasGoal = false;
+                      let shotTime: string | undefined;
+                      let shotTimeDiff: number | undefined;
+                      let closestShotTimeRaw: number | null = null;
+                      let closestShotTimeDiff: number | null = null;
+                      
+                      if (pkTimeRaw !== null && pkTimeRaw !== undefined) {
+                        const shotWindowEnd = pkTimeRaw + 5; // Do 5s po wejściu w PK
+                        
+                        for (const shot of allShotsForMatch) {
+                          let shotTimeRaw: number | null = null;
+                          if (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null) {
+                            shotTimeRaw = shot.videoTimestampRaw;
+                          }
+                          if (shotTimeRaw === null) continue;
+                          
+                          // Tylko strzały po wejściu w PK
+                          if (shotTimeRaw < pkTimeRaw) continue;
+                          
+                          const timeDiff = shotTimeRaw - pkTimeRaw;
+                          
+                          // Sprawdź czy strzał jest w przedziale do 5s po wejściu w PK (dla flag)
+                          if (shotTimeRaw >= pkTimeRaw && shotTimeRaw <= shotWindowEnd) {
+                            if (closestShotTimeRaw === null || timeDiff < closestShotTimeDiff!) {
+                              closestShotTimeRaw = shotTimeRaw;
+                              closestShotTimeDiff = timeDiff;
+                              hasShot = true;
+                              if (shot.isGoal === true) {
+                                hasGoal = true;
+                              }
+                              const shotMinutes = Math.floor(shotTimeRaw / 60);
+                              const shotSeconds = Math.floor(shotTimeRaw % 60);
+                              shotTime = `${shotMinutes}:${shotSeconds.toString().padStart(2, '0')}`;
+                              shotTimeDiff = timeDiff;
+                            }
+                          } else {
+                            // Jeśli jest poza przedziałem 5s, ale jest najbliższy, zapisz dla kontekstu
+                            if (closestShotTimeRaw === null || timeDiff < closestShotTimeDiff!) {
+                              closestShotTimeRaw = shotTimeRaw;
+                              closestShotTimeDiff = timeDiff;
+                              const shotMinutes = Math.floor(shotTimeRaw / 60);
+                              const shotSeconds = Math.floor(shotTimeRaw % 60);
+                              shotTime = `${shotMinutes}:${shotSeconds.toString().padStart(2, '0')}`;
+                              shotTimeDiff = timeDiff;
+                            }
+                          }
+                        }
+                      }
+
+                      // Sprawdź czy trzeba zaktualizować flagi
+                      // Weryfikujemy, czy istniejące flagi są poprawne:
+                      // - jeśli w bazie jest isShot=true, ale strzał jest poza 5s → powinno być false
+                      // - jeśli w bazie jest isShot=false, ale strzał jest w przedziale 5s → powinno być true
+                      // - jeśli w bazie jest isGoal=true, ale strzał jest poza 5s lub nie ma gola → powinno być false
+                      // - jeśli w bazie jest isGoal=false, ale strzał jest w przedziale 5s i jest gol → powinno być true
                       // Dla defensywy (wejścia przeciwnika w nasze PK):
                       //   - jeśli była strata naszego zespołu do 8s przed PK → przeciwnik odzyskał piłkę → isRegain = true
                       //   - jeśli nie było strat naszego zespołu do 8s przed PK → przeciwnik nie odzyskał piłki → isRegain = false
-                      if (entry.isRegain !== shouldBeRegain) {
+                      
+                      // Normalizuj wartości z Firebase (undefined/null → false)
+                      const entryIsShot = entry.isShot === true;
+                      const entryIsGoal = entry.isGoal === true;
+                      const entryIsRegain = entry.isRegain === true;
+                      
+                      console.log(`  Porównanie wartości (defense):`, {
+                        entryIsShot,
+                        hasShot,
+                        entryIsGoal,
+                        hasGoal,
+                        entryIsRegain,
+                        shouldBeRegain,
+                        isShotDiffers: entryIsShot !== hasShot,
+                        isGoalDiffers: entryIsGoal !== hasGoal,
+                        isRegainDiffers: entryIsRegain !== shouldBeRegain
+                      });
+                      
+                      const needsUpdate = entryIsRegain !== shouldBeRegain || 
+                                        entryIsShot !== hasShot || 
+                                        entryIsGoal !== hasGoal;
+
+                      // Dodajemy do updates tylko jeśli wartość się zmienia
+                      if (needsUpdate) {
                         updates.push({
                           entry,
                           isRegain: shouldBeRegain,
                           regainTime: loseTimeString, // Czas ostatniej straty dla kontekstu (jeśli była w przedziale 8s)
                           timeDiffSeconds: timeDiff, // Zawsze pokazuj różnicę czasu, jeśli jest zdefiniowana
+                          isShot: hasShot,
+                          isGoal: hasGoal,
+                          shotTime,
+                          shotTimeDiff,
                         });
                       }
                     });
@@ -3711,7 +3924,7 @@ export default function Page() {
             <div className={styles.pkVerifyOverlay} onClick={() => setShowPKRegainVerifyModal(false)}>
               <div className={styles.pkVerifyModal} onClick={(e) => e.stopPropagation()}>
                 <div className={styles.pkVerifyHeader}>
-                  <h3>Podgląd zmian automatycznych flag isRegain</h3>
+                  <h3>Podgląd zmian automatycznych flag (isRegain, isShot, isGoal)</h3>
                   <button
                     className={styles.pkVerifyClose}
                     onClick={() => setShowPKRegainVerifyModal(false)}
@@ -3747,27 +3960,71 @@ export default function Page() {
                             <span className={styles.pkVerifyMinute}>Minuta {update.entry.minute}'</span>
                           </div>
                           <div className={styles.pkVerifyFlags}>
-                            <span className={styles.pkVerifyLabel}>isRegain:</span>
-                            <span className={styles.pkVerifyChange}>
-                              <span className={styles.pkVerifyIcon}>{update.entry.isRegain ? "✓" : "✗"}</span>
-                              <span>→</span>
-                              <span className={styles.pkVerifyIcon}>{update.isRegain ? "✓" : "✗"}</span>
-                              {update.regainTime && update.timeDiffSeconds !== undefined && (
-                                <span className={styles.pkVerifyTimeHint}>
-                                  ({update.entry.teamContext === "defense" ? "Strata" : "Regain"}: {update.regainTime}, różnica: {update.timeDiffSeconds.toFixed(1)}s)
+                            {update.entry.isRegain !== update.isRegain && (
+                              <>
+                                <span className={styles.pkVerifyLabel}>isRegain:</span>
+                                <span className={styles.pkVerifyChange}>
+                                  <span className={styles.pkVerifyIcon}>{update.entry.isRegain ? "✓" : "✗"}</span>
+                                  <span>→</span>
+                                  <span className={styles.pkVerifyIcon}>{update.isRegain ? "✓" : "✗"}</span>
+                                  {update.regainTime && update.timeDiffSeconds !== undefined && (
+                                    <span className={styles.pkVerifyTimeHint}>
+                                      ({update.entry.teamContext === "defense" ? "Strata" : "Regain"}: {update.regainTime}, {update.timeDiffSeconds >= 0 ? '+' : ''}{update.timeDiffSeconds.toFixed(1)}s)
+                                    </span>
+                                  )}
+                                  {update.regainTime && update.timeDiffSeconds === undefined && (
+                                    <span className={styles.pkVerifyTimeHint}>
+                                      ({update.entry.teamContext === "defense" ? "Strata" : "Regain"}: {update.regainTime})
+                                    </span>
+                                  )}
+                                  {!update.regainTime && update.timeDiffSeconds !== undefined && (
+                                    <span className={styles.pkVerifyTimeHint}>
+                                      ({update.timeDiffSeconds >= 0 ? '+' : ''}{update.timeDiffSeconds.toFixed(1)}s)
+                                    </span>
+                                  )}
                                 </span>
-                              )}
-                              {update.regainTime && update.timeDiffSeconds === undefined && (
-                                <span className={styles.pkVerifyTimeHint}>
-                                  ({update.entry.teamContext === "defense" ? "Strata" : "Regain"}: {update.regainTime})
+                              </>
+                            )}
+                            {update.isShot !== undefined && update.entry.isShot !== update.isShot && (
+                              <>
+                                <span className={styles.pkVerifyLabel}>isShot:</span>
+                                <span className={styles.pkVerifyChange}>
+                                  <span className={styles.pkVerifyIcon}>{update.entry.isShot ? "✓" : "✗"}</span>
+                                  <span>→</span>
+                                  <span className={styles.pkVerifyIcon}>{update.isShot ? "✓" : "✗"}</span>
+                                  {update.shotTime && update.shotTimeDiff !== undefined && (
+                                    <span className={styles.pkVerifyTimeHint}>
+                                      (Strzał: {update.shotTime}, {update.shotTimeDiff >= 0 ? '+' : ''}{update.shotTimeDiff.toFixed(1)}s)
+                                    </span>
+                                  )}
+                                  {update.shotTime && update.shotTimeDiff === undefined && (
+                                    <span className={styles.pkVerifyTimeHint}>
+                                      (Strzał: {update.shotTime})
+                                    </span>
+                                  )}
                                 </span>
-                              )}
-                              {!update.regainTime && update.timeDiffSeconds !== undefined && (
-                                <span className={styles.pkVerifyTimeHint}>
-                                  (różnica: {update.timeDiffSeconds.toFixed(1)}s)
+                              </>
+                            )}
+                            {update.isGoal !== undefined && update.entry.isGoal !== update.isGoal && (
+                              <>
+                                <span className={styles.pkVerifyLabel}>isGoal:</span>
+                                <span className={styles.pkVerifyChange}>
+                                  <span className={styles.pkVerifyIcon}>{update.entry.isGoal ? "✓" : "✗"}</span>
+                                  <span>→</span>
+                                  <span className={styles.pkVerifyIcon}>{update.isGoal ? "✓" : "✗"}</span>
+                                  {update.shotTime && update.shotTimeDiff !== undefined && (
+                                    <span className={styles.pkVerifyTimeHint}>
+                                      (Gol: {update.shotTime}, {update.shotTimeDiff >= 0 ? '+' : ''}{update.shotTimeDiff.toFixed(1)}s)
+                                    </span>
+                                  )}
+                                  {update.shotTime && update.shotTimeDiff === undefined && (
+                                    <span className={styles.pkVerifyTimeHint}>
+                                      (Gol: {update.shotTime})
+                                    </span>
+                                  )}
                                 </span>
-                              )}
-                            </span>
+                              </>
+                            )}
                           </div>
                         </div>
                       );
@@ -3818,7 +4075,12 @@ export default function Page() {
                         const updatedEntries = pkEntries.map(entry => {
                           const update = pendingPKRegainUpdates.find(u => u.entry.id === entry.id);
                           if (update) {
-                            return { ...entry, isRegain: update.isRegain };
+                            return { 
+                              ...entry, 
+                              isRegain: update.isRegain,
+                              isShot: update.isShot !== undefined ? update.isShot : entry.isShot,
+                              isGoal: update.isGoal !== undefined ? update.isGoal : entry.isGoal,
+                            };
                           }
                           return entry;
                         });
