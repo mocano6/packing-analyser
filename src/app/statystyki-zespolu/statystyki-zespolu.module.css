@@ -1332,6 +1332,9 @@
   color: #6b7280;
   text-align: center;
   font-style: italic;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .matchDataTableCell {
