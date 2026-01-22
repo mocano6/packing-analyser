@@ -66,6 +66,8 @@ export interface ActionSectionProps {
   setIsReaction5sActive: React.Dispatch<React.SetStateAction<boolean>>;
   isReaction5sNotApplicableActive: boolean;
   setIsReaction5sNotApplicableActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isAutActive: boolean;
+  setIsAutActive: React.Dispatch<React.SetStateAction<boolean>>;
   isPMAreaActive: boolean;
   setIsPMAreaActive: React.Dispatch<React.SetStateAction<boolean>>;
   playersBehindBall: number;
@@ -172,6 +174,8 @@ const ActionSection = memo(function ActionSection({
   setIsReaction5sActive,
   isReaction5sNotApplicableActive,
   setIsReaction5sNotApplicableActive,
+  isAutActive,
+  setIsAutActive,
   isPMAreaActive,
   setIsPMAreaActive,
   playersBehindBall,
@@ -954,6 +958,9 @@ const ActionSection = memo(function ActionSection({
               setIsReaction5sActive(false);
             }
           }}
+          // Nowy prop dla przycisku "Aut"
+          isAutActive={isAutActive}
+          onAutToggle={() => setIsAutActive(!isAutActive)}
           // Nowy prop dla liczby partnerów przed piłką
           playersBehindBall={playersBehindBall}
           onPlayersBehindBallChange={setPlayersBehindBall}
@@ -1361,6 +1368,15 @@ const ActionSection = memo(function ActionSection({
                 ...editingAction,
                 isReaction5sNotApplicable: newValue,
                 isReaction5s: newValue ? false : editingAction.isReaction5s
+              });
+            }
+          }}
+          isAutActive={editingAction?.isAut || false}
+          onAutToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isAut: !editingAction.isAut
               });
             }
           }}

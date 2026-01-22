@@ -82,6 +82,9 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   // Dodaj stan isReaction5sNotApplicableActive dla loses
   const [isReaction5sNotApplicableActive, setIsReaction5sNotApplicableActive] = useState<boolean>(false);
   
+  // Dodaj stan isAutActive dla loses
+  const [isAutActive, setIsAutActive] = useState<boolean>(false);
+  
   // Dodaj stan isPMAreaActive dla loses
   const [isPMAreaActive, setIsPMAreaActive] = useState<boolean>(false);
   
@@ -590,6 +593,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           isBelow8s: isBelow8sActive, 
           isReaction5s: isReaction5sActive, 
           isReaction5sNotApplicable: isReaction5sNotApplicableActive,
+          isAut: isAutActive,
           playersBehindBall: playersBehindBall, 
             opponentsBehindBall: opponentsBehindBall,
             playersLeftField: playersLeftField,
@@ -721,7 +725,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           isShot: isShot === true,
           isGoal: isGoal === true,
           isPenaltyAreaEntry: isPenaltyAreaEntry === true,
-          isPMArea: isPMAreaActive === true
+          isPMArea: isPMAreaActive === true,
+          isAut: isAutActive === true
         } as Action;
       }
       
@@ -770,7 +775,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
               isGoal: cleanedAction.isGoal ?? false,
               isPenaltyAreaEntry: cleanedAction.isPenaltyAreaEntry ?? false,
               ...(actionCategory === "loses" && {
-                isPMArea: (cleanedAction as any).isPMArea ?? false
+                isPMArea: (cleanedAction as any).isPMArea ?? false,
+                isAut: (cleanedAction as any).isAut ?? false
               })
             } : {})
           };
@@ -818,7 +824,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       return false;
     }
-  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP0StartActive, isP1StartActive, isP2StartActive, isP3StartActive, isP0Active, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf, isBelow8sActive, isReaction5sActive, isReaction5sNotApplicableActive, isPMAreaActive, playersBehindBall, opponentsBehindBall, playersLeftField, opponentsLeftField, actionCategory, actionMode, selectedDefensePlayers, loadActionsForMatch]);
+  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP0StartActive, isP1StartActive, isP2StartActive, isP3StartActive, isP0Active, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf, isBelow8sActive, isReaction5sActive, isReaction5sNotApplicableActive, isAutActive, isPMAreaActive, playersBehindBall, opponentsBehindBall, playersLeftField, opponentsLeftField, actionCategory, actionMode, selectedDefensePlayers, loadActionsForMatch]);
 
   // Funkcja pomocnicza do określenia kategorii akcji
   const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
@@ -1053,6 +1059,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsBelow8sActive(false);
     setIsReaction5sActive(false);
     setIsReaction5sNotApplicableActive(false);
+    setIsAutActive(false);
     setIsPMAreaActive(false);
     setPlayersBehindBall(0);
     setOpponentsBehindBall(0);
@@ -1114,6 +1121,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsReaction5sActive,
     isReaction5sNotApplicableActive,
     setIsReaction5sNotApplicableActive,
+    isAutActive,
+    setIsAutActive,
     isPMAreaActive,
     setIsPMAreaActive,
     playersBehindBall,

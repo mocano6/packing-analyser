@@ -144,6 +144,12 @@ export default function PlayerDetailsPage() {
   const [selectedLosesZone, setSelectedLosesZone] = useState<string | null>(null);
   const [selectedLosesPackingFilter, setSelectedLosesPackingFilter] = useState<"P0" | "P1" | "P2" | "P3" | null>(null); // Filtr P0-P3 dla strat
   const [losesZoneActions, setLosesZoneActions] = useState<Action[] | null>(null);
+  const [losesZoneDetails, setLosesZoneDetails] = useState<{
+    zoneName: string;
+    losesXT: number;
+    loses: number;
+    actions: Action[];
+  } | null>(null);
   const [selectedPackingFilter, setSelectedPackingFilter] = useState<"P0" | "P1" | "P2" | "P3" | null>(null); // Filtr dla P0-P3
   const [regainZoneActions, setRegainZoneActions] = useState<Action[] | null>(null);
   const [actionsModalOpen, setActionsModalOpen] = useState(false);
@@ -7365,70 +7371,332 @@ export default function PlayerDetailsPage() {
                           </div>
                         </div>
                       </div>
-                      <div className={styles.heatmapWrapper}>
-                        {(() => {
-                          // Funkcja pomocnicza do filtrowania heatmapy strat po P0-P3
-                          const filterLosesHeatmapByPacking = (heatmap: Map<string, number>, packingFilter: "P0" | "P1" | "P2" | "P3" | null, mode: 'pxt' | 'count'): Map<string, number> => {
-                            if (!packingFilter || !playerStats?.losesZoneStats) return heatmap;
-                            
-                            const filteredHeatmap = new Map<string, number>();
-                            const packingFieldMap: { [key: string]: keyof Action } = {
-                              'P0': 'isP0',
-                              'P1': 'isP1',
-                              'P2': 'isP2',
-                              'P3': 'isP3'
+                      <div className={styles.heatmapWrapperInPanel}>
+                        <div className={styles.heatmapContainerInPanel}>
+                          {(() => {
+                            // Funkcja pomocnicza do filtrowania heatmapy strat po P0-P3
+                            const filterLosesHeatmapByPacking = (heatmap: Map<string, number>, packingFilter: "P0" | "P1" | "P2" | "P3" | null, mode: 'pxt' | 'count'): Map<string, number> => {
+                              if (!packingFilter || !playerStats?.losesZoneStats) return heatmap;
+                              
+                              const filteredHeatmap = new Map<string, number>();
+                              const packingFieldMap: { [key: string]: keyof Action } = {
+                                'P0': 'isP0',
+                                'P1': 'isP1',
+                                'P2': 'isP2',
+                                'P3': 'isP3'
+                              };
+                              
+                              const packingField = packingFieldMap[packingFilter];
+                              if (!packingField) return heatmap;
+                              
+                              // Przejdź przez wszystkie strefy i akcje
+                              playerStats.losesZoneStats.forEach((actions, zoneName) => {
+                                const filteredActions = actions.filter(action => action[packingField] === true);
+                                if (filteredActions.length > 0) {
+                                  // Oblicz sumę xT lub liczbę akcji dla tej strefy
+                                  if (mode === 'pxt') {
+                                    const sumXT = filteredActions.reduce((sum, action: any) => {
+                                      const receiverXT = action.losesDefenseXT !== undefined 
+                                        ? action.losesDefenseXT 
+                                        : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+                                      return sum + receiverXT;
+                                    }, 0);
+                                    if (sumXT > 0) {
+                                      filteredHeatmap.set(zoneName, sumXT);
+                                    }
+                                  } else {
+                                    filteredHeatmap.set(zoneName, filteredActions.length);
+                                  }
+                                }
+                              });
+                              
+                              return filteredHeatmap;
                             };
                             
-                            const packingField = packingFieldMap[packingFilter];
-                            if (!packingField) return heatmap;
+                            const currentMode = regainHeatmapMode === 'xt' ? 'pxt' : 'count';
                             
-                            // Przejdź przez wszystkie strefy i akcje
-                            playerStats.losesZoneStats.forEach((actions, zoneName) => {
-                              const filteredActions = actions.filter(action => action[packingField] === true);
-                              if (filteredActions.length > 0) {
-                                // Oblicz sumę xT lub liczbę akcji dla tej strefy
-                                if (mode === 'pxt') {
-                                  const sumXT = filteredActions.reduce((sum, action: any) => {
-                                    const receiverXT = action.losesDefenseXT !== undefined 
-                                      ? action.losesDefenseXT 
-                                      : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
-                                    return sum + receiverXT;
-                                  }, 0);
-                                  if (sumXT > 0) {
-                                    filteredHeatmap.set(zoneName, sumXT);
-                                  }
-                                } else {
-                                  filteredHeatmap.set(zoneName, filteredActions.length);
-                                }
-                              }
-                            });
+                            // Wybierz odpowiednią heatmapę na podstawie trybu atak/obrona
+                            let currentHeatmap: Map<string, number>;
+                            if (losesAttackDefenseMode === 'attack') {
+                              currentHeatmap = currentMode === 'pxt' 
+                                ? (playerStats.losesAttackHeatmap || new Map<string, number>())
+                                : (playerStats.losesAttackCountHeatmap || new Map<string, number>());
+                            } else {
+                              currentHeatmap = currentMode === 'pxt'
+                                ? (playerStats.losesDefenseHeatmap || new Map<string, number>())
+                                : (playerStats.losesDefenseCountHeatmap || new Map<string, number>());
+                            }
                             
-                            return filteredHeatmap;
-                          };
-                          
-                          const currentMode = regainHeatmapMode === 'xt' ? 'pxt' : 'count';
-                          let currentHeatmap = playerStats.losesHeatmap || new Map<string, number>();
-                          
-                          // Zastosuj filtr P0-P3 jeśli jest wybrany
-                          if (selectedLosesPackingFilter) {
-                            currentHeatmap = filterLosesHeatmapByPacking(currentHeatmap, selectedLosesPackingFilter, currentMode);
-                          }
-                          
-                          return (
-                            <div className={styles.heatmapContainer}>
+                            // Zastosuj filtr P0-P3 jeśli jest wybrany
+                            if (selectedLosesPackingFilter) {
+                              currentHeatmap = filterLosesHeatmapByPacking(currentHeatmap, selectedLosesPackingFilter, currentMode);
+                            }
+                            
+                            return (
                               <PlayerHeatmapPitch
                                 heatmapData={currentHeatmap}
                                 category="loses"
                                 mode={currentMode}
                                 mirrored={false}
+                                selectedZone={selectedLosesZone}
                                 onZoneClick={(zoneName) => {
-                                  // TODO: Implementacja kliknięcia na strefę dla strat
-                                  setSelectedLosesZone(zoneName);
+                                  if (!zoneName) return;
+                                  
+                                  // Normalizuj nazwę strefy - usuń spacje i zamień na wielkie litery
+                                  const normalizedZone = typeof zoneName === 'string' 
+                                    ? zoneName.toUpperCase().replace(/\s+/g, '') 
+                                    : String(zoneName).toUpperCase().replace(/\s+/g, '');
+                                  
+                                  if (!normalizedZone) return;
+                                  
+                                  // Najpierw sprawdź, czy w heatmapie jest wartość dla tej strefy
+                                  // Sprawdź wszystkie możliwe warianty nazwy strefy
+                                  let heatmapValue = currentHeatmap.get(normalizedZone);
+                                  if (heatmapValue === undefined) {
+                                    heatmapValue = currentHeatmap.get(zoneName) || 
+                                                   currentHeatmap.get(normalizedZone.toLowerCase()) ||
+                                                   currentHeatmap.get(zoneName?.toUpperCase());
+                                  }
+                                  
+                                  // Jeśli nadal nie znaleziono, przeszukaj wszystkie klucze w heatmapie
+                                  if (heatmapValue === undefined && currentHeatmap.size > 0) {
+                                    currentHeatmap.forEach((value, key) => {
+                                      const normalizedKey = key.toUpperCase().replace(/\s+/g, '');
+                                      if (normalizedKey === normalizedZone) {
+                                        heatmapValue = value;
+                                      }
+                                    });
+                                  }
+                                  
+                                  // Zawsze ustaw dane, jeśli jest wartość w heatmapie (nawet jeśli jest bardzo mała)
+                                  if (heatmapValue !== undefined && heatmapValue >= 0) {
+                                    // Zbierz wszystkie akcje dla tej strefy
+                                    let allZoneActions: Action[] = [];
+                                    
+                                    if (losesAttackDefenseMode === 'defense') {
+                                      // Tryb "W obronie" - użyj losesZoneStats
+                                      allZoneActions = playerStats?.losesZoneStats?.get(normalizedZone) || 
+                                                        playerStats?.losesZoneStats?.get(zoneName) || [];
+                                      
+                                      // Jeśli nie znaleziono, sprawdź wszystkie klucze
+                                      if (allZoneActions.length === 0 && playerStats?.losesZoneStats) {
+                                        playerStats.losesZoneStats.forEach((actions, key) => {
+                                          const normalizedKey = key.toUpperCase().replace(/\s+/g, '');
+                                          if (normalizedKey === normalizedZone) {
+                                            allZoneActions = actions;
+                                          }
+                                        });
+                                      }
+                                    } else {
+                                      // Tryb "W ataku" - znajdź akcje, które mają losesAttackZone = normalizedZone
+                                      if (playerStats?.losesZoneStats) {
+                                        playerStats.losesZoneStats.forEach((actions, defenseZone) => {
+                                          actions.forEach((action: any) => {
+                                            const losesAttackZone = action.losesAttackZone || action.oppositeZone;
+                                            const attackZoneName = losesAttackZone ? convertZoneToNameHelper(losesAttackZone) : null;
+                                            if (attackZoneName) {
+                                              const normalizedAttackZone = attackZoneName.toUpperCase().replace(/\s+/g, '');
+                                              if (normalizedAttackZone === normalizedZone) {
+                                                allZoneActions.push(action);
+                                              }
+                                            }
+                                          });
+                                        });
+                                      }
+                                    }
+                                    
+                                    // Oblicz statystyki
+                                    let losesXT = 0;
+                                    let losesCount = 0;
+                                    
+                                    if (allZoneActions.length > 0) {
+                                      // Mamy akcje - oblicz z nich
+                                      losesCount = allZoneActions.length;
+                                      losesXT = allZoneActions.reduce((sum, action: any) => {
+                                        let xtValue = 0;
+                                        if (losesAttackDefenseMode === 'defense') {
+                                          xtValue = action.losesDefenseXT !== undefined
+                                            ? action.losesDefenseXT
+                                            : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+                                        } else {
+                                          xtValue = action.losesAttackXT !== undefined
+                                            ? action.losesAttackXT
+                                            : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+                                        }
+                                        return sum + xtValue;
+                                      }, 0);
+                                    } else {
+                                      // Nie mamy akcji - użyj wartości z heatmapy
+                                      if (currentMode === 'pxt') {
+                                        losesXT = heatmapValue;
+                                        losesCount = 1;
+                                      } else {
+                                        losesCount = Math.round(heatmapValue);
+                                        losesXT = 0;
+                                      }
+                                    }
+                                    
+                                    // Zawsze ustaw dane, nawet jeśli nie ma akcji
+                                    setLosesZoneDetails({
+                                      zoneName: normalizedZone,
+                                      losesXT,
+                                      loses: losesCount,
+                                      actions: allZoneActions,
+                                    });
+                                    setSelectedLosesZone(normalizedZone);
+                                  } else {
+                                    // Brak danych w heatmapie - ale spróbuj znaleźć w losesZoneStats
+                                    let allZoneActions: Action[] = [];
+                                    
+                                    if (losesAttackDefenseMode === 'defense') {
+                                      allZoneActions = playerStats?.losesZoneStats?.get(normalizedZone) || 
+                                                        playerStats?.losesZoneStats?.get(zoneName) || [];
+                                      
+                                      if (allZoneActions.length === 0 && playerStats?.losesZoneStats) {
+                                        playerStats.losesZoneStats.forEach((actions, key) => {
+                                          const normalizedKey = key.toUpperCase().replace(/\s+/g, '');
+                                          if (normalizedKey === normalizedZone) {
+                                            allZoneActions = actions;
+                                          }
+                                        });
+                                      }
+                                    } else {
+                                      if (playerStats?.losesZoneStats) {
+                                        playerStats.losesZoneStats.forEach((actions, defenseZone) => {
+                                          actions.forEach((action: any) => {
+                                            const losesAttackZone = action.losesAttackZone || action.oppositeZone;
+                                            const attackZoneName = losesAttackZone ? convertZoneToNameHelper(losesAttackZone) : null;
+                                            if (attackZoneName) {
+                                              const normalizedAttackZone = attackZoneName.toUpperCase().replace(/\s+/g, '');
+                                              if (normalizedAttackZone === normalizedZone) {
+                                                allZoneActions.push(action);
+                                              }
+                                            }
+                                          });
+                                        });
+                                      }
+                                    }
+                                    
+                                    if (allZoneActions.length > 0) {
+                                      // Mamy akcje - użyj ich
+                                      const losesCount = allZoneActions.length;
+                                      const losesXT = allZoneActions.reduce((sum, action: any) => {
+                                        let xtValue = 0;
+                                        if (losesAttackDefenseMode === 'defense') {
+                                          xtValue = action.losesDefenseXT !== undefined
+                                            ? action.losesDefenseXT
+                                            : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+                                        } else {
+                                          xtValue = action.losesAttackXT !== undefined
+                                            ? action.losesAttackXT
+                                            : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+                                        }
+                                        return sum + xtValue;
+                                      }, 0);
+                                      
+                                      setLosesZoneDetails({
+                                        zoneName: normalizedZone,
+                                        losesXT,
+                                        loses: losesCount,
+                                        actions: allZoneActions,
+                                      });
+                                      setSelectedLosesZone(normalizedZone);
+                                    } else {
+                                      // Brak danych w ogóle
+                                      setLosesZoneDetails(null);
+                                      setSelectedLosesZone(null);
+                                    }
+                                  }
                                 }}
                               />
+                            );
+                          })()}
+                        </div>
+                        <div className={styles.zoneDetailsPanel}>
+                          {losesZoneDetails ? (
+                            <>
+                              <div className={styles.zoneDetailsHeader}>
+                                <h4>Strefa {losesZoneDetails.zoneName}</h4>
+                                <button
+                                  onClick={() => {
+                                    setLosesZoneDetails(null);
+                                    setSelectedLosesZone(null);
+                                  }}
+                                  className={styles.zoneDetailsClose}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                              <div className={styles.zoneDetailsBody}>
+                                <p className={styles.zoneDetailsSubtitle}>
+                                  {losesAttackDefenseMode === 'defense' 
+                                    ? 'Straty w tej strefie (w obronie):'
+                                    : 'Straty w tej strefie (w ataku):'}
+                                </p>
+                                <div className={styles.zonePlayersList}>
+                                  {losesZoneDetails.actions && losesZoneDetails.actions.length > 0 ? (
+                                    losesZoneDetails.actions.map((action, index) => {
+                                      const actionXT = losesAttackDefenseMode === 'defense'
+                                        ? (action.losesDefenseXT !== undefined ? action.losesDefenseXT : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0)))
+                                        : (action.losesAttackXT !== undefined ? action.losesAttackXT : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0)));
+                                      
+                                      return (
+                                        <div key={`action-${index}-${action.id || action.minute || index}`} className={styles.zonePlayerItem}>
+                                          <div className={styles.zonePlayerName}>
+                                            {action.minute !== undefined ? `Minuta ${action.minute}` : `Akcja ${index + 1}`}
+                                          </div>
+                                          <div className={styles.zonePlayerStats}>
+                                            <div className={styles.zonePlayerStat}>
+                                              <span className={styles.zoneLabel}>xT:</span>
+                                              <span className={styles.zoneValue}>{actionXT.toFixed(2)}</span>
+                                            </div>
+                                            {action.isP0 || action.isP0Start ? (
+                                              <div className={styles.zonePlayerStat}>
+                                                <span className={styles.zoneLabel}>P0</span>
+                                              </div>
+                                            ) : null}
+                                            {action.isP1 || action.isP1Start ? (
+                                              <div className={styles.zonePlayerStat}>
+                                                <span className={styles.zoneLabel}>P1</span>
+                                              </div>
+                                            ) : null}
+                                            {action.isP2 || action.isP2Start ? (
+                                              <div className={styles.zonePlayerStat}>
+                                                <span className={styles.zoneLabel}>P2</span>
+                                              </div>
+                                            ) : null}
+                                            {action.isP3 || action.isP3Start ? (
+                                              <div className={styles.zonePlayerStat}>
+                                                <span className={styles.zoneLabel}>P3</span>
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                  ) : (
+                                    <div className={styles.zonePlayerItem}>
+                                      <div className={styles.zonePlayerStats}>
+                                        <div className={styles.zonePlayerStat}>
+                                          <span className={styles.zoneLabel}>xT:</span>
+                                          <span className={styles.zoneValue}>{losesZoneDetails.losesXT.toFixed(2)}</span>
+                                        </div>
+                                        <div className={styles.zonePlayerStat}>
+                                          <span className={styles.zoneLabel}>Straty:</span>
+                                          <span className={styles.zoneValue}>{losesZoneDetails.loses}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <div className={styles.zoneDetailsPlaceholder}>
+                              <p>Kliknij na kafelek, aby zobaczyć szczegóły</p>
                             </div>
-                          );
-                        })()}
+                          )}
+                        </div>
                       </div>
                     </div>
 

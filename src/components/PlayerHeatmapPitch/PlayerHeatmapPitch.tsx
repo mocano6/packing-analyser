@@ -12,6 +12,7 @@ export interface PlayerHeatmapPitchProps {
   mode?: "pxt" | "count"; // Tryb wyświetlania: PxT lub liczba akcji
   onZoneClick?: (zoneName: string) => void; // Callback przy kliknięciu na strefę
   mirrored?: boolean; // Czy mapa ma być odwrócona (lustrzane odbicie)
+  selectedZone?: string | null; // Nazwa wybranej strefy do podświetlenia
 }
 
 const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
@@ -20,6 +21,7 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
   mode = "pxt",
   onZoneClick,
   mirrored = false,
+  selectedZone = null,
 }: PlayerHeatmapPitchProps) {
   // Funkcja do pobierania wartości xT dla pozycji z uwzględnieniem odwrócenia
   const getXTValueForPosition = useCallback((visualRow: number, visualCol: number): number => {
@@ -132,15 +134,21 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
         }
         
         const handleZoneClick = () => {
-          if (heatmapXTValue > 0 && onZoneClick && zoneNameStr) {
+          if (onZoneClick && zoneNameStr) {
+            // Wywołaj onZoneClick nawet jeśli wartość jest 0, aby można było wyświetlić informacje
             onZoneClick(zoneNameStr);
           }
         };
 
+        // Sprawdź, czy strefa jest wybrana
+        const normalizedZoneName = zoneNameStr ? zoneNameStr.toUpperCase().replace(/\s+/g, '') : '';
+        const normalizedSelectedZone = selectedZone ? selectedZone.toUpperCase().replace(/\s+/g, '') : '';
+        const isSelected = normalizedZoneName === normalizedSelectedZone;
+
         return (
           <div
             key={visualIndex}
-            className={`${styles.zoneCell} ${heatmapXTValue > 0 ? styles.hasData : ''}`}
+            className={`${styles.zoneCell} ${heatmapXTValue > 0 ? styles.hasData : ''} ${isSelected ? styles.selected : ''}`}
             style={{
               backgroundColor: heatmapXTValue > 0 
                 ? getHeatmapColor(heatmapXTValue, maxValue)
@@ -168,7 +176,7 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
         );
       });
     },
-    [heatmapData, getXTValueForPosition, getZoneNameForPosition, getHeatmapColor, category, mode, onZoneClick]
+    [heatmapData, getXTValueForPosition, getZoneNameForPosition, getHeatmapColor, category, mode, onZoneClick, selectedZone]
   );
 
   // Oblicz statystyki dla legendy

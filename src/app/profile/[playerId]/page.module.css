@@ -1239,6 +1239,34 @@
   align-items: flex-start;
 }
 
+.heatmapWrapperInPanel {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-top: 12px;
+  margin-left: 0;
+  padding-left: 0;
+  flex-direction: row; /* Heatmapa po lewej, lista zawodników po prawej */
+}
+
+.heatmapContainerInPanel {
+  flex: 1;
+  min-width: 0; /* Pozwala na responsywność */
+  margin-left: 0;
+  padding-left: 0;
+}
+
+/* Wyłącz margin: auto dla pitchContainer w kontekście panelu */
+.heatmapContainerInPanel :global(.PlayerHeatmapPitch_pitchContainer__RacD_),
+.heatmapContainerInPanel :global([class*="pitchContainer"]) {
+  margin: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  max-width: 100%;
+}
+
 .chartHeader {
   display: flex;
   justify-content: space-between;
@@ -1484,6 +1512,17 @@
   font-size: 14px;
   color: #6b7280;
   line-height: 1.5;
+}
+
+.zoneDetailsPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #9ca3af;
+  font-size: 14px;
+  text-align: center;
+  min-height: 200px;
 }
 
 .expandableHeader {
@@ -2074,6 +2113,17 @@
   .zoneDetailsPanel {
     min-width: 100%;
     max-height: 400px;
+  }
+  
+  .heatmapWrapperInPanel {
+    flex-direction: column; /* Na mniejszych ekranach lista nad heatmapą */
+  }
+  
+  .zoneDetailsPanel {
+    width: 100%;
+    max-height: 300px;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 }
 

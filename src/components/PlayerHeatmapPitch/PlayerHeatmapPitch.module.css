@@ -3,7 +3,7 @@
 .pitchContainer {
   width: 100%;
   max-width: 600px;
-  margin: 0 auto;
+  margin: 0;
   aspect-ratio: 12/8;
   position: relative;
 }
@@ -56,6 +56,13 @@
 
 .zoneCell.hasData {
   border-color: rgba(255, 255, 255, 0.15);
+}
+
+.zoneCell.selected {
+  border: 3px solid #3b82f6;
+  z-index: 15;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3), 0 4px 12px rgba(59, 130, 246, 0.4);
+  transform: scale(1.05);
 }
 
 .zoneCell:hover {

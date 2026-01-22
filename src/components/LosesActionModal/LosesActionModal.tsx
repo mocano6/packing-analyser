@@ -73,6 +73,9 @@ interface LosesActionModalProps {
   // Nowy prop dla przycisku "Brak 5s" (nie dotyczy)
   isReaction5sNotApplicableActive: boolean;
   onReaction5sNotApplicableToggle: () => void;
+  // Nowy prop dla przycisku "Aut"
+  isAutActive: boolean;
+  onAutToggle: () => void;
   // Nowy prop dla liczby partnerów przed piłką
   playersBehindBall: number;
   onPlayersBehindBallChange: (count: number) => void;
@@ -153,6 +156,9 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   // Nowy prop dla przycisku "Brak 5s" (nie dotyczy)
   isReaction5sNotApplicableActive,
   onReaction5sNotApplicableToggle,
+  // Nowy prop dla przycisku "Aut"
+  isAutActive,
+  onAutToggle,
   // Nowy prop dla liczby partnerów przed piłką
   playersBehindBall,
   onPlayersBehindBallChange,
@@ -1067,6 +1073,17 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   data-tooltip={`Brak 5s - nie da się zrobić 5s.\n• Przeciwnik poda piłkę do zawodnika znajdującego 2 strefy niżej.\n• Piłka w rękach bramkarza`}
                 >
                   Brak 5s
+                </button>
+                <button
+                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
+                    isAutActive ? styles.active : ""
+                  }`}
+                  onClick={onAutToggle}
+                  aria-pressed={isAutActive}
+                  type="button"
+                  data-tooltip="Aut - strata na własnej połowie"
+                >
+                  Aut
                 </button>
               </div>
             </div>
