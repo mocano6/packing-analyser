@@ -3,6 +3,8 @@
 import React, { useState, useMemo } from "react";
 import styles from "./Acc8sTable.module.css";
 import sharedStyles from "@/styles/sharedTableStyles.module.css";
+import pitchHeaderStyles from "@/components/PitchHeader/PitchHeader.module.css";
+import pageStyles from "@/app/page.module.css";
 import { Acc8sEntry } from "@/types";
 import { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import { CustomVideoPlayerRef } from "@/components/CustomVideoPlayer/CustomVideoPlayer";
@@ -60,6 +62,8 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
     isPKEntryUnder8s: boolean;
     shotTime?: string;
     pkTime?: string;
+    shotTimeDiff?: number;
+    pkTimeDiff?: number;
   }>>([]);
 
   // Liczba akcji kontrowersyjnych
@@ -209,6 +213,8 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                   isPKEntryUnder8s: boolean;
                   shotTime?: string;
                   pkTime?: string;
+                  shotTimeDiff?: number;
+                  pkTimeDiff?: number;
                 }> = [];
                 
                 entries.forEach((entry) => {
@@ -220,9 +226,13 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                   
                   const timeWindowEnd = acc8sTimeRaw + 8;
                   
-                  // Sprawdź wejścia w PK w przedziale 8s
+                  // Znajdź najbliższe wejście w PK (nawet poza przedziałem 8s, aby pokazać różnicę czasu)
                   let hasPK = false;
                   let pkTime: string | undefined;
+                  let pkTimeDiff: number | undefined;
+                  let closestPKTimeRaw: number | null = null;
+                  let closestPKTimeDiff: number | null = null;
+                  
                   for (const pkEntry of allPKEntries) {
                     let pkTimeRaw: number | null = null;
                     if (pkEntry.videoTimestampRaw !== undefined && pkEntry.videoTimestampRaw !== null) {
@@ -232,18 +242,42 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                     }
                     if (pkTimeRaw === null) continue;
                     
+                    // Tylko zdarzenia po akcji 8s ACC (nie przed)
+                    if (pkTimeRaw < acc8sTimeRaw) continue;
+                    
+                    const timeDiff = pkTimeRaw - acc8sTimeRaw;
+                    
+                    // Sprawdź czy jest w przedziale 8s
                     if (pkTimeRaw >= acc8sTimeRaw && pkTimeRaw <= timeWindowEnd) {
-                      hasPK = true;
-                      const pkMinutes = Math.floor(pkTimeRaw / 60);
-                      const pkSeconds = Math.floor(pkTimeRaw % 60);
-                      pkTime = `${pkMinutes}:${pkSeconds.toString().padStart(2, '0')}`;
-                      break;
+                      if (closestPKTimeRaw === null || timeDiff < closestPKTimeDiff!) {
+                        closestPKTimeRaw = pkTimeRaw;
+                        closestPKTimeDiff = timeDiff;
+                        hasPK = true;
+                        const pkMinutes = Math.floor(pkTimeRaw / 60);
+                        const pkSeconds = Math.floor(pkTimeRaw % 60);
+                        pkTime = `${pkMinutes}:${pkSeconds.toString().padStart(2, '0')}`;
+                        pkTimeDiff = timeDiff;
+                      }
+                    } else {
+                      // Jeśli jest poza przedziałem 8s, ale jest najbliższe, zapisz dla informacji
+                      if (closestPKTimeRaw === null || timeDiff < closestPKTimeDiff!) {
+                        closestPKTimeRaw = pkTimeRaw;
+                        closestPKTimeDiff = timeDiff;
+                        const pkMinutes = Math.floor(pkTimeRaw / 60);
+                        const pkSeconds = Math.floor(pkTimeRaw % 60);
+                        pkTime = `${pkMinutes}:${pkSeconds.toString().padStart(2, '0')}`;
+                        pkTimeDiff = timeDiff;
+                      }
                     }
                   }
                   
-                  // Sprawdź strzały w przedziale 8s
+                  // Znajdź najbliższy strzał (nawet poza przedziałem 8s, aby pokazać różnicę czasu)
                   let hasShot = false;
                   let shotTime: string | undefined;
+                  let shotTimeDiff: number | undefined;
+                  let closestShotTimeRaw: number | null = null;
+                  let closestShotTimeDiff: number | null = null;
+                  
                   for (const shot of allShots) {
                     let shotTimeRaw: number | null = null;
                     if (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null) {
@@ -253,12 +287,32 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                     }
                     if (shotTimeRaw === null) continue;
                     
+                    // Tylko zdarzenia po akcji 8s ACC (nie przed)
+                    if (shotTimeRaw < acc8sTimeRaw) continue;
+                    
+                    const timeDiff = shotTimeRaw - acc8sTimeRaw;
+                    
+                    // Sprawdź czy jest w przedziale 8s
                     if (shotTimeRaw >= acc8sTimeRaw && shotTimeRaw <= timeWindowEnd) {
-                      hasShot = true;
-                      const shotMinutes = Math.floor(shotTimeRaw / 60);
-                      const shotSeconds = Math.floor(shotTimeRaw % 60);
-                      shotTime = `${shotMinutes}:${shotSeconds.toString().padStart(2, '0')}`;
-                      break;
+                      if (closestShotTimeRaw === null || timeDiff < closestShotTimeDiff!) {
+                        closestShotTimeRaw = shotTimeRaw;
+                        closestShotTimeDiff = timeDiff;
+                        hasShot = true;
+                        const shotMinutes = Math.floor(shotTimeRaw / 60);
+                        const shotSeconds = Math.floor(shotTimeRaw % 60);
+                        shotTime = `${shotMinutes}:${shotSeconds.toString().padStart(2, '0')}`;
+                        shotTimeDiff = timeDiff;
+                      }
+                    } else {
+                      // Jeśli jest poza przedziałem 8s, ale jest najbliższe, zapisz dla informacji
+                      if (closestShotTimeRaw === null || timeDiff < closestShotTimeDiff!) {
+                        closestShotTimeRaw = shotTimeRaw;
+                        closestShotTimeDiff = timeDiff;
+                        const shotMinutes = Math.floor(shotTimeRaw / 60);
+                        const shotSeconds = Math.floor(shotTimeRaw % 60);
+                        shotTime = `${shotMinutes}:${shotSeconds.toString().padStart(2, '0')}`;
+                        shotTimeDiff = timeDiff;
+                      }
                     }
                   }
                   
@@ -270,6 +324,8 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                       isPKEntryUnder8s: hasPK,
                       shotTime,
                       pkTime,
+                      shotTimeDiff,
+                      pkTimeDiff,
                     });
                   }
                 });
@@ -282,11 +338,10 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                 setPendingUpdates(updates);
                 setShowAutoFlagsModal(true);
               }}
-              className={styles.autoFlagsButton}
+              className={pitchHeaderStyles.headerButton}
               title="Automatycznie ustaw flagi na podstawie wejść w PK i strzałów w 8s"
             >
-              <span className={styles.autoFlagsButtonIcon}>✓</span>
-              <span>Weryfikuj</span>
+              ✓ Weryfikuj
             </button>
           )}
           {onAddEntry && (
@@ -370,15 +425,15 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
       
       {/* Modal z podglądem zmian automatycznych flag */}
       {showAutoFlagsModal && (
-        <div className={styles.modalOverlay} onClick={() => setShowAutoFlagsModal(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
+        <div className={pageStyles.pkVerifyOverlay} onClick={() => setShowAutoFlagsModal(false)}>
+          <div className={pageStyles.pkVerifyModal} onClick={(e) => e.stopPropagation()}>
+            <div className={pageStyles.pkVerifyHeader}>
               <h3>Podgląd zmian automatycznych flag</h3>
-              <button className={styles.closeButton} onClick={() => setShowAutoFlagsModal(false)}>×</button>
+              <button className={pageStyles.pkVerifyClose} onClick={() => setShowAutoFlagsModal(false)}>×</button>
             </div>
-            <div className={styles.modalContent}>
+            <div className={pageStyles.pkVerifyBody}>
               <p>Znaleziono <strong>{pendingUpdates.length}</strong> akcji 8s ACC do zaktualizowania:</p>
-              <div className={styles.updatesList}>
+              <div className={pageStyles.pkVerifyList}>
                 {pendingUpdates.map((update, index) => {
                   const acc8sTimeRaw = update.entry.videoTimestampRaw !== undefined && update.entry.videoTimestampRaw !== null
                     ? update.entry.videoTimestampRaw
@@ -388,37 +443,47 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                   const acc8sTimeString = `${acc8sMinutes}:${acc8sSeconds.toString().padStart(2, '0')}`;
                   
                   return (
-                    <div key={update.entry.id || index} className={styles.updateItem}>
-                      <div className={styles.updateItemHeader}>
-                        <span className={styles.updateItemTime}>{acc8sTimeString}</span>
-                        <span className={styles.updateItemMinute}>Minuta {update.entry.minute}'</span>
+                    <div key={update.entry.id || index} className={pageStyles.pkVerifyItem}>
+                      <div className={pageStyles.pkVerifyItemHeader}>
+                        <span className={pageStyles.pkVerifyTime}>{acc8sTimeString}</span>
+                        <span className={pageStyles.pkVerifyMinute}>Minuta {update.entry.minute}'</span>
                       </div>
-                      <div className={styles.updateItemFlags}>
+                      <div className={pageStyles.pkVerifyFlags}>
                         {update.entry.isShotUnder8s !== update.isShotUnder8s && (
-                          <div className={styles.updateItemFlag}>
-                            <span className={styles.updateItemFlagLabel}>Strzał 8s:</span>
-                            <span className={styles.updateItemFlagChange}>
-                              <span className={styles.updateItemFlagIcon}>{update.entry.isShotUnder8s ? '✓' : '✗'}</span>
+                          <>
+                            <span className={pageStyles.pkVerifyLabel}>Strzał 8s:</span>
+                            <span className={pageStyles.pkVerifyChange}>
+                              <span className={pageStyles.pkVerifyIcon}>{update.entry.isShotUnder8s ? '✓' : '✗'}</span>
                               <span>→</span>
-                              <span className={styles.updateItemFlagIcon}>{update.isShotUnder8s ? '✓' : '✗'}</span>
-                              {update.shotTime && (
-                                <span className={styles.updateItemFlagTime}>({update.shotTime})</span>
+                              <span className={pageStyles.pkVerifyIcon}>{update.isShotUnder8s ? '✓' : '✗'}</span>
+                              {update.shotTime && update.shotTimeDiff !== undefined && (
+                                <span className={pageStyles.pkVerifyTimeHint}>
+                                  (Strzał: {update.shotTime}, różnica: {update.shotTimeDiff.toFixed(1)}s)
+                                </span>
+                              )}
+                              {update.shotTime && update.shotTimeDiff === undefined && (
+                                <span className={pageStyles.pkVerifyTimeHint}>({update.shotTime})</span>
                               )}
                             </span>
-                          </div>
+                          </>
                         )}
                         {update.entry.isPKEntryUnder8s !== update.isPKEntryUnder8s && (
-                          <div className={styles.updateItemFlag}>
-                            <span className={styles.updateItemFlagLabel}>PK 8s:</span>
-                            <span className={styles.updateItemFlagChange}>
-                              <span className={styles.updateItemFlagIcon}>{update.entry.isPKEntryUnder8s ? '✓' : '✗'}</span>
+                          <>
+                            <span className={pageStyles.pkVerifyLabel}>PK 8s:</span>
+                            <span className={pageStyles.pkVerifyChange}>
+                              <span className={pageStyles.pkVerifyIcon}>{update.entry.isPKEntryUnder8s ? '✓' : '✗'}</span>
                               <span>→</span>
-                              <span className={styles.updateItemFlagIcon}>{update.isPKEntryUnder8s ? '✓' : '✗'}</span>
-                              {update.pkTime && (
-                                <span className={styles.updateItemFlagTime}>({update.pkTime})</span>
+                              <span className={pageStyles.pkVerifyIcon}>{update.isPKEntryUnder8s ? '✓' : '✗'}</span>
+                              {update.pkTime && update.pkTimeDiff !== undefined && (
+                                <span className={pageStyles.pkVerifyTimeHint}>
+                                  (PK: {update.pkTime}, różnica: {update.pkTimeDiff.toFixed(1)}s)
+                                </span>
+                              )}
+                              {update.pkTime && update.pkTimeDiff === undefined && (
+                                <span className={pageStyles.pkVerifyTimeHint}>({update.pkTime})</span>
                               )}
                             </span>
-                          </div>
+                          </>
                         )}
                       </div>
                     </div>
@@ -426,10 +491,10 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                 })}
               </div>
             </div>
-            <div className={styles.modalFooter}>
+            <div className={pageStyles.pkVerifyFooter}>
               <button
                 onClick={() => setShowAutoFlagsModal(false)}
-                className={`${styles.modalFooterButton} ${styles.modalFooterCancel}`}
+                className={pageStyles.pkVerifyCancel}
               >
                 Anuluj
               </button>
@@ -445,7 +510,7 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                   setShowAutoFlagsModal(false);
                   setPendingUpdates([]);
                 }}
-                className={`${styles.modalFooterButton} ${styles.modalFooterSave}`}
+                className={pageStyles.pkVerifySave}
               >
                 Zatwierdź zmiany
               </button>

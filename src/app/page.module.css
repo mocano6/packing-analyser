@@ -673,3 +673,163 @@
 .scrollToVideoButtonFixed svg {
   display: block;
 }
+
+.pkVerifyOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.pkVerifyModal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 700px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.pkVerifyHeader {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pkVerifyHeader h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.pkVerifyClose {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.pkVerifyClose:hover {
+  background: rgba(107, 114, 128, 0.1);
+  color: #374151;
+}
+
+.pkVerifyBody {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.pkVerifyBody p {
+  margin: 0 0 12px 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.pkVerifyList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pkVerifyItem {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.pkVerifyItemHeader {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.pkVerifyTime {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.pkVerifyMinute {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.pkVerifyFlags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.pkVerifyLabel {
+  font-weight: 500;
+  color: #374151;
+}
+
+.pkVerifyChange {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pkVerifyIcon {
+  font-size: 12px;
+}
+
+.pkVerifyTimeHint {
+  color: #3b82f6;
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.pkVerifyFooter {
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background: #f9fafb;
+}
+
+.pkVerifyCancel {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.pkVerifySave {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  background: #2196f3;
+  color: white;
+  cursor: pointer;
+  font-weight: 500;
+}

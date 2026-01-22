@@ -30,6 +30,7 @@ import toast from 'react-hot-toast';
 import OfflineStatusBanner from "@/components/OfflineStatusBanner/OfflineStatusBanner";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { getDB } from "@/lib/firebase";
+import pitchHeaderStyles from "@/components/PitchHeader/PitchHeader.module.css";
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesModal";
 import MatchInfoModal from "@/components/MatchInfoModal/MatchInfoModal";
@@ -703,6 +704,15 @@ export default function Page() {
   const [acc8sModalData, setAcc8sModalData] = useState<{
     editingEntry?: Acc8sEntry;
   } | null>(null);
+
+  // Stan dla weryfikacji PK entries
+  const [showPKRegainVerifyModal, setShowPKRegainVerifyModal] = useState(false);
+  const [pendingPKRegainUpdates, setPendingPKRegainUpdates] = useState<Array<{
+    entry: PKEntry;
+    isRegain: boolean;
+    regainTime?: string;
+    timeDiffSeconds?: number;
+  }>>([]);
 
   // Funkcje obsługi strzałów
   const handleShotAdd = async (x: number, y: number, xG: number) => {
@@ -3210,28 +3220,28 @@ export default function Page() {
             <PKEntriesPitch
               pkEntries={pkEntries}
               onEntryAdd={async (startX, startY, endX, endY) => {
-              if (!matchInfo?.matchId || !matchInfo?.team) {
-                alert("Wybierz mecz, aby dodać wejście PK!");
-                return;
-              }
-              
-              // Pobierz czas wideo przed otwarciem modala (tak jak w openAcc8sModalWithVideoTime)
-              const currentTime = await getActiveVideoTime();
-              if (currentTime > 0) {
-                const rawTime = Math.max(0, currentTime);
-                const adjustedTime = Math.max(0, rawTime - 10);
-                localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
-                localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
-              } else {
-                // Fallback - ustaw 0
-                localStorage.setItem('tempVideoTimestamp', '0');
-                localStorage.setItem('tempVideoTimestampRaw', '0');
-              }
-              
-              // Otwórz modal z danymi wejścia PK
-              setPkEntryModalData({ startX, startY, endX, endY });
-              setIsPKEntryModalOpen(true);
-            }}
+                if (!matchInfo?.matchId || !matchInfo?.team) {
+                  alert("Wybierz mecz, aby dodać wejście PK!");
+                  return;
+                }
+                
+                // Pobierz czas wideo przed otwarciem modala (tak jak w openAcc8sModalWithVideoTime)
+                const currentTime = await getActiveVideoTime();
+                if (currentTime > 0) {
+                  const rawTime = Math.max(0, currentTime);
+                  const adjustedTime = Math.max(0, rawTime - 10);
+                  localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+                  localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
+                } else {
+                  // Fallback - ustaw 0
+                  localStorage.setItem('tempVideoTimestamp', '0');
+                  localStorage.setItem('tempVideoTimestampRaw', '0');
+                }
+                
+                // Otwórz modal z danymi wejścia PK
+                setPkEntryModalData({ startX, startY, endX, endY });
+                setIsPKEntryModalOpen(true);
+              }}
             onEntryClick={(entry) => {
               setSelectedPKEntryId(entry.id);
               setPkEntryModalData({
@@ -3246,7 +3256,592 @@ export default function Page() {
             selectedEntryId={selectedPKEntryId}
             matchInfo={matchInfo || undefined}
             allTeams={allTeams}
+            rightExtraContent={
+              pkEntries.length > 0 ? (
+                <button
+                  className={pitchHeaderStyles.headerButton}
+                  type="button"
+                  title="Automatycznie ustaw flagę isRegain na podstawie regainów na połowie przeciwnika w 8s"
+                  onClick={async () => {
+                    console.log("=== PRZYCISK WERYFIKUJ KLIKNIĘTY ===");
+                    console.log("matchInfo:", matchInfo);
+                    
+                    if (!matchInfo?.team || !matchInfo?.matchId) {
+                      console.log("Brak matchInfo.team lub matchInfo.matchId");
+                      alert("Wybierz mecz, aby zweryfikować wejścia w PK.");
+                      return;
+                    }
+
+                    console.log("Rozpoczynam weryfikację...");
+
+                    const updates: Array<{
+                      entry: PKEntry;
+                      isRegain: boolean;
+                      regainTime?: string;
+                      timeDiffSeconds?: number;
+                    }> = [];
+
+                    const normalizeZoneName = (zone: string | number | null | undefined): string | null => {
+                      if (zone === null || zone === undefined) return null;
+                      if (typeof zone === "string") {
+                        return zone.toUpperCase().replace(/\s+/g, "");
+                      }
+                      const name = getZoneName(zone);
+                      return name ? zoneNameToString(name).toUpperCase() : null;
+                    };
+
+                    const isOwnHalf = (zoneName: string | null | undefined): boolean => {
+                      if (!zoneName) return false;
+                      const zoneIndex = zoneNameToIndex(zoneName);
+                      if (zoneIndex === null) return false;
+                      const col = zoneIndex % 12;
+                      return col <= 5;
+                    };
+
+                    console.log("\n=== DEBUG: Weryfikacja PK entries ===");
+                    console.log("matchInfo.team:", matchInfo.team);
+                    console.log("matchInfo.matchId:", matchInfo.matchId);
+                    console.log("pkEntries.length:", pkEntries.length);
+
+                    // Pobierz regains bezpośrednio z Firebase (z actions_regain)
+                    let regainActionsForTeam: Action[] = [];
+                    try {
+                      const db = getDB();
+                      console.log("Pobieranie dokumentu meczu:", matchInfo.matchId);
+                      const matchDoc = await getDoc(doc(db, "matches", matchInfo.matchId));
+                      console.log("Dokument istnieje:", matchDoc.exists());
+                      
+                      if (matchDoc.exists()) {
+                        const matchData = matchDoc.data() as TeamInfo;
+                        console.log("Dane dokumentu:", {
+                          hasActionsRegain: !!matchData.actions_regain,
+                          actionsRegainType: typeof matchData.actions_regain,
+                          actionsRegainLength: Array.isArray(matchData.actions_regain) ? matchData.actions_regain.length : 'not array',
+                          actionsRegain: matchData.actions_regain
+                        });
+                        
+                        const allRegainActions = (matchData.actions_regain || []).map(action => ({
+                          ...action,
+                          _actionSource: "regain"
+                        })) as Action[];
+                        
+                        console.log("Wszystkie regains z Firebase (po mapowaniu):", allRegainActions.length);
+                        console.log("Przykładowe regains:", allRegainActions.slice(0, 3));
+                        
+                        regainActionsForTeam = allRegainActions.filter(action => {
+                          if (!action.teamId) return true;
+                          return action.teamId === matchInfo.team;
+                        });
+                        
+                        console.log("Regains dla zespołu (po filtrowaniu):", regainActionsForTeam.length);
+                        console.log("matchInfo.team:", matchInfo.team);
+                        console.log("Przykładowe regains dla zespołu:", regainActionsForTeam.slice(0, 3));
+                      } else {
+                        console.error("Dokument meczu nie istnieje!");
+                        alert("Nie znaleziono meczu w bazie danych.");
+                        return;
+                      }
+                    } catch (error) {
+                      console.error("Błąd podczas pobierania regainów z Firebase:", error);
+                      alert("Nie udało się pobrać regainów z bazy danych.");
+                      return;
+                    }
+
+                    console.log("Regains dla zespołu (po filtrowaniu):", regainActionsForTeam.length);
+                    regainActionsForTeam.forEach((regain: any, index: number) => {
+                      const attackZoneRaw = regain.regainAttackZone || regain.oppositeZone || regain.toZone;
+                      const attackZoneName = normalizeZoneName(attackZoneRaw);
+                      const regainTimeRaw = regain.videoTimestampRaw;
+                      const regainMinutes = regainTimeRaw ? Math.floor(regainTimeRaw / 60) : 0;
+                      const regainSeconds = regainTimeRaw ? Math.floor(regainTimeRaw % 60) : 0;
+                      const regainTimeString = `${regainMinutes}:${regainSeconds.toString().padStart(2, "0")}`;
+                      console.log(`  Regain ${index + 1}: ${regainTimeString} (${regainTimeRaw}s), teamId: ${regain.teamId}, attackZoneRaw: ${attackZoneRaw}, attackZoneName: ${attackZoneName}`);
+                    });
+
+                    // Pobierz loses bezpośrednio z Firebase (z actions_loses)
+                    let losesActionsForTeam: Action[] = [];
+                    try {
+                      const db = getDB();
+                      const matchDoc = await getDoc(doc(db, "matches", matchInfo.matchId));
+                      if (matchDoc.exists()) {
+                        const matchData = matchDoc.data() as TeamInfo;
+                        const allLosesActions = (matchData.actions_loses || []).map(action => ({
+                          ...action,
+                          _actionSource: "loses"
+                        })) as Action[];
+                        
+                        losesActionsForTeam = allLosesActions.filter(action => {
+                          if (!action.teamId) return true;
+                          return action.teamId === matchInfo.team;
+                        });
+                      }
+                    } catch (error) {
+                      console.error("Błąd podczas pobierania loses z Firebase:", error);
+                    }
+
+                    // Filtruj regains na połowie przeciwnika i wypisz w konsoli
+                    // Połowa przeciwnika = regainAttackZone w strefach a-h 7-12 (kolumny 6-11)
+                    const regainsOnOpponentHalf = regainActionsForTeam.filter((regain: any) => {
+                      const regainTimeRaw = regain.videoTimestampRaw;
+                      const regainMinutes = regainTimeRaw ? Math.floor(regainTimeRaw / 60) : 0;
+                      const regainSeconds = regainTimeRaw ? Math.floor(regainTimeRaw % 60) : 0;
+                      const regainTimeString = `${regainMinutes}:${regainSeconds.toString().padStart(2, "0")}`;
+                      
+                      // Używamy regainAttackZone (strefa ataku = opposite zone = połowa przeciwnika)
+                      const attackZoneRaw = regain.regainAttackZone || regain.oppositeZone || regain.toZone;
+                      console.log(`\n  Sprawdzanie regainu ${regainTimeString}:`);
+                      console.log(`    regainAttackZone: ${regain.regainAttackZone}`);
+                      console.log(`    oppositeZone: ${regain.oppositeZone}`);
+                      console.log(`    toZone: ${regain.toZone}`);
+                      console.log(`    attackZoneRaw (wybrane): ${attackZoneRaw}`);
+                      
+                      const attackZoneName = normalizeZoneName(attackZoneRaw);
+                      console.log(`    attackZoneName po normalizacji: ${attackZoneName}`);
+                      
+                      if (!attackZoneName) {
+                        console.log(`    ❌ Brak attackZoneName - pomijam`);
+                        return false;
+                      }
+                      
+                      const zoneIndex = zoneNameToIndex(attackZoneName);
+                      console.log(`    zoneIndex: ${zoneIndex}`);
+                      
+                      if (zoneIndex === null) {
+                        console.log(`    ❌ Nie można przekonwertować strefy na indeks - pomijam`);
+                        return false;
+                      }
+                      
+                      const col = zoneIndex % 12;
+                      const row = Math.floor(zoneIndex / 12);
+                      console.log(`    row: ${row}, col: ${col}`);
+                      console.log(`    Kolumny 0-5 = własna połowa, kolumny 6-11 = połowa przeciwnika`);
+                      
+                      // Kolumny 6-11 (indeksy 6-11) to połowa przeciwnika (strefy 7-12)
+                      const isOwn = col <= 5;
+                      console.log(`    isOwnHalf (col <= 5): ${isOwn}`);
+                      const isOpponentHalf = !isOwn; // Kolumny 6-11 = połowa przeciwnika
+                      console.log(`    isOpponentHalf (col >= 6): ${isOpponentHalf}`);
+                      
+                      if (isOpponentHalf) {
+                        console.log(`    ✅ Regain na połowie przeciwnika (strefy a-h 7-12) - DODAJĘ`);
+                      } else {
+                        console.log(`    ❌ Regain na własnej połowie (strefy a-h 1-6) - POMIJAM`);
+                      }
+                      
+                      return isOpponentHalf; // Zwracamy true jeśli jest na połowie przeciwnika (kolumny 6-11)
+                    });
+
+                    console.log("\n=== DEBUG: Regains na połowie przeciwnika ===");
+                    console.log("Wszystkie regains dla zespołu:", regainActionsForTeam.length);
+                    console.log("Regains na połowie przeciwnika:", regainsOnOpponentHalf.length);
+                    if (regainsOnOpponentHalf.length === 0) {
+                      console.log("⚠️ BRAK regainów na połowie przeciwnika!");
+                      console.log("Sprawdzam wszystkie regains dla zespołu:");
+                      regainActionsForTeam.forEach((regain: any, index: number) => {
+                        const regainTimeRaw = regain.videoTimestampRaw;
+                        const regainMinutes = regainTimeRaw ? Math.floor(regainTimeRaw / 60) : 0;
+                        const regainSeconds = regainTimeRaw ? Math.floor(regainTimeRaw % 60) : 0;
+                        const regainTimeString = `${regainMinutes}:${regainSeconds.toString().padStart(2, "0")}`;
+                        const attackZoneRaw = regain.regainAttackZone || regain.oppositeZone || regain.toZone;
+                        const attackZoneName = normalizeZoneName(attackZoneRaw);
+                        let isOwn: boolean | null = null;
+                        if (attackZoneName) {
+                          const zoneIndex = zoneNameToIndex(attackZoneName);
+                          if (zoneIndex !== null) {
+                            const col = zoneIndex % 12;
+                            isOwn = col <= 5;
+                          }
+                        }
+                        console.log(`  ${index + 1}. Regain ${regainTimeString} (${regainTimeRaw}s) - attackZone: ${attackZoneName}, isOwnHalf: ${isOwn}, regainAttackZone: ${regain.regainAttackZone}, oppositeZone: ${regain.oppositeZone}, toZone: ${regain.toZone}`);
+                      });
+                    } else {
+                      regainsOnOpponentHalf.forEach((regain: any, index: number) => {
+                        const regainTimeRaw = regain.videoTimestampRaw;
+                        const regainMinutes = regainTimeRaw ? Math.floor(regainTimeRaw / 60) : 0;
+                        const regainSeconds = regainTimeRaw ? Math.floor(regainTimeRaw % 60) : 0;
+                        const regainTimeString = `${regainMinutes}:${regainSeconds.toString().padStart(2, "0")}`;
+                        const attackZoneRaw = regain.regainAttackZone || regain.oppositeZone || regain.toZone;
+                        const attackZoneName = normalizeZoneName(attackZoneRaw);
+                        console.log(`  ${index + 1}. Regain ${regainTimeString} (${regainTimeRaw}s) - attackZone: ${attackZoneName}, regainAttackZone: ${regain.regainAttackZone}, oppositeZone: ${regain.oppositeZone}, toZone: ${regain.toZone}`);
+                      });
+                    }
+
+                    // Filtruj tylko wejścia w PK w ataku (teamContext === "attack")
+                    const pkEntriesAttack = pkEntries.filter(entry => {
+                      // Jeśli nie ma teamContext, domyślnie uznajemy za atak (dla kompatybilności wstecznej)
+                      return !entry.teamContext || entry.teamContext === "attack";
+                    });
+
+                    console.log(`\n=== DEBUG: Filtrowanie PK entries ===`);
+                    console.log(`Wszystkie PK entries: ${pkEntries.length}`);
+                    console.log(`PK entries w ataku: ${pkEntriesAttack.length}`);
+
+                    pkEntriesAttack.forEach((entry) => {
+                      // Używamy TYLKO videoTimestampRaw (bez fallbacków)
+                      if (entry.videoTimestampRaw === undefined || entry.videoTimestampRaw === null) {
+                        if (entry.isRegain !== false) {
+                          updates.push({ entry, isRegain: false });
+                        }
+                        return;
+                      }
+                      const pkTimeRaw = entry.videoTimestampRaw;
+                      const pkMinutes = Math.floor(pkTimeRaw / 60);
+                      const pkSeconds = Math.floor(pkTimeRaw % 60);
+                      const pkTimeString = `${pkMinutes}:${pkSeconds.toString().padStart(2, "0")}`;
+
+                      console.log(`\n=== DEBUG: Sprawdzanie PK entry ${pkTimeString} (${pkTimeRaw}s) ===`);
+
+                      const regainsBeforePK = regainsOnOpponentHalf
+                        .filter((regain: any) => {
+                          // Używamy TYLKO videoTimestampRaw (bez fallbacków)
+                          if (regain.videoTimestampRaw === undefined || regain.videoTimestampRaw === null) {
+                            console.log(`  Regain bez videoTimestampRaw - pomijam`);
+                            return false;
+                          }
+                          const regainTimeRaw = regain.videoTimestampRaw;
+                          
+                          // Tylko regains PRZED PK entry (nie w tym samym czasie lub później)
+                          if (regainTimeRaw >= pkTimeRaw) {
+                            console.log(`  Regain ${regainTimeRaw}s >= PK ${pkTimeRaw}s - pomijam (za późno)`);
+                            return false;
+                          }
+
+                          console.log(`  Regain ${regainTimeRaw}s < PK ${pkTimeRaw}s - OK (przed PK)`);
+                          return true;
+                        })
+                        .map((regain: any) => ({
+                          regain,
+                          timestamp: regain.videoTimestampRaw,
+                        }))
+                        .sort((a, b) => b.timestamp - a.timestamp);
+
+                      console.log(`  Znaleziono ${regainsBeforePK.length} regainów na połowie przeciwnika przed PK entry`);
+
+                      let shouldBeRegain = false;
+                      let timeDiff: number | undefined;
+                      let regainTimeString: string | undefined;
+
+                      if (regainsBeforePK.length > 0) {
+                        const lastRegain = regainsBeforePK[0];
+                        timeDiff = pkTimeRaw - lastRegain.timestamp;
+                        const lastRegainMinutes = Math.floor(lastRegain.timestamp / 60);
+                        const lastRegainSeconds = Math.floor(lastRegain.timestamp % 60);
+                        const lastRegainTimeString = `${lastRegainMinutes}:${lastRegainSeconds.toString().padStart(2, "0")}`;
+
+                        console.log(`  Ostatni regain: ${lastRegainTimeString} (${lastRegain.timestamp}s)`);
+                        console.log(`  Różnica czasu: ${timeDiff.toFixed(1)}s`);
+
+                        // Sprawdzamy czy różnica czasu jest <= 8 sekund (i dodatnia)
+                        if (timeDiff > 0 && timeDiff <= 8) {
+                          console.log(`  Różnica <= 8s - sprawdzam loses między regainem a PK`);
+                          // Sprawdzamy czy nie było loses między regainem a PK entry
+                          const losesBetween = losesActionsForTeam.filter((lose: any) => {
+                            // Używamy TYLKO videoTimestampRaw (bez fallbacków)
+                            if (lose.videoTimestampRaw === undefined || lose.videoTimestampRaw === null) return false;
+                            const loseTimeRaw = lose.videoTimestampRaw;
+                            return loseTimeRaw > lastRegain.timestamp && loseTimeRaw < pkTimeRaw;
+                          });
+
+                          console.log(`  Znaleziono ${losesBetween.length} strat między regainem a PK`);
+                          // Jeśli nie ma loses między regainem a PK, to powinno być isRegain = true
+                          shouldBeRegain = losesBetween.length === 0;
+                        } else {
+                          console.log(`  Różnica > 8s lub <= 0 - nie kwalifikuje się`);
+                        }
+
+                        regainTimeString = lastRegainTimeString;
+                      } else {
+                        console.log(`  Brak regainów na połowie przeciwnika przed PK entry`);
+                      }
+
+                      console.log(`  Wynik: shouldBeRegain = ${shouldBeRegain}, entry.isRegain = ${entry.isRegain}`);
+
+                      // Dodajemy do updates tylko jeśli wartość się zmienia
+                      if (entry.isRegain !== shouldBeRegain) {
+                        updates.push({
+                          entry,
+                          isRegain: shouldBeRegain,
+                          regainTime: regainTimeString, // Zawsze pokazuj czas ostatniego regaina, jeśli istnieje
+                          timeDiffSeconds: timeDiff, // Zawsze pokazuj różnicę czasu, jeśli jest zdefiniowana
+                        });
+                      }
+                    });
+
+                    // Filtruj tylko wejścia w PK w defensywie (teamContext === "defense")
+                    const pkEntriesDefense = pkEntries.filter(entry => {
+                      return entry.teamContext === "defense";
+                    });
+
+                    console.log(`\n=== DEBUG: Filtrowanie PK entries w defensywie ===`);
+                    console.log(`PK entries w defensywie: ${pkEntriesDefense.length}`);
+
+                    // Filtruj loses na własnej połowie (z perspektywy losesAttackZone to strefy 1-6)
+                    // Wykluczamy auty (isAut: true)
+                    const losesOnOwnHalf = losesActionsForTeam.filter((lose: any) => {
+                      // Wykluczamy auty
+                      if (lose.isAut === true) {
+                        return false;
+                      }
+
+                      // Używamy losesAttackZone (strefa ataku = strefa, gdzie nastąpiła strata)
+                      const attackZoneRaw = lose.losesAttackZone || lose.oppositeZone || lose.toZone;
+                      const attackZoneName = normalizeZoneName(attackZoneRaw);
+                      
+                      if (!attackZoneName) {
+                        return false;
+                      }
+                      
+                      const zoneIndex = zoneNameToIndex(attackZoneName);
+                      if (zoneIndex === null) {
+                        return false;
+                      }
+                      
+                      const col = zoneIndex % 12;
+                      // Kolumny 0-5 (indeksy 0-5) to własna połowa (strefy 1-6)
+                      const isOwnHalf = col <= 5;
+                      
+                      return isOwnHalf;
+                    });
+
+                    console.log(`Loses na własnej połowie (bez autów): ${losesOnOwnHalf.length}`);
+
+                    pkEntriesDefense.forEach((entry) => {
+                      // Używamy TYLKO videoTimestampRaw (bez fallbacków)
+                      if (entry.videoTimestampRaw === undefined || entry.videoTimestampRaw === null) {
+                        if (entry.isRegain !== false) {
+                          updates.push({ entry, isRegain: false });
+                        }
+                        return;
+                      }
+                      const pkTimeRaw = entry.videoTimestampRaw;
+                      const pkMinutes = Math.floor(pkTimeRaw / 60);
+                      const pkSeconds = Math.floor(pkTimeRaw % 60);
+                      const pkTimeString = `${pkMinutes}:${pkSeconds.toString().padStart(2, "0")}`;
+
+                      console.log(`\n=== DEBUG: Sprawdzanie PK entry w defensywie ${pkTimeString} (${pkTimeRaw}s) ===`);
+
+                      // Znajdź straty na własnej połowie w przedziale do 8s przed PK entry
+                      // Używamy TYLKO videoTimestampRaw
+                      const losesWithin8s = losesOnOwnHalf
+                        .filter((lose: any) => {
+                          // Używamy TYLKO videoTimestampRaw (bez fallbacków)
+                          if (lose.videoTimestampRaw === undefined || lose.videoTimestampRaw === null) {
+                            console.log(`  Lose bez videoTimestampRaw - pomijam`);
+                            return false;
+                          }
+                          const loseTimeRaw = lose.videoTimestampRaw;
+                          
+                          // Tylko loses w przedziale [pkTimeRaw - 8, pkTimeRaw) - maksymalnie 8s przed PK
+                          if (loseTimeRaw >= pkTimeRaw) {
+                            console.log(`  Lose ${loseTimeRaw}s >= PK ${pkTimeRaw}s - pomijam (za późno)`);
+                            return false;
+                          }
+
+                          const timeDiff = pkTimeRaw - loseTimeRaw;
+                          if (timeDiff > 8) {
+                            console.log(`  Lose ${loseTimeRaw}s - różnica ${timeDiff.toFixed(1)}s > 8s - pomijam (za wcześnie)`);
+                            return false;
+                          }
+
+                          console.log(`  Lose ${loseTimeRaw}s - różnica ${timeDiff.toFixed(1)}s <= 8s - OK`);
+                          return true;
+                        })
+                        .map((lose: any) => ({
+                          lose,
+                          timestamp: lose.videoTimestampRaw,
+                          timeDiff: pkTimeRaw - lose.videoTimestampRaw,
+                        }))
+                        .sort((a, b) => b.timestamp - a.timestamp); // Sortuj od najnowszej
+
+                      console.log(`  Znaleziono ${losesWithin8s.length} strat na własnej połowie w przedziale do 8s przed PK entry`);
+
+                      let shouldBeRegain = false; // Domyślnie false, jeśli nie było strat (przeciwnik nie odzyskał piłki)
+                      let timeDiff: number | undefined;
+                      let loseTimeString: string | undefined;
+
+                      if (losesWithin8s.length > 0) {
+                        // Jeśli była strata naszego zespołu do 8s przed PK, to przeciwnik odzyskał piłkę → isRegain = true
+                        const lastLose = losesWithin8s[0];
+                        timeDiff = lastLose.timeDiff;
+                        const lastLoseMinutes = Math.floor(lastLose.timestamp / 60);
+                        const lastLoseSeconds = Math.floor(lastLose.timestamp % 60);
+                        const lastLoseTimeString = `${lastLoseMinutes}:${lastLoseSeconds.toString().padStart(2, "0")}`;
+
+                        console.log(`  Ostatnia strata w przedziale 8s: ${lastLoseTimeString} (${lastLose.timestamp}s), różnica: ${timeDiff.toFixed(1)}s`);
+                        console.log(`  Była strata naszego zespołu do 8s przed PK - przeciwnik odzyskał piłkę → isRegain = true`);
+                        
+                        shouldBeRegain = true; // Przeciwnik odzyskał piłkę (nasza strata)
+                        loseTimeString = lastLoseTimeString;
+                      } else {
+                        console.log(`  Brak strat naszego zespołu na własnej połowie w przedziale do 8s przed PK entry - przeciwnik nie odzyskał piłki → isRegain = false`);
+                        shouldBeRegain = false; // Przeciwnik nie odzyskał piłki (nie było strat)
+                      }
+
+                      console.log(`  Wynik: shouldBeRegain = ${shouldBeRegain}, entry.isRegain = ${entry.isRegain}`);
+
+                      // Dodajemy do updates jeśli wartość się zmienia
+                      // Dla defensywy (wejścia przeciwnika w nasze PK):
+                      //   - jeśli była strata naszego zespołu do 8s przed PK → przeciwnik odzyskał piłkę → isRegain = true
+                      //   - jeśli nie było strat naszego zespołu do 8s przed PK → przeciwnik nie odzyskał piłki → isRegain = false
+                      if (entry.isRegain !== shouldBeRegain) {
+                        updates.push({
+                          entry,
+                          isRegain: shouldBeRegain,
+                          regainTime: loseTimeString, // Czas ostatniej straty dla kontekstu (jeśli była w przedziale 8s)
+                          timeDiffSeconds: timeDiff, // Zawsze pokazuj różnicę czasu, jeśli jest zdefiniowana
+                        });
+                      }
+                    });
+
+                    if (updates.length === 0) {
+                      alert("Nie znaleziono żadnych zmian do zastosowania.");
+                      return;
+                    }
+
+                    setPendingPKRegainUpdates(updates);
+                    setShowPKRegainVerifyModal(true);
+                  }}
+                >
+                  ✓ Weryfikuj
+                </button>
+              ) : null
+            }
           />
+          {showPKRegainVerifyModal && (
+            <div className={styles.pkVerifyOverlay} onClick={() => setShowPKRegainVerifyModal(false)}>
+              <div className={styles.pkVerifyModal} onClick={(e) => e.stopPropagation()}>
+                <div className={styles.pkVerifyHeader}>
+                  <h3>Podgląd zmian automatycznych flag isRegain</h3>
+                  <button
+                    className={styles.pkVerifyClose}
+                    onClick={() => setShowPKRegainVerifyModal(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className={styles.pkVerifyBody}>
+                  <p>
+                    Znaleziono <strong>{pendingPKRegainUpdates.length}</strong> wejść w PK do zaktualizowania:
+                  </p>
+                  
+                  {(() => {
+                    const attackUpdates = pendingPKRegainUpdates.filter(update => 
+                      !update.entry.teamContext || update.entry.teamContext === "attack"
+                    );
+                    const defenseUpdates = pendingPKRegainUpdates.filter(update => 
+                      update.entry.teamContext === "defense"
+                    );
+
+                    const renderUpdateItem = (update: typeof pendingPKRegainUpdates[0], index: number) => {
+                      // Używamy TYLKO videoTimestampRaw (bez fallbacków)
+                      if (update.entry.videoTimestampRaw === undefined || update.entry.videoTimestampRaw === null) return null;
+                      const pkTimeRaw = update.entry.videoTimestampRaw;
+                      const pkMinutes = Math.floor(pkTimeRaw / 60);
+                      const pkSeconds = Math.floor(pkTimeRaw % 60);
+                      const pkTimeString = `${pkMinutes}:${pkSeconds.toString().padStart(2, "0")}`;
+
+                      return (
+                        <div key={update.entry.id || index} className={styles.pkVerifyItem}>
+                          <div className={styles.pkVerifyItemHeader}>
+                            <span className={styles.pkVerifyTime}>{pkTimeString}</span>
+                            <span className={styles.pkVerifyMinute}>Minuta {update.entry.minute}'</span>
+                          </div>
+                          <div className={styles.pkVerifyFlags}>
+                            <span className={styles.pkVerifyLabel}>isRegain:</span>
+                            <span className={styles.pkVerifyChange}>
+                              <span className={styles.pkVerifyIcon}>{update.entry.isRegain ? "✓" : "✗"}</span>
+                              <span>→</span>
+                              <span className={styles.pkVerifyIcon}>{update.isRegain ? "✓" : "✗"}</span>
+                              {update.regainTime && update.timeDiffSeconds !== undefined && (
+                                <span className={styles.pkVerifyTimeHint}>
+                                  ({update.entry.teamContext === "defense" ? "Strata" : "Regain"}: {update.regainTime}, różnica: {update.timeDiffSeconds.toFixed(1)}s)
+                                </span>
+                              )}
+                              {update.regainTime && update.timeDiffSeconds === undefined && (
+                                <span className={styles.pkVerifyTimeHint}>
+                                  ({update.entry.teamContext === "defense" ? "Strata" : "Regain"}: {update.regainTime})
+                                </span>
+                              )}
+                              {!update.regainTime && update.timeDiffSeconds !== undefined && (
+                                <span className={styles.pkVerifyTimeHint}>
+                                  (różnica: {update.timeDiffSeconds.toFixed(1)}s)
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    };
+
+                    return (
+                      <>
+                        {attackUpdates.length > 0 && (
+                          <div>
+                            <h4 style={{ marginTop: '16px', marginBottom: '8px', fontWeight: 'bold' }}>
+                              Atak (nasze wejścia w PK przeciwnika) - {attackUpdates.length}
+                            </h4>
+                            <div className={styles.pkVerifyList}>
+                              {attackUpdates.map((update, index) => renderUpdateItem(update, index))}
+                            </div>
+                          </div>
+                        )}
+                        {defenseUpdates.length > 0 && (
+                          <div>
+                            <h4 style={{ marginTop: '16px', marginBottom: '8px', fontWeight: 'bold' }}>
+                              Obrona (wejścia przeciwnika w nasze PK) - {defenseUpdates.length}
+                            </h4>
+                            <div className={styles.pkVerifyList}>
+                              {defenseUpdates.map((update, index) => renderUpdateItem(update, index))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+                <div className={styles.pkVerifyFooter}>
+                  <button
+                    className={styles.pkVerifyCancel}
+                    onClick={() => setShowPKRegainVerifyModal(false)}
+                  >
+                    Anuluj
+                  </button>
+                  <button
+                    className={styles.pkVerifySave}
+                    onClick={async () => {
+                      if (!matchInfo?.matchId) {
+                        alert("Wybierz mecz, aby zapisać zmiany.");
+                        return;
+                      }
+
+                      try {
+                        const updatedEntries = pkEntries.map(entry => {
+                          const update = pendingPKRegainUpdates.find(u => u.entry.id === entry.id);
+                          if (update) {
+                            return { ...entry, isRegain: update.isRegain };
+                          }
+                          return entry;
+                        });
+
+                        const db = getDB();
+                        await updateDoc(doc(db, "matches", matchInfo.matchId), {
+                          pkEntries: updatedEntries
+                        });
+
+                        setShowPKRegainVerifyModal(false);
+                        setPendingPKRegainUpdates([]);
+                      } catch (error) {
+                        console.error("Błąd podczas aktualizacji wejść w PK:", error);
+                        alert("Nie udało się zaktualizować wejść w PK.");
+                      }
+                    }}
+                  >
+                    Zatwierdź zmiany
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {pkEntryModalData && (
             <PKEntryModal
             isOpen={isPKEntryModalOpen}

@@ -11,6 +11,7 @@ export interface PKEntriesPitchProps {
   onEntryAdd?: (startX: number, startY: number, endX: number, endY: number) => void;
   onEntryClick?: (entry: PKEntry) => void;
   selectedEntryId?: string;
+  rightExtraContent?: React.ReactNode;
   hideTeamLogos?: boolean;
   hideFlipButton?: boolean;
   hideInstructions?: boolean;
@@ -33,6 +34,7 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
   onEntryAdd,
   onEntryClick,
   selectedEntryId,
+  rightExtraContent,
   hideTeamLogos = false,
   hideFlipButton = false,
   hideInstructions = false,
@@ -197,9 +199,8 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
 
     // Hierarchia kolorów kropki: gol (najważniejszy) > strzał > regain
     // Gol: zielony wypełnienie
-    // Strzał (bez gola): czarne wypełnienie, białe obramowanie
-    // Regain: pomarańczowe obramowanie (pogrubione jeśli jest też gol)
-    // Regain (bez strzału i gola): białe wypełnienie, pomarańczowe obramowanie
+    // Strzał (bez gola): czarne wypełnienie
+    // Regain: pomarańczowe obramowanie (zawsze, gdy jest regain)
     let dotFillColor = "white";
     let dotStrokeColor = "white";
     let dotStrokeWidth = 1.4;
@@ -217,9 +218,14 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
     } else if (isShot) {
       // Strzał ma drugi priorytet
       dotFillColor = "#111827"; // czarny
-      dotStrokeColor = "white";
+      // Jeśli jest też regain, obramowanie pomarańczowe
+      if (isRegain) {
+        dotStrokeColor = "#f59e0b"; // pomarańczowy
+      } else {
+        dotStrokeColor = "white";
+      }
     } else if (isRegain) {
-      // Regain ma najniższy priorytet (tylko gdy nie ma strzału ani gola)
+      // Regain (bez strzału i gola): białe wypełnienie, pomarańczowe obramowanie
       dotFillColor = "white";
       dotStrokeColor = "#f59e0b"; // pomarańczowy
     }
@@ -383,6 +389,7 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
         hideTeamLogos={hideTeamLogos}
         rightContent={
           <>
+            {rightExtraContent}
             {!!onEntryAdd && (
               <button
                 className={`${pitchHeaderStyles.headerButton} ${showArrows ? pitchHeaderStyles.headerButtonActive : ""}`}
