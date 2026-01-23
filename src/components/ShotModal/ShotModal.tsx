@@ -52,6 +52,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     actionType: "open_play" as "open_play" | "counter" | "corner" | "free_kick" | "direct_free_kick" | "penalty" | "throw_in" | "regain",
     actionCategory: "open_play" as "open_play" | "sfg",
     sfgSubtype: "direct" as "direct" | "combination",
+    actionPhase: "phase1" as "phase1" | "phase2",
     blockingPlayers: [] as string[],
     linePlayers: [] as string[],
     linePlayersCount: 0,
@@ -65,6 +66,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     assistantName: "",
     isControversial: false,
     previousShotId: "",
+    isFromPK: false,
   });
   const isEditMode = Boolean(editingShot);
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
@@ -348,6 +350,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         actionType: editingShot.actionType || "open_play",
         actionCategory: editingShot.actionType && ["corner", "free_kick", "direct_free_kick", "penalty", "throw_in"].includes(editingShot.actionType) ? "sfg" : "open_play",
         sfgSubtype: (editingShot as any)?.sfgSubtype || "direct",
+        actionPhase: (editingShot as any)?.actionPhase || "phase1",
         blockingPlayers: editingShot.blockingPlayers || [],
         linePlayers: (editingShot as any)?.linePlayers || [],
         linePlayersCount: (editingShot as any)?.linePlayersCount || 0,
@@ -361,6 +364,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         assistantName: (editingShot as any)?.assistantName || "",
         isControversial: editingShot.isControversial || false,
         previousShotId: editingShot.previousShotId || "",
+        isFromPK: (editingShot as any)?.isFromPK || false,
       });
       setControversyNote(editingShot.controversyNote || "");
     } else {
@@ -381,6 +385,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         actionType: "open_play",
         actionCategory: "open_play",
         sfgSubtype: "direct",
+        actionPhase: "phase1",
         blockingPlayers: [],
         linePlayers: [],
         linePlayersCount: 0,
@@ -394,6 +399,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         assistantName: "",
         isControversial: false,
         previousShotId: "",
+        isFromPK: false,
       });
     }
   }, [editingShot, isOpen, matchInfo, xG, x]);
@@ -658,6 +664,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       ...prev,
       actionCategory: category,
       actionType: category === "open_play" ? "open_play" : "corner", // Reset to default for category
+      actionPhase: category === "sfg" ? "phase1" : prev.actionPhase, // Reset phase for SFG
     }));
   };
 
@@ -672,8 +679,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       ];
     } else {
       return [
-        { value: "open_play", label: "Budowanie" },
-        { value: "counter", label: "Kontra" },
+        { value: "open_play", label: "Budowanie (open play)" },
         { value: "regain", label: "Regain" }
       ];
     }
@@ -683,6 +689,13 @@ const ShotModal: React.FC<ShotModalProps> = ({
     return [
       { value: "direct", label: "Bezpośredni" },
       { value: "combination", label: "Kombinacyjny" }
+    ];
+  };
+
+  const getActionPhases = (): Array<{value: string, label: string}> => {
+    return [
+      { value: "phase1", label: "I faza" },
+      { value: "phase2", label: "II faza" }
     ];
   };
 
@@ -872,6 +885,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       teamId: formData.teamId,
       actionType: formData.actionType,
       sfgSubtype: formData.sfgSubtype,
+      actionPhase: formData.actionCategory === "sfg" ? formData.actionPhase : undefined,
       blockingPlayers: formData.blockingPlayers,
       linePlayers: formData.linePlayers,
       linePlayersCount: formData.linePlayersCount,
@@ -884,6 +898,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       isControversial: formData.isControversial,
       controversyNote: formData.isControversial && controversyNote.trim() ? controversyNote.trim() : undefined,
       previousShotId: formData.previousShotId || undefined,
+      isFromPK: formData.isFromPK || undefined,
       matchId,
       ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
       ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
@@ -933,6 +948,17 @@ const ShotModal: React.FC<ShotModalProps> = ({
                 className={styles.input}
                 required
               />
+              <button
+                type="button"
+                className={`${styles.pkFlagButton} ${styles.tooltipTrigger} ${formData.isFromPK ? styles.pkFlagButtonActive : ""}`}
+                onClick={() => setFormData({ ...formData, isFromPK: !formData.isFromPK })}
+                aria-pressed={formData.isFromPK}
+                aria-label="Czy strzał był z pola karnego?"
+                data-tooltip="Czy strzał był z pola karnego?"
+                title="Czy strzał był z pola karnego?"
+              >
+                PK
+              </button>
               {formData.teamContext === "attack" && (
                 <div className={styles.linePlayersCountInput}>
                   <label htmlFor="line-players-count">Przeciwnik na linii strzału:</label>
@@ -1112,16 +1138,27 @@ const ShotModal: React.FC<ShotModalProps> = ({
           <div className={styles.fieldGroup}>
             <label>Rodzaj akcji:</label>
             <div className={styles.actionTypeSelector}>
-              {getAvailableActionTypes().map((actionType) => (
-                <button
-                  key={actionType.value}
-                  type="button"
-                  className={`${styles.actionTypeButton} ${formData.actionType === actionType.value ? styles.active : ""}`}
-                  onClick={() => setFormData({...formData, actionType: actionType.value as any})}
-                >
-                  {actionType.label}
-                </button>
-              ))}
+              {getAvailableActionTypes().map((actionType) => {
+                let tooltipText = "";
+                if (actionType.value === "open_play") {
+                  tooltipText = "Open play";
+                } else if (actionType.value === "regain") {
+                  tooltipText = "Strzał do 8s po odbiorze na połowie przeciwnika";
+                }
+                
+                return (
+                  <button
+                    key={actionType.value}
+                    type="button"
+                    className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${formData.actionType === actionType.value ? styles.active : ""}`}
+                    onClick={() => setFormData({...formData, actionType: actionType.value as any})}
+                    data-tooltip={tooltipText || undefined}
+                    title={tooltipText || undefined}
+                  >
+                    {actionType.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -1138,6 +1175,27 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     onClick={() => setFormData({...formData, sfgSubtype: subtype.value as any})}
                   >
                     {subtype.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Faza akcji (tylko dla SFG) */}
+          {formData.actionCategory === "sfg" && formData.actionType !== "penalty" && (
+            <div className={styles.fieldGroup}>
+              <label className={styles.tooltipTrigger} data-tooltip="Czy strzał był w 'pierwsze tempo', czy w późniejszej fazie SFG." title="Czy strzał był w 'pierwsze tempo', czy w późniejszej fazie SFG.">
+                Faza akcji:
+              </label>
+              <div className={styles.actionTypeSelector}>
+                {getActionPhases().map((phase) => (
+                  <button
+                    key={phase.value}
+                    type="button"
+                    className={`${styles.actionTypeButton} ${formData.actionPhase === phase.value ? styles.active : ""}`}
+                    onClick={() => setFormData({...formData, actionPhase: phase.value as any})}
+                  >
+                    {phase.label}
                   </button>
                 ))}
               </div>

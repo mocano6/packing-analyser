@@ -41,6 +41,9 @@ const PitchHeader: React.FC<PitchHeaderProps> = ({
         {isFlipped ? (
           <>
             <div className={styles.teamLogo}>
+              <span className={styles.attackDirection} title="Kierunek ataku">
+                ←
+              </span>
               {(() => {
                 const teamData = allTeams.find(team => team.id === matchInfo?.team);
                 return teamData?.logo ? (
@@ -82,6 +85,9 @@ const PitchHeader: React.FC<PitchHeaderProps> = ({
             </div>
             <div className={styles.vs}>VS</div>
             <div className={styles.teamLogo}>
+              <span className={styles.attackDirection} title="Kierunek ataku">
+                →
+              </span>
               {(() => {
                 const teamData = allTeams.find(team => team.id === matchInfo?.team);
                 return teamData?.logo ? (

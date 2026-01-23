@@ -3373,15 +3373,163 @@ export default function Page() {
 
                         // Sprawdź czy trzeba zaktualizować actionType
                         const currentActionType = shot.actionType || 'open_play';
-                        const needsUpdate = shouldBeRegain && currentActionType !== 'regain';
+                        let needsUpdate = false;
+                        let newActionType: 'open_play' | 'regain' = currentActionType as 'open_play' | 'regain';
 
-                        console.log(`  Wynik: shouldBeRegain = ${shouldBeRegain}, currentActionType = ${currentActionType}, needsUpdate = ${needsUpdate}`);
+                        if (shouldBeRegain && currentActionType !== 'regain') {
+                          // Powinno być 'regain', ale jest inne
+                          needsUpdate = true;
+                          newActionType = 'regain';
+                        } else if (!shouldBeRegain && currentActionType === 'regain') {
+                          // Jest 'regain', ale nie powinno być
+                          needsUpdate = true;
+                          newActionType = 'open_play';
+                        }
+
+                        console.log(`  Wynik: shouldBeRegain = ${shouldBeRegain}, currentActionType = ${currentActionType}, needsUpdate = ${needsUpdate}, newActionType = ${newActionType}`);
 
                         if (needsUpdate) {
                           updates.push({
                             shot,
-                            actionType: 'regain',
+                            actionType: newActionType,
                             regainTime: regainTimeString,
+                            timeDiffSeconds: timeDiff,
+                          });
+                        }
+                      });
+
+                      // Filtruj tylko strzały w obronie (teamContext === "defense")
+                      const shotsDefense = shotsFromFirebase.filter(shot => {
+                        return shot.teamContext === "defense";
+                      });
+
+                      console.log(`\n=== DEBUG: Weryfikacja strzałów w obronie ===`);
+                      console.log(`Strzały w obronie: ${shotsDefense.length}`);
+
+                      const isOwnHalf = (zoneName: string | null | undefined): boolean => {
+                        if (!zoneName) return false;
+                        const zoneIndex = zoneNameToIndex(zoneName);
+                        if (zoneIndex === null) return false;
+                        const col = zoneIndex % 12;
+                        return col <= 5; // Kolumny 0-5 = własna połowa (strefy 1-6)
+                      };
+
+                      shotsDefense.forEach((shot) => {
+                        // Używamy TYLKO videoTimestampRaw
+                        if (shot.videoTimestampRaw === undefined || shot.videoTimestampRaw === null) {
+                          return;
+                        }
+                        const shotTimeRaw = shot.videoTimestampRaw;
+                        const shotMinutes = Math.floor(shotTimeRaw / 60);
+                        const shotSeconds = Math.floor(shotTimeRaw % 60);
+                        const shotTimeString = `${shotMinutes}:${shotSeconds.toString().padStart(2, "0")}`;
+
+                        console.log(`\n=== DEBUG: Sprawdzanie strzału w obronie ${shotTimeString} (${shotTimeRaw}s) ===`);
+
+                        // Filtruj loses na własnej połowie (strefy 1-6, kolumny 0-5)
+                        // Wykluczamy auty (isAut: false)
+                        const losesOnOwnHalf = losesActionsForTeam.filter((lose: any) => {
+                          // Wykluczamy auty
+                          if (lose.isAut === true) {
+                            return false;
+                          }
+
+                          // Używamy losesAttackZone (strefa ataku = strefa, gdzie nastąpiła strata)
+                          const attackZoneRaw = lose.losesAttackZone || lose.oppositeZone || lose.toZone;
+                          const attackZoneName = normalizeZoneName(attackZoneRaw);
+                          
+                          if (!attackZoneName) {
+                            return false;
+                          }
+                          
+                          return isOwnHalf(attackZoneName);
+                        });
+
+                        console.log(`  Loses na własnej połowie (bez autów): ${losesOnOwnHalf.length}`);
+
+                        // Znajdź straty na własnej połowie w przedziale do 8s przed strzałem
+                        const losesWithin8s = losesOnOwnHalf
+                          .filter((lose: any) => {
+                            if (lose.videoTimestampRaw === undefined || lose.videoTimestampRaw === null) {
+                              return false;
+                            }
+                            const loseTimeRaw = lose.videoTimestampRaw;
+                            
+                            // Tylko loses PRZED strzałem
+                            if (loseTimeRaw >= shotTimeRaw) {
+                              return false;
+                            }
+
+                            const timeDiff = shotTimeRaw - loseTimeRaw;
+                            // Maksymalnie 8s przed strzałem
+                            if (timeDiff > 8) {
+                              return false;
+                            }
+
+                            return true;
+                          })
+                          .map((lose: any) => ({
+                            lose,
+                            timestamp: lose.videoTimestampRaw,
+                            timeDiff: shotTimeRaw - lose.videoTimestampRaw,
+                          }))
+                          .sort((a, b) => b.timestamp - a.timestamp); // Sortuj od najnowszej
+
+                        console.log(`  Znaleziono ${losesWithin8s.length} strat na własnej połowie w przedziale do 8s przed strzałem`);
+
+                        let shouldBeRegain = false;
+                        let timeDiff: number | undefined;
+                        let loseTimeString: string | undefined;
+
+                        if (losesWithin8s.length > 0) {
+                          const lastLose = losesWithin8s[0];
+                          timeDiff = lastLose.timeDiff;
+                          
+                          console.log(`  Ostatnia strata: ${lastLose.timestamp}s, różnica: ${timeDiff.toFixed(1)}s`);
+
+                          // Sprawdzamy czy nie było regainów między stratą a strzałem
+                          const regainsBetween = regainActionsForTeam.filter((regain: any) => {
+                            if (regain.videoTimestampRaw === undefined || regain.videoTimestampRaw === null) return false;
+                            const regainTimeRaw = regain.videoTimestampRaw;
+                            return regainTimeRaw > lastLose.timestamp && regainTimeRaw < shotTimeRaw;
+                          });
+
+                          console.log(`  Znaleziono ${regainsBetween.length} regainów między stratą a strzałem`);
+
+                          // Jeśli nie ma regainów między stratą a strzałem, to powinno być actionType = 'regain'
+                          shouldBeRegain = regainsBetween.length === 0;
+                          
+                          if (shouldBeRegain) {
+                            const loseMinutes = Math.floor(lastLose.timestamp / 60);
+                            const loseSeconds = Math.floor(lastLose.timestamp % 60);
+                            loseTimeString = `${loseMinutes}:${loseSeconds.toString().padStart(2, "0")}`;
+                          }
+                        } else {
+                          console.log(`  Brak strat na własnej połowie w przedziale do 8s przed strzałem`);
+                        }
+
+                        // Sprawdź czy trzeba zaktualizować actionType
+                        const currentActionType = shot.actionType || 'open_play';
+                        let needsUpdate = false;
+                        let newActionType: 'open_play' | 'regain' = currentActionType as 'open_play' | 'regain';
+
+                        if (shouldBeRegain && currentActionType !== 'regain') {
+                          // Powinno być 'regain', ale jest inne
+                          needsUpdate = true;
+                          newActionType = 'regain';
+                        } else if (!shouldBeRegain && currentActionType === 'regain') {
+                          // Jest 'regain', ale nie powinno być
+                          needsUpdate = true;
+                          newActionType = 'open_play';
+                        }
+
+                        console.log(`  Wynik: shouldBeRegain = ${shouldBeRegain}, currentActionType = ${currentActionType}, needsUpdate = ${needsUpdate}, newActionType = ${newActionType}`);
+
+                        if (needsUpdate) {
+                          updates.push({
+                            shot,
+                            actionType: newActionType,
+                            regainTime: loseTimeString, // Używamy loseTimeString dla kontekstu
                             timeDiffSeconds: timeDiff,
                           });
                         }
@@ -4428,42 +4576,80 @@ export default function Page() {
                   ×
                 </button>
               </div>
-              <div className={styles.pkVerifyBody}>
-                <p>
-                  Znaleziono <strong>{pendingShotsUpdates.length}</strong> strzałów do zaktualizowania:
-                </p>
-                <div className={styles.pkVerifyList}>
-                  {pendingShotsUpdates.map((update, index) => {
-                    if (update.shot.videoTimestampRaw === undefined || update.shot.videoTimestampRaw === null) return null;
-                    const shotTimeRaw = update.shot.videoTimestampRaw;
-                    const shotMinutes = Math.floor(shotTimeRaw / 60);
-                    const shotSeconds = Math.floor(shotTimeRaw % 60);
-                    const shotTimeString = `${shotMinutes}:${shotSeconds.toString().padStart(2, "0")}`;
+                <div className={styles.pkVerifyBody}>
+                  <p>
+                    Znaleziono <strong>{pendingShotsUpdates.length}</strong> strzałów do zaktualizowania:
+                  </p>
+                  
+                  {(() => {
+                    const attackUpdates = pendingShotsUpdates.filter(update => 
+                      update.shot.teamContext === "attack"
+                    );
+                    const defenseUpdates = pendingShotsUpdates.filter(update => 
+                      update.shot.teamContext === "defense"
+                    );
+
+                    const renderUpdateItem = (update: typeof pendingShotsUpdates[0], index: number) => {
+                      if (update.shot.videoTimestampRaw === undefined || update.shot.videoTimestampRaw === null) return null;
+                      const shotTimeRaw = update.shot.videoTimestampRaw;
+                      const shotMinutes = Math.floor(shotTimeRaw / 60);
+                      const shotSeconds = Math.floor(shotTimeRaw % 60);
+                      const shotTimeString = `${shotMinutes}:${shotSeconds.toString().padStart(2, "0")}`;
+
+                      return (
+                        <div key={update.shot.id || index} className={styles.pkVerifyItem}>
+                          <div className={styles.pkVerifyItemHeader}>
+                            <span className={styles.pkVerifyTime}>{shotTimeString}</span>
+                            <span className={styles.pkVerifyMinute}>Minuta {update.shot.minute}'</span>
+                          </div>
+                          <div className={styles.pkVerifyFlags}>
+                            <span className={styles.pkVerifyLabel}>actionType:</span>
+                            <span className={styles.pkVerifyChange}>
+                              <span className={styles.pkVerifyIcon}>{(update.shot.actionType || 'open_play') === 'regain' ? "✓" : "✗"}</span>
+                              <span>→</span>
+                              <span className={styles.pkVerifyIcon}>{update.actionType === 'regain' ? "✓" : "✗"}</span>
+                              {update.actionType === 'regain' && update.regainTime && update.timeDiffSeconds !== undefined && (
+                                <span className={styles.pkVerifyTimeHint}>
+                                  (Regain: {update.regainTime}, {update.timeDiffSeconds >= 0 ? '+' : ''}{update.timeDiffSeconds.toFixed(1)}s)
+                                </span>
+                              )}
+                              {update.actionType === 'open_play' && (
+                                <span className={styles.pkVerifyTimeHint}>
+                                  (Brak regainu/straty w przedziale 8s)
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    };
 
                     return (
-                      <div key={update.shot.id || index} className={styles.pkVerifyItem}>
-                        <div className={styles.pkVerifyItemHeader}>
-                          <span className={styles.pkVerifyTime}>{shotTimeString}</span>
-                          <span className={styles.pkVerifyMinute}>Minuta {update.shot.minute}'</span>
-                        </div>
-                        <div className={styles.pkVerifyFlags}>
-                          <span className={styles.pkVerifyLabel}>actionType:</span>
-                          <span className={styles.pkVerifyChange}>
-                            <span className={styles.pkVerifyIcon}>{(update.shot.actionType || 'open_play') === 'regain' ? "✓" : "✗"}</span>
-                            <span>→</span>
-                            <span className={styles.pkVerifyIcon}>✓</span>
-                            {update.regainTime && update.timeDiffSeconds !== undefined && (
-                              <span className={styles.pkVerifyTimeHint}>
-                                (Regain: {update.regainTime}, {update.timeDiffSeconds >= 0 ? '+' : ''}{update.timeDiffSeconds.toFixed(1)}s)
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                      </div>
+                      <>
+                        {attackUpdates.length > 0 && (
+                          <div>
+                            <h4 style={{ marginTop: '16px', marginBottom: '8px', fontWeight: 'bold' }}>
+                              Atak (nasze strzały) - {attackUpdates.length}
+                            </h4>
+                            <div className={styles.pkVerifyList}>
+                              {attackUpdates.map((update, index) => renderUpdateItem(update, index))}
+                            </div>
+                          </div>
+                        )}
+                        {defenseUpdates.length > 0 && (
+                          <div>
+                            <h4 style={{ marginTop: '16px', marginBottom: '8px', fontWeight: 'bold' }}>
+                              Obrona (strzały przeciwnika) - {defenseUpdates.length}
+                            </h4>
+                            <div className={styles.pkVerifyList}>
+                              {defenseUpdates.map((update, index) => renderUpdateItem(update, index))}
+                            </div>
+                          </div>
+                        )}
+                      </>
                     );
-                  })}
+                  })()}
                 </div>
-              </div>
               <div className={styles.pkVerifyFooter}>
                 <button
                   className={styles.pkVerifyCancel}

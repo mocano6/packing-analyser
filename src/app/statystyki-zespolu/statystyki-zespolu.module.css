@@ -1203,6 +1203,104 @@
   border-bottom: none;
 }
 
+/* Kafelki statystyk */
+.statsTiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.statTile {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.statTile::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.05), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.statTile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+.statTile:hover::before {
+  opacity: 1;
+}
+
+.statTileGood {
+  border-color: rgba(52, 199, 89, 0.3);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(52, 199, 89, 0.03));
+  box-shadow: 0 4px 16px rgba(52, 199, 89, 0.08), 0 1px 2px rgba(52, 199, 89, 0.1);
+}
+
+.statTileGood::before {
+  background: linear-gradient(90deg, transparent, rgba(52, 199, 89, 0.2), transparent);
+}
+
+.statTileBad {
+  border-color: rgba(255, 59, 48, 0.3);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 59, 48, 0.03));
+  box-shadow: 0 4px 16px rgba(255, 59, 48, 0.08), 0 1px 2px rgba(255, 59, 48, 0.1);
+}
+
+.statTileBad::before {
+  background: linear-gradient(90deg, transparent, rgba(255, 59, 48, 0.2), transparent);
+}
+
+.statTileGood .statTileValue {
+  color: #059669;
+}
+
+.statTileBad .statTileValue {
+  color: #dc2626;
+}
+
+.statTileLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.5);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+}
+
+.statTileValue {
+  font-size: 28px;
+  font-weight: 700;
+  color: rgba(0, 0, 0, 0.9);
+  margin-bottom: 6px;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  letter-spacing: -0.5px;
+}
+
+.statTileSecondary {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  margin-top: 6px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
 /* Style dla danych meczu */
 .matchDataDetails {
   display: flex;
@@ -1437,6 +1535,17 @@
 .countItemSelected:hover {
   background-color: #bfdbfe !important;
   border-color: #2563eb !important;
+}
+
+.countItemDisabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+.countItemDisabled:hover {
+  background-color: #f9fafb !important;
+  border-color: #e5e7eb !important;
 }
 
 .countLabel {
@@ -1711,9 +1820,14 @@
 
 /* Sekcja xG */
 .xgPitchSection {
-  margin-bottom: 30px;
-  border: none;
-  box-shadow: none;
+  margin-bottom: 32px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
   overflow: visible !important;
 }
 
@@ -1732,14 +1846,20 @@
   z-index: 1;
 }
 
+.xgStatsSummary .detailsSection {
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
 /* Tabela porównawcza xG - styl Apple */
 .xgComparisonTable {
-  background: transparent;
-  border-radius: 0;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 16px;
   overflow: visible !important;
-  box-shadow: none;
-  backdrop-filter: none;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   outline: none !important;
   position: relative;
   z-index: 1;
@@ -1910,31 +2030,30 @@
   background-color: #f3f4f6;
   padding: 4px;
   border-radius: 8px;
-  width: fit-content;
 }
 
 .xgHalfButton {
   padding: 8px 16px;
   border: none;
-  border-radius: 6px;
   background-color: transparent;
   color: #6b7280;
-  cursor: pointer;
-  font-size: 14px;
   font-weight: 500;
-  transition: all 0.15s ease;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
   white-space: nowrap;
 }
 
 .xgHalfButton:hover {
-  color: #3b82f6;
   background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
 }
 
 .xgHalfButton.active {
   background-color: #3b82f6;
   color: white;
-  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
 }
 
 .xgFilterContainer {
@@ -1944,30 +2063,82 @@
   background-color: #f3f4f6;
   padding: 4px;
   border-radius: 8px;
-  width: fit-content;
 }
 
 .xgFilterButton {
   padding: 8px 16px;
   border: none;
-  border-radius: 6px;
   background-color: transparent;
   color: #6b7280;
-  cursor: pointer;
-  font-size: 14px;
   font-weight: 500;
-  transition: all 0.15s ease;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
   white-space: nowrap;
 }
 
 .xgFilterButton:hover {
-  color: #3b82f6;
   background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
 }
 
 .xgFilterButton.active {
   background-color: #3b82f6;
   color: white;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.xgMapFilters {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 0;
+}
+
+.xgMapFilterGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.xgMapFilterLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.7);
+  min-width: 100px;
+}
+
+.xgMapFilterButtons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.xgMapFilterButton {
+  padding: 4px 10px;
+  border: 1px solid #e5e7eb;
+  background-color: white;
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.xgMapFilterButton:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.xgMapFilterButton.active {
+  background-color: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
   box-shadow: 0 1px 2px rgba(59, 130, 246, 0.2);
 }
 
@@ -1975,15 +2146,13 @@
   display: flex;
   gap: 20px;
   align-items: flex-start;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .xgPitchWrapper {
   flex: 1;
-  background: white;
-  border-radius: 8px;
   padding: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding-bottom: 16px;
 }
 
 /* Panel informacji o strzale */
@@ -2222,16 +2391,18 @@
 
 /* Wykresy w panelu */
 .chartContainerInPanel {
-  margin-bottom: 24px;
-  padding: 20px;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  margin-bottom: 32px;
+  padding: 32px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .chartContainerInPanel .chartHeader {
-  margin-bottom: 16px;
+  display: none;
 }
 
 .chartContainerInPanel .chartHeader h3 {

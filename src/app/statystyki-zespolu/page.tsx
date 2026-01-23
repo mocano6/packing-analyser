@@ -89,12 +89,12 @@ export default function StatystykiZespoluPage() {
   const [expandedCategory, setExpandedCategory] = useState<'kpi' | 'pxt' | 'xg' | 'matchData' | 'pkEntries' | 'regains' | 'loses' | null>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('statystykiZespolu_expandedCategory');
-      if (saved && ['pxt', 'xg', 'matchData', 'pkEntries', 'regains', 'loses'].includes(saved)) {
-        return saved as 'pxt' | 'xg' | 'matchData' | 'pkEntries' | 'regains' | 'loses';
+      if (saved && ['kpi', 'pxt', 'xg', 'matchData', 'pkEntries', 'regains', 'loses'].includes(saved)) {
+        return saved as 'kpi' | 'pxt' | 'xg' | 'matchData' | 'pkEntries' | 'regains' | 'loses';
       }
-      return 'pxt';
+      return 'kpi';
     }
-    return 'pxt';
+    return 'kpi';
   });
 
   // Zapisuj wybraną kategorię w localStorage przy każdej zmianie
@@ -136,7 +136,7 @@ export default function StatystykiZespoluPage() {
   const [teamLosesHeatmapMode, setTeamLosesHeatmapMode] = useState<"xt" | "count">("xt");
   const [losesHalfFilter, setLosesHalfFilter] = useState<"all" | "own" | "opponent" | "pm">("own");
   const [regainHalfFilter, setRegainHalfFilter] = useState<"all" | "own" | "opponent" | "pm">("all");
-  const [selectedActionFilter, setSelectedActionFilter] = useState<Array<'p1' | 'p2' | 'p3' | 'p0start' | 'p1start' | 'p2start' | 'p3start' | 'pk' | 'shot' | 'goal'>>([]);
+  const [selectedActionFilter, setSelectedActionFilter] = useState<Array<'p0' | 'p1' | 'p2' | 'p3' | 'p0start' | 'p1start' | 'p2start' | 'p3start' | 'pk' | 'shot' | 'goal'>>([]);
   const [actionsModalOpen, setActionsModalOpen] = useState(false);
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<{ playerId: string; playerName: string; zoneName: string } | null>(null);
   const [matchDataPeriod, setMatchDataPeriod] = useState<'total' | 'firstHalf' | 'secondHalf'>('total');
@@ -149,6 +149,21 @@ export default function StatystykiZespoluPage() {
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
   const [xgFilter, setXgFilter] = useState<'all' | 'sfg' | 'open_play'>('all');
   const [xgHalf, setXgHalf] = useState<'all' | 'first' | 'second'>('all');
+  const [xgMapFilters, setXgMapFilters] = useState<{
+    bodyPart: 'all' | 'foot' | 'head' | 'other';
+    sfg: boolean;
+    regain: boolean;
+    goal: boolean;
+    blocked: boolean;
+    onTarget: boolean;
+  }>({
+    bodyPart: 'all',
+    sfg: true,
+    regain: true,
+    goal: true,
+    blocked: true,
+    onTarget: true,
+  });
   const [selectedPKEntryIdForView, setSelectedPKEntryIdForView] = useState<string | undefined>(undefined);
   const [pkEntryTypeFilter, setPkEntryTypeFilter] = useState<"all" | "pass" | "dribble" | "sfg">("all");
   const [pkOnlyRegain, setPkOnlyRegain] = useState(false);
@@ -205,7 +220,7 @@ export default function StatystykiZespoluPage() {
   } | null>(null);
 
   // Helpery do filtrów akcji (Start/Koniec)
-  const isFilterActive = (filter: 'p1' | 'p2' | 'p3' | 'p0start' | 'p1start' | 'p2start' | 'p3start' | 'pk' | 'shot' | 'goal'): boolean => {
+  const isFilterActive = (filter: 'p0' | 'p1' | 'p2' | 'p3' | 'p0start' | 'p1start' | 'p2start' | 'p3start' | 'pk' | 'shot' | 'goal'): boolean => {
     return Array.isArray(selectedActionFilter) && selectedActionFilter.includes(filter);
   };
 
@@ -216,7 +231,7 @@ export default function StatystykiZespoluPage() {
 
   const hasEndFilterSelected = (): boolean => {
     const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
-    return filters.some(f => ['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+    return filters.some(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
   };
 
   const matchesSelectedActionFilter = (action: Action): boolean => {
@@ -224,7 +239,7 @@ export default function StatystykiZespoluPage() {
     if (filters.length === 0) return true;
 
     const startFilters = filters.filter(f => ['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
-    const endFilters = filters.filter(f => ['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+    const endFilters = filters.filter(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
 
     let matchesStartFilter = startFilters.length === 0;
     let matchesEndFilter = endFilters.length === 0;
@@ -240,14 +255,16 @@ export default function StatystykiZespoluPage() {
     }
 
     if (endFilters.length > 0) {
-      const isP1 = action.isP1 || action.isP1Start;
-      const isP2 = action.isP2 || action.isP2Start;
-      const isP3 = action.isP3 || action.isP3Start;
+      const isP0 = action.isP0;
+      const isP1 = action.isP1;
+      const isP2 = action.isP2;
+      const isP3 = action.isP3;
       const isPK = action.isPenaltyAreaEntry;
       const isShot = action.isShot;
       const isGoal = action.isGoal;
 
       matchesEndFilter = endFilters.some(filter => {
+        if (filter === 'p0') return isP0;
         if (filter === 'p1') return isP1;
         if (filter === 'p2') return isP2;
         if (filter === 'p3') return isP3;
@@ -501,6 +518,9 @@ export default function StatystykiZespoluPage() {
       if (selectedActionType === 'pass') return action.actionType === 'pass';
       if (selectedActionType === 'dribble') return action.actionType === 'dribble';
       return true;
+    }).filter(action => {
+      // Filtruj akcje według wybranych filtrów Start/Koniec
+      return matchesSelectedActionFilter(action);
     });
 
     filteredActions.forEach(action => {
@@ -544,7 +564,7 @@ export default function StatystykiZespoluPage() {
     secondHalf.packingPerDribble = secondHalf.dribbleCount > 0 ? secondHalf.packing / secondHalf.dribbleCount : 0;
 
     return { firstHalf, secondHalf };
-  }, [allActions, selectedActionType]);
+  }, [allActions, selectedActionType, selectedActionFilter]);
 
   // Znajdź wybrany mecz dla wyświetlenia informacji
   const selectedMatchInfo = useMemo(() => {
@@ -818,12 +838,15 @@ export default function StatystykiZespoluPage() {
         senderP2StartCountCentral: 0,
         senderP3StartCountLateral: 0,
         senderP3StartCountCentral: 0,
+        senderP0Count: 0,
         senderP1Count: 0,
         senderP2Count: 0,
         senderP3Count: 0,
         senderPKCount: 0,
         senderShotCount: 0,
         senderGoalCount: 0,
+        senderP0CountLateral: 0,
+        senderP0CountCentral: 0,
         senderP1CountLateral: 0,
         senderP1CountCentral: 0,
         senderP2CountLateral: 0,
@@ -837,12 +860,15 @@ export default function StatystykiZespoluPage() {
         senderGoalCountLateral: 0,
         senderGoalCountCentral: 0,
         // Liczniki akcji jako przyjmujący
+        receiverP0Count: 0,
         receiverP1Count: 0,
         receiverP2Count: 0,
         receiverP3Count: 0,
         receiverPKCount: 0,
         receiverShotCount: 0,
         receiverGoalCount: 0,
+        receiverP0CountLateral: 0,
+        receiverP0CountCentral: 0,
         receiverP1CountLateral: 0,
         receiverP1CountCentral: 0,
         receiverP2CountLateral: 0,
@@ -856,12 +882,15 @@ export default function StatystykiZespoluPage() {
         receiverGoalCountLateral: 0,
         receiverGoalCountCentral: 0,
         // Liczniki akcji z dryblingu
+        dribblingP0Count: 0,
         dribblingP1Count: 0,
         dribblingP2Count: 0,
         dribblingP3Count: 0,
         dribblingPKCount: 0,
         dribblingShotCount: 0,
         dribblingGoalCount: 0,
+        dribblingP0CountLateral: 0,
+        dribblingP0CountCentral: 0,
         dribblingP1CountLateral: 0,
         dribblingP1CountCentral: 0,
         dribblingP2CountLateral: 0,
@@ -910,12 +939,15 @@ export default function StatystykiZespoluPage() {
     let senderP2StartCountCentral = 0;
     let senderP3StartCountLateral = 0;
     let senderP3StartCountCentral = 0;
+    let senderP0Count = 0;
     let senderP1Count = 0;
     let senderP2Count = 0;
     let senderP3Count = 0;
     let senderPKCount = 0;
     let senderShotCount = 0;
     let senderGoalCount = 0;
+    let senderP0CountLateral = 0;
+    let senderP0CountCentral = 0;
     let senderP1CountLateral = 0;
     let senderP1CountCentral = 0;
     let senderP2CountLateral = 0;
@@ -930,12 +962,15 @@ export default function StatystykiZespoluPage() {
     let senderGoalCountCentral = 0;
 
     // Liczniki akcji jako przyjmujący
+    let receiverP0Count = 0;
     let receiverP1Count = 0;
     let receiverP2Count = 0;
     let receiverP3Count = 0;
     let receiverPKCount = 0;
     let receiverShotCount = 0;
     let receiverGoalCount = 0;
+    let receiverP0CountLateral = 0;
+    let receiverP0CountCentral = 0;
     let receiverP1CountLateral = 0;
     let receiverP1CountCentral = 0;
     let receiverP2CountLateral = 0;
@@ -950,12 +985,15 @@ export default function StatystykiZespoluPage() {
     let receiverGoalCountCentral = 0;
 
     // Liczniki akcji z dryblingu
+    let dribblingP0Count = 0;
     let dribblingP1Count = 0;
     let dribblingP2Count = 0;
     let dribblingP3Count = 0;
     let dribblingPKCount = 0;
     let dribblingShotCount = 0;
     let dribblingGoalCount = 0;
+    let dribblingP0CountLateral = 0;
+    let dribblingP0CountCentral = 0;
     let dribblingP1CountLateral = 0;
     let dribblingP1CountCentral = 0;
     let dribblingP2CountLateral = 0;
@@ -1030,7 +1068,7 @@ export default function StatystykiZespoluPage() {
 
         const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
         const startFilters = filters.filter(f => ['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
-        const endFilters = filters.filter(f => ['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+        const endFilters = filters.filter(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
 
         let matchesStartFilterForCounts = startFilters.length === 0;
         let matchesEndFilterForCounts = endFilters.length === 0;
@@ -1046,14 +1084,16 @@ export default function StatystykiZespoluPage() {
         }
 
         if (endFilters.length > 0) {
-          const isP1 = action.isP1 || action.isP1Start;
-          const isP2 = action.isP2 || action.isP2Start;
-          const isP3 = action.isP3 || action.isP3Start;
+          const isP0 = action.isP0;
+          const isP1 = action.isP1;
+          const isP2 = action.isP2;
+          const isP3 = action.isP3;
           const isPK = action.isPenaltyAreaEntry;
           const isShot = action.isShot;
           const isGoal = action.isGoal;
 
           matchesEndFilterForCounts = endFilters.some(filter => {
+            if (filter === 'p0') return isP0;
             if (filter === 'p1') return isP1;
             if (filter === 'p2') return isP2;
             if (filter === 'p3') return isP3;
@@ -1119,21 +1159,27 @@ export default function StatystykiZespoluPage() {
             }
           }
 
-          // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
-          if ((action.isP3 || action.isP3Start) && matchesFiltersForEndCounts) {
+          // P3, P2, P1, P0 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
+          // Dla kafelków End używamy tylko isP0, isP1, isP2, isP3 (bez isP0Start itd.)
+          if (action.isP3 && matchesFiltersForEndCounts) {
             senderP3Count += 1;
             if (senderIsLateral) senderP3CountLateral += 1;
             else senderP3CountCentral += 1;
           }
-          if ((action.isP2 || action.isP2Start) && matchesFiltersForEndCounts) {
+          if (action.isP2 && matchesFiltersForEndCounts) {
             senderP2Count += 1;
             if (senderIsLateral) senderP2CountLateral += 1;
             else senderP2CountCentral += 1;
           }
-          if ((action.isP1 || action.isP1Start) && matchesFiltersForEndCounts) {
+          if (action.isP1 && matchesFiltersForEndCounts) {
             senderP1Count += 1;
             if (senderIsLateral) senderP1CountLateral += 1;
             else senderP1CountCentral += 1;
+          }
+          if (action.isP0 && matchesFiltersForEndCounts) {
+            senderP0Count += 1;
+            if (senderIsLateral) senderP0CountLateral += 1;
+            else senderP0CountCentral += 1;
           }
         }
       }
@@ -1173,22 +1219,27 @@ export default function StatystykiZespoluPage() {
             }
           }
           
-          // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
-          // Użyj tej samej logiki co w profilu zawodnika (action.isP1 || action.isP1Start)
-          if (action.isP3 || action.isP3Start) {
+          // P3, P2, P1, P0 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
+          // Dla kafelków End używamy tylko isP0, isP1, isP2, isP3 (bez isP0Start itd.)
+          if (action.isP3) {
             receiverP3Count += 1;
             if (receiverIsLateral) receiverP3CountLateral += 1;
             else receiverP3CountCentral += 1;
           }
-          if (action.isP2 || action.isP2Start) {
+          if (action.isP2) {
             receiverP2Count += 1;
             if (receiverIsLateral) receiverP2CountLateral += 1;
             else receiverP2CountCentral += 1;
           }
-          if (action.isP1 || action.isP1Start) {
+          if (action.isP1) {
             receiverP1Count += 1;
             if (receiverIsLateral) receiverP1CountLateral += 1;
             else receiverP1CountCentral += 1;
+          }
+          if (action.isP0) {
+            receiverP0Count += 1;
+            if (receiverIsLateral) receiverP0CountLateral += 1;
+            else receiverP0CountCentral += 1;
           }
         }
       }
@@ -1225,22 +1276,27 @@ export default function StatystykiZespoluPage() {
             }
           }
           
-          // P3, P2, P1 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
-          // Użyj tej samej logiki co w profilu zawodnika (action.isP1 || action.isP1Start)
-          if (action.isP3 || action.isP3Start) {
+          // P3, P2, P1, P0 mogą być jednocześnie strzałami lub PK, więc sprawdzamy niezależnie
+          // Dla kafelków End używamy tylko isP0, isP1, isP2, isP3 (bez isP0Start itd.)
+          if (action.isP3) {
             dribblingP3Count += 1;
             if (dribblingIsLateral) dribblingP3CountLateral += 1;
             else dribblingP3CountCentral += 1;
           }
-          if (action.isP2 || action.isP2Start) {
+          if (action.isP2) {
             dribblingP2Count += 1;
             if (dribblingIsLateral) dribblingP2CountLateral += 1;
             else dribblingP2CountCentral += 1;
           }
-          if (action.isP1 || action.isP1Start) {
+          if (action.isP1) {
             dribblingP1Count += 1;
             if (dribblingIsLateral) dribblingP1CountLateral += 1;
             else dribblingP1CountCentral += 1;
+          }
+          if (action.isP0) {
+            dribblingP0Count += 1;
+            if (dribblingIsLateral) dribblingP0CountLateral += 1;
+            else dribblingP0CountCentral += 1;
           }
         }
       }
@@ -1301,12 +1357,15 @@ export default function StatystykiZespoluPage() {
       pxtReceiverPerAction: receiverPassCount > 0 ? pxtAsReceiver / receiverPassCount : 0,
       pxtDribblingPerAction: dribblingActionsCount > 0 ? pxtAsDribbler / dribblingActionsCount : 0,
       // Liczniki akcji jako podający
+      senderP0Count,
       senderP1Count,
       senderP2Count,
       senderP3Count,
       senderPKCount,
       senderShotCount,
       senderGoalCount,
+      senderP0CountLateral,
+      senderP0CountCentral,
       senderP1CountLateral,
       senderP1CountCentral,
       senderP2CountLateral,
@@ -1320,12 +1379,15 @@ export default function StatystykiZespoluPage() {
       senderGoalCountLateral,
       senderGoalCountCentral,
       // Liczniki akcji jako przyjmujący
+      receiverP0Count,
       receiverP1Count,
       receiverP2Count,
       receiverP3Count,
       receiverPKCount,
       receiverShotCount,
       receiverGoalCount,
+      receiverP0CountLateral,
+      receiverP0CountCentral,
       receiverP1CountLateral,
       receiverP1CountCentral,
       receiverP2CountLateral,
@@ -1339,12 +1401,15 @@ export default function StatystykiZespoluPage() {
       receiverGoalCountLateral,
       receiverGoalCountCentral,
       // Liczniki akcji z dryblingu
+      dribblingP0Count,
       dribblingP1Count,
       dribblingP2Count,
       dribblingP3Count,
       dribblingPKCount,
       dribblingShotCount,
       dribblingGoalCount,
+      dribblingP0CountLateral,
+      dribblingP0CountCentral,
       dribblingP1CountLateral,
       dribblingP1CountCentral,
       dribblingP2CountLateral,
@@ -1370,7 +1435,7 @@ export default function StatystykiZespoluPage() {
       senderP3StartCountLateral,
       senderP3StartCountCentral,
     };
-  }, [allActions, teamActions, allShots, allPKEntries, selectedTeam, heatmapDirection, selectedPxtCategory, derivedRegainActions, derivedLosesActions]);
+  }, [allActions, teamActions, allShots, allPKEntries, selectedTeam, heatmapDirection, selectedPxtCategory, derivedRegainActions, derivedLosesActions, selectedActionFilter]);
 
   const regainsFirstHalfPct = teamStats.totalRegains > 0
     ? (teamStats.regainsFirstHalf / teamStats.totalRegains) * 100
@@ -1512,12 +1577,13 @@ export default function StatystykiZespoluPage() {
       
       if (attackZoneName) {
         const isOwn = isOwnHalf(attackZoneName);
-        // Jeśli attackZone jest na własnej połowie (isOwn = true), to regainDefenseZone jest na połowie przeciwnika
-        // Jeśli attackZone jest na połowie przeciwnika (isOwn = false), to regainDefenseZone jest na własnej połowie
+        // Z perspektywy ataku: strefy 1-6 to własna połowa, strefy 7-12 to połowa przeciwnika
+        // Jeśli attackZone jest na połowie przeciwnika (isOwn = false, strefy 7-12), to regainDefenseZone jest na własnej połowie (strefy 1-6)
+        // Jeśli attackZone jest na własnej połowie (isOwn = true, strefy 1-6), to regainDefenseZone jest na połowie przeciwnika (strefy 7-12)
         if (isOwn) {
-          totalRegainsOpponentHalf += 1; // attackZone na własnej połowie = regain na połowie przeciwnika
+          totalRegainsOwnHalf += 1; // attackZone na własnej połowie (1-6) = regain na własnej połowie
         } else {
-          totalRegainsOwnHalf += 1; // attackZone na połowie przeciwnika = regain na własnej połowie
+          totalRegainsOpponentHalf += 1; // attackZone na połowie przeciwnika (7-12) = regain na połowie przeciwnika
         }
       }
 
@@ -3013,15 +3079,13 @@ export default function StatystykiZespoluPage() {
               >
                 <span className={styles.categoryName}>xG</span>
               </button>
-              {isAdmin && (
-                <button
-                  type="button"
-                  className={`${styles.categoryItem} ${expandedCategory === 'matchData' ? styles.active : ''}`}
-                  onClick={() => setExpandedCategory(expandedCategory === 'matchData' ? null : 'matchData')}
-                >
-                  <span className={styles.categoryName}>Dane meczowe</span>
-                </button>
-              )}
+              <button
+                type="button"
+                className={`${styles.categoryItem} ${expandedCategory === 'pkEntries' ? styles.active : ''}`}
+                onClick={() => setExpandedCategory(expandedCategory === 'pkEntries' ? null : 'pkEntries')}
+              >
+                <span className={styles.categoryName}>Wejścia w PK</span>
+              </button>
               <button
                 type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'regains' ? styles.active : ''}`}
@@ -3036,13 +3100,15 @@ export default function StatystykiZespoluPage() {
               >
                 <span className={styles.categoryName}>Straty</span>
               </button>
-              <button
-                type="button"
-                className={`${styles.categoryItem} ${expandedCategory === 'pkEntries' ? styles.active : ''}`}
-                onClick={() => setExpandedCategory(expandedCategory === 'pkEntries' ? null : 'pkEntries')}
-              >
-                <span className={styles.categoryName}>Wejścia w PK</span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  className={`${styles.categoryItem} ${expandedCategory === 'matchData' ? styles.active : ''}`}
+                  onClick={() => setExpandedCategory(expandedCategory === 'matchData' ? null : 'matchData')}
+                >
+                  <span className={styles.categoryName}>Dane meczowe</span>
+                </button>
+              )}
       </div>
 
             {/* Szczegóły poniżej */}
@@ -3100,6 +3166,18 @@ export default function StatystykiZespoluPage() {
                   const reaction5sPercentage = losesExcludingNotApplicableAndAut.length > 0 
                     ? (reaction5sLoses.length / losesExcludingNotApplicableAndAut.length) * 100 
                     : 0;
+                  
+                  // Funkcja pomocnicza do określenia czy strefa jest na własnej połowie (A-H, 1-6) czy połowie przeciwnika (A-H, 7-12)
+                  const isOwnHalf = (zoneName: string | null | undefined): boolean => {
+                    if (!zoneName) return false;
+                    const normalized = convertZoneToName(zoneName);
+                    if (!normalized) return false;
+                    const zoneIndex = zoneNameToIndex(normalized);
+                    if (zoneIndex === null) return false;
+                    // Kolumna (0-11): 0-5 to własna połowa, 6-11 to połowa przeciwnika
+                    const col = zoneIndex % 12;
+                    return col <= 5; // Własna połowa: kolumny 0-5 (strefy 1-6)
+                  };
                   
                   // Funkcja pomocnicza do określenia czy strefa jest w PM Area (C5-8, D5-8, E5-8, F5-8)
                   const isPMArea = (zoneName: string | null | undefined): boolean => {
@@ -3215,11 +3293,12 @@ export default function StatystykiZespoluPage() {
                   
                   // Przygotuj dane dla spidermapy
                   // Normalizujemy wartości do skali 0-100 dla lepszej wizualizacji
-                  // Zakładamy maksymalne wartości: xG = 3.0, xG/strzał = 0.15, wejścia w PK = 20, % = 100
+                  // Zakładamy maksymalne wartości: xG = 3.0, xG/strzał = 0.30 (2x KPI), wejścia w PK = 20, % = 100
                   const maxXG = 3.0;
-                  const maxXGPerShot = 0.15;
+                  const maxXGPerShot = 0.30; // 2x KPI (0.15) dla lepszej wizualizacji
                   const maxPKEntries = 20;
                   const maxPercentage = 100;
+                  const maxLosesPMAreaCount = 20;
                   
                   const normalizedOpponentXG = Math.min((opponentXG / maxXG) * 100, 100);
                   const normalizedOpponentXGPerShot = Math.min((opponentXGPerShot / maxXGPerShot) * 100, 100);
@@ -3227,386 +3306,609 @@ export default function StatystykiZespoluPage() {
                   const normalizedTeamXGPerShot = Math.min((teamXGPerShot / maxXGPerShot) * 100, 100);
                   const normalizedOpponentPKEntries = Math.min((opponentPKEntriesCount / maxPKEntries) * 100, 100);
                   const normalizedReaction5sPercentage = Math.min((reaction5sPercentage / maxPercentage) * 100, 100);
-                  const normalizedLosesInPMAreaPercentage = Math.min((losesInPMAreaPercentage / maxPercentage) * 100, 100);
+                  const normalizedLosesInPMAreaCount = Math.min((losesInPMAreaCount / maxLosesPMAreaCount) * 100, 100);
                   
                   // Normalizacja dla "Udane wejścia" - cel to 25%, więc normalizujemy do skali gdzie 25% = 100%
                   const target8sAcc = 25;
                   const normalized8sAcc = Math.min((shotAndPK8sPercentage / target8sAcc) * 100, 100);
                   
+                  // Wartości KPI (cele) - wszystkie na tej samej odległości od środka (np. 80)
+                  const kpiRadarValue = 80; // Wszystkie KPI na tym samym poziomie
+                  
+                  // xG przeciwnika: KPI < 1.0
+                  const kpiXG = 1.0;
+                  
+                  // xG/strzał (NASZ): KPI > 0.15 (więcej = lepiej)
+                  const kpiXGPerShot = 0.15;
+                  
+                  // PK przeciwnik: KPI < 11
+                  const kpiPKEntries = 11;
+                  
+                  // 5s: KPI > 50%
+                  const kpiReaction5s = 50;
+                  
+                  // Straty PM Area: KPI ≤ 6 szt.
+                  const kpiLosesPMAreaCount = 6;
+                  
+                  // Przechwyty na połowie przeciwnika: KPI ≥ 27
+                  const kpiRegainsOpponentHalf = 27;
+                  
+                  // Przechwyty PP → PK/Shot 8s: KPI ≥ 25%
+                  const kpiRegainsPPToPKShot8s = 25;
+                  
+                  // Oblicz przechwyty na połowie przeciwnika z videoTimestampRaw
+                  const regainsOnOpponentHalfWithTimestamp = derivedRegainActions
+                    .filter(action => {
+                      const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+                      const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+                      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                      const attackZoneName = attackZoneRaw
+                        ? convertZoneToName(attackZoneRaw)
+                        : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
+                      
+                      if (!attackZoneName) return false;
+                      const isOwn = isOwnHalf(attackZoneName);
+                      // Z perspektywy ataku: strefy 7-12 to połowa przeciwnika
+                      return !isOwn; // attackZone na połowie przeciwnika (7-12)
+                    })
+                    .filter(action => {
+                      const timestamp = action.videoTimestampRaw ?? action.videoTimestamp ?? 0;
+                      return timestamp > 0;
+                    })
+                    .map(action => ({
+                      action,
+                      timestamp: action.videoTimestampRaw ?? action.videoTimestamp ?? 0,
+                    }))
+                    .sort((a, b) => a.timestamp - b.timestamp);
+                  
+                  // Przygotuj PK entries i shots w ataku z timestampami
+                  const pkEntriesAttackWithTimestamp = (allPKEntries || [])
+                    .filter((entry: any) => {
+                      if (!entry) return false;
+                      const teamContext = entry.teamContext ?? "attack";
+                      return teamContext === "attack" || (entry.teamId && entry.teamId === teamIdInMatch);
+                    })
+                    .map((entry: any) => ({
+                      entry,
+                      timestamp: entry.videoTimestampRaw ?? entry.videoTimestamp ?? 0,
+                    }))
+                    .filter(item => item.timestamp > 0)
+                    .sort((a, b) => a.timestamp - b.timestamp);
+                  
+                  const shotsAttackWithTimestamp = teamShots
+                    .map(shot => ({
+                      shot,
+                      timestamp: shot.videoTimestampRaw ?? shot.videoTimestamp ?? 0,
+                    }))
+                    .filter(item => item.timestamp > 0)
+                    .sort((a, b) => a.timestamp - b.timestamp);
+                  
+                  // Przygotuj loses z timestampami
+                  const losesWithTimestamp = derivedLosesActions
+                    .map(lose => ({
+                      lose,
+                      timestamp: lose.videoTimestampRaw ?? (lose.videoTimestamp !== undefined ? lose.videoTimestamp + 10 : 0),
+                    }))
+                    .filter(item => item.timestamp > 0)
+                    .sort((a, b) => a.timestamp - b.timestamp);
+                  
+                  // Dla każdego przechwytu na połowie przeciwnika sprawdź, czy w ciągu 8s jest PK entry lub shot w ataku, bez loses między nimi
+                  let regainsPPWithPKOrShot8s = 0;
+                  
+                  regainsOnOpponentHalfWithTimestamp.forEach(regainItem => {
+                    const regainTime = regainItem.timestamp;
+                    const timeWindowEnd = regainTime + 8;
+                    
+                    // Znajdź najbliższe PK entry w ataku w oknie 8s
+                    const pkEntryInWindow = pkEntriesAttackWithTimestamp.find(item => 
+                      item.timestamp > regainTime && item.timestamp <= timeWindowEnd
+                    );
+                    
+                    // Znajdź najbliższy shot w ataku w oknie 8s
+                    const shotInWindow = shotsAttackWithTimestamp.find(item => 
+                      item.timestamp > regainTime && item.timestamp <= timeWindowEnd
+                    );
+                    
+                    // Sprawdź, czy jest PK entry lub shot
+                    const targetEvent = pkEntryInWindow || shotInWindow;
+                    if (!targetEvent) return;
+                    
+                    // Sprawdź, czy między przechwytem a targetEvent nie ma loses
+                    const hasLoseBetween = losesWithTimestamp.some(loseItem => 
+                      loseItem.timestamp > regainTime && loseItem.timestamp < targetEvent.timestamp
+                    );
+                    
+                    if (!hasLoseBetween) {
+                      regainsPPWithPKOrShot8s += 1;
+                    }
+                  });
+                  
+                  const regainsPPToPKShot8sPercentage = regainsOnOpponentHalfWithTimestamp.length > 0
+                    ? (regainsPPWithPKOrShot8s / regainsOnOpponentHalfWithTimestamp.length) * 100
+                    : 0;
+                  
+                  // Dla spidermapy: wartości "ujemnie rosnące i dodatnio malejące"
+                  // Dla metryk gdzie "mniej = lepiej": odwracamy (100 - normalized) - im mniej, tym większa wartość na wykresie
+                  // Dla metryk gdzie "więcej = lepiej": używamy normalizowanej wartości - im więcej, tym większa wartość na wykresie
+                  const toScoreLowerIsBetter = (normalizedValue: number): number => Math.max(0, Math.min(100, 100 - normalizedValue));
+                  const toScoreHigherIsBetter = (normalizedValue: number): number => Math.max(0, Math.min(100, normalizedValue));
+                  
+                  // Specjalna funkcja dla "Straty PM Area" - zapewnia, że gdy wartość = KPI, to score = kpiRadarValue
+                  // Mapowanie: 0 → 100, kpiLosesPMAreaCount → kpiRadarValue, maxLosesPMAreaCount → 0
+                  const toScoreLosesPMArea = (actualValue: number): number => {
+                    if (actualValue <= 0) return 100;
+                    if (actualValue >= maxLosesPMAreaCount) return 0;
+                    if (actualValue === kpiLosesPMAreaCount) return kpiRadarValue;
+                    
+                    // Interpolacja liniowa: gdy wartość < KPI, interpolujemy między 100 a kpiRadarValue
+                    // gdy wartość > KPI, interpolujemy między kpiRadarValue a 0
+                    if (actualValue < kpiLosesPMAreaCount) {
+                      // Interpolacja między (0, 100) a (kpiLosesPMAreaCount, kpiRadarValue)
+                      const ratio = actualValue / kpiLosesPMAreaCount;
+                      return 100 - (100 - kpiRadarValue) * ratio;
+                    } else {
+                      // Interpolacja między (kpiLosesPMAreaCount, kpiRadarValue) a (maxLosesPMAreaCount, 0)
+                      const ratio = (actualValue - kpiLosesPMAreaCount) / (maxLosesPMAreaCount - kpiLosesPMAreaCount);
+                      return kpiRadarValue - kpiRadarValue * ratio;
+                    }
+                  };
+                  
+                  // Specjalna funkcja dla "8s ACC" - zapewnia, że gdy wartość = target8sAcc, to score = kpiRadarValue
+                  // Mapowanie: 0% → 0, target8sAcc → kpiRadarValue, 100% → 100
+                  const toScore8sAcc = (actualPercentage: number): number => {
+                    if (actualPercentage <= 0) return 0;
+                    if (actualPercentage >= 100) return 100;
+                    if (actualPercentage === target8sAcc) return kpiRadarValue;
+                    
+                    // Interpolacja liniowa: gdy wartość < target8sAcc, interpolujemy między 0 a kpiRadarValue
+                    // gdy wartość > target8sAcc, interpolujemy między kpiRadarValue a 100
+                    if (actualPercentage < target8sAcc) {
+                      // Interpolacja między (0, 0) a (target8sAcc, kpiRadarValue)
+                      const ratio = actualPercentage / target8sAcc;
+                      return kpiRadarValue * ratio;
+                    } else {
+                      // Interpolacja między (target8sAcc, kpiRadarValue) a (100, 100)
+                      const ratio = (actualPercentage - target8sAcc) / (100 - target8sAcc);
+                      return kpiRadarValue + (100 - kpiRadarValue) * ratio;
+                    }
+                  };
+                  
+                  // Specjalna funkcja dla "xG/strzał" - zapewnia, że gdy wartość = kpiXGPerShot, to score = kpiRadarValue
+                  // Mapowanie: 0 → 0, kpiXGPerShot → kpiRadarValue, maxXGPerShot → 100
+                  const toScoreXGPerShot = (actualValue: number): number => {
+                    if (actualValue <= 0) return 0;
+                    if (actualValue >= maxXGPerShot) return 100;
+                    if (actualValue === kpiXGPerShot) return kpiRadarValue;
+                    
+                    // Interpolacja liniowa: gdy wartość < kpiXGPerShot, interpolujemy między 0 a kpiRadarValue
+                    // gdy wartość > kpiXGPerShot, interpolujemy między kpiRadarValue a 100
+                    if (actualValue < kpiXGPerShot) {
+                      // Interpolacja między (0, 0) a (kpiXGPerShot, kpiRadarValue)
+                      const ratio = actualValue / kpiXGPerShot;
+                      return kpiRadarValue * ratio;
+                    } else {
+                      // Interpolacja między (kpiXGPerShot, kpiRadarValue) a (maxXGPerShot, 100)
+                      const ratio = (actualValue - kpiXGPerShot) / (maxXGPerShot - kpiXGPerShot);
+                      return kpiRadarValue + (100 - kpiRadarValue) * ratio;
+                    }
+                  };
+                  
+                  // Specjalna funkcja dla "PK przeciwnik" - zapewnia, że gdy wartość = kpiPKEntries, to score = kpiRadarValue
+                  // Mapowanie: 0 → 100, kpiPKEntries → kpiRadarValue, maxPKEntries → 0
+                  const toScorePKOpponent = (actualValue: number): number => {
+                    if (actualValue <= 0) return 100;
+                    if (actualValue >= maxPKEntries) return 0;
+                    if (actualValue === kpiPKEntries) return kpiRadarValue;
+                    
+                    // Interpolacja liniowa: gdy wartość < kpiPKEntries, interpolujemy między 100 a kpiRadarValue
+                    // gdy wartość > kpiPKEntries, interpolujemy między kpiRadarValue a 0
+                    if (actualValue < kpiPKEntries) {
+                      // Interpolacja między (0, 100) a (kpiPKEntries, kpiRadarValue)
+                      const ratio = actualValue / kpiPKEntries;
+                      return 100 - (100 - kpiRadarValue) * ratio;
+                    } else {
+                      // Interpolacja między (kpiPKEntries, kpiRadarValue) a (maxPKEntries, 0)
+                      const ratio = (actualValue - kpiPKEntries) / (maxPKEntries - kpiPKEntries);
+                      return kpiRadarValue - kpiRadarValue * ratio;
+                    }
+                  };
+                  
+                  // Specjalna funkcja dla "5s (reakcja)" - zapewnia, że gdy wartość = kpiReaction5s, to score = kpiRadarValue
+                  // Mapowanie: 0% → 0, kpiReaction5s → kpiRadarValue, 100% → 100
+                  const toScoreReaction5s = (actualPercentage: number): number => {
+                    if (actualPercentage <= 0) return 0;
+                    if (actualPercentage >= 100) return 100;
+                    if (actualPercentage === kpiReaction5s) return kpiRadarValue;
+                    
+                    // Interpolacja liniowa: gdy wartość < kpiReaction5s, interpolujemy między 0 a kpiRadarValue
+                    // gdy wartość > kpiReaction5s, interpolujemy między kpiRadarValue a 100
+                    if (actualPercentage < kpiReaction5s) {
+                      // Interpolacja między (0, 0) a (kpiReaction5s, kpiRadarValue)
+                      const ratio = actualPercentage / kpiReaction5s;
+                      return kpiRadarValue * ratio;
+                    } else {
+                      // Interpolacja między (kpiReaction5s, kpiRadarValue) a (100, 100)
+                      const ratio = (actualPercentage - kpiReaction5s) / (100 - kpiReaction5s);
+                      return kpiRadarValue + (100 - kpiRadarValue) * ratio;
+                    }
+                  };
+                  
+                  // Specjalna funkcja dla "Przechwyty na połowie przeciwnika" - zapewnia, że gdy wartość = kpiRegainsOpponentHalf, to score = kpiRadarValue
+                  // Mapowanie: 0 → 0, kpiRegainsOpponentHalf → kpiRadarValue, maxRegainsOpponentHalf → 100
+                  const maxRegainsOpponentHalf = 60; // 2x KPI dla lepszej wizualizacji
+                  const toScoreRegainsOpponentHalf = (actualValue: number): number => {
+                    if (actualValue <= 0) return 0;
+                    if (actualValue >= maxRegainsOpponentHalf) return 100;
+                    if (actualValue === kpiRegainsOpponentHalf) return kpiRadarValue;
+                    
+                    // Interpolacja liniowa: gdy wartość < kpiRegainsOpponentHalf, interpolujemy między 0 a kpiRadarValue
+                    // gdy wartość > kpiRegainsOpponentHalf, interpolujemy między kpiRadarValue a 100
+                    if (actualValue < kpiRegainsOpponentHalf) {
+                      // Interpolacja między (0, 0) a (kpiRegainsOpponentHalf, kpiRadarValue)
+                      const ratio = actualValue / kpiRegainsOpponentHalf;
+                      return kpiRadarValue * ratio;
+                    } else {
+                      // Interpolacja między (kpiRegainsOpponentHalf, kpiRadarValue) a (maxRegainsOpponentHalf, 100)
+                      const ratio = (actualValue - kpiRegainsOpponentHalf) / (maxRegainsOpponentHalf - kpiRegainsOpponentHalf);
+                      return kpiRadarValue + (100 - kpiRadarValue) * ratio;
+                    }
+                  };
+                  
+                  // Specjalna funkcja dla "Przechwyty PP → PK/Shot 8s" - zapewnia, że gdy wartość = kpiRegainsPPToPKShot8s, to score = kpiRadarValue
+                  // Mapowanie: 0% → 0, kpiRegainsPPToPKShot8s → kpiRadarValue, 100% → 100
+                  const toScoreRegainsPPToPKShot8s = (actualPercentage: number): number => {
+                    if (actualPercentage <= 0) return 0;
+                    if (actualPercentage >= 100) return 100;
+                    if (actualPercentage === kpiRegainsPPToPKShot8s) return kpiRadarValue;
+                    
+                    // Interpolacja liniowa: gdy wartość < kpiRegainsPPToPKShot8s, interpolujemy między 0 a kpiRadarValue
+                    // gdy wartość > kpiRegainsPPToPKShot8s, interpolujemy między kpiRadarValue a 100
+                    if (actualPercentage < kpiRegainsPPToPKShot8s) {
+                      // Interpolacja między (0, 0) a (kpiRegainsPPToPKShot8s, kpiRadarValue)
+                      const ratio = actualPercentage / kpiRegainsPPToPKShot8s;
+                      return kpiRadarValue * ratio;
+                    } else {
+                      // Interpolacja między (kpiRegainsPPToPKShot8s, kpiRadarValue) a (100, 100)
+                      const ratio = (actualPercentage - kpiRegainsPPToPKShot8s) / (100 - kpiRegainsPPToPKShot8s);
+                      return kpiRadarValue + (100 - kpiRadarValue) * ratio;
+                    }
+                  };
+
+                  const scoreOpponentXG = toScoreLowerIsBetter(normalizedOpponentXG);
+                  const scoreXGPerShot = toScoreXGPerShot(teamXGPerShot);
+                  const scoreOpponentPKEntries = toScorePKOpponent(opponentPKEntriesCount);
+                  const scoreLosesPMArea = toScoreLosesPMArea(losesInPMAreaCount);
+                  const scoreReaction5s = toScoreReaction5s(reaction5sPercentage);
+                  const score8sAcc = toScore8sAcc(shotAndPK8sPercentage);
+                  const scoreRegainsOpponentHalf = toScoreRegainsOpponentHalf(teamRegainStats.totalRegainsOpponentHalf);
+                  const scoreRegainsPPToPKShot8s = toScoreRegainsPPToPKShot8s(regainsPPToPKShot8sPercentage);
+                  
                   const radarData = [
                     {
-                      subject: 'xG - xG przeciwnika',
-                      value: normalizedOpponentXG,
-                      fullMark: 100,
-                    },
-                    {
                       subject: 'xG/strzał',
-                      value: normalizedOpponentXGPerShot,
+                      value: scoreXGPerShot,
+                      kpi: kpiRadarValue,
                       fullMark: 100,
                     },
                     {
                       subject: 'PK przeciwnik',
-                      value: normalizedOpponentPKEntries,
+                      value: scoreOpponentPKEntries,
+                      kpi: kpiRadarValue,
                       fullMark: 100,
                     },
                     {
                       subject: '5s',
-                      value: normalizedReaction5sPercentage,
+                      value: scoreReaction5s,
+                      kpi: kpiRadarValue,
                       fullMark: 100,
                     },
                     {
-                      subject: 'Straty PM Area',
-                      value: normalizedLosesInPMAreaPercentage,
+                      subject: 'PM Area straty',
+                      value: scoreLosesPMArea,
+                      kpi: kpiRadarValue,
                       fullMark: 100,
                     },
                     {
                       subject: '8s ACC',
-                      value: normalized8sAcc,
+                      value: score8sAcc,
+                      kpi: kpiRadarValue,
+                      fullMark: 100,
+                    },
+                    {
+                      subject: 'Przechwyty PP',
+                      value: scoreRegainsOpponentHalf,
+                      kpi: kpiRadarValue,
+                      fullMark: 100,
+                    },
+                    {
+                      subject: '8s CA',
+                      value: scoreRegainsPPToPKShot8s,
+                      kpi: kpiRadarValue,
                       fullMark: 100,
                     },
                   ];
                   
                   return (
                     <div className={styles.chartContainerInPanel}>
-                      <div className={styles.chartHeader}>
-                        <h3>Spidermapa</h3>
-                        <span className={styles.chartInfo}>
-                          xG przeciwnika: {opponentXG.toFixed(2)} • xG/strzał: {opponentXGPerShot.toFixed(3)} ({opponentShotsCount} strzałów) • 
-                          PK przeciwnik: {opponentPKEntriesCount} • 
-                          5s: {reaction5sPercentage.toFixed(1)}% ({reaction5sLoses.length}/{losesExcludingNotApplicableAndAut.length}) • 
-                          Straty PM Area: {losesInPMAreaPercentage.toFixed(1)}% ({losesInPMAreaCount}/{allLoses.length}) • 
-                          Udane wejścia: {shotAndPK8sPercentage.toFixed(1)}% ({shotAndPK8sCount}/{total8sAcc}) [Cel: 25%]
-                        </span>
-                      </div>
-                      <ResponsiveContainer width="100%" height={400}>
-                        <RadarChart data={radarData}>
-                          <PolarGrid />
-                          <PolarAngleAxis dataKey="subject" />
-                          <PolarRadiusAxis angle={90} domain={[0, 100]} />
-                          <Tooltip
-                            content={({ active, payload }) => {
-                              if (!active || !payload || payload.length === 0) return null;
-                              const data = payload[0].payload;
-                              let displayValue = '';
-                              
-                              // Wyświetlaj rzeczywiste wartości zamiast znormalizowanych
-                              if (data.subject === 'xG - xG przeciwnika') {
-                                displayValue = `${opponentXG.toFixed(2)}`;
-                              } else if (data.subject === 'xG/strzał') {
-                                displayValue = `${opponentXGPerShot.toFixed(3)} (${opponentShotsCount} strzałów)`;
-                              } else if (data.subject === 'PK przeciwnik') {
-                                displayValue = `${opponentPKEntriesCount}`;
-                              } else if (data.subject === '5s') {
-                                displayValue = `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesExcludingNotApplicableAndAut.length})`;
-                              } else if (data.subject === 'Straty PM Area') {
-                                displayValue = `${losesInPMAreaPercentage.toFixed(1)}% (${losesInPMAreaCount}/${allLoses.length})`;
-                              } else if (data.subject === '8s ACC') {
-                                displayValue = `${shotAndPK8sPercentage.toFixed(1)}% (${shotAndPK8sCount}/${total8sAcc}) [Cel: 25%]`;
-                              }
-                              
-                              return (
-                                <div style={{
-                                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                                  border: '1px solid #ccc',
-                                  borderRadius: '4px',
-                                  padding: '8px 12px',
-                                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                                }}>
-                                  <p style={{ margin: 0, fontWeight: 'bold', marginBottom: '4px' }}>{data.subject}</p>
-                                  <p style={{ margin: 0, color: '#8884d8' }}>{displayValue}</p>
+                      <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+                        <div style={{ flex: '1 1 50%', minWidth: 0 }}>
+                          <ResponsiveContainer width="100%" height={420}>
+                            <RadarChart data={radarData} margin={{ top: 30, right: 30, bottom: 30, left: 30 }}>
+                              <defs>
+                                <linearGradient id="kpiGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                  <stop offset="0%" stopColor="#34C759" stopOpacity={0.1} />
+                                  <stop offset="100%" stopColor="#30D158" stopOpacity={0.05} />
+                                </linearGradient>
+                                <linearGradient id="valueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                  <stop offset="0%" stopColor="#6366f1" stopOpacity={0.18} />
+                                  <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.12} />
+                                </linearGradient>
+                              </defs>
+                              <PolarGrid 
+                                stroke="rgba(0, 0, 0, 0.08)" 
+                                strokeWidth={1}
+                                strokeDasharray="4 6"
+                              />
+                              <PolarAngleAxis 
+                                dataKey="subject" 
+                                tick={{ 
+                                  fontSize: 12, 
+                                  fill: 'rgba(0, 0, 0, 0.65)',
+                                  fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif',
+                                  fontWeight: 500,
+                                  letterSpacing: '-0.1px'
+                                }}
+                                tickLine={false}
+                              />
+                              <PolarRadiusAxis 
+                                angle={90} 
+                                domain={[0, 100]} 
+                                tick={{ 
+                                  fontSize: 10, 
+                                  fill: 'rgba(0, 0, 0, 0.45)',
+                                  fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif',
+                                  fontWeight: 400
+                                }}
+                                axisLine={false}
+                                tickCount={5}
+                                tickFormatter={(value) => value === 0 ? '' : value.toString()}
+                              />
+                              <Tooltip
+                                content={({ active, payload }) => {
+                                  if (!active || !payload || payload.length === 0) return null;
+                                  const data = payload[0].payload;
+                                  let displayValue = '';
+                                  let kpiValue = '';
+                                  
+                                  // Wyświetlaj rzeczywiste wartości zamiast znormalizowanych
+                                  if (data.subject === 'xG/strzał') {
+                                    displayValue = `${teamXGPerShot.toFixed(3)} (${teamShotsCount} strzałów)`;
+                                    const missing = kpiXGPerShot - teamXGPerShot;
+                                    kpiValue = `KPI > ${kpiXGPerShot.toFixed(2)} • ${missing > 0 ? `brakuje: +${missing.toFixed(3)}` : `zapasu: ${Math.abs(missing).toFixed(3)}`}`;
+                                  } else if (data.subject === 'PK przeciwnik') {
+                                    displayValue = `${opponentPKEntriesCount}`;
+                                    const over = opponentPKEntriesCount - kpiPKEntries;
+                                    kpiValue = `KPI < ${kpiPKEntries} • ${over > 0 ? `nadmiar: +${over}` : `zapasu: ${Math.abs(over)}`}`;
+                                  } else if (data.subject === '5s') {
+                                    displayValue = `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesExcludingNotApplicableAndAut.length})`;
+                                    const missing = kpiReaction5s - reaction5sPercentage;
+                                    kpiValue = `KPI > ${kpiReaction5s}% • ${missing > 0 ? `brakuje: +${missing.toFixed(1)} pp` : `zapasu: ${Math.abs(missing).toFixed(1)} pp`}`;
+                                  } else if (data.subject === 'PM Area straty') {
+                                    displayValue = `${losesInPMAreaCount} (${losesInPMAreaPercentage.toFixed(1)}% z ${allLoses.length})`;
+                                    const over = losesInPMAreaCount - kpiLosesPMAreaCount;
+                                    kpiValue = `KPI ≤ ${kpiLosesPMAreaCount} • ${over >= 0 ? `nadmiar: +${over}` : `zapasu: ${Math.abs(over)}`}`;
+                                  } else if (data.subject === '8s ACC') {
+                                    displayValue = `${shotAndPK8sPercentage.toFixed(1)}% (${shotAndPK8sCount}/${total8sAcc})`;
+                                    const missing = target8sAcc - shotAndPK8sPercentage;
+                                    kpiValue = `KPI ≥ ${target8sAcc}% • ${missing > 0 ? `brakuje: +${missing.toFixed(1)} pp` : `zapasu: ${Math.abs(missing).toFixed(1)} pp`}`;
+                                  } else if (data.subject === 'Przechwyty PP') {
+                                    displayValue = `${teamRegainStats.totalRegainsOpponentHalf}`;
+                                    const missing = kpiRegainsOpponentHalf - teamRegainStats.totalRegainsOpponentHalf;
+                                    kpiValue = `KPI ≥ ${kpiRegainsOpponentHalf} • ${missing > 0 ? `brakuje: +${missing}` : `zapasu: ${Math.abs(missing)}`}`;
+                                  } else if (data.subject === '8s CA') {
+                                    displayValue = `${regainsPPToPKShot8sPercentage.toFixed(1)}% (${regainsPPWithPKOrShot8s}/${regainsOnOpponentHalfWithTimestamp.length})`;
+                                    const missing = kpiRegainsPPToPKShot8s - regainsPPToPKShot8sPercentage;
+                                    kpiValue = `KPI ≥ ${kpiRegainsPPToPKShot8s}% • ${missing > 0 ? `brakuje: +${missing.toFixed(1)} pp` : `zapasu: ${Math.abs(missing).toFixed(1)} pp`}`;
+                                  }
+                                  
+                                  return (
+                                    <div style={{
+                                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                      backdropFilter: 'blur(20px) saturate(180%)',
+                                      WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                                      border: '1px solid rgba(0, 0, 0, 0.1)',
+                                      borderRadius: '12px',
+                                      padding: '12px 16px',
+                                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08)',
+                                      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif'
+                                    }}>
+                                      <p style={{ margin: 0, fontWeight: 600, marginBottom: '6px', fontSize: '12px', color: 'rgba(0, 0, 0, 0.8)', letterSpacing: '0.3px' }}>{data.subject}</p>
+                                      <p style={{ margin: 0, color: '#6366f1', marginBottom: '4px', fontSize: '13px', fontWeight: 600 }}>{displayValue}</p>
+                                      <p style={{ margin: 0, color: '#34C759', fontSize: '11px', fontWeight: 500 }}>{kpiValue}</p>
+                                    </div>
+                                  );
+                                }}
+                              />
+                              <Radar
+                                name="KPI (cel)"
+                                dataKey="kpi"
+                                stroke="#34C759"
+                                fill="url(#kpiGradient)"
+                                strokeWidth={2.5}
+                                strokeDasharray="6 4"
+                                dot={false}
+                              />
+                              <Radar
+                                name="Wartości"
+                                dataKey="value"
+                                stroke="#6366f1"
+                                fill="url(#valueGradient)"
+                                strokeWidth={3}
+                                dot={{ 
+                                  r: 4, 
+                                  strokeWidth: 2, 
+                                  stroke: '#6366f1', 
+                                  fill: '#ffffff'
+                                }}
+                              />
+                              <Legend 
+                                wrapperStyle={{ 
+                                  paddingTop: '20px', 
+                                  fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif',
+                                  fontSize: '12px',
+                                  fontWeight: 500
+                                }}
+                                iconType="circle"
+                                iconSize={8}
+                              />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                          
+                          {/* Podsumowanie KPI pod spidermapą */}
+                          {(() => {
+                            const kpiCount = 7; // Całkowita liczba KPI
+                            let realizedKpiCount = 0;
+                            
+                            if (shotAndPK8sPercentage >= target8sAcc) realizedKpiCount++;
+                            if (teamXGPerShot >= kpiXGPerShot) realizedKpiCount++;
+                            if (opponentPKEntriesCount <= kpiPKEntries) realizedKpiCount++;
+                            if (reaction5sPercentage >= kpiReaction5s) realizedKpiCount++;
+                            if (losesInPMAreaCount <= kpiLosesPMAreaCount) realizedKpiCount++;
+                            if (teamRegainStats.totalRegainsOpponentHalf >= kpiRegainsOpponentHalf) realizedKpiCount++;
+                            if (regainsPPToPKShot8sPercentage >= kpiRegainsPPToPKShot8s) realizedKpiCount++;
+                            
+                            const kpiPercentage = (realizedKpiCount / kpiCount) * 100;
+                            const isKpiGood = kpiPercentage >= 50;
+                            
+                            return (
+                              <div className={`${styles.statTile} ${isKpiGood ? styles.statTileGood : styles.statTileBad}`} style={{ marginTop: '20px' }}>
+                                <div className={styles.statTileLabel}>KPI ZREALIZOWANE</div>
+                                <div className={styles.statTileValue}>
+                                  {kpiPercentage.toFixed(1)}%
                                 </div>
-                              );
-                            }}
-                          />
-                          <Radar
-                            name="Wartości"
-                            dataKey="value"
-                            stroke="#8884d8"
-                            fill="#8884d8"
-                            fillOpacity={0.6}
-                          />
-                        </RadarChart>
-                      </ResponsiveContainer>
-                      
-                      {/* Sekcja KPI 8s ACC pod spidermapą */}
-                      <div className={styles.detailsSection} style={{ marginTop: '24px' }}>
-                        <h4 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>Statystyki</h4>
-                        {shotAndPK8sCount > 0 && (
-                          <details style={{ marginTop: '8px', marginLeft: '0' }}>
-                            <summary style={{ cursor: 'pointer', color: '#2196f3', fontSize: '14px', fontWeight: '500' }}>
-                              Pokaż czasy eventów ({shotAndPK8sCount})
-                            </summary>
-                            <div style={{ marginTop: '8px', paddingLeft: '16px', maxHeight: '200px', overflowY: 'auto' }}>
-                              {shotAndPK8sEntries
-                                .filter((entry: any) => entry.videoTimestampRaw !== undefined && entry.videoTimestampRaw !== null)
-                                .sort((a: any, b: any) => (a.videoTimestampRaw || 0) - (b.videoTimestampRaw || 0))
-                                .map((entry: any, index: number) => {
-                                  // Użyj videoTimestampRaw dla czasu 8s ACC
-                                  const acc8sTimeRaw = entry.videoTimestampRaw;
-                                  const minutes = Math.floor(acc8sTimeRaw / 60);
-                                  const seconds = Math.floor(acc8sTimeRaw % 60);
-                                  const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                                  const flags = [];
-                                  if (entry.isShotUnder8s) flags.push('Strzał');
-                                  if (entry.isPKEntryUnder8s) flags.push('PK');
-                                  
-                                  // Znajdź najbliższe wejście w PK LUB strzał (następujące po czasie 8s ACC, bez limitu czasu)
-                                  // Szukaj w wejściach PK (używamy videoTimestampRaw, jeśli nie ma, użyj videoTimestamp + 10s)
-                                  const followingPKEntries = (allPKEntries || []).filter((pkEntry: any) => {
-                                    if (!pkEntry) return false;
-                                    let pkTime: number | null = null;
-                                    if (pkEntry.videoTimestampRaw !== undefined && pkEntry.videoTimestampRaw !== null) {
-                                      pkTime = pkEntry.videoTimestampRaw;
-                                    } else if (pkEntry.videoTimestamp !== undefined && pkEntry.videoTimestamp !== null) {
-                                      pkTime = pkEntry.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
-                                    }
-                                    if (pkTime === null) return false;
-                                    return pkTime >= acc8sTimeRaw; // Następuje po (bez limitu)
-                                  });
-                                  
-                                  // Szukaj w strzałach (używamy videoTimestampRaw, jeśli nie ma, użyj videoTimestamp + 10s)
-                                  const followingShots = (allShots || []).filter((shot: any) => {
-                                    if (!shot) return false;
-                                    let shotTime: number | null = null;
-                                    if (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null) {
-                                      shotTime = shot.videoTimestampRaw;
-                                    } else if (shot.videoTimestamp !== undefined && shot.videoTimestamp !== null) {
-                                      shotTime = shot.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
-                                    }
-                                    if (shotTime === null) return false;
-                                    return shotTime >= acc8sTimeRaw; // Następuje po (bez limitu)
-                                  });
-                                  
-                                  // Znajdź najbliższe wejście w PK
-                                  let nearestPK: { time: number; diff: number } | null = null;
-                                  followingPKEntries.forEach((pkEntry: any) => {
-                                    let pkTime: number;
-                                    if (pkEntry.videoTimestampRaw !== undefined && pkEntry.videoTimestampRaw !== null) {
-                                      pkTime = pkEntry.videoTimestampRaw;
-                                    } else {
-                                      pkTime = pkEntry.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
-                                    }
-                                    const diff = pkTime - acc8sTimeRaw;
-                                    if (!nearestPK || diff < nearestPK.diff) {
-                                      nearestPK = { time: pkTime, diff };
-                                    }
-                                  });
-                                  
-                                  // Znajdź najbliższy strzał
-                                  let nearestShot: { time: number; diff: number } | null = null;
-                                  followingShots.forEach((shot: any) => {
-                                    let shotTime: number;
-                                    if (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null) {
-                                      shotTime = shot.videoTimestampRaw;
-                                    } else {
-                                      shotTime = shot.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
-                                    }
-                                    const diff = shotTime - acc8sTimeRaw;
-                                    if (!nearestShot || diff < nearestShot.diff) {
-                                      nearestShot = { time: shotTime, diff };
-                                    }
-                                  });
-                                  
-                                  // Wybierz najbliższe zdarzenie (albo PK, albo strzał - to które jest bliżej)
-                                  let nearestEvent: { time: number; diff: number; type: string } | null = null;
-                                  
-                                  if (nearestPK && nearestShot) {
-                                    // Jeśli są oba, wybierz to które jest bliżej
-                                    nearestEvent = nearestPK.diff <= nearestShot.diff ? 
-                                      { ...nearestPK, type: 'PK' } : 
-                                      { ...nearestShot, type: 'Strzał' };
-                                  } else if (nearestPK) {
-                                    nearestEvent = { ...nearestPK, type: 'PK' };
-                                  } else if (nearestShot) {
-                                    nearestEvent = { ...nearestShot, type: 'Strzał' };
-                                  }
-                                  
-                                  let nearestEventString = '';
-                                  if (nearestEvent) {
-                                    const eventMinutes = Math.floor(nearestEvent.time / 60);
-                                    const eventSeconds = Math.floor(nearestEvent.time % 60);
-                                    const eventTimeString = `${eventMinutes}:${eventSeconds.toString().padStart(2, '0')}`;
-                                    nearestEventString = ` → ${eventTimeString} (${nearestEvent.type}, +${nearestEvent.diff}s)`;
-                                  }
-                                  
-                                  return (
-                                    <div key={entry.id || index} style={{ padding: '4px 0', fontSize: '13px', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
-                                      <span>{timeString} - {flags.join(', ')}</span>
-                                      {nearestEventString && (
-                                        <span style={{ color: '#2196f3', marginLeft: '16px' }}>{nearestEventString}</span>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                            </div>
-                          </details>
-                        )}
-                        <div className={styles.detailsRow}>
-                          <span className={styles.detailsLabel}>Wejścia w PK w 8s od akcji 8s ACC:</span>
-                          <span className={styles.detailsValue}>
-                            <span className={styles.valueMain}><strong>{pkEntriesWithin8sPercentage.toFixed(1)}%</strong></span>
-                            <span className={styles.valueSecondary}> ({pkEntriesWithin8sCount}/{total8sAcc})</span>
-                          </span>
+                                <div className={styles.statTileSecondary}>
+                                  {realizedKpiCount}/{kpiCount} KPI
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
-                        {pkEntriesWithin8sCount > 0 && (
-                          <details style={{ marginTop: '8px', marginLeft: '0' }}>
-                            <summary style={{ cursor: 'pointer', color: '#2196f3', fontSize: '14px', fontWeight: '500' }}>
-                              Pokaż czasy eventów 8s ({pkEntriesWithin8sCount})
-                            </summary>
-                            <div style={{ marginTop: '8px', paddingLeft: '16px', maxHeight: '200px', overflowY: 'auto' }}>
-                              {acc8sWithPKOrShot8s
-                                .map((acc8sEntry: any) => {
-                                  const acc8sTimeRaw = acc8sEntry.videoTimestampRaw;
-                                  const timeWindowEnd = acc8sTimeRaw + 8;
-                                  
-                                  // Znajdź wejścia w PK w przedziale 8s (używamy videoTimestampRaw, jeśli nie ma, użyj videoTimestamp + 10s)
-                                  const nearbyPKEntries = pkEntriesWithTimestamp.filter((pkEntry: any) => {
-                                    let pkTime: number | null = null;
-                                    if (pkEntry.videoTimestampRaw !== undefined && pkEntry.videoTimestampRaw !== null) {
-                                      pkTime = pkEntry.videoTimestampRaw;
-                                    } else if (pkEntry.videoTimestamp !== undefined && pkEntry.videoTimestamp !== null) {
-                                      pkTime = pkEntry.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
-                                    }
-                                    if (pkTime === null) return false;
-                                    return pkTime >= acc8sTimeRaw && pkTime <= timeWindowEnd;
-                                  });
-                                  
-                                  // Znajdź strzały w przedziale 8s (używamy videoTimestampRaw, jeśli nie ma, użyj videoTimestamp + 10s)
-                                  const nearbyShots = shotsWithTimestamp.filter((shot: any) => {
-                                    let shotTime: number | null = null;
-                                    if (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null) {
-                                      shotTime = shot.videoTimestampRaw;
-                                    } else if (shot.videoTimestamp !== undefined && shot.videoTimestamp !== null) {
-                                      shotTime = shot.videoTimestamp + 10; // Dodaj 10s, bo videoTimestamp ma odjęte 10s
-                                    }
-                                    if (shotTime === null) return false;
-                                    return shotTime >= acc8sTimeRaw && shotTime <= timeWindowEnd;
-                                  });
-                                  
-                                  if (nearbyPKEntries.length === 0 && nearbyShots.length === 0) return null;
-                                  
-                                  const acc8sMinutes = Math.floor(acc8sTimeRaw / 60);
-                                  const acc8sSeconds = Math.floor(acc8sTimeRaw % 60);
-                                  const acc8sTimeString = `${acc8sMinutes}:${acc8sSeconds.toString().padStart(2, '0')}`;
-                                  
-                                  const eventStrings: string[] = [];
-                                  
-                                  if (nearbyPKEntries.length > 0) {
-                                    const pkTimes = nearbyPKEntries.map((pkEntry: any) => {
-                                      const pkTime = pkEntry.videoTimestampRaw !== undefined && pkEntry.videoTimestampRaw !== null
-                                        ? pkEntry.videoTimestampRaw
-                                        : pkEntry.videoTimestamp + 10;
-                                      const pkMinutes = Math.floor(pkTime / 60);
-                                      const pkSeconds = Math.floor(pkTime % 60);
-                                      const pkTimeString = `${pkMinutes}:${pkSeconds.toString().padStart(2, '0')}`;
-                                      const diff = Math.floor(pkTime - acc8sTimeRaw);
-                                      return `${pkTimeString} (+${diff}s)`;
-                                    });
-                                    eventStrings.push(`PK: ${pkTimes.join(', ')}`);
-                                  }
-                                  
-                                  if (nearbyShots.length > 0) {
-                                    const shotTimes = nearbyShots.map((shot: any) => {
-                                      const shotTime = shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null
-                                        ? shot.videoTimestampRaw
-                                        : shot.videoTimestamp + 10;
-                                      const shotMinutes = Math.floor(shotTime / 60);
-                                      const shotSeconds = Math.floor(shotTime % 60);
-                                      const shotTimeString = `${shotMinutes}:${shotSeconds.toString().padStart(2, '0')}`;
-                                      const diff = Math.floor(shotTime - acc8sTimeRaw);
-                                      return `${shotTimeString} (+${diff}s)`;
-                                    });
-                                    eventStrings.push(`Strzał: ${shotTimes.join(', ')}`);
-                                  }
-                                  
-                                  return (
-                                    <div key={acc8sEntry.id} style={{ padding: '4px 0', fontSize: '13px', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
-                                      <span>{acc8sTimeString}</span>
-                                      <span style={{ color: '#2196f3', marginLeft: '16px' }}>→ {eventStrings.join(', ')}</span>
-                                    </div>
-                                  );
-                                })
-                                .filter(Boolean)}
+                        
+                        {/* Sekcja KPI 8s ACC po prawej stronie */}
+                        <div style={{ flex: '1 1 50%', minWidth: 0 }}>
+                          <div className={styles.detailsSection} style={{ marginTop: '0' }}>
+                        
+                        {/* Kafelki statystyk */}
+                        <div className={styles.statsTiles}>
+                          {(() => {
+                            const isPKOpponentBad = opponentPKEntriesCount > kpiPKEntries;
+                            const isLosesPMAreaBad = losesInPMAreaCount >= kpiLosesPMAreaCount;
+                            const isXGPerShotGood = teamXGPerShot >= kpiXGPerShot;
+                            const is8sAccGood = shotAndPK8sPercentage >= target8sAcc;
+                            const isReaction5sGood = reaction5sPercentage >= kpiReaction5s;
+                            const isRegainsOpponentHalfGood = teamRegainStats.totalRegainsOpponentHalf >= kpiRegainsOpponentHalf;
+                            const isRegainsPPToPKShot8sGood = regainsPPToPKShot8sPercentage >= kpiRegainsPPToPKShot8s;
+
+                            const pkDelta = opponentPKEntriesCount - kpiPKEntries;
+                            const xgPerShotDelta = kpiXGPerShot - teamXGPerShot;
+                            const losesPmDelta = losesInPMAreaCount - kpiLosesPMAreaCount;
+                            const accDelta = target8sAcc - shotAndPK8sPercentage;
+                            const reactionDelta = kpiReaction5s - reaction5sPercentage;
+                            const regainsOpponentHalfDelta = kpiRegainsOpponentHalf - teamRegainStats.totalRegainsOpponentHalf;
+                            const regainsPPToPKShot8sDelta = kpiRegainsPPToPKShot8s - regainsPPToPKShot8sPercentage;
+
+                            return (
+                              <>
+                          <div className={`${styles.statTile} ${is8sAccGood ? styles.statTileGood : styles.statTileBad}`}>
+                            <div className={styles.statTileLabel}>8s ACC</div>
+                            <div className={styles.statTileValue}>
+                              {shotAndPK8sPercentage.toFixed(1)}%
+                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                                {accDelta > 0 ? `(-${accDelta.toFixed(1)}%)` : `(+${Math.abs(accDelta).toFixed(1)}%)`}
+                              </span>
                             </div>
-                          </details>
-                        )}
-
-                        {/* Posiadanie piłki w meczu i połowach + czas martwy */}
-                        {selectedMatchInfo.matchData?.possession && (() => {
-                          const possession = selectedMatchInfo.matchData!.possession!;
-                          const teamName = selectedMatchInfo.team ? (availableTeams.find(t => t.id === selectedMatchInfo.team)?.name || 'Nasz zespół') : 'Nasz zespół';
-                          const opponentName = selectedMatchInfo.opponent || 'Przeciwnik';
-                          const teamFirstHalf = possession.teamFirstHalf || 0;
-                          const oppFirstHalf = possession.opponentFirstHalf || 0;
-                          const teamSecondHalf = possession.teamSecondHalf || 0;
-                          const oppSecondHalf = possession.opponentSecondHalf || 0;
-
-                          const sumFirst = teamFirstHalf + oppFirstHalf;
-                          const sumSecond = teamSecondHalf + oppSecondHalf;
-
-                          // Zakładamy minimalnie 45 minut na połowę; jeśli zmierzone posiadanie jest większe, długość połowy dopasowujemy do sumy
-                          const firstHalfDuration = sumFirst > 0 ? Math.max(45, sumFirst) : 45;
-                          const secondHalfDuration = sumSecond > 0 ? Math.max(45, sumSecond) : 45;
-                          const matchDuration = firstHalfDuration + secondHalfDuration;
-
-                          const deadFirst = Math.max(0, firstHalfDuration - sumFirst);
-                          const deadSecond = Math.max(0, secondHalfDuration - sumSecond);
-                          const deadTotal = deadFirst + deadSecond;
-
-                          const teamTotal = teamFirstHalf + teamSecondHalf;
-                          const oppTotal = oppFirstHalf + oppSecondHalf;
-
-                          const teamMatchPerc = matchDuration > 0 ? (teamTotal / matchDuration) * 100 : 0;
-                          const oppMatchPerc = matchDuration > 0 ? (oppTotal / matchDuration) * 100 : 0;
-                          const deadMatchPerc = matchDuration > 0 ? (deadTotal / matchDuration) * 100 : 0;
-
-                          const teamFirstPerc = firstHalfDuration > 0 ? (teamFirstHalf / firstHalfDuration) * 100 : 0;
-                          const oppFirstPerc = firstHalfDuration > 0 ? (oppFirstHalf / firstHalfDuration) * 100 : 0;
-                          const deadFirstPerc = firstHalfDuration > 0 ? (deadFirst / firstHalfDuration) * 100 : 0;
-
-                          const teamSecondPerc = secondHalfDuration > 0 ? (teamSecondHalf / secondHalfDuration) * 100 : 0;
-                          const oppSecondPerc = secondHalfDuration > 0 ? (oppSecondHalf / secondHalfDuration) * 100 : 0;
-                          const deadSecondPerc = secondHalfDuration > 0 ? (deadSecond / secondHalfDuration) * 100 : 0;
-
-                          const minutesToMMSS = (minutes: number): string => {
-                            if (!Number.isFinite(minutes) || minutes <= 0) return '0:00';
-                            const totalSeconds = Math.round(minutes * 60);
-                            const mins = Math.floor(totalSeconds / 60);
-                            const secs = totalSeconds % 60;
-                            return `${mins}:${secs.toString().padStart(2, '0')}`;
-                          };
-
-                          return (
-                            <>
-                              <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>Posiadanie:</span>
-                                <span className={styles.detailsValue}>
-                                  <span className={styles.valueMain}>
-                                    <strong>
-                                      {teamName}: mecz {teamMatchPerc.toFixed(1)}% ({minutesToMMSS(teamTotal)}), P1 {teamFirstPerc.toFixed(1)}% ({minutesToMMSS(teamFirstHalf)}), P2 {teamSecondPerc.toFixed(1)}% ({minutesToMMSS(teamSecondHalf)})
-                                    </strong>
-                                  </span>
-                                </span>
-                              </div>
-                              <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>{opponentName}:</span>
-                                <span className={styles.detailsValue}>
-                                  <span className={styles.valueMain}>
-                                    mecz {oppMatchPerc.toFixed(1)}% ({minutesToMMSS(oppTotal)}), P1 {oppFirstPerc.toFixed(1)}% ({minutesToMMSS(oppFirstHalf)}), P2 {oppSecondPerc.toFixed(1)}% ({minutesToMMSS(oppSecondHalf)})
-                                  </span>
-                                </span>
-                              </div>
-                              <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>Czas martwy:</span>
-                                <span className={styles.detailsValue}>
-                                  <span className={styles.valueMain}>
-                                    mecz {minutesToMMSS(deadTotal)} ({deadMatchPerc.toFixed(1)}%), P1 {minutesToMMSS(deadFirst)} ({deadFirstPerc.toFixed(1)}%), P2 {minutesToMMSS(deadSecond)} ({deadSecondPerc.toFixed(1)}%)
-                                  </span>
-                                </span>
-                              </div>
-                            </>
-                          );
-                        })()}
+                            <div className={styles.statTileSecondary}>
+                              {shotAndPK8sCount}/{total8sAcc} • KPI ≥ {target8sAcc}%
+                            </div>
+                          </div>
+                          <div className={`${styles.statTile} ${isXGPerShotGood ? styles.statTileGood : styles.statTileBad}`}>
+                            <div className={styles.statTileLabel}>xG/strzał</div>
+                            <div className={styles.statTileValue}>
+                              {teamXGPerShot.toFixed(2)}
+                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                                {xgPerShotDelta > 0 ? `(-${xgPerShotDelta.toFixed(2)})` : `(+${Math.abs(xgPerShotDelta).toFixed(2)})`}
+                              </span>
+                            </div>
+                            <div className={styles.statTileSecondary}>
+                              {teamShotsCount} strzałów • KPI &gt; {kpiXGPerShot.toFixed(2)}
+                            </div>
+                          </div>
+                          <div className={`${styles.statTile} ${isPKOpponentBad ? styles.statTileBad : styles.statTileGood}`}>
+                            <div className={styles.statTileLabel}>PK przeciwnik</div>
+                            <div className={styles.statTileValue}>
+                              {opponentPKEntriesCount}
+                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                                {pkDelta > 0 ? `(+${pkDelta})` : `(-${Math.abs(pkDelta)})`}
+                              </span>
+                            </div>
+                            <div className={styles.statTileSecondary}>
+                              KPI &lt; {kpiPKEntries}
+                            </div>
+                          </div>
+                          <div className={`${styles.statTile} ${isReaction5sGood ? styles.statTileGood : styles.statTileBad}`}>
+                            <div className={styles.statTileLabel}>5s (counterpressing)</div>
+                            <div className={styles.statTileValue}>
+                              {reaction5sPercentage.toFixed(1)}%
+                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                                {reactionDelta > 0 ? `(-${reactionDelta.toFixed(1)}%)` : `(+${Math.abs(reactionDelta).toFixed(1)}%)`}
+                              </span>
+                            </div>
+                            <div className={styles.statTileSecondary}>
+                              {reaction5sLoses.length}/{losesExcludingNotApplicableAndAut.length} • KPI &gt; {kpiReaction5s}%
+                            </div>
+                          </div>
+                          <div className={`${styles.statTile} ${isLosesPMAreaBad ? styles.statTileBad : styles.statTileGood}`}>
+                            <div className={styles.statTileLabel}>PM Area straty</div>
+                            <div className={styles.statTileValue}>
+                              {losesInPMAreaCount}
+                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                                {losesPmDelta >= 0 ? `(+${losesPmDelta})` : `(-${Math.abs(losesPmDelta)})`}
+                              </span>
+                            </div>
+                            <div className={styles.statTileSecondary}>
+                              {losesInPMAreaPercentage.toFixed(1)}% ({losesInPMAreaCount}/{allLoses.length}) • KPI ≤ {kpiLosesPMAreaCount}
+                            </div>
+                          </div>
+                          <div className={`${styles.statTile} ${isRegainsOpponentHalfGood ? styles.statTileGood : styles.statTileBad}`}>
+                            <div className={styles.statTileLabel}>Przechwyty PP</div>
+                            <div className={styles.statTileValue}>
+                              {teamRegainStats.totalRegainsOpponentHalf}
+                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                                {regainsOpponentHalfDelta > 0 ? `(-${regainsOpponentHalfDelta})` : `(+${Math.abs(regainsOpponentHalfDelta)})`}
+                              </span>
+                            </div>
+                            <div className={styles.statTileSecondary}>
+                              KPI ≥ {kpiRegainsOpponentHalf}
+                            </div>
+                          </div>
+                          <div className={`${styles.statTile} ${isRegainsPPToPKShot8sGood ? styles.statTileGood : styles.statTileBad}`}>
+                            <div className={styles.statTileLabel}>8s CA</div>
+                            <div className={styles.statTileValue}>
+                              {regainsPPToPKShot8sPercentage.toFixed(1)}%
+                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                                {regainsPPToPKShot8sDelta > 0 ? `(-${regainsPPToPKShot8sDelta.toFixed(1)}%)` : `(+${Math.abs(regainsPPToPKShot8sDelta).toFixed(1)}%)`}
+                              </span>
+                            </div>
+                            <div className={styles.statTileSecondary}>
+                              {regainsPPWithPKOrShot8s}/{regainsOnOpponentHalfWithTimestamp.length} • KPI ≥ {kpiRegainsPPToPKShot8s}%
+                            </div>
+                          </div>
+                              </>
+                            );
+                          })()}
+                          </div>
+                        </div>
+                      </div>
                       </div>
                     </div>
                   );
@@ -4807,160 +5109,78 @@ export default function StatystykiZespoluPage() {
                         <>
                           {/* Statystyki xG */}
                           <div className={styles.xgStatsSummary}>
-                            <div className={styles.xgComparisonTable}>
-                              {/* Nagłówek tabeli */}
-                              <div className={styles.xgTableHeaderRow}>
-                                <div className={styles.xgTableHeaderCell}></div>
-                                <div 
-                                  className={`${styles.xgTableHeaderCell} ${styles.tooltipTrigger}`}
-                                  data-tooltip="xG bez karnych"
-                                >
-                                  NP xG
-                                </div>
-                                <div className={styles.xgTableHeaderCell}>xG</div>
-                                <div 
-                                  className={`${styles.xgTableHeaderCell} ${styles.tooltipTrigger}`}
-                                  data-tooltip={`KPI: ${XG_PER_SHOT_KPI.toFixed(2)}`}
-                                >
-                                  xG/strzał
-                                </div>
-                                <div className={styles.xgTableHeaderCell}>
-                                  xG OT
-                                  <div className={styles.xgTableHeaderSubtext}>
-                                    ({teamShotsOnTarget.length}/{teamShotsCount} / {opponentShotsOnTarget.length}/{opponentShotsCount})
-                                  </div>
-                                </div>
-                                <div className={styles.xgTableHeaderCell}>xG/min posiadania</div>
-                                <div className={styles.xgTableHeaderCell}>Różnica xG-Bramki</div>
-                                <div 
-                                  className={`${styles.xgTableHeaderCell} ${styles.tooltipTrigger}`}
-                                  data-tooltip="xG, które przeciwnik zablokował"
-                                >
-                                  xG zablokowane
-                                </div>
-                                <div 
-                                  className={`${styles.xgTableHeaderCell} ${styles.tooltipTrigger}`}
-                                  data-tooltip="Średnia liczba przeciwników na linii strzału"
-                                >
-                                  Zawodnicy na linii/strzał
-                                </div>
+                            <div className={styles.detailsSection}>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>NP XG:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}>{teamXGNoPenalty.toFixed(2)}</span>
+                                  <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGNoPenalty.toFixed(2)}</span>
+                                </span>
                               </div>
-                              
-                              {/* Wiersz zespołu */}
-                              <div className={styles.xgTableDataRow}>
-                                <div className={styles.xgTableTeamCell}>
-                                  {availableTeams.find(t => t.id === selectedTeam)?.name || 'ZESPÓŁ'}
-                                </div>
-                                <div className={styles.xgTableValueCell}>{teamXGNoPenalty.toFixed(2)}</div>
-                                <div className={styles.xgTableValueCell}>{teamXG.toFixed(2)}</div>
-                                <div 
-                                  className={styles.xgTableValueCell}
-                                  style={{
-                                    color: teamXGPerShotValue >= XG_PER_SHOT_KPI ? '#10b981' : '#ef4444'
-                                  }}
-                                >
-                                  {teamXGPerShot}
-                                </div>
-                                <div className={styles.xgTableValueCell}>{teamXGOT.toFixed(2)}</div>
-                                <div className={styles.xgTableValueCell}>{teamXGPerMinPossession.toFixed(3)}</div>
-                                <div 
-                                  className={styles.xgTableValueCell}
-                                  style={{
-                                    color: teamXGDiff > 0 ? '#10b981' : teamXGDiff < 0 ? '#ef4444' : '#6b7280'
-                                  }}
-                                >
-                                  {teamXGDiff > 0 ? '+' : ''}{teamXGDiff.toFixed(2)}
-                                </div>
-                                <div className={styles.xgTableValueCell}>{teamXGBlocked.toFixed(2)}</div>
-                                <div className={styles.xgTableValueCell}>{teamAvgLinePlayers.toFixed(1)}</div>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>XG:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}>{teamXG.toFixed(2)}</span>
+                                  <span className={styles.valueSecondary}> • Przeciwnik: {opponentXG.toFixed(2)}</span>
+                                </span>
                               </div>
-                              
-                              {/* Wiersz przeciwnika */}
-                              <div className={styles.xgTableDataRow}>
-                                <div className={styles.xgTableTeamCell}>PRZECIWNIK</div>
-                                <div className={styles.xgTableValueCell}>{opponentXGNoPenalty.toFixed(2)}</div>
-                                <div className={styles.xgTableValueCell}>{opponentXG.toFixed(2)}</div>
-                                <div 
-                                  className={styles.xgTableValueCell}
-                                  style={{
-                                    color: opponentXGPerShotValue >= XG_PER_SHOT_KPI ? '#10b981' : '#ef4444'
-                                  }}
-                                >
-                                  {opponentXGPerShot}
-                                </div>
-                                <div className={styles.xgTableValueCell}>{opponentXGOT.toFixed(2)}</div>
-                                <div className={styles.xgTableValueCell}>{opponentXGPerMinPossession.toFixed(3)}</div>
-                                <div 
-                                  className={styles.xgTableValueCell}
-                                  style={{
-                                    color: opponentXGDiff > 0 ? '#10b981' : opponentXGDiff < 0 ? '#ef4444' : '#6b7280'
-                                  }}
-                                >
-                                  {opponentXGDiff > 0 ? '+' : ''}{opponentXGDiff.toFixed(2)}
-                                </div>
-                                <div className={styles.xgTableValueCell}>{opponentXGBlocked.toFixed(2)}</div>
-                                <div className={styles.xgTableValueCell}>{opponentAvgLinePlayers.toFixed(1)}</div>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>XG/STRZAŁ:</span>
+                                <span className={styles.detailsValue}>
+                                  <span 
+                                    className={styles.valueMain}
+                                    style={{
+                                      color: teamXGPerShotValue >= XG_PER_SHOT_KPI ? '#10b981' : '#ef4444'
+                                    }}
+                                  >
+                                    {teamXGPerShot}
+                                  </span>
+                                  <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGPerShot}</span>
+                                  <span className={styles.valueSecondary}> • KPI: {XG_PER_SHOT_KPI.toFixed(2)}</span>
+                                </span>
                               </div>
-                              
-                              {/* Wiersz różnic */}
-                              <div className={styles.xgTableDataRow}>
-                                <div className={styles.xgTableTeamCell}>RÓŻNICA</div>
-                                <div 
-                                  className={styles.xgTableValueCell}
-                                  style={{
-                                    color: teamXG > opponentXG ? '#10b981' : teamXG < opponentXG ? '#ef4444' : '#6b7280'
-                                  }}
-                                >
-                                  {teamXG > opponentXG ? '+' : ''}{(teamXG - opponentXG).toFixed(2)}
-                                </div>
-                                <div 
-                                  className={styles.xgTableValueCell}
-                                  style={{
-                                    color: teamXGPerShotValue > opponentXGPerShotValue ? '#10b981' : teamXGPerShotValue < opponentXGPerShotValue ? '#ef4444' : '#6b7280'
-                                  }}
-                                >
-                                  {teamXGPerShotValue > opponentXGPerShotValue ? '+' : ''}{(teamXGPerShotValue - opponentXGPerShotValue).toFixed(2)}
-                                </div>
-                                <div 
-                                  className={styles.xgTableValueCell}
-                                  style={{
-                                    color: teamXGOT > opponentXGOT ? '#10b981' : teamXGOT < opponentXGOT ? '#ef4444' : '#6b7280'
-                                  }}
-                                >
-                                  {teamXGOT > opponentXGOT ? '+' : ''}{(teamXGOT - opponentXGOT).toFixed(2)}
-                                </div>
-                                <div 
-                                  className={styles.xgTableValueCell}
-                                  style={{
-                                    color: teamXGPerMinPossession > opponentXGPerMinPossession ? '#10b981' : teamXGPerMinPossession < opponentXGPerMinPossession ? '#ef4444' : '#6b7280'
-                                  }}
-                                >
-                                  {teamXGPerMinPossession > opponentXGPerMinPossession ? '+' : ''}{(teamXGPerMinPossession - opponentXGPerMinPossession).toFixed(3)}
-                                </div>
-                                <div 
-                                  className={styles.xgTableValueCell}
-                                  style={{
-                                    color: teamXGDiff > opponentXGDiff ? '#10b981' : teamXGDiff < opponentXGDiff ? '#ef4444' : '#6b7280'
-                                  }}
-                                >
-                                  {teamXGDiff > opponentXGDiff ? '+' : ''}{(teamXGDiff - opponentXGDiff).toFixed(2)}
-                                </div>
-                                <div 
-                                  className={styles.xgTableValueCell}
-                                  style={{
-                                    color: teamXGBlocked > opponentXGBlocked ? '#10b981' : teamXGBlocked < opponentXGBlocked ? '#ef4444' : '#6b7280'
-                                  }}
-                                >
-                                  {teamXGBlocked > opponentXGBlocked ? '+' : ''}{(teamXGBlocked - opponentXGBlocked).toFixed(2)}
-                                </div>
-                                <div 
-                                  className={styles.xgTableValueCell}
-                                  style={{
-                                    color: teamAvgLinePlayers > opponentAvgLinePlayers ? '#10b981' : teamAvgLinePlayers < opponentAvgLinePlayers ? '#ef4444' : '#6b7280'
-                                  }}
-                                >
-                                  {teamAvgLinePlayers > opponentAvgLinePlayers ? '+' : ''}{(teamAvgLinePlayers - opponentAvgLinePlayers).toFixed(1)}
-                                </div>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>XG OT:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}>{teamXGOT.toFixed(2)}</span>
+                                  <span className={styles.valueSecondary}> ({teamShotsOnTarget.length}/{teamShotsCount})</span>
+                                  <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGOT.toFixed(2)} ({opponentShotsOnTarget.length}/{opponentShotsCount})</span>
+                                </span>
+                              </div>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>XG/MIN POSIADANIA:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}>{teamXGPerMinPossession.toFixed(3)}</span>
+                                  <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGPerMinPossession.toFixed(3)}</span>
+                                </span>
+                              </div>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>RÓŻNICA XG-BRAMKI:</span>
+                                <span className={styles.detailsValue}>
+                                  <span 
+                                    className={styles.valueMain}
+                                    style={{
+                                      color: teamXGDiff > 0 ? '#10b981' : teamXGDiff < 0 ? '#ef4444' : '#6b7280'
+                                    }}
+                                  >
+                                    {teamXGDiff > 0 ? '+' : ''}{teamXGDiff.toFixed(2)}
+                                  </span>
+                                  <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGDiff > 0 ? '+' : ''}{opponentXGDiff.toFixed(2)}</span>
+                                </span>
+                              </div>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>XG ZABLOKOWANE:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}>{teamXGBlocked.toFixed(2)}</span>
+                                  <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGBlocked.toFixed(2)}</span>
+                                </span>
+                              </div>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>ZAWODNICY NA LINII/STRZAŁ:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}>{teamAvgLinePlayers.toFixed(1)}</span>
+                                  <span className={styles.valueSecondary}> • Przeciwnik: {opponentAvgLinePlayers.toFixed(1)}</span>
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -4969,9 +5189,9 @@ export default function StatystykiZespoluPage() {
                     })()}
                     
                     <div className={styles.xgPitchContainer}>
-                    <div className={styles.xgPitchWrapper}>
-                      <XGPitch
-                        shots={(() => {
+                      <div className={styles.xgPitchWrapper}>
+                        <XGPitch
+                          shots={(() => {
                           // Najpierw filtruj według połowy
                           let filteredByHalf = allShots;
                           if (xgHalf === 'first') {
@@ -4981,13 +5201,10 @@ export default function StatystykiZespoluPage() {
                           }
                           
                           // Następnie filtruj według kategorii
-                          if (xgFilter === 'all') {
-                            return filteredByHalf;
-                          } else if (xgFilter === 'sfg') {
-                            return filteredByHalf.filter(shot => {
-                              // Sprawdź actionCategory jeśli jest dostępne
+                          let filteredByCategory = filteredByHalf;
+                          if (xgFilter === 'sfg') {
+                            filteredByCategory = filteredByHalf.filter(shot => {
                               if ((shot as any).actionCategory === 'sfg') return true;
-                              // W przeciwnym razie sprawdź actionType
                               return shot.actionType === 'corner' || 
                                      shot.actionType === 'free_kick' || 
                                      shot.actionType === 'direct_free_kick' || 
@@ -4995,24 +5212,158 @@ export default function StatystykiZespoluPage() {
                                      shot.actionType === 'throw_in';
                             });
                           } else if (xgFilter === 'open_play') {
-                            return filteredByHalf.filter(shot => {
-                              // Sprawdź actionCategory jeśli jest dostępne
+                            filteredByCategory = filteredByHalf.filter(shot => {
                               if ((shot as any).actionCategory === 'open_play') return true;
-                              // W przeciwnym razie sprawdź actionType
                               return shot.actionType === 'open_play' || 
                                      shot.actionType === 'counter' || 
                                      shot.actionType === 'regain';
                             });
                           }
-                          return filteredByHalf;
+                          
+                          // Filtruj według filtrów mapy
+                          return filteredByCategory.filter(shot => {
+                            // Filtr części ciała
+                            if (xgMapFilters.bodyPart !== 'all' && shot.bodyPart !== xgMapFilters.bodyPart) {
+                              return false;
+                            }
+                            
+                            // Sprawdź czy wszystkie filtry typu są wyłączone
+                            const allTypeFiltersOff = !xgMapFilters.sfg && !xgMapFilters.regain && !xgMapFilters.goal && !xgMapFilters.blocked && !xgMapFilters.onTarget;
+                            
+                            // Jeśli wszystkie filtry typu są wyłączone, pokazuj wszystko
+                            if (allTypeFiltersOff) {
+                              return true;
+                            }
+                            
+                            // Sprawdź czy strzał pasuje do PRZYNAJMNIEJ JEDNEGO włączonego filtra typu
+                            let matchesAnyFilter = false;
+                            
+                            // Filtr SFG
+                            if (xgMapFilters.sfg) {
+                              const isSFG = (shot as any).actionCategory === 'sfg' ||
+                                           shot.actionType === 'corner' ||
+                                           shot.actionType === 'free_kick' ||
+                                           shot.actionType === 'direct_free_kick' ||
+                                           shot.actionType === 'penalty' ||
+                                           shot.actionType === 'throw_in';
+                              if (isSFG) matchesAnyFilter = true;
+                            }
+                            
+                            // Filtr Regain
+                            if (xgMapFilters.regain && shot.actionType === 'regain') {
+                              matchesAnyFilter = true;
+                            }
+                            
+                            // Filtr Gol
+                            if (xgMapFilters.goal && shot.isGoal) {
+                              matchesAnyFilter = true;
+                            }
+                            
+                            // Filtr Zablokowane
+                            if (xgMapFilters.blocked && shot.shotType === 'blocked') {
+                              matchesAnyFilter = true;
+                            }
+                            
+                            // Filtr Celne
+                            if (xgMapFilters.onTarget && (shot.shotType === 'on_target' || shot.shotType === 'goal')) {
+                              matchesAnyFilter = true;
+                            }
+                            
+                            // Jeśli żaden z włączonych filtrów nie pasuje, ale są też inne typy strzałów
+                            // (np. off_target, counter, open_play bez regain), pokazuj je tylko jeśli wszystkie filtry są wyłączone
+                            if (!matchesAnyFilter) {
+                              // Sprawdź czy to jest strzał, który nie pasuje do żadnego z włączonych filtrów
+                              const isOffTarget = shot.shotType === 'off_target';
+                              const isOpenPlay = shot.actionType === 'open_play' || shot.actionType === 'counter';
+                              const isOtherType = isOffTarget || (isOpenPlay && shot.actionType !== 'regain');
+                              
+                              // Jeśli to inny typ strzału i wszystkie filtry są wyłączone, pokazuj
+                              if (isOtherType && allTypeFiltersOff) {
+                                return true;
+                              }
+                              
+                              // W przeciwnym razie ukryj
+                              return false;
+                            }
+                            
+                            return true;
+                          });
                         })()}
                         onShotAdd={() => {}}
-                          onShotClick={(shot) => setSelectedShot(shot)}
-                          selectedShotId={selectedShot?.id}
+                        onShotClick={(shot) => setSelectedShot(shot)}
+                        selectedShotId={selectedShot?.id}
                         matchInfo={selectedMatchInfo}
                         allTeams={availableTeams}
-                          hideToggleButton={true}
-                        />
+                        hideToggleButton={true}
+                      />
+                      
+                      {/* Filtry na mapie - pod mapą */}
+                      <div className={styles.xgMapFilters}>
+                        <div className={styles.xgMapFilterGroup}>
+                          <span className={styles.xgMapFilterLabel}>Część ciała:</span>
+                          <div className={styles.xgMapFilterButtons}>
+                            <button
+                              className={`${styles.xgMapFilterButton} ${xgMapFilters.bodyPart === 'all' ? styles.active : ''}`}
+                              onClick={() => setXgMapFilters(prev => ({ ...prev, bodyPart: 'all' }))}
+                            >
+                              Wszystkie
+                            </button>
+                            <button
+                              className={`${styles.xgMapFilterButton} ${xgMapFilters.bodyPart === 'foot' ? styles.active : ''}`}
+                              onClick={() => setXgMapFilters(prev => ({ ...prev, bodyPart: 'foot' }))}
+                            >
+                              Stopa
+                            </button>
+                            <button
+                              className={`${styles.xgMapFilterButton} ${xgMapFilters.bodyPart === 'head' ? styles.active : ''}`}
+                              onClick={() => setXgMapFilters(prev => ({ ...prev, bodyPart: 'head' }))}
+                            >
+                              Głowa
+                            </button>
+                            <button
+                              className={`${styles.xgMapFilterButton} ${xgMapFilters.bodyPart === 'other' ? styles.active : ''}`}
+                              onClick={() => setXgMapFilters(prev => ({ ...prev, bodyPart: 'other' }))}
+                            >
+                              Inne
+                            </button>
+                          </div>
+                        </div>
+                        <div className={styles.xgMapFilterGroup}>
+                          <span className={styles.xgMapFilterLabel}>Typ:</span>
+                          <div className={styles.xgMapFilterButtons}>
+                            <button
+                              className={`${styles.xgMapFilterButton} ${xgMapFilters.sfg ? styles.active : ''}`}
+                              onClick={() => setXgMapFilters(prev => ({ ...prev, sfg: !prev.sfg }))}
+                            >
+                              SFG
+                            </button>
+                            <button
+                              className={`${styles.xgMapFilterButton} ${xgMapFilters.regain ? styles.active : ''}`}
+                              onClick={() => setXgMapFilters(prev => ({ ...prev, regain: !prev.regain }))}
+                            >
+                              Regain
+                            </button>
+                            <button
+                              className={`${styles.xgMapFilterButton} ${xgMapFilters.goal ? styles.active : ''}`}
+                              onClick={() => setXgMapFilters(prev => ({ ...prev, goal: !prev.goal }))}
+                            >
+                              Gol
+                            </button>
+                            <button
+                              className={`${styles.xgMapFilterButton} ${xgMapFilters.blocked ? styles.active : ''}`}
+                              onClick={() => setXgMapFilters(prev => ({ ...prev, blocked: !prev.blocked }))}
+                            >
+                              Zablokowane
+                            </button>
+                            <button
+                              className={`${styles.xgMapFilterButton} ${xgMapFilters.onTarget ? styles.active : ''}`}
+                              onClick={() => setXgMapFilters(prev => ({ ...prev, onTarget: !prev.onTarget }))}
+                            >
+                              Celne
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                       </div>
                       
                       {/* Panel informacji o strzale */}
@@ -5715,8 +6066,13 @@ export default function StatystykiZespoluPage() {
                                     
                                     {/* Wejścia w PK - szczegóły (wszystkie - atak i obrona) */}
                                     {(() => {
-                                      // Filtruj wejścia w PK według wybranego okresu (WSZYSTKIE - atak i obrona)
+                                      // Filtruj wejścia w PK według wybranego okresu i meczu (WSZYSTKIE - atak i obrona)
                                       const filteredPKEntries = allPKEntries.filter((entry: any) => {
+                                        // Filtruj według meczu (teamId jest zawsze nasz zespół)
+                                        if (entry.teamId !== selectedTeam) {
+                                          return false;
+                                        }
+                                        // Filtruj według okresu
                                         if (matchDataPeriod === 'firstHalf') {
                                           return entry.minute <= 45;
                                         } else if (matchDataPeriod === 'secondHalf') {
@@ -5726,17 +6082,28 @@ export default function StatystykiZespoluPage() {
                                       });
                                       
                                       // Określ zespół wejścia w PK (wszystkie - atak i obrona)
+                                      // UWAGA: teamId jest zawsze nasz zespół (selectedTeam), nawet dla defense
+                                      // teamContext === 'attack' = nasze wejścia, teamContext === 'defense' = wejścia przeciwnika
+                                      // homePKEntries = wejścia gospodarza, awayPKEntries = wejścia gościa
                                       const homePKEntries = filteredPKEntries.filter((entry: any) => {
-                                        const entryTeamId = entry.teamId || (entry.teamContext === 'attack' 
-                                          ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
-                                          : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
-                                        return entryTeamId === (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent);
+                                        const teamContext = entry.teamContext ?? 'attack';
+                                        if (teamContext === 'attack') {
+                                          // Nasze wejścia - jeśli nasz zespół jest gospodarzem, to to są wejścia gospodarza
+                                          return isHome;
+                                        } else {
+                                          // Wejścia przeciwnika (defense) - jeśli nasz zespół jest gościem, to przeciwnik jest gospodarzem
+                                          return !isHome;
+                                        }
                                       });
                                       const awayPKEntries = filteredPKEntries.filter((entry: any) => {
-                                        const entryTeamId = entry.teamId || (entry.teamContext === 'attack' 
-                                          ? (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
-                                          : (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
-                                        return entryTeamId === (isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team);
+                                        const teamContext = entry.teamContext ?? 'attack';
+                                        if (teamContext === 'attack') {
+                                          // Nasze wejścia - jeśli nasz zespół jest gościem, to to są wejścia gościa
+                                          return !isHome;
+                                        } else {
+                                          // Wejścia przeciwnika (defense) - jeśli nasz zespół jest gospodarzem, to przeciwnik jest gościem
+                                          return isHome;
+                                        }
                                       });
                                       
                                       // Podania (wszystkie - atak i obrona)
@@ -5889,8 +6256,13 @@ export default function StatystykiZespoluPage() {
                           
                           {/* Wejścia w PK - liczba (tylko w ataku) */}
                           {(() => {
-                            // Filtruj wejścia w PK według wybranego okresu
+                            // Filtruj wejścia w PK według wybranego okresu i meczu
                             const filteredPKEntries = allPKEntries.filter((entry: any) => {
+                              // Filtruj według meczu (teamId jest zawsze nasz zespół)
+                              if (entry.teamId !== selectedTeam) {
+                                return false;
+                              }
+                              // Filtruj według okresu
                               if (matchDataPeriod === 'firstHalf') {
                                 return entry.minute <= 45;
                               } else if (matchDataPeriod === 'secondHalf') {
@@ -5900,31 +6272,26 @@ export default function StatystykiZespoluPage() {
                             });
                             
                             // Wejścia w ataku dla gospodarza (nasze wejścia w ataku)
+                            // UWAGA: teamId jest zawsze nasz zespół (selectedTeam), nawet dla defense
+                            // teamContext === 'attack' = nasze wejścia, teamContext === 'defense' = wejścia przeciwnika
                             const homePKEntriesAttack = filteredPKEntries.filter((entry: any) => {
-                              const entryTeamId = entry.teamId || (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent);
-                              const isHomeTeam = entryTeamId === (isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent);
-                              return isHomeTeam && (entry.teamContext ?? 'attack') === 'attack';
+                              const teamContext = entry.teamContext ?? 'attack';
+                              if (teamContext === 'attack') {
+                                // Nasze wejścia - jeśli nasz zespół jest gospodarzem, to to są wejścia gospodarza
+                                return isHome;
+                              }
+                              return false;
                             });
                             
                             // Wejścia w ataku dla gościa (wejścia przeciwnika w ataku = nasze wejścia w obronie)
-                            // Wejścia przeciwnika mogą być zapisane jako teamContext === 'defense' dla naszego zespołu
-                            // LUB teamContext === 'attack' dla przeciwnika
+                            // UWAGA: teamId jest zawsze nasz zespół (selectedTeam), nawet dla defense
+                            // teamContext === 'defense' = wejścia przeciwnika (czyli przeciwnik w ataku = nasze wejścia w obronie)
                             const awayPKEntriesAttack = filteredPKEntries.filter((entry: any) => {
-                              const entryTeamId = entry.teamId;
-                              const homeTeamId = isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent;
-                              const awayTeamId = isHome ? selectedMatchInfo.opponent : selectedMatchInfo.team;
                               const teamContext = entry.teamContext ?? 'attack';
-                              
-                              // Wejścia przeciwnika w ataku (teamContext === 'attack' dla przeciwnika)
-                              if (entryTeamId === awayTeamId && teamContext === 'attack') {
-                                return true;
+                              if (teamContext === 'defense') {
+                                // Wejścia przeciwnika (defense) - jeśli nasz zespół jest gospodarzem, to przeciwnik jest gościem
+                                return isHome;
                               }
-                              
-                              // Wejścia w obronie (teamContext === 'defense' dla naszego zespołu)
-                              if (entryTeamId === homeTeamId && teamContext === 'defense') {
-                                return true;
-                              }
-                              
                               return false;
                             });
                             
@@ -6916,21 +7283,27 @@ export default function StatystykiZespoluPage() {
           {/* Szczegółowe dane o punktach */}
           <div className={styles.actionCounts}>
             {(selectedActionType === 'pass' || selectedActionType === 'all') && (
-              <div className={styles.countItemsWrapper} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 300px) minmax(0, 1fr)', gap: '16px', alignItems: 'flex-start' }}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxWidth: '100%' }}>
-                  <div 
-                    className={`${styles.countItem} ${isFilterActive('p0start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p0start') ? styles.countItemDisabled : ''}`}
-                    onClick={() => {
-                      if (hasStartFilterSelected() && !isFilterActive('p0start')) return;
-                      setSelectedActionFilter(prev => {
-                        const filters = Array.isArray(prev) ? prev : [];
-                        const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
-                        if (filters.includes('p0start')) return withoutStartFilters;
-                        return [...withoutStartFilters, 'p0start'];
-                      });
-                    }}
-                  >
-                    <span className={styles.countLabel}>P0 Start:</span>
+              <div className={styles.countItemsWrapper} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(0, 0, 0, 0.7)', marginBottom: '4px' }}>Start akcji</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                    <div 
+                      className={`${styles.countItem} ${isFilterActive('p0start') ? styles.countItemSelected : ''} ${teamStats.senderP0StartCount === 0 ? styles.countItemDisabled : ''}`}
+                      onClick={() => {
+                        if (teamStats.senderP0StartCount === 0) return;
+                        setSelectedActionFilter(prev => {
+                          const filters = Array.isArray(prev) ? prev : [];
+                          // Radio behavior w obrębie sekcji Start: usuń wszystkie Start filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
+                          const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                          if (filters.includes('p0start')) {
+                            return withoutStartFilters; // Odznacz
+                          } else {
+                            return [...withoutStartFilters, 'p0start']; // Zaznacz
+                          }
+                        });
+                      }}
+                    >
+                      <span className={styles.countLabel}>P0 Start:</span>
                     <span className={styles.countValue}>{teamStats.senderP0StartCount}</span>
                     <div className={styles.zoneBreakdown}>
                       <span className={styles.zoneLabel}>Strefy boczne:</span>
@@ -6940,16 +7313,20 @@ export default function StatystykiZespoluPage() {
                     </div>
                   </div>
                   <div 
-                    className={`${styles.countItem} ${isFilterActive('p1start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p1start') ? styles.countItemDisabled : ''}`}
-                    onClick={() => {
-                      if (hasStartFilterSelected() && !isFilterActive('p1start')) return;
-                      setSelectedActionFilter(prev => {
-                        const filters = Array.isArray(prev) ? prev : [];
-                        const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
-                        if (filters.includes('p1start')) return withoutStartFilters;
-                        return [...withoutStartFilters, 'p1start'];
-                      });
-                    }}
+                    className={`${styles.countItem} ${isFilterActive('p1start') ? styles.countItemSelected : ''} ${teamStats.senderP1StartCount === 0 ? styles.countItemDisabled : ''}`}
+                      onClick={() => {
+                        if (teamStats.senderP1StartCount === 0) return;
+                        setSelectedActionFilter(prev => {
+                          const filters = Array.isArray(prev) ? prev : [];
+                          // Radio behavior w obrębie sekcji Start: usuń wszystkie Start filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
+                          const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                          if (filters.includes('p1start')) {
+                            return withoutStartFilters; // Odznacz
+                          } else {
+                            return [...withoutStartFilters, 'p1start']; // Zaznacz
+                          }
+                        });
+                      }}
                   >
                     <span className={styles.countLabel}>P1 Start:</span>
                     <span className={styles.countValue}>{teamStats.senderP1StartCount}</span>
@@ -6961,16 +7338,20 @@ export default function StatystykiZespoluPage() {
                     </div>
                   </div>
                   <div 
-                    className={`${styles.countItem} ${isFilterActive('p2start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p2start') ? styles.countItemDisabled : ''}`}
-                    onClick={() => {
-                      if (hasStartFilterSelected() && !isFilterActive('p2start')) return;
-                      setSelectedActionFilter(prev => {
-                        const filters = Array.isArray(prev) ? prev : [];
-                        const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
-                        if (filters.includes('p2start')) return withoutStartFilters;
-                        return [...withoutStartFilters, 'p2start'];
-                      });
-                    }}
+                    className={`${styles.countItem} ${isFilterActive('p2start') ? styles.countItemSelected : ''} ${teamStats.senderP2StartCount === 0 ? styles.countItemDisabled : ''}`}
+                      onClick={() => {
+                        if (teamStats.senderP2StartCount === 0) return;
+                        setSelectedActionFilter(prev => {
+                          const filters = Array.isArray(prev) ? prev : [];
+                          // Radio behavior w obrębie sekcji Start: usuń wszystkie Start filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
+                          const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                          if (filters.includes('p2start')) {
+                            return withoutStartFilters; // Odznacz
+                          } else {
+                            return [...withoutStartFilters, 'p2start']; // Zaznacz
+                          }
+                        });
+                      }}
                   >
                     <span className={styles.countLabel}>P2 Start:</span>
                     <span className={styles.countValue}>{teamStats.senderP2StartCount}</span>
@@ -6982,16 +7363,20 @@ export default function StatystykiZespoluPage() {
                     </div>
                   </div>
                   <div 
-                    className={`${styles.countItem} ${isFilterActive('p3start') ? styles.countItemSelected : ''} ${hasStartFilterSelected() && !isFilterActive('p3start') ? styles.countItemDisabled : ''}`}
-                    onClick={() => {
-                      if (hasStartFilterSelected() && !isFilterActive('p3start')) return;
-                      setSelectedActionFilter(prev => {
-                        const filters = Array.isArray(prev) ? prev : [];
-                        const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
-                        if (filters.includes('p3start')) return withoutStartFilters;
-                        return [...withoutStartFilters, 'p3start'];
-                      });
-                    }}
+                    className={`${styles.countItem} ${isFilterActive('p3start') ? styles.countItemSelected : ''} ${teamStats.senderP3StartCount === 0 ? styles.countItemDisabled : ''}`}
+                      onClick={() => {
+                        if (teamStats.senderP3StartCount === 0) return;
+                        setSelectedActionFilter(prev => {
+                          const filters = Array.isArray(prev) ? prev : [];
+                          // Radio behavior w obrębie sekcji Start: usuń wszystkie Start filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
+                          const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                          if (filters.includes('p3start')) {
+                            return withoutStartFilters; // Odznacz
+                          } else {
+                            return [...withoutStartFilters, 'p3start']; // Zaznacz
+                          }
+                        });
+                      }}
                   >
                     <span className={styles.countLabel}>P3 Start:</span>
                     <span className={styles.countValue}>{teamStats.senderP3StartCount}</span>
@@ -7002,102 +7387,177 @@ export default function StatystykiZespoluPage() {
                       <span className={styles.zoneValue}>{teamStats.senderP3StartCountCentral}</span>
                     </div>
                   </div>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', minWidth: 0 }}>
-                  <div 
-                    className={`${styles.countItem} ${isFilterActive('p1') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p1') ? styles.countItemDisabled : ''}`}
-                    onClick={() => {
-                      if (hasEndFilterSelected() && !isFilterActive('p1')) return;
-                      setSelectedActionFilter(prev => {
-                        const filters = Array.isArray(prev) ? prev : [];
-                        const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
-                        if (filters.includes('p1')) return withoutEndFilters;
-                        return [...withoutEndFilters, 'p1'];
-                      });
-                    }}
-                  >
-                    <span className={styles.countLabel}>P1:</span>
-                    <span className={styles.countValue}>
-                      {selectedActionType === 'all' ? teamStats.senderP1Count + teamStats.dribblingP1Count : teamStats.senderP1Count}
-                    </span>
-                    <div className={styles.zoneBreakdown}>
-                      <span className={styles.zoneLabel}>Strefy boczne:</span>
-                      <span className={styles.zoneValue}>
-                        {selectedActionType === 'all' ? teamStats.senderP1CountLateral + teamStats.dribblingP1CountLateral : teamStats.senderP1CountLateral}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(0, 0, 0, 0.7)', marginBottom: '4px' }}>Koniec akcji</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                    <div 
+                      className={`${styles.countItem} ${isFilterActive('p0') ? styles.countItemSelected : ''} ${(() => {
+                        const p0Value = selectedActionType === 'all' ? teamStats.senderP0Count + (teamStats.dribblingP0Count || 0) : teamStats.senderP0Count;
+                        return p0Value === 0 ? styles.countItemDisabled : '';
+                      })()}`}
+                      onClick={() => {
+                        const p0Value = selectedActionType === 'all' ? teamStats.senderP0Count + (teamStats.dribblingP0Count || 0) : teamStats.senderP0Count;
+                        if (p0Value === 0) return;
+                        setSelectedActionFilter(prev => {
+                          const filters = Array.isArray(prev) ? prev : [];
+                          // Radio behavior w obrębie sekcji Koniec: usuń wszystkie Koniec filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
+                          const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3'].includes(f));
+                          if (filters.includes('p0')) {
+                            return withoutEndFilters; // Odznacz
+                          } else {
+                            return [...withoutEndFilters, 'p0']; // Zaznacz
+                          }
+                        });
+                      }}
+                    >
+                      <span className={styles.countLabel}>P0:</span>
+                      <span className={styles.countValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP0Count + (teamStats.dribblingP0Count || 0) : teamStats.senderP0Count}
                       </span>
-                      <span className={styles.zoneLabel}>Strefy centralne:</span>
-                      <span className={styles.zoneValue}>
-                        {selectedActionType === 'all' ? teamStats.senderP1CountCentral + teamStats.dribblingP1CountCentral : teamStats.senderP1CountCentral}
+                      <div className={styles.zoneBreakdown}>
+                        <span className={styles.zoneLabel}>Strefy boczne:</span>
+                        <span className={styles.zoneValue}>
+                          {selectedActionType === 'all' ? teamStats.senderP0CountLateral + (teamStats.dribblingP0CountLateral || 0) : teamStats.senderP0CountLateral}
+                        </span>
+                        <span className={styles.zoneLabel}>Strefy centralne:</span>
+                        <span className={styles.zoneValue}>
+                          {selectedActionType === 'all' ? teamStats.senderP0CountCentral + (teamStats.dribblingP0CountCentral || 0) : teamStats.senderP0CountCentral}
+                        </span>
+                      </div>
+                    </div>
+                    <div 
+                      className={`${styles.countItem} ${isFilterActive('p1') ? styles.countItemSelected : ''} ${(() => {
+                        const p1Value = selectedActionType === 'all' ? teamStats.senderP1Count + teamStats.dribblingP1Count : teamStats.senderP1Count;
+                        return p1Value === 0 ? styles.countItemDisabled : '';
+                      })()}`}
+                      onClick={() => {
+                        const p1Value = selectedActionType === 'all' ? teamStats.senderP1Count + teamStats.dribblingP1Count : teamStats.senderP1Count;
+                        if (p1Value === 0) return;
+                        setSelectedActionFilter(prev => {
+                          const filters = Array.isArray(prev) ? prev : [];
+                          // Radio behavior w obrębie sekcji Koniec: usuń wszystkie Koniec filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
+                          const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3'].includes(f));
+                          if (filters.includes('p1')) {
+                            return withoutEndFilters; // Odznacz
+                          } else {
+                            return [...withoutEndFilters, 'p1']; // Zaznacz
+                          }
+                        });
+                      }}
+                    >
+                      <span className={styles.countLabel}>P1:</span>
+                      <span className={styles.countValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP1Count + teamStats.dribblingP1Count : teamStats.senderP1Count}
                       </span>
+                      <div className={styles.zoneBreakdown}>
+                        <span className={styles.zoneLabel}>Strefy boczne:</span>
+                        <span className={styles.zoneValue}>
+                          {selectedActionType === 'all' ? teamStats.senderP1CountLateral + teamStats.dribblingP1CountLateral : teamStats.senderP1CountLateral}
+                        </span>
+                        <span className={styles.zoneLabel}>Strefy centralne:</span>
+                        <span className={styles.zoneValue}>
+                          {selectedActionType === 'all' ? teamStats.senderP1CountCentral + teamStats.dribblingP1CountCentral : teamStats.senderP1CountCentral}
+                        </span>
+                      </div>
+                    </div>
+                    <div 
+                      className={`${styles.countItem} ${isFilterActive('p2') ? styles.countItemSelected : ''} ${(() => {
+                        const p2Value = selectedActionType === 'all' ? teamStats.senderP2Count + teamStats.dribblingP2Count : teamStats.senderP2Count;
+                        return p2Value === 0 ? styles.countItemDisabled : '';
+                      })()}`}
+                      onClick={() => {
+                        const p2Value = selectedActionType === 'all' ? teamStats.senderP2Count + teamStats.dribblingP2Count : teamStats.senderP2Count;
+                        if (p2Value === 0) return;
+                        setSelectedActionFilter(prev => {
+                          const filters = Array.isArray(prev) ? prev : [];
+                          // Radio behavior w obrębie sekcji Koniec: usuń wszystkie Koniec filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
+                          const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3'].includes(f));
+                          if (filters.includes('p2')) {
+                            return withoutEndFilters; // Odznacz
+                          } else {
+                            return [...withoutEndFilters, 'p2']; // Zaznacz
+                          }
+                        });
+                      }}
+                    >
+                      <span className={styles.countLabel}>P2:</span>
+                      <span className={styles.countValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP2Count + teamStats.dribblingP2Count : teamStats.senderP2Count}
+                      </span>
+                      <div className={styles.zoneBreakdown}>
+                        <span className={styles.zoneLabel}>Strefy boczne:</span>
+                        <span className={styles.zoneValue}>
+                          {selectedActionType === 'all' ? teamStats.senderP2CountLateral + teamStats.dribblingP2CountLateral : teamStats.senderP2CountLateral}
+                        </span>
+                        <span className={styles.zoneLabel}>Strefy centralne:</span>
+                        <span className={styles.zoneValue}>
+                          {selectedActionType === 'all' ? teamStats.senderP2CountCentral + teamStats.dribblingP2CountCentral : teamStats.senderP2CountCentral}
+                        </span>
+                      </div>
+                    </div>
+                    <div 
+                      className={`${styles.countItem} ${isFilterActive('p3') ? styles.countItemSelected : ''} ${(() => {
+                        const p3Value = selectedActionType === 'all' ? teamStats.senderP3Count + teamStats.dribblingP3Count : teamStats.senderP3Count;
+                        return p3Value === 0 ? styles.countItemDisabled : '';
+                      })()}`}
+                      onClick={() => {
+                        const p3Value = selectedActionType === 'all' ? teamStats.senderP3Count + teamStats.dribblingP3Count : teamStats.senderP3Count;
+                        if (p3Value === 0) return;
+                        setSelectedActionFilter(prev => {
+                          const filters = Array.isArray(prev) ? prev : [];
+                          // Radio behavior w obrębie sekcji Koniec: usuń wszystkie Koniec filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
+                          const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3'].includes(f));
+                          if (filters.includes('p3')) {
+                            return withoutEndFilters; // Odznacz
+                          } else {
+                            return [...withoutEndFilters, 'p3']; // Zaznacz
+                          }
+                        });
+                      }}
+                    >
+                      <span className={styles.countLabel}>P3:</span>
+                      <span className={styles.countValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP3Count + teamStats.dribblingP3Count : teamStats.senderP3Count}
+                      </span>
+                      <div className={styles.zoneBreakdown}>
+                        <span className={styles.zoneLabel}>Strefy boczne:</span>
+                        <span className={styles.zoneValue}>
+                          {selectedActionType === 'all' ? teamStats.senderP3CountLateral + teamStats.dribblingP3CountLateral : teamStats.senderP3CountLateral}
+                        </span>
+                        <span className={styles.zoneLabel}>Strefy centralne:</span>
+                        <span className={styles.zoneValue}>
+                          {selectedActionType === 'all' ? teamStats.senderP3CountCentral + teamStats.dribblingP3CountCentral : teamStats.senderP3CountCentral}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div 
-                    className={`${styles.countItem} ${isFilterActive('p2') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p2') ? styles.countItemDisabled : ''}`}
-                    onClick={() => {
-                      if (hasEndFilterSelected() && !isFilterActive('p2')) return;
-                      setSelectedActionFilter(prev => {
-                        const filters = Array.isArray(prev) ? prev : [];
-                        const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
-                        if (filters.includes('p2')) return withoutEndFilters;
-                        return [...withoutEndFilters, 'p2'];
-                      });
-                    }}
-                  >
-                    <span className={styles.countLabel}>P2:</span>
-                    <span className={styles.countValue}>
-                      {selectedActionType === 'all' ? teamStats.senderP2Count + teamStats.dribblingP2Count : teamStats.senderP2Count}
-                    </span>
-                    <div className={styles.zoneBreakdown}>
-                      <span className={styles.zoneLabel}>Strefy boczne:</span>
-                      <span className={styles.zoneValue}>
-                        {selectedActionType === 'all' ? teamStats.senderP2CountLateral + teamStats.dribblingP2CountLateral : teamStats.senderP2CountLateral}
-                      </span>
-                      <span className={styles.zoneLabel}>Strefy centralne:</span>
-                      <span className={styles.zoneValue}>
-                        {selectedActionType === 'all' ? teamStats.senderP2CountCentral + teamStats.dribblingP2CountCentral : teamStats.senderP2CountCentral}
-                      </span>
-                    </div>
-                  </div>
-                  <div 
-                    className={`${styles.countItem} ${isFilterActive('p3') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('p3') ? styles.countItemDisabled : ''}`}
-                    onClick={() => {
-                      if (hasEndFilterSelected() && !isFilterActive('p3')) return;
-                      setSelectedActionFilter(prev => {
-                        const filters = Array.isArray(prev) ? prev : [];
-                        const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
-                        if (filters.includes('p3')) return withoutEndFilters;
-                        return [...withoutEndFilters, 'p3'];
-                      });
-                    }}
-                  >
-                    <span className={styles.countLabel}>P3:</span>
-                    <span className={styles.countValue}>
-                      {selectedActionType === 'all' ? teamStats.senderP3Count + teamStats.dribblingP3Count : teamStats.senderP3Count}
-                    </span>
-                    <div className={styles.zoneBreakdown}>
-                      <span className={styles.zoneLabel}>Strefy boczne:</span>
-                      <span className={styles.zoneValue}>
-                        {selectedActionType === 'all' ? teamStats.senderP3CountLateral + teamStats.dribblingP3CountLateral : teamStats.senderP3CountLateral}
-                      </span>
-                      <span className={styles.zoneLabel}>Strefy centralne:</span>
-                      <span className={styles.zoneValue}>
-                        {selectedActionType === 'all' ? teamStats.senderP3CountCentral + teamStats.dribblingP3CountCentral : teamStats.senderP3CountCentral}
-                      </span>
-                    </div>
-                  </div>
-                  <div 
-                    className={`${styles.countItem} ${isFilterActive('pk') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('pk') ? styles.countItemDisabled : ''}`}
-                    onClick={() => {
-                      if (hasEndFilterSelected() && !isFilterActive('pk')) return;
-                      setSelectedActionFilter(prev => {
-                        const filters = Array.isArray(prev) ? prev : [];
-                        const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
-                        if (filters.includes('pk')) return withoutEndFilters;
-                        return [...withoutEndFilters, 'pk'];
-                      });
-                    }}
-                  >
-                    <span className={styles.countLabel}>PK:</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(0, 0, 0, 0.7)', marginBottom: '4px' }}>Dodatkowy rezultat akcji</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                    <div 
+                      className={`${styles.countItem} ${isFilterActive('pk') ? styles.countItemSelected : ''} ${(() => {
+                        const pkValue = selectedActionType === 'all' ? teamStats.senderPKCount + teamStats.dribblingPKCount : teamStats.senderPKCount;
+                        return pkValue === 0 ? styles.countItemDisabled : '';
+                      })()}`}
+                      onClick={() => {
+                        const pkValue = selectedActionType === 'all' ? teamStats.senderPKCount + teamStats.dribblingPKCount : teamStats.senderPKCount;
+                        if (pkValue === 0) return;
+                        setSelectedActionFilter(prev => {
+                          const filters = Array.isArray(prev) ? prev : [];
+                          // Radio behavior w obrębie sekcji Dodatkowy rezultat: usuń wszystkie rezultat filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
+                          const withoutResultFilters = filters.filter(f => !['pk', 'shot', 'goal'].includes(f));
+                          if (filters.includes('pk')) {
+                            return withoutResultFilters; // Odznacz
+                          } else {
+                            return [...withoutResultFilters, 'pk']; // Zaznacz
+                          }
+                        });
+                      }}
+                    >
+                      <span className={styles.countLabel}>PK:</span>
                     <span className={styles.countValue}>
                       {selectedActionType === 'all' ? teamStats.senderPKCount + teamStats.dribblingPKCount : teamStats.senderPKCount}
                     </span>
@@ -7113,16 +7573,24 @@ export default function StatystykiZespoluPage() {
                     </div>
                   </div>
                   <div 
-                    className={`${styles.countItem} ${isFilterActive('shot') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('shot') ? styles.countItemDisabled : ''}`}
-                    onClick={() => {
-                      if (hasEndFilterSelected() && !isFilterActive('shot')) return;
-                      setSelectedActionFilter(prev => {
-                        const filters = Array.isArray(prev) ? prev : [];
-                        const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
-                        if (filters.includes('shot')) return withoutEndFilters;
-                        return [...withoutEndFilters, 'shot'];
-                      });
-                    }}
+                    className={`${styles.countItem} ${isFilterActive('shot') ? styles.countItemSelected : ''} ${(() => {
+                      const shotValue = selectedActionType === 'all' ? teamStats.senderShotCount + teamStats.dribblingShotCount : teamStats.senderShotCount;
+                      return shotValue === 0 ? styles.countItemDisabled : '';
+                    })()}`}
+                      onClick={() => {
+                        const shotValue = selectedActionType === 'all' ? teamStats.senderShotCount + teamStats.dribblingShotCount : teamStats.senderShotCount;
+                        if (shotValue === 0) return;
+                        setSelectedActionFilter(prev => {
+                          const filters = Array.isArray(prev) ? prev : [];
+                          // Radio behavior w obrębie sekcji Dodatkowy rezultat: usuń wszystkie rezultat filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
+                          const withoutResultFilters = filters.filter(f => !['pk', 'shot', 'goal'].includes(f));
+                          if (filters.includes('shot')) {
+                            return withoutResultFilters; // Odznacz
+                          } else {
+                            return [...withoutResultFilters, 'shot']; // Zaznacz
+                          }
+                        });
+                      }}
                   >
                     <span className={styles.countLabel}>Strzał:</span>
                     <span className={styles.countValue}>
@@ -7140,16 +7608,24 @@ export default function StatystykiZespoluPage() {
                     </div>
                   </div>
                   <div 
-                    className={`${styles.countItem} ${isFilterActive('goal') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('goal') ? styles.countItemDisabled : ''}`}
-                    onClick={() => {
-                      if (hasEndFilterSelected() && !isFilterActive('goal')) return;
-                      setSelectedActionFilter(prev => {
-                        const filters = Array.isArray(prev) ? prev : [];
-                        const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
-                        if (filters.includes('goal')) return withoutEndFilters;
-                        return [...withoutEndFilters, 'goal'];
-                      });
-                    }}
+                    className={`${styles.countItem} ${isFilterActive('goal') ? styles.countItemSelected : ''} ${(() => {
+                      const goalValue = selectedActionType === 'all' ? teamStats.senderGoalCount + teamStats.dribblingGoalCount : teamStats.senderGoalCount;
+                      return goalValue === 0 ? styles.countItemDisabled : '';
+                    })()}`}
+                      onClick={() => {
+                        const goalValue = selectedActionType === 'all' ? teamStats.senderGoalCount + teamStats.dribblingGoalCount : teamStats.senderGoalCount;
+                        if (goalValue === 0) return;
+                        setSelectedActionFilter(prev => {
+                          const filters = Array.isArray(prev) ? prev : [];
+                          // Radio behavior w obrębie sekcji Dodatkowy rezultat: usuń wszystkie rezultat filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
+                          const withoutResultFilters = filters.filter(f => !['pk', 'shot', 'goal'].includes(f));
+                          if (filters.includes('goal')) {
+                            return withoutResultFilters; // Odznacz
+                          } else {
+                            return [...withoutResultFilters, 'goal']; // Zaznacz
+                          }
+                        });
+                      }}
                   >
                     <span className={styles.countLabel}>Gol:</span>
                     <span className={styles.countValue}>
@@ -7165,6 +7641,7 @@ export default function StatystykiZespoluPage() {
                         {selectedActionType === 'all' ? teamStats.senderGoalCountCentral + teamStats.dribblingGoalCountCentral : teamStats.senderGoalCountCentral}
                       </span>
                     </div>
+                  </div>
                   </div>
                 </div>
               </div>
@@ -7235,13 +7712,12 @@ export default function StatystykiZespoluPage() {
                   </div>
                 </div>
                 <div 
-                  className={`${styles.countItem} ${isFilterActive('pk') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('pk') ? styles.countItemDisabled : ''}`}
+                  className={`${styles.countItem} ${isFilterActive('pk') ? styles.countItemSelected : ''}`}
                   onClick={() => {
-                    if (hasEndFilterSelected() && !isFilterActive('pk')) return;
                     setSelectedActionFilter(prev => {
                       const filters = Array.isArray(prev) ? prev : [];
                       const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
-                      if (filters.includes('pk')) return withoutEndFilters;
+                      // Radio button behavior: zawsze zaznacz, tylko jeden może być aktywny
                       return [...withoutEndFilters, 'pk'];
                     });
                   }}
@@ -7256,13 +7732,12 @@ export default function StatystykiZespoluPage() {
                   </div>
                 </div>
                 <div 
-                  className={`${styles.countItem} ${isFilterActive('shot') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('shot') ? styles.countItemDisabled : ''}`}
+                  className={`${styles.countItem} ${isFilterActive('shot') ? styles.countItemSelected : ''}`}
                   onClick={() => {
-                    if (hasEndFilterSelected() && !isFilterActive('shot')) return;
                     setSelectedActionFilter(prev => {
                       const filters = Array.isArray(prev) ? prev : [];
                       const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
-                      if (filters.includes('shot')) return withoutEndFilters;
+                      // Radio button behavior: zawsze zaznacz, tylko jeden może być aktywny
                       return [...withoutEndFilters, 'shot'];
                     });
                   }}
@@ -7277,13 +7752,12 @@ export default function StatystykiZespoluPage() {
                   </div>
                 </div>
                 <div 
-                  className={`${styles.countItem} ${isFilterActive('goal') ? styles.countItemSelected : ''} ${hasEndFilterSelected() && !isFilterActive('goal') ? styles.countItemDisabled : ''}`}
+                  className={`${styles.countItem} ${isFilterActive('goal') ? styles.countItemSelected : ''}`}
                   onClick={() => {
-                    if (hasEndFilterSelected() && !isFilterActive('goal')) return;
                     setSelectedActionFilter(prev => {
                       const filters = Array.isArray(prev) ? prev : [];
                       const withoutEndFilters = filters.filter(f => !['p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
-                      if (filters.includes('goal')) return withoutEndFilters;
+                      // Radio button behavior: zawsze zaznacz, tylko jeden może być aktywny
                       return [...withoutEndFilters, 'goal'];
                     });
                   }}

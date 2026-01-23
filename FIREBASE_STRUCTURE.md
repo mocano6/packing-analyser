@@ -337,6 +337,10 @@ Wszystkie obiekty są zapisywane w kolekcji `matches/{matchId}` jako tablice:
   teamContext: 'attack' | 'defense'; // Atak czy obrona
   teamId: string;               // ID zespołu, który wykonał strzał
   
+  // Uwaga: Weryfikacja actionType = 'regain':
+  // - Dla strzałów w ataku (teamContext === "attack"): sprawdzamy regains na połowie przeciwnika w 8s przed strzałem
+  // - Dla strzałów w obronie (teamContext === "defense"): sprawdzamy straty (actions_loses) na własnej połowie (strefy 1-6, isAut: false) w 8s przed strzałem, bez regainów między stratą a strzałem
+  
   // Rodzaj akcji
   actionType?: 'open_play' | 'counter' | 'corner' | 'free_kick' | 
                'direct_free_kick' | 'penalty' | 'throw_in' | 'regain';

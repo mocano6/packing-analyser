@@ -413,6 +413,45 @@
   font-size: 12px;
 }
 
+.pkFlagButton {
+  width: 36px;
+  height: 27px;
+  border-radius: 4px;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  background-color: #f8fafc;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  margin-left: 6px;
+}
+
+.pkFlagButton:hover {
+  border-color: rgba(15, 23, 42, 0.3);
+  color: #0f172a;
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+.pkFlagButtonActive {
+  background-color: #dbeafe;
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #1e40af;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+}
+
+.pkFlagButtonActive:hover {
+  background-color: #bfdbfe;
+  border-color: rgba(59, 130, 246, 0.6);
+  color: #1e3a8a;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
 .finalXG {
   font-size: 0.75rem;
   font-weight: 600;

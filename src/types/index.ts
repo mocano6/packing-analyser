@@ -193,6 +193,7 @@ export interface Shot {
   isControversial?: boolean;
   controversyNote?: string; // Notatka analityka dotycząca kontrowersyjnego strzału
   previousShotId?: string; // ID poprzedniego strzału (dla dobitki) - xG jest obliczane jako xG * (1 - xG_previous/100)
+  isFromPK?: boolean; // Czy strzał był z pola karnego
 }
 
 export interface PKEntry {
