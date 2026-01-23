@@ -982,7 +982,7 @@ export default function Page() {
     }
   }, [actions, actionCategory, activeTab]);
 
-  const { isAuthenticated, isLoading, userTeams, isAdmin, logout } = useAuth();
+  const { isAuthenticated, isLoading, userTeams, isAdmin, userRole, logout } = useAuth();
 
   // Pobierz zespoły z Firebase
   useEffect(() => {
@@ -2688,6 +2688,46 @@ export default function Page() {
             Wyloguj się
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // Dla coach - pokaż stronę z linkami do statystyk (bez Statystyk zawodników)
+  if (isAuthenticated && userRole === 'coach') {
+    return (
+      <div className={styles.container}>
+        <div className={styles.coachWelcome}>
+          <h1>Witaj</h1>
+          <p>Wybierz sekcję, którą chcesz przeglądać:</p>
+          <div className={styles.coachLinks}>
+            <Link href="/statystyki-zespolu" className={styles.coachLink}>
+              <span className={styles.coachLinkIcon}>📊</span>
+              <div className={styles.coachLinkContent}>
+                <h3>Statystyki zespołu</h3>
+                <p>Analizuj statystyki zespołowe i KPI</p>
+              </div>
+            </Link>
+            <Link href="/profile" className={styles.coachLink}>
+              <span className={styles.coachLinkIcon}>👤</span>
+              <div className={styles.coachLinkContent}>
+                <h3>Profil zawodnika</h3>
+                <p>Szczegółowy profil wybranego zawodnika</p>
+              </div>
+            </Link>
+          </div>
+        </div>
+        <SidePanel
+          players={players}
+          actions={packingActions.actions || []}
+          matchInfo={matchInfo}
+          isAdmin={isAdmin}
+          userRole={userRole}
+          selectedTeam={selectedTeam}
+          onRefreshData={handleRefreshData}
+          onImportSuccess={handleImportSuccess}
+          onImportError={handleImportError}
+          onLogout={handleLogout}
+        />
       </div>
     );
   }
@@ -4820,6 +4860,7 @@ export default function Page() {
           actions={actions}
           matchInfo={matchInfo}
           isAdmin={isAdmin}
+          userRole={userRole}
           selectedTeam={selectedTeam}
           onRefreshData={handleRefreshData}
           onImportSuccess={handleImportSuccess}

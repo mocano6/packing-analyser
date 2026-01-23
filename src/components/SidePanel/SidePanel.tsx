@@ -14,6 +14,7 @@ interface SidePanelProps {
   actions: Action[];
   matchInfo: TeamInfo | null;
   isAdmin: boolean;
+  userRole?: 'user' | 'admin' | 'coach' | null;
   selectedTeam: string;
   onRefreshData: () => Promise<void>;
   onImportSuccess: (data: { players: Player[], actions: Action[], matchInfo: any }) => void;
@@ -26,6 +27,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
   actions,
   matchInfo,
   isAdmin,
+  userRole,
   selectedTeam,
   onRefreshData,
   onImportSuccess,
@@ -85,10 +87,12 @@ const SidePanel: React.FC<SidePanelProps> = ({
           {/* Sekcja Statystyki */}
           <div className={styles.section}>
             <h4>📊 Statystyki</h4>
-            <Link href="/zawodnicy" className={styles.menuItem}>
-              <span className={styles.icon}>👥</span>
-              <span>Statystyki zawodników</span>
-            </Link>
+            {userRole !== 'coach' && (
+              <Link href="/zawodnicy" className={styles.menuItem}>
+                <span className={styles.icon}>👥</span>
+                <span>Statystyki zawodników</span>
+              </Link>
+            )}
             <Link href="/statystyki-zespolu" className={styles.menuItem}>
               <span className={styles.icon}>📊</span>
               <span>Statystyki zespołu</span>
@@ -118,32 +122,34 @@ const SidePanel: React.FC<SidePanelProps> = ({
             </div>
           )}
 
-          {/* Sekcja Narzędzia */}
-          <div className={styles.section}>
-            <h4>🔧 Narzędzia</h4>
-            <button 
-              onClick={handleRefreshClick}
-              className={styles.menuItem}
-            >
-              <span className={styles.icon}>🔄</span>
-              <span>Odśwież dane</span>
-            </button>
-            
-            <div className={styles.exportImportWrapper}>
-              <ExportButton
-                players={players}
-                actions={actions}
-                matchInfo={matchInfo}
-              />
+          {/* Sekcja Narzędzia - ukryta dla coach */}
+          {userRole !== 'coach' && (
+            <div className={styles.section}>
+              <h4>🔧 Narzędzia</h4>
+              <button 
+                onClick={handleRefreshClick}
+                className={styles.menuItem}
+              >
+                <span className={styles.icon}>🔄</span>
+                <span>Odśwież dane</span>
+              </button>
+              
+              <div className={styles.exportImportWrapper}>
+                <ExportButton
+                  players={players}
+                  actions={actions}
+                  matchInfo={matchInfo}
+                />
+              </div>
+              
+              <div className={styles.exportImportWrapper}>
+                <ImportButton 
+                  onImportSuccess={onImportSuccess}
+                  onImportError={onImportError}
+                />
+              </div>
             </div>
-            
-            <div className={styles.exportImportWrapper}>
-              <ImportButton 
-                onImportSuccess={onImportSuccess}
-                onImportError={onImportError}
-              />
-            </div>
-          </div>
+          )}
 
           {/* Sekcja Konto */}
           <div className={styles.section}>

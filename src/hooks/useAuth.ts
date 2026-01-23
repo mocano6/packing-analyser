@@ -20,6 +20,7 @@ interface UseAuthReturnType {
   user: any;
   userTeams: string[];
   isAdmin: boolean;
+  userRole: 'user' | 'admin' | 'coach' | null;
   logout: () => void;
   refreshUserData: () => Promise<void>;
 }
@@ -34,6 +35,7 @@ export function useAuth(): UseAuthReturnType {
   });
   const [userTeams, setUserTeams] = useState<string[]>([]);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [userRole, setUserRole] = useState<'user' | 'admin' | 'coach' | null>(null);
   const [isUserDataLoading, setIsUserDataLoading] = useState<boolean>(false);
 
   const authService = AuthService.getInstance();
@@ -118,6 +120,7 @@ export function useAuth(): UseAuthReturnType {
     if (userData) {
       setUserTeams(userData.allowedTeams);
       setIsAdmin(userData.role === 'admin');
+      setUserRole(userData.role);
     }
     setIsUserDataLoading(false);
   };
@@ -139,6 +142,7 @@ export function useAuth(): UseAuthReturnType {
           if (userData && isMounted) {
             setUserTeams(userData.allowedTeams);
             setIsAdmin(userData.role === 'admin');
+            setUserRole(userData.role);
           }
           if (isMounted) {
             setIsUserDataLoading(false);
@@ -149,6 +153,7 @@ export function useAuth(): UseAuthReturnType {
         if (isMounted) {
           setUserTeams([]);
           setIsAdmin(false);
+          setUserRole(null);
           setIsUserDataLoading(false);
         }
       }
@@ -166,6 +171,7 @@ export function useAuth(): UseAuthReturnType {
       // Wyczyść dane użytkownika od razu
       setUserTeams([]);
       setIsAdmin(false);
+      setUserRole(null);
       setIsUserDataLoading(false);
       
       await authService.signOut();
@@ -184,6 +190,7 @@ export function useAuth(): UseAuthReturnType {
     user: authState.user,
     userTeams,
     isAdmin,
+    userRole,
     logout,
     refreshUserData
   };
