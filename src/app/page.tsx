@@ -2447,7 +2447,34 @@ export default function Page() {
       const db = getDB();
 
       // Zablokuj minuta i połowa podczas edycji, ale pozwól na zmianę timestamp
-      const originalAction = actions.find(a => a.id === editedAction.id);
+      let originalAction = actions.find(a => a.id === editedAction.id);
+      
+      // Jeśli nie znaleziono w actions, spróbuj znaleźć bezpośrednio w bazie danych
+      if (!originalAction && editedAction.matchId) {
+        try {
+          const matchRef = doc(db, "matches", editedAction.matchId);
+          const matchDoc = await getDoc(matchRef);
+          
+          if (matchDoc.exists()) {
+            const matchData = matchDoc.data() as TeamInfo;
+            // Sprawdź we wszystkich kolekcjach packing
+            const packingActions = matchData.actions_packing || [];
+            const unpackingActions = matchData.actions_unpacking || [];
+            const allPackingActions = [...packingActions, ...unpackingActions];
+            originalAction = allPackingActions.find(a => a.id === editedAction.id);
+            
+            // Jeśli nadal nie znaleziono, sprawdź w regain i loses
+            if (!originalAction) {
+              const regainActions = matchData.actions_regain || [];
+              const losesActions = matchData.actions_loses || [];
+              const allRegainLosesActions = [...regainActions, ...losesActions];
+              originalAction = allRegainLosesActions.find(a => a.id === editedAction.id);
+            }
+          }
+        } catch (error) {
+          console.error("Błąd podczas wyszukiwania oryginalnej akcji w bazie:", error);
+        }
+      }
       
       // Pobierz nowy timestamp z localStorage jeśli został zmieniony
       const tempVideoTimestamp = localStorage.getItem('tempVideoTimestamp');
@@ -2505,23 +2532,33 @@ export default function Page() {
 
       // Czy akcja została przeniesiona do innego meczu?
       const isMovedToNewMatch = originalMatchId && originalMatchId !== editedAction.matchId;
+      
+      // Czy akcja packing została przeniesiona między packing/unpacking (zmiana trybu attack/defense)?
+      // UWAGA: Nie przenosimy między kategoriami packing/regain/loses - to nie jest możliwe
+      const isMovedBetweenPackingUnpacking = 
+        originalActionCategory === "packing" && 
+        actionCategory === "packing" && 
+        originalCollectionField !== collectionField;
 
-      if (isMovedToNewMatch) {
-        // 1. Usuń akcję ze starego meczu
-        const oldMatchRef = doc(db, "matches", originalMatchId);
-        const oldMatchDoc = await getDoc(oldMatchRef);
-        
-        if (oldMatchDoc.exists()) {
-          const oldMatchData = oldMatchDoc.data() as TeamInfo;
-          const oldActions = (oldMatchData[originalCollectionField as keyof TeamInfo] as Action[] | undefined) || [];
-          const filteredOldActions = oldActions.filter(a => a.id !== editedAction.id);
+      if (isMovedToNewMatch || isMovedBetweenPackingUnpacking) {
+        // 1. Usuń akcję ze starego meczu/kolekcji (tylko jeśli istnieje originalAction)
+        if (originalAction) {
+          const oldMatchId = originalMatchId || editedAction.matchId;
+          const oldMatchRef = doc(db, "matches", oldMatchId);
+          const oldMatchDoc = await getDoc(oldMatchRef);
           
-          await updateDoc(oldMatchRef, {
-            [originalCollectionField]: filteredOldActions
-          });
+          if (oldMatchDoc.exists()) {
+            const oldMatchData = oldMatchDoc.data() as TeamInfo;
+            const oldActions = (oldMatchData[originalCollectionField as keyof TeamInfo] as Action[] | undefined) || [];
+            const filteredOldActions = oldActions.filter(a => a.id !== editedAction.id);
+            
+            await updateDoc(oldMatchRef, {
+              [originalCollectionField]: filteredOldActions
+            });
+          }
         }
 
-        // 2. Dodaj akcję do nowego meczu
+        // 2. Dodaj akcję do nowego meczu/kolekcji
         const newMatchRef = doc(db, "matches", editedAction.matchId);
         const newMatchDoc = await getDoc(newMatchRef);
         
@@ -2584,12 +2621,71 @@ export default function Page() {
         }
 
         const matchData = matchDoc.data() as TeamInfo;
-        const currentActions = (matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
+        let currentActions = (matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
         
-        const actionIndex = currentActions.findIndex(a => a.id === editedAction.id);
+        // Jeśli nie znaleziono akcji w nowej kolekcji, sprawdź w oryginalnej
+        // Tylko dla packing/unpacking (zmiana trybu attack/defense), nie dla zmiany kategorii packing/regain/loses
+        let actionIndex = currentActions.findIndex(a => a.id === editedAction.id);
+        if (actionIndex === -1 && originalAction && originalCollectionField !== collectionField) {
+          // Sprawdź w oryginalnej kolekcji tylko jeśli obie są packing (packing/unpacking)
+          const isPackingToUnpacking = 
+            (originalCollectionField === "actions_packing" && collectionField === "actions_unpacking") ||
+            (originalCollectionField === "actions_unpacking" && collectionField === "actions_packing");
+          
+          if (isPackingToUnpacking) {
+            const originalActions = (matchData[originalCollectionField as keyof TeamInfo] as Action[] | undefined) || [];
+            actionIndex = originalActions.findIndex(a => a.id === editedAction.id);
+            if (actionIndex !== -1) {
+              // Znaleziono w oryginalnej kolekcji - użyj jej i zaktualizuj kolekcję
+              currentActions = originalActions;
+              // Usuń z oryginalnej kolekcji
+              const filteredOriginalActions = originalActions.filter(a => a.id !== editedAction.id);
+              await updateDoc(matchRef, {
+                [originalCollectionField]: filteredOriginalActions
+              });
+              // Dodaj do nowej kolekcji
+              const newActions = (matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
+              const cleanedAction = removeUndefinedFields(actionWithOppositeValues);
+              const actionWithBooleans = {
+                ...cleanedAction
+              };
+              await updateDoc(matchRef, {
+                [collectionField]: [...newActions, actionWithBooleans]
+              });
+              
+              // Aktualizuj lokalny stan
+              if (matchInfo && editedAction.matchId === matchInfo.matchId) {
+                const refreshedMatchDoc = await getDoc(matchRef);
+                if (refreshedMatchDoc.exists()) {
+                  const refreshedMatchData = refreshedMatchDoc.data() as TeamInfo;
+                  const refreshedActions = (refreshedMatchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
+                  setActions(refreshedActions);
+                }
+              }
+              
+              setIsActionEditModalOpen(false);
+              setEditingAction(null);
+              localStorage.removeItem('tempVideoTimestamp');
+              localStorage.removeItem('tempVideoTimestampRaw');
+              localStorage.removeItem('tempControversyNote');
+              
+              const refreshEvent = new CustomEvent('matchesListRefresh', {
+                detail: { timestamp: Date.now() }
+              });
+              window.dispatchEvent(refreshEvent);
+              
+              return;
+            }
+          }
+        }
+        
         if (actionIndex === -1) {
           console.error("❌ Nie znaleziono akcji do edycji:", editedAction.id, "w kolekcji:", collectionField);
-          alert("Nie znaleziono akcji do edycji");
+          console.error("OriginalAction:", originalAction);
+          console.error("OriginalCollectionField:", originalCollectionField);
+          console.error("CollectionField:", collectionField);
+          console.error("EditedAction:", editedAction);
+          alert("Nie znaleziono akcji do edycji. Sprawdź konsolę dla szczegółów.");
           return;
         }
 
