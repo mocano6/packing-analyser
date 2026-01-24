@@ -3802,7 +3802,7 @@ export default function StatystykiZespoluPage() {
                         <div className={styles.statsTiles}>
                           {(() => {
                             const isPKOpponentBad = opponentPKEntriesCount > kpiPKEntries;
-                            const isLosesPMAreaBad = losesInPMAreaCount >= kpiLosesPMAreaCount;
+                            const isLosesPMAreaBad = losesInPMAreaCount > kpiLosesPMAreaCount;
                             const isXGPerShotGood = teamXGPerShot >= kpiXGPerShot;
                             const is8sAccGood = shotAndPK8sPercentage >= target8sAcc;
                             const isReaction5sGood = reaction5sPercentage >= kpiReaction5s;
