@@ -485,9 +485,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     let baseXG = finalXG;
     
     // Odwróć obniżenie o 27% dla strzałów głową lub inną częścią ciała
-    if (shot.bodyPart === "head" || shot.bodyPart === "other") {
-      baseXG = baseXG / 0.73; // Odwróć * 0.73
-    }
+    // Usunięto odwracanie mnożnika dla głowy - użytkownik sam wpisuje wartość xG
     
     // Odwróć modyfikację dla dobitki
     if (shot.previousShotId) {
@@ -651,10 +649,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       finalXG = finalXG * remainingProbability;
     }
     
-    // Obniżenie o 27% dla strzałów głową lub inną częścią ciała
-    if (formData.bodyPart === "head" || formData.bodyPart === "other") {
-      finalXG *= 0.73; // -27% = * 0.73
-    }
+    // Usunięto mnożnik dla głowy - użytkownik sam wpisuje wartość xG
     
     return Math.max(1, Math.round(finalXG)); // Minimum 1%, zaokrąglij do całej liczby
   };
