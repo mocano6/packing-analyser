@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, Fragment } from "react";
 import { LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import { Action, TeamInfo, Shot } from "@/types";
 import { getOppositeXTValueForZone, getZoneName, getXTValueForZone, zoneNameToIndex, zoneNameToString } from "@/constants/xtValues";
@@ -18,12 +18,16 @@ import XGPitch from "@/components/XGPitch/XGPitch";
 import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
 import { getPlayerFullName } from "@/utils/playerUtils";
 import SidePanel from "@/components/SidePanel/SidePanel";
+import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import styles from "./statystyki-zespolu.module.css";
 
 export default function StatystykiZespoluPage() {
   const { teams, isLoading: isTeamsLoading } = useTeams();
   const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, logout } = useAuth();
+  const [isVideoVisible, setIsVideoVisible] = useState(false);
+  const [selectedKpiForVideo, setSelectedKpiForVideo] = useState<string | null>(null);
   const { players } = usePlayersState();
+  const youtubeVideoRef = useRef<YouTubeVideoRef>(null);
 
   // Filtruj dostępne zespoły na podstawie uprawnień użytkownika (tak jak w głównej aplikacji)
   const availableTeams = useMemo(() => {
@@ -3316,6 +3320,7 @@ export default function StatystykiZespoluPage() {
 
             {/* Szczegóły poniżej */}
             {expandedCategory === 'kpi' && selectedMatchInfo && (
+              <Fragment>
               <div className={styles.detailsPanel}>
                 <h3>KPI</h3>
                 
@@ -4034,7 +4039,11 @@ export default function StatystykiZespoluPage() {
 
                             return (
                               <>
-                          <div className={`${styles.statTile} ${is8sAccGood ? styles.statTileGood : styles.statTileBad}`}>
+                          <div 
+                            className={`${styles.statTile} ${is8sAccGood ? styles.statTileGood : styles.statTileBad}`}
+                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === '8s-acc' ? null : '8s-acc')}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <div className={styles.statTileLabel}>8s ACC</div>
                             <div className={styles.statTileValue}>
                               {shotAndPK8sPercentage.toFixed(1)}%
@@ -4131,6 +4140,112 @@ export default function StatystykiZespoluPage() {
                   );
                 })()}
               </div>
+              
+              {/* Wideo YouTube dla wybranego meczu - osadzone na pełnej szerokości i wysokości */}
+              <div 
+                style={{ 
+                  width: '100vw', 
+                  height: '100vh',
+                  marginLeft: 'calc(-50vw + 50%)',
+                  marginRight: 'calc(-50vw + 50%)',
+                  position: 'relative',
+                  backgroundColor: '#000',
+                  marginTop: '24px'
+                }}
+              >
+                {/* Wyświetl czasy zagrań nad wideo dla wybranego KPI */}
+                {selectedKpiForVideo === '8s-acc' && (() => {
+                  // Pobierz wszystkie zagrańia 8s ACC dla wybranego meczu
+                  const all8sAccEntries = (allAcc8sEntries || []).filter((entry: any) => 
+                    entry && 
+                    entry.videoTimestampRaw !== undefined && 
+                    entry.videoTimestampRaw !== null
+                  );
+                  
+                  // Zidentyfikuj skuteczne zagrańia (te które spełniają KPI - mają strzał lub wejście PK w 8s)
+                  const successfulEntriesIds = new Set(
+                    all8sAccEntries
+                      .filter((entry: any) => 
+                        entry.isShotUnder8s === true || entry.isPKEntryUnder8s === true
+                      )
+                      .map((entry: any) => entry.id)
+                  );
+                  
+                  // Przygotuj wszystkie zagrańia z czasem, zaznaczając skuteczne
+                  const entriesWithTime = all8sAccEntries
+                    .map((entry: any) => ({
+                      entry,
+                      time: entry.videoTimestampRaw,
+                      isSuccessful: successfulEntriesIds.has(entry.id)
+                    }))
+                    .sort((a, b) => a.time - b.time);
+                  
+                  return entriesWithTime.length > 0 ? (
+                    <div style={{
+                      position: 'absolute',
+                      top: '10px',
+                      left: '10px',
+                      right: '10px',
+                      zIndex: 1000,
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                      maxHeight: '120px',
+                      overflowY: 'auto',
+                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                      padding: '12px',
+                      borderRadius: '8px'
+                    }}>
+                      {entriesWithTime.map((item, index) => {
+                        const minutes = Math.floor(item.time / 60);
+                        const seconds = Math.floor(item.time % 60);
+                        const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                        
+                        return (
+                          <button
+                            key={item.entry.id || index}
+                            onClick={async () => {
+                              if (youtubeVideoRef.current) {
+                                await youtubeVideoRef.current.seekTo(item.time);
+                              }
+                            }}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: item.isSuccessful ? '#4caf50' : '#757575',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              fontWeight: '500',
+                              whiteSpace: 'nowrap',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = item.isSuccessful ? '#66bb6a' : '#9e9e9e';
+                              e.currentTarget.style.transform = 'scale(1.05)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = item.isSuccessful ? '#4caf50' : '#757575';
+                              e.currentTarget.style.transform = 'scale(1)';
+                            }}
+                          >
+                            {timeString}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null;
+                })()}
+                
+                <YouTubeVideo 
+                  ref={youtubeVideoRef}
+                  matchInfo={selectedMatchInfo}
+                  isVisible={true}
+                  isFullscreen={true}
+                />
+              </div>
+              </Fragment>
             )}
             {expandedCategory === 'pkEntries' && selectedMatchInfo && (
               <div className={styles.detailsPanel}>
@@ -8387,7 +8502,7 @@ export default function StatystykiZespoluPage() {
                     label={{ value: 'Packing', angle: 90, position: 'insideRight' }}
                             tick={{ fontSize: 12 }}
                   />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={CustomTooltip} />
                   <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
                   <Line 
                     yAxisId="left"
