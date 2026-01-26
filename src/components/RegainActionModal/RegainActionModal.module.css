@@ -1165,6 +1165,21 @@
   transform: translateX(-50%) translateY(-4px);
 }
 
+/* Style dla przycisków Podanie/Drybling w actionTypeSelector */
+.actionTypeSelector .actionTypeButton.activePassButton {
+  background-color: #dcfce7;
+  color: #166534;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(22, 163, 74, 0.2);
+}
+
+.actionTypeSelector .actionTypeButton.activeDribbleButton {
+  background-color: #f3e8ff;
+  color: #7e22ce;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(126, 34, 206, 0.2);
+}
+
 .actionTypeSelector {
   display: flex;
   gap: 6px;
@@ -1252,7 +1267,7 @@
 .verticalButtonsContainer {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
   min-width: 90px;
   flex: 0 0 auto; /* Nie rozciągaj się */
   overflow: visible;
@@ -1273,7 +1288,7 @@
   align-items: stretch;
   overflow: visible;
   position: relative;
-  z-index: 10;
+  z-index: 1;
 }
 
 .countRow {

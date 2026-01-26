@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import styles from "./ActionModal.module.css";
 import { Player, Action, TeamInfo } from "@/types";
-import ActionTypeToggle from "../ActionTypeToggle/ActionTypeToggle";
 import { ACTION_BUTTONS } from "../PointsButtons/constants";
 import PlayerCard from "./PlayerCard";
 import { TEAMS } from "@/constants/teams";
@@ -829,16 +828,9 @@ const ActionModal: React.FC<ActionModalProps> = ({
             </div>
           )}
 
-          {/* Typ akcji */}
+          {/* Połowa */}
           <div className={styles.formGroup}>
             <div className={styles.togglesRow}>
-              <div className={styles.toggleGroup}>
-                <label>Typ akcji:</label>
-                <ActionTypeToggle
-                  actionType={actionType}
-                  onActionTypeChange={handleActionTypeChange}
-                />
-              </div>
               <div className={styles.toggleGroup}>
                 <label>Połowa:</label>
                 <div className={styles.halfToggle}>
@@ -937,6 +929,25 @@ const ActionModal: React.FC<ActionModalProps> = ({
 
           {/* Wszystkie przyciski w jednym rzędzie */}
           <div className={styles.compactButtonsRow}>
+            {/* Typ akcji - Podanie/Drybling */}
+            <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Typ akcji">
+              <button
+                className={`${styles.actionTypeButton} ${actionType === "pass" ? styles.activePassButton : ""}`}
+                onClick={handleActionTypeChange.bind(null, "pass")}
+                aria-pressed={actionType === "pass"}
+                type="button"
+              >
+                Podanie
+              </button>
+              <button
+                className={`${styles.actionTypeButton} ${actionType === "dribble" ? styles.activeDribbleButton : ""}`}
+                onClick={handleActionTypeChange.bind(null, "dribble")}
+                aria-pressed={actionType === "dribble"}
+                type="button"
+              >
+                Drybling
+              </button>
+            </div>
             {/* Sekcja "Początek i koniec działania" z przyciskami P0-P3 */}
             <div className={styles.pSectionContainer}>
               <div className={styles.pStartEndContainer}>

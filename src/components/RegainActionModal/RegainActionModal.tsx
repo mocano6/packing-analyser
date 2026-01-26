@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import styles from "./RegainActionModal.module.css";
 import { Player, Action, TeamInfo } from "@/types";
-import ActionTypeToggle from "../ActionTypeToggle/ActionTypeToggle";
 import { ACTION_BUTTONS } from "../PointsButtons/constants";
 import PlayerCard from "../ActionModal/PlayerCard";
 import { TEAMS } from "@/constants/teams";
@@ -747,16 +746,9 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
             </div>
           )}
 
-          {/* Typ akcji */}
+          {/* Połowa */}
           <div className={styles.formGroup}>
             <div className={styles.togglesRow}>
-              <div className={styles.toggleGroup}>
-                <label>Typ akcji:</label>
-                <ActionTypeToggle
-                  actionType={actionType}
-                  onActionTypeChange={handleActionTypeChange}
-                />
-              </div>
               <div className={styles.toggleGroup}>
                 <label>Połowa:</label>
                 <div 
@@ -951,69 +943,102 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
 
           {/* Wszystkie przyciski w jednym rzędzie */}
           <div className={styles.compactButtonsRow}>
-            {/* Box 1: P0-P3, Poniżej 8s, Wejście PK, Strzał, Gol */}
-            <div className={styles.pSectionContainer}>
-              {/* Sekcja z przyciskami P0-P3 - przestrzeń w której piłka została odebrana */}
-              <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Przestrzeń w której piłka została odebrana">
+            {/* Lewa strona: Typ akcji - Podanie/Drybling i P0-P3 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* Typ akcji - Podanie/Drybling */}
+              <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Typ akcji">
                 <button
-                  className={`${styles.actionTypeButton} ${
-                    isP0Active ? styles.active : ""
-                  }`}
-                  onClick={onP0Toggle}
-                  title="Aktywuj/Dezaktywuj P0"
-                  aria-pressed={isP0Active}
+                  className={`${styles.actionTypeButton} ${actionType === "pass" ? styles.activePassButton : ""}`}
+                  onClick={handleActionTypeChange.bind(null, "pass")}
+                  aria-pressed={actionType === "pass"}
                   type="button"
                 >
-                  P0
+                  Podanie
                 </button>
                 <button
-                  className={`${styles.actionTypeButton} ${
-                    isP1Active ? styles.active : ""
-                  }`}
-                  onClick={onP1Toggle}
-                  title="Aktywuj/Dezaktywuj P1"
-                  aria-pressed={isP1Active}
+                  className={`${styles.actionTypeButton} ${actionType === "dribble" ? styles.activeDribbleButton : ""}`}
+                  onClick={handleActionTypeChange.bind(null, "dribble")}
+                  aria-pressed={actionType === "dribble"}
                   type="button"
                 >
-                  P1
-                </button>
-                <button
-                  className={`${styles.actionTypeButton} ${
-                    isP2Active ? styles.active : ""
-                  }`}
-                  onClick={onP2Toggle}
-                  title="Aktywuj/Dezaktywuj P2"
-                  aria-pressed={isP2Active}
-                  type="button"
-                >
-                  P2
-                </button>
-                <button
-                  className={`${styles.actionTypeButton} ${
-                    isP3Active ? styles.active : ""
-                  }`}
-                  onClick={onP3Toggle}
-                  title="Aktywuj/Dezaktywuj P3"
-                  aria-pressed={isP3Active}
-                  type="button"
-                >
-                  P3
+                  Drybling
                 </button>
               </div>
-              {/* Rząd z "Poniżej 8s" i "Wejście PK, Strzał, Gol" */}
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                {/* Przycisk "Poniżej 8s" */}
-                <button
-                  className={`${styles.compactButton} ${styles.tooltipTrigger} ${
-                    isBelow8sActive ? styles.activeButton : ""
-                  }`}
-                  onClick={onBelow8sToggle}
-                  aria-pressed={isBelow8sActive}
-                  type="button"
-                  data-tooltip={`8 sekund od jego rozpoczęcia (1T):\n• wejść w pole karne rywala\n• oddać strzał na bramkę lub strzelić gola`}
-                >
-                  <span className={styles.compactLabel}>Poniżej 8s</span>
-                </button>
+              
+              {/* P0-P3 */}
+              <div className={styles.pSectionContainer}>
+                <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Przestrzeń w której piłka została odebrana">
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isP0Active ? styles.active : ""
+                    }`}
+                    onClick={onP0Toggle}
+                    title="Aktywuj/Dezaktywuj P0"
+                    aria-pressed={isP0Active}
+                    type="button"
+                  >
+                    P0
+                  </button>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isP1Active ? styles.active : ""
+                    }`}
+                    onClick={onP1Toggle}
+                    title="Aktywuj/Dezaktywuj P1"
+                    aria-pressed={isP1Active}
+                    type="button"
+                  >
+                    P1
+                  </button>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isP2Active ? styles.active : ""
+                    }`}
+                    onClick={onP2Toggle}
+                    title="Aktywuj/Dezaktywuj P2"
+                    aria-pressed={isP2Active}
+                    type="button"
+                  >
+                    P2
+                  </button>
+                  <button
+                    className={`${styles.actionTypeButton} ${
+                      isP3Active ? styles.active : ""
+                    }`}
+                    onClick={onP3Toggle}
+                    title="Aktywuj/Dezaktywuj P3"
+                    aria-pressed={isP3Active}
+                    type="button"
+                  >
+                    P3
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {/* Środek: Sekcja z przyciskami "przed piłką" */}
+            <div
+              className={`${styles.countSelectorContainer} ${styles.tooltipTrigger}`}
+              data-tooltip="Liczymy zawodników wyraźnie do bramki przeciwnika."
+            >
+              {renderCountRow(
+                "Partner",
+                clamp0to10(playersBehindBall),
+                (n) => onPlayersBehindBallChange(clamp0to10(n)),
+                "Partnerzy przed piłką (0-10)"
+              )}
+              {renderCountRow(
+                "Przeciwnik (bez bramkarza)",
+                clamp0to10(opponentsBehindBall),
+                (n) => onOpponentsBehindBallChange(clamp0to10(n)),
+                "Przeciwnicy przed piłką (0-10)"
+              )}
+            </div>
+            
+            {/* Prawa strona: Grupa przycisków "Przeciwnik po przechwycie" - Wejście PK, Strzał, Gol, Poniżej 8s */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '12px', color: '#666', fontWeight: 500, marginBottom: '4px' }}>Przeciwnik po przechwycie</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
                 {/* Przyciski ułożone pionowo: Wejście PK, Strzał, Gol */}
                 <div className={styles.verticalButtonsContainer}>
                   <button
@@ -1054,25 +1079,20 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                     <span className={styles.compactLabel}>Gol</span>
                   </button>
                 </div>
+
+                {/* Przycisk "Poniżej 8s" */}
+                <button
+                  className={`${styles.compactButton} ${styles.tooltipTrigger} ${
+                    isBelow8sActive ? styles.activeButton : ""
+                  }`}
+                  onClick={onBelow8sToggle}
+                  aria-pressed={isBelow8sActive}
+                  type="button"
+                  data-tooltip={`8 sekund od jego rozpoczęcia (1T):\n• wejść w pole karne rywala\n• oddać strzał na bramkę lub strzelić gola`}
+                >
+                  <span className={styles.compactLabel}>Poniżej 8s</span>
+                </button>
               </div>
-            </div>
-            {/* Box 2: Sekcja z przyciskami "przed piłką" - ułożone pionowo */}
-            <div
-              className={`${styles.countSelectorContainer} ${styles.tooltipTrigger}`}
-              data-tooltip="Liczymy zawodników wyraźnie do bramki przeciwnika."
-            >
-              {renderCountRow(
-                "Partner",
-                clamp0to10(playersBehindBall),
-                (n) => onPlayersBehindBallChange(clamp0to10(n)),
-                "Partnerzy przed piłką (0-10)"
-              )}
-              {renderCountRow(
-                "Przeciwnik (bez bramkarza)",
-                clamp0to10(opponentsBehindBall),
-                (n) => onOpponentsBehindBallChange(clamp0to10(n)),
-                "Przeciwnicy przed piłką (0-10)"
-              )}
             </div>
 
             {/* Pozostałe przyciski punktów (bez "Minięty przeciwnik") */}

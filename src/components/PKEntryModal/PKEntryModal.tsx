@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { PKEntry, Player, TeamInfo } from "@/types";
 import { getPlayerFullName } from "@/utils/playerUtils";
 import styles from "./PKEntryModal.module.css";
@@ -226,6 +226,46 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
 
     return playersWithMinutes;
   }, [players, matchInfo]);
+
+  // Funkcja pomocnicza do ograniczania wartości do zakresu 0-10
+  const clamp0to10 = (value: number) => Math.max(0, Math.min(10, value));
+
+  // Funkcja renderująca rząd przycisków numerycznych (0-10)
+  const renderCountRow = useCallback(
+    (
+      label: string,
+      value: number,
+      onChange: (next: number) => void,
+      ariaLabelPrefix: string
+    ) => {
+      const values = Array.from({ length: 11 }, (_, i) => i); // 0..10
+
+      return (
+        <div className={styles.countRow}>
+          <div className={styles.countRowLabel}>{label}</div>
+          <div className={styles.countButtons} role="group" aria-label={ariaLabelPrefix}>
+            {values.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`${styles.countButton} ${value === n ? styles.countButtonActive : ""}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onChange(n);
+                }}
+                aria-pressed={value === n}
+                title={`Ustaw ${n}`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    },
+    []
+  );
 
   // Funkcja do grupowania zawodników według pozycji
   const getPlayersByPosition = (playersList: Player[]) => {
@@ -900,112 +940,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
             </div>
           </div>
 
-          {/* Niewykorzystane 1T, Partnerzy w PK i Przeciwnicy w PK */}
-          <div className={styles.fieldGroup}>
-            <div className={styles.compactButtonsRow}>
-              {formData.teamContext === "attack" && (
-                <button
-                  type="button"
-                  className={`${styles.compactButton} ${styles.tooltipTrigger} ${formData.isPossible1T ? styles.activeButton : ""}`}
-                  onClick={() => setFormData({...formData, isPossible1T: !formData.isPossible1T})}
-                  data-tooltip="Był kontakt w 1T, ale strzału nie było"
-                  aria-pressed={formData.isPossible1T}
-                >
-                  <span className={styles.compactLabel}>1T bez strzału</span>
-                </button>
-              )}
-              <div 
-                className={styles.compactPointsButtonSmall}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setFormData({...formData, pkPlayersCount: formData.pkPlayersCount + 1});
-                }}
-                title="Kliknij aby zwiększyć liczbę partnerów w PK"
-              >
-                <span className={styles.compactLabel}>Partnerzy w PK</span>
-                <span className={styles.pointsValue}><b>{formData.pkPlayersCount}</b></span>
-                <button
-                  type="button"
-                  className={styles.compactSubtractButton}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setFormData({...formData, pkPlayersCount: Math.max(0, formData.pkPlayersCount - 1)});
-                  }}
-                  title="Odejmij 1"
-                >
-                  −
-                </button>
-              </div>
-              <div 
-                className={styles.compactPointsButtonSmall}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setFormData({...formData, opponentsInPKCount: formData.opponentsInPKCount + 1});
-                }}
-                title="Kliknij aby zwiększyć liczbę przeciwników w PK"
-              >
-                <span className={styles.compactLabel}>Przeciwnicy w PK</span>
-                <span className={styles.pointsValue}><b>{formData.opponentsInPKCount}</b></span>
-                <button
-                  type="button"
-                  className={styles.compactSubtractButton}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setFormData({...formData, opponentsInPKCount: Math.max(0, formData.opponentsInPKCount - 1)});
-                  }}
-                  title="Odejmij 1"
-                >
-                  −
-                </button>
-              </div>
-              <button
-                type="button"
-                className={`${styles.compactButton} ${styles.tooltipTrigger} ${formData.isShot ? styles.activeButton : ""}`}
-                onClick={() => {
-                  // Jeśli odznaczamy strzał, odznaczamy też gol
-                  if (formData.isShot) {
-                    setFormData({...formData, isShot: false, isGoal: false});
-                  } else {
-                    setFormData({...formData, isShot: true});
-                  }
-                }}
-                data-tooltip="Po wejściu w PK był strzał"
-                aria-pressed={formData.isShot}
-              >
-                <span className={styles.compactLabel}>Strzał</span>
-              </button>
-              <button
-                type="button"
-                className={`${styles.compactButton} ${styles.tooltipTrigger} ${formData.isGoal ? styles.activeButton : ""}`}
-                onClick={() => {
-                  // Jeśli zaznaczamy gol, automatycznie zaznaczamy strzał
-                  if (!formData.isGoal) {
-                    setFormData({...formData, isGoal: true, isShot: true});
-                  } else {
-                    setFormData({...formData, isGoal: false});
-                  }
-                }}
-                data-tooltip="Po wejściu w PK był gol"
-                aria-pressed={formData.isGoal}
-              >
-                <span className={styles.compactLabel}>Gol</span>
-              </button>
-              <button
-                type="button"
-                className={`${styles.compactButton} ${styles.tooltipTrigger} ${formData.isRegain ? styles.activeButton : ""}`}
-                onClick={() => setFormData({...formData, isRegain: !formData.isRegain})}
-                data-tooltip="Przechwyt piłki"
-                aria-pressed={formData.isRegain}
-              >
-                <span className={styles.compactLabel}>Regain</span>
-              </button>
-            </div>
-          </div>
-
           {/* Lista zawodników - jedna lista z zielonym i czerwonym obramowaniem - tylko dla ataku */}
           {formData.teamContext === "attack" && (
             <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
@@ -1046,6 +980,86 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* 1T bez strzału, Partnerzy w PK, Przeciwnicy w PK, Strzał, Gol, Regain */}
+          <div className={styles.fieldGroup}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+              {/* Przyciski 1T bez strzału, Strzał, Gol, Regain */}
+              <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Opcje akcji">
+                {formData.teamContext === "attack" && (
+                  <button
+                    type="button"
+                    className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${formData.isPossible1T ? styles.active : ""}`}
+                    onClick={() => setFormData({...formData, isPossible1T: !formData.isPossible1T})}
+                    data-tooltip="Był kontakt w 1T, ale strzału nie było"
+                    aria-pressed={formData.isPossible1T}
+                  >
+                    1T bez strzału
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${formData.isShot ? styles.active : ""}`}
+                  onClick={() => {
+                    // Jeśli odznaczamy strzał, odznaczamy też gol
+                    if (formData.isShot) {
+                      setFormData({...formData, isShot: false, isGoal: false});
+                    } else {
+                      setFormData({...formData, isShot: true});
+                    }
+                  }}
+                  data-tooltip="Po wejściu w PK był strzał"
+                  aria-pressed={formData.isShot}
+                >
+                  Strzał
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${formData.isGoal ? styles.active : ""}`}
+                  onClick={() => {
+                    // Jeśli zaznaczamy gol, automatycznie zaznaczamy strzał
+                    if (!formData.isGoal) {
+                      setFormData({...formData, isGoal: true, isShot: true});
+                    } else {
+                      setFormData({...formData, isGoal: false});
+                    }
+                  }}
+                  data-tooltip="Po wejściu w PK był gol"
+                  aria-pressed={formData.isGoal}
+                >
+                  Gol
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${formData.isRegain ? styles.active : ""}`}
+                  onClick={() => setFormData({...formData, isRegain: !formData.isRegain})}
+                  data-tooltip="Przechwyt piłki"
+                  aria-pressed={formData.isRegain}
+                >
+                  Regain
+                </button>
+              </div>
+              
+              {/* Sekcja z przyciskami numerycznymi dla Partnerzy w PK i Przeciwnicy w PK */}
+              <div
+                className={`${styles.countSelectorContainer} ${styles.tooltipTrigger}`}
+                data-tooltip="Liczba zawodników w polu karnym"
+              >
+                {renderCountRow(
+                  "Partnerzy w PK",
+                  clamp0to10(formData.pkPlayersCount),
+                  (n) => setFormData({...formData, pkPlayersCount: clamp0to10(n)}),
+                  "Partnerzy w PK (0-10)"
+                )}
+                {renderCountRow(
+                  "Przeciwnicy w PK",
+                  clamp0to10(formData.opponentsInPKCount),
+                  (n) => setFormData({...formData, opponentsInPKCount: clamp0to10(n)}),
+                  "Przeciwnicy w PK (0-10)"
+                )}
+              </div>
+            </div>
+          </div>
 
           <div className={styles.buttonGroup}>
             {editingEntry && onDelete && (

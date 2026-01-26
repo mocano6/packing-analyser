@@ -1015,3 +1015,66 @@
   opacity: 1;
   transform: translateX(-50%) translateY(-4px);
 }
+
+/* Szybki wybór liczby zawodników w PK */
+.countSelectorContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px;
+  background-color: #f3f4f6;
+  border-radius: 6px;
+  height: auto;
+  box-sizing: border-box;
+  align-items: stretch;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.countRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.countRowLabel {
+  width: 150px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.countButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.countButton {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: #6b7280;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.countButton:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.countButtonActive {
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.2);
+}
