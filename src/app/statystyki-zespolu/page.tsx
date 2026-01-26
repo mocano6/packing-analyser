@@ -4155,7 +4155,7 @@ export default function StatystykiZespoluPage() {
               >
                 {/* Wyświetl czasy zagrań nad wideo dla wybranego KPI */}
                 {selectedKpiForVideo === '8s-acc' && (() => {
-                  // Pobierz wszystkie zagrańia 8s ACC dla wybranego meczu
+                  // Pobierz wszystkie zagrańia 8s ACC dla wybranego meczu (używamy videoTimestampRaw do filtrowania i seekTo)
                   const all8sAccEntries = (allAcc8sEntries || []).filter((entry: any) => 
                     entry && 
                     entry.videoTimestampRaw !== undefined && 
@@ -4172,10 +4172,13 @@ export default function StatystykiZespoluPage() {
                   );
                   
                   // Przygotuj wszystkie zagrańia z czasem, zaznaczając skuteczne
+                  // Używamy videoTimestamp do wyświetlania i do seekTo
                   const entriesWithTime = all8sAccEntries
                     .map((entry: any) => ({
                       entry,
-                      time: entry.videoTimestampRaw,
+                      time: entry.videoTimestamp !== undefined && entry.videoTimestamp !== null 
+                        ? entry.videoTimestamp 
+                        : entry.videoTimestampRaw, // Fallback do videoTimestampRaw jeśli videoTimestamp nie istnieje
                       isSuccessful: successfulEntriesIds.has(entry.id)
                     }))
                     .sort((a, b) => a.time - b.time);
