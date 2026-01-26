@@ -79,8 +79,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   // Dodaj stan isReaction5sActive dla loses
   const [isReaction5sActive, setIsReaction5sActive] = useState<boolean>(false);
   
-  // Dodaj stan isReaction5sNotApplicableActive dla loses
-  const [isReaction5sNotApplicableActive, setIsReaction5sNotApplicableActive] = useState<boolean>(false);
+  // Dodaj stan isBadReaction5sActive dla loses
+  const [isBadReaction5sActive, setIsBadReaction5sActive] = useState<boolean>(false);
   
   // Dodaj stan isAutActive dla loses
   const [isAutActive, setIsAutActive] = useState<boolean>(false);
@@ -592,7 +592,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
             losesDefenseZone: losesOppositeZone || formattedStartZone, // Strefa obrony (opposite zone)
           isBelow8s: isBelow8sActive, 
           isReaction5s: isReaction5sActive, 
-          isReaction5sNotApplicable: isReaction5sNotApplicableActive,
+          isBadReaction5s: isBadReaction5sActive,
           isAut: isAutActive,
           playersBehindBall: playersBehindBall, 
             opponentsBehindBall: opponentsBehindBall,
@@ -824,7 +824,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       return false;
     }
-  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP0StartActive, isP1StartActive, isP2StartActive, isP3StartActive, isP0Active, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf, isBelow8sActive, isReaction5sActive, isReaction5sNotApplicableActive, isAutActive, isPMAreaActive, playersBehindBall, opponentsBehindBall, playersLeftField, opponentsLeftField, actionCategory, actionMode, selectedDefensePlayers, loadActionsForMatch]);
+  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP0StartActive, isP1StartActive, isP2StartActive, isP3StartActive, isP0Active, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf, isBelow8sActive, isReaction5sActive, isBadReaction5sActive, isAutActive, isPMAreaActive, playersBehindBall, opponentsBehindBall, playersLeftField, opponentsLeftField, actionCategory, actionMode, selectedDefensePlayers, loadActionsForMatch]);
 
   // Funkcja pomocnicza do określenia kategorii akcji
   const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
@@ -1058,7 +1058,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsControversial(false);
     setIsBelow8sActive(false);
     setIsReaction5sActive(false);
-    setIsReaction5sNotApplicableActive(false);
+    setIsBadReaction5sActive(false);
     setIsAutActive(false);
     setIsPMAreaActive(false);
     setPlayersBehindBall(0);
@@ -1119,8 +1119,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsBelow8sActive,
     isReaction5sActive,
     setIsReaction5sActive,
-    isReaction5sNotApplicableActive,
-    setIsReaction5sNotApplicableActive,
+    isBadReaction5sActive,
+    setIsBadReaction5sActive,
     isAutActive,
     setIsAutActive,
     isPMAreaActive,

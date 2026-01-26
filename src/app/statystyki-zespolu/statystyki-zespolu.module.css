@@ -1511,6 +1511,13 @@
   margin-top: 20px;
 }
 
+.countItemsWrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .countItem {
   padding: 12px;
   background-color: #f9fafb;

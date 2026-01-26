@@ -1035,65 +1035,6 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
               )}
             </div>
             
-            {/* Prawa strona: Grupa przycisków "Przeciwnik po przechwycie" - Wejście PK, Strzał, Gol, Poniżej 8s */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span style={{ fontSize: '12px', color: '#666', fontWeight: 500, marginBottom: '4px' }}>Przeciwnik po przechwycie</span>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {/* Przyciski ułożone pionowo: Wejście PK, Strzał, Gol */}
-                <div className={styles.verticalButtonsContainer}>
-                  <button
-                    className={`${styles.compactButton} ${
-                      isPenaltyAreaEntry ? styles.activeButton : ""
-                    }`}
-                    onClick={handlePenaltyAreaEntryToggle}
-                    aria-pressed={isPenaltyAreaEntry}
-                    type="button"
-                    title="Wejście w pole karne"
-                  >
-                    <span className={styles.compactLabel}>Wejście PK</span>
-                  </button>
-
-                  <button
-                    className={`${styles.compactButton} ${
-                      isShot ? styles.activeButton : ""
-                    }`}
-                    onClick={handleShotToggle}
-                    aria-pressed={isShot}
-                    type="button"
-                    title="Strzał"
-                  >
-                    <span className={styles.compactLabel}>Strzał</span>
-                  </button>
-
-                  <button
-                    className={`${styles.compactButton} ${
-                      isGoal ? styles.activeButton : ""
-                    } ${!isShot ? styles.disabledButton : ""}`}
-                    onClick={handleGoalToggle}
-                    disabled={!isShot}
-                    aria-pressed={isGoal}
-                    aria-disabled={!isShot}
-                    type="button"
-                    title={!isShot ? "Musisz najpierw zaznaczyć Strzał" : "Gol"}
-                  >
-                    <span className={styles.compactLabel}>Gol</span>
-                  </button>
-                </div>
-
-                {/* Przycisk "Poniżej 8s" */}
-                <button
-                  className={`${styles.compactButton} ${styles.tooltipTrigger} ${
-                    isBelow8sActive ? styles.activeButton : ""
-                  }`}
-                  onClick={onBelow8sToggle}
-                  aria-pressed={isBelow8sActive}
-                  type="button"
-                  data-tooltip={`8 sekund od jego rozpoczęcia (1T):\n• wejść w pole karne rywala\n• oddać strzał na bramkę lub strzelić gola`}
-                >
-                  <span className={styles.compactLabel}>Poniżej 8s</span>
-                </button>
-              </div>
-            </div>
 
             {/* Pozostałe przyciski punktów (bez "Minięty przeciwnik") */}
             {ACTION_BUTTONS.map((button, index) => {

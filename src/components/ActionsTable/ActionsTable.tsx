@@ -11,11 +11,11 @@ import { useAuth } from "@/hooks/useAuth";
 
 // Funkcja do określenia kategorii akcji (spójna z page.tsx)
 const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
-  // Loses: ma isReaction5s, isAut lub isReaction5sNotApplicable (którekolwiek z tych pól zdefiniowane)
+  // Loses: ma isReaction5s, isAut lub isBadReaction5s (którekolwiek z tych pól zdefiniowane)
   // LUB ma pola specyficzne dla loses (losesAttackZone, losesDefenseZone, losesAttackXT, losesDefenseXT)
   if (action.isReaction5s !== undefined || 
       action.isAut !== undefined || 
-      action.isReaction5sNotApplicable !== undefined ||
+      action.isBadReaction5s !== undefined ||
       action.losesAttackZone !== undefined ||
       action.losesDefenseZone !== undefined ||
       action.losesAttackXT !== undefined ||

@@ -446,16 +446,6 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
       {/* Instrukcja */}
       {!hideInstructions && !!onEntryAdd && (
         <>
-          {drawingState.isDrawing && (
-            <div className={styles.instruction}>
-              Kliknij punkt końcowy strzałki
-            </div>
-          )}
-          {!drawingState.isDrawing && (
-            <div className={styles.instruction}>
-              Kliknij, aby rozpocząć rysowanie strzałki (punkt startu)
-            </div>
-          )}
         </>
       )}
 

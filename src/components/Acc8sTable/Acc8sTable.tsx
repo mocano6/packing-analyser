@@ -65,6 +65,7 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
     shotTimeDiff?: number;
     pkTimeDiff?: number;
   }>>([]);
+  const [selectedAcc8sUpdates, setSelectedAcc8sUpdates] = useState<Set<string>>(new Set());
 
   // Liczba akcji kontrowersyjnych
   const controversialCount = useMemo(() => {
@@ -336,6 +337,9 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                 }
                 
                 setPendingUpdates(updates);
+                // Zaznacz wszystkie domyślnie
+                const allIds = new Set(updates.map(u => u.entry.id || `acc8s-${updates.indexOf(u)}`).filter(Boolean));
+                setSelectedAcc8sUpdates(allIds);
                 setShowAutoFlagsModal(true);
               }}
               className={pitchHeaderStyles.headerButton}
@@ -442,9 +446,26 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                   const acc8sSeconds = acc8sTimeRaw ? Math.floor(acc8sTimeRaw % 60) : 0;
                   const acc8sTimeString = `${acc8sMinutes}:${acc8sSeconds.toString().padStart(2, '0')}`;
                   
+                  const entryId = update.entry.id || `acc8s-${index}`;
+                  const isSelected = selectedAcc8sUpdates.has(entryId);
+                  
                   return (
-                    <div key={update.entry.id || index} className={pageStyles.pkVerifyItem}>
+                    <div key={entryId} className={pageStyles.pkVerifyItem}>
                       <div className={pageStyles.pkVerifyItemHeader}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            const newSelected = new Set(selectedAcc8sUpdates);
+                            if (e.target.checked) {
+                              newSelected.add(entryId);
+                            } else {
+                              newSelected.delete(entryId);
+                            }
+                            setSelectedAcc8sUpdates(newSelected);
+                          }}
+                          style={{ marginRight: '8px', cursor: 'pointer' }}
+                        />
                         <span className={pageStyles.pkVerifyTime}>{acc8sTimeString}</span>
                         <span className={pageStyles.pkVerifyMinute}>Minuta {update.entry.minute}'</span>
                       </div>
@@ -492,28 +513,63 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
               </div>
             </div>
             <div className={pageStyles.pkVerifyFooter}>
-              <button
-                onClick={() => setShowAutoFlagsModal(false)}
-                className={pageStyles.pkVerifyCancel}
-              >
-                Anuluj
-              </button>
-              <button
-                onClick={async () => {
-                  if (onBulkUpdateEntries) {
-                    await onBulkUpdateEntries(pendingUpdates.map(u => ({
-                      id: u.entry.id,
-                      isShotUnder8s: u.isShotUnder8s,
-                      isPKEntryUnder8s: u.isPKEntryUnder8s,
-                    })));
-                  }
-                  setShowAutoFlagsModal(false);
-                  setPendingUpdates([]);
-                }}
-                className={pageStyles.pkVerifySave}
-              >
-                Zatwierdź zmiany
-              </button>
+              <div className={pageStyles.pkVerifySelectAllGroup}>
+                <button
+                  type="button"
+                  className={pageStyles.pkVerifySelectAllButton}
+                  onClick={() => {
+                    const allIds = new Set(pendingUpdates.map(u => u.entry.id || `acc8s-${pendingUpdates.indexOf(u)}`).filter(Boolean));
+                    setSelectedAcc8sUpdates(allIds);
+                  }}
+                >
+                  Zaznacz wszystkie
+                </button>
+                <button
+                  type="button"
+                  className={pageStyles.pkVerifySelectAllButton}
+                  onClick={() => setSelectedAcc8sUpdates(new Set())}
+                >
+                  Odznacz wszystkie
+                </button>
+              </div>
+              <div className={pageStyles.pkVerifyFooterActions}>
+                <button
+                  onClick={() => {
+                    setShowAutoFlagsModal(false);
+                    setSelectedAcc8sUpdates(new Set());
+                  }}
+                  className={pageStyles.pkVerifyCancel}
+                >
+                  Anuluj
+                </button>
+                <button
+                  onClick={async () => {
+                    if (selectedAcc8sUpdates.size === 0) {
+                      alert("Zaznacz przynajmniej jedną pozycję do zaktualizowania.");
+                      return;
+                    }
+                    
+                    if (onBulkUpdateEntries) {
+                      await onBulkUpdateEntries(pendingUpdates
+                        .filter(u => {
+                          const entryId = u.entry.id || `acc8s-${pendingUpdates.indexOf(u)}`;
+                          return selectedAcc8sUpdates.has(entryId);
+                        })
+                        .map(u => ({
+                          id: u.entry.id,
+                          isShotUnder8s: u.isShotUnder8s,
+                          isPKEntryUnder8s: u.isPKEntryUnder8s,
+                        })));
+                    }
+                    setShowAutoFlagsModal(false);
+                    setPendingUpdates([]);
+                    setSelectedAcc8sUpdates(new Set());
+                  }}
+                  className={pageStyles.pkVerifySave}
+                >
+                  Zatwierdź zmiany ({selectedAcc8sUpdates.size})
+                </button>
+              </div>
             </div>
           </div>
         </div>

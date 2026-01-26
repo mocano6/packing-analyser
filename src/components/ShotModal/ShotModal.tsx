@@ -1129,33 +1129,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
             </div>
           </div>
 
-          {/* Rodzaj akcji */}
-          <div className={styles.fieldGroup}>
-            <label>Rodzaj akcji:</label>
-            <div className={styles.actionTypeSelector}>
-              {getAvailableActionTypes().map((actionType) => {
-                let tooltipText = "";
-                if (actionType.value === "open_play") {
-                  tooltipText = "Open play";
-                } else if (actionType.value === "regain") {
-                  tooltipText = "Strzał do 8s po odbiorze na połowie przeciwnika";
-                }
-                
-                return (
-                  <button
-                    key={actionType.value}
-                    type="button"
-                    className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${formData.actionType === actionType.value ? styles.active : ""}`}
-                    onClick={() => setFormData({...formData, actionType: actionType.value as any})}
-                    data-tooltip={tooltipText || undefined}
-                    title={tooltipText || undefined}
-                  >
-                    {actionType.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
 
           {/* Podrodzaj SFG */}
           {formData.actionCategory === "sfg" && formData.actionType !== "penalty" && (

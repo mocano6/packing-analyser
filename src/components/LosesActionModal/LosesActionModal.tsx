@@ -70,8 +70,8 @@ interface LosesActionModalProps {
   isReaction5sActive: boolean;
   onReaction5sToggle: () => void;
   // Nowy prop dla przycisku "Brak 5s" (nie dotyczy)
-  isReaction5sNotApplicableActive: boolean;
-  onReaction5sNotApplicableToggle: () => void;
+  isBadReaction5sActive: boolean;
+  onBadReaction5sToggle: () => void;
   // Nowy prop dla przycisku "Aut"
   isAutActive: boolean;
   onAutToggle: () => void;
@@ -153,8 +153,8 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   isReaction5sActive,
   onReaction5sToggle,
   // Nowy prop dla przycisku "Brak 5s" (nie dotyczy)
-  isReaction5sNotApplicableActive,
-  onReaction5sNotApplicableToggle,
+  isBadReaction5sActive,
+  onBadReaction5sToggle,
   // Nowy prop dla przycisku "Aut"
   isAutActive,
   onAutToggle,
@@ -1063,31 +1063,35 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                     3T+
                   </button>
                 </div>
-                <div
-                  className={`${styles.actionTypeSelector} ${styles.actionTypeSelectorSecond}`}
+              <div
+                className={`${styles.actionTypeSelector} ${styles.actionTypeSelectorSecond}`}
+              >
+                <button
+                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
+                    isReaction5sActive ? styles.active : ""
+                  }`}
+                  onClick={onReaction5sToggle}
+                  aria-pressed={isReaction5sActive}
+                  type="button"
+                  data-tooltip={`Kontrpressing (do 5s po stracie).\n• 2 kontakty z piłką lub podanie/strzał (5 sekunda przy pierwszym kontakcie).\n• Sfaulujemy przeciwnika, akcja zostaje przerwana.`}
+                  title="5s - dobre"
                 >
-                  <button
-                    className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
-                      isReaction5sActive ? styles.active : ""
-                    }`}
-                    onClick={onReaction5sToggle}
-                    aria-pressed={isReaction5sActive}
-                    type="button"
-                    data-tooltip={`Kontrpressing (do 5s po stracie).\n• 2 kontakty z piłką lub podanie/strzał (5 sekunda przy pierwszym kontakcie).\n• Sfaulujemy przeciwnika, akcja zostaje przerwana.`}
-                  >
-                    5s
-                  </button>
-                  <button
-                    className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
-                      isReaction5sNotApplicableActive ? styles.active : ""
-                    }`}
-                    onClick={onReaction5sNotApplicableToggle}
-                    aria-pressed={isReaction5sNotApplicableActive}
-                    type="button"
-                    data-tooltip={`Brak 5s - nie da się zrobić 5s.\n• Przeciwnik poda piłkę do zawodnika znajdującego 2 strefy niżej.\n• Piłka w rękach bramkarza`}
-                  >
-                    Brak 5s
-                  </button>
+                  <span style={{ fontSize: '14px', color: '#10b981', marginRight: '4px' }}>✓</span>
+                  <span>5s</span>
+                </button>
+                <button
+                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
+                    isBadReaction5sActive ? styles.active : ""
+                  }`}
+                  onClick={onBadReaction5sToggle}
+                  aria-pressed={isBadReaction5sActive}
+                  type="button"
+                  data-tooltip="Nieudane 5s"
+                  title="Nieudane 5s"
+                >
+                  <span style={{ fontSize: '14px', color: '#dc2626', marginRight: '4px' }}>✗</span>
+                  <span>5s</span>
+                </button>
                   <button
                     className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
                       isAutActive ? styles.active : ""
@@ -1122,65 +1126,6 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
               )}
             </div>
             
-            {/* Prawa strona: Grupa przycisków "Przeciwnik po przechwycie" - Wejście PK, Strzał, Gol, Poniżej 8s */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span style={{ fontSize: '12px', color: '#666', fontWeight: 500, marginBottom: '4px' }}>Przeciwnik po przechwycie</span>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {/* Przyciski ułożone pionowo: Wejście PK, Strzał, Gol */}
-                <div className={styles.verticalButtonsContainer}>
-                  <button
-                    className={`${styles.compactButton} ${
-                      isPenaltyAreaEntry ? styles.activeButton : ""
-                    }`}
-                    onClick={handlePenaltyAreaEntryToggle}
-                    aria-pressed={isPenaltyAreaEntry}
-                    type="button"
-                    title="Wejście w pole karne"
-                  >
-                    <span className={styles.compactLabel}>Wejście PK</span>
-                  </button>
-
-                  <button
-                    className={`${styles.compactButton} ${
-                      isShot ? styles.activeButton : ""
-                    }`}
-                    onClick={handleShotToggle}
-                    aria-pressed={isShot}
-                    type="button"
-                    title="Strzał"
-                  >
-                    <span className={styles.compactLabel}>Strzał</span>
-                  </button>
-
-                  <button
-                    className={`${styles.compactButton} ${
-                      isGoal ? styles.activeButton : ""
-                    } ${!isShot ? styles.disabledButton : ""}`}
-                    onClick={handleGoalToggle}
-                    disabled={!isShot}
-                    aria-pressed={isGoal}
-                    aria-disabled={!isShot}
-                    type="button"
-                    title={!isShot ? "Musisz najpierw zaznaczyć Strzał" : "Gol"}
-                  >
-                    <span className={styles.compactLabel}>Gol</span>
-                  </button>
-                </div>
-
-                {/* Przycisk "Poniżej 8s" */}
-                <button
-                  className={`${styles.compactButton} ${styles.tooltipTrigger} ${
-                    isBelow8sActive ? styles.activeButton : ""
-                  }`}
-                  onClick={onBelow8sToggle}
-                  aria-pressed={isBelow8sActive}
-                  type="button"
-                  data-tooltip={`8 sekund od jego rozpoczęcia (1T):\n• wejść w pole karne rywala\n• oddać strzał na bramkę lub strzelić gola`}
-                >
-                  <span className={styles.compactLabel}>Poniżej 8s</span>
-                </button>
-              </div>
-            </div>
 
             {/* Pozostałe przyciski punktów (bez "Minięty przeciwnik") */}
             {ACTION_BUTTONS.map((button, index) => {

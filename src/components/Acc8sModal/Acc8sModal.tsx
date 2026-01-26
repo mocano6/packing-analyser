@@ -506,56 +506,6 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
             </div>
           </div>
 
-          {/* Buttony dla checkboxów - możliwość ręcznej zmiany */}
-          <div className={styles.compactButtonsRow}>
-            <button
-              type="button"
-              className={`${styles.compactButton} ${formData.isShotUnder8s ? styles.activeButton : ""}`}
-              onClick={() => setFormData({...formData, isShotUnder8s: !formData.isShotUnder8s})}
-              title="Strzał 8s"
-              aria-pressed={formData.isShotUnder8s}
-            >
-              <span className={styles.compactLabel}>Strzał 8s</span>
-            </button>
-            <button
-              type="button"
-              className={`${styles.compactButton} ${formData.isPKEntryUnder8s ? styles.activeButton : ""}`}
-              onClick={() => setFormData({...formData, isPKEntryUnder8s: !formData.isPKEntryUnder8s})}
-              title="PK 8s"
-              aria-pressed={formData.isPKEntryUnder8s}
-            >
-              <span className={styles.compactLabel}>PK 8s</span>
-            </button>
-          </div>
-
-          {/* Liczba podań - widoczne tylko dla admina */}
-          {isAdmin && (
-            <div 
-              className={styles.compactPointsButton}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleAddPass();
-              }}
-              title="Liczba podań = liczba wybranych zawodników"
-            >
-              <span className={styles.compactLabel}>Liczba podań</span>
-              <span className={styles.pointsValue}><b>{formData.passingPlayerIds.length}</b></span>
-              <button
-                className={styles.compactSubtractButton}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleRemovePass();
-                }}
-                title="Odejmij podanie"
-                type="button"
-                disabled={formData.passingPlayerIds.length === 0}
-              >
-                −
-              </button>
-            </div>
-          )}
 
           {/* Pole notatki kontrowersyjnej - pojawia się gdy isControversial jest true */}
           {formData.isControversial && (

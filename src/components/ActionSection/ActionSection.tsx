@@ -64,8 +64,8 @@ export interface ActionSectionProps {
   setIsBelow8sActive: React.Dispatch<React.SetStateAction<boolean>>;
   isReaction5sActive: boolean;
   setIsReaction5sActive: React.Dispatch<React.SetStateAction<boolean>>;
-  isReaction5sNotApplicableActive: boolean;
-  setIsReaction5sNotApplicableActive: React.Dispatch<React.SetStateAction<boolean>>;
+  isBadReaction5sActive: boolean;
+  setIsBadReaction5sActive: React.Dispatch<React.SetStateAction<boolean>>;
   isAutActive: boolean;
   setIsAutActive: React.Dispatch<React.SetStateAction<boolean>>;
   isPMAreaActive: boolean;
@@ -172,8 +172,8 @@ const ActionSection = memo(function ActionSection({
   setIsBelow8sActive,
   isReaction5sActive,
   setIsReaction5sActive,
-  isReaction5sNotApplicableActive,
-  setIsReaction5sNotApplicableActive,
+  isBadReaction5sActive,
+  setIsBadReaction5sActive,
   isAutActive,
   setIsAutActive,
   isPMAreaActive,
@@ -950,10 +950,10 @@ const ActionSection = memo(function ActionSection({
             }
           }}
           // Nowy prop dla przycisku "Brak 5s" (nie dotyczy)
-          isReaction5sNotApplicableActive={isReaction5sNotApplicableActive}
-          onReaction5sNotApplicableToggle={() => {
-            const newValue = !isReaction5sNotApplicableActive;
-            setIsReaction5sNotApplicableActive(newValue);
+          isBadReaction5sActive={isBadReaction5sActive}
+          onBadReaction5sToggle={() => {
+            const newValue = !isBadReaction5sActive;
+            setIsBadReaction5sActive(newValue);
             if (newValue) {
               setIsReaction5sActive(false);
             }
@@ -1356,17 +1356,17 @@ const ActionSection = memo(function ActionSection({
               onEditingActionChange({
                 ...editingAction,
                 isReaction5s: newValue,
-                isReaction5sNotApplicable: newValue ? false : editingAction.isReaction5sNotApplicable
+                isBadReaction5s: newValue ? false : editingAction.isBadReaction5s
               });
             }
           }}
-          isReaction5sNotApplicableActive={editingAction?.isReaction5sNotApplicable || false}
-          onReaction5sNotApplicableToggle={() => {
+          isBadReaction5sActive={editingAction?.isBadReaction5s || false}
+          onBadReaction5sToggle={() => {
             if (editingAction && onEditingActionChange) {
-              const newValue = !editingAction.isReaction5sNotApplicable;
+              const newValue = !editingAction.isBadReaction5s;
               onEditingActionChange({
                 ...editingAction,
-                isReaction5sNotApplicable: newValue,
+                isBadReaction5s: newValue,
                 isReaction5s: newValue ? false : editingAction.isReaction5s
               });
             }

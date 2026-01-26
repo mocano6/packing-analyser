@@ -187,9 +187,9 @@ Wszystkie obiekty są zapisywane w kolekcji `matches/{matchId}` jako tablice:
   
   // Flagi czasowe
   isBelow8s?: boolean;         // Poniżej 8 sekund
-  isReaction5s?: boolean;      // Reakcja 5s (kontrpressing do 20s po stracie)
+  isReaction5s?: boolean;      // Reakcja 5s (kontrpressing do 5s po stracie) - dobre 5s (✓)
   isAut?: boolean;              // Aut
-  isReaction5sNotApplicable?: boolean; // Nie dotyczy - nie da się zrobić 5s
+  isBadReaction5s?: boolean;    // Złe 5s - nieudane 5s (✗)
   
   // Flagi Packing (dla loses)
   isP0?: boolean;               // P0

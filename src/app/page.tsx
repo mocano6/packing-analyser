@@ -712,7 +712,12 @@ export default function Page() {
     isRegain: boolean;
     regainTime?: string;
     timeDiffSeconds?: number;
+    isShot?: boolean;
+    isGoal?: boolean;
+    shotTime?: string;
+    shotTimeDiff?: number;
   }>>([]);
+  const [selectedPKUpdates, setSelectedPKUpdates] = useState<Set<string>>(new Set());
 
   // Stan dla weryfikacji strzałów
   const [showShotsVerifyModal, setShowShotsVerifyModal] = useState(false);
@@ -722,6 +727,7 @@ export default function Page() {
     regainTime?: string;
     timeDiffSeconds?: number;
   }>>([]);
+  const [selectedShotsUpdates, setSelectedShotsUpdates] = useState<Set<string>>(new Set());
 
   // Funkcje obsługi strzałów
   const handleShotAdd = async (x: number, y: number, xG: number) => {
@@ -902,8 +908,8 @@ export default function Page() {
     setIsReaction5sActive,
     isAutActive,
     setIsAutActive,
-    isReaction5sNotApplicableActive,
-    setIsReaction5sNotApplicableActive,
+    isBadReaction5sActive,
+    setIsBadReaction5sActive,
     isPMAreaActive,
     setIsPMAreaActive,
     playersBehindBall,
@@ -937,12 +943,12 @@ export default function Page() {
                          action.opponentsLeftField !== undefined) &&
                         action.isReaction5s === undefined &&
                         action.isAut === undefined &&
-                        action.isReaction5sNotApplicable === undefined;
+                        action.isBadReaction5s === undefined;
         
-        // Loses: ma isReaction5s, isAut lub isReaction5sNotApplicable
+        // Loses: ma isReaction5s, isAut lub isBadReaction5s
         const isLoses = action.isReaction5s !== undefined || 
                        action.isAut !== undefined || 
-                       action.isReaction5sNotApplicable !== undefined;
+                       action.isBadReaction5s !== undefined;
         
         return isRegain || isLoses;
       });
@@ -958,14 +964,14 @@ export default function Page() {
          action.opponentsLeftField !== undefined) &&
         action.isReaction5s === undefined &&
         action.isAut === undefined &&
-        action.isReaction5sNotApplicable === undefined
+        action.isBadReaction5s === undefined
       );
     } else if (actionCategory === "loses") {
-      // Loses: ma isReaction5s, isAut lub isReaction5sNotApplicable (którekolwiek z tych pól zdefiniowane)
+      // Loses: ma isReaction5s, isAut lub isBadReaction5s (którekolwiek z tych pól zdefiniowane)
       return actions.filter(action => 
         action.isReaction5s !== undefined || 
         action.isAut !== undefined || 
-        action.isReaction5sNotApplicable !== undefined
+        action.isBadReaction5s !== undefined
       );
     } else {
       // Packing: nie ma pól charakterystycznych dla regain/loses
@@ -3161,8 +3167,8 @@ export default function Page() {
             setIsReaction5sActive={setIsReaction5sActive}
             isAutActive={isAutActive}
             setIsAutActive={setIsAutActive}
-            isReaction5sNotApplicableActive={isReaction5sNotApplicableActive}
-            setIsReaction5sNotApplicableActive={setIsReaction5sNotApplicableActive}
+            isBadReaction5sActive={isBadReaction5sActive}
+            setIsBadReaction5sActive={setIsBadReaction5sActive}
             isPMAreaActive={isPMAreaActive}
             setIsPMAreaActive={setIsPMAreaActive}
             playersBehindBall={playersBehindBall}
@@ -3678,6 +3684,9 @@ export default function Page() {
 
                         console.log("Updates przed zapisaniem:", updates.length);
                         setPendingShotsUpdates(updates);
+                        // Zaznacz wszystkie domyślnie
+                        const allIds = new Set(updates.map(u => u.shot.id || `shot-${updates.indexOf(u)}`).filter(Boolean));
+                        setSelectedShotsUpdates(allIds);
                         setShowShotsVerifyModal(true);
                       } catch (error) {
                         console.error("Błąd podczas weryfikacji strzałów:", error);
@@ -4420,6 +4429,9 @@ export default function Page() {
                     }
 
                     setPendingPKRegainUpdates(updates);
+                    // Zaznacz wszystkie domyślnie
+                    const allIds = new Set(updates.map(u => u.entry.id || `update-${updates.indexOf(u)}`).filter(Boolean));
+                    setSelectedPKUpdates(allIds);
                     setShowPKRegainVerifyModal(true);
                   }}
                 >
@@ -4461,9 +4473,26 @@ export default function Page() {
                       const pkSeconds = Math.floor(pkTimeRaw % 60);
                       const pkTimeString = `${pkMinutes}:${pkSeconds.toString().padStart(2, "0")}`;
 
+                      const entryId = update.entry.id || `update-${index}`;
+                      const isSelected = selectedPKUpdates.has(entryId);
+                      
                       return (
-                        <div key={update.entry.id || index} className={styles.pkVerifyItem}>
+                        <div key={entryId} className={styles.pkVerifyItem}>
                           <div className={styles.pkVerifyItemHeader}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const newSelected = new Set(selectedPKUpdates);
+                                if (e.target.checked) {
+                                  newSelected.add(entryId);
+                                } else {
+                                  newSelected.delete(entryId);
+                                }
+                                setSelectedPKUpdates(newSelected);
+                              }}
+                              style={{ marginRight: '8px', cursor: 'pointer' }}
+                            />
                             <span className={styles.pkVerifyTime}>{pkTimeString}</span>
                             <span className={styles.pkVerifyMinute}>Minuta {update.entry.minute}'</span>
                           </div>
@@ -4565,33 +4594,63 @@ export default function Page() {
                   })()}
                 </div>
                 <div className={styles.pkVerifyFooter}>
-                  <button
-                    className={styles.pkVerifyCancel}
-                    onClick={() => setShowPKRegainVerifyModal(false)}
-                  >
-                    Anuluj
-                  </button>
-                  <button
-                    className={styles.pkVerifySave}
-                    onClick={async () => {
-                      if (!matchInfo?.matchId) {
-                        alert("Wybierz mecz, aby zapisać zmiany.");
-                        return;
-                      }
+                  <div className={styles.pkVerifySelectAllGroup}>
+                    <button
+                      type="button"
+                      className={styles.pkVerifySelectAllButton}
+                      onClick={() => {
+                        const allIds = new Set(pendingPKRegainUpdates.map(u => u.entry.id || `update-${pendingPKRegainUpdates.indexOf(u)}`).filter(Boolean));
+                        setSelectedPKUpdates(allIds);
+                      }}
+                    >
+                      Zaznacz wszystkie
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.pkVerifySelectAllButton}
+                      onClick={() => setSelectedPKUpdates(new Set())}
+                    >
+                      Odznacz wszystkie
+                    </button>
+                  </div>
+                  <div className={styles.pkVerifyFooterActions}>
+                    <button
+                      className={styles.pkVerifyCancel}
+                      onClick={() => {
+                        setShowPKRegainVerifyModal(false);
+                        setSelectedPKUpdates(new Set());
+                      }}
+                    >
+                      Anuluj
+                    </button>
+                    <button
+                      className={styles.pkVerifySave}
+                      onClick={async () => {
+                        if (!matchInfo?.matchId) {
+                          alert("Wybierz mecz, aby zapisać zmiany.");
+                          return;
+                        }
 
-                      try {
-                        const updatedEntries = pkEntries.map(entry => {
-                          const update = pendingPKRegainUpdates.find(u => u.entry.id === entry.id);
-                          if (update) {
-                            return { 
-                              ...entry, 
-                              isRegain: update.isRegain,
-                              isShot: update.isShot !== undefined ? update.isShot : entry.isShot,
-                              isGoal: update.isGoal !== undefined ? update.isGoal : entry.isGoal,
-                            };
-                          }
-                          return entry;
-                        });
+                        if (selectedPKUpdates.size === 0) {
+                          alert("Zaznacz przynajmniej jedną pozycję do zaktualizowania.");
+                          return;
+                        }
+
+                        try {
+                          const updatedEntries = pkEntries.map(entry => {
+                            const update = pendingPKRegainUpdates.find(u => u.entry.id === entry.id);
+                            const entryId = entry.id || `update-${pendingPKRegainUpdates.findIndex(u => u.entry.id === entry.id)}`;
+                            // Aktualizuj tylko jeśli pozycja jest zaznaczona
+                            if (update && selectedPKUpdates.has(entryId)) {
+                              return { 
+                                ...entry, 
+                                isRegain: update.isRegain,
+                                isShot: update.isShot !== undefined ? update.isShot : entry.isShot,
+                                isGoal: update.isGoal !== undefined ? update.isGoal : entry.isGoal,
+                              };
+                            }
+                            return entry;
+                          });
 
                         const db = getDB();
                         await updateDoc(doc(db, "matches", matchInfo.matchId), {
@@ -4600,15 +4659,17 @@ export default function Page() {
 
                         setShowPKRegainVerifyModal(false);
                         setPendingPKRegainUpdates([]);
+                        setSelectedPKUpdates(new Set());
                       } catch (error) {
                         console.error("Błąd podczas aktualizacji wejść w PK:", error);
                         alert("Nie udało się zaktualizować wejść w PK.");
                       }
                     }}
                   >
-                    Zatwierdź zmiany
+                    Zatwierdź zmiany ({selectedPKUpdates.size})
                   </button>
                 </div>
+              </div>
               </div>
             </div>
           )}
@@ -4731,10 +4792,26 @@ export default function Page() {
                       const shotMinutes = Math.floor(shotTimeRaw / 60);
                       const shotSeconds = Math.floor(shotTimeRaw % 60);
                       const shotTimeString = `${shotMinutes}:${shotSeconds.toString().padStart(2, "0")}`;
+                      const shotId = update.shot.id || `shot-${index}`;
+                      const isSelected = selectedShotsUpdates.has(shotId);
 
                       return (
-                        <div key={update.shot.id || index} className={styles.pkVerifyItem}>
+                        <div key={shotId} className={styles.pkVerifyItem}>
                           <div className={styles.pkVerifyItemHeader}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const newSelected = new Set(selectedShotsUpdates);
+                                if (e.target.checked) {
+                                  newSelected.add(shotId);
+                                } else {
+                                  newSelected.delete(shotId);
+                                }
+                                setSelectedShotsUpdates(newSelected);
+                              }}
+                              style={{ marginRight: '8px', cursor: 'pointer' }}
+                            />
                             <span className={styles.pkVerifyTime}>{shotTimeString}</span>
                             <span className={styles.pkVerifyMinute}>Minuta {update.shot.minute}'</span>
                           </div>
@@ -4787,31 +4864,61 @@ export default function Page() {
                   })()}
                 </div>
               <div className={styles.pkVerifyFooter}>
-                <button
-                  className={styles.pkVerifyCancel}
-                  onClick={() => setShowShotsVerifyModal(false)}
-                >
-                  Anuluj
-                </button>
-                <button
-                  className={styles.pkVerifySave}
-                  onClick={async () => {
-                    if (!matchInfo?.matchId) {
-                      alert("Wybierz mecz, aby zapisać zmiany.");
-                      return;
-                    }
+                <div className={styles.pkVerifySelectAllGroup}>
+                  <button
+                    type="button"
+                    className={styles.pkVerifySelectAllButton}
+                    onClick={() => {
+                      const allIds = new Set(pendingShotsUpdates.map(u => u.shot.id || `shot-${pendingShotsUpdates.indexOf(u)}`).filter(Boolean));
+                      setSelectedShotsUpdates(allIds);
+                    }}
+                  >
+                    Zaznacz wszystkie
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.pkVerifySelectAllButton}
+                    onClick={() => setSelectedShotsUpdates(new Set())}
+                  >
+                    Odznacz wszystkie
+                  </button>
+                </div>
+                <div className={styles.pkVerifyFooterActions}>
+                  <button
+                    className={styles.pkVerifyCancel}
+                    onClick={() => {
+                      setShowShotsVerifyModal(false);
+                      setSelectedShotsUpdates(new Set());
+                    }}
+                  >
+                    Anuluj
+                  </button>
+                  <button
+                    className={styles.pkVerifySave}
+                    onClick={async () => {
+                      if (!matchInfo?.matchId) {
+                        alert("Wybierz mecz, aby zapisać zmiany.");
+                        return;
+                      }
 
-                    try {
-                      const updatedShots = shots.map(shot => {
-                        const update = pendingShotsUpdates.find(u => u.shot.id === shot.id);
-                        if (update) {
-                          return { 
-                            ...shot, 
-                            actionType: update.actionType,
-                          };
-                        }
-                        return shot;
-                      });
+                      if (selectedShotsUpdates.size === 0) {
+                        alert("Zaznacz przynajmniej jedną pozycję do zaktualizowania.");
+                        return;
+                      }
+
+                      try {
+                        const updatedShots = shots.map(shot => {
+                          const update = pendingShotsUpdates.find(u => u.shot.id === shot.id);
+                          const shotId = shot.id || `shot-${pendingShotsUpdates.findIndex(u => u.shot.id === shot.id)}`;
+                          // Aktualizuj tylko jeśli pozycja jest zaznaczona
+                          if (update && selectedShotsUpdates.has(shotId)) {
+                            return { 
+                              ...shot, 
+                              actionType: update.actionType,
+                            };
+                          }
+                          return shot;
+                        });
 
                       const db = getDB();
                       await updateDoc(doc(db, "matches", matchInfo.matchId), {
@@ -4820,15 +4927,17 @@ export default function Page() {
 
                       setShowShotsVerifyModal(false);
                       setPendingShotsUpdates([]);
+                      setSelectedShotsUpdates(new Set());
                     } catch (error) {
                       console.error("Błąd podczas aktualizacji strzałów:", error);
                       alert("Nie udało się zaktualizować strzałów.");
                     }
                   }}
                 >
-                  Zatwierdź zmiany
+                  Zatwierdź zmiany ({selectedShotsUpdates.size})
                 </button>
               </div>
+            </div>
             </div>
           </div>
         )}

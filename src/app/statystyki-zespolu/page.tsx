@@ -134,7 +134,7 @@ export default function StatystykiZespoluPage() {
   const [teamRegainHeatmapMode, setTeamRegainHeatmapMode] = useState<"xt" | "count">("xt");
   const [teamLosesAttackDefenseMode, setTeamLosesAttackDefenseMode] = useState<"attack" | "defense">("attack");
   const [teamLosesHeatmapMode, setTeamLosesHeatmapMode] = useState<"xt" | "count">("xt");
-  const [losesHalfFilter, setLosesHalfFilter] = useState<"all" | "own" | "opponent" | "pm">("own");
+  const [losesHalfFilter, setLosesHalfFilter] = useState<"all" | "own" | "opponent" | "pm">("all");
   const [regainHalfFilter, setRegainHalfFilter] = useState<"all" | "own" | "opponent" | "pm">("all");
   const [selectedActionFilter, setSelectedActionFilter] = useState<Array<'p0' | 'p1' | 'p2' | 'p3' | 'p0start' | 'p1start' | 'p2start' | 'p3start' | 'pk' | 'shot' | 'goal'>>([]);
   const [actionsModalOpen, setActionsModalOpen] = useState(false);
@@ -194,7 +194,7 @@ export default function StatystykiZespoluPage() {
         zone: string;
         isReaction5s?: boolean;
         isAut?: boolean;
-        isReaction5sNotApplicable?: boolean;
+        isBadReaction5s?: boolean;
         xT: number;
       }>;
     }>;
@@ -1521,7 +1521,7 @@ export default function StatystykiZespoluPage() {
     };
 
     // Filtruj przechwyty według wybranej połowy
-    const filteredRegainActions = regainHalfFilter === "all"
+    let filteredRegainActions = regainHalfFilter === "all"
       ? derivedRegainActions
       : regainHalfFilter === "pm"
       ? derivedRegainActions.filter(action => {
@@ -1539,6 +1539,56 @@ export default function StatystykiZespoluPage() {
           
           return regainHalfFilter === "own" ? !isOwn : isOwn;
         });
+
+    // Oblicz statystyki P0-P3 dla wszystkich przechwytów (bez filtrowania według selectedActionFilter)
+    // Te wartości będą pokazywane w kafelkach
+    let allRegainP0Count = 0;
+    let allRegainP1Count = 0;
+    let allRegainP2Count = 0;
+    let allRegainP3Count = 0;
+    let allRegainP0CountLateral = 0;
+    let allRegainP1CountLateral = 0;
+    let allRegainP2CountLateral = 0;
+    let allRegainP3CountLateral = 0;
+    let allRegainP0CountCentral = 0;
+    let allRegainP1CountCentral = 0;
+    let allRegainP2CountCentral = 0;
+    let allRegainP3CountCentral = 0;
+
+    filteredRegainActions.forEach(action => {
+      const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+      
+      if (defenseZoneName) {
+        const isLateral = isLateralZone(defenseZoneName);
+        
+        if (action.isP0 || action.isP0Start) {
+          allRegainP0Count += 1;
+          if (isLateral) allRegainP0CountLateral += 1;
+          else allRegainP0CountCentral += 1;
+        }
+        if (action.isP1 || action.isP1Start) {
+          allRegainP1Count += 1;
+          if (isLateral) allRegainP1CountLateral += 1;
+          else allRegainP1CountCentral += 1;
+        }
+        if (action.isP2 || action.isP2Start) {
+          allRegainP2Count += 1;
+          if (isLateral) allRegainP2CountLateral += 1;
+          else allRegainP2CountCentral += 1;
+        }
+        if (action.isP3 || action.isP3Start) {
+          allRegainP3Count += 1;
+          if (isLateral) allRegainP3CountLateral += 1;
+          else allRegainP3CountCentral += 1;
+        }
+      }
+    });
+
+    // Filtruj według selectedActionFilter (P0-P3) - tylko dla statystyk poniżej
+    if (selectedActionFilter && selectedActionFilter.length > 0) {
+      filteredRegainActions = filteredRegainActions.filter(action => matchesSelectedActionFilter(action));
+    }
 
     const attackXTHeatmap = new Map<string, number>();
     const defenseXTHeatmap = new Map<string, number>();
@@ -1559,6 +1609,20 @@ export default function StatystykiZespoluPage() {
     let attackOpponentsBehindSum = 0;
     let defensePlayersBehindSum = 0;
     let defenseOpponentsBehindSum = 0;
+
+    // Statystyki P0-P3 dla przechwytów
+    let regainP0Count = 0;
+    let regainP1Count = 0;
+    let regainP2Count = 0;
+    let regainP3Count = 0;
+    let regainP0CountLateral = 0;
+    let regainP1CountLateral = 0;
+    let regainP2CountLateral = 0;
+    let regainP3CountLateral = 0;
+    let regainP0CountCentral = 0;
+    let regainP1CountCentral = 0;
+    let regainP2CountCentral = 0;
+    let regainP3CountCentral = 0;
 
     filteredRegainActions.forEach(action => {
       totalRegains += 1;
@@ -1622,6 +1686,32 @@ export default function StatystykiZespoluPage() {
         defensePlayersBehindSum += playersBehind;
         defenseOpponentsBehindSum += opponentsBehind;
       }
+
+      // Oblicz statystyki P0-P3 dla przechwytów (używamy regainDefenseZone)
+      if (defenseZoneName) {
+        const isLateral = isLateralZone(defenseZoneName);
+        
+        if (action.isP0 || action.isP0Start) {
+          regainP0Count += 1;
+          if (isLateral) regainP0CountLateral += 1;
+          else regainP0CountCentral += 1;
+        }
+        if (action.isP1 || action.isP1Start) {
+          regainP1Count += 1;
+          if (isLateral) regainP1CountLateral += 1;
+          else regainP1CountCentral += 1;
+        }
+        if (action.isP2 || action.isP2Start) {
+          regainP2Count += 1;
+          if (isLateral) regainP2CountLateral += 1;
+          else regainP2CountCentral += 1;
+        }
+        if (action.isP3 || action.isP3Start) {
+          regainP3Count += 1;
+          if (isLateral) regainP3CountLateral += 1;
+          else regainP3CountCentral += 1;
+        }
+      }
     });
 
     const totalContext = attackContextCount + defenseContextCount;
@@ -1648,10 +1738,36 @@ export default function StatystykiZespoluPage() {
       defenseXTHeatmap,
       attackCountHeatmap,
       defenseCountHeatmap,
+      // Statystyki P0-P3
+      regainP0Count,
+      regainP1Count,
+      regainP2Count,
+      regainP3Count,
+      regainP0CountLateral,
+      regainP1CountLateral,
+      regainP2CountLateral,
+      regainP3CountLateral,
+      regainP0CountCentral,
+      regainP1CountCentral,
+      regainP2CountCentral,
+      regainP3CountCentral,
+      // Statystyki P0-P3 dla wszystkich przechwytów (bez filtrowania według selectedActionFilter) - do wyświetlania w kafelkach
+      allRegainP0Count,
+      allRegainP1Count,
+      allRegainP2Count,
+      allRegainP3Count,
+      allRegainP0CountLateral,
+      allRegainP1CountLateral,
+      allRegainP2CountLateral,
+      allRegainP3CountLateral,
+      allRegainP0CountCentral,
+      allRegainP1CountCentral,
+      allRegainP2CountCentral,
+      allRegainP3CountCentral,
     };
     
     return result;
-  }, [derivedRegainActions, regainHalfFilter]);
+  }, [derivedRegainActions, regainHalfFilter, selectedActionFilter]);
 
   // Statystyki po akcjach regain (xG, wejścia w PK, PXT 8s, 15s)
   const regainAfterStats = useMemo(() => {
@@ -1678,7 +1794,7 @@ export default function StatystykiZespoluPage() {
     };
 
     // Filtruj przechwyty według wybranej połowy
-    const filteredRegainActions = regainHalfFilter === "all"
+    let filteredRegainActions = regainHalfFilter === "all"
       ? derivedRegainActions
       : regainHalfFilter === "pm"
       ? derivedRegainActions.filter(action => {
@@ -1696,6 +1812,11 @@ export default function StatystykiZespoluPage() {
           
           return regainHalfFilter === "own" ? !isOwn : isOwn;
         });
+
+    // Filtruj według selectedActionFilter (P0-P3)
+    if (selectedActionFilter && selectedActionFilter.length > 0) {
+      filteredRegainActions = filteredRegainActions.filter(action => matchesSelectedActionFilter(action));
+    }
 
     if (!selectedMatch || !selectedMatchInfo || filteredRegainActions.length === 0) {
       return {
@@ -1873,7 +1994,7 @@ export default function StatystykiZespoluPage() {
       });
     });
 
-    const totalRegains = derivedRegainActions.length;
+    const totalRegains = filteredRegainActions.length;
     const totalRegainsFor5s = regainActionsWithTimestamp.length;
 
     return {
@@ -1893,7 +2014,7 @@ export default function StatystykiZespoluPage() {
       pkEntriesPerRegain: totalRegains > 0 ? totalPKEntries8s / totalRegains : 0,
       pxt8sPerRegain: totalRegains > 0 ? totalPXT8s / totalRegains : 0,
     };
-  }, [selectedMatch, selectedMatchInfo, derivedRegainActions, allActions, allShots, allPKEntries, allLosesActions, regainHalfFilter]);
+  }, [selectedMatch, selectedMatchInfo, derivedRegainActions, allActions, allShots, allPKEntries, allLosesActions, regainHalfFilter, selectedActionFilter]);
 
   const regainsTimelineXT = useMemo(() => {
     if (derivedRegainActions.length === 0) return [];
@@ -1986,7 +2107,7 @@ export default function StatystykiZespoluPage() {
     };
 
     // Filtruj straty według wybranej połowy
-    const filteredLosesActions = losesHalfFilter === "all"
+    let filteredLosesActions = losesHalfFilter === "all"
       ? derivedLosesActions
       : losesHalfFilter === "pm"
       ? derivedLosesActions.filter(action => {
@@ -2004,6 +2125,56 @@ export default function StatystykiZespoluPage() {
           
           return losesHalfFilter === "own" ? !isOwn : isOwn;
         });
+
+    // Oblicz statystyki P0-P3 dla wszystkich strat (bez filtrowania według selectedActionFilter)
+    // Te wartości będą pokazywane w kafelkach
+    let allLosesP0Count = 0;
+    let allLosesP1Count = 0;
+    let allLosesP2Count = 0;
+    let allLosesP3Count = 0;
+    let allLosesP0CountLateral = 0;
+    let allLosesP1CountLateral = 0;
+    let allLosesP2CountLateral = 0;
+    let allLosesP3CountLateral = 0;
+    let allLosesP0CountCentral = 0;
+    let allLosesP1CountCentral = 0;
+    let allLosesP2CountCentral = 0;
+    let allLosesP3CountCentral = 0;
+
+    filteredLosesActions.forEach(action => {
+      const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+      
+      if (defenseZoneName) {
+        const isLateral = isLateralZone(defenseZoneName);
+        
+        if (action.isP0 || action.isP0Start) {
+          allLosesP0Count += 1;
+          if (isLateral) allLosesP0CountLateral += 1;
+          else allLosesP0CountCentral += 1;
+        }
+        if (action.isP1 || action.isP1Start) {
+          allLosesP1Count += 1;
+          if (isLateral) allLosesP1CountLateral += 1;
+          else allLosesP1CountCentral += 1;
+        }
+        if (action.isP2 || action.isP2Start) {
+          allLosesP2Count += 1;
+          if (isLateral) allLosesP2CountLateral += 1;
+          else allLosesP2CountCentral += 1;
+        }
+        if (action.isP3 || action.isP3Start) {
+          allLosesP3Count += 1;
+          if (isLateral) allLosesP3CountLateral += 1;
+          else allLosesP3CountCentral += 1;
+        }
+      }
+    });
+
+    // Filtruj według selectedActionFilter (P0-P3) - tylko dla statystyk poniżej
+    if (selectedActionFilter && selectedActionFilter.length > 0) {
+      filteredLosesActions = filteredLosesActions.filter(action => matchesSelectedActionFilter(action));
+    }
 
     if (filteredLosesActions.length === 0) {
       return {
@@ -2090,13 +2261,26 @@ export default function StatystykiZespoluPage() {
       losesAttackCount,
       losesDefenseCount,
       totalLosesOwnHalf,
-      totalLosesOpponentHalf,
-      attackXTHeatmap,
-      defenseXTHeatmap,
-      attackCountHeatmap,
-      defenseCountHeatmap,
-    };
-  }, [derivedLosesActions, losesHalfFilter]);
+        totalLosesOpponentHalf,
+        attackXTHeatmap,
+        defenseXTHeatmap,
+        attackCountHeatmap,
+        defenseCountHeatmap,
+        // Statystyki P0-P3 dla wszystkich strat (bez filtrowania według selectedActionFilter) - do wyświetlania w kafelkach
+        allLosesP0Count,
+        allLosesP1Count,
+        allLosesP2Count,
+        allLosesP3Count,
+        allLosesP0CountLateral,
+        allLosesP1CountLateral,
+        allLosesP2CountLateral,
+        allLosesP3CountLateral,
+        allLosesP0CountCentral,
+        allLosesP1CountCentral,
+        allLosesP2CountCentral,
+        allLosesP3CountCentral,
+      };
+    }, [derivedLosesActions, losesHalfFilter, selectedActionFilter]);
 
   // Oblicz całkowite xT dla wszystkich strat w meczu (bez filtra)
   const totalLosesXT = useMemo(() => {
@@ -2230,7 +2414,7 @@ export default function StatystykiZespoluPage() {
         reaction5sCount: 0,
         below8sCount: 0,
         unknownCount: 0,
-        totalLosesForReaction5s: 0, // Całkowita liczba strat bez isAut i isReaction5sNotApplicable
+        totalLosesForReaction5s: 0, // Całkowita liczba strat z zaznaczonym przyciskiem 5s (✓ lub ✗), bez isAut
       };
     }
 
@@ -2240,10 +2424,14 @@ export default function StatystykiZespoluPage() {
     let totalLosesForReaction5s = 0;
 
     filteredLosesActions.forEach(action => {
-      // Wyklucz akcje z isAut lub isReaction5sNotApplicable z liczenia dla reaction5s
-      const isExcluded = action.isAut === true || action.isReaction5sNotApplicable === true;
+      // Wyklucz tylko akcje z isAut z liczenia dla reaction5s
+      // Uwzględniamy straty z isReaction5s === true LUB isBadReaction5s === true (mają zaznaczony jeden z przycisków 5s)
+      // Wsparcie wsteczne: isReaction5sNotApplicable jest traktowane jak isBadReaction5s
+      const hasBad5s = action.isBadReaction5s === true || (action as any).isReaction5sNotApplicable === true;
+      const has5sFlag = action.isReaction5s === true || hasBad5s;
+      const isExcluded = action.isAut === true;
       
-      if (!isExcluded) {
+      if (!isExcluded && has5sFlag) {
         totalLosesForReaction5s += 1;
       }
 
@@ -2289,7 +2477,7 @@ export default function StatystykiZespoluPage() {
     };
 
     // Filtruj straty według wybranej połowy
-    const filteredLosesActions = losesHalfFilter === "all"
+    let filteredLosesActions = losesHalfFilter === "all"
       ? derivedLosesActions
       : losesHalfFilter === "pm"
       ? derivedLosesActions.filter(action => {
@@ -2310,6 +2498,11 @@ export default function StatystykiZespoluPage() {
           
           return false;
         });
+
+    // Filtruj według selectedActionFilter (P0-P3)
+    if (selectedActionFilter && selectedActionFilter.length > 0) {
+      filteredLosesActions = filteredLosesActions.filter(action => matchesSelectedActionFilter(action));
+    }
 
     if (!selectedMatch || !selectedMatchInfo || filteredLosesActions.length === 0) {
       return {
@@ -2476,7 +2669,7 @@ export default function StatystykiZespoluPage() {
       xGPerLose: totalLoses > 0 ? totalOpponentXG8s / totalLoses : 0,
       pkEntriesPerLose: totalLoses > 0 ? totalOpponentPKEntries8s / totalLoses : 0,
     };
-  }, [selectedMatch, selectedMatchInfo, selectedTeam, derivedLosesActions, derivedRegainActions, allShots, allPKEntries, losesHalfFilter]);
+  }, [selectedMatch, selectedMatchInfo, selectedTeam, derivedLosesActions, derivedRegainActions, allShots, allPKEntries, losesHalfFilter, selectedActionFilter]);
 
   // Wykres PK entries co 5 minut (zespół vs przeciwnik)
   const pkEntriesTimeline = useMemo(() => {
@@ -2556,7 +2749,7 @@ export default function StatystykiZespoluPage() {
       const result = new Map<string, number>();
       
       // Przejdź przez wszystkie akcje przechwytów i zbuduj heatmapę używając zawsze attackZoneName jako klucza
-      const filteredRegainActions = regainHalfFilter === "all"
+      let filteredRegainActions = regainHalfFilter === "all"
         ? derivedRegainActions
         : regainHalfFilter === "pm"
         ? derivedRegainActions.filter(action => {
@@ -2571,6 +2764,11 @@ export default function StatystykiZespoluPage() {
             const isOwn = isOwnHalf(defenseZoneName);
             return regainHalfFilter === "own" ? !isOwn : isOwn;
           });
+
+      // Filtruj według selectedActionFilter (P0-P3)
+      if (selectedActionFilter && selectedActionFilter.length > 0) {
+        filteredRegainActions = filteredRegainActions.filter(action => matchesSelectedActionFilter(action));
+      }
       
       filteredRegainActions.forEach(action => {
         const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
@@ -2593,7 +2791,7 @@ export default function StatystykiZespoluPage() {
       // Dla count: zawsze używaj attackCountHeatmap (liczby akcji są takie same)
       return teamRegainStats.attackCountHeatmap;
     }
-  }, [teamRegainStats.attackCountHeatmap, derivedRegainActions, regainHalfFilter, teamRegainAttackDefenseMode, teamRegainHeatmapMode]);
+  }, [teamRegainStats.attackCountHeatmap, derivedRegainActions, regainHalfFilter, teamRegainAttackDefenseMode, teamRegainHeatmapMode, selectedActionFilter]);
 
   // Zawsze używaj pól z ataku (losesAttackZone), ale wartości xT zależą od trybu
   const teamLosesHeatmap = useMemo(() => {
@@ -2624,7 +2822,7 @@ export default function StatystykiZespoluPage() {
       const result = new Map<string, number>();
       
       // Przejdź przez wszystkie akcje strat i zbuduj heatmapę używając zawsze attackZoneName jako klucza
-      const filteredLosesActions = losesHalfFilter === "all"
+      let filteredLosesActions = losesHalfFilter === "all"
         ? derivedLosesActions
         : losesHalfFilter === "pm"
         ? derivedLosesActions.filter(action => {
@@ -2639,6 +2837,11 @@ export default function StatystykiZespoluPage() {
             const isOwn = isOwnHalf(defenseZoneName);
             return losesHalfFilter === "own" ? !isOwn : isOwn;
           });
+
+      // Filtruj według selectedActionFilter (P0-P3)
+      if (selectedActionFilter && selectedActionFilter.length > 0) {
+        filteredLosesActions = filteredLosesActions.filter(action => matchesSelectedActionFilter(action));
+      }
       
       filteredLosesActions.forEach(action => {
         const attackZoneRaw = action.losesAttackZone || action.oppositeZone;
@@ -2661,7 +2864,7 @@ export default function StatystykiZespoluPage() {
       // Dla count: zawsze używaj attackCountHeatmap (liczby akcji są takie same)
       return teamLosesStats.attackCountHeatmap;
     }
-  }, [teamLosesStats.attackCountHeatmap, derivedLosesActions, losesHalfFilter, teamLosesAttackDefenseMode, teamLosesHeatmapMode]);
+  }, [teamLosesStats.attackCountHeatmap, derivedLosesActions, losesHalfFilter, teamLosesAttackDefenseMode, teamLosesHeatmapMode, selectedActionFilter]);
 
   // Przygotuj dane dla heatmapy zespołu i agregacja danych zawodników
   const teamHeatmapData = useMemo(() => {
@@ -3154,17 +3357,25 @@ export default function StatystykiZespoluPage() {
                   
                   // Oblicz % strat z isReaction5s === true
                   // 1. Wliczamy wszystkie straty z loses
-                  // 2. Odejmujemy straty z flagami isReaction5sNotApplicable i isAut
-                  // 3. Sprawdzamy, jaki % i ile jest strat z flagą isReaction5s w tym zbiorze
+                  // 2. Odejmujemy tylko straty z flagą isAut
+                  // 3. Uwzględniamy straty z isReaction5s === true LUB isBadReaction5s === true (mają zaznaczony jeden z przycisków 5s)
+                  // 4. Sprawdzamy, jaki % z tych strat ma flagę isReaction5s === true (✓ 5s)
                   const allLoses = derivedLosesActions;
-                  const losesExcludingNotApplicableAndAut = allLoses.filter(action => 
-                    action.isReaction5sNotApplicable !== true && action.isAut !== true
-                  );
-                  const reaction5sLoses = losesExcludingNotApplicableAndAut.filter(action => 
+                  // Wszystkie straty bez isAut, które mają zaznaczony jeden z przycisków 5s (✓ 5s LUB ✗ 5s)
+                  // Uwaga: sprawdzamy dokładnie === true, aby wykluczyć undefined i false
+                  // Wsparcie wsteczne: isReaction5sNotApplicable jest traktowane jak isBadReaction5s
+                  const losesWith5sFlags = allLoses.filter(action => {
+                    if (action.isAut === true) return false;
+                    // Sprawdzamy isBadReaction5s lub isReaction5sNotApplicable (wsparcie wsteczne)
+                    const hasBad5s = action.isBadReaction5s === true || (action as any).isReaction5sNotApplicable === true;
+                    return action.isReaction5s === true || hasBad5s;
+                  });
+                  // Straty z flagą isReaction5s === true (✓ 5s - dobre)
+                  const reaction5sLoses = losesWith5sFlags.filter(action => 
                     action.isReaction5s === true
                   );
-                  const reaction5sPercentage = losesExcludingNotApplicableAndAut.length > 0 
-                    ? (reaction5sLoses.length / losesExcludingNotApplicableAndAut.length) * 100 
+                  const reaction5sPercentage = losesWith5sFlags.length > 0 
+                    ? (reaction5sLoses.length / losesWith5sFlags.length) * 100 
                     : 0;
                   
                   // Funkcja pomocnicza do określenia czy strefa jest na własnej połowie (A-H, 1-6) czy połowie przeciwnika (A-H, 7-12)
@@ -3494,10 +3705,12 @@ export default function StatystykiZespoluPage() {
                   };
                   
                   // Specjalna funkcja dla "PK przeciwnik" - zapewnia, że gdy wartość = kpiPKEntries, to score = kpiRadarValue
-                  // Mapowanie: 0 → 100, kpiPKEntries → kpiRadarValue, maxPKEntries → 0
+                  // Mapowanie: 0 → 100, kpiPKEntries (11) → kpiRadarValue (80), kpiPKEntries + 40 (51) → 0
+                  // Punkt 0 na spidermapie = KPI + 40 (51), punkt 100 = 0 (najlepsze)
+                  const maxPKOpponentEntries = kpiPKEntries + 40; // 51 = maksimum na spidermapie (punkt 0)
                   const toScorePKOpponent = (actualValue: number): number => {
                     if (actualValue <= 0) return 100;
-                    if (actualValue >= maxPKEntries) return 0;
+                    if (actualValue >= maxPKOpponentEntries) return 0;
                     if (actualValue === kpiPKEntries) return kpiRadarValue;
                     
                     // Interpolacja liniowa: gdy wartość < kpiPKEntries, interpolujemy między 100 a kpiRadarValue
@@ -3507,17 +3720,19 @@ export default function StatystykiZespoluPage() {
                       const ratio = actualValue / kpiPKEntries;
                       return 100 - (100 - kpiRadarValue) * ratio;
                     } else {
-                      // Interpolacja między (kpiPKEntries, kpiRadarValue) a (maxPKEntries, 0)
-                      const ratio = (actualValue - kpiPKEntries) / (maxPKEntries - kpiPKEntries);
+                      // Interpolacja między (kpiPKEntries, kpiRadarValue) a (maxPKOpponentEntries, 0)
+                      const ratio = (actualValue - kpiPKEntries) / (maxPKOpponentEntries - kpiPKEntries);
                       return kpiRadarValue - kpiRadarValue * ratio;
                     }
                   };
                   
                   // Specjalna funkcja dla "5s (reakcja)" - zapewnia, że gdy wartość = kpiReaction5s, to score = kpiRadarValue
-                  // Mapowanie: 0% → 0, kpiReaction5s → kpiRadarValue, 100% → 100
+                  // Mapowanie: 0% → 0, kpiReaction5s (50%) → kpiRadarValue (80), kpiReaction5s + 40% (90%) → 100
+                  // Punkt 0 na spidermapie = KPI (50%), punkt 100 = KPI + 40% (90%)
+                  const maxReaction5sPercentage = kpiReaction5s + 40; // 90% = maksimum na spidermapie
                   const toScoreReaction5s = (actualPercentage: number): number => {
                     if (actualPercentage <= 0) return 0;
-                    if (actualPercentage >= 100) return 100;
+                    if (actualPercentage >= maxReaction5sPercentage) return 100;
                     if (actualPercentage === kpiReaction5s) return kpiRadarValue;
                     
                     // Interpolacja liniowa: gdy wartość < kpiReaction5s, interpolujemy między 0 a kpiRadarValue
@@ -3527,8 +3742,8 @@ export default function StatystykiZespoluPage() {
                       const ratio = actualPercentage / kpiReaction5s;
                       return kpiRadarValue * ratio;
                     } else {
-                      // Interpolacja między (kpiReaction5s, kpiRadarValue) a (100, 100)
-                      const ratio = (actualPercentage - kpiReaction5s) / (100 - kpiReaction5s);
+                      // Interpolacja między (kpiReaction5s, kpiRadarValue) a (maxReaction5sPercentage, 100)
+                      const ratio = (actualPercentage - kpiReaction5s) / (maxReaction5sPercentage - kpiReaction5s);
                       return kpiRadarValue + (100 - kpiRadarValue) * ratio;
                     }
                   };
@@ -3690,7 +3905,7 @@ export default function StatystykiZespoluPage() {
                                     const over = opponentPKEntriesCount - kpiPKEntries;
                                     kpiValue = `KPI < ${kpiPKEntries} • ${over > 0 ? `nadmiar: +${over}` : `zapasu: ${Math.abs(over)}`}`;
                                   } else if (data.subject === '5s') {
-                                    displayValue = `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesExcludingNotApplicableAndAut.length})`;
+                                    displayValue = `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesWith5sFlags.length})`;
                                     const missing = kpiReaction5s - reaction5sPercentage;
                                     kpiValue = `KPI > ${kpiReaction5s}% • ${missing > 0 ? `brakuje: +${missing.toFixed(1)} pp` : `zapasu: ${Math.abs(missing).toFixed(1)} pp`}`;
                                   } else if (data.subject === 'PM Area straty') {
@@ -3856,7 +4071,9 @@ export default function StatystykiZespoluPage() {
                             </div>
                           </div>
                           <div className={`${styles.statTile} ${isReaction5sGood ? styles.statTileGood : styles.statTileBad}`}>
-                            <div className={styles.statTileLabel}>5s (counterpressing)</div>
+                            <div className={`${styles.statTileLabel} ${styles.tooltipTrigger}`} data-tooltip="KPI 5s (counterpressing) = (Liczba strat z isReaction5s === true) / (Wszystkie straty z zaznaczonym przyciskiem ✓ 5s LUB ✗ 5s, bez isAut) × 100%. KPI > 50%">
+                              5s (counterpressing)
+                            </div>
                             <div className={styles.statTileValue}>
                               {reaction5sPercentage.toFixed(1)}%
                               <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
@@ -3864,7 +4081,7 @@ export default function StatystykiZespoluPage() {
                               </span>
                             </div>
                             <div className={styles.statTileSecondary}>
-                              {reaction5sLoses.length}/{losesExcludingNotApplicableAndAut.length} • KPI &gt; {kpiReaction5s}%
+                              {reaction5sLoses.length}/{losesWith5sFlags.length} • KPI &gt; {kpiReaction5s}%
                             </div>
                           </div>
                           <div className={`${styles.statTile} ${isLosesPMAreaBad ? styles.statTileBad : styles.statTileGood}`}>
@@ -4145,6 +4362,57 @@ export default function StatystykiZespoluPage() {
                   </div>
                 </div>
 
+                {/* Filtr z kafelkami P0-P3 */}
+                <div className={styles.detailsSection}>
+                  <div className={styles.countItemsWrapper}>
+                    {(['p0', 'p1', 'p2', 'p3'] as const).map((pValue) => {
+                      const isActive = isFilterActive(pValue);
+                      // Używamy wartości "all" (wszystkie przechwyty) do wyświetlania w kafelkach
+                      const count = pValue === 'p0' ? teamRegainStats.allRegainP0Count :
+                                   pValue === 'p1' ? teamRegainStats.allRegainP1Count :
+                                   pValue === 'p2' ? teamRegainStats.allRegainP2Count :
+                                   teamRegainStats.allRegainP3Count;
+                      const lateralCount = pValue === 'p0' ? teamRegainStats.allRegainP0CountLateral :
+                                          pValue === 'p1' ? teamRegainStats.allRegainP1CountLateral :
+                                          pValue === 'p2' ? teamRegainStats.allRegainP2CountLateral :
+                                          teamRegainStats.allRegainP3CountLateral;
+                      const centralCount = pValue === 'p0' ? teamRegainStats.allRegainP0CountCentral :
+                                          pValue === 'p1' ? teamRegainStats.allRegainP1CountCentral :
+                                          pValue === 'p2' ? teamRegainStats.allRegainP2CountCentral :
+                                          teamRegainStats.allRegainP3CountCentral;
+                      
+                      return (
+                        <div
+                          key={pValue}
+                          className={`${styles.countItem} ${isActive ? styles.countItemSelected : ''} ${count === 0 ? styles.countItemDisabled : ''}`}
+                          onClick={() => {
+                            if (count === 0) return;
+                            setSelectedActionFilter(prev => {
+                              const filters = Array.isArray(prev) ? prev : [];
+                              const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                              if (filters.includes(pValue)) {
+                                return withoutEndFilters;
+                              }
+                              return [...withoutEndFilters, pValue];
+                            });
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                            <span className={styles.countLabel}>{pValue.toUpperCase()}:</span>
+                            <span className={styles.countValue}>{count}</span>
+                          </div>
+                          <div className={styles.zoneBreakdown}>
+                            <span className={styles.zoneLabel}>Strefy boczne:</span>
+                            <span className={styles.zoneValue}>{lateralCount}</span>
+                            <span className={styles.zoneLabel}>Strefy centralne:</span>
+                            <span className={styles.zoneValue}>{centralCount}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* Podstawowe statystyki */}
                 <div className={styles.detailsSection}>
                   <div className={styles.detailsRow}>
@@ -4283,11 +4551,37 @@ export default function StatystykiZespoluPage() {
                           }
 
                           // Zawsze używaj regainAttackZone do filtrowania (pola z ataku)
-                          const zoneActions = derivedRegainActions.filter(action => {
+                          // Używamy przefiltrowanych akcji z teamRegainStats
+                          const filteredRegainActionsForHeatmap = regainHalfFilter === "all"
+                            ? derivedRegainActions
+                            : regainHalfFilter === "pm"
+                            ? derivedRegainActions.filter(action => {
+                                const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+                                const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                                const pmZones = ['C5', 'C6', 'C7', 'C8', 'D5', 'D6', 'D7', 'D8', 'E5', 'E6', 'E7', 'E8', 'F5', 'F6', 'F7', 'F8'];
+                                return defenseZoneName && pmZones.includes(defenseZoneName);
+                              })
+                            : derivedRegainActions.filter(action => {
+                                const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+                                const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                                if (!defenseZoneName) return false;
+                                const zoneIndex = zoneNameToIndex(defenseZoneName);
+                                if (zoneIndex === null) return false;
+                                const col = zoneIndex % 12;
+                                const isOwn = col <= 5;
+                                return regainHalfFilter === "own" ? !isOwn : isOwn;
+                              });
+                          
+                          let zoneActions = filteredRegainActionsForHeatmap.filter(action => {
                             const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
                             const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
                             return attackZoneName?.toUpperCase().replace(/\s+/g, '') === normalizedZone;
                           });
+                          
+                          // Filtruj według selectedActionFilter (P0-P3)
+                          if (selectedActionFilter && selectedActionFilter.length > 0) {
+                            zoneActions = zoneActions.filter(action => matchesSelectedActionFilter(action));
+                          }
 
                           const playersMap = new Map<string, { 
                             regainXT: number; 
@@ -4569,16 +4863,78 @@ export default function StatystykiZespoluPage() {
                   </div>
                 </div>
 
+                {/* Filtr z kafelkami P0-P3 */}
+                <div className={styles.detailsSection}>
+                  <div className={styles.countItemsWrapper}>
+                    {(['p0', 'p1', 'p2', 'p3'] as const).map((pValue) => {
+                      const isActive = isFilterActive(pValue);
+                      // Używamy wartości "all" (wszystkie straty) do wyświetlania w kafelkach
+                      const count = pValue === 'p0' ? teamLosesStats.allLosesP0Count :
+                                   pValue === 'p1' ? teamLosesStats.allLosesP1Count :
+                                   pValue === 'p2' ? teamLosesStats.allLosesP2Count :
+                                   teamLosesStats.allLosesP3Count;
+                      const lateralCount = pValue === 'p0' ? teamLosesStats.allLosesP0CountLateral :
+                                          pValue === 'p1' ? teamLosesStats.allLosesP1CountLateral :
+                                          pValue === 'p2' ? teamLosesStats.allLosesP2CountLateral :
+                                          teamLosesStats.allLosesP3CountLateral;
+                      const centralCount = pValue === 'p0' ? teamLosesStats.allLosesP0CountCentral :
+                                          pValue === 'p1' ? teamLosesStats.allLosesP1CountCentral :
+                                          pValue === 'p2' ? teamLosesStats.allLosesP2CountCentral :
+                                          teamLosesStats.allLosesP3CountCentral;
+                      
+                      return (
+                        <div
+                          key={pValue}
+                          className={`${styles.countItem} ${isActive ? styles.countItemSelected : ''} ${count === 0 ? styles.countItemDisabled : ''}`}
+                          onClick={() => {
+                            if (count === 0) return;
+                            setSelectedActionFilter(prev => {
+                              const filters = Array.isArray(prev) ? prev : [];
+                              const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+                              if (filters.includes(pValue)) {
+                                return withoutEndFilters;
+                              }
+                              return [...withoutEndFilters, pValue];
+                            });
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                            <span className={styles.countLabel}>{pValue.toUpperCase()}:</span>
+                            <span className={styles.countValue}>{count}</span>
+                          </div>
+                          <div className={styles.zoneBreakdown}>
+                            <span className={styles.zoneLabel}>Strefy boczne:</span>
+                            <span className={styles.zoneValue}>{lateralCount}</span>
+                            <span className={styles.zoneLabel}>Strefy centralne:</span>
+                            <span className={styles.zoneValue}>{centralCount}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* Podstawowe statystyki */}
                 <div className={styles.detailsSection}>
                   <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}>STRATY:</span>
                     <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>{teamLosesStats.totalLosesOwnHalf + teamLosesStats.totalLosesOpponentHalf}</span>
-                      {teamStats.totalLoses > 0 && (
-                        <span className={styles.valueSecondary}>/{teamStats.totalLoses} ({(((teamLosesStats.totalLosesOwnHalf + teamLosesStats.totalLosesOpponentHalf) / teamStats.totalLoses) * 100).toFixed(1)}%)</span>
-                      )}
-                      <span className={styles.valueSecondary}> • ({teamStats.losesPer90.toFixed(1)} / 90)</span>
+                      {(() => {
+                        const filteredLosesCount = teamLosesStats.totalLosesOwnHalf + teamLosesStats.totalLosesOpponentHalf;
+                        const totalMinutes = teamStats.totalMinutes || 90;
+                        const losesPer90 = totalMinutes > 0 
+                          ? ((filteredLosesCount * 90) / totalMinutes).toFixed(1)
+                          : '0.0';
+                        return (
+                          <>
+                            <span className={styles.valueMain}>{filteredLosesCount}</span>
+                            {teamStats.totalLoses > 0 && (
+                              <span className={styles.valueSecondary}>/{teamStats.totalLoses} ({((filteredLosesCount / teamStats.totalLoses) * 100).toFixed(1)}%)</span>
+                            )}
+                            <span className={styles.valueSecondary}> • ({losesPer90} / 90)</span>
+                          </>
+                        );
+                      })()}
                     </span>
                   </div>
                   <div className={styles.detailsRow}>
@@ -4613,13 +4969,36 @@ export default function StatystykiZespoluPage() {
                   <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}>Kontrpressing 5s:</span>
                     <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>
-                        {losesContextStats.totalLosesForReaction5s > 0 ? ((losesContextStats.reaction5sCount / losesContextStats.totalLosesForReaction5s) * 100).toFixed(1) : 0}%
-                      </span>
-                      <span className={styles.valueSecondary}>
-                        • {losesContextStats.reaction5sCount}/{losesContextStats.totalLosesForReaction5s} • </span>
-                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains5s}</span>
-                      <span className={styles.valueSecondary}> Nasz Regain</span>
+                      {(() => {
+                        // Użyj tej samej logiki co w głównym KPI - wszystkie straty (derivedLosesActions)
+                        // Wszystkie straty bez isAut, które mają zaznaczony jeden z przycisków 5s (✓ 5s LUB ✗ 5s)
+                        // Wsparcie wsteczne: isReaction5sNotApplicable jest traktowane jak isBadReaction5s
+                        const allLoses = derivedLosesActions;
+                        const losesWith5sFlags = allLoses.filter(action => {
+                          if (action.isAut === true) return false;
+                          const hasBad5s = action.isBadReaction5s === true || (action as any).isReaction5sNotApplicable === true;
+                          return action.isReaction5s === true || hasBad5s;
+                        });
+                        // Straty z flagą isReaction5s === true (✓ 5s - dobre)
+                        const reaction5sLoses = losesWith5sFlags.filter(action => 
+                          action.isReaction5s === true
+                        );
+                        const reaction5sPercentage = losesWith5sFlags.length > 0 
+                          ? (reaction5sLoses.length / losesWith5sFlags.length) * 100 
+                          : 0;
+                        
+                        return (
+                          <>
+                            <span className={styles.valueMain}>
+                              {reaction5sPercentage.toFixed(1)}%
+                            </span>
+                            <span className={styles.valueSecondary}>
+                              • {reaction5sLoses.length}/{losesWith5sFlags.length} • </span>
+                            <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains5s}</span>
+                            <span className={styles.valueSecondary}> Nasz Regain</span>
+                          </>
+                        );
+                      })()}
                     </span>
                   </div>
                   <div className={styles.detailsRow}>
@@ -4706,11 +5085,37 @@ export default function StatystykiZespoluPage() {
                           }
 
                           // Zawsze zbierz akcje dla wybranej strefy z ataku (losesAttackZone)
-                          const zoneActions = derivedLosesActions.filter(action => {
+                          // Używamy przefiltrowanych akcji z teamLosesStats
+                          const filteredLosesActionsForHeatmap = losesHalfFilter === "all"
+                            ? derivedLosesActions
+                            : losesHalfFilter === "pm"
+                            ? derivedLosesActions.filter(action => {
+                                const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+                                const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                                const pmZones = ['C5', 'C6', 'C7', 'C8', 'D5', 'D6', 'D7', 'D8', 'E5', 'E6', 'E7', 'E8', 'F5', 'F6', 'F7', 'F8'];
+                                return defenseZoneName && pmZones.includes(defenseZoneName);
+                              })
+                            : derivedLosesActions.filter(action => {
+                                const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+                                const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                                if (!defenseZoneName) return false;
+                                const zoneIndex = zoneNameToIndex(defenseZoneName);
+                                if (zoneIndex === null) return false;
+                                const col = zoneIndex % 12;
+                                const isOwn = col <= 5;
+                                return losesHalfFilter === "own" ? !isOwn : isOwn;
+                              });
+                          
+                          let zoneActions = filteredLosesActionsForHeatmap.filter(action => {
                             const attackZoneRaw = action.losesAttackZone || action.oppositeZone;
                             const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
                             return attackZoneName?.toUpperCase().replace(/\s+/g, '') === normalizedZone;
                           });
+                          
+                          // Filtruj według selectedActionFilter (P0-P3)
+                          if (selectedActionFilter && selectedActionFilter.length > 0) {
+                            zoneActions = zoneActions.filter(action => matchesSelectedActionFilter(action));
+                          }
 
                           const playersMap = new Map<string, { 
                             losesXT: number; 
@@ -4720,7 +5125,7 @@ export default function StatystykiZespoluPage() {
                               zone: string;
                               isReaction5s?: boolean;
                               isAut?: boolean;
-                              isReaction5sNotApplicable?: boolean;
+                              isBadReaction5s?: boolean;
                               xT: number;
                             }>;
                           }>();
@@ -4760,7 +5165,7 @@ export default function StatystykiZespoluPage() {
                               zone: actionZone || normalizedZone,
                               isReaction5s: action.isReaction5s,
                               isAut: action.isAut,
-                              isReaction5sNotApplicable: action.isReaction5sNotApplicable,
+                              isBadReaction5s: action.isBadReaction5s,
                               xT: actionXT,
                             });
                           });
@@ -4842,8 +5247,8 @@ export default function StatystykiZespoluPage() {
                                             <span><strong>xT:</strong> {action.xT.toFixed(2)}</span>
                                             {action.isAut === true ? (
                                               <span style={{ color: '#ef4444', fontWeight: '600' }}>Aut</span>
-                                            ) : action.isReaction5sNotApplicable === true ? (
-                                              <span style={{ color: '#9ca3af', fontWeight: '600' }}>Nie dotyczy</span>
+                                            ) : action.isBadReaction5s === true || (action as any).isReaction5sNotApplicable === true ? (
+                                              <span style={{ color: '#dc2626', fontWeight: '600' }}>✗ 5s</span>
                                             ) : action.isReaction5s === true ? (
                                               <span style={{ color: '#10b981', fontWeight: '600' }}>Reakcja 5s</span>
                                             ) : (
@@ -6680,8 +7085,10 @@ export default function StatystykiZespoluPage() {
                                 return true;
                               });
                               
-                              // Policz wszystkie straty
-                              const totalLoses = filtered.length;
+                              // Policz wszystkie straty (bez isAut)
+                              const totalLoses = filtered.filter((action: any) => 
+                                action.isAut !== true
+                              ).length;
                               
                               // Policz straty z flagą isReaction5s === true
                               const counterpressingLoses = filtered.filter((action: any) => {
@@ -6755,9 +7162,9 @@ export default function StatystykiZespoluPage() {
                               return true;
                               });
                               
-                              // Policz tylko te z flagą isReaction5s === true (bez żadnych wykluczeń)
-                              let reaction5sCount = 0;
-                              
+                            // Policz tylko te z flagą isReaction5s === true (bez żadnych wykluczeń)
+                            let reaction5sCount = 0;
+                            
                             countedLoses.forEach(action => {
                                 if (action.isReaction5s === true) {
                                   reaction5sCount += 1;

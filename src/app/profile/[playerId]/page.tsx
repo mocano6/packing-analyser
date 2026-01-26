@@ -2667,7 +2667,7 @@ export default function PlayerDetailsPage() {
         return (
           action.isReaction5s !== undefined ||
           action.isAut !== undefined ||
-          action.isReaction5sNotApplicable !== undefined ||
+          action.isBadReaction5s !== undefined ||
           action.losesDefenseXT !== undefined ||
           action.losesAttackXT !== undefined ||
           action.losesDefenseZone !== undefined ||
@@ -7709,7 +7709,7 @@ export default function PlayerDetailsPage() {
                         return (
                           action.isReaction5s !== undefined ||
                           action.isAut !== undefined ||
-                          action.isReaction5sNotApplicable !== undefined ||
+                          action.isBadReaction5s !== undefined ||
                           action.losesDefenseXT !== undefined ||
                           action.losesAttackXT !== undefined ||
                           action.losesDefenseZone !== undefined ||

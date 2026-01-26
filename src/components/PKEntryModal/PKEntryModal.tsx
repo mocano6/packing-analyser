@@ -1029,15 +1029,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                 >
                   Gol
                 </button>
-                <button
-                  type="button"
-                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${formData.isRegain ? styles.active : ""}`}
-                  onClick={() => setFormData({...formData, isRegain: !formData.isRegain})}
-                  data-tooltip="Przechwyt piłki"
-                  aria-pressed={formData.isRegain}
-                >
-                  Regain
-                </button>
               </div>
               
               {/* Sekcja z przyciskami numerycznymi dla Partnerzy w PK i Przeciwnicy w PK */}

@@ -115,9 +115,9 @@ export interface Action {
   losesDefenseXT?: number; // Wartość xT w obronie dla loses (z lose zone)
   losesAttackZone?: string; // Strefa ataku dla loses (opposite zone)
   losesDefenseZone?: string; // Strefa obrony dla loses (gdzie nastąpiła strata)
-  isReaction5s?: boolean; // Reakcja 5s (dla loses)
+  isReaction5s?: boolean; // Reakcja 5s (dla loses) - dobre 5s (✓)
   isAut?: boolean; // Aut (dla loses)
-  isReaction5sNotApplicable?: boolean; // Nie dotyczy - nie da się zrobić 5s (dla loses)
+  isBadReaction5s?: boolean; // Złe 5s (dla loses) - nieudane 5s (✗)
 }
 
 // Dla zachowania kompatybilności
