@@ -4055,7 +4055,11 @@ export default function StatystykiZespoluPage() {
                               {shotAndPK8sCount}/{total8sAcc} • KPI ≥ {target8sAcc}%
                             </div>
                           </div>
-                          <div className={`${styles.statTile} ${isXGPerShotGood ? styles.statTileGood : styles.statTileBad}`}>
+                          <div 
+                            className={`${styles.statTile} ${isXGPerShotGood ? styles.statTileGood : styles.statTileBad}`}
+                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === 'xg-per-shot' ? null : 'xg-per-shot')}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <div className={styles.statTileLabel}>xG/strzał</div>
                             <div className={styles.statTileValue}>
                               {teamXGPerShot.toFixed(2)}
@@ -4067,7 +4071,11 @@ export default function StatystykiZespoluPage() {
                               {teamShotsCount} strzałów • KPI &gt; {kpiXGPerShot.toFixed(2)}
                             </div>
                           </div>
-                          <div className={`${styles.statTile} ${isPKOpponentBad ? styles.statTileBad : styles.statTileGood}`}>
+                          <div 
+                            className={`${styles.statTile} ${isPKOpponentBad ? styles.statTileBad : styles.statTileGood}`}
+                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === 'pk-opponent' ? null : 'pk-opponent')}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <div className={styles.statTileLabel}>PK przeciwnik</div>
                             <div className={styles.statTileValue}>
                               {opponentPKEntriesCount}
@@ -4079,7 +4087,11 @@ export default function StatystykiZespoluPage() {
                               KPI &lt; {kpiPKEntries}
                             </div>
                           </div>
-                          <div className={`${styles.statTile} ${isReaction5sGood ? styles.statTileGood : styles.statTileBad}`}>
+                          <div 
+                            className={`${styles.statTile} ${isReaction5sGood ? styles.statTileGood : styles.statTileBad}`}
+                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === '5s' ? null : '5s')}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <div className={`${styles.statTileLabel} ${styles.tooltipTrigger}`} data-tooltip="KPI 5s (counterpressing) = (Liczba strat z isReaction5s === true) / (Wszystkie straty z zaznaczonym przyciskiem ✓ 5s LUB ✗ 5s, bez isAut) × 100%. KPI > 50%">
                               5s (counterpressing)
                             </div>
@@ -4093,7 +4105,11 @@ export default function StatystykiZespoluPage() {
                               {reaction5sLoses.length}/{losesWith5sFlags.length} • KPI &gt; {kpiReaction5s}%
                             </div>
                           </div>
-                          <div className={`${styles.statTile} ${isLosesPMAreaBad ? styles.statTileBad : styles.statTileGood}`}>
+                          <div 
+                            className={`${styles.statTile} ${isLosesPMAreaBad ? styles.statTileBad : styles.statTileGood}`}
+                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === 'pm-area-loses' ? null : 'pm-area-loses')}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <div className={styles.statTileLabel}>PM Area straty</div>
                             <div className={styles.statTileValue}>
                               {losesInPMAreaCount}
@@ -4105,7 +4121,11 @@ export default function StatystykiZespoluPage() {
                               {losesInPMAreaPercentage.toFixed(1)}% ({losesInPMAreaCount}/{allLoses.length}) • KPI ≤ {kpiLosesPMAreaCount}
                             </div>
                           </div>
-                          <div className={`${styles.statTile} ${isRegainsOpponentHalfGood ? styles.statTileGood : styles.statTileBad}`}>
+                          <div 
+                            className={`${styles.statTile} ${isRegainsOpponentHalfGood ? styles.statTileGood : styles.statTileBad}`}
+                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === 'regains-pp' ? null : 'regains-pp')}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <div className={styles.statTileLabel}>Przechwyty PP</div>
                             <div className={styles.statTileValue}>
                               {teamRegainStats.totalRegainsOpponentHalf}
@@ -4117,7 +4137,11 @@ export default function StatystykiZespoluPage() {
                               KPI ≥ {kpiRegainsOpponentHalf}
                             </div>
                           </div>
-                          <div className={`${styles.statTile} ${isRegainsPPToPKShot8sGood ? styles.statTileGood : styles.statTileBad}`}>
+                          <div 
+                            className={`${styles.statTile} ${isRegainsPPToPKShot8sGood ? styles.statTileGood : styles.statTileBad}`}
+                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === '8s-ca' ? null : '8s-ca')}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <div className={styles.statTileLabel}>8s CA</div>
                             <div className={styles.statTileValue}>
                               {regainsPPToPKShot8sPercentage.toFixed(1)}%
@@ -4154,34 +4178,292 @@ export default function StatystykiZespoluPage() {
                 }}
               >
                 {/* Wyświetl czasy zagrań nad wideo dla wybranego KPI */}
-                {selectedKpiForVideo === '8s-acc' && (() => {
-                  // Pobierz wszystkie zagrańia 8s ACC dla wybranego meczu (używamy videoTimestampRaw do filtrowania i seekTo)
-                  const all8sAccEntries = (allAcc8sEntries || []).filter((entry: any) => 
-                    entry && 
-                    entry.videoTimestampRaw !== undefined && 
-                    entry.videoTimestampRaw !== null
-                  );
+                {selectedKpiForVideo && selectedMatchInfo && (() => {
+                  // Oblicz potrzebne zmienne (takie same jak w bloku KPI)
+                  const isSelectedTeamHome = selectedMatchInfo.isHome;
+                  const teamIdInMatch = selectedTeam;
+                  const opponentIdInMatch = isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team;
                   
-                  // Zidentyfikuj skuteczne zagrańia (te które spełniają KPI - mają strzał lub wejście PK w 8s)
-                  const successfulEntriesIds = new Set(
-                    all8sAccEntries
-                      .filter((entry: any) => 
-                        entry.isShotUnder8s === true || entry.isPKEntryUnder8s === true
-                      )
-                      .map((entry: any) => entry.id)
-                  );
+                  // Funkcje pomocnicze
+                  const convertZoneToName = (zone: any): string | null => {
+                    if (typeof zone === 'string') return zone;
+                    if (zone && typeof zone === 'object') {
+                      if (zone.name) return zone.name;
+                      if (zone.zone) return zone.zone;
+                    }
+                    return null;
+                  };
                   
-                  // Przygotuj wszystkie zagrańia z czasem, zaznaczając skuteczne
-                  // Używamy videoTimestamp do wyświetlania i do seekTo
-                  const entriesWithTime = all8sAccEntries
-                    .map((entry: any) => ({
-                      entry,
-                      time: entry.videoTimestamp !== undefined && entry.videoTimestamp !== null 
-                        ? entry.videoTimestamp 
-                        : entry.videoTimestampRaw, // Fallback do videoTimestampRaw jeśli videoTimestamp nie istnieje
-                      isSuccessful: successfulEntriesIds.has(entry.id)
-                    }))
-                    .sort((a, b) => a.time - b.time);
+                  const getOppositeZoneName = (zoneName: string): string | null => {
+                    const normalized = convertZoneToName(zoneName);
+                    if (!normalized) return null;
+                    return getOppositeXTValueForZone(normalized)?.zone || null;
+                  };
+                  
+                  const isOwnHalf = (zoneName: string | null | undefined): boolean => {
+                    if (!zoneName) return false;
+                    const normalized = convertZoneToName(zoneName);
+                    if (!normalized) return false;
+                    const zoneIndex = zoneNameToIndex(normalized);
+                    if (zoneIndex === null) return false;
+                    const col = zoneIndex % 12;
+                    return col <= 5;
+                  };
+                  
+                  const isPMArea = (zoneName: string | null | undefined): boolean => {
+                    if (!zoneName) return false;
+                    const normalized = convertZoneToName(zoneName);
+                    if (!normalized) return false;
+                    const pmZones = ['C5', 'C6', 'C7', 'C8', 'D5', 'D6', 'D7', 'D8', 'E5', 'E6', 'E7', 'E8', 'F5', 'F6', 'F7', 'F8'];
+                    return pmZones.includes(normalized);
+                  };
+                  
+                  const kpiXGPerShot = 0.15;
+                  
+                  let entriesWithTime: Array<{ item: any; time: number; isSuccessful: boolean }> = [];
+                  
+                  if (selectedKpiForVideo === '8s-acc') {
+                    // Pobierz wszystkie zagrańia 8s ACC dla wybranego meczu
+                    const all8sAccEntries = (allAcc8sEntries || []).filter((entry: any) => 
+                      entry && 
+                      entry.videoTimestampRaw !== undefined && 
+                      entry.videoTimestampRaw !== null
+                    );
+                    
+                    // Zidentyfikuj skuteczne zagrańia (te które spełniają KPI - mają strzał lub wejście PK w 8s)
+                    const successfulEntriesIds = new Set(
+                      all8sAccEntries
+                        .filter((entry: any) => 
+                          entry.isShotUnder8s === true || entry.isPKEntryUnder8s === true
+                        )
+                        .map((entry: any) => entry.id)
+                    );
+                    
+                    entriesWithTime = all8sAccEntries
+                      .map((entry: any) => ({
+                        item: entry,
+                        time: entry.videoTimestamp !== undefined && entry.videoTimestamp !== null 
+                          ? entry.videoTimestamp 
+                          : entry.videoTimestampRaw,
+                        isSuccessful: successfulEntriesIds.has(entry.id)
+                      }))
+                      .sort((a, b) => a.time - b.time);
+                  } else if (selectedKpiForVideo === 'xg-per-shot') {
+                    // Wszystkie strzały naszego zespołu
+                    const teamShotsFiltered = (allShots || []).filter((shot: any) => {
+                      const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
+                        ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                        : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                      return shotTeamId === teamIdInMatch &&
+                        shot && 
+                        (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null ||
+                         shot.videoTimestamp !== undefined && shot.videoTimestamp !== null);
+                    });
+                    
+                    // Skuteczne to te z xG >= 0.15 (KPI)
+                    entriesWithTime = teamShotsFiltered
+                      .map((shot: any) => ({
+                        item: shot,
+                        time: shot.videoTimestamp !== undefined && shot.videoTimestamp !== null
+                          ? shot.videoTimestamp
+                          : shot.videoTimestampRaw,
+                        isSuccessful: (shot.xG || 0) >= kpiXGPerShot
+                      }))
+                      .sort((a, b) => a.time - b.time);
+                  } else if (selectedKpiForVideo === 'pk-opponent') {
+                    // Wszystkie wejścia PK przeciwnika
+                    const opponentPKEntriesFiltered = (allPKEntries || []).filter((entry: any) => 
+                      entry && 
+                      entry.teamId === selectedTeam && 
+                      (entry.teamContext ?? "attack") === "defense" &&
+                      (entry.videoTimestampRaw !== undefined && entry.videoTimestampRaw !== null ||
+                       entry.videoTimestamp !== undefined && entry.videoTimestamp !== null)
+                    );
+                    
+                    // Wszystkie są "złe" bo KPI < 11
+                    entriesWithTime = opponentPKEntriesFiltered
+                      .map((entry: any) => ({
+                        item: entry,
+                        time: entry.videoTimestamp !== undefined && entry.videoTimestamp !== null
+                          ? entry.videoTimestamp
+                          : entry.videoTimestampRaw,
+                        isSuccessful: false // Wszystkie są złe
+                      }))
+                      .sort((a, b) => a.time - b.time);
+                  } else if (selectedKpiForVideo === '5s') {
+                    // Wszystkie straty z flagą 5s
+                    const allLoses = derivedLosesActions;
+                    const losesWith5sFlags = allLoses.filter((action: any) => {
+                      if (action.isAut === true) return false;
+                      const hasBad5s = action.isBadReaction5s === true || (action as any).isReaction5sNotApplicable === true;
+                      return action.isReaction5s === true || hasBad5s;
+                    });
+                    const reaction5sLoses = losesWith5sFlags.filter((action: any) => action.isReaction5s === true);
+                    
+                    const losesWith5sFiltered = losesWith5sFlags.filter((action: any) => 
+                      action && 
+                      (action.videoTimestampRaw !== undefined && action.videoTimestampRaw !== null ||
+                       action.videoTimestamp !== undefined && action.videoTimestamp !== null)
+                    );
+                    
+                    // Skuteczne to te z isReaction5s === true
+                    const successfulLosesIds = new Set(
+                      reaction5sLoses.map((action: any) => action.id)
+                    );
+                    
+                    entriesWithTime = losesWith5sFiltered
+                      .map((action: any) => ({
+                        item: action,
+                        time: action.videoTimestamp !== undefined && action.videoTimestamp !== null
+                          ? action.videoTimestamp
+                          : action.videoTimestampRaw,
+                        isSuccessful: successfulLosesIds.has(action.id)
+                      }))
+                      .sort((a, b) => a.time - b.time);
+                  } else if (selectedKpiForVideo === 'pm-area-loses') {
+                    // Wszystkie straty w PM Area
+                    const allLoses = derivedLosesActions;
+                    const losesInPMAreaFiltered = allLoses.filter((action: any) => {
+                      const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
+                      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                      return isPMArea(defenseZoneName) &&
+                        action && 
+                        (action.videoTimestampRaw !== undefined && action.videoTimestampRaw !== null ||
+                         action.videoTimestamp !== undefined && action.videoTimestamp !== null);
+                    });
+                    
+                    // Wszystkie są "złe" bo KPI ≤ 6
+                    entriesWithTime = losesInPMAreaFiltered
+                      .map((action: any) => ({
+                        item: action,
+                        time: action.videoTimestamp !== undefined && action.videoTimestamp !== null
+                          ? action.videoTimestamp
+                          : action.videoTimestampRaw,
+                        isSuccessful: false // Wszystkie są złe
+                      }))
+                      .sort((a, b) => a.time - b.time);
+                  } else if (selectedKpiForVideo === 'regains-pp') {
+                    // Wszystkie przechwyty na połowie przeciwnika
+                    const regainsPPFiltered = (derivedRegainActions || []).filter((action: any) => {
+                      const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+                      const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+                      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                      const attackZoneName = attackZoneRaw
+                        ? convertZoneToName(attackZoneRaw)
+                        : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
+                      
+                      if (!attackZoneName) return false;
+                      const isOwn = isOwnHalf(attackZoneName);
+                      return !isOwn && // attackZone na połowie przeciwnika
+                        action && 
+                        (action.videoTimestampRaw !== undefined && action.videoTimestampRaw !== null ||
+                         action.videoTimestamp !== undefined && action.videoTimestamp !== null);
+                    });
+                    
+                    // Wszystkie są "dobre" bo KPI ≥ 27
+                    entriesWithTime = regainsPPFiltered
+                      .map((action: any) => ({
+                        item: action,
+                        time: action.videoTimestamp !== undefined && action.videoTimestamp !== null
+                          ? action.videoTimestamp
+                          : action.videoTimestampRaw,
+                        isSuccessful: true // Wszystkie są dobre
+                      }))
+                      .sort((a, b) => a.time - b.time);
+                  } else if (selectedKpiForVideo === '8s-ca') {
+                    // Przechwyty na połowie przeciwnika
+                    const regainsOnOpponentHalf = (derivedRegainActions || []).filter((action: any) => {
+                      const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+                      const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+                      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                      const attackZoneName = attackZoneRaw
+                        ? convertZoneToName(attackZoneRaw)
+                        : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
+                      
+                      if (!attackZoneName) return false;
+                      const isOwn = isOwnHalf(attackZoneName);
+                      return !isOwn && // attackZone na połowie przeciwnika
+                        action && 
+                        (action.videoTimestampRaw !== undefined && action.videoTimestampRaw !== null ||
+                         action.videoTimestamp !== undefined && action.videoTimestamp !== null);
+                    });
+                    
+                    // Przygotuj PK entries i shots w ataku z timestampami
+                    const pkEntriesAttackWithTimestamp = (allPKEntries || [])
+                      .filter((entry: any) => {
+                        if (!entry) return false;
+                        const teamContext = entry.teamContext ?? "attack";
+                        return teamContext === "attack" || (entry.teamId && entry.teamId === teamIdInMatch);
+                      })
+                      .map((entry: any) => ({
+                        entry,
+                        timestamp: entry.videoTimestampRaw ?? entry.videoTimestamp ?? 0,
+                      }))
+                      .filter(item => item.timestamp > 0)
+                      .sort((a, b) => a.timestamp - b.timestamp);
+                    
+                    const teamShotsForCA = (allShots || []).filter((shot: any) => {
+                      const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
+                        ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                        : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                      return shotTeamId === teamIdInMatch;
+                    });
+                    
+                    const shotsAttackWithTimestamp = teamShotsForCA
+                      .map((shot: any) => ({
+                        shot,
+                        timestamp: shot.videoTimestampRaw ?? shot.videoTimestamp ?? 0,
+                      }))
+                      .filter(item => item.timestamp > 0)
+                      .sort((a, b) => a.timestamp - b.timestamp);
+                    
+                    // Przygotuj loses z timestampami
+                    const losesWithTimestamp = (derivedLosesActions || [])
+                      .map((lose: any) => ({
+                        lose,
+                        timestamp: lose.videoTimestampRaw ?? (lose.videoTimestamp !== undefined ? lose.videoTimestamp + 10 : 0),
+                      }))
+                      .filter(item => item.timestamp > 0)
+                      .sort((a, b) => a.timestamp - b.timestamp);
+                    
+                    // Sprawdź które przechwyty mają PK lub strzał w 8s
+                    const successfulRegainsIds = new Set<string>();
+                    regainsOnOpponentHalf.forEach((action: any) => {
+                      const regainTime = action.videoTimestampRaw ?? action.videoTimestamp ?? 0;
+                      if (regainTime === 0) return;
+                      const timeWindowEnd = regainTime + 8;
+                      
+                      // Sprawdź czy jest PK entry lub shot w oknie 8s
+                      const pkEntryInWindow = pkEntriesAttackWithTimestamp.find((item: any) => 
+                        item.timestamp > regainTime && item.timestamp <= timeWindowEnd
+                      );
+                      const shotInWindow = shotsAttackWithTimestamp.find((item: any) => 
+                        item.timestamp > regainTime && item.timestamp <= timeWindowEnd
+                      );
+                      
+                      if (pkEntryInWindow || shotInWindow) {
+                        // Sprawdź czy nie ma loses między nimi
+                        const targetEvent = pkEntryInWindow || shotInWindow;
+                        const hasLoseBetween = losesWithTimestamp.some((loseItem: any) => 
+                          loseItem.timestamp > regainTime && loseItem.timestamp < targetEvent.timestamp
+                        );
+                        
+                        if (!hasLoseBetween) {
+                          successfulRegainsIds.add(action.id);
+                        }
+                      }
+                    });
+                    
+                    entriesWithTime = regainsOnOpponentHalf
+                      .map((action: any) => ({
+                        item: action,
+                        time: action.videoTimestamp !== undefined && action.videoTimestamp !== null
+                          ? action.videoTimestamp
+                          : action.videoTimestampRaw,
+                        isSuccessful: successfulRegainsIds.has(action.id)
+                      }))
+                      .sort((a, b) => a.time - b.time);
+                  }
                   
                   return entriesWithTime.length > 0 ? (
                     <div style={{
@@ -4206,7 +4488,7 @@ export default function StatystykiZespoluPage() {
                         
                         return (
                           <button
-                            key={item.entry.id || index}
+                            key={item.item.id || index}
                             onClick={async () => {
                               if (youtubeVideoRef.current) {
                                 await youtubeVideoRef.current.seekTo(item.time);
