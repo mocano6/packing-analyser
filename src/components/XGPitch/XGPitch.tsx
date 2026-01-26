@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useState } from "react";
+import React, { memo, useState, useEffect } from "react";
 import { Shot } from "@/types";
 import styles from "./XGPitch.module.css";
 import PitchHeader from "../PitchHeader/PitchHeader";
@@ -74,10 +74,37 @@ const XGPitch = memo(function XGPitch({
   hideToggleButton = false,
   rightExtraContent,
 }: XGPitchProps) {
-  // Stan przełącznika orientacji boiska
-  const [isFlipped, setIsFlipped] = useState(false);
+  // Stan przełącznika orientacji boiska - przywróć z localStorage (wspólny dla wszystkich zakładek)
+  const [isFlipped, setIsFlipped] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('pitchOrientation');
+      return saved === 'true';
+    }
+    return false;
+  });
   // Stan przełącznika widoczności strzałów
   const [showShots, setShowShots] = useState(true);
+
+  // Zapisz orientację do localStorage przy zmianie (wspólny dla wszystkich zakładek)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pitchOrientation', String(isFlipped));
+      // Wyślij event, aby inne komponenty mogły zaktualizować swój stan
+      window.dispatchEvent(new CustomEvent('pitchOrientationChanged', { detail: { isFlipped } }));
+    }
+  }, [isFlipped]);
+
+  // Nasłuchuj zmian orientacji z innych komponentów
+  useEffect(() => {
+    const handleOrientationChange = (event: CustomEvent) => {
+      setIsFlipped(event.detail.isFlipped);
+    };
+    
+    window.addEventListener('pitchOrientationChanged', handleOrientationChange as EventListener);
+    return () => {
+      window.removeEventListener('pitchOrientationChanged', handleOrientationChange as EventListener);
+    };
+  }, []);
 
   // Obsługa przełączania orientacji
   const handleFlipToggle = () => {

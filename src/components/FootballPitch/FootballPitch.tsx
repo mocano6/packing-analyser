@@ -47,21 +47,35 @@ const FootballPitch = memo(function FootballPitch({
   allTeams = [],
   hideTeamLogos = false,
 }: FootballPitchProps) {
-  // Stan przełącznika orientacji boiska - wczytujemy z localStorage
+  // Stan przełącznika orientacji boiska - przywróć z localStorage (wspólny dla wszystkich zakładek)
   const [isFlipped, setIsFlipped] = useState(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('pitchFlipped');
+      const saved = localStorage.getItem('pitchOrientation');
       return saved === 'true';
     }
     return false;
   });
 
-  // Zapisujemy stan flip w localStorage przy każdej zmianie
+  // Zapisz orientację do localStorage przy zmianie (wspólny dla wszystkich zakładek)
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('pitchFlipped', isFlipped.toString());
+      localStorage.setItem('pitchOrientation', String(isFlipped));
+      // Wyślij event, aby inne komponenty mogły zaktualizować swój stan
+      window.dispatchEvent(new CustomEvent('pitchOrientationChanged', { detail: { isFlipped } }));
     }
   }, [isFlipped]);
+
+  // Nasłuchuj zmian orientacji z innych komponentów
+  useEffect(() => {
+    const handleOrientationChange = (event: CustomEvent) => {
+      setIsFlipped(event.detail.isFlipped);
+    };
+    
+    window.addEventListener('pitchOrientationChanged', handleOrientationChange as EventListener);
+    return () => {
+      window.removeEventListener('pitchOrientationChanged', handleOrientationChange as EventListener);
+    };
+  }, []);
 
   // Logowanie zmian stref dla debugowania
   useEffect(() => {
