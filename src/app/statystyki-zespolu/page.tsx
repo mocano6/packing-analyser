@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef, Fragment } from "react";
-import { LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
+import { LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ResponsiveRadar } from '@nivo/radar';
 import { Action, TeamInfo, Shot } from "@/types";
 import { getOppositeXTValueForZone, getZoneName, getXTValueForZone, zoneNameToIndex, zoneNameToString } from "@/constants/xtValues";
@@ -315,8 +315,8 @@ export default function StatystykiZespoluPage() {
   useEffect(() => {
     if (selectedTeam) {
       // Nie wymuszaj odświeżenia przy każdej zmianie - używaj normalnego fetchMatches
-      fetchMatches(selectedTeam).catch(error => {
-        console.error('❌ Błąd podczas pobierania meczów:', error);
+      fetchMatches(selectedTeam).catch(() => {
+        // Silently handle error - UI will show empty state
       });
     }
   }, [selectedTeam]); // Tylko selectedTeam w dependency - bez funkcji żeby uniknąć infinite loop
@@ -369,7 +369,6 @@ export default function StatystykiZespoluPage() {
 
       try {
         if (!db) {
-          console.error("Firebase nie jest zainicjalizowane");
           setAllActions([]);
           setAllRegainActions([]);
           setAllLosesActions([]);
@@ -410,8 +409,8 @@ export default function StatystykiZespoluPage() {
           setAllPKEntries([]);
           setAllAcc8sEntries([]);
         }
-      } catch (error) {
-        console.error("Błąd podczas pobierania akcji:", error);
+      } catch {
+        // Silently handle error - UI will show empty state
         setAllActions([]);
         setAllRegainActions([]);
         setAllLosesActions([]);
