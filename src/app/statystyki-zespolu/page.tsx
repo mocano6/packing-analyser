@@ -26,7 +26,14 @@ export default function StatystykiZespoluPage() {
   const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, logout } = useAuth();
   const [isVideoVisible, setIsVideoVisible] = useState(false);
   const [selectedKpiForVideo, setSelectedKpiForVideo] = useState<string | null>(null);
+  const [expandedKpiForPlayers, setExpandedKpiForPlayers] = useState<string | null>(null);
+  const [isPlayersListCollapsed, setIsPlayersListCollapsed] = useState<boolean>(true);
   const { players } = usePlayersState();
+  
+  // Resetuj stan zwijania gdy zmienia się wybrane KPI
+  useEffect(() => {
+    setIsPlayersListCollapsed(false);
+  }, [expandedKpiForPlayers]);
   const youtubeVideoRef = useRef<YouTubeVideoRef>(null);
 
   // Filtruj dostępne zespoły na podstawie uprawnień użytkownika (tak jak w głównej aplikacji)
@@ -2265,11 +2272,11 @@ export default function StatystykiZespoluPage() {
       losesAttackCount,
       losesDefenseCount,
       totalLosesOwnHalf,
-        totalLosesOpponentHalf,
-        attackXTHeatmap,
-        defenseXTHeatmap,
-        attackCountHeatmap,
-        defenseCountHeatmap,
+      totalLosesOpponentHalf,
+      attackXTHeatmap,
+      defenseXTHeatmap,
+      attackCountHeatmap,
+      defenseCountHeatmap,
         // Statystyki P0-P3 dla wszystkich strat (bez filtrowania według selectedActionFilter) - do wyświetlania w kafelkach
         allLosesP0Count,
         allLosesP1Count,
@@ -3286,13 +3293,13 @@ export default function StatystykiZespoluPage() {
               >
                 <span className={styles.categoryName}>xG</span>
               </button>
-              <button
-                type="button"
+                <button
+                  type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'pkEntries' ? styles.active : ''}`}
                 onClick={() => setExpandedCategory(expandedCategory === 'pkEntries' ? null : 'pkEntries')}
-              >
+                >
                 <span className={styles.categoryName}>Wejścia w PK</span>
-              </button>
+                </button>
               <button
                 type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'regains' ? styles.active : ''}`}
@@ -3308,13 +3315,13 @@ export default function StatystykiZespoluPage() {
                 <span className={styles.categoryName}>Straty</span>
               </button>
               {isAdmin && (
-                <button
-                  type="button"
+              <button
+                type="button"
                   className={`${styles.categoryItem} ${expandedCategory === 'matchData' ? styles.active : ''}`}
                   onClick={() => setExpandedCategory(expandedCategory === 'matchData' ? null : 'matchData')}
-                >
+              >
                   <span className={styles.categoryName}>Dane meczowe</span>
-                </button>
+              </button>
               )}
       </div>
 
@@ -3893,23 +3900,23 @@ export default function StatystykiZespoluPage() {
                                 tickCount={5}
                                 tickFormatter={(value) => value === 0 ? '' : value.toString()}
                               />
-                              <Tooltip
-                                content={({ active, payload }) => {
-                                  if (!active || !payload || payload.length === 0) return null;
-                                  const data = payload[0].payload;
-                                  let displayValue = '';
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (!active || !payload || payload.length === 0) return null;
+                              const data = payload[0].payload;
+                              let displayValue = '';
                                   let kpiValue = '';
-                                  
-                                  // Wyświetlaj rzeczywiste wartości zamiast znormalizowanych
+                              
+                              // Wyświetlaj rzeczywiste wartości zamiast znormalizowanych
                                   if (data.subject === 'xG/strzał') {
                                     displayValue = `${teamXGPerShot.toFixed(3)} (${teamShotsCount} strzałów)`;
                                     const missing = kpiXGPerShot - teamXGPerShot;
                                     kpiValue = `KPI > ${kpiXGPerShot.toFixed(2)} • ${missing > 0 ? `brakuje: +${missing.toFixed(3)}` : `zapasu: ${Math.abs(missing).toFixed(3)}`}`;
-                                  } else if (data.subject === 'PK przeciwnik') {
-                                    displayValue = `${opponentPKEntriesCount}`;
+                              } else if (data.subject === 'PK przeciwnik') {
+                                displayValue = `${opponentPKEntriesCount}`;
                                     const over = opponentPKEntriesCount - kpiPKEntries;
                                     kpiValue = `KPI < ${kpiPKEntries} • ${over > 0 ? `nadmiar: +${over}` : `zapasu: ${Math.abs(over)}`}`;
-                                  } else if (data.subject === '5s') {
+                              } else if (data.subject === '5s') {
                                     displayValue = `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesWith5sFlags.length})`;
                                     const missing = kpiReaction5s - reaction5sPercentage;
                                     kpiValue = `KPI > ${kpiReaction5s}% • ${missing > 0 ? `brakuje: +${missing.toFixed(1)} pp` : `zapasu: ${Math.abs(missing).toFixed(1)} pp`}`;
@@ -3917,7 +3924,7 @@ export default function StatystykiZespoluPage() {
                                     displayValue = `${losesInPMAreaCount} (${losesInPMAreaPercentage.toFixed(1)}% z ${allLoses.length})`;
                                     const over = losesInPMAreaCount - kpiLosesPMAreaCount;
                                     kpiValue = `KPI ≤ ${kpiLosesPMAreaCount} • ${over >= 0 ? `nadmiar: +${over}` : `zapasu: ${Math.abs(over)}`}`;
-                                  } else if (data.subject === '8s ACC') {
+                              } else if (data.subject === '8s ACC') {
                                     displayValue = `${shotAndPK8sPercentage.toFixed(1)}% (${shotAndPK8sCount}/${total8sAcc})`;
                                     const missing = target8sAcc - shotAndPK8sPercentage;
                                     kpiValue = `KPI ≥ ${target8sAcc}% • ${missing > 0 ? `brakuje: +${missing.toFixed(1)} pp` : `zapasu: ${Math.abs(missing).toFixed(1)} pp`}`;
@@ -3929,11 +3936,11 @@ export default function StatystykiZespoluPage() {
                                     displayValue = `${regainsPPToPKShot8sPercentage.toFixed(1)}% (${regainsPPWithPKOrShot8s}/${regainsOnOpponentHalfWithTimestamp.length})`;
                                     const missing = kpiRegainsPPToPKShot8s - regainsPPToPKShot8sPercentage;
                                     kpiValue = `KPI ≥ ${kpiRegainsPPToPKShot8s}% • ${missing > 0 ? `brakuje: +${missing.toFixed(1)} pp` : `zapasu: ${Math.abs(missing).toFixed(1)} pp`}`;
-                                  }
-                                  
-                                  return (
-                                    <div style={{
-                                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                              }
+                              
+                              return (
+                                <div style={{
+                                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
                                       backdropFilter: 'blur(20px) saturate(180%)',
                                       WebkitBackdropFilter: 'blur(20px) saturate(180%)',
                                       border: '1px solid rgba(0, 0, 0, 0.1)',
@@ -3945,10 +3952,10 @@ export default function StatystykiZespoluPage() {
                                       <p style={{ margin: 0, fontWeight: 600, marginBottom: '6px', fontSize: '12px', color: 'rgba(0, 0, 0, 0.8)', letterSpacing: '0.3px' }}>{data.subject}</p>
                                       <p style={{ margin: 0, color: '#6366f1', marginBottom: '4px', fontSize: '13px', fontWeight: 600 }}>{displayValue}</p>
                                       <p style={{ margin: 0, color: '#34C759', fontSize: '11px', fontWeight: 500 }}>{kpiValue}</p>
-                                    </div>
-                                  );
-                                }}
-                              />
+                                </div>
+                              );
+                            }}
+                          />
                               <Radar
                                 name="KPI (cel)"
                                 dataKey="kpi"
@@ -3958,9 +3965,9 @@ export default function StatystykiZespoluPage() {
                                 strokeDasharray="6 4"
                                 dot={false}
                               />
-                              <Radar
-                                name="Wartości"
-                                dataKey="value"
+                          <Radar
+                            name="Wartości"
+                            dataKey="value"
                                 stroke="#6366f1"
                                 fill="url(#valueGradient)"
                                 strokeWidth={3}
@@ -3980,10 +3987,10 @@ export default function StatystykiZespoluPage() {
                                 }}
                                 iconType="circle"
                                 iconSize={8}
-                              />
-                            </RadarChart>
-                          </ResponsiveContainer>
-                          
+                          />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                      
                           {/* Podsumowanie KPI pod spidermapą */}
                           {(() => {
                             const kpiCount = 7; // Całkowita liczba KPI
@@ -4057,7 +4064,11 @@ export default function StatystykiZespoluPage() {
                           </div>
                           <div 
                             className={`${styles.statTile} ${isXGPerShotGood ? styles.statTileGood : styles.statTileBad}`}
-                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === 'xg-per-shot' ? null : 'xg-per-shot')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedKpiForVideo(selectedKpiForVideo === 'xg-per-shot' ? null : 'xg-per-shot');
+                              setExpandedKpiForPlayers(expandedKpiForPlayers === 'xg-per-shot' ? null : 'xg-per-shot');
+                            }}
                             style={{ cursor: 'pointer' }}
                           >
                             <div className={styles.statTileLabel}>xG/strzał</div>
@@ -4107,7 +4118,11 @@ export default function StatystykiZespoluPage() {
                           </div>
                           <div 
                             className={`${styles.statTile} ${isLosesPMAreaBad ? styles.statTileBad : styles.statTileGood}`}
-                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === 'pm-area-loses' ? null : 'pm-area-loses')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedKpiForVideo(selectedKpiForVideo === 'pm-area-loses' ? null : 'pm-area-loses');
+                              setExpandedKpiForPlayers(expandedKpiForPlayers === 'pm-area-loses' ? null : 'pm-area-loses');
+                            }}
                             style={{ cursor: 'pointer' }}
                           >
                             <div className={styles.statTileLabel}>PM Area straty</div>
@@ -4123,7 +4138,11 @@ export default function StatystykiZespoluPage() {
                           </div>
                           <div 
                             className={`${styles.statTile} ${isRegainsOpponentHalfGood ? styles.statTileGood : styles.statTileBad}`}
-                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === 'regains-pp' ? null : 'regains-pp')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedKpiForVideo(selectedKpiForVideo === 'regains-pp' ? null : 'regains-pp');
+                              setExpandedKpiForPlayers(expandedKpiForPlayers === 'regains-pp' ? null : 'regains-pp');
+                            }}
                             style={{ cursor: 'pointer' }}
                           >
                             <div className={styles.statTileLabel}>Przechwyty PP</div>
@@ -4137,33 +4156,759 @@ export default function StatystykiZespoluPage() {
                               KPI ≥ {kpiRegainsOpponentHalf}
                             </div>
                           </div>
-                          <div 
-                            className={`${styles.statTile} ${isRegainsPPToPKShot8sGood ? styles.statTileGood : styles.statTileBad}`}
-                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === '8s-ca' ? null : '8s-ca')}
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <div className={styles.statTileLabel}>8s CA</div>
-                            <div className={styles.statTileValue}>
-                              {regainsPPToPKShot8sPercentage.toFixed(1)}%
-                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
-                                {regainsPPToPKShot8sDelta > 0 ? `(-${regainsPPToPKShot8sDelta.toFixed(1)}%)` : `(+${Math.abs(regainsPPToPKShot8sDelta).toFixed(1)}%)`}
-                              </span>
-                            </div>
+                          <div>
+                            <div 
+                              className={`${styles.statTile} ${isRegainsPPToPKShot8sGood ? styles.statTileGood : styles.statTileBad}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedKpiForVideo(selectedKpiForVideo === '8s-ca' ? null : '8s-ca');
+                                setExpandedKpiForPlayers(expandedKpiForPlayers === '8s-ca' ? null : '8s-ca');
+                              }}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <div className={styles.statTileLabel}>8s CA</div>
+                              <div className={styles.statTileValue}>
+                                {regainsPPToPKShot8sPercentage.toFixed(1)}%
+                                <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                                  {regainsPPToPKShot8sDelta > 0 ? `(-${regainsPPToPKShot8sDelta.toFixed(1)}%)` : `(+${Math.abs(regainsPPToPKShot8sDelta).toFixed(1)}%)`}
+                                </span>
+                              </div>
                             <div className={styles.statTileSecondary}>
                               {regainsPPWithPKOrShot8s}/{regainsOnOpponentHalfWithTimestamp.length} • KPI ≥ {kpiRegainsPPToPKShot8s}%
                             </div>
                           </div>
+                        </div>
                               </>
                             );
                           })()}
                           </div>
                         </div>
                       </div>
+                    </div>
+                    
+                    {/* Lista zawodników dla wybranych KPI - na samym dole kontenera, na pełnej szerokości */}
+                    {expandedKpiForPlayers && selectedMatchInfo && (() => {
+                if (expandedKpiForPlayers === 'xg-per-shot') {
+                  // Oblicz potrzebne zmienne
+                  const isSelectedTeamHome = selectedMatchInfo.isHome;
+                  const teamIdInMatch = selectedTeam;
+                  
+                  // Filtruj strzały naszego zespołu
+                  const teamShots = allShots.filter(shot => {
+                    const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
+                      ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                      : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                    return shotTeamId === teamIdInMatch;
+                  });
+                  
+                  const teamShotsCount = teamShots.length;
+                  const kpiXGPerShot = 0.15;
+                  
+                  // Oblicz statystyki per zawodnik dla strzałów
+                  const playerShotsMap = new Map<string, { shots: any[]; totalXG: number }>();
+                  teamShots.forEach((shot: any) => {
+                    if (shot.playerId) {
+                      if (!playerShotsMap.has(shot.playerId)) {
+                        playerShotsMap.set(shot.playerId, { shots: [], totalXG: 0 });
+                      }
+                      const playerData = playerShotsMap.get(shot.playerId)!;
+                      playerData.shots.push(shot);
+                      playerData.totalXG += shot.xG || 0;
+                    }
+                  });
+                  
+                  const playerStats = Array.from(playerShotsMap.entries())
+                    .map(([playerId, data]) => {
+                      const player = players.find(p => p.id === playerId);
+                      return {
+                        playerId,
+                        playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                        count: data.shots.length,
+                        totalXG: data.totalXG,
+                        percentage: teamShotsCount > 0 ? (data.shots.length / teamShotsCount) * 100 : 0,
+                        shots: data.shots
+                      };
+                    })
+                    .sort((a, b) => b.count - a.count);
+                  
+                  return (
+                    <div style={{ 
+                      marginTop: '24px', 
+                      padding: '16px', 
+                      backgroundColor: '#f9fafb', 
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
+                      width: '100%'
+                    }}>
+                      <div 
+                        style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center',
+                          marginBottom: '12px',
+                          cursor: 'pointer',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          backgroundColor: 'white',
+                          border: '1px solid #e5e7eb'
+                        }}
+                        onClick={() => setIsPlayersListCollapsed(!isPlayersListCollapsed)}
+                      >
+                        <div style={{ fontWeight: '600', fontSize: '15px' }}>
+                          Zawodnicy - xG/strzał ({playerStats.length})
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
                       </div>
+                      {!isPlayersListCollapsed && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {playerStats.map((stat) => (
+                          <div key={stat.playerId} style={{ 
+                            padding: '8px 12px',
+                            backgroundColor: 'white',
+                            borderRadius: '6px',
+                            border: '1px solid #e5e7eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            fontSize: '13px'
+                          }}>
+                            <div style={{ flex: '0 0 160px', fontWeight: '500' }}>
+                              {stat.playerName}
+                            </div>
+                            <div style={{ flex: '0 0 auto', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                              {stat.count} strzałów ({stat.percentage.toFixed(1)}%) • xG: {stat.totalXG.toFixed(2)} • xG/strz: {(stat.totalXG / stat.count).toFixed(2)}
+                            </div>
+                            <div style={{ flex: '1', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', justifyContent: 'flex-start' }}>
+                              {stat.shots.map((shot: any, idx: number) => {
+                                const time = shot.videoTimestamp !== undefined && shot.videoTimestamp !== null
+                                  ? shot.videoTimestamp
+                                  : shot.videoTimestampRaw;
+                                if (!time) return null;
+                                const minutes = Math.floor(time / 60);
+                                const seconds = Math.floor(time % 60);
+                                const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                                const isGoal = shot.shotType === 'goal' || shot.isGoal === true;
+                                const isSuccessful = (shot.xG || 0) >= kpiXGPerShot || isGoal;
+                                
+                                return (
+                                  <button
+                                    key={shot.id || idx}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (youtubeVideoRef.current) {
+                                        await youtubeVideoRef.current.seekTo(time);
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '4px 8px',
+                                      backgroundColor: isSuccessful ? '#4caf50' : '#757575',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '11px',
+                                      fontWeight: isGoal ? '700' : '500',
+                                      position: 'relative'
+                                    }}
+                                    title={`${isGoal ? 'GOL • ' : ''}xG: ${(shot.xG || 0).toFixed(2)} • Minuta: ${shot.minute}'`}
+                                  >
+                                    {timeString}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      )}
                     </div>
                   );
+                } else if (expandedKpiForPlayers === 'pm-area-loses') {
+                  // Oblicz potrzebne zmienne
+                  const allLoses = derivedLosesActions;
+                  
+                  // Funkcje pomocnicze do konwersji stref
+                  const convertZoneToName = (zone: any): string | null => {
+                    if (typeof zone === 'string') return zone;
+                    if (zone && typeof zone === 'object') {
+                      if (zone.name) return zone.name;
+                      if (zone.zone) return zone.zone;
+                    }
+                    return null;
+                  };
+                  
+                  const isPMArea = (zoneName: string | null | undefined): boolean => {
+                    if (!zoneName) return false;
+                    const normalized = convertZoneToName(zoneName);
+                    if (!normalized) return false;
+                    const pmZones = ['C5', 'C6', 'C7', 'C8', 'D5', 'D6', 'D7', 'D8', 'E5', 'E6', 'E7', 'E8', 'F5', 'F6', 'F7', 'F8'];
+                    return pmZones.includes(normalized);
+                  };
+                  
+                  // Filtruj straty w PM Area
+                  const losesInPMArea = allLoses.filter((action: any) => {
+                    const zoneName = action.losesDefenseZone || action.toZone || action.endZone || action.zone;
+                    return isPMArea(zoneName);
+                  });
+                  
+                  const losesInPMAreaCount = losesInPMArea.length;
+                  
+                  // Oblicz statystyki per zawodnik dla strat w PM Area
+                  const playerLosesMap = new Map<string, { loses: any[] }>();
+                  losesInPMArea.forEach((action: any) => {
+                    const playerId = action.senderId || action.playerId;
+                    if (playerId) {
+                      if (!playerLosesMap.has(playerId)) {
+                        playerLosesMap.set(playerId, { loses: [] });
+                      }
+                      playerLosesMap.get(playerId)!.loses.push(action);
+                    }
+                  });
+                  
+                  const playerStats = Array.from(playerLosesMap.entries())
+                    .map(([playerId, data]) => {
+                      const player = players.find(p => p.id === playerId);
+                      return {
+                        playerId,
+                        playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                        count: data.loses.length,
+                        percentage: losesInPMAreaCount > 0 ? (data.loses.length / losesInPMAreaCount) * 100 : 0,
+                        loses: data.loses
+                      };
+                    })
+                    .sort((a, b) => b.count - a.count);
+                                  
+                                  return (
+                    <div style={{ 
+                      marginTop: '24px', 
+                      padding: '16px', 
+                      backgroundColor: '#f9fafb', 
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
+                      width: '100%'
+                    }}>
+                      <div 
+                        style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center',
+                          marginBottom: '12px',
+                          cursor: 'pointer',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          backgroundColor: 'white',
+                          border: '1px solid #e5e7eb'
+                        }}
+                        onClick={() => setIsPlayersListCollapsed(!isPlayersListCollapsed)}
+                      >
+                        <div style={{ fontWeight: '600', fontSize: '15px' }}>
+                          Zawodnicy - PM Area straty ({playerStats.length})
+                                    </div>
+                        <div style={{ fontSize: '14px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
+                      </div>
+                      {!isPlayersListCollapsed && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {playerStats.map((stat) => (
+                          <div key={stat.playerId} style={{ 
+                            padding: '8px 12px',
+                            backgroundColor: 'white',
+                            borderRadius: '6px',
+                            border: '1px solid #e5e7eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            fontSize: '13px'
+                          }}>
+                            <div style={{ flex: '0 0 160px', fontWeight: '500' }}>
+                              {stat.playerName}
+                            </div>
+                            <div style={{ flex: '0 0 auto', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                              {stat.count} strat ({stat.percentage.toFixed(1)}%)
+                            </div>
+                            <div style={{ flex: '1', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', justifyContent: 'flex-start' }}>
+                              {stat.loses.map((lose: any, idx: number) => {
+                                const time = lose.videoTimestamp !== undefined && lose.videoTimestamp !== null
+                                  ? lose.videoTimestamp
+                                  : lose.videoTimestampRaw;
+                                if (!time) return null;
+                                const minutes = Math.floor(time / 60);
+                                const seconds = Math.floor(time % 60);
+                                const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                                
+                                return (
+                                  <button
+                                    key={lose.id || idx}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (youtubeVideoRef.current) {
+                                        await youtubeVideoRef.current.seekTo(time);
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '4px 8px',
+                                      backgroundColor: '#757575',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '11px',
+                                      fontWeight: '500'
+                                    }}
+                                    title={`Minuta: ${lose.minute}'`}
+                                  >
+                                    {timeString}
+                                  </button>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      )}
+                        </div>
+                  );
+                } else if (expandedKpiForPlayers === 'regains-pp') {
+                  // Oblicz potrzebne zmienne
+                  const isSelectedTeamHome = selectedMatchInfo.isHome;
+                  const teamIdInMatch = selectedTeam;
+                  
+                  // Funkcje pomocnicze
+                  const convertZoneToName = (zone: any): string | null => {
+                    if (typeof zone === 'string') return zone;
+                    if (zone && typeof zone === 'object') {
+                      if (zone.name) return zone.name;
+                      if (zone.zone) return zone.zone;
+                    }
+                    return null;
+                  };
+                  
+                  const getOppositeZoneName = (zoneName: string): string | null => {
+                    const normalized = convertZoneToName(zoneName);
+                    if (!normalized) return null;
+                    return getOppositeXTValueForZone(normalized)?.zone || null;
+                  };
+                  
+                  const zoneNameToIndex = (zoneName: string): number | null => {
+                    const match = zoneName.match(/^([A-F])(\d+)$/);
+                    if (!match) return null;
+                    const col = match[1].charCodeAt(0) - 65;
+                    const row = parseInt(match[2], 10) - 1;
+                    return row * 12 + col;
+                  };
+                  
+                  const isOwnHalf = (zoneName: string | null | undefined): boolean => {
+                    if (!zoneName) return false;
+                    const normalized = convertZoneToName(zoneName);
+                    if (!normalized) return false;
+                    const zoneIndex = zoneNameToIndex(normalized);
+                    if (zoneIndex === null) return false;
+                    const col = zoneIndex % 12;
+                    return col <= 5;
+                  };
+                  
+                  // Filtruj przechwyty na połowie przeciwnika
+                  const regainsOnOpponentHalfWithTimestamp = (derivedRegainActions || [])
+                    .map((action: any) => {
+                      const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+                      const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+                      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                      const attackZoneName = attackZoneRaw
+                        ? convertZoneToName(attackZoneRaw)
+                        : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
+                      
+                      if (!attackZoneName) return null;
+                      const isOwn = isOwnHalf(attackZoneName);
+                      
+                      if (isOwn) return null;
+                      
+                      const timestamp = action.videoTimestampRaw ?? (action.videoTimestamp !== undefined ? action.videoTimestamp + 10 : 0);
+                      if (!timestamp || timestamp <= 0) return null;
+                      
+                      return { action, timestamp };
+                    })
+                    .filter((item: any) => item !== null)
+                    .sort((a: any, b: any) => a.timestamp - b.timestamp);
+                  
+                  const totalRegainsOpponentHalf = regainsOnOpponentHalfWithTimestamp.length;
+                  
+                  // Oblicz statystyki per zawodnik dla przechwytów na połowie przeciwnika
+                  const playerRegainsMap = new Map<string, { regains: any[] }>();
+                  regainsOnOpponentHalfWithTimestamp.forEach((item: any) => {
+                    const action = item.action;
+                    if (action && action.senderId) {
+                      if (!playerRegainsMap.has(action.senderId)) {
+                        playerRegainsMap.set(action.senderId, { regains: [] });
+                      }
+                      playerRegainsMap.get(action.senderId)!.regains.push(action);
+                    }
+                  });
+                  
+                  const playerStats = Array.from(playerRegainsMap.entries())
+                    .map(([playerId, data]) => {
+                      const player = players.find(p => p.id === playerId);
+                      return {
+                        playerId,
+                        playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                        count: data.regains.length,
+                        percentage: totalRegainsOpponentHalf > 0 
+                          ? (data.regains.length / totalRegainsOpponentHalf) * 100 
+                          : 0,
+                        regains: data.regains
+                      };
+                    })
+                    .sort((a, b) => b.count - a.count);
+                                  
+                                  return (
+                    <div style={{ 
+                      marginTop: '24px', 
+                      padding: '16px', 
+                      backgroundColor: '#f9fafb', 
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
+                      width: '100%'
+                    }}>
+                      <div 
+                        style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center',
+                          marginBottom: '12px',
+                          cursor: 'pointer',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          backgroundColor: 'white',
+                          border: '1px solid #e5e7eb'
+                        }}
+                        onClick={() => setIsPlayersListCollapsed(!isPlayersListCollapsed)}
+                      >
+                        <div style={{ fontWeight: '600', fontSize: '15px' }}>
+                          Zawodnicy - Przechwyty PP ({playerStats.length})
+                                    </div>
+                        <div style={{ fontSize: '14px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
+                      </div>
+                      {!isPlayersListCollapsed && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {playerStats.map((stat) => (
+                          <div key={stat.playerId} style={{ 
+                            padding: '8px 12px',
+                            backgroundColor: 'white',
+                            borderRadius: '6px',
+                            border: '1px solid #e5e7eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            fontSize: '13px'
+                          }}>
+                            <div style={{ flex: '0 0 160px', fontWeight: '500' }}>
+                              {stat.playerName}
+                            </div>
+                            <div style={{ flex: '0 0 auto', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                              {stat.count} przechwytów ({stat.percentage.toFixed(1)}%)
+                            </div>
+                            <div style={{ flex: '1', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', justifyContent: 'flex-start' }}>
+                              {stat.regains.map((regain: any, idx: number) => {
+                                const time = regain.videoTimestamp !== undefined && regain.videoTimestamp !== null
+                                  ? regain.videoTimestamp
+                                  : regain.videoTimestampRaw;
+                                if (!time) return null;
+                                const minutes = Math.floor(time / 60);
+                                const seconds = Math.floor(time % 60);
+                                const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                                
+                                return (
+                                  <button
+                                    key={regain.id || idx}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (youtubeVideoRef.current) {
+                                        await youtubeVideoRef.current.seekTo(time);
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '4px 8px',
+                                      backgroundColor: '#4caf50',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '11px',
+                                      fontWeight: '500'
+                                    }}
+                                    title={`Minuta: ${regain.minute}'`}
+                                  >
+                                    {timeString}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      )}
+                    </div>
+                  );
+                } else if (expandedKpiForPlayers === '8s-ca') {
+                  // Oblicz potrzebne zmienne
+                  const isSelectedTeamHome = selectedMatchInfo.isHome;
+                  const teamIdInMatch = selectedTeam;
+                  
+                  // Funkcje pomocnicze
+                  const convertZoneToName = (zone: any): string | null => {
+                    if (typeof zone === 'string') return zone;
+                    if (zone && typeof zone === 'object') {
+                      if (zone.name) return zone.name;
+                      if (zone.zone) return zone.zone;
+                    }
+                    return null;
+                  };
+                  
+                  const getOppositeZoneName = (zoneName: string): string | null => {
+                    const normalized = convertZoneToName(zoneName);
+                    if (!normalized) return null;
+                    return getOppositeXTValueForZone(normalized)?.zone || null;
+                  };
+                  
+                  const zoneNameToIndex = (zoneName: string): number | null => {
+                    const match = zoneName.match(/^([A-F])(\d+)$/);
+                    if (!match) return null;
+                    const col = match[1].charCodeAt(0) - 65;
+                    const row = parseInt(match[2], 10) - 1;
+                    return row * 12 + col;
+                  };
+                  
+                  const isOwnHalf = (zoneName: string | null | undefined): boolean => {
+                    if (!zoneName) return false;
+                    const normalized = convertZoneToName(zoneName);
+                    if (!normalized) return false;
+                    const zoneIndex = zoneNameToIndex(normalized);
+                    if (zoneIndex === null) return false;
+                    const col = zoneIndex % 12;
+                    return col <= 5;
+                  };
+                  
+                  // Filtruj przechwyty na połowie przeciwnika - użyj tej samej logiki co w panelu nad wideo
+                  const regainsOnOpponentHalf = (derivedRegainActions || []).filter((action: any) => {
+                    const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+                    const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+                    const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                    const attackZoneName = attackZoneRaw
+                      ? convertZoneToName(attackZoneRaw)
+                      : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
+                    
+                    if (!attackZoneName) return false;
+                    const isOwn = isOwnHalf(attackZoneName);
+                    return !isOwn && // attackZone na połowie przeciwnika
+                      action && 
+                      (action.videoTimestampRaw !== undefined && action.videoTimestampRaw !== null ||
+                       action.videoTimestamp !== undefined && action.videoTimestamp !== null);
+                  });
+                  
+                  const regainsOnOpponentHalfWithTimestamp = regainsOnOpponentHalf
+                    .map((action: any) => ({
+                      action,
+                      timestamp: action.videoTimestampRaw ?? action.videoTimestamp ?? 0,
+                    }))
+                    .filter((item: any) => item.timestamp > 0)
+                    .sort((a: any, b: any) => a.timestamp - b.timestamp);
+                  
+                  // Filtruj strzały naszego zespołu - użyj tej samej logiki co w głównym bloku KPI
+                  const teamShots = allShots.filter(shot => {
+                    const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
+                      ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                      : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                    return shotTeamId === teamIdInMatch;
+                  });
+                  
+                  // Przygotuj PK entries i shots w ataku z timestampami - użyj tej samej logiki co w głównym bloku KPI
+                  const pkEntriesAttackWithTimestamp = (allPKEntries || [])
+                    .filter((entry: any) => {
+                      if (!entry) return false;
+                      const teamContext = entry.teamContext ?? "attack";
+                      return teamContext === "attack" || (entry.teamId && entry.teamId === teamIdInMatch);
+                    })
+                    .map((entry: any) => ({
+                      entry,
+                      timestamp: entry.videoTimestampRaw ?? entry.videoTimestamp ?? 0,
+                    }))
+                    .filter(item => item.timestamp > 0)
+                    .sort((a, b) => a.timestamp - b.timestamp);
+                  
+                  const shotsAttackWithTimestamp = teamShots
+                    .map(shot => ({
+                      shot,
+                      timestamp: shot.videoTimestampRaw ?? shot.videoTimestamp ?? 0,
+                    }))
+                    .filter(item => item.timestamp > 0)
+                    .sort((a, b) => a.timestamp - b.timestamp);
+                  
+                  // Przygotuj loses z timestampami
+                  const losesWithTimestamp = derivedLosesActions
+                    .map((lose: any) => ({
+                      lose,
+                      timestamp: lose.videoTimestampRaw ?? (lose.videoTimestamp !== undefined ? lose.videoTimestamp + 10 : 0),
+                    }))
+                    .filter((item: any) => item.timestamp > 0)
+                    .sort((a: any, b: any) => a.timestamp - b.timestamp);
+                  
+                  // Oblicz statystyki per zawodnik dla przechwytów PP z PK/strzałem w 8s
+                  const successfulRegainsIds = new Set<string>();
+                  regainsOnOpponentHalfWithTimestamp.forEach((regainItem: any) => {
+                    const regainTime = regainItem.timestamp;
+                    const timeWindowEnd = regainTime + 8;
+                    
+                    const pkEntryInWindow = pkEntriesAttackWithTimestamp.find((item: any) => 
+                      item.timestamp > regainTime && item.timestamp <= timeWindowEnd
+                    );
+                    const shotInWindow = shotsAttackWithTimestamp.find((item: any) => 
+                      item.timestamp > regainTime && item.timestamp <= timeWindowEnd
+                    );
+                    
+                    if (pkEntryInWindow || shotInWindow) {
+                      const targetEvent = pkEntryInWindow || shotInWindow;
+                      const hasLoseBetween = losesWithTimestamp.some((loseItem: any) => 
+                        loseItem.timestamp > regainTime && loseItem.timestamp < targetEvent.timestamp
+                      );
+                      
+                      if (!hasLoseBetween) {
+                        successfulRegainsIds.add(regainItem.action.id);
+                      }
+                    }
+                  });
+                  
+                  const playerRegainsMap = new Map<string, { regains: any[]; successful: any[] }>();
+                  regainsOnOpponentHalfWithTimestamp.forEach((item: any) => {
+                    const action = item.action;
+                    if (action && action.senderId) {
+                      if (!playerRegainsMap.has(action.senderId)) {
+                        playerRegainsMap.set(action.senderId, { regains: [], successful: [] });
+                      }
+                      const playerData = playerRegainsMap.get(action.senderId)!;
+                      playerData.regains.push(action);
+                      if (successfulRegainsIds.has(action.id)) {
+                        playerData.successful.push(action);
+                      }
+                    }
+                  });
+                  
+                  const playerStats = Array.from(playerRegainsMap.entries())
+                    .map(([playerId, data]) => {
+                      const player = players.find(p => p.id === playerId);
+                      return {
+                        playerId,
+                        playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                        count: data.regains.length,
+                        successfulCount: data.successful.length,
+                        percentage: regainsOnOpponentHalfWithTimestamp.length > 0 
+                          ? (data.regains.length / regainsOnOpponentHalfWithTimestamp.length) * 100 
+                          : 0,
+                        successfulPercentage: data.regains.length > 0
+                          ? (data.successful.length / data.regains.length) * 100
+                          : 0,
+                        regains: data.regains
+                      };
+                    })
+                    .sort((a, b) => b.successfulCount - a.successfulCount);
+
+                          return (
+                    <div style={{ 
+                      marginTop: '24px', 
+                      padding: '16px', 
+                      backgroundColor: '#f9fafb', 
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
+                      width: '100%'
+                    }}>
+                      <div 
+                        style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center',
+                          marginBottom: '12px',
+                          cursor: 'pointer',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          backgroundColor: 'white',
+                          border: '1px solid #e5e7eb'
+                        }}
+                        onClick={() => setIsPlayersListCollapsed(!isPlayersListCollapsed)}
+                      >
+                        <div style={{ fontWeight: '600', fontSize: '15px' }}>
+                          Zawodnicy - 8s CA ({playerStats.length})
+                              </div>
+                        <div style={{ fontSize: '14px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
+                              </div>
+                      {!isPlayersListCollapsed && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {playerStats.map((stat) => (
+                          <div key={stat.playerId} style={{ 
+                            padding: '8px 12px',
+                            backgroundColor: 'white',
+                            borderRadius: '6px',
+                            border: '1px solid #e5e7eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            fontSize: '13px'
+                          }}>
+                            <div style={{ flex: '0 0 160px', fontWeight: '500' }}>
+                              {stat.playerName}
+                            </div>
+                            <div style={{ flex: '0 0 auto', color: '#6b7280', whiteSpace: 'nowrap', fontSize: '12px' }}>
+                              {stat.successfulCount}/{stat.count} skutecznych ({stat.successfulPercentage.toFixed(0)}%) • {stat.percentage.toFixed(1)}% udziału
+                            </div>
+                            <div style={{ flex: '1', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', justifyContent: 'flex-start', minWidth: 0 }}>
+                              {stat.regains.map((regain: any, idx: number) => {
+                                const time = regain.videoTimestamp !== undefined && regain.videoTimestamp !== null
+                                  ? regain.videoTimestamp
+                                  : regain.videoTimestampRaw;
+                                if (!time) return null;
+                                const minutes = Math.floor(time / 60);
+                                const seconds = Math.floor(time % 60);
+                                const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                                // Sprawdź czy regain jest skuteczny - używamy action.id
+                                const regainActionId = regain.id || (regain.action && regain.action.id);
+                                const isSuccessful = successfulRegainsIds.has(regainActionId);
+                                
+                                return (
+                                  <button
+                                    key={regain.id || regain.action?.id || idx}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (youtubeVideoRef.current) {
+                                        await youtubeVideoRef.current.seekTo(time);
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '4px 8px',
+                                      backgroundColor: isSuccessful ? '#4caf50' : '#757575',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '11px',
+                                      fontWeight: '500',
+                                      flexShrink: 0
+                                    }}
+                                    title={`Minuta: ${regain.minute}' • ${isSuccessful ? 'Skuteczny' : 'Nieskuteczny'}`}
+                                  >
+                                    {timeString}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      )}
+                    </div>
+                  );
+                }
+                return null;
+                        })()}
+                      </div>
+                  );
                 })()}
-              </div>
+                    </div>
               
               {/* Wideo YouTube dla wybranego meczu - osadzone na pełnej szerokości i wysokości */}
               <div 
@@ -4371,7 +5116,7 @@ export default function StatystykiZespoluPage() {
                       }))
                       .sort((a, b) => a.time - b.time);
                   } else if (selectedKpiForVideo === '8s-ca') {
-                    // Przechwyty na połowie przeciwnika
+                    // Przechwyty na połowie przeciwnika - użyj tej samej logiki co w głównym bloku KPI (bez filtrowania po timestamp)
                     const regainsOnOpponentHalf = (derivedRegainActions || []).filter((action: any) => {
                       const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
                       const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
@@ -4468,18 +5213,19 @@ export default function StatystykiZespoluPage() {
                   return entriesWithTime.length > 0 ? (
                     <div style={{
                       position: 'absolute',
-                      top: '10px',
-                      left: '10px',
-                      right: '10px',
+                      top: '0',
+                      left: '0',
+                      right: '0',
                       zIndex: 1000,
                       display: 'flex',
                       flexWrap: 'wrap',
-                      gap: '8px',
-                      maxHeight: '120px',
+                      gap: '4px',
+                      maxHeight: '60px',
                       overflowY: 'auto',
-                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                      padding: '12px',
-                      borderRadius: '8px'
+                      backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                      padding: '6px 8px',
+                      borderRadius: '0 0 6px 6px',
+                      borderBottom: '2px solid rgba(255, 255, 255, 0.1)'
                     }}>
                       {entriesWithTime.map((item, index) => {
                         const minutes = Math.floor(item.time / 60);
@@ -4495,16 +5241,17 @@ export default function StatystykiZespoluPage() {
                               }
                             }}
                             style={{
-                              padding: '6px 12px',
+                              padding: '4px 8px',
                               backgroundColor: item.isSuccessful ? '#4caf50' : '#757575',
                               color: 'white',
                               border: 'none',
-                              borderRadius: '6px',
+                              borderRadius: '4px',
                               cursor: 'pointer',
-                              fontSize: '13px',
+                              fontSize: '11px',
                               fontWeight: '500',
                               whiteSpace: 'nowrap',
-                              transition: 'all 0.2s'
+                              transition: 'all 0.2s',
+                              lineHeight: '1.2'
                             }}
                             onMouseEnter={(e) => {
                               e.currentTarget.style.backgroundColor = item.isSuccessful ? '#66bb6a' : '#9e9e9e';
@@ -5328,9 +6075,9 @@ export default function StatystykiZespoluPage() {
                         return (
                           <>
                             <span className={styles.valueMain}>{filteredLosesCount}</span>
-                            {teamStats.totalLoses > 0 && (
+                      {teamStats.totalLoses > 0 && (
                               <span className={styles.valueSecondary}>/{teamStats.totalLoses} ({((filteredLosesCount / teamStats.totalLoses) * 100).toFixed(1)}%)</span>
-                            )}
+                      )}
                             <span className={styles.valueSecondary}> • ({losesPer90} / 90)</span>
                           </>
                         );
@@ -5389,13 +6136,13 @@ export default function StatystykiZespoluPage() {
                         
                         return (
                           <>
-                            <span className={styles.valueMain}>
+                      <span className={styles.valueMain}>
                               {reaction5sPercentage.toFixed(1)}%
-                            </span>
-                            <span className={styles.valueSecondary}>
+                      </span>
+                      <span className={styles.valueSecondary}>
                               • {reaction5sLoses.length}/{losesWith5sFlags.length} • </span>
-                            <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains5s}</span>
-                            <span className={styles.valueSecondary}> Nasz Regain</span>
+                      <span className={styles.valueMain}>{losesAfterStats.totalOpponentRegains5s}</span>
+                      <span className={styles.valueSecondary}> Nasz Regain</span>
                           </>
                         );
                       })()}
@@ -5921,29 +6668,29 @@ export default function StatystykiZespoluPage() {
                                   <span className={styles.valueMain}>{teamXGNoPenalty.toFixed(2)}</span>
                                   <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGNoPenalty.toFixed(2)}</span>
                                 </span>
-                              </div>
+                                </div>
                               <div className={styles.detailsRow}>
                                 <span className={styles.detailsLabel}>XG:</span>
                                 <span className={styles.detailsValue}>
                                   <span className={styles.valueMain}>{teamXG.toFixed(2)}</span>
                                   <span className={styles.valueSecondary}> • Przeciwnik: {opponentXG.toFixed(2)}</span>
                                 </span>
-                              </div>
+                                </div>
                               <div className={styles.detailsRow}>
                                 <span className={styles.detailsLabel}>XG/STRZAŁ:</span>
                                 <span className={styles.detailsValue}>
                                   <span 
                                     className={styles.valueMain}
-                                    style={{
-                                      color: teamXGPerShotValue >= XG_PER_SHOT_KPI ? '#10b981' : '#ef4444'
-                                    }}
-                                  >
-                                    {teamXGPerShot}
+                                  style={{
+                                    color: teamXGPerShotValue >= XG_PER_SHOT_KPI ? '#10b981' : '#ef4444'
+                                  }}
+                                >
+                                  {teamXGPerShot}
                                   </span>
                                   <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGPerShot}</span>
                                   <span className={styles.valueSecondary}> • KPI: {XG_PER_SHOT_KPI.toFixed(2)}</span>
                                 </span>
-                              </div>
+                                </div>
                               <div className={styles.detailsRow}>
                                 <span className={styles.detailsLabel}>XG OT:</span>
                                 <span className={styles.detailsValue}>
@@ -5964,15 +6711,15 @@ export default function StatystykiZespoluPage() {
                                 <span className={styles.detailsValue}>
                                   <span 
                                     className={styles.valueMain}
-                                    style={{
-                                      color: teamXGDiff > 0 ? '#10b981' : teamXGDiff < 0 ? '#ef4444' : '#6b7280'
-                                    }}
-                                  >
-                                    {teamXGDiff > 0 ? '+' : ''}{teamXGDiff.toFixed(2)}
+                                  style={{
+                                    color: teamXGDiff > 0 ? '#10b981' : teamXGDiff < 0 ? '#ef4444' : '#6b7280'
+                                  }}
+                                >
+                                  {teamXGDiff > 0 ? '+' : ''}{teamXGDiff.toFixed(2)}
                                   </span>
                                   <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGDiff > 0 ? '+' : ''}{opponentXGDiff.toFixed(2)}</span>
                                 </span>
-                              </div>
+                                </div>
                               <div className={styles.detailsRow}>
                                 <span className={styles.detailsLabel}>XG ZABLOKOWANE:</span>
                                 <span className={styles.detailsValue}>
@@ -5986,7 +6733,7 @@ export default function StatystykiZespoluPage() {
                                   <span className={styles.valueMain}>{teamAvgLinePlayers.toFixed(1)}</span>
                                   <span className={styles.valueSecondary}> • Przeciwnik: {opponentAvgLinePlayers.toFixed(1)}</span>
                                 </span>
-                              </div>
+                                </div>
                             </div>
                           </div>
                         </>
@@ -5994,9 +6741,9 @@ export default function StatystykiZespoluPage() {
                     })()}
                     
                     <div className={styles.xgPitchContainer}>
-                      <div className={styles.xgPitchWrapper}>
-                        <XGPitch
-                          shots={(() => {
+                    <div className={styles.xgPitchWrapper}>
+                      <XGPitch
+                        shots={(() => {
                           // Najpierw filtruj według połowy
                           let filteredByHalf = allShots;
                           if (xgHalf === 'first') {
@@ -6095,12 +6842,12 @@ export default function StatystykiZespoluPage() {
                           });
                         })()}
                         onShotAdd={() => {}}
-                        onShotClick={(shot) => setSelectedShot(shot)}
-                        selectedShotId={selectedShot?.id}
+                          onShotClick={(shot) => setSelectedShot(shot)}
+                          selectedShotId={selectedShot?.id}
                         matchInfo={selectedMatchInfo}
                         allTeams={availableTeams}
-                        hideToggleButton={true}
-                      />
+                          hideToggleButton={true}
+                        />
                       
                       {/* Filtry na mapie - pod mapą */}
                       <div className={styles.xgMapFilters}>
@@ -7562,9 +8309,9 @@ export default function StatystykiZespoluPage() {
                               return true;
                               });
                               
-                            // Policz tylko te z flagą isReaction5s === true (bez żadnych wykluczeń)
-                            let reaction5sCount = 0;
-                            
+                              // Policz tylko te z flagą isReaction5s === true (bez żadnych wykluczeń)
+                              let reaction5sCount = 0;
+                              
                             countedLoses.forEach(action => {
                                 if (action.isReaction5s === true) {
                                   reaction5sCount += 1;
@@ -8096,21 +8843,21 @@ export default function StatystykiZespoluPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
                     <div 
                       className={`${styles.countItem} ${isFilterActive('p0start') ? styles.countItemSelected : ''} ${teamStats.senderP0StartCount === 0 ? styles.countItemDisabled : ''}`}
-                      onClick={() => {
+                    onClick={() => {
                         if (teamStats.senderP0StartCount === 0) return;
-                        setSelectedActionFilter(prev => {
-                          const filters = Array.isArray(prev) ? prev : [];
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
                           // Radio behavior w obrębie sekcji Start: usuń wszystkie Start filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
-                          const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                        const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
                           if (filters.includes('p0start')) {
                             return withoutStartFilters; // Odznacz
                           } else {
                             return [...withoutStartFilters, 'p0start']; // Zaznacz
                           }
-                        });
-                      }}
-                    >
-                      <span className={styles.countLabel}>P0 Start:</span>
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>P0 Start:</span>
                     <span className={styles.countValue}>{teamStats.senderP0StartCount}</span>
                     <div className={styles.zoneBreakdown}>
                       <span className={styles.zoneLabel}>Strefy boczne:</span>
@@ -8121,19 +8868,19 @@ export default function StatystykiZespoluPage() {
                   </div>
                   <div 
                     className={`${styles.countItem} ${isFilterActive('p1start') ? styles.countItemSelected : ''} ${teamStats.senderP1StartCount === 0 ? styles.countItemDisabled : ''}`}
-                      onClick={() => {
+                    onClick={() => {
                         if (teamStats.senderP1StartCount === 0) return;
-                        setSelectedActionFilter(prev => {
-                          const filters = Array.isArray(prev) ? prev : [];
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
                           // Radio behavior w obrębie sekcji Start: usuń wszystkie Start filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
-                          const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                        const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
                           if (filters.includes('p1start')) {
                             return withoutStartFilters; // Odznacz
                           } else {
                             return [...withoutStartFilters, 'p1start']; // Zaznacz
                           }
-                        });
-                      }}
+                      });
+                    }}
                   >
                     <span className={styles.countLabel}>P1 Start:</span>
                     <span className={styles.countValue}>{teamStats.senderP1StartCount}</span>
@@ -8146,19 +8893,19 @@ export default function StatystykiZespoluPage() {
                   </div>
                   <div 
                     className={`${styles.countItem} ${isFilterActive('p2start') ? styles.countItemSelected : ''} ${teamStats.senderP2StartCount === 0 ? styles.countItemDisabled : ''}`}
-                      onClick={() => {
+                    onClick={() => {
                         if (teamStats.senderP2StartCount === 0) return;
-                        setSelectedActionFilter(prev => {
-                          const filters = Array.isArray(prev) ? prev : [];
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
                           // Radio behavior w obrębie sekcji Start: usuń wszystkie Start filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
-                          const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                        const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
                           if (filters.includes('p2start')) {
                             return withoutStartFilters; // Odznacz
                           } else {
                             return [...withoutStartFilters, 'p2start']; // Zaznacz
                           }
-                        });
-                      }}
+                      });
+                    }}
                   >
                     <span className={styles.countLabel}>P2 Start:</span>
                     <span className={styles.countValue}>{teamStats.senderP2StartCount}</span>
@@ -8171,19 +8918,19 @@ export default function StatystykiZespoluPage() {
                   </div>
                   <div 
                     className={`${styles.countItem} ${isFilterActive('p3start') ? styles.countItemSelected : ''} ${teamStats.senderP3StartCount === 0 ? styles.countItemDisabled : ''}`}
-                      onClick={() => {
+                    onClick={() => {
                         if (teamStats.senderP3StartCount === 0) return;
-                        setSelectedActionFilter(prev => {
-                          const filters = Array.isArray(prev) ? prev : [];
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
                           // Radio behavior w obrębie sekcji Start: usuń wszystkie Start filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
-                          const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
+                        const withoutStartFilters = filters.filter(f => !['p0start', 'p1start', 'p2start', 'p3start'].includes(f));
                           if (filters.includes('p3start')) {
                             return withoutStartFilters; // Odznacz
                           } else {
                             return [...withoutStartFilters, 'p3start']; // Zaznacz
                           }
-                        });
-                      }}
+                      });
+                    }}
                   >
                     <span className={styles.countLabel}>P3 Start:</span>
                     <span className={styles.countValue}>{teamStats.senderP3StartCount}</span>
@@ -8194,21 +8941,21 @@ export default function StatystykiZespoluPage() {
                       <span className={styles.zoneValue}>{teamStats.senderP3StartCountCentral}</span>
                     </div>
                   </div>
-                  </div>
+                </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(0, 0, 0, 0.7)', marginBottom: '4px' }}>Koniec akcji</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-                    <div 
+                  <div 
                       className={`${styles.countItem} ${isFilterActive('p0') ? styles.countItemSelected : ''} ${(() => {
                         const p0Value = selectedActionType === 'all' ? teamStats.senderP0Count + (teamStats.dribblingP0Count || 0) : teamStats.senderP0Count;
                         return p0Value === 0 ? styles.countItemDisabled : '';
                       })()}`}
-                      onClick={() => {
+                    onClick={() => {
                         const p0Value = selectedActionType === 'all' ? teamStats.senderP0Count + (teamStats.dribblingP0Count || 0) : teamStats.senderP0Count;
                         if (p0Value === 0) return;
-                        setSelectedActionFilter(prev => {
-                          const filters = Array.isArray(prev) ? prev : [];
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
                           // Radio behavior w obrębie sekcji Koniec: usuń wszystkie Koniec filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
                           const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3'].includes(f));
                           if (filters.includes('p0')) {
@@ -8251,34 +8998,34 @@ export default function StatystykiZespoluPage() {
                           } else {
                             return [...withoutEndFilters, 'p1']; // Zaznacz
                           }
-                        });
-                      }}
-                    >
-                      <span className={styles.countLabel}>P1:</span>
-                      <span className={styles.countValue}>
-                        {selectedActionType === 'all' ? teamStats.senderP1Count + teamStats.dribblingP1Count : teamStats.senderP1Count}
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>P1:</span>
+                    <span className={styles.countValue}>
+                      {selectedActionType === 'all' ? teamStats.senderP1Count + teamStats.dribblingP1Count : teamStats.senderP1Count}
+                    </span>
+                    <div className={styles.zoneBreakdown}>
+                      <span className={styles.zoneLabel}>Strefy boczne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP1CountLateral + teamStats.dribblingP1CountLateral : teamStats.senderP1CountLateral}
                       </span>
-                      <div className={styles.zoneBreakdown}>
-                        <span className={styles.zoneLabel}>Strefy boczne:</span>
-                        <span className={styles.zoneValue}>
-                          {selectedActionType === 'all' ? teamStats.senderP1CountLateral + teamStats.dribblingP1CountLateral : teamStats.senderP1CountLateral}
-                        </span>
-                        <span className={styles.zoneLabel}>Strefy centralne:</span>
-                        <span className={styles.zoneValue}>
-                          {selectedActionType === 'all' ? teamStats.senderP1CountCentral + teamStats.dribblingP1CountCentral : teamStats.senderP1CountCentral}
-                        </span>
-                      </div>
+                      <span className={styles.zoneLabel}>Strefy centralne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP1CountCentral + teamStats.dribblingP1CountCentral : teamStats.senderP1CountCentral}
+                      </span>
                     </div>
-                    <div 
+                  </div>
+                  <div 
                       className={`${styles.countItem} ${isFilterActive('p2') ? styles.countItemSelected : ''} ${(() => {
                         const p2Value = selectedActionType === 'all' ? teamStats.senderP2Count + teamStats.dribblingP2Count : teamStats.senderP2Count;
                         return p2Value === 0 ? styles.countItemDisabled : '';
                       })()}`}
-                      onClick={() => {
+                    onClick={() => {
                         const p2Value = selectedActionType === 'all' ? teamStats.senderP2Count + teamStats.dribblingP2Count : teamStats.senderP2Count;
                         if (p2Value === 0) return;
-                        setSelectedActionFilter(prev => {
-                          const filters = Array.isArray(prev) ? prev : [];
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
                           // Radio behavior w obrębie sekcji Koniec: usuń wszystkie Koniec filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
                           const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3'].includes(f));
                           if (filters.includes('p2')) {
@@ -8286,34 +9033,34 @@ export default function StatystykiZespoluPage() {
                           } else {
                             return [...withoutEndFilters, 'p2']; // Zaznacz
                           }
-                        });
-                      }}
-                    >
-                      <span className={styles.countLabel}>P2:</span>
-                      <span className={styles.countValue}>
-                        {selectedActionType === 'all' ? teamStats.senderP2Count + teamStats.dribblingP2Count : teamStats.senderP2Count}
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>P2:</span>
+                    <span className={styles.countValue}>
+                      {selectedActionType === 'all' ? teamStats.senderP2Count + teamStats.dribblingP2Count : teamStats.senderP2Count}
+                    </span>
+                    <div className={styles.zoneBreakdown}>
+                      <span className={styles.zoneLabel}>Strefy boczne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP2CountLateral + teamStats.dribblingP2CountLateral : teamStats.senderP2CountLateral}
                       </span>
-                      <div className={styles.zoneBreakdown}>
-                        <span className={styles.zoneLabel}>Strefy boczne:</span>
-                        <span className={styles.zoneValue}>
-                          {selectedActionType === 'all' ? teamStats.senderP2CountLateral + teamStats.dribblingP2CountLateral : teamStats.senderP2CountLateral}
-                        </span>
-                        <span className={styles.zoneLabel}>Strefy centralne:</span>
-                        <span className={styles.zoneValue}>
-                          {selectedActionType === 'all' ? teamStats.senderP2CountCentral + teamStats.dribblingP2CountCentral : teamStats.senderP2CountCentral}
-                        </span>
-                      </div>
+                      <span className={styles.zoneLabel}>Strefy centralne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP2CountCentral + teamStats.dribblingP2CountCentral : teamStats.senderP2CountCentral}
+                      </span>
                     </div>
-                    <div 
+                  </div>
+                  <div 
                       className={`${styles.countItem} ${isFilterActive('p3') ? styles.countItemSelected : ''} ${(() => {
                         const p3Value = selectedActionType === 'all' ? teamStats.senderP3Count + teamStats.dribblingP3Count : teamStats.senderP3Count;
                         return p3Value === 0 ? styles.countItemDisabled : '';
                       })()}`}
-                      onClick={() => {
+                    onClick={() => {
                         const p3Value = selectedActionType === 'all' ? teamStats.senderP3Count + teamStats.dribblingP3Count : teamStats.senderP3Count;
                         if (p3Value === 0) return;
-                        setSelectedActionFilter(prev => {
-                          const filters = Array.isArray(prev) ? prev : [];
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
                           // Radio behavior w obrębie sekcji Koniec: usuń wszystkie Koniec filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
                           const withoutEndFilters = filters.filter(f => !['p0', 'p1', 'p2', 'p3'].includes(f));
                           if (filters.includes('p3')) {
@@ -8321,39 +9068,39 @@ export default function StatystykiZespoluPage() {
                           } else {
                             return [...withoutEndFilters, 'p3']; // Zaznacz
                           }
-                        });
-                      }}
-                    >
-                      <span className={styles.countLabel}>P3:</span>
-                      <span className={styles.countValue}>
-                        {selectedActionType === 'all' ? teamStats.senderP3Count + teamStats.dribblingP3Count : teamStats.senderP3Count}
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>P3:</span>
+                    <span className={styles.countValue}>
+                      {selectedActionType === 'all' ? teamStats.senderP3Count + teamStats.dribblingP3Count : teamStats.senderP3Count}
+                    </span>
+                    <div className={styles.zoneBreakdown}>
+                      <span className={styles.zoneLabel}>Strefy boczne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP3CountLateral + teamStats.dribblingP3CountLateral : teamStats.senderP3CountLateral}
                       </span>
-                      <div className={styles.zoneBreakdown}>
-                        <span className={styles.zoneLabel}>Strefy boczne:</span>
-                        <span className={styles.zoneValue}>
-                          {selectedActionType === 'all' ? teamStats.senderP3CountLateral + teamStats.dribblingP3CountLateral : teamStats.senderP3CountLateral}
-                        </span>
-                        <span className={styles.zoneLabel}>Strefy centralne:</span>
-                        <span className={styles.zoneValue}>
-                          {selectedActionType === 'all' ? teamStats.senderP3CountCentral + teamStats.dribblingP3CountCentral : teamStats.senderP3CountCentral}
-                        </span>
-                      </div>
+                      <span className={styles.zoneLabel}>Strefy centralne:</span>
+                      <span className={styles.zoneValue}>
+                        {selectedActionType === 'all' ? teamStats.senderP3CountCentral + teamStats.dribblingP3CountCentral : teamStats.senderP3CountCentral}
+                      </span>
                     </div>
+                  </div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(0, 0, 0, 0.7)', marginBottom: '4px' }}>Dodatkowy rezultat akcji</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-                    <div 
+                  <div 
                       className={`${styles.countItem} ${isFilterActive('pk') ? styles.countItemSelected : ''} ${(() => {
                         const pkValue = selectedActionType === 'all' ? teamStats.senderPKCount + teamStats.dribblingPKCount : teamStats.senderPKCount;
                         return pkValue === 0 ? styles.countItemDisabled : '';
                       })()}`}
-                      onClick={() => {
+                    onClick={() => {
                         const pkValue = selectedActionType === 'all' ? teamStats.senderPKCount + teamStats.dribblingPKCount : teamStats.senderPKCount;
                         if (pkValue === 0) return;
-                        setSelectedActionFilter(prev => {
-                          const filters = Array.isArray(prev) ? prev : [];
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
                           // Radio behavior w obrębie sekcji Dodatkowy rezultat: usuń wszystkie rezultat filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
                           const withoutResultFilters = filters.filter(f => !['pk', 'shot', 'goal'].includes(f));
                           if (filters.includes('pk')) {
@@ -8361,10 +9108,10 @@ export default function StatystykiZespoluPage() {
                           } else {
                             return [...withoutResultFilters, 'pk']; // Zaznacz
                           }
-                        });
-                      }}
-                    >
-                      <span className={styles.countLabel}>PK:</span>
+                      });
+                    }}
+                  >
+                    <span className={styles.countLabel}>PK:</span>
                     <span className={styles.countValue}>
                       {selectedActionType === 'all' ? teamStats.senderPKCount + teamStats.dribblingPKCount : teamStats.senderPKCount}
                     </span>
@@ -8384,11 +9131,11 @@ export default function StatystykiZespoluPage() {
                       const shotValue = selectedActionType === 'all' ? teamStats.senderShotCount + teamStats.dribblingShotCount : teamStats.senderShotCount;
                       return shotValue === 0 ? styles.countItemDisabled : '';
                     })()}`}
-                      onClick={() => {
+                    onClick={() => {
                         const shotValue = selectedActionType === 'all' ? teamStats.senderShotCount + teamStats.dribblingShotCount : teamStats.senderShotCount;
                         if (shotValue === 0) return;
-                        setSelectedActionFilter(prev => {
-                          const filters = Array.isArray(prev) ? prev : [];
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
                           // Radio behavior w obrębie sekcji Dodatkowy rezultat: usuń wszystkie rezultat filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
                           const withoutResultFilters = filters.filter(f => !['pk', 'shot', 'goal'].includes(f));
                           if (filters.includes('shot')) {
@@ -8396,8 +9143,8 @@ export default function StatystykiZespoluPage() {
                           } else {
                             return [...withoutResultFilters, 'shot']; // Zaznacz
                           }
-                        });
-                      }}
+                      });
+                    }}
                   >
                     <span className={styles.countLabel}>Strzał:</span>
                     <span className={styles.countValue}>
@@ -8419,11 +9166,11 @@ export default function StatystykiZespoluPage() {
                       const goalValue = selectedActionType === 'all' ? teamStats.senderGoalCount + teamStats.dribblingGoalCount : teamStats.senderGoalCount;
                       return goalValue === 0 ? styles.countItemDisabled : '';
                     })()}`}
-                      onClick={() => {
+                    onClick={() => {
                         const goalValue = selectedActionType === 'all' ? teamStats.senderGoalCount + teamStats.dribblingGoalCount : teamStats.senderGoalCount;
                         if (goalValue === 0) return;
-                        setSelectedActionFilter(prev => {
-                          const filters = Array.isArray(prev) ? prev : [];
+                      setSelectedActionFilter(prev => {
+                        const filters = Array.isArray(prev) ? prev : [];
                           // Radio behavior w obrębie sekcji Dodatkowy rezultat: usuń wszystkie rezultat filtry, jeśli kliknięty był już zaznaczony - odznacz, w przeciwnym razie zaznacz
                           const withoutResultFilters = filters.filter(f => !['pk', 'shot', 'goal'].includes(f));
                           if (filters.includes('goal')) {
@@ -8431,8 +9178,8 @@ export default function StatystykiZespoluPage() {
                           } else {
                             return [...withoutResultFilters, 'goal']; // Zaznacz
                           }
-                        });
-                      }}
+                      });
+                    }}
                   >
                     <span className={styles.countLabel}>Gol:</span>
                     <span className={styles.countValue}>
@@ -8448,7 +9195,7 @@ export default function StatystykiZespoluPage() {
                         {selectedActionType === 'all' ? teamStats.senderGoalCountCentral + teamStats.dribblingGoalCountCentral : teamStats.senderGoalCountCentral}
                       </span>
                     </div>
-                  </div>
+                    </div>
                   </div>
                 </div>
               </div>
