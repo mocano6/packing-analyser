@@ -2464,8 +2464,8 @@ export default function PlayerDetailsPage() {
         }
         
         // Liczniki w kafelkach - zawsze obliczamy dla wszystkich akcji (bez filtrowania)
-        const regainDefenseZone = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-        const regainZoneName = convertZoneToName(regainDefenseZone);
+        const regainAttackZone = action.regainAttackZone || action.oppositeZone;
+        const regainZoneName = convertZoneToName(regainAttackZone);
         
         if (regainZoneName) {
           // Liczniki według stref (P0, P1, P2, P3) - BEZ filtrowania
@@ -2498,8 +2498,8 @@ export default function PlayerDetailsPage() {
         
         totalRegains += 1;
         
-        // Strefa, w której zawodnik odzyskał piłkę - używamy nowych pól
-        // (regainDefenseZone i regainZoneName już obliczone powyżej dla liczników)
+        // Strefa, w której zawodnik odzyskał piłkę - zawsze używamy regainAttackZone
+        // (regainZoneName już obliczone powyżej dla liczników z regainAttackZone)
         if (regainZoneName) {
           // Liczba akcji
           const currentCount = regainActionCountHeatmap.get(regainZoneName) || 0;
@@ -2597,33 +2597,27 @@ export default function PlayerDetailsPage() {
           totalOverallPlayersBefore += playersBeforeBall;
           totalOverallOpponentsBehind += opponentsBehind;
           
-          // Dla "W ataku" i "W obronie":
-          // - "W obronie": klucz to fromZone/startZone, wartość to xTValueStart/xTValueEnd (wartość w obronie)
-          // - "W ataku": klucz to oppositeZone, wartość to oppositeXT (wartość w ataku)
-          // Zawsze dodajemy do obu heatmap, niezależnie od isAttack
-          // "W ataku" - pokazuje oppositeXT na oppositeZone (lustrzane odbicie)
-          if (oppositeZoneName) {
-            const currentAttackXT = regainAttackHeatmap.get(oppositeZoneName) || 0;
-            regainAttackHeatmap.set(oppositeZoneName, currentAttackXT + oppositeXT);
-            // Liczba akcji w ataku - zawsze dodajemy (wszystkie akcje mają opposite strefę)
-            const currentAttackCount = regainAttackCountHeatmap.get(oppositeZoneName) || 0;
-            regainAttackCountHeatmap.set(oppositeZoneName, currentAttackCount + 1);
-          }
-          
-          // "W obronie" - pokazuje xTValueStart/xTValueEnd na fromZone/startZone
+          // Zawsze używamy regainAttackZone jako klucza dla obu trybów (atak/obrona)
+          // Wartości przełączamy: regainAttackXT dla "W ataku", regainDefenseXT dla "W obronie"
           if (regainZoneName) {
+            // "W ataku" - wartość z regainAttackXT/oppositeXT
+            const currentAttackXT = regainAttackHeatmap.get(regainZoneName) || 0;
+            regainAttackHeatmap.set(regainZoneName, currentAttackXT + oppositeXT);
+            const currentAttackCount = regainAttackCountHeatmap.get(regainZoneName) || 0;
+            regainAttackCountHeatmap.set(regainZoneName, currentAttackCount + 1);
+
+            // "W obronie" - wartość z regainDefenseXT
             const currentDefenseXT = regainDefenseHeatmap.get(regainZoneName) || 0;
             regainDefenseHeatmap.set(regainZoneName, currentDefenseXT + defenseXT);
-            // Liczba akcji w obronie - zawsze dodajemy (wszystkie akcje mają fromZone/startZone)
             const currentDefenseCount = regainDefenseCountHeatmap.get(regainZoneName) || 0;
             regainDefenseCountHeatmap.set(regainZoneName, currentDefenseCount + 1);
+
+            // Zbierz akcje dla tej strefy (zawsze wg regainAttackZone)
+            if (!regainZoneStats.has(regainZoneName)) {
+              regainZoneStats.set(regainZoneName, []);
+            }
+            regainZoneStats.get(regainZoneName)!.push(action);
           }
-          
-          // Zbierz akcje dla tej strefy
-          if (!regainZoneStats.has(regainZoneName)) {
-            regainZoneStats.set(regainZoneName, []);
-          }
-          regainZoneStats.get(regainZoneName)!.push(action);
         }
         
         // Statystyki według pozycji
@@ -2697,8 +2691,8 @@ export default function PlayerDetailsPage() {
         }
         
         // Liczniki w kafelkach - zawsze obliczamy dla wszystkich akcji (bez filtrowania)
-        const losesDefenseZone = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
-        const losesZoneName = convertZoneToName(losesDefenseZone);
+        const losesAttackZone = action.losesAttackZone || action.oppositeZone;
+        const losesZoneName = convertZoneToName(losesAttackZone);
         
         if (losesZoneName) {
           // Liczniki według stref (P0, P1, P2, P3) - BEZ filtrowania
@@ -2731,8 +2725,8 @@ export default function PlayerDetailsPage() {
         
         totalLoses += 1;
         
-        // Strefa, w której zawodnik stracił piłkę - używamy nowych pól
-        // (losesDefenseZone i losesZoneName już obliczone powyżej dla liczników)
+        // Strefa, w której zawodnik stracił piłkę - zawsze używamy losesAttackZone
+        // (losesZoneName już obliczone powyżej dla liczników z losesAttackZone)
         if (losesZoneName) {
           // Liczba akcji
           const currentCount = losesActionCountHeatmap.get(losesZoneName) || 0;
@@ -2773,12 +2767,6 @@ export default function PlayerDetailsPage() {
                   return zoneIndex !== null ? getOppositeXTValueForZone(zoneIndex) : 0;
                 })());
           
-          // Strefa ataku - używamy nowych pól
-          const losesAttackZone = action.losesAttackZone || action.oppositeZone;
-          const oppositeZoneName = losesAttackZone 
-            ? convertZoneToName(losesAttackZone)
-            : getOppositeZoneName(losesZoneName);
-          
           // Zbierz statystyki xT w ataku i obronie
           // Dla loses zawsze dodajemy do obu statystyk (atak i obrona), bo każda akcja ma obie wartości
           // - defenseXT to wartość w obronie (losesDefenseXT)
@@ -2792,33 +2780,27 @@ export default function PlayerDetailsPage() {
           losesXTInAttack += attackXT;
           losesAttackCount += 1;
           
-          // Dla "W ataku" i "W obronie":
-          // - "W obronie": klucz to losesDefenseZone, wartość to losesDefenseXT (wartość w obronie)
-          // - "W ataku": klucz to losesAttackZone, wartość to losesAttackXT (wartość w ataku)
-          // Zawsze dodajemy do obu heatmap
-          // "W ataku" - pokazuje losesAttackXT na losesAttackZone
-          if (oppositeZoneName) {
-            const currentAttackXT = losesAttackHeatmap.get(oppositeZoneName) || 0;
-            losesAttackHeatmap.set(oppositeZoneName, currentAttackXT + attackXT);
-            // Liczba akcji w ataku - zawsze dodajemy
-            const currentAttackCount = losesAttackCountHeatmap.get(oppositeZoneName) || 0;
-            losesAttackCountHeatmap.set(oppositeZoneName, currentAttackCount + 1);
-          }
-          
-          // "W obronie" - pokazuje losesDefenseXT na losesDefenseZone
+          // Zawsze używamy losesAttackZone jako klucza dla obu trybów (atak/obrona)
+          // Wartości przełączamy: losesAttackXT dla "W ataku", losesDefenseXT dla "W obronie"
           if (losesZoneName) {
+            // "W ataku" - wartość z losesAttackXT/oppositeXT
+            const currentAttackXT = losesAttackHeatmap.get(losesZoneName) || 0;
+            losesAttackHeatmap.set(losesZoneName, currentAttackXT + attackXT);
+            const currentAttackCount = losesAttackCountHeatmap.get(losesZoneName) || 0;
+            losesAttackCountHeatmap.set(losesZoneName, currentAttackCount + 1);
+
+            // "W obronie" - wartość z losesDefenseXT
             const currentDefenseXT = losesDefenseHeatmap.get(losesZoneName) || 0;
             losesDefenseHeatmap.set(losesZoneName, currentDefenseXT + defenseXT);
-            // Liczba akcji w obronie - zawsze dodajemy
             const currentDefenseCount = losesDefenseCountHeatmap.get(losesZoneName) || 0;
             losesDefenseCountHeatmap.set(losesZoneName, currentDefenseCount + 1);
+
+            // Zbierz akcje dla tej strefy (zawsze wg losesAttackZone)
+            if (!losesZoneStats.has(losesZoneName)) {
+              losesZoneStats.set(losesZoneName, []);
+            }
+            losesZoneStats.get(losesZoneName)!.push(action);
           }
-          
-          // Zbierz akcje dla tej strefy
-          if (!losesZoneStats.has(losesZoneName)) {
-            losesZoneStats.set(losesZoneName, []);
-          }
-          losesZoneStats.get(losesZoneName)!.push(action);
         }
       }
 
@@ -6469,23 +6451,12 @@ export default function PlayerDetailsPage() {
                             if (!packingField) return heatmap;
                             
                             // Przejdź przez wszystkie strefy i akcje
-                            // Dla trybu "atak" musimy użyć opposite zone, dla "obrona" i "normalny" używamy regainDefenseZone
-                            playerStats.regainZoneStats.forEach((actions, defenseZoneName) => {
+                            // Zawsze używamy regainAttackZone jako klucza (niezależnie od trybu)
+                            playerStats.regainZoneStats.forEach((actions, attackZoneName) => {
                               const filteredActions = actions.filter(action => action[packingField] === true);
                               if (filteredActions.length > 0) {
-                                // Dla trybu "atak" używamy opposite zone, dla innych trybów używamy defense zone
-                                const targetZoneName = attackDefenseMode === 'attack' 
-                                  ? (() => {
-                                      // Oblicz opposite zone dla pierwszej akcji (wszystkie akcje w tej strefie mają ten sam opposite zone)
-                                      const firstAction = filteredActions[0];
-                                      const regainAttackZone = firstAction.regainAttackZone || firstAction.oppositeZone;
-                                      if (regainAttackZone) {
-                                        return convertZoneToName(regainAttackZone);
-                                      }
-                                      // Fallback: oblicz opposite zone z defense zone
-                                      return getOppositeZoneName(defenseZoneName);
-                                    })()
-                                  : defenseZoneName;
+                                // Zawsze używamy regainAttackZone jako klucza
+                                const targetZoneName = attackZoneName;
                                 
                                 if (!targetZoneName) return;
                                 
@@ -6596,37 +6567,13 @@ export default function PlayerDetailsPage() {
                                   return hasRegainFields && !isLoses;
                                 });
                                 
+                                // Zawsze filtrujemy po regainAttackZone (niezależnie od trybu)
                                 const filteredActions = onlyRegainActions.filter((action) => {
-                                  if (regainAttackDefenseMode === 'attack') {
-                                    // Dla "W ataku" - porównujemy regainAttackZone z klikniętą
-                                    const regainAttackZone = action.regainAttackZone || action.oppositeZone;
-                                    const oppositeZoneNameStr = regainAttackZone 
-                                      ? convertZoneToNameHelper(regainAttackZone)
-                                      : (() => {
-                                          // Fallback: oblicz z regainDefenseZone
-                                          const regainDefenseZone = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-                                          const actionZoneName = convertZoneToNameHelper(regainDefenseZone);
-                                          if (!actionZoneName) return null;
-                                          const zoneIndex = zoneNameToIndex(actionZoneName);
-                                          if (zoneIndex === null) return null;
-                                          const row = Math.floor(zoneIndex / 12);
-                                          const col = zoneIndex % 12;
-                                          const oppositeRow = 7 - row;
-                                          const oppositeCol = 11 - col;
-                                          const oppositeIndex = oppositeRow * 12 + oppositeCol;
-                                          const oppositeZoneNameData = getZoneName(oppositeIndex);
-                                          return oppositeZoneNameData ? zoneNameToString(oppositeZoneNameData) : null;
-                                        });
-                                    
-                                    return oppositeZoneNameStr === zoneName;
-                                  } else if (regainAttackDefenseMode === 'defense') {
-                                    // Dla "W obronie" - porównujemy regainDefenseZone z klikniętą strefą
-                                    // NIE filtrujemy po isAttack - pokazujemy wszystkie akcje dla tej strefy
-                                    const regainDefenseZone = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-                                    const actionZoneName = convertZoneToNameHelper(regainDefenseZone);
-                                    return actionZoneName === zoneName;
-                                  }
-                                  return false;
+                                  const regainAttackZone = action.regainAttackZone || action.oppositeZone;
+                                  const attackZoneNameStr = regainAttackZone 
+                                    ? convertZoneToNameHelper(regainAttackZone)
+                                    : null;
+                                  return attackZoneNameStr === zoneName;
                                 });
                                 
                                 // Zastosuj filtr P0-P3 jeśli jest wybrany
@@ -7375,7 +7322,7 @@ export default function PlayerDetailsPage() {
                         <div className={styles.heatmapContainerInPanel}>
                           {(() => {
                             // Funkcja pomocnicza do filtrowania heatmapy strat po P0-P3
-                            const filterLosesHeatmapByPacking = (heatmap: Map<string, number>, packingFilter: "P0" | "P1" | "P2" | "P3" | null, mode: 'pxt' | 'count'): Map<string, number> => {
+                            const filterLosesHeatmapByPacking = (heatmap: Map<string, number>, packingFilter: "P0" | "P1" | "P2" | "P3" | null, mode: 'pxt' | 'count', attackDefenseMode: 'attack' | 'defense'): Map<string, number> => {
                               if (!packingFilter || !playerStats?.losesZoneStats) return heatmap;
                               
                               const filteredHeatmap = new Map<string, number>();
@@ -7390,22 +7337,34 @@ export default function PlayerDetailsPage() {
                               if (!packingField) return heatmap;
                               
                               // Przejdź przez wszystkie strefy i akcje
-                              playerStats.losesZoneStats.forEach((actions, zoneName) => {
+                              // Zawsze używamy losesAttackZone jako klucza (niezależnie od trybu)
+                              playerStats.losesZoneStats.forEach((actions, attackZoneName) => {
                                 const filteredActions = actions.filter(action => action[packingField] === true);
                                 if (filteredActions.length > 0) {
                                   // Oblicz sumę xT lub liczbę akcji dla tej strefy
                                   if (mode === 'pxt') {
                                     const sumXT = filteredActions.reduce((sum, action: any) => {
-                                      const receiverXT = action.losesDefenseXT !== undefined 
-                                        ? action.losesDefenseXT 
-                                        : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+                                      let receiverXT = 0;
+                                      if (attackDefenseMode === 'attack') {
+                                        // W ataku - używamy losesAttackXT
+                                        receiverXT = action.losesAttackXT !== undefined 
+                                          ? action.losesAttackXT 
+                                          : (action.oppositeXT !== undefined 
+                                            ? action.oppositeXT 
+                                            : 0);
+                                      } else if (attackDefenseMode === 'defense') {
+                                        // W obronie - używamy losesDefenseXT
+                                        receiverXT = action.losesDefenseXT !== undefined 
+                                          ? action.losesDefenseXT 
+                                          : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
+                                      }
                                       return sum + receiverXT;
                                     }, 0);
                                     if (sumXT > 0) {
-                                      filteredHeatmap.set(zoneName, sumXT);
+                                      filteredHeatmap.set(attackZoneName, sumXT);
                                     }
                                   } else {
-                                    filteredHeatmap.set(zoneName, filteredActions.length);
+                                    filteredHeatmap.set(attackZoneName, filteredActions.length);
                                   }
                                 }
                               });
@@ -7429,7 +7388,7 @@ export default function PlayerDetailsPage() {
                             
                             // Zastosuj filtr P0-P3 jeśli jest wybrany
                             if (selectedLosesPackingFilter) {
-                              currentHeatmap = filterLosesHeatmapByPacking(currentHeatmap, selectedLosesPackingFilter, currentMode);
+                              currentHeatmap = filterLosesHeatmapByPacking(currentHeatmap, selectedLosesPackingFilter, currentMode, losesAttackDefenseMode);
                             }
                             
                             return (
@@ -7471,38 +7430,19 @@ export default function PlayerDetailsPage() {
                                   // Zawsze ustaw dane, jeśli jest wartość w heatmapie (nawet jeśli jest bardzo mała)
                                   if (heatmapValue !== undefined && heatmapValue >= 0) {
                                     // Zbierz wszystkie akcje dla tej strefy
+                                    // Zawsze filtrujemy po losesAttackZone (niezależnie od trybu)
                                     let allZoneActions: Action[] = [];
+                                    allZoneActions = playerStats?.losesZoneStats?.get(normalizedZone) || 
+                                                      playerStats?.losesZoneStats?.get(zoneName) || [];
                                     
-                                    if (losesAttackDefenseMode === 'defense') {
-                                      // Tryb "W obronie" - użyj losesZoneStats
-                                      allZoneActions = playerStats?.losesZoneStats?.get(normalizedZone) || 
-                                                        playerStats?.losesZoneStats?.get(zoneName) || [];
-                                      
-                                      // Jeśli nie znaleziono, sprawdź wszystkie klucze
-                                      if (allZoneActions.length === 0 && playerStats?.losesZoneStats) {
-                                        playerStats.losesZoneStats.forEach((actions, key) => {
-                                          const normalizedKey = key.toUpperCase().replace(/\s+/g, '');
-                                          if (normalizedKey === normalizedZone) {
-                                            allZoneActions = actions;
-                                          }
-                                        });
-                                      }
-                                    } else {
-                                      // Tryb "W ataku" - znajdź akcje, które mają losesAttackZone = normalizedZone
-                                      if (playerStats?.losesZoneStats) {
-                                        playerStats.losesZoneStats.forEach((actions, defenseZone) => {
-                                          actions.forEach((action: any) => {
-                                            const losesAttackZone = action.losesAttackZone || action.oppositeZone;
-                                            const attackZoneName = losesAttackZone ? convertZoneToNameHelper(losesAttackZone) : null;
-                                            if (attackZoneName) {
-                                              const normalizedAttackZone = attackZoneName.toUpperCase().replace(/\s+/g, '');
-                                              if (normalizedAttackZone === normalizedZone) {
-                                                allZoneActions.push(action);
-                                              }
-                                            }
-                                          });
-                                        });
-                                      }
+                                    // Jeśli nie znaleziono, sprawdź wszystkie klucze
+                                    if (allZoneActions.length === 0 && playerStats?.losesZoneStats) {
+                                      playerStats.losesZoneStats.forEach((actions, key) => {
+                                        const normalizedKey = key.toUpperCase().replace(/\s+/g, '');
+                                        if (normalizedKey === normalizedZone) {
+                                          allZoneActions = actions;
+                                        }
+                                      });
                                     }
                                     
                                     // Oblicz statystyki
@@ -7546,35 +7486,18 @@ export default function PlayerDetailsPage() {
                                     setSelectedLosesZone(normalizedZone);
                                   } else {
                                     // Brak danych w heatmapie - ale spróbuj znaleźć w losesZoneStats
+                                    // Zawsze filtrujemy po losesAttackZone (niezależnie od trybu)
                                     let allZoneActions: Action[] = [];
+                                    allZoneActions = playerStats?.losesZoneStats?.get(normalizedZone) || 
+                                                      playerStats?.losesZoneStats?.get(zoneName) || [];
                                     
-                                    if (losesAttackDefenseMode === 'defense') {
-                                      allZoneActions = playerStats?.losesZoneStats?.get(normalizedZone) || 
-                                                        playerStats?.losesZoneStats?.get(zoneName) || [];
-                                      
-                                      if (allZoneActions.length === 0 && playerStats?.losesZoneStats) {
-                                        playerStats.losesZoneStats.forEach((actions, key) => {
-                                          const normalizedKey = key.toUpperCase().replace(/\s+/g, '');
-                                          if (normalizedKey === normalizedZone) {
-                                            allZoneActions = actions;
-                                          }
-                                        });
-                                      }
-                                    } else {
-                                      if (playerStats?.losesZoneStats) {
-                                        playerStats.losesZoneStats.forEach((actions, defenseZone) => {
-                                          actions.forEach((action: any) => {
-                                            const losesAttackZone = action.losesAttackZone || action.oppositeZone;
-                                            const attackZoneName = losesAttackZone ? convertZoneToNameHelper(losesAttackZone) : null;
-                                            if (attackZoneName) {
-                                              const normalizedAttackZone = attackZoneName.toUpperCase().replace(/\s+/g, '');
-                                              if (normalizedAttackZone === normalizedZone) {
-                                                allZoneActions.push(action);
-                                              }
-                                            }
-                                          });
-                                        });
-                                      }
+                                    if (allZoneActions.length === 0 && playerStats?.losesZoneStats) {
+                                      playerStats.losesZoneStats.forEach((actions, key) => {
+                                        const normalizedKey = key.toUpperCase().replace(/\s+/g, '');
+                                        if (normalizedKey === normalizedZone) {
+                                          allZoneActions = actions;
+                                        }
+                                      });
                                     }
                                     
                                     if (allZoneActions.length > 0) {

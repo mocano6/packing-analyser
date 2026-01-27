@@ -28,12 +28,14 @@ export default function StatystykiZespoluPage() {
   const [selectedKpiForVideo, setSelectedKpiForVideo] = useState<string | null>(null);
   const [expandedKpiForPlayers, setExpandedKpiForPlayers] = useState<string | null>(null);
   const [isPlayersListCollapsed, setIsPlayersListCollapsed] = useState<boolean>(true);
+  const [selectedPlayerForVideo, setSelectedPlayerForVideo] = useState<string | null>(null);
   const { players } = usePlayersState();
   
   // Resetuj stan zwijania gdy zmienia się wybrane KPI
   useEffect(() => {
     setIsPlayersListCollapsed(false);
   }, [expandedKpiForPlayers]);
+  
   const youtubeVideoRef = useRef<YouTubeVideoRef>(null);
 
   // Filtruj dostępne zespoły na podstawie uprawnień użytkownika (tak jak w głównej aplikacji)
@@ -581,6 +583,11 @@ export default function StatystykiZespoluPage() {
   const selectedMatchInfo = useMemo(() => {
     return teamMatches.find(match => match.matchId === selectedMatch);
   }, [teamMatches, selectedMatch]);
+  
+  // Resetuj wybranego zawodnika gdy zmienia się KPI lub mecz
+  useEffect(() => {
+    setSelectedPlayerForVideo(null);
+  }, [selectedKpiForVideo, selectedMatchInfo]);
 
   const pkEntriesSideStats = useMemo(() => {
     // UWAGA: PKEntryModal zapisuje `teamId` jako matchInfo.team (nasz zespół) również dla wpisów przeciwnika,
@@ -3964,7 +3971,7 @@ export default function StatystykiZespoluPage() {
                                 strokeWidth={2.5}
                                 strokeDasharray="6 4"
                                 dot={false}
-                              />
+                          />
                           <Radar
                             name="Wartości"
                             dataKey="value"
@@ -4048,7 +4055,10 @@ export default function StatystykiZespoluPage() {
                               <>
                           <div 
                             className={`${styles.statTile} ${is8sAccGood ? styles.statTileGood : styles.statTileBad}`}
-                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === '8s-acc' ? null : '8s-acc')}
+                            onClick={() => {
+                              setSelectedKpiForVideo(selectedKpiForVideo === '8s-acc' ? null : '8s-acc');
+                              setExpandedKpiForPlayers(null);
+                            }}
                             style={{ cursor: 'pointer' }}
                           >
                             <div className={styles.statTileLabel}>8s ACC</div>
@@ -4084,7 +4094,10 @@ export default function StatystykiZespoluPage() {
                           </div>
                           <div 
                             className={`${styles.statTile} ${isPKOpponentBad ? styles.statTileBad : styles.statTileGood}`}
-                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === 'pk-opponent' ? null : 'pk-opponent')}
+                            onClick={() => {
+                              setSelectedKpiForVideo(selectedKpiForVideo === 'pk-opponent' ? null : 'pk-opponent');
+                              setExpandedKpiForPlayers(null);
+                            }}
                             style={{ cursor: 'pointer' }}
                           >
                             <div className={styles.statTileLabel}>PK przeciwnik</div>
@@ -4100,7 +4113,10 @@ export default function StatystykiZespoluPage() {
                           </div>
                           <div 
                             className={`${styles.statTile} ${isReaction5sGood ? styles.statTileGood : styles.statTileBad}`}
-                            onClick={() => setSelectedKpiForVideo(selectedKpiForVideo === '5s' ? null : '5s')}
+                            onClick={() => {
+                              setSelectedKpiForVideo(selectedKpiForVideo === '5s' ? null : '5s');
+                              setExpandedKpiForPlayers(null);
+                            }}
                             style={{ cursor: 'pointer' }}
                           >
                             <div className={`${styles.statTileLabel} ${styles.tooltipTrigger}`} data-tooltip="KPI 5s (counterpressing) = (Liczba strat z isReaction5s === true) / (Wszystkie straty z zaznaczonym przyciskiem ✓ 5s LUB ✗ 5s, bez isAut) × 100%. KPI > 50%">
@@ -4186,6 +4202,94 @@ export default function StatystykiZespoluPage() {
                       </div>
                     </div>
                     
+                    {/* Legenda dla xG/strzał - nad listą zawodników i panelem wideo */}
+                    {expandedKpiForPlayers === 'xg-per-shot' && (
+                      <div style={{ 
+                        marginTop: '12px',
+                        marginBottom: '4px',
+                        padding: '4px 8px', 
+                        backgroundColor: 'white', 
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        color: '#6b7280',
+                        display: 'flex',
+                        gap: '12px',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        width: '100%'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <div style={{ 
+                            width: '12px', 
+                            height: '12px', 
+                            backgroundColor: '#4caf50', 
+                            borderRadius: '3px',
+                            border: 'none'
+                          }}></div>
+                          <span>Skuteczny (xG ≥ 0.15)</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <div style={{ 
+                            width: '12px', 
+                            height: '12px', 
+                            backgroundColor: '#757575', 
+                            borderRadius: '3px',
+                            border: 'none'
+                          }}></div>
+                          <span>Nieskuteczny</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <div style={{ 
+                            width: '12px', 
+                            height: '12px', 
+                            backgroundColor: '#4caf50', 
+                            borderRadius: '3px',
+                            border: '1px solid #ef4444'
+                          }}></div>
+                          <span>Gol</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Legenda dla PK przeciwnika */}
+                    {expandedKpiForPlayers === 'pk-opponent' && (
+                      <div style={{ 
+                        marginTop: '12px',
+                        marginBottom: '4px',
+                        padding: '4px 8px', 
+                        backgroundColor: 'white', 
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        color: '#6b7280',
+                        display: 'flex',
+                        gap: '12px',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        width: '100%'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <div style={{ 
+                            width: '12px', 
+                            height: '12px', 
+                            backgroundColor: '#ef4444', 
+                            borderRadius: '3px',
+                            border: 'none'
+                          }}></div>
+                          <span>Strzał</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <div style={{ 
+                            width: '12px', 
+                            height: '12px', 
+                            backgroundColor: '#757575', 
+                            borderRadius: '3px',
+                            border: '1px solid #4caf50'
+                          }}></div>
+                          <span>Gol</span>
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Lista zawodników dla wybranych KPI - na samym dole kontenera, na pełnej szerokości */}
                     {expandedKpiForPlayers && selectedMatchInfo && (() => {
                 if (expandedKpiForPlayers === 'xg-per-shot') {
@@ -4233,49 +4337,67 @@ export default function StatystykiZespoluPage() {
                   
                   return (
                     <div style={{ 
-                      marginTop: '24px', 
-                      padding: '16px', 
-                      backgroundColor: '#f9fafb', 
-                      borderRadius: '8px',
-                      border: '1px solid #e5e7eb',
-                      width: '100%'
-                    }}>
-                      <div 
-                        style={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
-                          alignItems: 'center',
-                          marginBottom: '12px',
-                          cursor: 'pointer',
-                          padding: '8px',
-                          borderRadius: '6px',
-                          backgroundColor: 'white',
-                          border: '1px solid #e5e7eb'
-                        }}
-                        onClick={() => setIsPlayersListCollapsed(!isPlayersListCollapsed)}
-                      >
-                        <div style={{ fontWeight: '600', fontSize: '15px' }}>
-                          Zawodnicy - xG/strzał ({playerStats.length})
-                        </div>
-                        <div style={{ fontSize: '14px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
-                      </div>
-                      {!isPlayersListCollapsed && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {playerStats.map((stat) => (
-                          <div key={stat.playerId} style={{ 
-                            padding: '8px 12px',
-                            backgroundColor: 'white',
-                            borderRadius: '6px',
-                            border: '1px solid #e5e7eb',
-                            display: 'flex',
+                        marginTop: '0', 
+                        padding: '8px', 
+                        backgroundColor: 'white', 
+                        borderRadius: '4px',
+                        border: '1px solid #e5e7eb',
+                        width: '100%'
+                      }}>
+                        <div 
+                          style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
                             alignItems: 'center',
-                            gap: '12px',
-                            fontSize: '13px'
-                          }}>
-                            <div style={{ flex: '0 0 160px', fontWeight: '500' }}>
+                            marginBottom: '6px',
+                            cursor: 'pointer',
+                            padding: '4px 6px',
+                            borderRadius: '4px'
+                          }}
+                          onClick={() => setIsPlayersListCollapsed(!isPlayersListCollapsed)}
+                        >
+                          <div style={{ fontWeight: '500', fontSize: '13px', color: '#374151' }}>
+                            Zawodnicy - xG/strzał ({playerStats.length})
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
+                        </div>
+                        {!isPlayersListCollapsed && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          {playerStats.map((stat) => (
+                          <div 
+                            key={stat.playerId} 
+                            onClick={() => {
+                              setSelectedPlayerForVideo(selectedPlayerForVideo === stat.playerId ? null : stat.playerId);
+                              setSelectedKpiForVideo('xg-per-shot');
+                            }}
+                            onMouseEnter={(e) => {
+                              if (selectedPlayerForVideo !== stat.playerId) {
+                                e.currentTarget.style.backgroundColor = '#f9fafb';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (selectedPlayerForVideo !== stat.playerId) {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }
+                            }}
+                            style={{ 
+                              padding: '6px 8px',
+                              backgroundColor: selectedPlayerForVideo === stat.playerId ? '#eff6ff' : 'transparent',
+                              borderRadius: '4px',
+                              border: selectedPlayerForVideo === stat.playerId ? '1px solid #3b82f6' : 'none',
+                              borderBottom: selectedPlayerForVideo !== stat.playerId ? '1px solid #f3f4f6' : 'none',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <div style={{ flex: '0 0 140px', fontWeight: '500', color: '#374151' }}>
                               {stat.playerName}
                             </div>
-                            <div style={{ flex: '0 0 auto', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                            <div style={{ flex: '0 0 auto', color: '#6b7280', whiteSpace: 'nowrap', fontSize: '11px' }}>
                               {stat.count} strzałów ({stat.percentage.toFixed(1)}%) • xG: {stat.totalXG.toFixed(2)} • xG/strz: {(stat.totalXG / stat.count).toFixed(2)}
                             </div>
                             <div style={{ flex: '1', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', justifyContent: 'flex-start' }}>
@@ -4286,7 +4408,7 @@ export default function StatystykiZespoluPage() {
                                 if (!time) return null;
                                 const minutes = Math.floor(time / 60);
                                 const seconds = Math.floor(time % 60);
-                                const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                                  const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
                                 const isGoal = shot.shotType === 'goal' || shot.isGoal === true;
                                 const isSuccessful = (shot.xG || 0) >= kpiXGPerShot || isGoal;
                                 
@@ -4303,11 +4425,11 @@ export default function StatystykiZespoluPage() {
                                       padding: '4px 8px',
                                       backgroundColor: isSuccessful ? '#4caf50' : '#757575',
                                       color: 'white',
-                                      border: 'none',
+                                      border: isGoal ? '1px solid #ef4444' : 'none',
                                       borderRadius: '4px',
                                       cursor: 'pointer',
                                       fontSize: '11px',
-                                      fontWeight: isGoal ? '700' : '500',
+                                      fontWeight: '500',
                                       position: 'relative'
                                     }}
                                     title={`${isGoal ? 'GOL • ' : ''}xG: ${(shot.xG || 0).toFixed(2)} • Minuta: ${shot.minute}'`}
@@ -4319,9 +4441,9 @@ export default function StatystykiZespoluPage() {
                             </div>
                           </div>
                         ))}
+                        </div>
+                        )}
                       </div>
-                      )}
-                    </div>
                   );
                 } else if (expandedKpiForPlayers === 'pm-area-loses') {
                   // Oblicz potrzebne zmienne
@@ -4329,12 +4451,12 @@ export default function StatystykiZespoluPage() {
                   
                   // Funkcje pomocnicze do konwersji stref
                   const convertZoneToName = (zone: any): string | null => {
-                    if (typeof zone === 'string') return zone;
-                    if (zone && typeof zone === 'object') {
-                      if (zone.name) return zone.name;
-                      if (zone.zone) return zone.zone;
-                    }
-                    return null;
+                    if (!zone) return null;
+                    const raw = (typeof zone === 'string' || typeof zone === 'number')
+                      ? zone
+                      : (zone?.name ?? zone?.zone ?? null);
+                    if (!raw) return null;
+                    return String(raw).toUpperCase().replace(/\s+/g, '');
                   };
                   
                   const isPMArea = (zoneName: string | null | undefined): boolean => {
@@ -4380,10 +4502,10 @@ export default function StatystykiZespoluPage() {
                                   
                                   return (
                     <div style={{ 
-                      marginTop: '24px', 
-                      padding: '16px', 
-                      backgroundColor: '#f9fafb', 
-                      borderRadius: '8px',
+                      marginTop: '0', 
+                      padding: '8px', 
+                      backgroundColor: 'white', 
+                      borderRadius: '4px',
                       border: '1px solid #e5e7eb',
                       width: '100%'
                     }}>
@@ -4392,37 +4514,55 @@ export default function StatystykiZespoluPage() {
                           display: 'flex', 
                           justifyContent: 'space-between', 
                           alignItems: 'center',
-                          marginBottom: '12px',
+                          marginBottom: '6px',
                           cursor: 'pointer',
-                          padding: '8px',
-                          borderRadius: '6px',
-                          backgroundColor: 'white',
-                          border: '1px solid #e5e7eb'
+                          padding: '4px 6px',
+                          borderRadius: '4px'
                         }}
                         onClick={() => setIsPlayersListCollapsed(!isPlayersListCollapsed)}
                       >
-                        <div style={{ fontWeight: '600', fontSize: '15px' }}>
+                        <div style={{ fontWeight: '500', fontSize: '13px', color: '#374151' }}>
                           Zawodnicy - PM Area straty ({playerStats.length})
-                                    </div>
-                        <div style={{ fontSize: '14px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
                       </div>
                       {!isPlayersListCollapsed && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                         {playerStats.map((stat) => (
-                          <div key={stat.playerId} style={{ 
-                            padding: '8px 12px',
-                            backgroundColor: 'white',
-                            borderRadius: '6px',
-                            border: '1px solid #e5e7eb',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '12px',
-                            fontSize: '13px'
-                          }}>
-                            <div style={{ flex: '0 0 160px', fontWeight: '500' }}>
+                          <div 
+                            key={stat.playerId} 
+                            onClick={() => {
+                              setSelectedPlayerForVideo(selectedPlayerForVideo === stat.playerId ? null : stat.playerId);
+                              setSelectedKpiForVideo('pm-area-loses');
+                            }}
+                            onMouseEnter={(e) => {
+                              if (selectedPlayerForVideo !== stat.playerId) {
+                                e.currentTarget.style.backgroundColor = '#f9fafb';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (selectedPlayerForVideo !== stat.playerId) {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }
+                            }}
+                            style={{ 
+                              padding: '6px 8px',
+                              backgroundColor: selectedPlayerForVideo === stat.playerId && expandedKpiForPlayers === 'pm-area-loses' ? '#eff6ff' : 'transparent',
+                              borderRadius: '4px',
+                              border: selectedPlayerForVideo === stat.playerId && expandedKpiForPlayers === 'pm-area-loses' ? '1px solid #3b82f6' : 'none',
+                              borderBottom: selectedPlayerForVideo !== stat.playerId ? '1px solid #f3f4f6' : 'none',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <div style={{ flex: '0 0 140px', fontWeight: '500', color: '#374151' }}>
                               {stat.playerName}
                             </div>
-                            <div style={{ flex: '0 0 auto', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                            <div style={{ flex: '0 0 auto', color: '#6b7280', whiteSpace: 'nowrap', fontSize: '11px' }}>
                               {stat.count} strat ({stat.percentage.toFixed(1)}%)
                             </div>
                             <div style={{ flex: '1', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', justifyContent: 'flex-start' }}>
@@ -4472,30 +4612,7 @@ export default function StatystykiZespoluPage() {
                   const isSelectedTeamHome = selectedMatchInfo.isHome;
                   const teamIdInMatch = selectedTeam;
                   
-                  // Funkcje pomocnicze
-                  const convertZoneToName = (zone: any): string | null => {
-                    if (typeof zone === 'string') return zone;
-                    if (zone && typeof zone === 'object') {
-                      if (zone.name) return zone.name;
-                      if (zone.zone) return zone.zone;
-                    }
-                    return null;
-                  };
-                  
-                  const getOppositeZoneName = (zoneName: string): string | null => {
-                    const normalized = convertZoneToName(zoneName);
-                    if (!normalized) return null;
-                    return getOppositeXTValueForZone(normalized)?.zone || null;
-                  };
-                  
-                  const zoneNameToIndex = (zoneName: string): number | null => {
-                    const match = zoneName.match(/^([A-F])(\d+)$/);
-                    if (!match) return null;
-                    const col = match[1].charCodeAt(0) - 65;
-                    const row = parseInt(match[2], 10) - 1;
-                    return row * 12 + col;
-                  };
-                  
+                  // Funkcja pomocnicza - używa globalnych helperów
                   const isOwnHalf = (zoneName: string | null | undefined): boolean => {
                     if (!zoneName) return false;
                     const normalized = convertZoneToName(zoneName);
@@ -4535,11 +4652,12 @@ export default function StatystykiZespoluPage() {
                   const playerRegainsMap = new Map<string, { regains: any[] }>();
                   regainsOnOpponentHalfWithTimestamp.forEach((item: any) => {
                     const action = item.action;
-                    if (action && action.senderId) {
-                      if (!playerRegainsMap.has(action.senderId)) {
-                        playerRegainsMap.set(action.senderId, { regains: [] });
+                    const playerId = action?.senderId || action?.playerId;
+                    if (action && playerId) {
+                      if (!playerRegainsMap.has(playerId)) {
+                        playerRegainsMap.set(playerId, { regains: [] });
                       }
-                      playerRegainsMap.get(action.senderId)!.regains.push(action);
+                      playerRegainsMap.get(playerId)!.regains.push(action);
                     }
                   });
                   
@@ -4560,10 +4678,10 @@ export default function StatystykiZespoluPage() {
                                   
                                   return (
                     <div style={{ 
-                      marginTop: '24px', 
-                      padding: '16px', 
-                      backgroundColor: '#f9fafb', 
-                      borderRadius: '8px',
+                      marginTop: '0', 
+                      padding: '8px', 
+                      backgroundColor: 'white', 
+                      borderRadius: '4px',
                       border: '1px solid #e5e7eb',
                       width: '100%'
                     }}>
@@ -4572,37 +4690,55 @@ export default function StatystykiZespoluPage() {
                           display: 'flex', 
                           justifyContent: 'space-between', 
                           alignItems: 'center',
-                          marginBottom: '12px',
+                          marginBottom: '6px',
                           cursor: 'pointer',
-                          padding: '8px',
-                          borderRadius: '6px',
-                          backgroundColor: 'white',
-                          border: '1px solid #e5e7eb'
+                          padding: '4px 6px',
+                          borderRadius: '4px'
                         }}
                         onClick={() => setIsPlayersListCollapsed(!isPlayersListCollapsed)}
                       >
-                        <div style={{ fontWeight: '600', fontSize: '15px' }}>
+                        <div style={{ fontWeight: '500', fontSize: '13px', color: '#374151' }}>
                           Zawodnicy - Przechwyty PP ({playerStats.length})
-                                    </div>
-                        <div style={{ fontSize: '14px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
                       </div>
                       {!isPlayersListCollapsed && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                         {playerStats.map((stat) => (
-                          <div key={stat.playerId} style={{ 
-                            padding: '8px 12px',
-                            backgroundColor: 'white',
-                            borderRadius: '6px',
-                            border: '1px solid #e5e7eb',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '12px',
-                            fontSize: '13px'
-                          }}>
-                            <div style={{ flex: '0 0 160px', fontWeight: '500' }}>
+                          <div 
+                            key={stat.playerId} 
+                            onClick={() => {
+                              setSelectedPlayerForVideo(selectedPlayerForVideo === stat.playerId ? null : stat.playerId);
+                              setSelectedKpiForVideo('regains-pp');
+                            }}
+                            onMouseEnter={(e) => {
+                              if (selectedPlayerForVideo !== stat.playerId) {
+                                e.currentTarget.style.backgroundColor = '#f9fafb';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (selectedPlayerForVideo !== stat.playerId) {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }
+                            }}
+                            style={{ 
+                              padding: '6px 8px',
+                              backgroundColor: selectedPlayerForVideo === stat.playerId && expandedKpiForPlayers === 'regains-pp' ? '#eff6ff' : 'transparent',
+                              borderRadius: '4px',
+                              border: selectedPlayerForVideo === stat.playerId && expandedKpiForPlayers === 'regains-pp' ? '1px solid #3b82f6' : 'none',
+                              borderBottom: selectedPlayerForVideo !== stat.playerId ? '1px solid #f3f4f6' : 'none',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <div style={{ flex: '0 0 140px', fontWeight: '500', color: '#374151' }}>
                               {stat.playerName}
                             </div>
-                            <div style={{ flex: '0 0 auto', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                            <div style={{ flex: '0 0 auto', color: '#6b7280', whiteSpace: 'nowrap', fontSize: '11px' }}>
                               {stat.count} przechwytów ({stat.percentage.toFixed(1)}%)
                             </div>
                             <div style={{ flex: '1', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', justifyContent: 'flex-start' }}>
@@ -4652,30 +4788,7 @@ export default function StatystykiZespoluPage() {
                   const isSelectedTeamHome = selectedMatchInfo.isHome;
                   const teamIdInMatch = selectedTeam;
                   
-                  // Funkcje pomocnicze
-                  const convertZoneToName = (zone: any): string | null => {
-                    if (typeof zone === 'string') return zone;
-                    if (zone && typeof zone === 'object') {
-                      if (zone.name) return zone.name;
-                      if (zone.zone) return zone.zone;
-                    }
-                    return null;
-                  };
-                  
-                  const getOppositeZoneName = (zoneName: string): string | null => {
-                    const normalized = convertZoneToName(zoneName);
-                    if (!normalized) return null;
-                    return getOppositeXTValueForZone(normalized)?.zone || null;
-                  };
-                  
-                  const zoneNameToIndex = (zoneName: string): number | null => {
-                    const match = zoneName.match(/^([A-F])(\d+)$/);
-                    if (!match) return null;
-                    const col = match[1].charCodeAt(0) - 65;
-                    const row = parseInt(match[2], 10) - 1;
-                    return row * 12 + col;
-                  };
-                  
+                  // Funkcja pomocnicza - używa globalnych helperów
                   const isOwnHalf = (zoneName: string | null | undefined): boolean => {
                     if (!zoneName) return false;
                     const normalized = convertZoneToName(zoneName);
@@ -4686,29 +4799,29 @@ export default function StatystykiZespoluPage() {
                     return col <= 5;
                   };
                   
-                  // Filtruj przechwyty na połowie przeciwnika - użyj tej samej logiki co w panelu nad wideo
-                  const regainsOnOpponentHalf = (derivedRegainActions || []).filter((action: any) => {
-                    const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
-                    const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-                    const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
-                    const attackZoneName = attackZoneRaw
-                      ? convertZoneToName(attackZoneRaw)
-                      : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
-                    
-                    if (!attackZoneName) return false;
-                    const isOwn = isOwnHalf(attackZoneName);
-                    return !isOwn && // attackZone na połowie przeciwnika
-                      action && 
-                      (action.videoTimestampRaw !== undefined && action.videoTimestampRaw !== null ||
-                       action.videoTimestamp !== undefined && action.videoTimestamp !== null);
-                  });
-                  
-                  const regainsOnOpponentHalfWithTimestamp = regainsOnOpponentHalf
+                  // Filtruj przechwyty na połowie przeciwnika - użyj DOKŁADNIE tej samej logiki co w głównym bloku KPI
+                  const regainsOnOpponentHalfWithTimestamp = (derivedRegainActions || [])
+                    .filter((action: any) => {
+                      const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+                      const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+                      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                      const attackZoneName = attackZoneRaw
+                        ? convertZoneToName(attackZoneRaw)
+                        : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
+                      
+                      if (!attackZoneName) return false;
+                      const isOwn = isOwnHalf(attackZoneName);
+                      // Z perspektywy ataku: strefy 7-12 to połowa przeciwnika
+                      return !isOwn; // attackZone na połowie przeciwnika (7-12)
+                    })
+                    .filter((action: any) => {
+                      const timestamp = action.videoTimestampRaw ?? action.videoTimestamp ?? 0;
+                      return timestamp > 0;
+                    })
                     .map((action: any) => ({
                       action,
                       timestamp: action.videoTimestampRaw ?? action.videoTimestamp ?? 0,
                     }))
-                    .filter((item: any) => item.timestamp > 0)
                     .sort((a: any, b: any) => a.timestamp - b.timestamp);
                   
                   // Filtruj strzały naszego zespołu - użyj tej samej logiki co w głównym bloku KPI
@@ -4778,11 +4891,13 @@ export default function StatystykiZespoluPage() {
                   const playerRegainsMap = new Map<string, { regains: any[]; successful: any[] }>();
                   regainsOnOpponentHalfWithTimestamp.forEach((item: any) => {
                     const action = item.action;
-                    if (action && action.senderId) {
-                      if (!playerRegainsMap.has(action.senderId)) {
-                        playerRegainsMap.set(action.senderId, { regains: [], successful: [] });
+                    // Użyj senderId lub playerId, tak jak w innych miejscach
+                    const playerId = action?.senderId || action?.playerId;
+                    if (action && playerId) {
+                      if (!playerRegainsMap.has(playerId)) {
+                        playerRegainsMap.set(playerId, { regains: [], successful: [] });
                       }
-                      const playerData = playerRegainsMap.get(action.senderId)!;
+                      const playerData = playerRegainsMap.get(playerId)!;
                       playerData.regains.push(action);
                       if (successfulRegainsIds.has(action.id)) {
                         playerData.successful.push(action);
@@ -4790,31 +4905,41 @@ export default function StatystykiZespoluPage() {
                     }
                   });
                   
+                  // Dla "8s CA" pokazuj wszystkie przechwyty, ale tylko skuteczne będą zaznaczone na zielono
+                  // Dla "Przechwyty PP" pokazuj wszystkie przechwyty (wszystkie są liczone w KPI)
+                  const totalSuccessfulRegains = successfulRegainsIds.size;
+                  const is8sCA = expandedKpiForPlayers === '8s-ca';
                   const playerStats = Array.from(playerRegainsMap.entries())
                     .map(([playerId, data]) => {
                       const player = players.find(p => p.id === playerId);
+                      // Zawsze pokazuj wszystkie przechwyty, niezależnie od KPI
+                      const regainsToShow = data.regains;
+                      const countToShow = regainsToShow.length;
+                      // Dla "8s CA" procent udziału liczony jest od wszystkich przechwytów, nie tylko skutecznych
+                      const totalForPercentage = regainsOnOpponentHalfWithTimestamp.length;
                       return {
                         playerId,
                         playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
-                        count: data.regains.length,
+                        count: countToShow,
                         successfulCount: data.successful.length,
-                        percentage: regainsOnOpponentHalfWithTimestamp.length > 0 
-                          ? (data.regains.length / regainsOnOpponentHalfWithTimestamp.length) * 100 
+                        percentage: totalForPercentage > 0 
+                          ? (countToShow / totalForPercentage) * 100 
                           : 0,
                         successfulPercentage: data.regains.length > 0
                           ? (data.successful.length / data.regains.length) * 100
                           : 0,
-                        regains: data.regains
+                        regains: regainsToShow // Zawsze wszystkie przechwyty
                       };
                     })
+                    .filter(stat => stat.count > 0) // Filtruj zawodników bez przechwytów
                     .sort((a, b) => b.successfulCount - a.successfulCount);
-
-                          return (
+                                  
+                                  return (
                     <div style={{ 
-                      marginTop: '24px', 
-                      padding: '16px', 
-                      backgroundColor: '#f9fafb', 
-                      borderRadius: '8px',
+                      marginTop: '0', 
+                      padding: '8px', 
+                      backgroundColor: 'white', 
+                      borderRadius: '4px',
                       border: '1px solid #e5e7eb',
                       width: '100%'
                     }}>
@@ -4823,37 +4948,55 @@ export default function StatystykiZespoluPage() {
                           display: 'flex', 
                           justifyContent: 'space-between', 
                           alignItems: 'center',
-                          marginBottom: '12px',
+                          marginBottom: '6px',
                           cursor: 'pointer',
-                          padding: '8px',
-                          borderRadius: '6px',
-                          backgroundColor: 'white',
-                          border: '1px solid #e5e7eb'
+                          padding: '4px 6px',
+                          borderRadius: '4px'
                         }}
                         onClick={() => setIsPlayersListCollapsed(!isPlayersListCollapsed)}
                       >
-                        <div style={{ fontWeight: '600', fontSize: '15px' }}>
+                        <div style={{ fontWeight: '500', fontSize: '13px', color: '#374151' }}>
                           Zawodnicy - 8s CA ({playerStats.length})
-                              </div>
-                        <div style={{ fontSize: '14px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
-                              </div>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
+                      </div>
                       {!isPlayersListCollapsed && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                         {playerStats.map((stat) => (
-                          <div key={stat.playerId} style={{ 
-                            padding: '8px 12px',
-                            backgroundColor: 'white',
-                            borderRadius: '6px',
-                            border: '1px solid #e5e7eb',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '12px',
-                            fontSize: '13px'
-                          }}>
-                            <div style={{ flex: '0 0 160px', fontWeight: '500' }}>
+                          <div 
+                            key={stat.playerId} 
+                            onClick={() => {
+                              setSelectedPlayerForVideo(selectedPlayerForVideo === stat.playerId ? null : stat.playerId);
+                              setSelectedKpiForVideo('8s-ca');
+                            }}
+                            onMouseEnter={(e) => {
+                              if (selectedPlayerForVideo !== stat.playerId) {
+                                e.currentTarget.style.backgroundColor = '#f9fafb';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (selectedPlayerForVideo !== stat.playerId) {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }
+                            }}
+                            style={{ 
+                              padding: '6px 8px',
+                              backgroundColor: selectedPlayerForVideo === stat.playerId && expandedKpiForPlayers === '8s-ca' ? '#eff6ff' : 'transparent',
+                              borderRadius: '4px',
+                              border: selectedPlayerForVideo === stat.playerId && expandedKpiForPlayers === '8s-ca' ? '1px solid #3b82f6' : 'none',
+                              borderBottom: selectedPlayerForVideo !== stat.playerId ? '1px solid #f3f4f6' : 'none',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <div style={{ flex: '0 0 140px', fontWeight: '500', color: '#374151' }}>
                               {stat.playerName}
                             </div>
-                            <div style={{ flex: '0 0 auto', color: '#6b7280', whiteSpace: 'nowrap', fontSize: '12px' }}>
+                            <div style={{ flex: '0 0 auto', color: '#6b7280', whiteSpace: 'nowrap', fontSize: '11px' }}>
                               {stat.successfulCount}/{stat.count} skutecznych ({stat.successfulPercentage.toFixed(0)}%) • {stat.percentage.toFixed(1)}% udziału
                             </div>
                             <div style={{ flex: '1', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', justifyContent: 'flex-start', minWidth: 0 }}>
@@ -4893,14 +5036,14 @@ export default function StatystykiZespoluPage() {
                                   >
                                     {timeString}
                                   </button>
-                                );
-                              })}
+                                  );
+                                })}
                             </div>
                           </div>
                         ))}
                       </div>
                       )}
-                    </div>
+                        </div>
                   );
                 }
                 return null;
@@ -4909,6 +5052,94 @@ export default function StatystykiZespoluPage() {
                   );
                 })()}
                     </div>
+              
+              {/* Legenda dla xG/strzał - nad panelem wideo */}
+              {selectedKpiForVideo === 'xg-per-shot' && (
+                <div style={{ 
+                  marginTop: '12px',
+                  marginBottom: '4px',
+                  padding: '4px 8px', 
+                  backgroundColor: 'white', 
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  color: '#6b7280',
+                  display: 'flex',
+                  gap: '12px',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  width: '100%'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ 
+                      width: '12px', 
+                      height: '12px', 
+                      backgroundColor: '#4caf50', 
+                      borderRadius: '3px',
+                      border: 'none'
+                    }}></div>
+                    <span>Skuteczny (xG ≥ 0.15)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ 
+                      width: '12px', 
+                      height: '12px', 
+                      backgroundColor: '#757575', 
+                      borderRadius: '3px',
+                      border: 'none'
+                    }}></div>
+                    <span>Nieskuteczny</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ 
+                      width: '12px', 
+                      height: '12px', 
+                      backgroundColor: '#4caf50', 
+                      borderRadius: '3px',
+                      border: '1px solid #ef4444'
+                    }}></div>
+                    <span>Gol</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Legenda dla PK przeciwnika - nad panelem wideo */}
+              {selectedKpiForVideo === 'pk-opponent' && (
+                <div style={{ 
+                  marginTop: '12px',
+                  marginBottom: '4px',
+                  padding: '4px 8px', 
+                  backgroundColor: 'white', 
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  color: '#6b7280',
+                  display: 'flex',
+                  gap: '12px',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  width: '100%'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ 
+                      width: '12px', 
+                      height: '12px', 
+                      backgroundColor: '#ef4444', 
+                      borderRadius: '3px',
+                      border: 'none'
+                    }}></div>
+                    <span>Strzał</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ 
+                      width: '12px', 
+                      height: '12px', 
+                      backgroundColor: '#757575', 
+                      borderRadius: '3px',
+                      border: '1px solid #4caf50'
+                    }}></div>
+                    <span>Gol</span>
+                  </div>
+                </div>
+              )}
               
               {/* Wideo YouTube dla wybranego meczu - osadzone na pełnej szerokości i wysokości */}
               <div 
@@ -4919,7 +5150,7 @@ export default function StatystykiZespoluPage() {
                   marginRight: 'calc(-50vw + 50%)',
                   position: 'relative',
                   backgroundColor: '#000',
-                  marginTop: '24px'
+                  marginTop: selectedKpiForVideo === 'xg-per-shot' ? '0' : '24px'
                 }}
               >
                 {/* Wyświetl czasy zagrań nad wideo dla wybranego KPI */}
@@ -4995,7 +5226,7 @@ export default function StatystykiZespoluPage() {
                       .sort((a, b) => a.time - b.time);
                   } else if (selectedKpiForVideo === 'xg-per-shot') {
                     // Wszystkie strzały naszego zespołu
-                    const teamShotsFiltered = (allShots || []).filter((shot: any) => {
+                    let teamShotsFiltered = (allShots || []).filter((shot: any) => {
                       const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
                         ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
                         : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
@@ -5005,6 +5236,13 @@ export default function StatystykiZespoluPage() {
                          shot.videoTimestamp !== undefined && shot.videoTimestamp !== null);
                     });
                     
+                    // Jeśli wybrano zawodnika, filtruj tylko jego strzały
+                    if (selectedPlayerForVideo) {
+                      teamShotsFiltered = teamShotsFiltered.filter((shot: any) => 
+                        shot.playerId === selectedPlayerForVideo
+                      );
+                    }
+                    
                     // Skuteczne to te z xG >= 0.15 (KPI)
                     entriesWithTime = teamShotsFiltered
                       .map((shot: any) => ({
@@ -5012,7 +5250,8 @@ export default function StatystykiZespoluPage() {
                         time: shot.videoTimestamp !== undefined && shot.videoTimestamp !== null
                           ? shot.videoTimestamp
                           : shot.videoTimestampRaw,
-                        isSuccessful: (shot.xG || 0) >= kpiXGPerShot
+                        isSuccessful: (shot.xG || 0) >= kpiXGPerShot,
+                        isGoal: shot.shotType === 'goal' || shot.isGoal === true
                       }))
                       .sort((a, b) => a.time - b.time);
                   } else if (selectedKpiForVideo === 'pk-opponent') {
@@ -5032,7 +5271,9 @@ export default function StatystykiZespoluPage() {
                         time: entry.videoTimestamp !== undefined && entry.videoTimestamp !== null
                           ? entry.videoTimestamp
                           : entry.videoTimestampRaw,
-                        isSuccessful: false // Wszystkie są złe
+                        isSuccessful: false, // Wszystkie są złe
+                        isShot: entry.isShot === true, // Czy zakończyło się strzałem
+                        isGoal: entry.isGoal === true // Czy zakończyło się golem
                       }))
                       .sort((a, b) => a.time - b.time);
                   } else if (selectedKpiForVideo === '5s') {
@@ -5068,7 +5309,7 @@ export default function StatystykiZespoluPage() {
                   } else if (selectedKpiForVideo === 'pm-area-loses') {
                     // Wszystkie straty w PM Area
                     const allLoses = derivedLosesActions;
-                    const losesInPMAreaFiltered = allLoses.filter((action: any) => {
+                    let losesInPMAreaFiltered = allLoses.filter((action: any) => {
                       const defenseZoneRaw = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
                       const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
                       return isPMArea(defenseZoneName) &&
@@ -5076,6 +5317,14 @@ export default function StatystykiZespoluPage() {
                         (action.videoTimestampRaw !== undefined && action.videoTimestampRaw !== null ||
                          action.videoTimestamp !== undefined && action.videoTimestamp !== null);
                     });
+                    
+                    // Jeśli wybrano zawodnika, filtruj tylko jego straty
+                    if (selectedPlayerForVideo) {
+                      losesInPMAreaFiltered = losesInPMAreaFiltered.filter((action: any) => {
+                        const playerId = action.senderId || action.playerId;
+                        return playerId === selectedPlayerForVideo;
+                      });
+                    }
                     
                     // Wszystkie są "złe" bo KPI ≤ 6
                     entriesWithTime = losesInPMAreaFiltered
@@ -5088,35 +5337,58 @@ export default function StatystykiZespoluPage() {
                       }))
                       .sort((a, b) => a.time - b.time);
                   } else if (selectedKpiForVideo === 'regains-pp') {
-                    // Wszystkie przechwyty na połowie przeciwnika
-                    const regainsPPFiltered = (derivedRegainActions || []).filter((action: any) => {
-                      const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
-                      const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-                      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
-                      const attackZoneName = attackZoneRaw
-                        ? convertZoneToName(attackZoneRaw)
-                        : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
-                      
-                      if (!attackZoneName) return false;
-                      const isOwn = isOwnHalf(attackZoneName);
-                      return !isOwn && // attackZone na połowie przeciwnika
-                        action && 
-                        (action.videoTimestampRaw !== undefined && action.videoTimestampRaw !== null ||
-                         action.videoTimestamp !== undefined && action.videoTimestamp !== null);
-                    });
+                    // Przechwyty na połowie przeciwnika - użyj tej samej logiki co w liście zawodników
+                    const regainsOnOpponentHalfWithTimestamp = (derivedRegainActions || [])
+                      .map((action: any) => {
+                        const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+                        const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+                        const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                        const attackZoneName = attackZoneRaw
+                          ? convertZoneToName(attackZoneRaw)
+                          : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
+                        
+                        if (!attackZoneName) return null;
+                        const isOwn = isOwnHalf(attackZoneName);
+                        
+                        if (isOwn) return null;
+                        
+                        const timestamp = action.videoTimestampRaw ?? (action.videoTimestamp !== undefined ? action.videoTimestamp + 10 : 0);
+                        if (!timestamp || timestamp <= 0) return null;
+                        
+                        return { action, timestamp };
+                      })
+                      .filter((item: any) => item !== null)
+                      .sort((a: any, b: any) => a.timestamp - b.timestamp);
+                    
+                    // Jeśli wybrano zawodnika, filtruj tylko jego przechwyty
+                    let filteredRegains = regainsOnOpponentHalfWithTimestamp;
+                    if (selectedPlayerForVideo) {
+                      filteredRegains = filteredRegains.filter((item: any) => {
+                        const action = item.action;
+                        const playerId = action.senderId || action.playerId;
+                        return playerId === selectedPlayerForVideo;
+                      });
+                    }
                     
                     // Wszystkie są "dobre" bo KPI ≥ 27
-                    entriesWithTime = regainsPPFiltered
-                      .map((action: any) => ({
-                        item: action,
-                        time: action.videoTimestamp !== undefined && action.videoTimestamp !== null
+                    // Użyj tej samej logiki co w liście zawodników - w liście używamy action.videoTimestamp lub action.videoTimestampRaw
+                    entriesWithTime = filteredRegains
+                      .map((item: any) => {
+                        const action = item.action;
+                        // Użyj tej samej logiki co w liście zawodników - videoTimestamp lub videoTimestampRaw
+                        const time = action.videoTimestamp !== undefined && action.videoTimestamp !== null
                           ? action.videoTimestamp
-                          : action.videoTimestampRaw,
-                        isSuccessful: true // Wszystkie są dobre
-                      }))
+                          : action.videoTimestampRaw;
+                        return {
+                          item: action,
+                          time: time,
+                          isSuccessful: true // Wszystkie są dobre
+                        };
+                      })
+                      .filter((entry: any) => entry.time) // Filtruj tylko te z timestamp (tak jak w liście zawodników - if (!time) return null)
                       .sort((a, b) => a.time - b.time);
                   } else if (selectedKpiForVideo === '8s-ca') {
-                    // Przechwyty na połowie przeciwnika - użyj tej samej logiki co w głównym bloku KPI (bez filtrowania po timestamp)
+                    // Przechwyty na połowie przeciwnika - użyj tej samej logiki co w liście zawodników
                     const regainsOnOpponentHalf = (derivedRegainActions || []).filter((action: any) => {
                       const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
                       const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
@@ -5132,6 +5404,25 @@ export default function StatystykiZespoluPage() {
                         (action.videoTimestampRaw !== undefined && action.videoTimestampRaw !== null ||
                          action.videoTimestamp !== undefined && action.videoTimestamp !== null);
                     });
+                    
+                    // Przygotuj regainsOnOpponentHalfWithTimestamp - użyj tej samej struktury co w liście zawodników
+                    // W liście zawodników używamy action.videoTimestampRaw ?? action.videoTimestamp ?? 0
+                    let regainsOnOpponentHalfWithTimestamp = regainsOnOpponentHalf
+                      .map((action: any) => ({
+                        action,
+                        timestamp: action.videoTimestampRaw ?? action.videoTimestamp ?? 0,
+                      }))
+                      .filter((item: any) => item.timestamp > 0)
+                      .sort((a: any, b: any) => a.timestamp - b.timestamp);
+                    
+                    // Jeśli wybrano zawodnika, filtruj tylko jego przechwyty
+                    if (selectedPlayerForVideo) {
+                      regainsOnOpponentHalfWithTimestamp = regainsOnOpponentHalfWithTimestamp.filter((item: any) => {
+                        const action = item.action;
+                        const playerId = action.senderId || action.playerId;
+                        return playerId === selectedPlayerForVideo;
+                      });
+                    }
                     
                     // Przygotuj PK entries i shots w ataku z timestampami
                     const pkEntriesAttackWithTimestamp = (allPKEntries || [])
@@ -5171,11 +5462,10 @@ export default function StatystykiZespoluPage() {
                       .filter(item => item.timestamp > 0)
                       .sort((a, b) => a.timestamp - b.timestamp);
                     
-                    // Sprawdź które przechwyty mają PK lub strzał w 8s
+                    // Sprawdź które przechwyty mają PK lub strzał w 8s - użyj tej samej logiki co w liście zawodników
                     const successfulRegainsIds = new Set<string>();
-                    regainsOnOpponentHalf.forEach((action: any) => {
-                      const regainTime = action.videoTimestampRaw ?? action.videoTimestamp ?? 0;
-                      if (regainTime === 0) return;
+                    regainsOnOpponentHalfWithTimestamp.forEach((regainItem: any) => {
+                      const regainTime = regainItem.timestamp;
                       const timeWindowEnd = regainTime + 8;
                       
                       // Sprawdź czy jest PK entry lub shot w oknie 8s
@@ -5194,19 +5484,32 @@ export default function StatystykiZespoluPage() {
                         );
                         
                         if (!hasLoseBetween) {
-                          successfulRegainsIds.add(action.id);
+                          successfulRegainsIds.add(regainItem.action.id);
                         }
                       }
                     });
                     
-                    entriesWithTime = regainsOnOpponentHalf
-                      .map((action: any) => ({
-                        item: action,
-                        time: action.videoTimestamp !== undefined && action.videoTimestamp !== null
+                    // Użyj tej samej logiki co w liście zawodników - videoTimestamp lub videoTimestampRaw
+                    // W liście zawodników: regain.videoTimestamp !== undefined && regain.videoTimestamp !== null ? regain.videoTimestamp : regain.videoTimestampRaw
+                    // Jeśli time jest falsy (0, null, undefined), to w liście zawodników używamy if (!time) return null
+                    entriesWithTime = regainsOnOpponentHalfWithTimestamp
+                      .map((item: any) => {
+                        const action = item.action;
+                        // Użyj tej samej logiki co w liście zawodników - videoTimestamp lub videoTimestampRaw
+                        let time = action.videoTimestamp !== undefined && action.videoTimestamp !== null
                           ? action.videoTimestamp
-                          : action.videoTimestampRaw,
-                        isSuccessful: successfulRegainsIds.has(action.id)
-                      }))
+                          : action.videoTimestampRaw;
+                        // Jeśli time jest falsy, użyj timestamp z item jako fallback (który jest obliczony jako action.videoTimestampRaw ?? action.videoTimestamp ?? 0)
+                        if (!time) {
+                          time = item.timestamp;
+                        }
+                        return {
+                          item: action,
+                          time: time,
+                          isSuccessful: successfulRegainsIds.has(action.id)
+                        };
+                      })
+                      .filter((entry: any) => entry.time) // Filtruj tylko te z timestamp (tak jak w liście zawodników - if (!time) return null)
                       .sort((a, b) => a.time - b.time);
                   }
                   
@@ -5231,8 +5534,29 @@ export default function StatystykiZespoluPage() {
                         const minutes = Math.floor(item.time / 60);
                         const seconds = Math.floor(item.time % 60);
                         const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                        const isGoal = item.isGoal === true;
+                        const isShot = item.isShot === true;
+                        const isXGPerShot = selectedKpiForVideo === 'xg-per-shot';
+                        const isPKOpponent = selectedKpiForVideo === 'pk-opponent';
+
+                        // Określ kolor tła i ramki
+                        let backgroundColor = item.isSuccessful ? '#4caf50' : '#757575';
+                        let borderStyle = 'none';
                         
-                        return (
+                        if (isPKOpponent) {
+                          // Dla PK przeciwnika: czerwony dla strzałów, zielony border dla goli
+                          if (isShot) {
+                            backgroundColor = '#ef4444';
+                          }
+                          if (isGoal) {
+                            borderStyle = '1px solid #4caf50';
+                          }
+                        } else if (isXGPerShot && isGoal) {
+                          // Dla xG/strzał: zielony border dla goli
+                          borderStyle = '1px solid #ef4444';
+                        }
+
+                          return (
                           <button
                             key={item.item.id || index}
                             onClick={async () => {
@@ -5242,9 +5566,9 @@ export default function StatystykiZespoluPage() {
                             }}
                             style={{
                               padding: '4px 8px',
-                              backgroundColor: item.isSuccessful ? '#4caf50' : '#757575',
+                              backgroundColor: backgroundColor,
                               color: 'white',
-                              border: 'none',
+                              border: borderStyle,
                               borderRadius: '4px',
                               cursor: 'pointer',
                               fontSize: '11px',
@@ -5254,11 +5578,19 @@ export default function StatystykiZespoluPage() {
                               lineHeight: '1.2'
                             }}
                             onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = item.isSuccessful ? '#66bb6a' : '#9e9e9e';
+                              if (isPKOpponent && isShot) {
+                                e.currentTarget.style.backgroundColor = '#dc2626';
+                              } else {
+                                e.currentTarget.style.backgroundColor = item.isSuccessful ? '#66bb6a' : '#9e9e9e';
+                              }
                               e.currentTarget.style.transform = 'scale(1.05)';
                             }}
                             onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = item.isSuccessful ? '#4caf50' : '#757575';
+                              if (isPKOpponent && isShot) {
+                                e.currentTarget.style.backgroundColor = '#ef4444';
+                              } else {
+                                e.currentTarget.style.backgroundColor = item.isSuccessful ? '#4caf50' : '#757575';
+                              }
                               e.currentTarget.style.transform = 'scale(1)';
                             }}
                           >
@@ -5266,7 +5598,7 @@ export default function StatystykiZespoluPage() {
                           </button>
                         );
                       })}
-                    </div>
+                      </div>
                   ) : null;
                 })()}
                 
