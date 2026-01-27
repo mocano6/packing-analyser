@@ -212,6 +212,33 @@
   border: 1px solid rgba(255, 255, 255, 1);
 }
 
+/* PROSTOKĄT W LINII ATAKU - PRAWA STRONA (domyślnie) */
+.attackRectangle {
+  position: absolute;
+  top: 50%;
+  width: 10%;
+  height: 22%;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.attackRectangleRight {
+  right: 0;
+  left: auto;
+}
+
+.attackRectangleLeft {
+  left: 0;
+  right: auto;
+}
+
+.opponentRectangle {
+  border-color: rgba(255, 255, 255, 0.2);
+  opacity: 0.7;
+}
+
 @media (max-width: 600px) {
   .flipButton {
     width: 36px;

@@ -472,6 +472,7 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
           <div className={styles.penaltySpotRight} />
           <div className={styles.goalLeft} />
           <div className={styles.goalRight} />
+          <div className={`${styles.attackRectangle} ${isFlipped ? styles.attackRectangleLeft : styles.attackRectangleRight}`} />
         </div>
 
         {/* Renderowanie strzałek */}

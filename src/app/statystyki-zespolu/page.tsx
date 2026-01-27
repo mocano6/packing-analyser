@@ -3368,6 +3368,26 @@ export default function StatystykiZespoluPage() {
                   const teamShotsCount = teamShots.length;
                   const teamXGPerShot = teamShotsCount > 0 ? (teamXG / teamShotsCount) : 0;
                   
+                  // Oblicz % strzałów z 1T w strefie 1T
+                  const pitchOrientation = typeof window !== 'undefined' ? localStorage.getItem('pitchOrientation') : 'false';
+                  const isPitchFlipped = pitchOrientation === 'true';
+                  
+                  const isIn1TZone = (shot: any) => {
+                    const x = shot.x || 0;
+                    const y = shot.y || 0;
+                    const isInYRange = y >= 39 && y <= 61;
+                    if (isPitchFlipped) {
+                      return isInYRange && x >= 0 && x <= 10;
+                    } else {
+                      return isInYRange && x >= 90 && x <= 100;
+                    }
+                  };
+                  
+                  const teamShots1T = teamShots.filter(isIn1TZone);
+                  const teamShots1TCount = teamShots1T.length;
+                  const teamShots1TContact1 = teamShots1T.filter(shot => shot.isContact1 === true).length;
+                  const team1TContact1Percentage = teamShots1TCount > 0 ? (teamShots1TContact1 / teamShots1TCount) * 100 : 0;
+                  
                   // Wejścia w PK przeciwnika (teamContext === 'defense')
                   const opponentPKEntries = (allPKEntries || []).filter((e: any) => 
                     e && e.teamId === selectedTeam && (e.teamContext ?? "attack") === "defense"
@@ -3551,6 +3571,9 @@ export default function StatystykiZespoluPage() {
                   // xG/strzał (NASZ): KPI > 0.15 (więcej = lepiej)
                   const kpiXGPerShot = 0.15;
                   
+                  // % strzałów z 1T w strefie 1T: KPI ≥ 85% (więcej = lepiej)
+                  const kpi1TPercentage = 85;
+                  
                   // PK przeciwnik: KPI < 11
                   const kpiPKEntries = 11;
                   
@@ -3723,6 +3746,26 @@ export default function StatystykiZespoluPage() {
                     }
                   };
                   
+                  // Specjalna funkcja dla "% 1T (strefa 1T)" - zapewnia, że gdy wartość = kpi1TPercentage, to score = kpiRadarValue
+                  // Mapowanie: 0% → 0, kpi1TPercentage (85%) → kpiRadarValue, 100% → 100
+                  const toScore1TPercentage = (actualPercentage: number): number => {
+                    if (actualPercentage <= 0) return 0;
+                    if (actualPercentage >= 100) return 100;
+                    if (actualPercentage === kpi1TPercentage) return kpiRadarValue;
+                    
+                    // Interpolacja liniowa: gdy wartość < kpi1TPercentage, interpolujemy między 0 a kpiRadarValue
+                    // gdy wartość > kpi1TPercentage, interpolujemy między kpiRadarValue a 100
+                    if (actualPercentage < kpi1TPercentage) {
+                      // Interpolacja między (0, 0) a (kpi1TPercentage, kpiRadarValue)
+                      const ratio = actualPercentage / kpi1TPercentage;
+                      return kpiRadarValue * ratio;
+                    } else {
+                      // Interpolacja między (kpi1TPercentage, kpiRadarValue) a (100, 100)
+                      const ratio = (actualPercentage - kpi1TPercentage) / (100 - kpi1TPercentage);
+                      return kpiRadarValue + (100 - kpiRadarValue) * ratio;
+                    }
+                  };
+                  
                   // Specjalna funkcja dla "PK przeciwnik" - zapewnia, że gdy wartość = kpiPKEntries, to score = kpiRadarValue
                   // Mapowanie: 0 → 100, kpiPKEntries (11) → kpiRadarValue (80), kpiPKEntries + 40 (51) → 0
                   // Punkt 0 na spidermapie = KPI + 40 (51), punkt 100 = 0 (najlepsze)
@@ -3810,6 +3853,7 @@ export default function StatystykiZespoluPage() {
 
                   const scoreOpponentXG = toScoreLowerIsBetter(normalizedOpponentXG);
                   const scoreXGPerShot = toScoreXGPerShot(teamXGPerShot);
+                  const score1TPercentage = toScore1TPercentage(team1TContact1Percentage);
                   const scoreOpponentPKEntries = toScorePKOpponent(opponentPKEntriesCount);
                   const scoreLosesPMArea = toScoreLosesPMArea(losesInPMAreaCount);
                   const scoreReaction5s = toScoreReaction5s(reaction5sPercentage);
@@ -3821,6 +3865,12 @@ export default function StatystykiZespoluPage() {
                     {
                       subject: 'xG/strzał',
                       value: scoreXGPerShot,
+                      kpi: kpiRadarValue,
+                      fullMark: 100,
+                    },
+                    {
+                      subject: '1T',
+                      value: score1TPercentage,
                       kpi: kpiRadarValue,
                       fullMark: 100,
                     },
@@ -4000,11 +4050,12 @@ export default function StatystykiZespoluPage() {
                       
                           {/* Podsumowanie KPI pod spidermapą */}
                           {(() => {
-                            const kpiCount = 7; // Całkowita liczba KPI
+                            const kpiCount = 8; // Całkowita liczba KPI
                             let realizedKpiCount = 0;
                             
                             if (shotAndPK8sPercentage >= target8sAcc) realizedKpiCount++;
                             if (teamXGPerShot >= kpiXGPerShot) realizedKpiCount++;
+                            if (team1TContact1Percentage >= kpi1TPercentage) realizedKpiCount++;
                             if (opponentPKEntriesCount <= kpiPKEntries) realizedKpiCount++;
                             if (reaction5sPercentage >= kpiReaction5s) realizedKpiCount++;
                             if (losesInPMAreaCount <= kpiLosesPMAreaCount) realizedKpiCount++;
@@ -4038,6 +4089,7 @@ export default function StatystykiZespoluPage() {
                             const isPKOpponentBad = opponentPKEntriesCount > kpiPKEntries;
                             const isLosesPMAreaBad = losesInPMAreaCount > kpiLosesPMAreaCount;
                             const isXGPerShotGood = teamXGPerShot >= kpiXGPerShot;
+                            const is1TPercentageGood = team1TContact1Percentage >= kpi1TPercentage;
                             const is8sAccGood = shotAndPK8sPercentage >= target8sAcc;
                             const isReaction5sGood = reaction5sPercentage >= kpiReaction5s;
                             const isRegainsOpponentHalfGood = teamRegainStats.totalRegainsOpponentHalf >= kpiRegainsOpponentHalf;
@@ -4045,6 +4097,7 @@ export default function StatystykiZespoluPage() {
 
                             const pkDelta = opponentPKEntriesCount - kpiPKEntries;
                             const xgPerShotDelta = kpiXGPerShot - teamXGPerShot;
+                            const oneTPercentageDelta = kpi1TPercentage - team1TContact1Percentage;
                             const losesPmDelta = losesInPMAreaCount - kpiLosesPMAreaCount;
                             const accDelta = target8sAcc - shotAndPK8sPercentage;
                             const reactionDelta = kpiReaction5s - reaction5sPercentage;
@@ -4090,6 +4143,26 @@ export default function StatystykiZespoluPage() {
                             </div>
                             <div className={styles.statTileSecondary}>
                               {teamShotsCount} strzałów • KPI &gt; {kpiXGPerShot.toFixed(2)}
+                            </div>
+                          </div>
+                          <div 
+                            className={`${styles.statTile} ${is1TPercentageGood ? styles.statTileGood : styles.statTileBad}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedKpiForVideo(selectedKpiForVideo === '1t-percentage' ? null : '1t-percentage');
+                              setExpandedKpiForPlayers(expandedKpiForPlayers === '1t-percentage' ? null : '1t-percentage');
+                            }}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <div className={styles.statTileLabel}>1T</div>
+                            <div className={styles.statTileValue}>
+                              {team1TContact1Percentage.toFixed(1)}%
+                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                                {oneTPercentageDelta > 0 ? `(-${oneTPercentageDelta.toFixed(1)}%)` : `(+${Math.abs(oneTPercentageDelta).toFixed(1)}%)`}
+                              </span>
+                            </div>
+                            <div className={styles.statTileSecondary}>
+                              {teamShots1TCount} strzały w 1T • KPI ≥ {kpi1TPercentage}%
                             </div>
                           </div>
                           <div 
@@ -4251,6 +4324,54 @@ export default function StatystykiZespoluPage() {
                       </div>
                     )}
                     
+                    {/* Legenda dla 1T */}
+                    {expandedKpiForPlayers === '1t-percentage' && (
+                      <div style={{ 
+                        marginTop: '12px',
+                        marginBottom: '4px',
+                        padding: '4px 8px', 
+                        backgroundColor: 'white', 
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        color: '#6b7280',
+                        display: 'flex',
+                        gap: '12px',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        width: '100%'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <div style={{ 
+                            width: '12px', 
+                            height: '12px', 
+                            backgroundColor: '#4caf50', 
+                            borderRadius: '3px',
+                            border: 'none'
+                          }}></div>
+                          <span>1T</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <div style={{ 
+                            width: '12px', 
+                            height: '12px', 
+                            backgroundColor: '#757575', 
+                            borderRadius: '3px',
+                            border: 'none'
+                          }}></div>
+                          <span>Nie 1T</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <div style={{ 
+                            width: '12px', 
+                            height: '12px', 
+                            backgroundColor: '#4caf50', 
+                            borderRadius: '3px',
+                            border: '1px solid #ef4444'
+                          }}></div>
+                          <span>Gol</span>
+                        </div>
+                      </div>
+                    )}
                     {/* Legenda dla PK przeciwnika */}
                     {expandedKpiForPlayers === 'pk-opponent' && (
                       <div style={{ 
@@ -4433,6 +4554,181 @@ export default function StatystykiZespoluPage() {
                                       position: 'relative'
                                     }}
                                     title={`${isGoal ? 'GOL • ' : ''}xG: ${(shot.xG || 0).toFixed(2)} • Minuta: ${shot.minute}'`}
+                                  >
+                                    {timeString}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                        </div>
+                        )}
+                      </div>
+                  );
+                } else if (expandedKpiForPlayers === '1t-percentage') {
+                  // Oblicz potrzebne zmienne
+                  const isSelectedTeamHome = selectedMatchInfo.isHome;
+                  const teamIdInMatch = selectedTeam;
+                  
+                  // Filtruj strzały naszego zespołu
+                  const teamShots = allShots.filter(shot => {
+                    const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
+                      ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                      : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                    return shotTeamId === teamIdInMatch;
+                  });
+                  
+                  // Filtruj strzały w strefie 1T
+                  const pitchOrientation = typeof window !== 'undefined' ? localStorage.getItem('pitchOrientation') : 'false';
+                  const isPitchFlipped = pitchOrientation === 'true';
+                  
+                  const isIn1TZone = (shot: any) => {
+                    const x = shot.x || 0;
+                    const y = shot.y || 0;
+                    const isInYRange = y >= 39 && y <= 61;
+                    if (isPitchFlipped) {
+                      return isInYRange && x >= 0 && x <= 10;
+                    } else {
+                      return isInYRange && x >= 90 && x <= 100;
+                    }
+                  };
+                  
+                  const teamShots1T = teamShots.filter(isIn1TZone);
+                  const teamShots1TCount = teamShots1T.length;
+                  const kpi1TPercentage = 85;
+                  
+                  // Oblicz statystyki per zawodnik dla strzałów w strefie 1T
+                  const playerShotsMap = new Map<string, { shots: any[]; totalXG: number; contact1Count: number }>();
+                  teamShots1T.forEach((shot: any) => {
+                    if (shot.playerId) {
+                      if (!playerShotsMap.has(shot.playerId)) {
+                        playerShotsMap.set(shot.playerId, { shots: [], totalXG: 0, contact1Count: 0 });
+                      }
+                      const playerData = playerShotsMap.get(shot.playerId)!;
+                      playerData.shots.push(shot);
+                      playerData.totalXG += shot.xG || 0;
+                      if (shot.isContact1 === true) {
+                        playerData.contact1Count++;
+                      }
+                    }
+                  });
+                  
+                  const playerStats = Array.from(playerShotsMap.entries())
+                    .map(([playerId, data]) => {
+                      const player = players.find(p => p.id === playerId);
+                      const contact1Percentage = data.shots.length > 0 ? (data.contact1Count / data.shots.length) * 100 : 0;
+                      return {
+                        playerId,
+                        playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                        count: data.shots.length,
+                        totalXG: data.totalXG,
+                        contact1Count: data.contact1Count,
+                        contact1Percentage,
+                        percentage: teamShots1TCount > 0 ? (data.shots.length / teamShots1TCount) * 100 : 0,
+                        shots: data.shots
+                      };
+                    })
+                    .sort((a, b) => b.count - a.count);
+                  
+                  return (
+                    <div style={{ 
+                        marginTop: '0', 
+                        padding: '8px', 
+                        backgroundColor: 'white', 
+                        borderRadius: '4px',
+                        border: '1px solid #e5e7eb',
+                        width: '100%'
+                      }}>
+                        <div 
+                          style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            marginBottom: '6px',
+                            cursor: 'pointer',
+                            padding: '4px 6px',
+                            borderRadius: '4px'
+                          }}
+                          onClick={() => setIsPlayersListCollapsed(!isPlayersListCollapsed)}
+                        >
+                          <div style={{ fontWeight: '500', fontSize: '13px', color: '#374151' }}>
+                            Zawodnicy - 1T ({playerStats.length})
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
+                        </div>
+                        {!isPlayersListCollapsed && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          {playerStats.map((stat) => (
+                          <div 
+                            key={stat.playerId} 
+                            onClick={() => {
+                              setSelectedPlayerForVideo(selectedPlayerForVideo === stat.playerId ? null : stat.playerId);
+                              setSelectedKpiForVideo('1t-percentage');
+                            }}
+                            onMouseEnter={(e) => {
+                              if (selectedPlayerForVideo !== stat.playerId) {
+                                e.currentTarget.style.backgroundColor = '#f9fafb';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (selectedPlayerForVideo !== stat.playerId) {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }
+                            }}
+                            style={{ 
+                              padding: '6px 8px',
+                              backgroundColor: selectedPlayerForVideo === stat.playerId ? '#eff6ff' : 'transparent',
+                              borderRadius: '4px',
+                              border: selectedPlayerForVideo === stat.playerId ? '1px solid #3b82f6' : 'none',
+                              borderBottom: selectedPlayerForVideo !== stat.playerId ? '1px solid #f3f4f6' : 'none',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <div style={{ flex: '0 0 140px', fontWeight: '500', color: '#374151' }}>
+                              {stat.playerName}
+                            </div>
+                            <div style={{ flex: '0 0 auto', color: '#6b7280', whiteSpace: 'nowrap', fontSize: '11px' }}>
+                              {stat.count} strzałów ({stat.percentage.toFixed(1)}%) • {stat.contact1Percentage.toFixed(1)}% 1T • xG: {stat.totalXG.toFixed(2)}
+                            </div>
+                            <div style={{ flex: '1', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', justifyContent: 'flex-start' }}>
+                              {stat.shots.map((shot: any, idx: number) => {
+                                const time = shot.videoTimestamp !== undefined && shot.videoTimestamp !== null
+                                  ? shot.videoTimestamp
+                                  : shot.videoTimestampRaw;
+                                if (!time) return null;
+                                const minutes = Math.floor(time / 60);
+                                const seconds = Math.floor(time % 60);
+                                  const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                                const isGoal = shot.shotType === 'goal' || shot.isGoal === true;
+                                const isContact1 = shot.isContact1 === true;
+                                
+                                return (
+                                  <button
+                                    key={shot.id || idx}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (youtubeVideoRef.current) {
+                                        await youtubeVideoRef.current.seekTo(time);
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '4px 8px',
+                                      backgroundColor: isContact1 ? '#4caf50' : '#757575',
+                                      color: 'white',
+                                      border: isGoal ? '1px solid #ef4444' : 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '11px',
+                                      fontWeight: '500',
+                                      position: 'relative'
+                                    }}
+                                    title={`${isGoal ? 'GOL • ' : ''}${isContact1 ? '1T • ' : ''}xG: ${(shot.xG || 0).toFixed(2)} • Minuta: ${shot.minute}'`}
                                   >
                                     {timeString}
                                   </button>
@@ -4957,7 +5253,7 @@ export default function StatystykiZespoluPage() {
                       >
                         <div style={{ fontWeight: '500', fontSize: '13px', color: '#374151' }}>
                           Zawodnicy - 8s CA ({playerStats.length})
-                        </div>
+                                    </div>
                         <div style={{ fontSize: '12px', color: '#6b7280', transform: isPlayersListCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
                       </div>
                       {!isPlayersListCollapsed && (
@@ -5102,6 +5398,55 @@ export default function StatystykiZespoluPage() {
                 </div>
               )}
               
+              {/* Legenda dla 1T - nad panelem wideo */}
+              {selectedKpiForVideo === '1t-percentage' && (
+                <div style={{ 
+                  marginTop: '12px',
+                  marginBottom: '4px',
+                  padding: '4px 8px', 
+                  backgroundColor: 'white', 
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  color: '#6b7280',
+                  display: 'flex',
+                  gap: '12px',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  width: '100%'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ 
+                      width: '12px', 
+                      height: '12px', 
+                      backgroundColor: '#4caf50', 
+                      borderRadius: '3px',
+                      border: 'none'
+                    }}></div>
+                    <span>1T</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ 
+                      width: '12px', 
+                      height: '12px', 
+                      backgroundColor: '#757575', 
+                      borderRadius: '3px',
+                      border: 'none'
+                    }}></div>
+                    <span>Nie 1T</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ 
+                      width: '12px', 
+                      height: '12px', 
+                      backgroundColor: '#4caf50', 
+                      borderRadius: '3px',
+                      border: '1px solid #ef4444'
+                    }}></div>
+                    <span>Gol</span>
+                  </div>
+                </div>
+              )}
+              
               {/* Legenda dla PK przeciwnika - nad panelem wideo */}
               {selectedKpiForVideo === 'pk-opponent' && (
                 <div style={{ 
@@ -5150,7 +5495,7 @@ export default function StatystykiZespoluPage() {
                   marginRight: 'calc(-50vw + 50%)',
                   position: 'relative',
                   backgroundColor: '#000',
-                  marginTop: selectedKpiForVideo === 'xg-per-shot' ? '0' : '24px'
+                  marginTop: (selectedKpiForVideo === 'xg-per-shot' || selectedKpiForVideo === '1t-percentage') ? '0' : '24px'
                 }}
               >
                 {/* Wyświetl czasy zagrań nad wideo dla wybranego KPI */}
@@ -5251,6 +5596,52 @@ export default function StatystykiZespoluPage() {
                           ? shot.videoTimestamp
                           : shot.videoTimestampRaw,
                         isSuccessful: (shot.xG || 0) >= kpiXGPerShot,
+                        isGoal: shot.shotType === 'goal' || shot.isGoal === true
+                      }))
+                      .sort((a, b) => a.time - b.time);
+                  } else if (selectedKpiForVideo === '1t-percentage') {
+                    // Wszystkie strzały naszego zespołu w strefie 1T
+                    const pitchOrientation = typeof window !== 'undefined' ? localStorage.getItem('pitchOrientation') : 'false';
+                    const isPitchFlipped = pitchOrientation === 'true';
+                    
+                    const isIn1TZone = (shot: any) => {
+                      const x = shot.x || 0;
+                      const y = shot.y || 0;
+                      const isInYRange = y >= 39 && y <= 61;
+                      if (isPitchFlipped) {
+                        return isInYRange && x >= 0 && x <= 10;
+                      } else {
+                        return isInYRange && x >= 90 && x <= 100;
+                      }
+                    };
+                    
+                    let teamShots1TFiltered = (allShots || []).filter((shot: any) => {
+                      const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
+                        ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
+                        : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                      return shotTeamId === teamIdInMatch &&
+                        isIn1TZone(shot) &&
+                        shot && 
+                        (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null ||
+                         shot.videoTimestamp !== undefined && shot.videoTimestamp !== null);
+                    });
+                    
+                    // Jeśli wybrano zawodnika, filtruj tylko jego strzały
+                    if (selectedPlayerForVideo) {
+                      teamShots1TFiltered = teamShots1TFiltered.filter((shot: any) => 
+                        shot.playerId === selectedPlayerForVideo
+                      );
+                    }
+                    
+                    const kpi1TPercentage = 85;
+                    // Skuteczne to te z isContact1 === true (1T)
+                    entriesWithTime = teamShots1TFiltered
+                      .map((shot: any) => ({
+                        item: shot,
+                        time: shot.videoTimestamp !== undefined && shot.videoTimestamp !== null
+                          ? shot.videoTimestamp
+                          : shot.videoTimestampRaw,
+                        isSuccessful: shot.isContact1 === true,
                         isGoal: shot.shotType === 'goal' || shot.isGoal === true
                       }))
                       .sort((a, b) => a.time - b.time);
@@ -5537,6 +5928,7 @@ export default function StatystykiZespoluPage() {
                         const isGoal = item.isGoal === true;
                         const isShot = item.isShot === true;
                         const isXGPerShot = selectedKpiForVideo === 'xg-per-shot';
+                        const is1TPercentage = selectedKpiForVideo === '1t-percentage';
                         const isPKOpponent = selectedKpiForVideo === 'pk-opponent';
 
                         // Określ kolor tła i ramki
@@ -5551,8 +5943,8 @@ export default function StatystykiZespoluPage() {
                           if (isGoal) {
                             borderStyle = '1px solid #4caf50';
                           }
-                        } else if (isXGPerShot && isGoal) {
-                          // Dla xG/strzał: zielony border dla goli
+                        } else if ((isXGPerShot || is1TPercentage) && isGoal) {
+                          // Dla xG/strzał i 1T: zielony border dla goli
                           borderStyle = '1px solid #ef4444';
                         }
 
@@ -6986,6 +7378,101 @@ export default function StatystykiZespoluPage() {
                       const teamAvgLinePlayers = teamShotsCount > 0 ? (teamLinePlayersTotal / teamShotsCount) : 0;
                       const opponentAvgLinePlayers = opponentShotsCount > 0 ? (opponentLinePlayersTotal / opponentShotsCount) : 0;
                       
+                      // Strefa 1T - prostokąt w linii ataku (reaguje na obrót boiska)
+                      // Prostokąt: szerokość 10%, wysokość 22%, wyśrodkowany pionowo (39-61%)
+                      // Sprawdź orientację boiska z localStorage
+                      const pitchOrientation = typeof window !== 'undefined' ? localStorage.getItem('pitchOrientation') : 'false';
+                      const isPitchFlipped = pitchOrientation === 'true';
+                      
+                      const isIn1TZone = (shot: any) => {
+                        const x = shot.x || 0;
+                        const y = shot.y || 0;
+                        // Strefa 1T: y: 39-61% (50% ± 11%)
+                        // x: 90-100% gdy nie odwrócone, 0-10% gdy odwrócone
+                        const isInYRange = y >= 39 && y <= 61;
+                        if (isPitchFlipped) {
+                          // Gdy odwrócone: atak po lewej (x: 0-10%)
+                          return isInYRange && x >= 0 && x <= 10;
+                        } else {
+                          // Gdy nie odwrócone: atak po prawej (x: 90-100%)
+                          return isInYRange && x >= 90 && x <= 100;
+                        }
+                      };
+                      
+                      // Funkcja sprawdzająca strefę 1T dla przeciwnika (po przeciwległej stronie)
+                      const isInOpponent1TZone = (shot: any) => {
+                        const x = shot.x || 0;
+                        const y = shot.y || 0;
+                        // Strefa 1T przeciwnika: y: 39-61% (50% ± 11%)
+                        // x: 0-10% gdy nie odwrócone (przeciwnik atakuje z lewej), 90-100% gdy odwrócone
+                        const isInYRange = y >= 39 && y <= 61;
+                        if (isPitchFlipped) {
+                          // Gdy odwrócone: przeciwnik atakuje z prawej (x: 90-100%)
+                          return isInYRange && x >= 90 && x <= 100;
+                        } else {
+                          // Gdy nie odwrócone: przeciwnik atakuje z lewej (x: 0-10%)
+                          return isInYRange && x >= 0 && x <= 10;
+                        }
+                      };
+                      
+                      // Statystyki strzałów w strefie 1T
+                      const teamShots1T = teamShots.filter(isIn1TZone);
+                      const opponentShots1T = opponentShots.filter(isInOpponent1TZone);
+                      const teamShots1TCount = teamShots1T.length;
+                      const opponentShots1TCount = opponentShots1T.length;
+                      
+                      // % strzałów z 1 kontaktu w strefie 1T
+                      const teamShots1TContact1 = teamShots1T.filter(shot => shot.isContact1 === true).length;
+                      const opponentShots1TContact1 = opponentShots1T.filter(shot => shot.isContact1 === true).length;
+                      const team1TContact1Percentage = teamShots1TCount > 0 ? (teamShots1TContact1 / teamShots1TCount) * 100 : 0;
+                      const opponent1TContact1Percentage = opponentShots1TCount > 0 ? (opponentShots1TContact1 / opponentShots1TCount) * 100 : 0;
+                      
+                      // xG w strefie 1T
+                      const teamXG1T = teamShots1T.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                      const opponentXG1T = opponentShots1T.reduce((sum, shot) => sum + (shot.xG || 0), 0);
+                      
+                      // Sytuacje z pkEntries (isPossible1T) w strefie 1T
+                      // Filtruj pkEntries według wybranej połowy
+                      let filteredPKEntriesForStats = allPKEntries.filter((entry: any) => {
+                        if (xgHalf === 'first') {
+                          return entry.minute <= 45;
+                        } else if (xgHalf === 'second') {
+                          return entry.minute > 45;
+                        }
+                        return true; // all - wszystkie wejścia
+                      });
+                      
+                      // Funkcja sprawdzająca, czy pkEntry kończy się w strefie 1T
+                      const isPKEntryIn1TZone = (entry: any) => {
+                        const x = entry.endX || 0;
+                        const y = entry.endY || 0;
+                        const isInYRange = y >= 39 && y <= 61;
+                        if (isPitchFlipped) {
+                          return isInYRange && x >= 0 && x <= 10;
+                        } else {
+                          return isInYRange && x >= 90 && x <= 100;
+                        }
+                      };
+                      
+                      // Filtruj pkEntries z isPossible1T w strefie 1T
+                      // teamContext: 'attack' = nasze wejścia, 'defense' = wejścia przeciwnika
+                      // Wszystkie pkEntries mają teamId === selectedTeam (matchInfo.team)
+                      // Filtruj pkEntries z isPossible1T w strefie 1T - tylko dla naszego zespołu
+                      // Dla przeciwnika nie sprawdzamy wejść w PK, bo tam nie dodajemy tych informacji
+                      const teamPKEntries1T = filteredPKEntriesForStats.filter((entry: any) => {
+                        if (!entry.isPossible1T) return false;
+                        if (!isPKEntryIn1TZone(entry)) return false;
+                        // Nasze wejścia: teamContext === 'attack'
+                        const teamContext = entry.teamContext ?? 'attack';
+                        return teamContext === 'attack';
+                      });
+                      
+                      const teamPKEntries1TCount = teamPKEntries1T.length;
+                      
+                      // Łączna liczba sytuacji (strzały + sytuacje z pkEntries) - tylko dla naszego zespołu
+                      // Dla przeciwnika tylko strzały
+                      const teamTotal1TSituations = teamShots1TCount + teamPKEntries1TCount;
+                      
                       // KPI dla xG/strzał: 0.15
                       const XG_PER_SHOT_KPI = 0.15;
                       
@@ -7030,6 +7517,14 @@ export default function StatystykiZespoluPage() {
                                   <span className={styles.valueSecondary}> ({teamShotsOnTarget.length}/{teamShotsCount})</span>
                                   <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGOT.toFixed(2)} ({opponentShotsOnTarget.length}/{opponentShotsCount})</span>
                                 </span>
+                                </div>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>STREFA 1T:</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}>{teamTotal1TSituations}</span>
+                                  <span className={styles.valueSecondary}> ({teamShots1TCount} strzałów{teamPKEntries1TCount > 0 ? `, ${teamPKEntries1TCount} bez strzału` : ''}) • {team1TContact1Percentage.toFixed(1)}% 1T • xG: {teamXG1T.toFixed(2)}</span>
+                                  <span className={styles.valueSecondary}> • Przeciwnik: {opponentShots1TCount} ({opponent1TContact1Percentage.toFixed(1)}%) • xG: {opponentXG1T.toFixed(2)}</span>
+                                </span>
                               </div>
                               <div className={styles.detailsRow}>
                                 <span className={styles.detailsLabel}>XG/MIN POSIADANIA:</span>
@@ -7037,14 +7532,14 @@ export default function StatystykiZespoluPage() {
                                   <span className={styles.valueMain}>{teamXGPerMinPossession.toFixed(3)}</span>
                                   <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGPerMinPossession.toFixed(3)}</span>
                                 </span>
-                              </div>
+                                </div>
                               <div className={styles.detailsRow}>
                                 <span className={styles.detailsLabel}>RÓŻNICA XG-BRAMKI:</span>
                                 <span className={styles.detailsValue}>
                                   <span 
                                     className={styles.valueMain}
                                   style={{
-                                    color: teamXGDiff > 0 ? '#10b981' : teamXGDiff < 0 ? '#ef4444' : '#6b7280'
+                                    color: teamXGDiff > 0 ? '#ef4444' : teamXGDiff < 0 ? '#10b981' : '#6b7280'
                                   }}
                                 >
                                   {teamXGDiff > 0 ? '+' : ''}{teamXGDiff.toFixed(2)}
