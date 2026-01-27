@@ -3886,9 +3886,9 @@ export default function StatystykiZespoluPage() {
                       value: scoreHigherIsBetter(teamXGPerShot, kpiXGPerShot),
                       kpi: 100,
                       actualValue: teamXGPerShot,
-                      actualLabel: `${teamXGPerShot.toFixed(3)} (${teamShotsCount} strzałów)`,
+                      actualLabel: `${teamXGPerShot.toFixed(2)} (${teamShotsCount} strzałów)`,
                       kpiLabel: `KPI > ${kpiXGPerShot.toFixed(2)}`,
-                      deltaLabel: formatDelta(xgPerShotDelta, 'higher', 3),
+                      deltaLabel: formatDelta(xgPerShotDelta, 'higher', 2),
                     },
                     {
                       metric: '1T',
@@ -3970,15 +3970,21 @@ export default function StatystykiZespoluPage() {
                                       data.metric === 'Przechwyty PP' ? kpiRegainsOpponentHalf :
                                       data.metric === '8s CA' ? kpiRegainsPPToPKShot8s :
                                       target8sAcc;
-                      displayValue = data.metric.includes('%') || data.metric === '1T' || data.metric === '5s' || data.metric === '8s ACC' || data.metric === '8s CA' 
-                        ? `${kpiValue.toFixed(2)}%` 
-                        : kpiValue.toFixed(2);
+                      // Formatuj do maksymalnie 2 miejsc po przecinku
+                      const isPercentage = data.metric === '1T' || data.metric === '5s' || data.metric === '8s ACC' || data.metric === '8s CA';
+                      const formatted = parseFloat(kpiValue.toFixed(2));
+                      displayValue = isPercentage 
+                        ? `${formatted}%` 
+                        : formatted.toString();
                     } else {
                       // Dla rzeczywistej wartości pokazuj actualValue zamiast znormalizowanej
                       const actualVal = data.actualValue;
-                      displayValue = data.metric.includes('%') || data.metric === '1T' || data.metric === '5s' || data.metric === '8s ACC' || data.metric === '8s CA'
-                        ? `${actualVal.toFixed(2)}%`
-                        : actualVal.toFixed(2);
+                      // Formatuj do maksymalnie 2 miejsc po przecinku
+                      const isPercentage = data.metric === '1T' || data.metric === '5s' || data.metric === '8s ACC' || data.metric === '8s CA';
+                      const formatted = parseFloat(actualVal.toFixed(2));
+                      displayValue = isPercentage
+                        ? `${formatted}%`
+                        : formatted.toString();
                     }
                     
                     const label = seriesKey === 'kpi' ? 'KPI (cel)' : 'Wartość rzeczywista';
