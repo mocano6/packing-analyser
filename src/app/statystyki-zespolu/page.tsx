@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, Fragment } from "react";
 import { LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
+import { ResponsiveRadar } from '@nivo/radar';
 import { Action, TeamInfo, Shot } from "@/types";
 import { getOppositeXTValueForZone, getZoneName, getXTValueForZone, zoneNameToIndex, zoneNameToString } from "@/constants/xtValues";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
@@ -3851,202 +3852,210 @@ export default function StatystykiZespoluPage() {
                     }
                   };
 
-                  const scoreOpponentXG = toScoreLowerIsBetter(normalizedOpponentXG);
-                  const scoreXGPerShot = toScoreXGPerShot(teamXGPerShot);
-                  const score1TPercentage = toScore1TPercentage(team1TContact1Percentage);
-                  const scoreOpponentPKEntries = toScorePKOpponent(opponentPKEntriesCount);
-                  const scoreLosesPMArea = toScoreLosesPMArea(losesInPMAreaCount);
-                  const scoreReaction5s = toScoreReaction5s(reaction5sPercentage);
-                  const score8sAcc = toScore8sAcc(shotAndPK8sPercentage);
-                  const scoreRegainsOpponentHalf = toScoreRegainsOpponentHalf(teamRegainStats.totalRegainsOpponentHalf);
-                  const scoreRegainsPPToPKShot8s = toScoreRegainsPPToPKShot8s(regainsPPToPKShot8sPercentage);
-                  
+                  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+                  const scoreHigherIsBetter = (actual: number, target: number) => {
+                    if (target <= 0) return 0;
+                    return clamp((actual / target) * 100, 0, 200);
+                  };
+                  const scoreLowerIsBetter = (actual: number, target: number) => {
+                    if (target <= 0) return 0;
+                    if (actual <= 0) return 200;
+                    return clamp((target / actual) * 100, 0, 200);
+                  };
+                  const formatDelta = (delta: number, mode: 'higher' | 'lower', precision: number, unit?: string) => {
+                    const value = Math.abs(delta).toFixed(precision);
+                    const suffix = unit ? ` ${unit}` : '';
+                    if (mode === 'higher') {
+                      return delta >= 0 ? `zapasu: +${value}${suffix}` : `brakuje: ${value}${suffix}`;
+                    }
+                    return delta <= 0 ? `zapasu: ${value}${suffix}` : `nadmiar: +${value}${suffix}`;
+                  };
+
+                  const xgPerShotDelta = teamXGPerShot - kpiXGPerShot;
+                  const oneTDelta = team1TContact1Percentage - kpi1TPercentage;
+                  const pkDelta = opponentPKEntriesCount - kpiPKEntries;
+                  const reactionDelta = reaction5sPercentage - kpiReaction5s;
+                  const losesPmDelta = losesInPMAreaCount - kpiLosesPMAreaCount;
+                  const accDelta = shotAndPK8sPercentage - target8sAcc;
+                  const regainsOpponentHalfDelta = teamRegainStats.totalRegainsOpponentHalf - kpiRegainsOpponentHalf;
+                  const regainsPPToPKShot8sDelta = regainsPPToPKShot8sPercentage - kpiRegainsPPToPKShot8s;
+
                   const radarData = [
                     {
-                      subject: 'xG/strzał',
-                      value: scoreXGPerShot,
-                      kpi: kpiRadarValue,
-                      fullMark: 100,
+                      metric: 'xG/strzał',
+                      value: scoreHigherIsBetter(teamXGPerShot, kpiXGPerShot),
+                      kpi: 100,
+                      actualValue: teamXGPerShot,
+                      actualLabel: `${teamXGPerShot.toFixed(3)} (${teamShotsCount} strzałów)`,
+                      kpiLabel: `KPI > ${kpiXGPerShot.toFixed(2)}`,
+                      deltaLabel: formatDelta(xgPerShotDelta, 'higher', 3),
                     },
                     {
-                      subject: '1T',
-                      value: score1TPercentage,
-                      kpi: kpiRadarValue,
-                      fullMark: 100,
+                      metric: '1T',
+                      value: scoreHigherIsBetter(team1TContact1Percentage, kpi1TPercentage),
+                      kpi: 100,
+                      actualValue: team1TContact1Percentage,
+                      actualLabel: `${team1TContact1Percentage.toFixed(1)}%`,
+                      kpiLabel: `KPI ≥ ${kpi1TPercentage}%`,
+                      deltaLabel: formatDelta(oneTDelta, 'higher', 1, 'pp'),
                     },
                     {
-                      subject: 'PK przeciwnik',
-                      value: scoreOpponentPKEntries,
-                      kpi: kpiRadarValue,
-                      fullMark: 100,
+                      metric: '5s',
+                      value: scoreHigherIsBetter(reaction5sPercentage, kpiReaction5s),
+                      kpi: 100,
+                      actualValue: reaction5sPercentage,
+                      actualLabel: `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesWith5sFlags.length})`,
+                      kpiLabel: `KPI > ${kpiReaction5s}%`,
+                      deltaLabel: formatDelta(reactionDelta, 'higher', 1, 'pp'),
                     },
                     {
-                      subject: '5s',
-                      value: scoreReaction5s,
-                      kpi: kpiRadarValue,
-                      fullMark: 100,
+                      metric: 'PK przeciwnik',
+                      value: scoreLowerIsBetter(opponentPKEntriesCount, kpiPKEntries),
+                      kpi: 100,
+                      actualValue: opponentPKEntriesCount,
+                      actualLabel: `${opponentPKEntriesCount}`,
+                      kpiLabel: `KPI < ${kpiPKEntries}`,
+                      deltaLabel: formatDelta(pkDelta, 'lower', 0),
                     },
                     {
-                      subject: 'PM Area straty',
-                      value: scoreLosesPMArea,
-                      kpi: kpiRadarValue,
-                      fullMark: 100,
+                      metric: 'PM Area straty',
+                      value: scoreLowerIsBetter(losesInPMAreaCount, kpiLosesPMAreaCount),
+                      kpi: 100,
+                      actualValue: losesInPMAreaCount,
+                      actualLabel: `${losesInPMAreaCount} (${losesInPMAreaPercentage.toFixed(1)}% z ${allLoses.length})`,
+                      kpiLabel: `KPI ≤ ${kpiLosesPMAreaCount}`,
+                      deltaLabel: formatDelta(losesPmDelta, 'lower', 0),
                     },
                     {
-                      subject: '8s ACC',
-                      value: score8sAcc,
-                      kpi: kpiRadarValue,
-                      fullMark: 100,
+                      metric: 'Przechwyty PP',
+                      value: scoreHigherIsBetter(teamRegainStats.totalRegainsOpponentHalf, kpiRegainsOpponentHalf),
+                      kpi: 100,
+                      actualValue: teamRegainStats.totalRegainsOpponentHalf,
+                      actualLabel: `${teamRegainStats.totalRegainsOpponentHalf}`,
+                      kpiLabel: `KPI ≥ ${kpiRegainsOpponentHalf}`,
+                      deltaLabel: formatDelta(regainsOpponentHalfDelta, 'higher', 0),
                     },
                     {
-                      subject: 'Przechwyty PP',
-                      value: scoreRegainsOpponentHalf,
-                      kpi: kpiRadarValue,
-                      fullMark: 100,
+                      metric: '8s CA',
+                      value: scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s),
+                      kpi: 100,
+                      actualValue: regainsPPToPKShot8sPercentage,
+                      actualLabel: `${regainsPPToPKShot8sPercentage.toFixed(1)}% (${regainsPPWithPKOrShot8s}/${regainsOnOpponentHalfWithTimestamp.length})`,
+                      kpiLabel: `KPI ≥ ${kpiRegainsPPToPKShot8s}%`,
+                      deltaLabel: formatDelta(regainsPPToPKShot8sDelta, 'higher', 1, 'pp'),
                     },
                     {
-                      subject: '8s CA',
-                      value: scoreRegainsPPToPKShot8s,
-                      kpi: kpiRadarValue,
-                      fullMark: 100,
+                      metric: '8s ACC',
+                      value: scoreHigherIsBetter(shotAndPK8sPercentage, target8sAcc),
+                      kpi: 100,
+                      actualValue: shotAndPK8sPercentage,
+                      actualLabel: `${shotAndPK8sPercentage.toFixed(1)}% (${shotAndPK8sCount}/${total8sAcc})`,
+                      kpiLabel: `KPI ≥ ${target8sAcc}%`,
+                      deltaLabel: formatDelta(accDelta, 'higher', 1, 'pp'),
                     },
                   ];
+
+                  const radarTooltip = (props: any) => {
+                    const { data, key: seriesKey, color } = props || {};
+                    if (!data) return null;
+                    
+                    let displayValue: string;
+                    if (seriesKey === 'kpi') {
+                      // Dla KPI pokazuj wartość docelową
+                      const kpiValue = data.metric === 'xG/strzał' ? kpiXGPerShot :
+                                      data.metric === '1T' ? kpi1TPercentage :
+                                      data.metric === '5s' ? kpiReaction5s :
+                                      data.metric === 'PK przeciwnik' ? kpiPKEntries :
+                                      data.metric === 'PM Area straty' ? kpiLosesPMAreaCount :
+                                      data.metric === 'Przechwyty PP' ? kpiRegainsOpponentHalf :
+                                      data.metric === '8s CA' ? kpiRegainsPPToPKShot8s :
+                                      target8sAcc;
+                      displayValue = data.metric.includes('%') || data.metric === '1T' || data.metric === '5s' || data.metric === '8s ACC' || data.metric === '8s CA' 
+                        ? `${kpiValue.toFixed(2)}%` 
+                        : kpiValue.toFixed(2);
+                    } else {
+                      // Dla rzeczywistej wartości pokazuj actualValue zamiast znormalizowanej
+                      const actualVal = data.actualValue;
+                      displayValue = data.metric.includes('%') || data.metric === '1T' || data.metric === '5s' || data.metric === '8s ACC' || data.metric === '8s CA'
+                        ? `${actualVal.toFixed(2)}%`
+                        : actualVal.toFixed(2);
+                    }
+                    
+                    const label = seriesKey === 'kpi' ? 'KPI (cel)' : 'Wartość rzeczywista';
+                    return (
+                      <div style={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        backdropFilter: 'blur(20px) saturate(180%)',
+                        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                        border: '1px solid rgba(0, 0, 0, 0.1)',
+                        borderRadius: '12px',
+                        padding: '12px 16px',
+                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08)',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif'
+                      }}>
+                        <p style={{ margin: 0, fontWeight: 600, marginBottom: '6px', fontSize: '12px', color: 'rgba(0, 0, 0, 0.8)', letterSpacing: '0.3px' }}>{data.metric}</p>
+                        <p style={{ margin: 0, color: color || '#6366f1', marginBottom: '4px', fontSize: '13px', fontWeight: 600 }}>{label}: {displayValue}</p>
+                        <p style={{ margin: 0, color: '#6366f1', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>{data.actualLabel}</p>
+                        <p style={{ margin: 0, color: '#34C759', fontSize: '11px', fontWeight: 500 }}>{data.kpiLabel} • {data.deltaLabel}</p>
+                      </div>
+                    );
+                  };
                   
                   return (
                     <div className={styles.chartContainerInPanel}>
-                      <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-end' }}>
                         <div style={{ flex: '1 1 50%', minWidth: 0 }}>
-                          <ResponsiveContainer width="100%" height={420}>
-                            <RadarChart data={radarData} margin={{ top: 30, right: 30, bottom: 30, left: 30 }}>
-                              <defs>
-                                <linearGradient id="kpiGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                  <stop offset="0%" stopColor="#34C759" stopOpacity={0.1} />
-                                  <stop offset="100%" stopColor="#30D158" stopOpacity={0.05} />
-                                </linearGradient>
-                                <linearGradient id="valueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                  <stop offset="0%" stopColor="#6366f1" stopOpacity={0.18} />
-                                  <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.12} />
-                                </linearGradient>
-                              </defs>
-                              <PolarGrid 
-                                stroke="rgba(0, 0, 0, 0.08)" 
-                                strokeWidth={1}
-                                strokeDasharray="4 6"
-                              />
-                              <PolarAngleAxis 
-                                dataKey="subject" 
-                                tick={{ 
-                                  fontSize: 12, 
-                                  fill: 'rgba(0, 0, 0, 0.65)',
-                                  fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif',
-                                  fontWeight: 500,
-                                  letterSpacing: '-0.1px'
-                                }}
-                                tickLine={false}
-                              />
-                              <PolarRadiusAxis 
-                                angle={90} 
-                                domain={[0, 100]} 
-                                tick={{ 
-                                  fontSize: 10, 
-                                  fill: 'rgba(0, 0, 0, 0.45)',
-                                  fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif',
-                                  fontWeight: 400
-                                }}
-                                axisLine={false}
-                                tickCount={5}
-                                tickFormatter={(value) => value === 0 ? '' : value.toString()}
-                              />
-                          <Tooltip
-                            content={({ active, payload }) => {
-                              if (!active || !payload || payload.length === 0) return null;
-                              const data = payload[0].payload;
-                              let displayValue = '';
-                                  let kpiValue = '';
-                              
-                              // Wyświetlaj rzeczywiste wartości zamiast znormalizowanych
-                                  if (data.subject === 'xG/strzał') {
-                                    displayValue = `${teamXGPerShot.toFixed(3)} (${teamShotsCount} strzałów)`;
-                                    const missing = kpiXGPerShot - teamXGPerShot;
-                                    kpiValue = `KPI > ${kpiXGPerShot.toFixed(2)} • ${missing > 0 ? `brakuje: +${missing.toFixed(3)}` : `zapasu: ${Math.abs(missing).toFixed(3)}`}`;
-                              } else if (data.subject === 'PK przeciwnik') {
-                                displayValue = `${opponentPKEntriesCount}`;
-                                    const over = opponentPKEntriesCount - kpiPKEntries;
-                                    kpiValue = `KPI < ${kpiPKEntries} • ${over > 0 ? `nadmiar: +${over}` : `zapasu: ${Math.abs(over)}`}`;
-                              } else if (data.subject === '5s') {
-                                    displayValue = `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesWith5sFlags.length})`;
-                                    const missing = kpiReaction5s - reaction5sPercentage;
-                                    kpiValue = `KPI > ${kpiReaction5s}% • ${missing > 0 ? `brakuje: +${missing.toFixed(1)} pp` : `zapasu: ${Math.abs(missing).toFixed(1)} pp`}`;
-                                  } else if (data.subject === 'PM Area straty') {
-                                    displayValue = `${losesInPMAreaCount} (${losesInPMAreaPercentage.toFixed(1)}% z ${allLoses.length})`;
-                                    const over = losesInPMAreaCount - kpiLosesPMAreaCount;
-                                    kpiValue = `KPI ≤ ${kpiLosesPMAreaCount} • ${over >= 0 ? `nadmiar: +${over}` : `zapasu: ${Math.abs(over)}`}`;
-                              } else if (data.subject === '8s ACC') {
-                                    displayValue = `${shotAndPK8sPercentage.toFixed(1)}% (${shotAndPK8sCount}/${total8sAcc})`;
-                                    const missing = target8sAcc - shotAndPK8sPercentage;
-                                    kpiValue = `KPI ≥ ${target8sAcc}% • ${missing > 0 ? `brakuje: +${missing.toFixed(1)} pp` : `zapasu: ${Math.abs(missing).toFixed(1)} pp`}`;
-                                  } else if (data.subject === 'Przechwyty PP') {
-                                    displayValue = `${teamRegainStats.totalRegainsOpponentHalf}`;
-                                    const missing = kpiRegainsOpponentHalf - teamRegainStats.totalRegainsOpponentHalf;
-                                    kpiValue = `KPI ≥ ${kpiRegainsOpponentHalf} • ${missing > 0 ? `brakuje: +${missing}` : `zapasu: ${Math.abs(missing)}`}`;
-                                  } else if (data.subject === '8s CA') {
-                                    displayValue = `${regainsPPToPKShot8sPercentage.toFixed(1)}% (${regainsPPWithPKOrShot8s}/${regainsOnOpponentHalfWithTimestamp.length})`;
-                                    const missing = kpiRegainsPPToPKShot8s - regainsPPToPKShot8sPercentage;
-                                    kpiValue = `KPI ≥ ${kpiRegainsPPToPKShot8s}% • ${missing > 0 ? `brakuje: +${missing.toFixed(1)} pp` : `zapasu: ${Math.abs(missing).toFixed(1)} pp`}`;
-                              }
-                              
-                              return (
-                                <div style={{
-                                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                                      backdropFilter: 'blur(20px) saturate(180%)',
-                                      WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-                                      border: '1px solid rgba(0, 0, 0, 0.1)',
-                                      borderRadius: '12px',
-                                      padding: '12px 16px',
-                                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08)',
-                                      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif'
-                                    }}>
-                                      <p style={{ margin: 0, fontWeight: 600, marginBottom: '6px', fontSize: '12px', color: 'rgba(0, 0, 0, 0.8)', letterSpacing: '0.3px' }}>{data.subject}</p>
-                                      <p style={{ margin: 0, color: '#6366f1', marginBottom: '4px', fontSize: '13px', fontWeight: 600 }}>{displayValue}</p>
-                                      <p style={{ margin: 0, color: '#34C759', fontSize: '11px', fontWeight: 500 }}>{kpiValue}</p>
-                                </div>
-                              );
-                            }}
-                          />
-                              <Radar
-                                name="KPI (cel)"
-                                dataKey="kpi"
-                                stroke="#34C759"
-                                fill="url(#kpiGradient)"
-                                strokeWidth={2.5}
-                                strokeDasharray="6 4"
-                                dot={false}
-                          />
-                          <Radar
-                            name="Wartości"
-                            dataKey="value"
-                                stroke="#6366f1"
-                                fill="url(#valueGradient)"
-                                strokeWidth={3}
-                                dot={{ 
-                                  r: 4, 
-                                  strokeWidth: 2, 
-                                  stroke: '#6366f1', 
-                                  fill: '#ffffff'
-                                }}
-                              />
-                              <Legend 
-                                wrapperStyle={{ 
-                                  paddingTop: '20px', 
-                                  fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif',
-                                  fontSize: '12px',
-                                  fontWeight: 500
-                                }}
-                                iconType="circle"
-                                iconSize={8}
-                          />
-                        </RadarChart>
-                      </ResponsiveContainer>
+                          <div style={{ height: 420 }}>
+                            <ResponsiveRadar
+                              data={radarData}
+                              keys={['kpi', 'value']}
+                              indexBy="metric"
+                              maxValue={200}
+                              margin={{ top: 40, right: 40, bottom: 40, left: 40 }}
+                              curve="linearClosed"
+                              borderWidth={2}
+                              borderColor={{ from: 'color' }}
+                              gridLevels={6}
+                              gridShape="circular"
+                              gridLabelOffset={12}
+                              enableDots={true}
+                              dotSize={6}
+                              dotBorderWidth={2}
+                              dotBorderColor={{ from: 'color' }}
+                              colors={['#34C759', '#6366f1']}
+                              fillOpacity={0.15}
+                              blendMode="multiply"
+                              motionConfig="wobbly"
+                              tooltip={radarTooltip}
+                              legends={[
+                                {
+                                  anchor: 'top-left',
+                                  direction: 'column',
+                                  translateX: -30,
+                                  translateY: -10,
+                                  itemWidth: 80,
+                                  itemHeight: 16,
+                                  itemTextColor: 'rgba(0, 0, 0, 0.65)',
+                                  symbolSize: 10,
+                                  symbolShape: 'circle',
+                                },
+                              ]}
+                              theme={{
+                                grid: { line: { stroke: 'rgba(0, 0, 0, 0.08)', strokeWidth: 1 } },
+                                dots: { text: { fontSize: 11 } },
+                                axis: {
+                                  ticks: {
+                                    text: {
+                                      fontSize: 12,
+                                      fill: 'rgba(0, 0, 0, 0.65)',
+                                      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif',
+                                      fontWeight: 500,
+                                    },
+                                  },
+                                },
+                              }}
+                            />
+                          </div>
                       
                           {/* Podsumowanie KPI pod spidermapą */}
                           {(() => {
@@ -4080,11 +4089,9 @@ export default function StatystykiZespoluPage() {
                         </div>
                         
                         {/* Sekcja KPI 8s ACC po prawej stronie */}
-                        <div style={{ flex: '1 1 50%', minWidth: 0 }}>
-                          <div className={styles.detailsSection} style={{ marginTop: '0' }}>
-                        
+                        <div style={{ flex: '1 1 50%', minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
                         {/* Kafelki statystyk */}
-                        <div className={styles.statsTiles}>
+                        <div className={styles.statsTiles} style={{ marginTop: 'auto' }}>
                           {(() => {
                             const isPKOpponentBad = opponentPKEntriesCount > kpiPKEntries;
                             const isLosesPMAreaBad = losesInPMAreaCount > kpiLosesPMAreaCount;
@@ -4271,7 +4278,6 @@ export default function StatystykiZespoluPage() {
                             );
                           })()}
                           </div>
-                        </div>
                       </div>
                     </div>
                     
