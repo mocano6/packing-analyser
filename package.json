@@ -18,6 +18,7 @@
     "reset-password": "node src/scripts/resetPassword.js"
   },
   "dependencies": {
+    "@nivo/radar": "^0.99.0",
     "@prisma/client": "^5.10.0",
     "@types/react-youtube": "^7.6.2",
     "@types/uuid": "^9.0.8",
