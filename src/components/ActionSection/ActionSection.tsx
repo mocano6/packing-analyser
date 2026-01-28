@@ -1,13 +1,16 @@
 // components/ActionSection/ActionSection.tsx
 "use client";
 
-import React, { memo, useEffect } from "react";
+import React, { memo, useEffect, useState } from "react";
 import FootballPitch from "../FootballPitch/FootballPitch";
 import ActionModal from "../ActionModal/ActionModal";
 import RegainActionModal from "../RegainActionModal/RegainActionModal";
 import LosesActionModal from "../LosesActionModal/LosesActionModal";
+import PlayerMatchStatsModal from "../PlayerMatchStatsModal/PlayerMatchStatsModal";
 import styles from "./ActionSection.module.css";
-import { Player, TeamInfo, Action } from "@/types";
+import { Player, TeamInfo, Action, PlayerMatchStats } from "@/types";
+import { getDB } from "@/lib/firebase";
+import { doc, updateDoc, getDoc } from "firebase/firestore";
 
 export interface ActionSectionProps {
   selectedZone: string | number | null;
@@ -120,6 +123,7 @@ export interface ActionSectionProps {
     name: string;
     logo?: string;
   }>;
+  isAdmin?: boolean;
 }
 
 const ActionSection = memo(function ActionSection({
@@ -219,8 +223,45 @@ const ActionSection = memo(function ActionSection({
   actions = [],
   onEditingActionChange,
   getActionCategory,
-  allTeams = []
+  allTeams = [],
+  isAdmin = false
 }: ActionSectionProps) {
+  const [isPlayerMatchStatsModalOpen, setIsPlayerMatchStatsModalOpen] = useState(false);
+
+  const handleSavePlayerMatchStats = async (stats: PlayerMatchStats) => {
+    if (!matchInfo?.matchId) {
+      throw new Error("Brak ID meczu.");
+    }
+
+    try {
+      const db = getDB();
+      const matchRef = doc(db, "matches", matchInfo.matchId);
+      const existingStats = matchInfo.matchData?.playerStats || [];
+      const updatedStats = [
+        ...existingStats.filter((item) => item.playerId !== stats.playerId),
+        stats,
+      ];
+
+      await updateDoc(matchRef, {
+        matchData: {
+          ...(matchInfo.matchData || {}),
+          playerStats: updatedStats,
+        },
+      });
+
+      // Odśwież dane meczu z Firebase
+      const refreshedMatchDoc = await getDoc(matchRef);
+      if (refreshedMatchDoc.exists()) {
+        const refreshedMatchData = refreshedMatchDoc.data() as TeamInfo;
+        // Wyślij event do odświeżenia danych w komponencie nadrzędnym
+        window.dispatchEvent(new CustomEvent('matchesListRefresh', {
+          detail: { timestamp: Date.now() }
+        }));
+      }
+    } catch (error) {
+      throw error;
+    }
+  };
   // Funkcja do obliczania minuty meczu na podstawie czasu wideo
   const calculateMatchMinuteFromVideoTime = React.useCallback(async (): Promise<{ minute: number; isSecondHalf: boolean } | null> => {
     if (!matchInfo) {
@@ -505,6 +546,16 @@ const ActionSection = memo(function ActionSection({
         actionCategory={actionCategory}
         matchInfo={matchInfo || undefined}
         allTeams={allTeams}
+        onOpenPlayerStatsModal={() => setIsPlayerMatchStatsModalOpen(true)}
+        isAdmin={isAdmin}
+      />
+
+      <PlayerMatchStatsModal
+        isOpen={isPlayerMatchStatsModalOpen}
+        onClose={() => setIsPlayerMatchStatsModalOpen(false)}
+        onSave={handleSavePlayerMatchStats}
+        matchInfo={matchInfo || null}
+        players={players}
       />
       
       {actionCategory === "packing" ? (

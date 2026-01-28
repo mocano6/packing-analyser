@@ -241,10 +241,18 @@ const ShotModal: React.FC<ShotModalProps> = ({
     );
   }, [filteredPlayers, matchInfo, formData.teamContext]);
 
-  // Funkcja do grupowania zawodników według pozycji
+  // Funkcja do grupowania zawodników według pozycji z meczu
   const getPlayersByPosition = (playersList: Player[]) => {
     const byPosition = playersList.reduce((acc, player) => {
+      // Pobierz pozycję z meczu, jeśli dostępna
       let position = player.position || 'Brak pozycji';
+      
+      if (matchInfo?.playerMinutes) {
+        const playerMinutes = matchInfo.playerMinutes.find(pm => pm.playerId === player.id);
+        if (playerMinutes?.position) {
+          position = playerMinutes.position;
+        }
+      }
       
       // Łączymy LW i RW w jedną grupę "Skrzydłowi"
       if (position === 'LW' || position === 'RW') {

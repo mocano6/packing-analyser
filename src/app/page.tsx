@@ -3119,6 +3119,7 @@ export default function Page() {
             onEditingActionChange={setEditingAction}
             getActionCategory={getActionCategory}
             allTeams={allTeams}
+            isAdmin={isAdmin}
           />
         )}
 
@@ -3214,6 +3215,7 @@ export default function Page() {
             onEditingActionChange={setEditingAction}
             getActionCategory={getActionCategory}
             allTeams={allTeams}
+            isAdmin={isAdmin}
           />
         )}
 

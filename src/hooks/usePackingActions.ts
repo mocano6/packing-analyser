@@ -258,7 +258,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     startZoneXT?: number,
     endZoneXT?: number,
     packingValue?: number,
-    isSecondHalfParam?: boolean
+    isSecondHalfParam?: boolean,
+    possessionTeamId?: string | null
   ): Promise<boolean> => {
     // Sprawdzmy każdy parametr oddzielnie, aby zidentyfikować dokładnie, który jest problemem
     if (!matchInfoArg) {
@@ -474,6 +475,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         }),
         ...(isValidTimestamp && { videoTimestamp: parsedVideoTimestamp }),
         ...(isValidTimestampRaw && { videoTimestampRaw: parsedVideoTimestampRaw }),
+        // Posiadanie piłki w czasie videoTimestampRaw (tylko dla akcji packing)
+        ...(actionCategory === "packing" && possessionTeamId !== undefined && possessionTeamId !== null && { possessionTeamId }),
         // Przypisujemy wartości xT tylko jeśli są zdefiniowane i NIE jest to regain ani loses
         ...(actionCategory !== "regain" && actionCategory !== "loses" && xTStart !== undefined && { xTValueStart: xTStart }),
         ...(actionCategory !== "regain" && actionCategory !== "loses" && xTEnd !== undefined && { xTValueEnd: xTEnd }),
@@ -1035,6 +1038,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     localStorage.removeItem('tempVideoTimestamp');
     localStorage.removeItem('tempVideoTimestampRaw');
     localStorage.removeItem('tempControversyNote');
+    localStorage.removeItem('tempPossessionTeamId');
     // Nie resetujemy isSecondHalf, bo połowa meczu jest utrzymywana między akcjami
   }, []);
 

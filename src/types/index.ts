@@ -63,6 +63,7 @@ export interface Action {
   actionType: string;
   videoTimestamp?: number; // Czas w sekundach z YouTube playera (po korekcie -10s)
   videoTimestampRaw?: number; // Surowy czas w sekundach z playera (bez korekty)
+  possessionTeamId?: string | null; // ID zespołu posiadającego piłkę w czasie videoTimestampRaw (null = piłka niczyja)
   // Dodatkowe pola z ActionsPacking
   senderId: string;
   senderName?: string;
@@ -315,7 +316,20 @@ export interface TeamInfo {
       teamSecondHalf?: number; // Liczba nieskutecznych akcji 8s ACC naszego zespołu w 2 połowie
       opponentSecondHalf?: number; // Liczba nieskutecznych akcji 8s ACC przeciwnika w 2 połowie
     };
+    // Statystyki zawodników zapisane ręcznie
+    playerStats?: PlayerMatchStats[];
   };
+  // Dane GPS z plików CSV STATSports
+  gpsData?: GPSDataEntry[];
+}
+
+export interface PlayerMatchStats {
+  playerId: string;
+  possessionMinutes?: number; // Czas posiadania piłki (min)
+  passesOwnHalfAccurate?: number; // Podania celne na własnej połowie
+  passesOwnHalfInaccurate?: number; // Podania niecelne na własnej połowie
+  passesOppHalfAccurate?: number; // Podania celne na połowie przeciwnika
+  passesOppHalfInaccurate?: number; // Podania niecelne na połowie przeciwnika
 }
 
 export interface PlayerMinutes {
@@ -333,4 +347,16 @@ export interface PlayerMinutesModalProps {
   match: TeamInfo;
   players: Player[];
   currentPlayerMinutes?: PlayerMinutes[];
+}
+
+// Dane GPS z pliku CSV STATSports
+export interface GPSDataEntry {
+  playerId: string;
+  playerName: string;
+  day: string; // E.g., "MD", "MD+1"
+  firstHalf: Record<string, any>; // Wszystkie kolumny z CSV dla I połowy
+  secondHalf: Record<string, any>; // Wszystkie kolumny z CSV dla II połowy
+  total: Record<string, any>; // Wszystkie kolumny z CSV dla całego meczu (Entire Session)
+  uploadedAt: string;
+  fileName: string;
 }

@@ -474,10 +474,26 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
     return sortedPlayers;
   }, [players, isEditMode, allMatches, currentSelectedMatch, matchInfo]);
 
-  // Grupowanie zawodników według pozycji
+  // Grupowanie zawodników według pozycji z meczu
   const playersByPosition = useMemo(() => {
+    // Pobierz wybrany mecz
+    let selectedMatch = null;
+    if (isEditMode && currentSelectedMatch) {
+      selectedMatch = allMatches?.find(match => match.matchId === currentSelectedMatch) || null;
+    } else if (matchInfo) {
+      selectedMatch = matchInfo;
+    }
+
     const byPosition = filteredPlayers.reduce((acc, player) => {
+      // Pobierz pozycję z meczu, jeśli dostępna
       let position = player.position || 'Brak pozycji';
+      
+      if (selectedMatch?.playerMinutes) {
+        const playerMinutes = selectedMatch.playerMinutes.find(pm => pm.playerId === player.id);
+        if (playerMinutes?.position) {
+          position = playerMinutes.position;
+        }
+      }
       
       // Łączymy LW i RW w jedną grupę "Skrzydłowi"
       if (position === 'LW' || position === 'RW') {
@@ -529,7 +545,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
     });
     
     return { byPosition, sortedPositions };
-  }, [filteredPlayers]);
+  }, [filteredPlayers, matchInfo, allMatches, currentSelectedMatch, isEditMode]);
 
   if (!isOpen) return null;
 

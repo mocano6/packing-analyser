@@ -469,6 +469,77 @@
   grid-template-columns: 1fr;
   gap: 20px;
   width: 100%;
+  position: relative;
+}
+
+/* Przyciski posiadania piłki jako overlay nad odtwarzaczem YouTube */
+.videoPossessionButtons {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  pointer-events: auto;
+  user-select: none;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.videoPossessionButtons:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+/* W trybie fullscreen przyciski są pozycjonowane względem kontenera odtwarzacza */
+.videoPlayersContainer:has(.videoContainerFullscreen) .videoPossessionButtons {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10001;
+}
+
+.videoPossessionButton {
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  min-width: 50px;
+}
+
+.videoPossessionButton:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+.videoPossessionButton:active {
+  background-color: rgba(255, 255, 255, 0.25);
+  transform: scale(0.95);
+}
+
+.videoPossessionButtonActive {
+  background-color: rgba(59, 130, 246, 0.8);
+  border-color: rgba(59, 130, 246, 0.9);
+  color: white;
+}
+
+.videoPossessionButtonActive:hover {
+  background-color: rgba(59, 130, 246, 0.9);
+  border-color: rgba(59, 130, 246, 1);
 }
 
 @media (max-width: 1024px) {

@@ -101,6 +101,10 @@ const SidePanel: React.FC<SidePanelProps> = ({
               <span className={styles.icon}>👤</span>
               <span>Profil zawodnika</span>
             </Link>
+            <Link href="/gps" className={styles.menuItem}>
+              <span className={styles.icon}>📍</span>
+              <span>Dane GPS</span>
+            </Link>
           </div>
 
           {/* Sekcja Admin (tylko dla adminów) */}

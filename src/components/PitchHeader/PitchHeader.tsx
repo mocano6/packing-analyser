@@ -7,6 +7,7 @@ export interface PitchHeaderProps {
   leftContent?: React.ReactNode;
   centerContent?: React.ReactNode;
   rightContent?: React.ReactNode;
+  rightExtraContent?: React.ReactNode;
   matchInfo?: {
     team?: string;
     opponent?: string;
@@ -27,6 +28,7 @@ const PitchHeader: React.FC<PitchHeaderProps> = ({
   leftContent,
   centerContent,
   rightContent,
+  rightExtraContent,
   matchInfo,
   allTeams = [],
   isFlipped = false,
@@ -119,6 +121,7 @@ const PitchHeader: React.FC<PitchHeaderProps> = ({
       </div>
       <div className={styles.pitchHeaderRight}>
         {rightContent}
+        {rightExtraContent}
       </div>
     </div>
   );

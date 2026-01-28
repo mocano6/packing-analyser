@@ -34,6 +34,8 @@ export interface FootballPitchProps {
     logo?: string;
   }>;
   hideTeamLogos?: boolean;
+  onOpenPlayerStatsModal?: () => void;
+  isAdmin?: boolean;
 }
 
 const FootballPitch = memo(function FootballPitch({
@@ -46,6 +48,8 @@ const FootballPitch = memo(function FootballPitch({
   matchInfo,
   allTeams = [],
   hideTeamLogos = false,
+  onOpenPlayerStatsModal,
+  isAdmin = false,
 }: FootballPitchProps) {
   // Stan przełącznika orientacji boiska - przywróć z localStorage (wspólny dla wszystkich zakładek)
   const [isFlipped, setIsFlipped] = useState(() => {
@@ -193,15 +197,28 @@ const FootballPitch = memo(function FootballPitch({
         isFlipped={isFlipped}
         hideTeamLogos={hideTeamLogos}
         rightContent={
-          <button
-            type="button"
-            className={pitchHeaderStyles.headerButton}
-            onClick={handleFlipToggle}
-            title={isFlipped ? "Przełącz na orientację standardową (→)" : "Przełącz na orientację odbita (←)"}
-            aria-label={isFlipped ? "Przełącz na orientację standardową" : "Przełącz na orientację odbita"}
-          >
-            Obróć
-          </button>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            {isAdmin && onOpenPlayerStatsModal && (
+              <button
+                type="button"
+                className={pitchHeaderStyles.headerButton}
+                onClick={onOpenPlayerStatsModal}
+                title="Dodaj statystyki zawodnika"
+                aria-label="Dodaj statystyki zawodnika"
+              >
+                Statystyki
+              </button>
+            )}
+            <button
+              type="button"
+              className={pitchHeaderStyles.headerButton}
+              onClick={handleFlipToggle}
+              title={isFlipped ? "Przełącz na orientację standardową (→)" : "Przełącz na orientację odbita (←)"}
+              aria-label={isFlipped ? "Przełącz na orientację standardową" : "Przełącz na orientację odbita"}
+            >
+              Obróć
+            </button>
+          </div>
         }
       />
 
