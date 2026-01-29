@@ -10,6 +10,80 @@ import { getDB } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs, deleteDoc, doc, getDoc } from "firebase/firestore";
 import styles from "./GPSDataSection.module.css";
 
+// Tooltipy informacyjne STATSports GPS (definicje)
+const STATSPORTS_GPS_TOOLTIPS: Record<string, string> = {
+  "Distance Zone 4 (Absolute)":
+    "Wysoka intensywność aerobowa (19-21 km/h). Monitoruj stabilność między sesjami.",
+  "Distance Zone 3 (Absolute)":
+    "Średnia intensywność (15-19 km/h). Budowanie bazy tlenowej.",
+  "Player Primary Position":
+    "Pozycja podstawowa zawodnika. Oczekiwane benchmarki dla danej roli.",
+  "Accelerations Zone 5 (Absolute)":
+    "Przyspieszenia w bardzo wysokiej intensywności. Wskazuje eksplozywność.",
+  "Number Of High Intensity Bursts":
+    "Liczba zrywów powyżej 85% max HR. Kluczowe dla pressingu i kontr.",
+  "Decelerations Zone 4 (Absolute)":
+    "Hamowania w wysokiej intensywności. Praca bez piłki i zmiany kierunku.",
+  "HML Efforts":
+    "Całkowita liczba wysiłków Wysokich/Średnich/Niskich intensywności.",
+  "Max Speed":
+    "Szczytowa prędkość sesji. Profil szybkościowy zawodnika.",
+  "HML Distance":
+    "Suma dystansu Wysokiego/Średniego/Niskiego. Jakość całkowitej pracy.",
+  "Duration Of High Intensity Bursts":
+    "Całkowity czas pracy anaerobowej podczas zrywów.",
+  "Duration Of High Intensity Bursts (s)":
+    "Całkowity czas pracy anaerobowej podczas zrywów.",
+  Sprints:
+    "Sprinty powyżej 25.2 km/h. Maksymalna prędkość wysiłkowa.",
+  "Distance Zone 3 - Zone 6 (Absolute)":
+    "Suma dystansu wszystkich stref wysokiej intensywności.",
+  "High Speed Running (Relative)":
+    "HSR na minutę gry. Intensywność względna do czasu.",
+  "Sprint Distance":
+    "Całkowity dystans pokonany podczas sprintów.",
+  "Accelerations (Relative)":
+    "Przyspieszenia na minutę. Eksplozywność względna.",
+  "Decelerations (Relative)":
+    "Hamowania na minutę. Zmiany kierunku względne do czasu.",
+  "Session Date":
+    "Data ostatniej zarejestrowanej sesji GPS.",
+  "Accelerations Zone 4 (Absolute)":
+    "Przyspieszenia w strefie wysokiej intensywności.",
+  "High Intensity Bursts Maximum Speed":
+    "Maksymalna prędkość osiągnięta podczas zrywów.",
+  "Distance Zone 2 (Relative)":
+    "Dystans średnio-niskiej intensywności na minutę.",
+  "Distance Zone 1 (Absolute)":
+    "Dystans niskiej intensywności (chodzenie/bieg).",
+  "Distance Per Min":
+    "Średnia prędkość sesji (m/min). Tempo pracy.",
+  "Decelerations Zone 6 (Absolute)":
+    "Hamowania maksymalnej intensywności.",
+  "High Intensity Bursts Total Distance":
+    "Całkowity dystans pokonany podczas zrywów.",
+  "Distance Zone 6 (Absolute)":
+    "Maksymalna strefa intensywności (>25 km/h).",
+  "Total Time":
+    "Rzeczywisty czas gry na boisku.",
+  "Decelerations Zone 5 (Absolute)":
+    "Hamowania bardzo wysokiej intensywności.",
+  "Accelerations Zone 6 (Absolute)":
+    "Przyspieszenia maksymalnej intensywności.",
+  "Distance Zone 5 (Absolute)":
+    "Bardzo wysoka intensywność (21-25 km/h).",
+  "Total Distance":
+    "Całkowity dystans pokonany w sesji.",
+};
+
+function getStatsportsGpsTooltip(metricName: string): string | undefined {
+  const direct = STATSPORTS_GPS_TOOLTIPS[metricName];
+  if (direct) return direct;
+
+  const normalized = metricName.replace(/\s+\(s\)\s*$/i, "").trim();
+  return STATSPORTS_GPS_TOOLTIPS[normalized];
+}
+
 interface GPSDataSectionProps {
   players: Player[];
   allAvailableTeams?: { id: string; name: string; logo?: string }[];
@@ -23,6 +97,17 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
   players,
   allAvailableTeams = []
 }) => {
+  const dayOptions: Array<{ value: string; label: string }> = [
+    { value: "MD-4", label: "MD-4 — 4 dni przed meczem" },
+    { value: "MD-3", label: "MD-3 — 3 dni przed meczem" },
+    { value: "MD-2", label: "MD-2 — 2 dni przed meczem" },
+    { value: "MD-1", label: "MD-1 — 1 dzień przed meczem" },
+    { value: "MD", label: "MD — Dzień meczu" },
+    { value: "MD+1", label: "MD+1 — 1 dzień po meczu" },
+    { value: "MD+2", label: "MD+2 — 2 dni po meczu" },
+    { value: "MD+3", label: "MD+3 — 3 dni po meczu" },
+  ];
+
   const [selectedTeam, setSelectedTeam] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('selectedTeam') || "";
@@ -699,20 +784,18 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
 
           <div className={styles.selectionRow}>
             <div className={styles.formGroup}>
-              <label htmlFor="day-select">Dzień tygodnia</label>
+              <label htmlFor="day-select">Dzień (MD)</label>
               <select
                 id="day-select"
                 value={selectedDay}
                 onChange={(e) => setSelectedDay(e.target.value)}
                 className={styles.select}
               >
-                <option value="MD">MD</option>
-                <option value="MD+1">MD+1</option>
-                <option value="MD+2">MD+2</option>
-                <option value="MD+3">MD+3</option>
-                <option value="MD+4">MD+4</option>
-                <option value="MD+5">MD+5</option>
-                <option value="MD+6">MD+6</option>
+                {dayOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div className={styles.formGroup}>
@@ -886,11 +969,26 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
 
                   return (
                     <div key={entry.id || index} className={styles.gpsDataItem}>
-                      <div className={styles.gpsDataHeader}>
+                      <div
+                        className={styles.gpsDataHeader}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isExpanded}
+                        onClick={toggleExpanded}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            toggleExpanded();
+                          }
+                        }}
+                      >
                         <div className={styles.gpsDataHeaderTop}>
                           <button
                             type="button"
-                            onClick={toggleExpanded}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpanded();
+                            }}
                             className={`${styles.expandButton} ${isExpanded ? styles.expanded : ''}`}
                             aria-label={isExpanded ? "Zwiń" : "Rozwiń"}
                           >
@@ -944,7 +1042,13 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                             <div className={styles.gpsDataMetrics}>
                               {Object.entries(entry.firstHalf).map(([key, value]) => (
                                 <div key={key} className={styles.gpsMetric}>
-                                  <span className={styles.metricLabel}>{key}:</span>
+                                  <span
+                                    className={styles.metricLabel}
+                                    title={getStatsportsGpsTooltip(key)}
+                                    data-tooltip={getStatsportsGpsTooltip(key)}
+                                  >
+                                    {key}:
+                                  </span>
                                   <span className={styles.metricValue}>{String(value)}</span>
                                 </div>
                               ))}
@@ -956,7 +1060,13 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                             <div className={styles.gpsDataMetrics}>
                               {Object.entries(entry.secondHalf).map(([key, value]) => (
                                 <div key={key} className={styles.gpsMetric}>
-                                  <span className={styles.metricLabel}>{key}:</span>
+                                  <span
+                                    className={styles.metricLabel}
+                                    title={getStatsportsGpsTooltip(key)}
+                                    data-tooltip={getStatsportsGpsTooltip(key)}
+                                  >
+                                    {key}:
+                                  </span>
                                   <span className={styles.metricValue}>{String(value)}</span>
                                 </div>
                               ))}
@@ -968,7 +1078,13 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                             <div className={styles.gpsDataMetrics}>
                               {Object.entries(entry.total).map(([key, value]) => (
                                 <div key={key} className={styles.gpsMetric}>
-                                  <span className={styles.metricLabel}>{key}:</span>
+                                  <span
+                                    className={styles.metricLabel}
+                                    title={getStatsportsGpsTooltip(key)}
+                                    data-tooltip={getStatsportsGpsTooltip(key)}
+                                  >
+                                    {key}:
+                                  </span>
                                   <span className={styles.metricValue}>{String(value)}</span>
                                 </div>
                               ))}

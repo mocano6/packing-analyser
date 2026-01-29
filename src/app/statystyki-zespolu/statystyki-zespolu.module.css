@@ -1423,6 +1423,179 @@
   transform: rotate(180deg);
 }
 
+.gpsSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background-color: #ffffff;
+  color: #1f2937;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.gpsSectionHeader:hover {
+  border-color: #2196f3;
+  box-shadow: 0 2px 10px rgba(33, 150, 243, 0.18);
+}
+
+.gpsSectionHeader:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.25);
+}
+
+.gpsControlsRow {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin: 12px 0 16px;
+}
+
+.gpsControlGroup {
+  min-width: 220px;
+  flex: 1;
+}
+
+.gpsValueModeToggle {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.gpsValueModeButton {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.gpsValueModeButton:hover {
+  border-color: #2196f3;
+  background-color: #f8fafc;
+  color: #1f2937;
+}
+
+.gpsValueModeButton.active {
+  border-color: #2196f3;
+  background-color: #e3f2fd;
+  color: #1d4ed8;
+  box-shadow: 0 2px 6px rgba(33, 150, 243, 0.18);
+}
+
+.gpsPeriodSelector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+}
+
+/* GPS: delikatnie mniejsze, ale spójne z resztą przełączników */
+.gpsPeriodSelector .periodButton {
+  flex: 1;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.gpsPeriodSelector .periodButton:hover {
+  background-color: #f8fafc;
+  color: #1f2937;
+}
+
+.gpsPeriodSelector .periodButton.active {
+  background-color: #e3f2fd;
+  color: #1d4ed8;
+  border-color: #2196f3;
+  box-shadow: 0 2px 6px rgba(33, 150, 243, 0.18);
+}
+
+.gpsMatchDayContent {
+  margin-top: 10px;
+  padding: 14px;
+  background-color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.gpsMatchDayLoading,
+.gpsMatchDayEmpty {
+  color: #6b7280;
+  font-size: 14px;
+  margin: 0;
+  padding: 12px 0;
+}
+
+.gpsMatchDayTableWrap {
+  overflow-x: auto;
+  margin-top: 0;
+}
+
+.gpsMatchDayTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.gpsMatchDayTable th,
+.gpsMatchDayTable td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.gpsMatchDayTable th {
+  font-weight: 600;
+  color: #374151;
+  background-color: #ffffff;
+}
+
+.gpsSortableTh {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.gpsSortableTh:hover {
+  background-color: rgba(33, 150, 243, 0.08);
+  color: #1f2937;
+}
+
+.gpsMatchDayTable td:first-child {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.gpsMatchDayTable td:not(:first-child) {
+  text-align: right;
+  color: #4b5563;
+}
+
+.gpsMatchDayTable tbody tr:hover {
+  background-color: #f8fafc;
+}
+
 .matchDataTableSubLabel {
   padding: 6px 12px;
   font-weight: 500;

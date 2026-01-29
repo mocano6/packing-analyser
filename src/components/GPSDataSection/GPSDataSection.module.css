@@ -765,11 +765,51 @@
 .metricLabel {
   color: #6b7280;
   font-weight: 500;
+  position: relative;
 }
 
 .metricValue {
   color: #1f2937;
   font-weight: 600;
+}
+
+/* Tooltip dla metryk STATSports */
+.metricLabel[data-tooltip] {
+  cursor: help;
+  text-decoration: underline dotted rgba(107, 114, 128, 0.7);
+  text-underline-offset: 2px;
+}
+
+.metricLabel[data-tooltip]:hover::after,
+.metricLabel[data-tooltip]:focus-visible::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: 360px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  color: #111827;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: normal;
+  z-index: 50;
+}
+
+.metricLabel[data-tooltip]:hover::before,
+.metricLabel[data-tooltip]:focus-visible::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  bottom: calc(100% + 2px);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #e5e7eb transparent transparent transparent;
+  z-index: 51;
 }
 
 @media (max-width: 768px) {

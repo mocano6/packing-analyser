@@ -10,7 +10,7 @@ import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
@@ -100,11 +100,11 @@ export default function StatystykiZespoluPage() {
   const [allPKEntries, setAllPKEntries] = useState<any[]>([]);
   const [allAcc8sEntries, setAllAcc8sEntries] = useState<any[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
-  const [expandedCategory, setExpandedCategory] = useState<'kpi' | 'pxt' | 'xg' | 'matchData' | 'pkEntries' | 'regains' | 'loses' | null>(() => {
+  const [expandedCategory, setExpandedCategory] = useState<'kpi' | 'pxt' | 'xg' | 'matchData' | 'pkEntries' | 'regains' | 'loses' | 'gps' | null>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('statystykiZespolu_expandedCategory');
-      if (saved && ['kpi', 'pxt', 'xg', 'matchData', 'pkEntries', 'regains', 'loses'].includes(saved)) {
-        return saved as 'kpi' | 'pxt' | 'xg' | 'matchData' | 'pkEntries' | 'regains' | 'loses';
+      if (saved && ['kpi', 'pxt', 'xg', 'matchData', 'pkEntries', 'regains', 'loses', 'gps'].includes(saved)) {
+        return saved as 'kpi' | 'pxt' | 'xg' | 'matchData' | 'pkEntries' | 'regains' | 'loses' | 'gps';
       }
       return 'kpi';
     }
@@ -161,6 +161,13 @@ export default function StatystykiZespoluPage() {
   const [possessionExpanded, setPossessionExpanded] = useState(false);
   const [shotsExpanded, setShotsExpanded] = useState(false);
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
+  const [gpsMatchDayExpanded, setGpsMatchDayExpanded] = useState(true);
+  const [gpsMatchDayPeriod, setGpsMatchDayPeriod] = useState<'total' | 'firstHalf' | 'secondHalf'>('total');
+  const [gpsMatchDayData, setGpsMatchDayData] = useState<Array<{ id: string; playerId: string; playerName: string; firstHalf: Record<string, any>; secondHalf: Record<string, any>; total: Record<string, any> }>>([]);
+  const [gpsMatchDayLoading, setGpsMatchDayLoading] = useState(false);
+  const [gpsMatchDaySort, setGpsMatchDaySort] = useState<{ column: string | null; dir: 'asc' | 'desc' }>({ column: null, dir: 'asc' });
+  const [gpsMatchPositionFilter, setGpsMatchPositionFilter] = useState<string>('all');
+  const [gpsMatchValueMode, setGpsMatchValueMode] = useState<'raw' | 'perMinute'>('raw');
   const [xgFilter, setXgFilter] = useState<'all' | 'sfg' | 'open_play'>('all');
   const [xgHalf, setXgHalf] = useState<'all' | 'first' | 'second'>('all');
   const [xgMapFilters, setXgMapFilters] = useState<{
@@ -588,6 +595,44 @@ export default function StatystykiZespoluPage() {
   useEffect(() => {
     setSelectedPlayerForVideo(null);
   }, [selectedKpiForVideo, selectedMatchInfo]);
+
+  // Pobierz dane GPS „Mecz” (day === "MD") dla daty wybranego meczu
+  useEffect(() => {
+    if (expandedCategory !== 'gps' || !selectedMatchInfo || !selectedTeam || !db) {
+      if (expandedCategory !== 'gps') setGpsMatchDayData([]);
+      return;
+    }
+    const matchDate = selectedMatchInfo.date;
+    const matchDateStr = typeof matchDate === 'string' && matchDate.includes('T')
+      ? matchDate.slice(0, 10)
+      : typeof matchDate === 'string'
+        ? matchDate
+        : '';
+    if (!matchDateStr) {
+      setGpsMatchDayData([]);
+      return;
+    }
+    setGpsMatchDayLoading(true);
+    const gpsRef = collection(db, 'gps');
+    getDocs(query(gpsRef, where('teamId', '==', selectedTeam), where('date', '==', matchDateStr), where('day', '==', 'MD')))
+      .then((snapshot) => {
+        const list: Array<{ id: string; playerId: string; playerName: string; firstHalf: Record<string, any>; secondHalf: Record<string, any>; total: Record<string, any> }> = [];
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data();
+          list.push({
+            id: docSnap.id,
+            playerId: d.playerId ?? '',
+            playerName: d.playerName ?? '',
+            firstHalf: d.firstHalf ?? {},
+            secondHalf: d.secondHalf ?? {},
+            total: d.total ?? {},
+          });
+        });
+        setGpsMatchDayData(list);
+      })
+      .catch(() => setGpsMatchDayData([]))
+      .finally(() => setGpsMatchDayLoading(false));
+  }, [expandedCategory, selectedMatchInfo, selectedTeam]);
 
   const pkEntriesSideStats = useMemo(() => {
     // UWAGA: PKEntryModal zapisuje `teamId` jako matchInfo.team (nasz zespół) również dla wpisów przeciwnika,
@@ -3320,6 +3365,13 @@ export default function StatystykiZespoluPage() {
                 onClick={() => setExpandedCategory(expandedCategory === 'loses' ? null : 'loses')}
               >
                 <span className={styles.categoryName}>Straty</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.categoryItem} ${expandedCategory === 'gps' ? styles.active : ''}`}
+                onClick={() => setExpandedCategory(expandedCategory === 'gps' ? null : 'gps')}
+              >
+                <span className={styles.categoryName}>GPS</span>
               </button>
               {isAdmin && (
               <button
@@ -7206,6 +7258,408 @@ export default function StatystykiZespoluPage() {
                       <Bar yAxisId="right" dataKey="xtDefense" name="xT w obronie" fill="#6b7280" radius={[4, 4, 0, 0]} opacity={0.85} />
                     </BarChart>
                   </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+            {expandedCategory === 'gps' && selectedMatchInfo && (
+              <div className={styles.detailsPanel}>
+                <h3>GPS</h3>
+                <div className={styles.gpsControlsRow}>
+                  <div className={styles.gpsControlGroup}>
+                    <p className={styles.compactSelectorGroupLabel}>Pozycja (mecz)</p>
+                    <select
+                      className={styles.compactSelect}
+                      value={gpsMatchPositionFilter}
+                      onChange={(e) => setGpsMatchPositionFilter(e.target.value)}
+                    >
+                      <option value="all">Wszystkie</option>
+                      {Array.from(new Set((selectedMatchInfo.playerMinutes || [])
+                        .map(pm => {
+                          const pos = pm.position || '';
+                          if (pos === 'LW' || pos === 'RW') return 'Skrzydłowi';
+                          return pos || 'Brak';
+                        })
+                        .filter(Boolean)
+                      )).map((pos) => (
+                        <option key={pos} value={pos}>
+                          {pos === 'Skrzydłowi' ? 'W' : pos}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className={styles.gpsControlGroup}>
+                    <p className={styles.compactSelectorGroupLabel}>Widok</p>
+                    <div className={styles.gpsValueModeToggle}>
+                      <button
+                        type="button"
+                        className={`${styles.gpsValueModeButton} ${gpsMatchValueMode === 'raw' ? styles.active : ''}`}
+                        onClick={() => setGpsMatchValueMode('raw')}
+                      >
+                        Dane
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.gpsValueModeButton} ${gpsMatchValueMode === 'perMinute' ? styles.active : ''}`}
+                        onClick={() => setGpsMatchValueMode('perMinute')}
+                      >
+                        Na minutę gry
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className={styles.detailsSection}>
+                  <button
+                    type="button"
+                    className={styles.gpsSectionHeader}
+                    style={{ width: '100%' }}
+                    onClick={() => setGpsMatchDayExpanded(!gpsMatchDayExpanded)}
+                    aria-expanded={gpsMatchDayExpanded}
+                  >
+                    <span>Mecz</span>
+                    <span className={`${styles.expandIcon} ${gpsMatchDayExpanded ? styles.expanded : ''}`}>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </span>
+                  </button>
+                  {gpsMatchDayExpanded && (
+                    <div className={styles.gpsMatchDayContent}>
+                      {gpsMatchDayLoading ? (
+                        <p className={styles.gpsMatchDayLoading}>Ładowanie danych GPS...</p>
+                      ) : gpsMatchDayData.length === 0 ? (
+                        <p className={styles.gpsMatchDayEmpty}>Brak danych GPS dla dnia meczowego (MD) w dniu wybranego meczu.</p>
+                      ) : (() => {
+                        const findKey = (total: Record<string, any>, keys: string[]) => keys.find(k => Object.prototype.hasOwnProperty.call(total, k));
+                        const getPeriodData = (entry: { firstHalf: Record<string, any>; secondHalf: Record<string, any>; total: Record<string, any> }) => {
+                          if (gpsMatchDayPeriod === 'firstHalf') return entry.firstHalf || {};
+                          if (gpsMatchDayPeriod === 'secondHalf') return entry.secondHalf || {};
+                          return entry.total || {};
+                        };
+                        const toNum = (v: any): number => {
+                          if (v == null) return NaN;
+                          if (typeof v === 'number') return v;
+                          if (typeof v === 'string') {
+                            const cleaned = v.trim().replace(',', '.');
+                            const direct = Number(cleaned);
+                            if (Number.isFinite(direct)) return direct;
+                            // Fallback: strip jednostki/znaki, zostaw liczby
+                            const stripped = Number(cleaned.replace(/[^\d.\-]/g, ''));
+                            return Number.isFinite(stripped) ? stripped : NaN;
+                          }
+                          const coerced = Number(v);
+                          return Number.isFinite(coerced) ? coerced : NaN;
+                        };
+                        const durationToSeconds = (v: any): number => {
+                          if (v == null) return NaN;
+                          if (typeof v === 'number') return v;
+                          if (typeof v !== 'string') return toNum(v);
+                          const s = v.trim();
+                          if (!s.includes(':')) return toNum(s);
+                          const parts = s.split(':').map(p => p.trim());
+                          if (parts.some(p => p === '' || Number.isNaN(Number(p)))) return NaN;
+                          const nums = parts.map(Number);
+                          if (nums.length === 2) {
+                            const [mm, ss] = nums;
+                            return mm * 60 + ss;
+                          }
+                          if (nums.length === 3) {
+                            const [hh, mm, ss] = nums;
+                            return hh * 3600 + mm * 60 + ss;
+                          }
+                          return NaN;
+                        };
+
+                        const getHibSeconds = (total: Record<string, any>) => {
+                          const k = findKey(total, [
+                            'Duration Of High Intensity Bursts (s)',
+                            'Duration Of High Intensity Bursts (Seconds)',
+                            'Duration Of High Intensity Bursts',
+                            'Duration of High Intensity Bursts (s)',
+                            'HIB Duration (s)',
+                          ]);
+                          if (!k || total[k] == null) return NaN;
+                          const v = total[k];
+                          // Wspieramy zarówno liczbę (sekundy) jak i format czasu
+                          return typeof v === 'string' && v.includes(':') ? durationToSeconds(v) : toNum(v);
+                        };
+
+                        const getHibCount = (total: Record<string, any>) => {
+                          const k = findKey(total, [
+                            'Number Of High Intensity Bursts',
+                            'Number of High Intensity Bursts',
+                            'High Intensity Bursts',
+                            'HIB Count',
+                          ]);
+                          if (!k || total[k] == null) return NaN;
+                          return toNum(total[k]);
+                        };
+
+                        const getAccDecAbs56 = (total: Record<string, any>) => {
+                          const acc5Key = findKey(total, ['Accelerations Zone 5 (Absolute)']);
+                          const acc6Key = findKey(total, ['Accelerations Zone 6 (Absolute)']);
+                          const dec5Key = findKey(total, ['Decelerations Zone 5 (Absolute)']);
+                          const dec6Key = findKey(total, ['Decelerations Zone 6 (Absolute)']);
+
+                          const acc5 = acc5Key != null ? toNum(total[acc5Key]) : NaN;
+                          const acc6 = acc6Key != null ? toNum(total[acc6Key]) : NaN;
+                          const dec5 = dec5Key != null ? toNum(total[dec5Key]) : NaN;
+                          const dec6 = dec6Key != null ? toNum(total[dec6Key]) : NaN;
+
+                          const hasAcc = Number.isFinite(acc5) || Number.isFinite(acc6);
+                          const hasDec = Number.isFinite(dec5) || Number.isFinite(dec6);
+
+                          const acc = hasAcc ? (Number.isFinite(acc5) ? acc5 : 0) + (Number.isFinite(acc6) ? acc6 : 0) : NaN;
+                          const dec = hasDec ? (Number.isFinite(dec5) ? dec5 : 0) + (Number.isFinite(dec6) ? dec6 : 0) : NaN;
+
+                          return { acc, dec };
+                        };
+
+                        const getDistance56 = (total: Record<string, any>) => {
+                          const d5Key = findKey(total, ['Distance Zone 5 (Absolute)']);
+                          const d6Key = findKey(total, ['Distance Zone 6 (Absolute)']);
+
+                          const d5 = d5Key != null ? toNum(total[d5Key]) : NaN;
+                          const d6 = d6Key != null ? toNum(total[d6Key]) : NaN;
+
+                          const hasAny = Number.isFinite(d5) || Number.isFinite(d6);
+                          const sum = hasAny ? (Number.isFinite(d5) ? d5 : 0) + (Number.isFinite(d6) ? d6 : 0) : NaN;
+                          return sum;
+                        };
+
+                        const formatNum = (n: number) => {
+                          if (!Number.isFinite(n)) return '—';
+                          return Number.isInteger(n) ? String(n) : n.toFixed(2);
+                        };
+
+                        const normalizePosition = (pos?: string) => {
+                          if (!pos) return 'Brak';
+                          if (pos === 'LW' || pos === 'RW') return 'Skrzydłowi';
+                          return pos;
+                        };
+
+                        const getPlayerMinutesInPeriod = (playerId: string): number => {
+                          const pm = (selectedMatchInfo.playerMinutes || []).find(p => p.playerId === playerId);
+                          if (!pm) return NaN;
+                          const start = pm.startMinute ?? 0;
+                          const end = pm.endMinute ?? 0;
+                          if (start === 0 && end === 0) return 0;
+
+                          const overlap = (aStart: number, aEnd: number, bStart: number, bEnd: number) => {
+                            const s = Math.max(aStart, bStart);
+                            const e = Math.min(aEnd, bEnd);
+                            return e >= s ? (e - s + 1) : 0;
+                          };
+
+                          if (gpsMatchDayPeriod === 'firstHalf') {
+                            return overlap(start, end, 1, 45);
+                          }
+                          if (gpsMatchDayPeriod === 'secondHalf') {
+                            // bez górnego limitu, ale minimum od 46
+                            return overlap(start, end, 46, end);
+                          }
+                          return Math.max(0, end - start + 1);
+                        };
+
+                        const getPlayerPositionInMatch = (playerId: string): string => {
+                          const pm = (selectedMatchInfo.playerMinutes || []).find(p => p.playerId === playerId);
+                          return normalizePosition(pm?.position);
+                        };
+
+                        const isPerMinute = gpsMatchValueMode === 'perMinute';
+                        const normalizeColumns = new Set<string>([
+                          'accRel',
+                          'decRel',
+                          'distance56',
+                          'sprintDistance',
+                          'sprints',
+                          'hib',
+                          'hibCount',
+                          'hmlDistance',
+                        ]);
+                        const applyNormalization = (col: string, raw: number, minutes: number) => {
+                          if (!isPerMinute) return raw;
+                          if (!normalizeColumns.has(col)) return raw;
+                          if (!Number.isFinite(minutes) || minutes <= 0) return NaN;
+                          return raw / minutes;
+                        };
+
+                        const getSortValue = (
+                          entry: { playerId: string; playerName: string; firstHalf: Record<string, any>; secondHalf: Record<string, any>; total: Record<string, any> },
+                          col: string
+                        ): number | string => {
+                          const total = getPeriodData(entry);
+                          const minutes = getPlayerMinutesInPeriod(entry.playerId);
+
+                          if (col === 'playerName') return entry.playerName ?? '';
+                          if (col === 'position') return getPlayerPositionInMatch(entry.playerId);
+                          if (col === 'minutes') return Number.isFinite(minutes) ? minutes : NaN;
+
+                          if (col === 'accRel') { const { acc } = getAccDecAbs56(total); return Number.isFinite(acc) ? applyNormalization(col, acc, minutes) : NaN; }
+                          if (col === 'decRel') { const { dec } = getAccDecAbs56(total); return Number.isFinite(dec) ? applyNormalization(col, dec, minutes) : NaN; }
+
+                          if (col === 'distance56') { return applyNormalization(col, getDistance56(total), minutes); }
+                          if (col === 'sprintDistance') { const k = findKey(total, ['Sprint Distance', 'Sprint distance']); return k != null && total[k] != null ? applyNormalization(col, toNum(total[k]), minutes) : NaN; }
+                          if (col === 'sprints') { const k = findKey(total, ['Sprints', 'Sprint Count']); return k != null && total[k] != null ? applyNormalization(col, toNum(total[k]), minutes) : NaN; }
+
+                          if (col === 'maxSpeed') { const k = findKey(total, ['Max Speed', 'Max speed', 'Max Speed (km/h)', 'Max Speed (kph)']); return k != null && total[k] != null ? toNum(total[k]) : NaN; }
+                          if (col === 'distancePerMin') { const k = findKey(total, ['Distance Per Min', 'Distance per min']); return k != null && total[k] != null ? toNum(total[k]) : NaN; }
+                          if (col === 'distanceZone46') {
+                            const k = findKey(total, [
+                              'High Speed Running (Relative)',
+                              'High Speed Running (relative)',
+                              'High Speed Running (m)',
+                              'High Speed Running',
+                            ]);
+                            return k != null && total[k] != null ? toNum(total[k]) : NaN;
+                          }
+
+                          if (col === 'hib') { return applyNormalization(col, getHibSeconds(total), minutes); }
+                          if (col === 'hibCount') { return applyNormalization(col, getHibCount(total), minutes); }
+
+                          if (col === 'hmlDistance') { const k = findKey(total, ['HML Distance', 'HML distance']); return k != null && total[k] != null ? applyNormalization(col, toNum(total[k]), minutes) : NaN; }
+                          return '';
+                        };
+                        const gpsMatchDaySortColumn = gpsMatchDaySort.column;
+                        const gpsMatchDaySortDir = gpsMatchDaySort.dir;
+                        const filteredGpsData = gpsMatchDayData.filter((e) => {
+                          if (gpsMatchPositionFilter === 'all') return true;
+                          return getPlayerPositionInMatch(e.playerId) === gpsMatchPositionFilter;
+                        });
+
+                        const sortedData = [...filteredGpsData].sort((a, b) => {
+                          if (!gpsMatchDaySortColumn) {
+                            // Domyślnie: grupuj po pozycji, potem alfabetycznie
+                            const pa = getPlayerPositionInMatch(a.playerId);
+                            const pb = getPlayerPositionInMatch(b.playerId);
+                            const pc = pa.localeCompare(pb, 'pl', { sensitivity: 'base' });
+                            if (pc !== 0) return pc;
+                            return (a.playerName || '').localeCompare((b.playerName || ''), 'pl', { sensitivity: 'base' });
+                          }
+                          const va = getSortValue(a, gpsMatchDaySortColumn);
+                          const vb = getSortValue(b, gpsMatchDaySortColumn);
+                          const cmp = typeof va === 'number' && typeof vb === 'number'
+                            ? (Number.isNaN(va) && Number.isNaN(vb) ? 0 : Number.isNaN(va) ? 1 : Number.isNaN(vb) ? -1 : va - vb)
+                            : String(va).localeCompare(String(vb), 'pl', { numeric: true });
+                          return gpsMatchDaySortDir === 'asc' ? cmp : -cmp;
+                        });
+                        const handleSort = (col: string) => {
+                          setGpsMatchDaySort(prev => prev.column === col
+                            ? { ...prev, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+                            : { column: col, dir: 'asc' });
+                        };
+                        return (
+                        <>
+                        <div className={styles.gpsPeriodSelector}>
+                          <button
+                            type="button"
+                            className={`${styles.periodButton} ${gpsMatchDayPeriod === 'total' ? styles.active : ''}`}
+                            onClick={() => setGpsMatchDayPeriod('total')}
+                          >
+                            Suma
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.periodButton} ${gpsMatchDayPeriod === 'firstHalf' ? styles.active : ''}`}
+                            onClick={() => setGpsMatchDayPeriod('firstHalf')}
+                          >
+                            1. połowa
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.periodButton} ${gpsMatchDayPeriod === 'secondHalf' ? styles.active : ''}`}
+                            onClick={() => setGpsMatchDayPeriod('secondHalf')}
+                          >
+                            2. połowa
+                          </button>
+                        </div>
+
+                        <div className={styles.gpsMatchDayTableWrap}>
+                          <table className={styles.gpsMatchDayTable}>
+                            <thead>
+                              <tr>
+                                <th
+                                  className={styles.gpsSortableTh}
+                                  onClick={() => handleSort('playerName')}
+                                  role="button"
+                                  aria-sort={gpsMatchDaySortColumn === 'playerName' ? (gpsMatchDaySortDir === 'asc' ? 'ascending' : 'descending') : undefined}
+                                >
+                                  Zawodnik{gpsMatchDaySortColumn === 'playerName' && (gpsMatchDaySortDir === 'asc' ? ' ↑' : ' ↓')}
+                                </th>
+                                <th className={styles.gpsSortableTh} onClick={() => handleSort('minutes')} role="button" aria-sort={gpsMatchDaySortColumn === 'minutes' ? (gpsMatchDaySortDir === 'asc' ? 'ascending' : 'descending') : undefined}>Min{gpsMatchDaySortColumn === 'minutes' && (gpsMatchDaySortDir === 'asc' ? ' ↑' : ' ↓')}</th>
+                                <th className={styles.gpsSortableTh} onClick={() => handleSort('accRel')} role="button" aria-sort={gpsMatchDaySortColumn === 'accRel' ? (gpsMatchDaySortDir === 'asc' ? 'ascending' : 'descending') : undefined}>ACC 5-6{gpsMatchDaySortColumn === 'accRel' && (gpsMatchDaySortDir === 'asc' ? ' ↑' : ' ↓')}</th>
+                                <th className={styles.gpsSortableTh} onClick={() => handleSort('decRel')} role="button" aria-sort={gpsMatchDaySortColumn === 'decRel' ? (gpsMatchDaySortDir === 'asc' ? 'ascending' : 'descending') : undefined}>DCC 5-6{gpsMatchDaySortColumn === 'decRel' && (gpsMatchDaySortDir === 'asc' ? ' ↑' : ' ↓')}</th>
+                                <th className={styles.gpsSortableTh} onClick={() => handleSort('distance56')} role="button" aria-sort={gpsMatchDaySortColumn === 'distance56' ? (gpsMatchDaySortDir === 'asc' ? 'ascending' : 'descending') : undefined}>Distance 5-6{gpsMatchDaySortColumn === 'distance56' && (gpsMatchDaySortDir === 'asc' ? ' ↑' : ' ↓')}</th>
+                                <th className={styles.gpsSortableTh} onClick={() => handleSort('sprintDistance')} role="button" aria-sort={gpsMatchDaySortColumn === 'sprintDistance' ? (gpsMatchDaySortDir === 'asc' ? 'ascending' : 'descending') : undefined}>Sprint Distance{gpsMatchDaySortColumn === 'sprintDistance' && (gpsMatchDaySortDir === 'asc' ? ' ↑' : ' ↓')}</th>
+                                <th className={styles.gpsSortableTh} onClick={() => handleSort('sprints')} role="button" aria-sort={gpsMatchDaySortColumn === 'sprints' ? (gpsMatchDaySortDir === 'asc' ? 'ascending' : 'descending') : undefined}>Sprints{gpsMatchDaySortColumn === 'sprints' && (gpsMatchDaySortDir === 'asc' ? ' ↑' : ' ↓')}</th>
+                                <th className={styles.gpsSortableTh} onClick={() => handleSort('maxSpeed')} role="button" aria-sort={gpsMatchDaySortColumn === 'maxSpeed' ? (gpsMatchDaySortDir === 'asc' ? 'ascending' : 'descending') : undefined}>Max Speed{gpsMatchDaySortColumn === 'maxSpeed' && (gpsMatchDaySortDir === 'asc' ? ' ↑' : ' ↓')}</th>
+                                <th className={styles.gpsSortableTh} onClick={() => handleSort('distancePerMin')} role="button" aria-sort={gpsMatchDaySortColumn === 'distancePerMin' ? (gpsMatchDaySortDir === 'asc' ? 'ascending' : 'descending') : undefined}>Distance Per Min{gpsMatchDaySortColumn === 'distancePerMin' && (gpsMatchDaySortDir === 'asc' ? ' ↑' : ' ↓')}</th>
+                                <th className={styles.gpsSortableTh} onClick={() => handleSort('distanceZone46')} role="button" aria-sort={gpsMatchDaySortColumn === 'distanceZone46' ? (gpsMatchDaySortDir === 'asc' ? 'ascending' : 'descending') : undefined}>HSR (m){gpsMatchDaySortColumn === 'distanceZone46' && (gpsMatchDaySortDir === 'asc' ? ' ↑' : ' ↓')}</th>
+                                <th className={styles.gpsSortableTh} onClick={() => handleSort('hib')} role="button" aria-sort={gpsMatchDaySortColumn === 'hib' ? (gpsMatchDaySortDir === 'asc' ? 'ascending' : 'descending') : undefined}>HIB (s){gpsMatchDaySortColumn === 'hib' && (gpsMatchDaySortDir === 'asc' ? ' ↑' : ' ↓')}</th>
+                                <th className={styles.gpsSortableTh} onClick={() => handleSort('hibCount')} role="button" aria-sort={gpsMatchDaySortColumn === 'hibCount' ? (gpsMatchDaySortDir === 'asc' ? 'ascending' : 'descending') : undefined}>HIB (n){gpsMatchDaySortColumn === 'hibCount' && (gpsMatchDaySortDir === 'asc' ? ' ↑' : ' ↓')}</th>
+                                <th className={styles.gpsSortableTh} onClick={() => handleSort('hmlDistance')} role="button" aria-sort={gpsMatchDaySortColumn === 'hmlDistance' ? (gpsMatchDaySortDir === 'asc' ? 'ascending' : 'descending') : undefined}>HML Distance{gpsMatchDaySortColumn === 'hmlDistance' && (gpsMatchDaySortDir === 'asc' ? ' ↑' : ' ↓')}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sortedData.map((entry) => {
+                                const total = getPeriodData(entry);
+                                const minutes = getPlayerMinutesInPeriod(entry.playerId);
+                                const minutesLabel = Number.isFinite(minutes) ? String(minutes) : '—';
+                                const accDecAbs56 = getAccDecAbs56(total);
+                                const accRelLabel = Number.isFinite(accDecAbs56.acc) ? formatNum(applyNormalization('accRel', accDecAbs56.acc, minutes)) : '—';
+                                const decRelLabel = Number.isFinite(accDecAbs56.dec) ? formatNum(applyNormalization('decRel', accDecAbs56.dec, minutes)) : '—';
+                                const distance56 = getDistance56(total);
+                                const distance56Label = Number.isFinite(distance56) ? formatNum(applyNormalization('distance56', distance56, minutes)) : '—';
+                                const maxSpeedKey = findKey(total, ['Max Speed', 'Max speed', 'Max Speed (km/h)', 'Max Speed (kph)']);
+                                const maxSpeedLabel = maxSpeedKey != null && total[maxSpeedKey] != null ? formatNum(toNum(total[maxSpeedKey])) : '—';
+                                const distancePerMinKey = findKey(total, ['Distance Per Min', 'Distance per min']);
+                                const distancePerMinLabel = distancePerMinKey != null && total[distancePerMinKey] != null ? formatNum(toNum(total[distancePerMinKey])) : '—';
+                                const distanceZone46Key = findKey(total, [
+                                  'High Speed Running (Relative)',
+                                  'High Speed Running (relative)',
+                                  'High Speed Running (m)',
+                                  'High Speed Running',
+                                ]);
+                                const distanceZone46Raw = distanceZone46Key != null && total[distanceZone46Key] != null ? toNum(total[distanceZone46Key]) : NaN;
+                                const distanceZone46Label = Number.isFinite(distanceZone46Raw) ? formatNum(distanceZone46Raw) : '—';
+                                const sprintsKey = findKey(total, ['Sprints', 'Sprint Count']);
+                                const sprintsRaw = sprintsKey != null && total[sprintsKey] != null ? toNum(total[sprintsKey]) : NaN;
+                                const sprintsLabel = Number.isFinite(sprintsRaw) ? formatNum(applyNormalization('sprints', sprintsRaw, minutes)) : '—';
+                                const sprintDistanceKey = findKey(total, ['Sprint Distance', 'Sprint distance']);
+                                const sprintDistanceRaw = sprintDistanceKey != null && total[sprintDistanceKey] != null ? toNum(total[sprintDistanceKey]) : NaN;
+                                const sprintDistanceLabel = Number.isFinite(sprintDistanceRaw) ? formatNum(applyNormalization('sprintDistance', sprintDistanceRaw, minutes)) : '—';
+                                const hibSeconds = getHibSeconds(total);
+                                const hibLabel = Number.isFinite(hibSeconds) ? formatNum(applyNormalization('hib', hibSeconds, minutes)) : '—';
+                                const hibCount = getHibCount(total);
+                                const hibCountLabel = Number.isFinite(hibCount) ? formatNum(applyNormalization('hibCount', hibCount, minutes)) : '—';
+                                const hmlDistanceKey = findKey(total, ['HML Distance', 'HML distance']);
+                                const hmlDistanceRaw = hmlDistanceKey != null && total[hmlDistanceKey] != null ? toNum(total[hmlDistanceKey]) : NaN;
+                                const hmlDistanceLabel = Number.isFinite(hmlDistanceRaw) ? formatNum(applyNormalization('hmlDistance', hmlDistanceRaw, minutes)) : '—';
+                                return (
+                                  <tr key={entry.id}>
+                                    <td>{entry.playerName}</td>
+                                    <td>{minutesLabel}</td>
+                                    <td>{accRelLabel}</td>
+                                    <td>{decRelLabel}</td>
+                                    <td>{distance56Label}</td>
+                                    <td>{sprintDistanceLabel}</td>
+                                    <td>{sprintsLabel}</td>
+                                    <td>{maxSpeedLabel}</td>
+                                    <td>{distancePerMinLabel}</td>
+                                    <td>{distanceZone46Label}</td>
+                                    <td>{hibLabel}</td>
+                                    <td>{hibCountLabel}</td>
+                                    <td>{hmlDistanceLabel}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        </>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
