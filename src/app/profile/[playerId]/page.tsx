@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Player, Action, TeamInfo, PKEntry, Shot } from "@/types";
+import { Player, Action, TeamInfo, PKEntry, Shot, PlayerMatchStats } from "@/types";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { useTeams } from "@/hooks/useTeams";
@@ -35,6 +35,7 @@ export default function PlayerDetailsPage() {
   const [allShots, setAllShots] = useState<any[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
   const [allTeamActions, setAllTeamActions] = useState<Action[]>([]); // Wszystkie akcje zespołu dla rankingu
+  const [playerMatchStatsByMatchId, setPlayerMatchStatsByMatchId] = useState<Record<string, PlayerMatchStats>>({});
   const [selectedMatchIds, setSelectedMatchIds] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("profile_selectedMatchIds");
@@ -605,6 +606,7 @@ export default function PlayerDetailsPage() {
       try {
         const allActionsData: Action[] = [];
         const allShotsData: any[] = [];
+        const matchStatsMap: Record<string, PlayerMatchStats> = {};
 
         // Użyj już przefiltrowanych meczów
         const matchesToLoad = filteredMatchesBySeason;
@@ -617,6 +619,14 @@ export default function PlayerDetailsPage() {
             const matchDoc = await getDoc(doc(db, "matches", match.matchId));
             if (matchDoc.exists()) {
               const matchData = matchDoc.data() as TeamInfo;
+              
+              // Pobierz ręcznie wpisane statystyki zawodnika (podania celne/niecelne + czas posiadania)
+              const playerMatchStats = matchData?.matchData?.playerStats?.find(
+                (s: any) => s?.playerId === targetPlayerId
+              );
+              if (playerMatchStats) {
+                matchStatsMap[match.matchId] = playerMatchStats as PlayerMatchStats;
+              }
               
               // Pobierz akcje z różnych kolekcji
               const packingActions = matchData.actions_packing || [];
@@ -654,9 +664,11 @@ export default function PlayerDetailsPage() {
 
         setAllActions(allActionsData);
         setAllShots(allShotsData);
+        setPlayerMatchStatsByMatchId(matchStatsMap);
       } catch (error) {
         console.error("Błąd podczas pobierania akcji:", error);
         setAllActions([]);
+        setPlayerMatchStatsByMatchId({});
       } finally {
         setIsLoadingActions(false);
       }
@@ -1033,6 +1045,14 @@ export default function PlayerDetailsPage() {
   const hasEndFilterSelected = (): boolean => {
     const filters = Array.isArray(selectedActionFilter) ? selectedActionFilter : [];
     return filters.some(f => ['p0', 'p1', 'p2', 'p3', 'pk', 'shot', 'goal'].includes(f));
+  };
+
+  const minutesDecimalToMMSS = (minutes?: number): string => {
+    if (minutes === undefined || minutes === null || Number.isNaN(minutes)) return "";
+    const totalSeconds = Math.max(0, Math.round(minutes * 60));
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   // Oblicz statystyki zawodnika
@@ -2951,6 +2971,36 @@ export default function PlayerDetailsPage() {
       return true;
     });
 
+    // Ręcznie wpisane statystyki zawodnika (jeśli istnieją) – sumujemy po wybranych meczach
+    let manualPassAccurate = 0;
+    let manualPassInaccurate = 0;
+    let manualPossessionMinutes = 0;
+    let hasManualPasses = false;
+    let hasManualPossession = false;
+
+    playerMatches.forEach((m) => {
+      const matchId = m.matchId || "";
+      if (!matchId) return;
+      const s = playerMatchStatsByMatchId[matchId];
+      if (!s) return;
+
+      const ownAcc = typeof s.passesOwnHalfAccurate === "number" && !Number.isNaN(s.passesOwnHalfAccurate) ? s.passesOwnHalfAccurate : undefined;
+      const ownInacc = typeof s.passesOwnHalfInaccurate === "number" && !Number.isNaN(s.passesOwnHalfInaccurate) ? s.passesOwnHalfInaccurate : undefined;
+      const oppAcc = typeof s.passesOppHalfAccurate === "number" && !Number.isNaN(s.passesOppHalfAccurate) ? s.passesOppHalfAccurate : undefined;
+      const oppInacc = typeof s.passesOppHalfInaccurate === "number" && !Number.isNaN(s.passesOppHalfInaccurate) ? s.passesOppHalfInaccurate : undefined;
+
+      if (ownAcc !== undefined || ownInacc !== undefined || oppAcc !== undefined || oppInacc !== undefined) {
+        hasManualPasses = true;
+        manualPassAccurate += (ownAcc ?? 0) + (oppAcc ?? 0);
+        manualPassInaccurate += (ownInacc ?? 0) + (oppInacc ?? 0);
+      }
+
+      if (typeof s.possessionMinutes === "number" && !Number.isNaN(s.possessionMinutes)) {
+        hasManualPossession = true;
+        manualPossessionMinutes += s.possessionMinutes;
+      }
+    });
+
     return {
       totalPxT,
       pxtAsSender,
@@ -3032,6 +3082,11 @@ export default function PlayerDetailsPage() {
       // Liczniki podań
       senderPassCount,
       receiverPassCount,
+      // Ręcznie wpisane podania/czas posiadania (jeśli istnieją)
+      manualPassAccurate: hasManualPasses ? manualPassAccurate : undefined,
+      manualPassInaccurate: hasManualPasses ? manualPassInaccurate : undefined,
+      manualPassTotal: hasManualPasses ? manualPassAccurate + manualPassInaccurate : undefined,
+      manualPossessionMinutes: hasManualPossession ? manualPossessionMinutes : undefined,
       // Liczniki akcji jako podający - miejsca startowe (P0-P3 Start)
       senderP0StartCount,
       senderP1StartCount,
@@ -3225,7 +3280,7 @@ export default function PlayerDetailsPage() {
       partnerStatsAsSender: new Map(partnerStatsAsSender),
       partnerStatsAsReceiver: new Map(partnerStatsAsReceiver),
     };
-  }, [player, allActions, filteredMatchesBySeason, selectedMatchIds, totalMinutes, positionMinutes, selectedPlayerForView, heatmapDirection, selectedActionFilter, selectedRegainPackingFilter, selectedLosesPackingFilter]);
+  }, [player, allActions, filteredMatchesBySeason, selectedMatchIds, totalMinutes, positionMinutes, selectedPlayerForView, heatmapDirection, selectedActionFilter, selectedRegainPackingFilter, selectedLosesPackingFilter, playerMatchStatsByMatchId]);
 
   // Oblicz ranking w zespole dla statystyk zawodnika
   const teamRanking = useMemo(() => {
@@ -4622,6 +4677,33 @@ export default function PlayerDetailsPage() {
                               )}
                             </span>
                           </div>
+                          {(playerStats.manualPassAccurate !== undefined || playerStats.manualPassInaccurate !== undefined) && (
+                            <div className={styles.detailsRow}>
+                              <span className={styles.detailsLabel}>Podania (wpisane):</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueMain}>
+                                  <strong>{playerStats.manualPassAccurate ?? 0}</strong> celne
+                                </span>
+                                <span className={styles.valueSecondary}>
+                                  {" "}• {playerStats.manualPassInaccurate ?? 0} niecelne
+                                  {playerStats.manualPassTotal !== undefined ? ` (łącznie ${playerStats.manualPassTotal})` : ""}
+                                </span>
+                              </span>
+                            </div>
+                          )}
+                          {playerStats.manualPossessionMinutes !== undefined && (
+                            <div className={styles.detailsRow}>
+                              <span className={styles.detailsLabel}>Czas posiadania:</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueMain}>
+                                  <strong>{minutesDecimalToMMSS(playerStats.manualPossessionMinutes)}</strong>
+                                </span>
+                                <span className={styles.valueSecondary}>
+                                  {" "}({playerStats.manualPossessionMinutes.toFixed(1)} min)
+                                </span>
+                              </span>
+                            </div>
+                          )}
                           <div className={styles.detailsRow}>
                             <span className={styles.detailsLabel}>PxT / podanie:</span>
                             <span className={styles.detailsValue}>

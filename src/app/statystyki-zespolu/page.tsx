@@ -14,6 +14,7 @@ import { doc, getDoc, collection, query, where, getDocs } from "firebase/firesto
 import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
+import { isIn1TZoneCanonical, isInOpponent1TZoneCanonical } from "@/utils/pitchZones";
 import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPitch";
 import XGPitch from "@/components/XGPitch/XGPitch";
 import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
@@ -614,9 +615,35 @@ export default function StatystykiZespoluPage() {
     }
     setGpsMatchDayLoading(true);
     const gpsRef = collection(db, 'gps');
-    getDocs(query(gpsRef, where('teamId', '==', selectedTeam), where('date', '==', matchDateStr), where('day', '==', 'MD')))
-      .then((snapshot) => {
-        const list: Array<{ id: string; playerId: string; playerName: string; firstHalf: Record<string, any>; secondHalf: Record<string, any>; total: Record<string, any> }> = [];
+    (async () => {
+      try {
+        const provider = 'STATSports';
+        let snapshot;
+        try {
+          snapshot = await getDocs(
+            query(
+              gpsRef,
+              where('teamId', '==', selectedTeam),
+              where('date', '==', matchDateStr),
+              where('day', '==', 'MD'),
+              where('provider', '==', provider)
+            )
+          );
+        } catch {
+          // Brak indeksu / stare dane - fallback bez provider
+          snapshot = await getDocs(
+            query(gpsRef, where('teamId', '==', selectedTeam), where('date', '==', matchDateStr), where('day', '==', 'MD'))
+          );
+        }
+
+        const list: Array<{
+          id: string;
+          playerId: string;
+          playerName: string;
+          firstHalf: Record<string, any>;
+          secondHalf: Record<string, any>;
+          total: Record<string, any>;
+        }> = [];
         snapshot.forEach((docSnap) => {
           const d = docSnap.data();
           list.push({
@@ -629,9 +656,12 @@ export default function StatystykiZespoluPage() {
           });
         });
         setGpsMatchDayData(list);
-      })
-      .catch(() => setGpsMatchDayData([]))
-      .finally(() => setGpsMatchDayLoading(false));
+      } catch {
+        setGpsMatchDayData([]);
+      } finally {
+        setGpsMatchDayLoading(false);
+      }
+    })();
   }, [expandedCategory, selectedMatchInfo, selectedTeam]);
 
   const pkEntriesSideStats = useMemo(() => {
@@ -3420,22 +3450,8 @@ export default function StatystykiZespoluPage() {
                   const teamShotsCount = teamShots.length;
                   const teamXGPerShot = teamShotsCount > 0 ? (teamXG / teamShotsCount) : 0;
                   
-                  // Oblicz % strzałów z 1T w strefie 1T
-                  const pitchOrientation = typeof window !== 'undefined' ? localStorage.getItem('pitchOrientation') : 'false';
-                  const isPitchFlipped = pitchOrientation === 'true';
-                  
-                  const isIn1TZone = (shot: any) => {
-                    const x = shot.x || 0;
-                    const y = shot.y || 0;
-                    const isInYRange = y >= 39 && y <= 61;
-                    if (isPitchFlipped) {
-                      return isInYRange && x >= 0 && x <= 10;
-                    } else {
-                      return isInYRange && x >= 90 && x <= 100;
-                    }
-                  };
-                  
-                  const teamShots1T = teamShots.filter(isIn1TZone);
+                  // Oblicz % strzałów z 1T w strefie 1T (KANONICZNIE, niezależnie od obrotu UI)
+                  const teamShots1T = teamShots.filter(isIn1TZoneCanonical);
                   const teamShots1TCount = teamShots1T.length;
                   const teamShots1TContact1 = teamShots1T.filter(shot => shot.isContact1 === true).length;
                   const team1TContact1Percentage = teamShots1TCount > 0 ? (teamShots1TContact1 / teamShots1TCount) * 100 : 0;
@@ -4643,21 +4659,7 @@ export default function StatystykiZespoluPage() {
                   });
                   
                   // Filtruj strzały w strefie 1T
-                  const pitchOrientation = typeof window !== 'undefined' ? localStorage.getItem('pitchOrientation') : 'false';
-                  const isPitchFlipped = pitchOrientation === 'true';
-                  
-                  const isIn1TZone = (shot: any) => {
-                    const x = shot.x || 0;
-                    const y = shot.y || 0;
-                    const isInYRange = y >= 39 && y <= 61;
-                    if (isPitchFlipped) {
-                      return isInYRange && x >= 0 && x <= 10;
-                    } else {
-                      return isInYRange && x >= 90 && x <= 100;
-                    }
-                  };
-                  
-                  const teamShots1T = teamShots.filter(isIn1TZone);
+                  const teamShots1T = teamShots.filter(isIn1TZoneCanonical);
                   const teamShots1TCount = teamShots1T.length;
                   const kpi1TPercentage = 85;
                   
@@ -5664,26 +5666,12 @@ export default function StatystykiZespoluPage() {
                       .sort((a, b) => a.time - b.time);
                   } else if (selectedKpiForVideo === '1t-percentage') {
                     // Wszystkie strzały naszego zespołu w strefie 1T
-                    const pitchOrientation = typeof window !== 'undefined' ? localStorage.getItem('pitchOrientation') : 'false';
-                    const isPitchFlipped = pitchOrientation === 'true';
-                    
-                    const isIn1TZone = (shot: any) => {
-                      const x = shot.x || 0;
-                      const y = shot.y || 0;
-                      const isInYRange = y >= 39 && y <= 61;
-                      if (isPitchFlipped) {
-                        return isInYRange && x >= 0 && x <= 10;
-                      } else {
-                        return isInYRange && x >= 90 && x <= 100;
-                      }
-                    };
-                    
                     let teamShots1TFiltered = (allShots || []).filter((shot: any) => {
                       const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
                         ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
                         : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
                       return shotTeamId === teamIdInMatch &&
-                        isIn1TZone(shot) &&
+                        isIn1TZoneCanonical(shot) &&
                         shot && 
                         (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null ||
                          shot.videoTimestamp !== undefined && shot.videoTimestamp !== null);
@@ -7845,44 +7833,11 @@ export default function StatystykiZespoluPage() {
                       
                       // Strefa 1T - prostokąt w linii ataku (reaguje na obrót boiska)
                       // Prostokąt: szerokość 10%, wysokość 22%, wyśrodkowany pionowo (39-61%)
-                      // Sprawdź orientację boiska z localStorage
-                      const pitchOrientation = typeof window !== 'undefined' ? localStorage.getItem('pitchOrientation') : 'false';
-                      const isPitchFlipped = pitchOrientation === 'true';
-                      
-                      const isIn1TZone = (shot: any) => {
-                        const x = shot.x || 0;
-                        const y = shot.y || 0;
-                        // Strefa 1T: y: 39-61% (50% ± 11%)
-                        // x: 90-100% gdy nie odwrócone, 0-10% gdy odwrócone
-                        const isInYRange = y >= 39 && y <= 61;
-                        if (isPitchFlipped) {
-                          // Gdy odwrócone: atak po lewej (x: 0-10%)
-                          return isInYRange && x >= 0 && x <= 10;
-                        } else {
-                          // Gdy nie odwrócone: atak po prawej (x: 90-100%)
-                          return isInYRange && x >= 90 && x <= 100;
-                        }
-                      };
-                      
-                      // Funkcja sprawdzająca strefę 1T dla przeciwnika (po przeciwległej stronie)
-                      const isInOpponent1TZone = (shot: any) => {
-                        const x = shot.x || 0;
-                        const y = shot.y || 0;
-                        // Strefa 1T przeciwnika: y: 39-61% (50% ± 11%)
-                        // x: 0-10% gdy nie odwrócone (przeciwnik atakuje z lewej), 90-100% gdy odwrócone
-                        const isInYRange = y >= 39 && y <= 61;
-                        if (isPitchFlipped) {
-                          // Gdy odwrócone: przeciwnik atakuje z prawej (x: 90-100%)
-                          return isInYRange && x >= 90 && x <= 100;
-                        } else {
-                          // Gdy nie odwrócone: przeciwnik atakuje z lewej (x: 0-10%)
-                          return isInYRange && x >= 0 && x <= 10;
-                        }
-                      };
+                      // Strefa 1T liczona kanonicznie (nie zależy od obrotu UI)
                       
                       // Statystyki strzałów w strefie 1T
-                      const teamShots1T = teamShots.filter(isIn1TZone);
-                      const opponentShots1T = opponentShots.filter(isInOpponent1TZone);
+                      const teamShots1T = teamShots.filter(isIn1TZoneCanonical);
+                      const opponentShots1T = opponentShots.filter(isInOpponent1TZoneCanonical);
                       const teamShots1TCount = teamShots1T.length;
                       const opponentShots1TCount = opponentShots1T.length;
                       
@@ -7909,14 +7864,10 @@ export default function StatystykiZespoluPage() {
                       
                       // Funkcja sprawdzająca, czy pkEntry kończy się w strefie 1T
                       const isPKEntryIn1TZone = (entry: any) => {
-                        const x = entry.endX || 0;
-                        const y = entry.endY || 0;
-                        const isInYRange = y >= 39 && y <= 61;
-                        if (isPitchFlipped) {
-                          return isInYRange && x >= 0 && x <= 10;
-                        } else {
-                          return isInYRange && x >= 90 && x <= 100;
-                        }
+                        // Kanonicznie: nasza strefa 1T zawsze po prawej (nie zależy od obrotu UI)
+                        const x = Number(entry.endX) || 0;
+                        const y = Number(entry.endY) || 0;
+                        return y >= 39 && y <= 61 && x >= 90 && x <= 100;
                       };
                       
                       // Filtruj pkEntries z isPossible1T w strefie 1T

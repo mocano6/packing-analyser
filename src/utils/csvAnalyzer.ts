@@ -11,6 +11,29 @@ export interface CSVStructure {
   columnSamples: { [key: string]: any[] };
 }
 
+type CSVDelimiter = ',' | ';';
+
+function detectCSVDelimiter(headerLine: string): CSVDelimiter {
+  const commaCount = (headerLine.match(/,/g) || []).length;
+  const semicolonCount = (headerLine.match(/;/g) || []).length;
+  // Catapult często eksportuje CSV jako ; (Europa). STATSports zwykle jako ,
+  return semicolonCount > commaCount ? ';' : ',';
+}
+
+function normalizeRowLength(row: string[], headersLength: number): string[] {
+  const normalized = [...row];
+  while (normalized.length > headersLength && (normalized[normalized.length - 1] ?? "").trim() === "") {
+    normalized.pop();
+  }
+  if (normalized.length > headersLength) {
+    return normalized.slice(0, headersLength);
+  }
+  while (normalized.length < headersLength) {
+    normalized.push("");
+  }
+  return normalized;
+}
+
 export function analyzeCSVStructure(csvText: string, maxRows: number = 10): CSVStructure {
   const lines = csvText.split('\n').filter(line => line.trim());
   if (lines.length === 0) {
@@ -18,7 +41,8 @@ export function analyzeCSVStructure(csvText: string, maxRows: number = 10): CSVS
   }
 
   // Parsuj nagłówki
-  const headers = parseCSVLine(lines[0]);
+  const delimiter = detectCSVDelimiter(lines[0]);
+  const headers = parseCSVLine(lines[0], delimiter);
   const sampleRows: string[][] = [];
   const columnSamples: { [key: string]: any[] } = {};
   const columnTypes: { [key: string]: 'string' | 'number' | 'date' | 'mixed' } = {};
@@ -31,7 +55,7 @@ export function analyzeCSVStructure(csvText: string, maxRows: number = 10): CSVS
   // Parsuj przykładowe wiersze
   const rowsToAnalyze = Math.min(maxRows, lines.length - 1);
   for (let i = 1; i <= rowsToAnalyze && i < lines.length; i++) {
-    const row = parseCSVLine(lines[i]);
+    const row = normalizeRowLength(parseCSVLine(lines[i], delimiter), headers.length);
     if (row.length === headers.length) {
       sampleRows.push(row);
       
@@ -89,7 +113,7 @@ export function analyzeCSVStructure(csvText: string, maxRows: number = 10): CSVS
 /**
  * Parsuje linię CSV, obsługując cudzysłowy i przecinki
  */
-function parseCSVLine(line: string): string[] {
+function parseCSVLine(line: string, delimiter: CSVDelimiter): string[] {
   const result: string[] = [];
   let current = '';
   let inQuotes = false;
@@ -107,7 +131,7 @@ function parseCSVLine(line: string): string[] {
         // Przełącz stan cudzysłowów
         inQuotes = !inQuotes;
       }
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       // Koniec pola
       result.push(current);
       current = '';
@@ -145,18 +169,17 @@ export function parseCSV(csvText: string): Record<string, string>[] {
     return [];
   }
 
-  const headers = parseCSVLine(lines[0]);
+  const delimiter = detectCSVDelimiter(lines[0]);
+  const headers = parseCSVLine(lines[0], delimiter);
   const result: Record<string, string>[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const values = parseCSVLine(lines[i]);
-    if (values.length === headers.length) {
-      const row: Record<string, string> = {};
-      headers.forEach((header, index) => {
-        row[header] = values[index]?.trim() || '';
-      });
-      result.push(row);
-    }
+    const values = normalizeRowLength(parseCSVLine(lines[i], delimiter), headers.length);
+    const row: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      row[header] = values[index]?.trim() || '';
+    });
+    result.push(row);
   }
 
   return result;

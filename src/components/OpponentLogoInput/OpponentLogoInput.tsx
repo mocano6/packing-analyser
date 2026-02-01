@@ -17,7 +17,7 @@ const OpponentLogoInput: React.FC<OpponentLogoInputProps> = ({
   const [isLoading, setIsLoading] = useState(false);
 
   // Funkcja kompresji obrazka
-  const compressImage = (dataUrl: string, maxWidth: number = 200, quality: number = 0.8): Promise<string> => {
+  const compressImage = (dataUrl: string, maxWidth: number = 200): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -39,11 +39,14 @@ const OpponentLogoInput: React.FC<OpponentLogoInputProps> = ({
         canvas.width = width;
         canvas.height = height;
 
-        // Narysuj obrazek na canvas z nowymi wymiarami
+        // Narysuj obrazek na canvas z nowymi wymiarami.
+        // WAŻNE: zapis do JPEG usuwa kanał alfa i często daje czarne tło na logo.
+        // Dlatego zapisujemy jako PNG, żeby zachować przezroczystość.
+        ctx.clearRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Konwertuj do base64 z kompresją
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        // Konwertuj do base64 (PNG zachowuje przezroczystość)
+        const compressedDataUrl = canvas.toDataURL('image/png');
         resolve(compressedDataUrl);
       };
       

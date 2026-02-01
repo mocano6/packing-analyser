@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { TEAMS } from "@/constants/teams";
 import { fetchTeams, Team } from "@/constants/teamsLoader";
 import styles from "./TeamsSelector.module.css";
 
@@ -26,6 +25,15 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
 }) => {
   const [teams, setTeams] = useState<Record<string, Team>>({});
   const [isLoading, setIsLoading] = useState(false);
+
+  const getTeamInitials = (name: string): string => {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return "?";
+    if (/^u\d+/i.test(trimmed)) return trimmed.toUpperCase(); // U16, U19, itp.
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  };
 
   // Pobieranie zespołów z Firebase (tylko jeśli availableTeams nie jest przekazane)
   useEffect(() => {
@@ -119,8 +127,24 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
                       }`}
                       onClick={() => handleTeamSelect(team.id)}
                       type="button"
+                      title={team.name}
                     >
-                      {team.name}
+                      <div className={styles.teamTile}>
+                        <div className={styles.teamLogoWrapper} aria-hidden="true">
+                          {team.logo ? (
+                            <img
+                              src={team.logo}
+                              alt=""
+                              className={styles.teamLogo}
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          ) : (
+                            <div className={styles.teamInitials}>{getTeamInitials(team.name)}</div>
+                          )}
+                        </div>
+                        <div className={styles.teamName}>{team.name}</div>
+                      </div>
                     </button>
                   ))}
                 </div>

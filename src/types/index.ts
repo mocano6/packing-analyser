@@ -350,7 +350,10 @@ export interface PlayerMinutesModalProps {
 }
 
 // Dane GPS z pliku CSV STATSports
+export type GPSProvider = 'STATSports' | 'Catapult';
+
 export interface GPSDataEntry {
+  provider?: GPSProvider; // Dostawca danych GPS (domyślnie: STATSports)
   playerId: string;
   playerName: string;
   day: string; // E.g., "MD", "MD+1"
