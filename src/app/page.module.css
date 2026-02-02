@@ -38,11 +38,19 @@
   gap: 8px;
 }
 
+.videoIconsHeaderWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  margin-left: 8px;
+}
+
 .videoIconsHeader {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: 8px;
+  margin-left: 0;
 }
 
 .youtubeLogoHeader {
@@ -54,6 +62,8 @@
   border-radius: 8px;
   transition: all 0.2s;
   background-color: transparent;
+  position: relative;
+  z-index: 0; /* nie zasłania elementów MatchInfoHeader */
 }
 
 .youtubeLogoHeader:hover {
@@ -487,10 +497,30 @@
   border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(4px);
-  z-index: 10000;
+  z-index: 900;
   pointer-events: auto;
   user-select: none;
   transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.videoPossessionButtonsHeader {
+  position: static;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(4px);
+  user-select: none;
+  pointer-events: auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto 2px auto;
+  overflow-x: auto;
 }
 
 .videoPossessionButtons:hover {
@@ -503,7 +533,7 @@
   top: 8px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 10001;
+  z-index: 901;
 }
 
 .videoPossessionButton {
@@ -540,6 +570,58 @@
 .videoPossessionButtonActive:hover {
   background-color: rgba(59, 130, 246, 0.9);
   border-color: rgba(59, 130, 246, 1);
+}
+
+.videoKeycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.videoPossessionJumpButton {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  margin-left: 8px;
+}
+
+.videoPossessionJumpButton:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+.videoPossessionJumpButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.videoPossessionResetButton {
+  background-color: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.videoPossessionResetButton:hover {
+  background-color: rgba(239, 68, 68, 0.28);
+  border-color: rgba(239, 68, 68, 0.45);
 }
 
 @media (max-width: 1024px) {

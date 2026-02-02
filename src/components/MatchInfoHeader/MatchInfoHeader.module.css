@@ -242,6 +242,8 @@
   background-color: #f8f9fa;
   border-top: 1px solid #e0e0e0;
   border-radius: 0 0 8px 8px;
+  position: relative;
+  z-index: 5; /* nad elementami z nagłówka (np. ikoną wideo) */
 }
 
 .expandBtn {

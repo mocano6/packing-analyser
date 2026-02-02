@@ -273,6 +273,8 @@ export interface TeamInfo {
       opponentFirstHalf?: number; // Czas posiadania przeciwnika w 1 połowie (min)
       teamSecondHalf?: number; // Czas posiadania naszego zespołu w 2 połowie (min)
       opponentSecondHalf?: number; // Czas posiadania przeciwnika w 2 połowie (min)
+      deadFirstHalf?: number; // Czas martwy (piłka poza grą) w 1 połowie (min)
+      deadSecondHalf?: number; // Czas martwy (piłka poza grą) w 2 połowie (min)
     };
     // Liczba podań celnych na własnej połowie
     passes?: {

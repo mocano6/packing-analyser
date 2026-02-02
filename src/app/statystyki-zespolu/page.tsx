@@ -4610,7 +4610,8 @@ export default function StatystykiZespoluPage() {
                                 const seconds = Math.floor(time % 60);
                                   const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
                                 const isGoal = shot.shotType === 'goal' || shot.isGoal === true;
-                                const isSuccessful = (shot.xG || 0) >= kpiXGPerShot || isGoal;
+                                const xgValue = shot.xG || 0;
+                                const isSuccessful = xgValue >= kpiXGPerShot;
                                 
                                 return (
                                   <button
@@ -4632,7 +4633,7 @@ export default function StatystykiZespoluPage() {
                                       fontWeight: '500',
                                       position: 'relative'
                                     }}
-                                    title={`${isGoal ? 'GOL • ' : ''}xG: ${(shot.xG || 0).toFixed(2)} • Minuta: ${shot.minute}'`}
+                                    title={`${isGoal ? 'GOL • ' : ''}xG: ${xgValue.toFixed(2)} • Minuta: ${shot.minute}'`}
                                   >
                                     {timeString}
                                   </button>

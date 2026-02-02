@@ -5,7 +5,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { TeamInfo, Player, GPSDataEntry, GPSProvider } from "@/types";
 import { TEAMS } from "@/constants/teams";
 import { analyzeCSVStructure, parseCSV, CSVStructure } from "@/utils/csvAnalyzer";
-import { getPlayerFullName } from "@/utils/playerUtils";
+import { getPlayerFirstName, getPlayerFullName, getPlayerLastName, sortPlayersByLastName } from "@/utils/playerUtils";
 import { getDB } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, orderBy, limit } from "firebase/firestore";
 import styles from "./GPSDataSection.module.css";
@@ -1571,20 +1571,23 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                               className={styles.select}
                             >
                               <option value="">-- Wybierz zawodnika --</option>
-                              {players
-                                .filter(player => 
-                                  selectedTeam && 
-                                  (player.teams?.includes(selectedTeam) || player.teamId === selectedTeam)
+                              {sortPlayersByLastName(
+                                players.filter(
+                                  (player) =>
+                                    selectedTeam &&
+                                    (player.teams?.includes(selectedTeam) || player.teamId === selectedTeam)
                                 )
-                                .map((player) => (
+                              ).map((player) => (
                                   <option key={player.id} value={player.id}>
-                                    {getPlayerFullName(player)} {player.number ? `#${player.number}` : ''}
+                                    {`${getPlayerLastName(player)} ${getPlayerFirstName(player)}`.trim()}{" "}
+                                    {player.number ? `#${player.number}` : ""}
                                   </option>
                                 ))}
                             </select>
                             {mapped.matched && mapped.player && !mapped.manualPlayerId && (
                               <small className={styles.suggestionHint}>
-                                💡 Sugestia aplikacji: {getPlayerFullName(mapped.player)} {mapped.player.number ? `#${mapped.player.number}` : ''}
+                                💡 Sugestia aplikacji: {`${getPlayerLastName(mapped.player)} ${getPlayerFirstName(mapped.player)}`.trim()}{" "}
+                                {mapped.player.number ? `#${mapped.player.number}` : ""}
                               </small>
                             )}
                           </div>

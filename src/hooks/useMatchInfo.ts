@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { PlayerMinutes } from "@/types";
+import { PlayerMinutes, TeamInfo } from "@/types";
 import { getDB } from "@/lib/firebase";
 import { 
   collection, getDocs, addDoc, updateDoc, deleteDoc, 
@@ -103,18 +103,6 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, delay =
   }
   
   throw lastError;
-}
-
-// Aktualizacja interfejsu TeamInfo, aby zawierał pole lastUpdated
-export interface TeamInfo {
-  matchId?: string;
-  team: string;
-  opponent: string;
-  isHome: boolean;
-  competition: string;
-  date: string;
-  playerMinutes?: PlayerMinutes[];
-  lastUpdated?: string; // Dodajemy pole lastUpdated
 }
 
 export function useMatchInfo() {
@@ -1037,6 +1025,104 @@ export function useMatchInfo() {
     }
   }, [isOfflineMode, matchInfo, notifyUser]);
 
+  // Helper: usuwa undefined rekurencyjnie (żeby updateDoc nie wprowadzał "pustych" pól)
+  const removeUndefinedValues = (obj: any): any => {
+    if (obj === null || obj === undefined) return obj;
+    if (Array.isArray(obj)) {
+      return obj.map(removeUndefinedValues).filter((x) => x !== undefined);
+    }
+    if (typeof obj === "object") {
+      const cleaned: any = {};
+      Object.keys(obj).forEach((k) => {
+        const v = obj[k];
+        if (v !== undefined) cleaned[k] = removeUndefinedValues(v);
+      });
+      return cleaned;
+    }
+    return obj;
+  };
+
+  // Helper: płytkie merge dla matchData + zagnieżdżonych sekcji (np. possession)
+  const mergeMatchData = (base: any, patch: any): any => {
+    if (!patch) return base ?? {};
+    const next: any = { ...(base ?? {}) };
+    Object.keys(patch).forEach((k) => {
+      const pv = patch[k];
+      if (pv && typeof pv === "object" && !Array.isArray(pv)) {
+        next[k] = { ...(next[k] ?? {}), ...pv };
+      } else {
+        next[k] = pv;
+      }
+    });
+    return next;
+  };
+
+  // Aktualizacja matchData dla meczu (lokalnie; zapis do Firebase tylko na żądanie)
+  const handleUpdateMatchData = useCallback(
+    async (matchId: string, matchDataPatch: any, opts?: { persistToFirebase?: boolean }) => {
+      if (!matchId) return false;
+
+      try {
+        // Lokalnie: cache + allMatches + matchInfo
+        const updatedCacheData = localCacheRef.current.data.map((m: any) => {
+          if (m?.matchId !== matchId) return m;
+          const merged = mergeMatchData((m as any).matchData, matchDataPatch);
+          return { ...m, matchData: merged, lastUpdated: new Date().toISOString() };
+        });
+        localCacheRef.current = {
+          ...localCacheRef.current,
+          data: updatedCacheData,
+          timestamp: new Date().getTime(),
+        };
+        saveLocalCache();
+
+        setAllMatches((prev: any[]) =>
+          prev.map((m: any) => {
+            if (m?.matchId !== matchId) return m;
+            const merged = mergeMatchData(m?.matchData, matchDataPatch);
+            return { ...m, matchData: merged, lastUpdated: new Date().toISOString() };
+          })
+        );
+
+        if ((matchInfo as any)?.matchId === matchId) {
+          setMatchInfo((prev: any) => {
+            if (!prev) return prev;
+            const merged = mergeMatchData(prev?.matchData, matchDataPatch);
+            return { ...prev, matchData: merged, lastUpdated: new Date().toISOString() };
+          });
+        }
+
+        // Firebase: tylko jeśli ktoś świadomie zatwierdzi zapis
+        const shouldPersist = Boolean(opts?.persistToFirebase);
+        if (shouldPersist && !isOfflineMode) {
+          try {
+            const db = getDB();
+            const matchRef = doc(db, "matches", matchId);
+
+            // Pobierz aktualne matchData z cache (żeby wysłać pełny merged obiekt)
+            const cached = localCacheRef.current.data.find((m: any) => m?.matchId === matchId) as any;
+            const merged = mergeMatchData(cached?.matchData, matchDataPatch);
+            const cleaned = removeUndefinedValues(merged);
+
+            await updateDoc(matchRef, {
+              matchData: cleaned,
+              lastUpdated: new Date().toISOString(),
+            });
+          } catch (firebaseError) {
+            console.error("❌ Błąd podczas zapisu matchData do Firebase:", firebaseError);
+            // Nie blokujemy pracy — dane są już w cache.
+          }
+        }
+
+        return true;
+      } catch (e) {
+        console.error("❌ Błąd handleUpdateMatchData:", e);
+        return false;
+      }
+    },
+    [isOfflineMode, matchInfo]
+  );
+
   return {
     matchInfo,
     allMatches,
@@ -1050,6 +1136,7 @@ export function useMatchInfo() {
     handleSelectMatch,
     handleDeleteMatch,
     handleSavePlayerMinutes,
+    handleUpdateMatchData,
     fetchMatches,
     forceRefreshFromFirebase
   };

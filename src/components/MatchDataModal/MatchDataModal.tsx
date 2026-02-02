@@ -76,6 +76,8 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
       opponentFirstHalf: undefined,
       teamSecondHalf: undefined,
       opponentSecondHalf: undefined,
+      deadFirstHalf: undefined,
+      deadSecondHalf: undefined,
     },
     passes: {
       teamFirstHalf: undefined,
@@ -119,6 +121,15 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
     opponentSecondHalf: "",
   });
 
+  // Lokalne wartości tekstowe dla czasu martwego (format MM:SS)
+  const [deadTimeInputs, setDeadTimeInputs] = useState<{
+    deadFirstHalf: string;
+    deadSecondHalf: string;
+  }>({
+    deadFirstHalf: "",
+    deadSecondHalf: "",
+  });
+
   // Reset formularza przy otwarciu modalu
   useEffect(() => {
     if (currentMatch?.matchData) {
@@ -128,6 +139,8 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
           opponentFirstHalf: currentMatch.matchData.possession?.opponentFirstHalf,
           teamSecondHalf: currentMatch.matchData.possession?.teamSecondHalf,
           opponentSecondHalf: currentMatch.matchData.possession?.opponentSecondHalf,
+          deadFirstHalf: currentMatch.matchData.possession?.deadFirstHalf,
+          deadSecondHalf: currentMatch.matchData.possession?.deadSecondHalf,
         },
         passes: {
           teamFirstHalf: currentMatch.matchData.passes?.teamFirstHalf,
@@ -162,6 +175,11 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
         teamSecondHalf: minutesDecimalToMMSS(currentMatch.matchData.possession?.teamSecondHalf),
         opponentSecondHalf: minutesDecimalToMMSS(currentMatch.matchData.possession?.opponentSecondHalf),
       });
+
+      setDeadTimeInputs({
+        deadFirstHalf: minutesDecimalToMMSS(currentMatch.matchData.possession?.deadFirstHalf),
+        deadSecondHalf: minutesDecimalToMMSS(currentMatch.matchData.possession?.deadSecondHalf),
+      });
     } else {
       setFormData({
         possession: {
@@ -169,6 +187,8 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
           opponentFirstHalf: undefined,
           teamSecondHalf: undefined,
           opponentSecondHalf: undefined,
+          deadFirstHalf: undefined,
+          deadSecondHalf: undefined,
         },
         passes: {
           teamFirstHalf: undefined,
@@ -201,6 +221,10 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
         teamSecondHalf: "",
         opponentSecondHalf: "",
       });
+      setDeadTimeInputs({
+        deadFirstHalf: "",
+        deadSecondHalf: "",
+      });
     }
   }, [currentMatch, isOpen]);
 
@@ -224,6 +248,26 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
     // Spróbuj sparsować do minut dziesiętnych i zaktualizować formData
     const minutesDecimal = mmssToMinutesDecimal(safeValue);
 
+    setFormData((prev) => {
+      const newData = { ...prev };
+      newData.possession = {
+        ...newData.possession,
+        [field]: minutesDecimal,
+      };
+      return newData;
+    });
+  };
+
+  const handleDeadTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target; // name: "possession.deadFirstHalf" / "possession.deadSecondHalf"
+    const parts = name.split(".");
+    const field = parts[1] as keyof typeof deadTimeInputs | undefined;
+    if (!field) return;
+
+    const safeValue = value.toUpperCase();
+    setDeadTimeInputs((prev) => ({ ...prev, [field]: safeValue }));
+
+    const minutesDecimal = mmssToMinutesDecimal(safeValue);
     setFormData((prev) => {
       const newData = { ...prev };
       newData.possession = {
@@ -365,6 +409,43 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
                 value={possessionTimeInputs.opponentSecondHalf}
                 onChange={handlePossessionTimeChange}
                 placeholder="MM:SS"
+              />
+            </div>
+
+            {/* Czas martwy */}
+            <div className={styles.tableRow}>
+              <div className={styles.rowLabel}>Czas martwy (min)</div>
+              <input
+                className={styles.tableInput}
+                name="possession.deadFirstHalf"
+                type="text"
+                value={deadTimeInputs.deadFirstHalf}
+                onChange={handleDeadTimeChange}
+                placeholder="MM:SS"
+              />
+              <input
+                className={styles.tableInput}
+                type="text"
+                value="-"
+                disabled
+                aria-disabled="true"
+                title="Czas martwy nie jest przypisany do zespołu"
+              />
+              <input
+                className={styles.tableInput}
+                name="possession.deadSecondHalf"
+                type="text"
+                value={deadTimeInputs.deadSecondHalf}
+                onChange={handleDeadTimeChange}
+                placeholder="MM:SS"
+              />
+              <input
+                className={styles.tableInput}
+                type="text"
+                value="-"
+                disabled
+                aria-disabled="true"
+                title="Czas martwy nie jest przypisany do zespołu"
               />
             </div>
 

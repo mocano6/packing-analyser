@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { fetchTeams, Team } from "@/constants/teamsLoader";
 import styles from "./TeamsSelector.module.css";
 
@@ -64,7 +64,13 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
     loadTeams();
   }, [availableTeams]);
 
-  const teamsList = Object.values(teams);
+  const teamsList = useMemo(() => {
+    return Object.values(teams)
+      .slice()
+      .sort((a, b) =>
+        String(a?.name || "").localeCompare(String(b?.name || ""), "pl", { sensitivity: "base", numeric: true })
+      );
+  }, [teams]);
   const selectedTeamName = teams[selectedTeam]?.name || "Wybierz zespół";
 
   const handleToggle = () => {

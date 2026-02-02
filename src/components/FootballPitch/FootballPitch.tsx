@@ -69,6 +69,36 @@ const FootballPitch = memo(function FootballPitch({
     }
   }, [isFlipped]);
 
+  // Toggle posiadania (globalne, przez localStorage + event)
+  const [isPossessionCounterEnabled, setIsPossessionCounterEnabled] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const v = localStorage.getItem("possession_counter_enabled");
+      if (v === "false") return false;
+      if (v === "true") return true;
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const e = event as CustomEvent;
+      if (typeof e?.detail?.enabled === "boolean") {
+        setIsPossessionCounterEnabled(Boolean(e.detail.enabled));
+      }
+    };
+    window.addEventListener("possessionCounterEnabledChanged", handler as EventListener);
+    return () => window.removeEventListener("possessionCounterEnabledChanged", handler as EventListener);
+  }, []);
+
+  const togglePossessionCounter = useCallback(() => {
+    const next = !isPossessionCounterEnabled;
+    setIsPossessionCounterEnabled(next);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("possession_counter_enabled", String(next));
+      window.dispatchEvent(new CustomEvent("possessionCounterEnabledChanged", { detail: { enabled: next } }));
+    }
+  }, [isPossessionCounterEnabled]);
+
   // Nasłuchuj zmian orientacji z innych komponentów
   useEffect(() => {
     const handleOrientationChange = (event: CustomEvent) => {
@@ -209,6 +239,15 @@ const FootballPitch = memo(function FootballPitch({
                 Statystyki
               </button>
             )}
+            <button
+              type="button"
+              className={pitchHeaderStyles.headerButton}
+              onClick={togglePossessionCounter}
+              aria-pressed={isPossessionCounterEnabled}
+              title={isPossessionCounterEnabled ? "Wyłącz licznik posiadania (Z/X/C)" : "Włącz licznik posiadania (Z/X/C)"}
+            >
+              Posiadanie: {isPossessionCounterEnabled ? "ON" : "OFF"}
+            </button>
             <button
               type="button"
               className={pitchHeaderStyles.headerButton}

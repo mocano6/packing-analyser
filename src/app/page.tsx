@@ -3,11 +3,13 @@
 
 import React, { useMemo, useEffect, useState, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { Tab, Player, TeamInfo, PlayerMinutes, Action, Shot } from "@/types";
+import { Player, TeamInfo, PlayerMinutes, Action, Shot } from "@/types";
 import Instructions from "@/components/Instructions/Instructions";
 import PlayersGrid from "@/components/PlayersGrid/PlayersGrid";
 import PlayerTile from "@/components/PlayersGrid/PlayerTile";
 import Tabs from "@/components/Tabs/Tabs";
+import type { Tab } from "@/components/Tabs/Tabs.types";
+import { getTabForShortcutKey } from "@/components/Tabs/tabShortcuts";
 import { usePlayersState } from "@/hooks/usePlayersState";
 
 import { usePackingActions } from "@/hooks/usePackingActions";
@@ -98,11 +100,11 @@ function removeUndefinedFields<T extends object>(obj: T): T {
 }
 
 export default function Page() {
-  const [activeTab, setActiveTab] = React.useState<"packing" | "acc8s" | "xg" | "regain_loses" | "pk_entries">(() => {
+  const [activeTab, setActiveTab] = React.useState<Tab>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('activeTab');
       if (saved && ['packing', 'acc8s', 'xg', 'regain_loses', 'pk_entries'].includes(saved)) {
-        return saved as "packing" | "acc8s" | "xg" | "regain_loses" | "pk_entries";
+        return saved as Tab;
       }
       // Migracja starych wartości
       if (saved === 'regain' || saved === 'loses') {
@@ -121,6 +123,35 @@ export default function Page() {
       localStorage.setItem('activeTab', activeTab);
     }
   }, [activeTab]);
+
+  // Globalne skróty zakładek (Q/W/E/R/T) — działa w całej aplikacji, ale nie przechwytuje wpisywania w polach tekstowych.
+  React.useEffect(() => {
+    const isEditable = (el: HTMLElement | null): boolean => {
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+      if (el.isContentEditable) return true;
+      return false;
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // Jeśli user pisze w input/textarea/select/contenteditable, nie ruszamy.
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (isEditable(activeEl)) return;
+
+      const next = getTabForShortcutKey(e.key);
+      if (!next) return;
+
+      e.preventDefault();
+      setActiveTab(next);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   // Inicjalizuj selectedTeam z localStorage lub pustym stringiem
   const [selectedTeam, setSelectedTeam] = React.useState<string>(() => {
@@ -150,6 +181,10 @@ export default function Page() {
   const customVideoRef = useRef<CustomVideoPlayerRef>(null);
   // Ref do kontenera wideo YouTube do scrollowania
   const youtubeVideoContainerRef = useRef<HTMLDivElement>(null);
+  const videoFocusKeeperRef = useRef<HTMLDivElement>(null);
+
+  // Fokus trzymamy eventowo na kontenerze wideo (onPointerDownCapture),
+  // bez pollingów i bez przejmowania fokusu od inputów.
 
   // Funkcja pomocnicza do pobierania czasu z aktywnego odtwarzacza
   const getActiveVideoTime = async (): Promise<number> => {
@@ -241,6 +276,53 @@ export default function Page() {
       }
     }
   };
+
+  // Skróty klawiatury do przewijania wideo (działają, gdy licznik posiadania jest ON).
+  // To zastępuje skróty YouTube w sytuacji, gdy nie pozwalamy iframe przejąć fokusu.
+  const videoSeekInFlightRef = useRef<boolean>(false);
+  useEffect(() => {
+    const isEditable = (el: HTMLElement | null): boolean => {
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+      if ((el as any).isContentEditable) return true;
+      return false;
+    };
+
+    const onKeyDown = async (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (typeof window === "undefined") return;
+      // W trybie "posiadanie ON" trzymamy fokus poza iframe, więc skróty muszą działać globalnie.
+      if (localStorage.getItem("possession_counter_enabled") === "false") return;
+      if (localStorage.getItem("isVideoVisible") !== "true") return;
+      // Jeśli nie ma żadnego playera, nie ma co przewijać
+      if (!youtubeVideoRef.current && !customVideoRef.current) return;
+
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (isEditable(activeEl)) return;
+
+      let delta: number | null = null;
+      if (e.key === "ArrowLeft") delta = e.shiftKey ? -30 : -5;
+      if (e.key === "ArrowRight") delta = e.shiftKey ? 30 : 5;
+      if (e.key === "j" || e.key === "J") delta = -10;
+      if (e.key === "l" || e.key === "L") delta = 10;
+      if (delta === null) return;
+
+      e.preventDefault();
+      if (videoSeekInFlightRef.current) return;
+      videoSeekInFlightRef.current = true;
+      try {
+        const t = await getActiveVideoTime();
+        const next = Math.max(0, t + delta);
+        await seekActiveVideo(next);
+      } finally {
+        videoSeekInFlightRef.current = false;
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown, { passive: false, capture: true } as any);
+    return () => window.removeEventListener("keydown", onKeyDown as any, true);
+  }, []);
 
   // State do przechowywania aktualnego czasu z zewnętrznego wideo
   const [externalVideoTime, setExternalVideoTime] = useState<number>(0);
@@ -549,10 +631,558 @@ export default function Page() {
     handleSelectMatch,
     handleDeleteMatch,
     handleSavePlayerMinutes,
+    handleUpdateMatchData,
     fetchMatches,
     forceRefreshFromFirebase,
     isOfflineMode
   } = useMatchInfo();
+
+  // ===== Posiadanie (Z / X / C) — licznik sekunda-po-sekundzie =====
+  // Domyślnie OFF na pierwszym renderze (SSR/hydration), potem synchronizacja z localStorage.
+  // Dzięki temu overlay nie "wyskakuje" gdy użytkownik ma zapisane OFF.
+  const [isPossessionCounterEnabled, setIsPossessionCounterEnabled] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const v = localStorage.getItem("possession_counter_enabled");
+    // Brak wartości => domyślnie ON
+    setIsPossessionCounterEnabled(v !== "false");
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const e = event as CustomEvent;
+      const enabled = Boolean(e?.detail?.enabled);
+      setIsPossessionCounterEnabled(enabled);
+    };
+    window.addEventListener("possessionCounterEnabledChanged", handler as EventListener);
+    return () => window.removeEventListener("possessionCounterEnabledChanged", handler as EventListener);
+  }, []);
+
+  const [pitchIsFlippedForPossession, setPitchIsFlippedForPossession] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("pitchOrientation") === "true";
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const e = event as CustomEvent;
+      if (e?.detail && typeof e.detail.isFlipped === "boolean") {
+        setPitchIsFlippedForPossession(Boolean(e.detail.isFlipped));
+      }
+    };
+    window.addEventListener("pitchOrientationChanged", handler as EventListener);
+    return () => window.removeEventListener("pitchOrientationChanged", handler as EventListener);
+  }, []);
+
+  type PossessionCountersSec = {
+    teamFirstHalf: number;
+    opponentFirstHalf: number;
+    deadFirstHalf: number;
+    teamSecondHalf: number;
+    opponentSecondHalf: number;
+    deadSecondHalf: number;
+  };
+
+  const minutesToSecondsSafe = (minutes?: number): number => {
+    if (minutes === undefined || minutes === null) return 0;
+    const n = Number(minutes);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return Math.round(n * 60);
+  };
+
+  const secondsToMinutesDecimal = (seconds: number): number => {
+    const s = Number.isFinite(seconds) ? Math.max(0, Math.round(seconds)) : 0;
+    return s / 60;
+  };
+
+  const formatMMSS = (seconds: number): string => {
+    const s = Math.max(0, Math.round(seconds || 0));
+    const mm = Math.floor(s / 60);
+    const ss = s % 60;
+    return `${mm.toString().padStart(2, "0")}:${ss.toString().padStart(2, "0")}`;
+  };
+
+  const [possessionSec, setPossessionSec] = useState<PossessionCountersSec>({
+    teamFirstHalf: 0,
+    opponentFirstHalf: 0,
+    deadFirstHalf: 0,
+    teamSecondHalf: 0,
+    opponentSecondHalf: 0,
+    deadSecondHalf: 0,
+  });
+
+  // Inicjalizuj liczniki z danych meczu (żeby można było kontynuować liczenie)
+  useEffect(() => {
+    const matchId = matchInfo?.matchId;
+    if (!matchInfo || !matchId) {
+      setPossessionSec({
+        teamFirstHalf: 0,
+        opponentFirstHalf: 0,
+        deadFirstHalf: 0,
+        teamSecondHalf: 0,
+        opponentSecondHalf: 0,
+        deadSecondHalf: 0,
+      });
+      return;
+    }
+
+    // Jeśli jest draft w localStorage, przywróć go (niezapisane do Firebase)
+    if (typeof window !== "undefined") {
+      try {
+        const rawDraft = localStorage.getItem(`possession_draft_sec_${matchId}`);
+        if (rawDraft) {
+          const parsed = JSON.parse(rawDraft) as Partial<PossessionCountersSec>;
+          const safe = (v: any) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.round(Number(v)) : 0);
+          setPossessionSec({
+            teamFirstHalf: safe(parsed.teamFirstHalf),
+            opponentFirstHalf: safe(parsed.opponentFirstHalf),
+            deadFirstHalf: safe(parsed.deadFirstHalf),
+            teamSecondHalf: safe(parsed.teamSecondHalf),
+            opponentSecondHalf: safe(parsed.opponentSecondHalf),
+            deadSecondHalf: safe(parsed.deadSecondHalf),
+          });
+          return;
+        }
+      } catch {
+        // ignore draft parsing
+      }
+    }
+
+    const p: any = (matchInfo as any).matchData?.possession || {};
+    setPossessionSec({
+      teamFirstHalf: minutesToSecondsSafe(p.teamFirstHalf),
+      opponentFirstHalf: minutesToSecondsSafe(p.opponentFirstHalf),
+      deadFirstHalf: minutesToSecondsSafe(p.deadFirstHalf),
+      teamSecondHalf: minutesToSecondsSafe(p.teamSecondHalf),
+      opponentSecondHalf: minutesToSecondsSafe(p.opponentSecondHalf),
+      deadSecondHalf: minutesToSecondsSafe(p.deadSecondHalf),
+    });
+  }, [matchInfo?.matchId]);
+
+  // Tryb licznika: zawsze 1 z 3 stanów (Z / X / C). Liczymy wg czasu WIDEO.
+  const [possessionMode, setPossessionMode] = useState<"z" | "x" | "c">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("possession_counter_mode");
+      if (saved === "z" || saved === "x" || saved === "c") return saved;
+    }
+    return "z";
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("possession_counter_mode", possessionMode);
+  }, [possessionMode]);
+
+  // Aktualny czas wideo dla licznika (sekundy).
+  const [possessionVideoTimeSec, setPossessionVideoTimeSec] = useState<number>(0);
+  const possessionVideoTimeRef = useRef<number>(0);
+  useEffect(() => {
+    possessionVideoTimeRef.current = possessionVideoTimeSec;
+  }, [possessionVideoTimeSec]);
+
+  // Ref do externalVideoTime, żeby nie zależeć od niego w deps
+  const externalVideoTimeRef = useRef<number>(0);
+  useEffect(() => {
+    externalVideoTimeRef.current = externalVideoTime;
+  }, [externalVideoTime]);
+
+  // Polling czasu wideo (lekki) — dla zewnętrznego okna bierzemy z postMessage.
+  useEffect(() => {
+    if (!matchInfo?.matchId) {
+      setPossessionVideoTimeSec(0);
+      return;
+    }
+
+    let cancelled = false;
+    let inFlight = false;
+
+    const tick = async () => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        const externalOpen =
+          typeof window !== "undefined" && localStorage.getItem("externalVideoWindowOpen") === "true";
+
+        let t = 0;
+        if (externalOpen) {
+          t = Number(externalVideoTimeRef.current || 0);
+        } else {
+          t = await getActiveVideoTime();
+        }
+
+        if (!cancelled && Number.isFinite(t) && t >= 0) {
+          setPossessionVideoTimeSec(t);
+        }
+      } catch {
+        // ignore
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void tick();
+    const id = window.setInterval(() => {
+      void tick();
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [matchInfo?.matchId]);
+
+  // Toggle Z/X/C globalnie (bez keyup) — nie w polach tekstowych.
+  useEffect(() => {
+    const isEditable = (el: HTMLElement | null): boolean => {
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+      if (el.isContentEditable) return true;
+      return false;
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!matchInfo?.matchId) return;
+      if (!isPossessionCounterEnabled) return;
+
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (isEditable(activeEl)) return;
+
+      const key = String(e.key || "").toLowerCase();
+      if (key !== "z" && key !== "x" && key !== "c") return;
+      if (e.repeat) return;
+
+      e.preventDefault();
+      // Zawsze ustawiamy 1 z 3 stanów; nie pozwalamy "odznaczyć" przez 2x klik/klawisz.
+      setPossessionMode(key as any);
+    };
+
+    // capture: działa niezależnie od fokusu / innych handlerów w tree
+    window.addEventListener("keydown", onKeyDown, { passive: false, capture: true } as any);
+    return () => window.removeEventListener("keydown", onKeyDown as any, true);
+  }, [matchInfo?.matchId, isPossessionCounterEnabled]);
+
+  // Liczenie na podstawie zmiany czasu wideo.
+  const lastVideoTimeRef = useRef<number | null>(null);
+  const videoRemainderRef = useRef<number>(0);
+
+  // Pamięć "co już policzone" (żeby nie dublować po seek/refresh)
+  type PossessionInterval = [number, number]; // inclusive sekundy na osi czasu wideo
+  const countedIntervalsRef = useRef<PossessionInterval[]>([]);
+  const [lastCountedVideoSec, setLastCountedVideoSec] = useState<number>(0);
+  const lastCountedVideoSecRef = useRef<number>(0);
+  useEffect(() => {
+    lastCountedVideoSecRef.current = lastCountedVideoSec;
+  }, [lastCountedVideoSec]);
+
+  const mergePossessionIntervals = (intervals: PossessionInterval[]): PossessionInterval[] => {
+    const sorted = [...intervals]
+      .map(([a, b]) => [Math.min(a, b), Math.max(a, b)] as PossessionInterval)
+      .sort((x, y) => x[0] - y[0]);
+    const out: PossessionInterval[] = [];
+    for (const [s, e] of sorted) {
+      if (out.length === 0) {
+        out.push([s, e]);
+        continue;
+      }
+      const last = out[out.length - 1];
+      if (s <= last[1] + 1) {
+        last[1] = Math.max(last[1], e);
+      } else {
+        out.push([s, e]);
+      }
+    }
+    return out;
+  };
+
+  const subtractFromUnion = (
+    union: PossessionInterval[],
+    start: number,
+    end: number
+  ): PossessionInterval[] => {
+    const s0 = Math.min(start, end);
+    const e0 = Math.max(start, end);
+    let cursor = s0;
+    const uncovered: PossessionInterval[] = [];
+    for (const [s, e] of union) {
+      if (e < cursor) continue;
+      if (s > e0) break;
+      if (s > cursor) uncovered.push([cursor, Math.min(e0, s - 1)]);
+      cursor = Math.max(cursor, e + 1);
+      if (cursor > e0) break;
+    }
+    if (cursor <= e0) uncovered.push([cursor, e0]);
+    return uncovered;
+  };
+
+  // Wczytaj stan zabezpieczenia per mecz (po refreshu)
+  useEffect(() => {
+    const matchId = matchInfo?.matchId;
+    if (!matchId || typeof window === "undefined") {
+      countedIntervalsRef.current = [];
+      setLastCountedVideoSec(0);
+      return;
+    }
+
+    try {
+      const rawIntervals = localStorage.getItem(`possession_counted_intervals_${matchId}`);
+      const parsed = rawIntervals ? JSON.parse(rawIntervals) : null;
+      countedIntervalsRef.current = mergePossessionIntervals(
+        Array.isArray(parsed) ? (parsed as PossessionInterval[]) : []
+      );
+    } catch {
+      countedIntervalsRef.current = [];
+    }
+
+    const rawLast = localStorage.getItem(`possession_last_counted_sec_${matchId}`);
+    const n = rawLast ? Number(rawLast) : 0;
+    setLastCountedVideoSec(Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
+  }, [matchInfo?.matchId]);
+
+  // Persist (debounce)
+  const persistIntervalsTimerRef = useRef<number | null>(null);
+  const persistCountedState = (matchId: string) => {
+    if (typeof window === "undefined") return;
+    if (persistIntervalsTimerRef.current) window.clearTimeout(persistIntervalsTimerRef.current);
+    persistIntervalsTimerRef.current = window.setTimeout(() => {
+      try {
+        localStorage.setItem(
+          `possession_counted_intervals_${matchId}`,
+          JSON.stringify(countedIntervalsRef.current)
+        );
+        localStorage.setItem(
+          `possession_last_counted_sec_${matchId}`,
+          String(lastCountedVideoSecRef.current || 0)
+        );
+      } catch {
+        // ignore quota
+      }
+    }, 500);
+  };
+
+  useEffect(() => {
+    // reset baseline po zmianie trybu / meczu
+    lastVideoTimeRef.current = possessionVideoTimeSec;
+    videoRemainderRef.current = 0;
+  }, [possessionMode, matchInfo?.matchId]);
+
+  useEffect(() => {
+    if (!matchInfo?.matchId) return;
+    if (!isPossessionCounterEnabled) return;
+
+    const current = possessionVideoTimeSec;
+    const last = lastVideoTimeRef.current;
+    if (last === null) {
+      lastVideoTimeRef.current = current;
+      return;
+    }
+
+    const delta = current - last;
+    // delta <= 0: pauza / cofnięcie / seek wstecz; delta duże: seek w przód — nie doliczamy "skoku".
+    if (delta <= 0 || delta > 30) {
+      lastVideoTimeRef.current = current;
+      videoRemainderRef.current = 0;
+      return;
+    }
+
+    const secondHalfStart = (matchInfo as any)?.secondHalfStartTime as number | undefined;
+    const fallbackIsSecondHalf = Boolean(isSecondHalf);
+    const isSecondHalfAt = (tSec: number): boolean => {
+      if (typeof secondHalfStart === "number" && Number.isFinite(secondHalfStart)) {
+        return tSec >= secondHalfStart;
+      }
+      return fallbackIsSecondHalf;
+    };
+
+    const isFlipped = pitchIsFlippedForPossession;
+    const leftOwner: "team" | "opponent" = isFlipped ? "team" : "opponent";
+    const rightOwner: "team" | "opponent" = isFlipped ? "opponent" : "team";
+
+    const accum = delta + videoRemainderRef.current;
+    const whole = Math.floor(accum);
+    videoRemainderRef.current = accum - whole;
+
+    if (whole <= 0) {
+      lastVideoTimeRef.current = current;
+      return;
+    }
+
+    // Zabezpieczenie przed policzeniem 2x tego samego fragmentu:
+    // przeliczamy tylko "niepokryte" sekundy na osi czasu wideo.
+    const startSec = Math.floor(last) + 1;
+    const endSec = Math.floor(last) + whole;
+    const unionBefore = countedIntervalsRef.current;
+    const uncovered = subtractFromUnion(unionBefore, startSec, endSec);
+    // Zaktualizuj unię o obserwowany fragment (nawet jeśli w całości był już policzony)
+    countedIntervalsRef.current = mergePossessionIntervals([...unionBefore, [startSec, endSec]]);
+
+    if (uncovered.length === 0) {
+      lastVideoTimeRef.current = current;
+      persistCountedState(matchInfo.matchId!);
+      return;
+    }
+
+    // Policzymy ile sekund wpada do których pól, a potem zrobimy 1 setState.
+    const add: PossessionCountersSec = {
+      teamFirstHalf: 0,
+      opponentFirstHalf: 0,
+      deadFirstHalf: 0,
+      teamSecondHalf: 0,
+      opponentSecondHalf: 0,
+      deadSecondHalf: 0,
+    };
+
+    const inc = (field: keyof PossessionCountersSec, by: number) => {
+      add[field] += by;
+    };
+
+    const boundary = typeof secondHalfStart === "number" && Number.isFinite(secondHalfStart) ? Math.floor(secondHalfStart) : null;
+    const splitByHalf = (a: number, b: number): Array<{ is2: boolean; len: number }> => {
+      const len = b - a + 1;
+      if (len <= 0) return [];
+      if (boundary === null) return [{ is2: fallbackIsSecondHalf, len }];
+      const firstEnd = Math.min(b, boundary - 1);
+      const secondStart = Math.max(a, boundary);
+      const parts: Array<{ is2: boolean; len: number }> = [];
+      if (a <= firstEnd) parts.push({ is2: false, len: firstEnd - a + 1 });
+      if (secondStart <= b) parts.push({ is2: true, len: b - secondStart + 1 });
+      return parts;
+    };
+
+    for (const [a, b] of uncovered) {
+      for (const part of splitByHalf(a, b)) {
+        const is2 = part.is2;
+        const len = part.len;
+
+        if (possessionMode === "x") {
+          inc(is2 ? "deadSecondHalf" : "deadFirstHalf", len);
+        } else if (possessionMode === "z") {
+          if (leftOwner === "team") inc(is2 ? "teamSecondHalf" : "teamFirstHalf", len);
+          else inc(is2 ? "opponentSecondHalf" : "opponentFirstHalf", len);
+        } else {
+          if (rightOwner === "team") inc(is2 ? "teamSecondHalf" : "teamFirstHalf", len);
+          else inc(is2 ? "opponentSecondHalf" : "opponentFirstHalf", len);
+        }
+      }
+    }
+
+    setPossessionSec((prev) => ({
+      teamFirstHalf: prev.teamFirstHalf + add.teamFirstHalf,
+      opponentFirstHalf: prev.opponentFirstHalf + add.opponentFirstHalf,
+      deadFirstHalf: prev.deadFirstHalf + add.deadFirstHalf,
+      teamSecondHalf: prev.teamSecondHalf + add.teamSecondHalf,
+      opponentSecondHalf: prev.opponentSecondHalf + add.opponentSecondHalf,
+      deadSecondHalf: prev.deadSecondHalf + add.deadSecondHalf,
+    }));
+
+    // Zapamiętaj ostatnią sekundę, w której realnie coś doliczyliśmy (do skoku po refreshu)
+    const maxUncovered = uncovered.reduce((m, [, e]) => Math.max(m, e), 0);
+    if (maxUncovered > 0) {
+      setLastCountedVideoSec(maxUncovered);
+      lastCountedVideoSecRef.current = maxUncovered;
+    }
+    persistCountedState(matchInfo.matchId!);
+
+    lastVideoTimeRef.current = current;
+  }, [possessionVideoTimeSec, possessionMode, matchInfo?.matchId, pitchIsFlippedForPossession, isSecondHalf, isPossessionCounterEnabled]);
+
+  // Posiadanie trzymamy w pamięci podręcznej (localStorage) i zapisujemy do Firebase dopiero po "Zatwierdź"
+  const [isPossessionDraftDirty, setIsPossessionDraftDirty] = useState(false);
+  const [isPossessionSaving, setIsPossessionSaving] = useState(false);
+
+  // oznacz jako "dirty", jeśli cokolwiek realnie policzyliśmy
+  useEffect(() => {
+    if (!matchInfo?.matchId) return;
+    if (!isPossessionCounterEnabled) return;
+    // jeśli jest cokolwiek policzone, pozwól zapisać
+    const any =
+      possessionSec.teamFirstHalf +
+        possessionSec.opponentFirstHalf +
+        possessionSec.teamSecondHalf +
+        possessionSec.opponentSecondHalf +
+        possessionSec.deadFirstHalf +
+        possessionSec.deadSecondHalf >
+      0;
+    if (any) setIsPossessionDraftDirty(true);
+  }, [possessionSec, matchInfo?.matchId, isPossessionCounterEnabled]);
+
+  // Persist draft do localStorage (żeby po refreshu wrócić do miejsca)
+  const draftTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    const matchId = matchInfo?.matchId;
+    if (!matchId || typeof window === "undefined") return;
+    if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = window.setTimeout(() => {
+      try {
+        localStorage.setItem(`possession_draft_sec_${matchId}`, JSON.stringify(possessionSec));
+      } catch {
+        // ignore quota
+      }
+    }, 300);
+    return () => {
+      if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
+    };
+  }, [possessionSec, matchInfo?.matchId]);
+
+  const commitPossessionToFirebase = async () => {
+    const matchId = matchInfo?.matchId;
+    if (!matchId) return;
+    setIsPossessionSaving(true);
+    try {
+      const patch = {
+        possession: {
+          teamFirstHalf: secondsToMinutesDecimal(possessionSec.teamFirstHalf),
+          opponentFirstHalf: secondsToMinutesDecimal(possessionSec.opponentFirstHalf),
+          teamSecondHalf: secondsToMinutesDecimal(possessionSec.teamSecondHalf),
+          opponentSecondHalf: secondsToMinutesDecimal(possessionSec.opponentSecondHalf),
+          deadFirstHalf: secondsToMinutesDecimal(possessionSec.deadFirstHalf),
+          deadSecondHalf: secondsToMinutesDecimal(possessionSec.deadSecondHalf),
+        },
+      };
+      await handleUpdateMatchData(matchId, patch, { persistToFirebase: true });
+      setIsPossessionDraftDirty(false);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(`possession_draft_sec_${matchId}`);
+      }
+    } finally {
+      setIsPossessionSaving(false);
+    }
+  };
+
+  const resetPossessionDraft = () => {
+    const matchId = matchInfo?.matchId;
+    if (!matchId) return;
+    const ok = window.confirm(
+      "Resetować posiadanie? Wyczyści to lokalny licznik oraz zabezpieczenie przed podwójnym liczeniem dla tego meczu."
+    );
+    if (!ok) return;
+
+    // wyczyść liczniki (draft)
+    setPossessionSec({
+      teamFirstHalf: 0,
+      opponentFirstHalf: 0,
+      deadFirstHalf: 0,
+      teamSecondHalf: 0,
+      opponentSecondHalf: 0,
+      deadSecondHalf: 0,
+    });
+    setIsPossessionDraftDirty(false);
+
+    // wyczyść zabezpieczenia przed podwójnym liczeniem + "ostatnie"
+    countedIntervalsRef.current = [];
+    setLastCountedVideoSec(0);
+    lastCountedVideoSecRef.current = 0;
+
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(`possession_draft_sec_${matchId}`);
+      localStorage.removeItem(`possession_counted_intervals_${matchId}`);
+      localStorage.removeItem(`possession_last_counted_sec_${matchId}`);
+    }
+  };
 
   // Funkcja do obliczania minuty meczu na podstawie czasu wideo (dla modalów ShotModal, PKEntryModal, Acc8sModal)
   const calculateMatchMinuteFromVideoTime = React.useCallback(async (): Promise<{ minute: number; isSecondHalf: boolean } | null> => {
@@ -708,6 +1338,7 @@ export default function Page() {
   // Stan dla weryfikacji PK entries
   const [showPKRegainVerifyModal, setShowPKRegainVerifyModal] = useState(false);
   const [pendingPKRegainUpdates, setPendingPKRegainUpdates] = useState<Array<{
+    entryKey: string;
     entry: PKEntry;
     isRegain: boolean;
     regainTime?: string;
@@ -722,12 +1353,48 @@ export default function Page() {
   // Stan dla weryfikacji strzałów
   const [showShotsVerifyModal, setShowShotsVerifyModal] = useState(false);
   const [pendingShotsUpdates, setPendingShotsUpdates] = useState<Array<{
+    shotKey: string;
     shot: Shot;
     actionType: 'open_play' | 'counter' | 'corner' | 'free_kick' | 'direct_free_kick' | 'penalty' | 'throw_in' | 'regain';
     regainTime?: string;
     timeDiffSeconds?: number;
   }>>([]);
   const [selectedShotsUpdates, setSelectedShotsUpdates] = useState<Set<string>>(new Set());
+
+  const getStablePKEntryKey = useCallback((entry: PKEntry): string => {
+    const rawId = String((entry as any)?.id ?? "").trim();
+    if (rawId) return rawId;
+    const ts = entry.videoTimestampRaw ?? entry.videoTimestamp;
+    const tsKey = ts !== undefined && ts !== null ? Math.floor(ts) : "no-ts";
+    const ctx = entry.teamContext ?? "ctx";
+    return [
+      "pk",
+      ctx,
+      tsKey,
+      String(entry.minute ?? "m"),
+      String(entry.startX),
+      String(entry.startY),
+      String(entry.endX),
+      String(entry.endY),
+    ].join("|");
+  }, []);
+
+  const getStableShotKey = useCallback((shot: Shot): string => {
+    const rawId = String((shot as any)?.id ?? "").trim();
+    if (rawId) return rawId;
+    const ts = shot.videoTimestampRaw ?? shot.videoTimestamp;
+    const tsKey = ts !== undefined && ts !== null ? Math.floor(ts) : "no-ts";
+    return [
+      "shot",
+      shot.teamContext ?? "ctx",
+      shot.teamId ?? "team",
+      tsKey,
+      String(shot.minute ?? "m"),
+      String(shot.x),
+      String(shot.y),
+      shot.playerId ?? "p",
+    ].join("|");
+  }, []);
 
   // Funkcje obsługi strzałów
   const handleShotAdd = async (x: number, y: number, xG: number) => {
@@ -1148,8 +1815,10 @@ export default function Page() {
           }
         }
         
-        const getLastName = (name: string) => {
-          const words = name.trim().split(/\s+/);
+        const getLastName = (name: string | undefined) => {
+          const safe = String(name || "").trim();
+          if (!safe) return "";
+          const words = safe.split(/\s+/);
           return words[words.length - 1].toLowerCase();
         };
         const lastNameA = getLastName(a.name);
@@ -2366,7 +3035,8 @@ export default function Page() {
       const defenseXT = action.xTValueStart || action.xTValueEnd || 0;
       
       // Określ strefy
-      const regainDefenseZone = action.regainDefenseZone || action.regainZone || action.fromZone || action.toZone || startZone;
+      const regainDefenseZone =
+        action.regainDefenseZone || (action as any).regainZone || action.fromZone || action.toZone || startZone;
       const regainAttackZone = action.regainAttackZone || oppositeZone;
       
       const convertedAction = {
@@ -2381,7 +3051,7 @@ export default function Page() {
       // Usuń stare pola
       delete convertedAction.fromZone;
       delete convertedAction.toZone;
-      delete convertedAction.regainZone;
+      delete (convertedAction as any).regainZone;
       delete convertedAction.oppositeZone;
       delete convertedAction.oppositeXT;
       delete convertedAction.mode;
@@ -2439,6 +3109,8 @@ export default function Page() {
       
       return convertedAction as Action;
     }
+    
+    return action;
   };
 
   // Obsługa zapisania edytowanej akcji
@@ -2834,6 +3506,140 @@ export default function Page() {
     );
   }
 
+  const possessionButtonsContent =
+    matchInfo?.matchId && isPossessionCounterEnabled
+      ? (() => {
+          // Nazwy po stronach zgodnie z PitchHeader
+          const resolveTeamName = (teamIdOrName: any): string => {
+            const raw = String(teamIdOrName || "").trim();
+            if (!raw) return "Nasz zespół";
+            const found = allTeams.find((t) => t.id === raw);
+            if (found?.name) return found.name;
+            // fallback na domyślne zespoły
+            const fallback = Object.values(TEAMS).find((t) => t.id === raw);
+            if (fallback?.name) return fallback.name;
+            // jeśli ktoś przekaże już nazwę, zostawiamy
+            return raw;
+          };
+
+          const teamName = resolveTeamName((matchInfo as any)?.teamName || (matchInfo as any)?.team);
+          const opponentName = String((matchInfo as any)?.opponentName || (matchInfo as any)?.opponent || "Przeciwnik");
+          const leftName = pitchIsFlippedForPossession ? teamName : opponentName;
+          const rightName = pitchIsFlippedForPossession ? opponentName : teamName;
+
+          // Liczniki dla aktualnej połowy
+          const is2 = (() => {
+            const secondHalfStart = (matchInfo as any)?.secondHalfStartTime as number | undefined;
+            if (typeof secondHalfStart === "number" && Number.isFinite(secondHalfStart)) {
+              return possessionVideoTimeSec >= secondHalfStart;
+            }
+            return Boolean(isSecondHalf);
+          })();
+          const leftOwner = pitchIsFlippedForPossession ? "team" : "opponent";
+          const rightOwner = pitchIsFlippedForPossession ? "opponent" : "team";
+
+          const leftSec =
+            leftOwner === "team"
+              ? (is2 ? possessionSec.teamSecondHalf : possessionSec.teamFirstHalf)
+              : (is2 ? possessionSec.opponentSecondHalf : possessionSec.opponentFirstHalf);
+          const rightSec =
+            rightOwner === "team"
+              ? (is2 ? possessionSec.teamSecondHalf : possessionSec.teamFirstHalf)
+              : (is2 ? possessionSec.opponentSecondHalf : possessionSec.opponentFirstHalf);
+          const deadSec = is2 ? possessionSec.deadSecondHalf : possessionSec.deadFirstHalf;
+
+          return (
+            <>
+              <button
+                type="button"
+                className={`${styles.videoPossessionButton} ${
+                  possessionMode === "z" ? styles.videoPossessionButtonActive : ""
+                }`}
+                onClick={() => setPossessionMode("z")}
+                aria-pressed={possessionMode === "z"}
+                title={`Z — posiadanie: ${leftName} (toggle)`}
+              >
+                <span className={styles.videoKeycap} aria-hidden="true">
+                  Z
+                </span>{" "}
+                {leftName}: {formatMMSS(leftSec)}
+              </button>
+              <button
+                type="button"
+                className={`${styles.videoPossessionButton} ${
+                  possessionMode === "x" ? styles.videoPossessionButtonActive : ""
+                }`}
+                onClick={() => setPossessionMode("x")}
+                aria-pressed={possessionMode === "x"}
+                title="X — czas martwy (toggle)"
+              >
+                <span className={styles.videoKeycap} aria-hidden="true">
+                  X
+                </span>{" "}
+                Martwy*: {formatMMSS(deadSec)}
+              </button>
+              <button
+                type="button"
+                className={`${styles.videoPossessionButton} ${
+                  possessionMode === "c" ? styles.videoPossessionButtonActive : ""
+                }`}
+                onClick={() => setPossessionMode("c")}
+                aria-pressed={possessionMode === "c"}
+                title={`C — posiadanie: ${rightName} (toggle)`}
+              >
+                <span className={styles.videoKeycap} aria-hidden="true">
+                  C
+                </span>{" "}
+                {rightName}: {formatMMSS(rightSec)}
+              </button>
+              <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, marginLeft: 6 }}>
+                {is2 ? "2p" : "1p"}
+              </span>
+              <span style={{ color: "rgba(255, 255, 255, 0.75)", fontSize: 12, marginLeft: 8 }}>
+                T: {formatMMSS(possessionVideoTimeSec)}
+              </span>
+              <button
+                type="button"
+                className={styles.videoPossessionJumpButton}
+                disabled={!lastCountedVideoSec || lastCountedVideoSec < 0}
+                aria-disabled={!lastCountedVideoSec || lastCountedVideoSec < 0}
+                title="Skocz do ostatniej sekundy, w której liczyłeś posiadanie"
+                onClick={async () => {
+                  if (!lastCountedVideoSec || lastCountedVideoSec < 0) return;
+                  await seekActiveVideo(lastCountedVideoSec);
+                  setPossessionVideoTimeSec(lastCountedVideoSec);
+                }}
+              >
+                Ostatnie: {lastCountedVideoSec ? formatMMSS(lastCountedVideoSec) : "—"}
+              </button>
+              <button
+                type="button"
+                className={styles.videoPossessionJumpButton}
+                disabled={!isPossessionDraftDirty || isPossessionSaving}
+                aria-disabled={!isPossessionDraftDirty || isPossessionSaving}
+                title="Zatwierdź i zapisz posiadanie do Firebase"
+                onClick={commitPossessionToFirebase}
+              >
+                {isPossessionSaving ? "Zapisywanie..." : "Zatwierdź"}
+              </button>
+              <button
+                type="button"
+                className={`${styles.videoPossessionJumpButton} ${styles.videoPossessionResetButton}`}
+                disabled={isPossessionSaving}
+                aria-disabled={isPossessionSaving}
+                title="Resetuj lokalny licznik posiadania"
+                onClick={resetPossessionDraft}
+              >
+                Reset
+              </button>
+            </>
+          );
+        })()
+      : null;
+
+  const shouldShowPossessionBarInHeader = Boolean(possessionButtonsContent) && !isVideoVisible;
+  const shouldShowPossessionBarOnVideo = Boolean(possessionButtonsContent) && isVideoVisible;
+
   return (
     <div className={styles.container}>
       <OfflineStatusBanner />
@@ -2869,49 +3675,52 @@ export default function Page() {
                 isExpanded={isPlayersGridExpanded}
                 onToggle={() => setIsPlayersGridExpanded(!isPlayersGridExpanded)}
               />
-              <div className={styles.videoIconsHeader}>
-                <div 
-                  className={`${styles.youtubeLogoHeader} ${isVideoFullscreen ? styles.youtubeLogoHeaderActive : ''}`}
-                  onClick={() => {
-                    if (!isVideoVisible) {
-                      // Jeśli wideo jest ukryte, pokaż je w trybie fullscreen
-                      setIsVideoVisible(true);
-                      setIsVideoFullscreen(true);
-                    } else if (isVideoFullscreen) {
-                      // Jeśli wideo jest w trybie fullscreen, całkowicie je ukryj
-                      setIsVideoVisible(false);
-                      setIsVideoFullscreen(false);
-                    } else {
-                      // Jeśli wideo jest widoczne ale nie w fullscreen, przełącz na fullscreen
-                      setIsVideoFullscreen(true);
-                    }
-                  }}
-                >
-                  <svg className={styles.youtubeLogoIcon} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" fill="#FF0000"/>
-                  </svg>
-                </div>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (matchInfo) {
-                      localStorage.setItem('externalVideoMatchInfo', JSON.stringify(matchInfo));
-                      const externalWindow = window.open(
-                        '/video-external',
-                        'youtube-video',
-                        'width=1200,height=800,scrollbars=yes,resizable=yes'
-                      );
-                      if (externalWindow) {
-                        (window as any).externalVideoWindow = externalWindow;
-                        localStorage.setItem('externalVideoWindowOpen', 'true');
+              <div className={styles.videoIconsHeaderWrapper}>
+                <div className={styles.videoIconsHeader}>
+                  <div 
+                    className={`${styles.youtubeLogoHeader} ${isVideoFullscreen ? styles.youtubeLogoHeaderActive : ''}`}
+                    onClick={() => {
+                      if (!isVideoVisible) {
+                        // Jeśli wideo jest ukryte, pokaż je w trybie fullscreen
+                        setIsVideoVisible(true);
+                        setIsVideoFullscreen(true);
+                      } else if (isVideoFullscreen) {
+                        // Jeśli wideo jest w trybie fullscreen, całkowicie je ukryj
+                        setIsVideoVisible(false);
+                        setIsVideoFullscreen(false);
+                      } else {
+                        // Jeśli wideo jest widoczne ale nie w fullscreen, przełącz na fullscreen
+                        setIsVideoFullscreen(true);
                       }
-                    }
-                  }}
-                  className={styles.externalButtonHeader}
-                  title="Otwórz wideo w nowym oknie (dla drugiego monitora)"
-                >
-                  <span>🖥️</span>
-                </button>
+                    }}
+                  >
+                    <svg className={styles.youtubeLogoIcon} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" fill="#FF0000"/>
+                    </svg>
+                  </div>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (matchInfo) {
+                        localStorage.setItem('externalVideoMatchInfo', JSON.stringify(matchInfo));
+                        const externalWindow = window.open(
+                          '/video-external',
+                          'youtube-video',
+                          'width=1200,height=800,scrollbars=yes,resizable=yes'
+                        );
+                        if (externalWindow) {
+                          (window as any).externalVideoWindow = externalWindow;
+                          localStorage.setItem('externalVideoWindowOpen', 'true');
+                        }
+                      }
+                    }}
+                    className={styles.externalButtonHeader}
+                    title="Otwórz wideo w nowym oknie (dla drugiego monitora)"
+                  >
+                    <span>🖥️</span>
+                  </button>
+                </div>
+
               </div>
             </div>
           </div>
@@ -3006,22 +3815,57 @@ export default function Page() {
           <div className={styles.leftControls}>
           </div>
         </div>
-        <div className={styles.videoPlayersContainer} ref={youtubeVideoContainerRef}>
-        <YouTubeVideo 
-          ref={youtubeVideoRef} 
-          matchInfo={matchInfo} 
-          isVisible={isVideoVisible}
-          onToggleVisibility={() => setIsVideoVisible(!isVideoVisible)}
-          isFullscreen={isVideoFullscreen}
-          onToggleFullscreen={() => setIsVideoFullscreen(!isVideoFullscreen)}
-        />
-          <CustomVideoPlayer 
-            ref={customVideoRef} 
-            matchInfo={matchInfo} 
-            isVisible={isVideoVisible}
-            onToggleVisibility={() => setIsVideoVisible(!isVideoVisible)}
-          />
-        </div>
+        {isVideoVisible && (
+          <div
+            className={styles.videoPlayersContainer}
+            ref={youtubeVideoContainerRef}
+            onPointerDownCapture={() => {
+              // W trybie analizy utrzymuj fokus w aplikacji, żeby skróty działały zawsze
+              if (isPossessionCounterEnabled) {
+                setTimeout(() => videoFocusKeeperRef.current?.focus({ preventScroll: true }), 0);
+              }
+            }}
+            onMouseDownCapture={() => {
+              if (isPossessionCounterEnabled) {
+                setTimeout(() => videoFocusKeeperRef.current?.focus({ preventScroll: true }), 0);
+              }
+            }}
+          >
+            <div
+              ref={videoFocusKeeperRef}
+              tabIndex={-1}
+              aria-hidden="true"
+              style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+            />
+            {/* Overlay do liczenia posiadania: Z (lewy) / X (martwe) / C (prawy) */}
+            {shouldShowPossessionBarOnVideo && (
+              <div className={styles.videoPossessionButtons} role="status" aria-live="polite">
+                {possessionButtonsContent}
+              </div>
+            )}
+            <YouTubeVideo 
+              ref={youtubeVideoRef} 
+              matchInfo={matchInfo} 
+              isVisible={isVideoVisible}
+              onToggleVisibility={() => setIsVideoVisible(!isVideoVisible)}
+              isFullscreen={isVideoFullscreen}
+              onToggleFullscreen={() => setIsVideoFullscreen(!isVideoFullscreen)}
+            />
+            <CustomVideoPlayer 
+              ref={customVideoRef} 
+              matchInfo={matchInfo} 
+              isVisible={isVideoVisible}
+              onToggleVisibility={() => setIsVideoVisible(!isVideoVisible)}
+            />
+          </div>
+        )}
+
+        {/* Gdy YT/wideo jest wyłączone, pokaż pasek posiadania między tabelą meczów a Tabs */}
+        {!isVideoVisible && possessionButtonsContent && (
+          <div className={styles.videoPossessionButtonsHeader} role="status" aria-live="polite">
+            {possessionButtonsContent}
+          </div>
+        )}
 
         <Tabs activeTab={activeTab} onTabChange={setActiveTab} />
 
@@ -3076,6 +3920,10 @@ export default function Page() {
             setIsBelow8sActive={setIsBelow8sActive}
             isReaction5sActive={isReaction5sActive}
             setIsReaction5sActive={setIsReaction5sActive}
+            isBadReaction5sActive={isBadReaction5sActive}
+            setIsBadReaction5sActive={setIsBadReaction5sActive}
+            isAutActive={isAutActive}
+            setIsAutActive={setIsAutActive}
             isPMAreaActive={isPMAreaActive}
             setIsPMAreaActive={setIsPMAreaActive}
             playersBehindBall={playersBehindBall}
@@ -3138,6 +3986,14 @@ export default function Page() {
             setActionType={setActionType}
             currentPoints={currentPoints}
             setCurrentPoints={setCurrentPoints}
+            isP0StartActive={isP0StartActive}
+            setIsP0StartActive={setIsP0StartActive}
+            isP1StartActive={isP1StartActive}
+            setIsP1StartActive={setIsP1StartActive}
+            isP2StartActive={isP2StartActive}
+            setIsP2StartActive={setIsP2StartActive}
+            isP3StartActive={isP3StartActive}
+            setIsP3StartActive={setIsP3StartActive}
             isP0Active={isP0Active}
             setIsP0Active={setIsP0Active}
             isP1Active={isP1Active}
@@ -3355,6 +4211,7 @@ export default function Page() {
                       try {
 
                       const updates: Array<{
+                        shotKey: string;
                         shot: Shot;
                         actionType: 'open_play' | 'counter' | 'corner' | 'free_kick' | 'direct_free_kick' | 'penalty' | 'throw_in' | 'regain';
                         regainTime?: string;
@@ -3534,6 +4391,7 @@ export default function Page() {
 
                         if (needsUpdate) {
                           updates.push({
+                            shotKey: getStableShotKey(shot),
                             shot,
                             actionType: newActionType,
                             regainTime: regainTimeString,
@@ -3671,6 +4529,7 @@ export default function Page() {
 
                         if (needsUpdate) {
                           updates.push({
+                            shotKey: getStableShotKey(shot),
                             shot,
                             actionType: newActionType,
                             regainTime: loseTimeString, // Używamy loseTimeString dla kontekstu
@@ -3687,7 +4546,7 @@ export default function Page() {
                         console.log("Updates przed zapisaniem:", updates.length);
                         setPendingShotsUpdates(updates);
                         // Zaznacz wszystkie domyślnie
-                        const allIds = new Set(updates.map(u => u.shot.id || `shot-${updates.indexOf(u)}`).filter(Boolean));
+                        const allIds = new Set(updates.map((u) => u.shotKey).filter(Boolean));
                         setSelectedShotsUpdates(allIds);
                         setShowShotsVerifyModal(true);
                       } catch (error) {
@@ -3794,6 +4653,7 @@ export default function Page() {
                     console.log("Rozpoczynam weryfikację...");
 
                     const updates: Array<{
+                      entryKey: string;
                       entry: PKEntry;
                       isRegain: boolean;
                       regainTime?: string;
@@ -4033,7 +4893,7 @@ export default function Page() {
                       // Używamy TYLKO videoTimestampRaw (bez fallbacków)
                       if (entry.videoTimestampRaw === undefined || entry.videoTimestampRaw === null) {
                         if (entry.isRegain !== false) {
-                          updates.push({ entry, isRegain: false });
+                          updates.push({ entryKey: getStablePKEntryKey(entry), entry, isRegain: false });
                         }
                         return;
                       }
@@ -4202,6 +5062,7 @@ export default function Page() {
                       // Dodajemy do updates tylko jeśli wartość się zmienia
                       if (needsUpdate) {
                         updates.push({
+                          entryKey: getStablePKEntryKey(entry),
                           entry,
                           isRegain: shouldBeRegain,
                           regainTime: regainTimeString, // Zawsze pokazuj czas ostatniego regaina, jeśli istnieje
@@ -4257,7 +5118,7 @@ export default function Page() {
                       // Używamy TYLKO videoTimestampRaw (bez fallbacków)
                       if (entry.videoTimestampRaw === undefined || entry.videoTimestampRaw === null) {
                         if (entry.isRegain !== false) {
-                          updates.push({ entry, isRegain: false });
+                          updates.push({ entryKey: getStablePKEntryKey(entry), entry, isRegain: false });
                         }
                         return;
                       }
@@ -4413,6 +5274,7 @@ export default function Page() {
                       // Dodajemy do updates tylko jeśli wartość się zmienia
                       if (needsUpdate) {
                         updates.push({
+                          entryKey: getStablePKEntryKey(entry),
                           entry,
                           isRegain: shouldBeRegain,
                           regainTime: loseTimeString, // Czas ostatniej straty dla kontekstu (jeśli była w przedziale 8s)
@@ -4432,7 +5294,7 @@ export default function Page() {
 
                     setPendingPKRegainUpdates(updates);
                     // Zaznacz wszystkie domyślnie
-                    const allIds = new Set(updates.map(u => u.entry.id || `update-${updates.indexOf(u)}`).filter(Boolean));
+                    const allIds = new Set(updates.map((u) => u.entryKey).filter(Boolean));
                     setSelectedPKUpdates(allIds);
                     setShowPKRegainVerifyModal(true);
                   }}
@@ -4475,7 +5337,7 @@ export default function Page() {
                       const pkSeconds = Math.floor(pkTimeRaw % 60);
                       const pkTimeString = `${pkMinutes}:${pkSeconds.toString().padStart(2, "0")}`;
 
-                      const entryId = update.entry.id || `update-${index}`;
+                      const entryId = update.entryKey;
                       const isSelected = selectedPKUpdates.has(entryId);
                       
                       return (
@@ -4601,7 +5463,7 @@ export default function Page() {
                       type="button"
                       className={styles.pkVerifySelectAllButton}
                       onClick={() => {
-                        const allIds = new Set(pendingPKRegainUpdates.map(u => u.entry.id || `update-${pendingPKRegainUpdates.indexOf(u)}`).filter(Boolean));
+                        const allIds = new Set(pendingPKRegainUpdates.map((u) => u.entryKey).filter(Boolean));
                         setSelectedPKUpdates(allIds);
                       }}
                     >
@@ -4639,11 +5501,12 @@ export default function Page() {
                         }
 
                         try {
-                          const updatedEntries = pkEntries.map(entry => {
-                            const update = pendingPKRegainUpdates.find(u => u.entry.id === entry.id);
-                            const entryId = entry.id || `update-${pendingPKRegainUpdates.findIndex(u => u.entry.id === entry.id)}`;
+                          const updateByKey = new Map(pendingPKRegainUpdates.map((u) => [u.entryKey, u] as const));
+                          const updatedEntries = pkEntries.map((entry) => {
+                            const entryKey = getStablePKEntryKey(entry);
+                            const update = updateByKey.get(entryKey);
                             // Aktualizuj tylko jeśli pozycja jest zaznaczona
-                            if (update && selectedPKUpdates.has(entryId)) {
+                            if (update && selectedPKUpdates.has(entryKey)) {
                               return { 
                                 ...entry, 
                                 isRegain: update.isRegain,
@@ -4794,7 +5657,7 @@ export default function Page() {
                       const shotMinutes = Math.floor(shotTimeRaw / 60);
                       const shotSeconds = Math.floor(shotTimeRaw % 60);
                       const shotTimeString = `${shotMinutes}:${shotSeconds.toString().padStart(2, "0")}`;
-                      const shotId = update.shot.id || `shot-${index}`;
+                      const shotId = update.shotKey;
                       const isSelected = selectedShotsUpdates.has(shotId);
 
                       return (
@@ -4871,7 +5734,7 @@ export default function Page() {
                     type="button"
                     className={styles.pkVerifySelectAllButton}
                     onClick={() => {
-                      const allIds = new Set(pendingShotsUpdates.map(u => u.shot.id || `shot-${pendingShotsUpdates.indexOf(u)}`).filter(Boolean));
+                      const allIds = new Set(pendingShotsUpdates.map((u) => u.shotKey).filter(Boolean));
                       setSelectedShotsUpdates(allIds);
                     }}
                   >
@@ -4909,11 +5772,12 @@ export default function Page() {
                       }
 
                       try {
-                        const updatedShots = shots.map(shot => {
-                          const update = pendingShotsUpdates.find(u => u.shot.id === shot.id);
-                          const shotId = shot.id || `shot-${pendingShotsUpdates.findIndex(u => u.shot.id === shot.id)}`;
+                        const updateByKey = new Map(pendingShotsUpdates.map((u) => [u.shotKey, u] as const));
+                        const updatedShots = shots.map((shot) => {
+                          const shotKey = getStableShotKey(shot);
+                          const update = updateByKey.get(shotKey);
                           // Aktualizuj tylko jeśli pozycja jest zaznaczona
-                          if (update && selectedShotsUpdates.has(shotId)) {
+                          if (update && selectedShotsUpdates.has(shotKey)) {
                             return { 
                               ...shot, 
                               actionType: update.actionType,
@@ -4963,7 +5827,13 @@ export default function Page() {
               await deletePKEntry(entryId);
             }}
             onUpdateEntry={async (entryId, entryData) => {
-              await updatePKEntry(entryId, entryData);
+              try {
+                await updatePKEntry(entryId, entryData);
+                return true;
+              } catch (error) {
+                console.error("Błąd podczas aktualizacji wejścia PK:", error);
+                return false;
+              }
             }}
             onEditEntry={(entry) => {
               setSelectedPKEntryId(entry.id);

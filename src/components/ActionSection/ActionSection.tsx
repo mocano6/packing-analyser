@@ -997,7 +997,10 @@ const ActionSection = memo(function ActionSection({
             const newValue = !isReaction5sActive;
             setIsReaction5sActive(newValue);
             if (newValue) {
-              setIsReaction5sNotApplicableActive(false);
+              // Jeśli włączamy 5s, wyłączamy "Brak 5s"
+              setIsBadReaction5sActive(false);
+              // Tylko jeden z: ✓ 5s / ✗ 5s / Aut
+              setIsAutActive(false);
             }
           }}
           // Nowy prop dla przycisku "Brak 5s" (nie dotyczy)
@@ -1007,11 +1010,21 @@ const ActionSection = memo(function ActionSection({
             setIsBadReaction5sActive(newValue);
             if (newValue) {
               setIsReaction5sActive(false);
+              // Tylko jeden z: ✓ 5s / ✗ 5s / Aut
+              setIsAutActive(false);
             }
           }}
           // Nowy prop dla przycisku "Aut"
           isAutActive={isAutActive}
-          onAutToggle={() => setIsAutActive(!isAutActive)}
+          onAutToggle={() => {
+            const newValue = !isAutActive;
+            setIsAutActive(newValue);
+            if (newValue) {
+              // Tylko jeden z: ✓ 5s / ✗ 5s / Aut
+              setIsReaction5sActive(false);
+              setIsBadReaction5sActive(false);
+            }
+          }}
           // Nowy prop dla liczby partnerów przed piłką
           playersBehindBall={playersBehindBall}
           onPlayersBehindBallChange={setPlayersBehindBall}
@@ -1407,7 +1420,8 @@ const ActionSection = memo(function ActionSection({
               onEditingActionChange({
                 ...editingAction,
                 isReaction5s: newValue,
-                isBadReaction5s: newValue ? false : editingAction.isBadReaction5s
+                isBadReaction5s: newValue ? false : editingAction.isBadReaction5s,
+                isAut: newValue ? false : editingAction.isAut,
               });
             }
           }}
@@ -1418,16 +1432,20 @@ const ActionSection = memo(function ActionSection({
               onEditingActionChange({
                 ...editingAction,
                 isBadReaction5s: newValue,
-                isReaction5s: newValue ? false : editingAction.isReaction5s
+                isReaction5s: newValue ? false : editingAction.isReaction5s,
+                isAut: newValue ? false : editingAction.isAut,
               });
             }
           }}
           isAutActive={editingAction?.isAut || false}
           onAutToggle={() => {
             if (editingAction && onEditingActionChange) {
+              const newValue = !editingAction.isAut;
               onEditingActionChange({
                 ...editingAction,
-                isAut: !editingAction.isAut
+                isAut: newValue,
+                isReaction5s: newValue ? false : editingAction.isReaction5s,
+                isBadReaction5s: newValue ? false : editingAction.isBadReaction5s,
               });
             }
           }}
