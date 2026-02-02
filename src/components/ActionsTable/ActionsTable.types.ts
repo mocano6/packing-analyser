@@ -17,7 +17,6 @@ export interface ActionsTableProps {
   highlightedPlayerId?: string | null;
   onDeleteAction?: (actionId: string) => void;
   onEditAction?: (action: Action) => void;
-  onRefreshPlayersData?: () => void;
   youtubeVideoRef?: React.RefObject<YouTubeVideoRef>;
   customVideoRef?: React.RefObject<CustomVideoPlayerRef>;
   actionCategory?: "packing" | "regain" | "loses"; // Kategoria akcji

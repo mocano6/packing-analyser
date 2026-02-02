@@ -10,8 +10,8 @@ import PackingChart from '@/components/PackingChart/PackingChart';
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import ActionSection from "@/components/ActionSection/ActionSection";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, getDocs, updateDoc, deleteDoc } from "firebase/firestore";
-import { sortPlayersByLastName, getPlayerFullName } from "@/utils/playerUtils";
+import { doc, getDoc, collection, getDocs, updateDoc } from "firebase/firestore";
+import { buildPlayersIndex, getPlayerLabel, sortPlayersByLastName } from "@/utils/playerUtils";
 import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
@@ -74,6 +74,7 @@ export default function ZawodnicyPage() {
   // Ref dla aktualnych players żeby uniknąć dependency w useEffect
   const playersRef = useRef<Player[]>([]);
   playersRef.current = players;
+  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
 
   const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
   const { teams, isLoading: isTeamsLoading } = useTeams();
@@ -500,78 +501,28 @@ export default function ZawodnicyPage() {
   // Znajdź potencjalne duplikaty - ulepszona wersja dla akcji vs zawodników
   const findDuplicates = () => {
     const duplicatesFound: { name: string; players: Player[] }[] = [];
-    
-    // Zbierz wszystkich zawodników z akcji (senderów i odbiorców)
-    const playersFromActions = new Map<string, { id: string, name: string }>();
-    
-    filteredActions.forEach(action => {
-      if (action.senderId && action.senderName) {
-        playersFromActions.set(action.senderId, {
-          id: action.senderId,
-          name: action.senderName
-        });
-      }
-      if (action.receiverId && action.receiverName) {
-        playersFromActions.set(action.receiverId, {
-          id: action.receiverId,
-          name: action.receiverName
-        });
-      }
-    });
-    
-    // Sprawdź duplikaty w nazwach z akcji
-    const nameCountsFromActions: { [key: string]: { id: string, name: string }[] } = {};
-    Array.from(playersFromActions.values()).forEach(player => {
-      const name = player.name.toLowerCase().trim();
-      if (!nameCountsFromActions[name]) {
-        nameCountsFromActions[name] = [];
-      }
-      nameCountsFromActions[name].push(player);
-    });
-    
-    // Znajdź duplikaty w akcjach
-    const duplicateNamesInActions = Object.entries(nameCountsFromActions).filter(([_, players]) => players.length > 1);
-    
-    // Dla każdego duplikatu z akcji, sprawdź czy można go sparować
-    duplicateNamesInActions.forEach(([name, actionPlayers]) => {
-      const allPlayersForName: Player[] = [];
-      
-      // Dodaj zawodników z filteredPlayers o tej samej nazwie
-      filteredPlayers.forEach(player => {
-        const playerName = getPlayerFullName(player).toLowerCase().trim();
-        if (playerName === name) {
-          allPlayersForName.push(player);
+
+    const nameBuckets: Record<string, Player[]> = {};
+    filteredPlayers
+      .filter(player => !player.isDeleted)
+      .forEach(player => {
+        const name = getPlayerLabel(player.id, playersIndex).toLowerCase().trim();
+        if (!name) return;
+        if (!nameBuckets[name]) {
+          nameBuckets[name] = [];
         }
+        nameBuckets[name].push(player);
       });
-      
-      // Dodaj zawodników z akcji o tej samej nazwie (którzy NIE są w filteredPlayers)
-      actionPlayers.forEach(actionPlayer => {
-        // Sprawdź czy ten ID już jest w filteredPlayers
-        const existsInFiltered = filteredPlayers.some(p => p.id === actionPlayer.id);
-        if (!existsInFiltered) {
-          // Utwórz tymczasowy obiekt Player dla zawodnika z akcji
-          const tempPlayer: Player = {
-            id: actionPlayer.id,
-            firstName: '',
-            lastName: '',
-            name: actionPlayer.name,
-            number: 0,
-            position: 'Nieznana',
-            teams: [], // Nie należy do żadnego zespołu
-          };
-          allPlayersForName.push(tempPlayer);
-        }
-      });
-      
-      // Jeśli mamy więcej niż 1 zawodnika o tej nazwie, to są duplikaty
-      if (allPlayersForName.length > 1) {
+
+    Object.entries(nameBuckets).forEach(([name, playersWithName]) => {
+      if (playersWithName.length > 1) {
         duplicatesFound.push({
-          name: name,
-          players: allPlayersForName
+          name,
+          players: playersWithName
         });
       }
     });
-    
+
     return duplicatesFound;
   };
 
@@ -632,44 +583,59 @@ export default function ZawodnicyPage() {
           
           for (const matchDoc of matchesSnapshot.docs) {
             const matchData = matchDoc.data();
+            const actionFields = ["actions_packing", "actions_unpacking", "actions_regain", "actions_loses"] as const;
+            const updates: Record<string, Action[]> = {};
             let actionsChanged = false;
-            
-            if (matchData.actions_packing && Array.isArray(matchData.actions_packing)) {
-              const updatedActions = matchData.actions_packing.map((action: Action) => {
-                const updatedAction = { ...action };
-                
+
+            actionFields.forEach((field) => {
+              const actions = matchData[field];
+              if (!Array.isArray(actions)) return;
+
+              const updatedActions = actions.map((action: Action) => {
+                const {
+                  senderName,
+                  senderNumber,
+                  receiverName,
+                  receiverNumber,
+                  ...rest
+                } = action as Action & {
+                  senderName?: string;
+                  senderNumber?: number;
+                  receiverName?: string;
+                  receiverNumber?: number;
+                };
+                const updatedAction: Action = { ...rest };
+
+                if (senderName || senderNumber || receiverName || receiverNumber) {
+                  actionsChanged = true;
+                }
+
                 // Sprawdź czy akcja ma senderId lub receiverId duplikatu
                 duplicatesToMerge.forEach(duplicate => {
                   if (action.senderId === duplicate.id) {
                     updatedAction.senderId = mainPlayer.id;
-                    updatedAction.senderName = getPlayerFullName(mainPlayer);
-                    updatedAction.senderNumber = mainPlayer.number;
                     actionsChanged = true;
                   }
-                  
                   if (action.receiverId === duplicate.id) {
                     updatedAction.receiverId = mainPlayer.id;
-                    updatedAction.receiverName = getPlayerFullName(mainPlayer);
-                    updatedAction.receiverNumber = mainPlayer.number;
                     actionsChanged = true;
                   }
                 });
-                
+
                 return updatedAction;
               });
 
-              // Zapisz zaktualizowane akcje jeśli zostały zmienione
-              if (actionsChanged) {
-                await updateDoc(doc(db, 'matches', matchDoc.id), {
-                  actions_packing: updatedActions
-                });
-              }
+              updates[field] = updatedActions;
+            });
+
+            if (actionsChanged) {
+              await updateDoc(doc(db, 'matches', matchDoc.id), updates);
             }
           }
 
-          // Krok 2: Usuń duplikaty z kolekcji players
+          // Krok 2: Soft delete duplikatów w kolekcji players
           for (const duplicate of duplicatesToMerge) {
-            await deleteDoc(doc(db, 'players', duplicate.id));
+            await updateDoc(doc(db, 'players', duplicate.id), { isDeleted: true });
           }
 
           mergedCount++;
@@ -913,7 +879,7 @@ export default function ZawodnicyPage() {
                   return (
                     <div key={player.id} className={styles.duplicateItem}>
                       <div className={styles.playerInfo}>
-                        <span className={styles.playerName}>{getPlayerFullName(player)} ({player.id})</span>
+                        <span className={styles.playerName}>{getPlayerLabel(player.id, playersIndex)} ({player.id})</span>
                         <span className={styles.playerNumber}>#{player.number}</span>
                         <span className={styles.playerBirthYear}>
                           {player.birthYear ? `ur. ${player.birthYear}` : 'Brak roku urodzenia'}

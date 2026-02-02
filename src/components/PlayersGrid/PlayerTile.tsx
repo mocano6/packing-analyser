@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import { PlayerTileProps } from "./PlayersGrid.types";
 import styles from "./PlayersGrid.module.css";
+import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 
 const PlayerTile = memo(function PlayerTile({
   player,
@@ -20,6 +21,7 @@ const PlayerTile = memo(function PlayerTile({
 }: PlayerTileProps) {
   // Stan śledzący czy komponent jest już wyrenderowany na kliencie
   const [isMounted, setIsMounted] = useState(false);
+  const playersIndex = buildPlayersIndex([player]);
 
   // Ustawienie flagi mounted po wyrenderowaniu na kliencie
   useEffect(() => {
@@ -88,7 +90,7 @@ const PlayerTile = memo(function PlayerTile({
         <div className={styles.playerContent}>
           <div className={styles.number}>{player.number}</div>
           <div className={styles.playerInfo}>
-            <div className={styles.name}>{player.name}</div>
+            <div className={styles.name}>{getPlayerLabel(player.id, playersIndex)}</div>
           </div>
         </div>
       </div>
@@ -106,7 +108,7 @@ const PlayerTile = memo(function PlayerTile({
       role="button"
       tabIndex={0}
       aria-pressed={isSelected}
-      aria-label={`Wybierz gracza: ${player.name}, numer ${player.number}`}
+      aria-label={`Wybierz gracza: ${getPlayerLabel(player.id, playersIndex)}, numer ${player.number}`}
     >
       {hasImage && (
         <>
@@ -135,7 +137,7 @@ const PlayerTile = memo(function PlayerTile({
           }}
           onKeyDown={handleEditKeyDown}
           title="Edytuj"
-          aria-label={`Edytuj gracza: ${player.name}`}
+          aria-label={`Edytuj gracza: ${getPlayerLabel(player.id, playersIndex)}`}
         >
           ✎
         </button>
@@ -147,13 +149,13 @@ const PlayerTile = memo(function PlayerTile({
           }}
           onKeyDown={handleDeleteKeyDown}
           title="Usuń"
-          aria-label={`Usuń gracza: ${player.name}`}
+          aria-label={`Usuń gracza: ${getPlayerLabel(player.id, playersIndex)}`}
         >
           ✕
         </button>
 
         <div className={styles.playerInfo}>
-          <div className={styles.name}>{player.name}</div>
+          <div className={styles.name}>{getPlayerLabel(player.id, playersIndex)}</div>
           <div className={styles.details}>
             {player.position && (
               <span className={styles.position}>{player.position}</span>

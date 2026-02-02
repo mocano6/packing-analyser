@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Player, TeamInfo, PlayerMatchStats } from "@/types";
-import { getPlayerFullName } from "@/utils/playerUtils";
+import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 import { getDB } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import styles from "./PlayerMatchStatsModal.module.css";
@@ -28,6 +28,7 @@ const PlayerMatchStatsModal: React.FC<PlayerMatchStatsModalProps> = ({
   const [possessionInput, setPossessionInput] = useState("");
   const [currentMatchData, setCurrentMatchData] = useState<TeamInfo | null>(null);
   const [isLoadingMatchData, setIsLoadingMatchData] = useState(false);
+  const playersIndex = React.useMemo(() => buildPlayersIndex(players), [players]);
   const [formData, setFormData] = useState<PlayerMatchStats>({
     playerId: "",
     possessionMinutes: undefined,
@@ -242,7 +243,7 @@ const PlayerMatchStatsModal: React.FC<PlayerMatchStatsModalProps> = ({
               <option value="">-- Wybierz zawodnika --</option>
               {teamPlayers.map((player) => (
                 <option key={player.id} value={player.id}>
-                  {getPlayerFullName(player)} {player.number ? `#${player.number}` : ""}
+                  {getPlayerLabel(player.id, playersIndex)} {player.number ? `#${player.number}` : ""}
                 </option>
               ))}
             </select>

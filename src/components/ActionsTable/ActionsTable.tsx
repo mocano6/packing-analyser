@@ -8,6 +8,7 @@ import { ActionsTableProps } from "@/components/ActionsTable/ActionsTable.types"
 import { Player, Action } from "@/types";
 import { getOppositeXTValueForZone, zoneNameToIndex, getZoneData, getZoneName, zoneNameToString } from "@/constants/xtValues";
 import { useAuth } from "@/hooks/useAuth";
+import { buildPlayersIndex, getPlayerLabel, PlayersIndex } from "@/utils/playerUtils";
 
 // Funkcja do określenia kategorii akcji (spójna z page.tsx)
 const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
@@ -92,7 +93,7 @@ const ActionRow = ({
   onVideoTimeClick,
   selectedMetric,
   actionModeFilter,
-  players,
+  playersIndex,
   actionCategory,
 }: {
   action: ActionsTableProps["actions"][0];
@@ -101,7 +102,7 @@ const ActionRow = ({
   onVideoTimeClick?: (videoTimestamp?: number) => void;
   selectedMetric: 'packing' | 'pxt' | 'xt';
   actionModeFilter: 'attack' | 'defense';
-  players: Player[];
+  playersIndex: PlayersIndex;
   actionCategory?: "packing" | "regain" | "loses";
 }) => {
   const { isAdmin } = useAuth();
@@ -133,22 +134,21 @@ const ActionRow = ({
   const isSecondHalf = action.isSecondHalf === true;
 
   // Przygotuj dane zawodników w bezpieczny sposób
-  let senderDisplay = action.senderName 
-    ? `${action.senderNumber || '?'} ${action.senderName}`
-    : (action.senderId ? `ID: ${action.senderId.substring(0, 6)}...` : '-');
+  let senderDisplay = action.senderId
+    ? getPlayerLabel(action.senderId, playersIndex, { includeNumber: true })
+    : "-";
     
   // W trybie obrony wyświetlaj zawodników miniętych
   if (actionModeFilter === 'defense' && action.defensePlayers && action.defensePlayers.length > 0) {
-    const defensePlayerNames = action.defensePlayers.map(playerId => {
-      const player = players.find(p => p.id === playerId);
-      return player ? `${player.number || '?'} ${player.name}` : `ID: ${playerId.substring(0, 6)}...`;
-    });
+    const defensePlayerNames = action.defensePlayers.map(playerId =>
+      getPlayerLabel(playerId, playersIndex, { includeNumber: true })
+    );
     senderDisplay = defensePlayerNames.join(', ');
   }
     
-  const receiverDisplay = action.receiverName 
-    ? `${action.receiverNumber || '?'} ${action.receiverName}`
-    : (action.receiverId ? `ID: ${action.receiverId.substring(0, 6)}...` : '-');
+  const receiverDisplay = action.receiverId
+    ? getPlayerLabel(action.receiverId, playersIndex, { includeNumber: true })
+    : "-";
 
   // Funkcja formatująca czas wideo (sekundy -> mm:ss)
   const formatVideoTime = (seconds?: number): string => {
@@ -526,7 +526,6 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   players,
   onDeleteAction,
   onEditAction,
-  onRefreshPlayersData,
   youtubeVideoRef,
   customVideoRef,
   actionCategory = "packing"
@@ -596,24 +595,9 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
     }
   }, [actionCategory, actionModeFilter]);
 
-  // Dodajemy state do śledzenia, czy jakieś akcje mają brakujące dane graczy
-  const [hasMissingPlayerData, setHasMissingPlayerData] = useState(false);
-
   // State dla filtra kontrowersyjnego
   const [showOnlyControversial, setShowOnlyControversial] = useState(false);
-
-  // Sprawdzamy czy jakieś akcje mają brakujące dane graczy
-  useEffect(() => {
-    if (!actions || !actions.length) return;
-
-    const missingData = actions.some(
-      action => 
-        (!action.senderName && action.senderId) || 
-        (action.actionType === "pass" && !action.receiverName && action.receiverId)
-    );
-    
-    setHasMissingPlayerData(missingData);
-  }, [actions]);
+  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
 
   // Funkcja do obsługi kliknięcia na czas wideo
   const handleVideoTimeClick = async (videoTimestamp?: number) => {
@@ -715,8 +699,8 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           comparison = a.minute - b.minute;
           break;
         case "sender":
-          comparison = `${a.senderNumber}-${a.senderName}`.localeCompare(
-            `${b.senderNumber}-${b.senderName}`
+          comparison = getPlayerLabel(a.senderId, playersIndex).localeCompare(
+            getPlayerLabel(b.senderId, playersIndex)
           );
           break;
         case "senderXT":
@@ -726,8 +710,8 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           comparison = (a.startZone || "").localeCompare(b.startZone || "");
           break;
         case "receiver":
-          comparison = `${a.receiverNumber}-${a.receiverName}`.localeCompare(
-            `${b.receiverNumber}-${b.receiverName}`
+          comparison = getPlayerLabel(a.receiverId, playersIndex).localeCompare(
+            getPlayerLabel(b.receiverId, playersIndex)
           );
           break;
         case "receiverXT":
@@ -783,7 +767,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
 
       return comparison * multiplier;
     });
-  }, [actions, sortConfig, actionModeFilter, actionCategory, showOnlyControversial]);
+  }, [actions, sortConfig, actionModeFilter, actionCategory, showOnlyControversial, playersIndex]);
 
   return (
     <div className={sharedStyles.tableContainer}>
@@ -836,15 +820,6 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             </div>
           )}
           
-          {hasMissingPlayerData && onRefreshPlayersData && (
-            <button
-              className={styles.refreshButton}
-              onClick={onRefreshPlayersData}
-              title="Odśwież dane zawodników w akcjach"
-            >
-              <span>↻</span> Uzupełnij dane
-            </button>
-          )}
         </div>
       </div>
 
@@ -970,7 +945,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
                 onVideoTimeClick={handleVideoTimeClick}
                 selectedMetric={selectedMetric}
                 actionModeFilter={actionModeFilter}
-                players={players || []}
+                playersIndex={playersIndex}
                 actionCategory={actionCategory}
               />
             ))

@@ -1195,23 +1195,17 @@ const ActionSection = memo(function ActionSection({
           selectedReceiverId={editingAction?.receiverId || null}
           onSenderSelect={(id) => {
             if (editingAction && onEditingActionChange) {
-              const player = players.find(p => p.id === id);
               onEditingActionChange({
                 ...editingAction,
-                senderId: id || '',
-                senderName: player?.name || '',
-                senderNumber: player?.number || 0
+                senderId: id || ''
               });
             }
           }}
           onReceiverSelect={(id) => {
             if (editingAction && onEditingActionChange) {
-              const player = players.find(p => p.id === id);
               onEditingActionChange({
                 ...editingAction,
-                receiverId: id || '',
-                receiverName: player?.name || '',
-                receiverNumber: player?.number || 0
+                receiverId: id || ''
               });
             }
           }}
@@ -1507,23 +1501,17 @@ const ActionSection = memo(function ActionSection({
           selectedReceiverId={editingAction?.receiverId || null}
           onSenderSelect={(id) => {
             if (editingAction && onEditingActionChange) {
-              const player = players.find(p => p.id === id);
               onEditingActionChange({
                 ...editingAction,
-                senderId: id || '',
-                senderName: player?.name || '',
-                senderNumber: player?.number || 0
+                senderId: id || ''
               });
             }
           }}
           onReceiverSelect={(id) => {
             if (editingAction && onEditingActionChange) {
-              const player = players.find(p => p.id === id);
               onEditingActionChange({
                 ...editingAction,
-                receiverId: id || '',
-                receiverName: player?.name || '',
-                receiverNumber: player?.number || 0
+                receiverId: id || ''
               });
             }
           }}
@@ -1819,23 +1807,17 @@ const ActionSection = memo(function ActionSection({
           selectedReceiverId={editingAction?.receiverId || null}
           onSenderSelect={(id) => {
             if (editingAction && onEditingActionChange) {
-              const player = players.find(p => p.id === id);
               onEditingActionChange({
                 ...editingAction,
-                senderId: id || '',
-                senderName: player?.name || '',
-                senderNumber: player?.number || 0
+                senderId: id || ''
               });
             }
           }}
           onReceiverSelect={(id) => {
             if (editingAction && onEditingActionChange) {
-              const player = players.find(p => p.id === id);
               onEditingActionChange({
                 ...editingAction,
-                receiverId: id || '',
-                receiverName: player?.name || '',
-                receiverNumber: player?.number || 0
+                receiverId: id || ''
               });
             }
           }}

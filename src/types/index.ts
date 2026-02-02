@@ -14,6 +14,7 @@ export interface Player {
   imageUrl?: string;
   teams: string[]; // Tablica identyfikatorów zespołów, do których należy zawodnik
   isTestPlayer?: boolean; // Czy zawodnik jest testowany
+  isDeleted?: boolean; // Soft delete – true = zawodnik usunięty, PII pozostaje w dokumencie
   // Akcje są teraz przechowywane tylko w matches/{matchId}.actions_packing[]
   // Minuty zawodników są teraz przechowywane tylko w matches/{matchId}.playerMinutes[]
 }
@@ -66,10 +67,14 @@ export interface Action {
   possessionTeamId?: string | null; // ID zespołu posiadającego piłkę w czasie videoTimestampRaw (null = piłka niczyja)
   // Dodatkowe pola z ActionsPacking
   senderId: string;
+  /** @deprecated PII - nie zapisywać poza players */
   senderName?: string;
+  /** @deprecated PII - nie zapisywać poza players */
   senderNumber?: number;
   receiverId?: string;
+  /** @deprecated PII - nie zapisywać poza players */
   receiverName?: string;
+  /** @deprecated PII - nie zapisywać poza players */
   receiverNumber?: number;
   startZone?: string;
   endZone?: string | null;
@@ -166,6 +171,7 @@ export interface Shot {
   x: number; // Pozycja X w procentach (0-100)
   y: number; // Pozycja Y w procentach (0-100)
   playerId?: string;
+  /** @deprecated PII - nie zapisywać poza players */
   playerName?: string;
   minute: number;
   xG: number; // Wartość expected goals
@@ -190,6 +196,7 @@ export interface Shot {
   isContact2?: boolean; // Liczba kontaktów: 2T
   isContact3Plus?: boolean; // Liczba kontaktów: 3T+
   assistantId?: string; // ID asystenta (tylko dla goli)
+  /** @deprecated PII - nie zapisywać poza players */
   assistantName?: string; // Nazwa asystenta (tylko dla goli)
   isControversial?: boolean;
   controversyNote?: string; // Notatka analityka dotycząca kontrowersyjnego strzału
@@ -208,8 +215,10 @@ export interface PKEntry {
   minute: number;
   isSecondHalf: boolean;
   senderId?: string; // ID zawodnika podającego
+  /** @deprecated PII - nie zapisywać poza players */
   senderName?: string; // Nazwa zawodnika podającego
   receiverId?: string; // ID zawodnika otrzymującego (opcjonalne dla dryblingu i regain)
+  /** @deprecated PII - nie zapisywać poza players */
   receiverName?: string; // Nazwa zawodnika otrzymującego (opcjonalne dla dryblingu i regain)
   entryType?: "pass" | "dribble" | "sfg" | "regain"; // Typ akcji definiujący kolor strzałki
   teamContext?: "attack" | "defense"; // Kontekst zespołu
@@ -357,7 +366,8 @@ export type GPSProvider = 'STATSports' | 'Catapult';
 export interface GPSDataEntry {
   provider?: GPSProvider; // Dostawca danych GPS (domyślnie: STATSports)
   playerId: string;
-  playerName: string;
+  /** @deprecated PII - nie zapisywać poza players */
+  playerName?: string;
   day: string; // E.g., "MD", "MD+1"
   firstHalf: Record<string, any>; // Wszystkie kolumny z CSV dla I połowy
   secondHalf: Record<string, any>; // Wszystkie kolumny z CSV dla II połowy

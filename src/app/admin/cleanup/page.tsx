@@ -1,203 +1,265 @@
 'use client';
 
-import { useState } from 'react';
-import { collection, getDocs, doc, updateDoc, deleteField } from 'firebase/firestore';
+import { useMemo, useState } from 'react';
+import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { getDB } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import styles from './cleanup.module.css';
 
-interface CleanupStats {
-  totalPlayers: number;
-  playersWithActionsSent: number;
-  playersWithActionsReceived: number;
-  playersWithMatchesInfo: number;
-  cleanedPlayers: number;
-  processedPlayers: number;
-}
+const FORBIDDEN_PII_FIELDS = [
+  'firstName',
+  'lastName',
+  'name',
+  'birthYear',
+  'number',
+  'playerName',
+  'senderName',
+  'receiverName',
+  'assistantName',
+  'senderNumber',
+  'receiverNumber'
+];
+
+const BASE_COLLECTIONS = ['matches', 'gps'];
+const ARCHIVE_COLLECTIONS = ['players', 'matches', 'gps', 'actions', 'teams'].map((name) => `${name}_archive`);
+const COLLECTIONS_TO_SCAN = [...BASE_COLLECTIONS, ...ARCHIVE_COLLECTIONS];
+
+/** Kolekcja w Firebase na kopie zapasowe przed czyszczeniem PII */
+const PII_CLEANUP_BACKUPS_COLLECTION = 'pii_cleanup_backups';
+
+type PiiHit = {
+  path: string;
+  field: string;
+  preview?: string;
+};
+
+type PiiDocumentFinding = {
+  id: string;
+  collection: string;
+  hits: PiiHit[];
+  data: Record<string, any>;
+};
 
 export default function CleanupPage() {
   const { isAdmin } = useAuth();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
-  const [analysisResults, setAnalysisResults] = useState<CleanupStats | null>(null);
-  const [cleanupResults, setCleanupResults] = useState<CleanupStats | null>(null);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [findings, setFindings] = useState<PiiDocumentFinding[]>([]);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [logs, setLogs] = useState<string[]>([]);
 
   const addLog = (message: string) => {
-    setLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
+    setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
   };
 
-  const analyzePlayerData = async () => {
+  const findingsByCollection = useMemo(() => {
+    const grouped: Record<string, number> = {};
+    findings.forEach((finding) => {
+      grouped[finding.collection] = (grouped[finding.collection] || 0) + 1;
+    });
+    return grouped;
+  }, [findings]);
+
+  const scanForPii = (value: any, path: string[] = []): PiiHit[] => {
+    const hits: PiiHit[] = [];
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => {
+        hits.push(...scanForPii(item, [...path, String(index)]));
+      });
+      return hits;
+    }
+    if (value && typeof value === 'object') {
+      Object.entries(value).forEach(([key, child]) => {
+        const nextPath = [...path, key];
+        if (FORBIDDEN_PII_FIELDS.includes(key)) {
+          hits.push({
+            path: nextPath.join('.'),
+            field: key,
+            preview: typeof child === 'string' ? child.slice(0, 80) : undefined
+          });
+        }
+        hits.push(...scanForPii(child, nextPath));
+      });
+    }
+    return hits;
+  };
+
+  const sanitizeData = (value: any): any => {
+    if (Array.isArray(value)) {
+      return value.map((item) => sanitizeData(item));
+    }
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value)
+          .filter(([key]) => !FORBIDDEN_PII_FIELDS.includes(key))
+          .map(([key, child]) => [key, sanitizeData(child)])
+      );
+    }
+    return value;
+  };
+
+  const createBackup = async () => {
+    if (!isAdmin) {
+      alert('Tylko administratorzy mogą tworzyć kopie zapasowe');
+      return;
+    }
+    if (!confirm('Utworzyć kopię zapasową wszystkich dokumentów z kolekcji matches, gps oraz *_archive?')) return;
+
+    setIsBackingUp(true);
+    setLogs([]);
+    addLog('📦 Rozpoczynam tworzenie kopii zapasowej...');
+
+    try {
+      const backupId = `backup_${Date.now()}`;
+      const backupMetaRef = doc(getDB(), PII_CLEANUP_BACKUPS_COLLECTION, backupId);
+      let totalDocs = 0;
+
+      for (const collectionName of COLLECTIONS_TO_SCAN) {
+        addLog(`📥 Kopiuję kolekcję: ${collectionName}`);
+        const snapshot = await getDocs(collection(getDB(), collectionName));
+        for (const docSnap of snapshot.docs) {
+          const docBackupId = `${collectionName}__${docSnap.id}`.replace(/\//g, '__');
+          const backupDocRef = doc(getDB(), PII_CLEANUP_BACKUPS_COLLECTION, backupId, 'documents', docBackupId);
+          await setDoc(backupDocRef, {
+            sourceCollection: collectionName,
+            sourceId: docSnap.id,
+            data: docSnap.data(),
+          });
+          totalDocs += 1;
+        }
+        addLog(`✅ Zakończono: ${collectionName} (${snapshot.docs.length} dokumentów)`);
+      }
+
+      await setDoc(backupMetaRef, {
+        backupAt: new Date().toISOString(),
+        documentCount: totalDocs,
+        source: 'pii_cleanup_manual',
+      });
+      addLog(`🎉 Kopia zapasowa utworzona: ${PII_CLEANUP_BACKUPS_COLLECTION}/${backupId} (${totalDocs} dokumentów)`);
+    } catch (error) {
+      console.error('Błąd tworzenia kopii:', error);
+      addLog(`❌ Błąd tworzenia kopii: ${String(error)}`);
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const analyzeCollections = async () => {
     if (!isAdmin) {
       alert('Tylko administratorzy mogą analizować dane');
       return;
     }
 
     setIsAnalyzing(true);
+    setFindings([]);
+    setSelectedKeys(new Set());
     setLogs([]);
-    addLog('🔍 Rozpoczynam analizę danych zawodników...');
+    addLog('🔍 Rozpoczynam analizę PII w kolekcjach matches/gps/archiwach...');
 
     try {
-      const playersCollection = collection(getDB(), 'players');
-      const playersSnapshot = await getDocs(playersCollection);
-      
-      addLog(`📋 Znaleziono ${playersSnapshot.size} zawodników`);
-
-      let playersWithActionsSent = 0;
-      let playersWithActionsReceived = 0;
-      let playersWithMatchesInfo = 0;
-      let totalActions = 0;
-
-      playersSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        
-        if (data.actionsSent) {
-          playersWithActionsSent++;
-          totalActions += Object.keys(data.actionsSent).length;
-          addLog(`🔍 ${data.firstName} ${data.lastName} - actionsSent: ${Object.keys(data.actionsSent).length} meczów`);
-        }
-        
-        if (data.actionsReceived) {
-          playersWithActionsReceived++;
-          totalActions += Object.keys(data.actionsReceived).length;
-          addLog(`🔍 ${data.firstName} ${data.lastName} - actionsReceived: ${Object.keys(data.actionsReceived).length} meczów`);
-        }
-        
-        if (data.matchesInfo) {
-          playersWithMatchesInfo++;
-          totalActions += Object.keys(data.matchesInfo).length;
-          addLog(`🔍 ${data.firstName} ${data.lastName} - matchesInfo: ${Object.keys(data.matchesInfo).length} meczów`);
-        }
-      });
-
-      const results: CleanupStats = {
-        totalPlayers: playersSnapshot.size,
-        playersWithActionsSent,
-        playersWithActionsReceived,
-        playersWithMatchesInfo,
-        cleanedPlayers: 0,
-        processedPlayers: 0
-      };
-
-      setAnalysisResults(results);
-      
-      addLog(`📊 Analiza zakończona:`);
-      addLog(`   • Zawodnicy z actionsSent: ${playersWithActionsSent}`);
-      addLog(`   • Zawodnicy z actionsReceived: ${playersWithActionsReceived}`);
-      addLog(`   • Zawodnicy z matchesInfo: ${playersWithMatchesInfo}`);
-      addLog(`   • Łącznie duplikatów do usunięcia: ${totalActions}`);
-      
-      if (playersWithActionsSent === 0 && playersWithActionsReceived === 0 && playersWithMatchesInfo === 0) {
-        addLog('✅ Baza danych jest już czysta!');
-      } else {
-        addLog('⚠️  Znaleziono dane do wyczyszczenia');
+      const results: PiiDocumentFinding[] = [];
+      for (const collectionName of COLLECTIONS_TO_SCAN) {
+        addLog(`📥 Skanuję kolekcję: ${collectionName}`);
+        const snapshot = await getDocs(collection(getDB(), collectionName));
+        snapshot.docs.forEach((docSnap) => {
+          const data = docSnap.data() || {};
+          const hits = scanForPii(data);
+          if (hits.length > 0) {
+            results.push({
+              id: docSnap.id,
+              collection: collectionName,
+              hits,
+              data
+            });
+          }
+        });
+        addLog(`✅ Zakończono: ${collectionName}`);
       }
-
+      setFindings(results);
+      addLog(`📊 Wykryto dokumentów z PII: ${results.length}`);
+      if (results.length === 0) {
+        addLog('✅ Nie znaleziono zabronionych pól PII.');
+      }
     } catch (error) {
       console.error('Błąd analizy:', error);
-      addLog(`❌ Błąd analizy: ${error}`);
+      addLog(`❌ Błąd analizy: ${String(error)}`);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const cleanupPlayerData = async () => {
+  const toggleSelection = (key: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedKeys(new Set(findings.map((f) => `${f.collection}/${f.id}`)));
+  };
+
+  const clearSelection = () => {
+    setSelectedKeys(new Set());
+  };
+
+  const cleanSelected = async () => {
     if (!isAdmin) {
       alert('Tylko administratorzy mogą czyścić dane');
       return;
     }
-
-    if (!analysisResults || (analysisResults.playersWithActionsSent === 0 && analysisResults.playersWithActionsReceived === 0 && analysisResults.playersWithMatchesInfo === 0)) {
-      alert('Brak danych do wyczyszczenia lub nie wykonano analizy');
+    if (selectedKeys.size === 0) {
+      alert('Nie wybrano żadnych dokumentów do czyszczenia.');
       return;
     }
-
-    const totalPlayersToClean = analysisResults.playersWithActionsSent + analysisResults.playersWithActionsReceived + analysisResults.playersWithMatchesInfo;
-    const confirmed = confirm(
-      `Czy na pewno chcesz usunąć duplikaty danych z ${totalPlayersToClean} zawodników?\n\n` +
-      `• actionsSent: ${analysisResults.playersWithActionsSent} zawodników\n` +
-      `• actionsReceived: ${analysisResults.playersWithActionsReceived} zawodników\n` +
-      `• matchesInfo: ${analysisResults.playersWithMatchesInfo} zawodników\n\n` +
-      'Ta operacja jest nieodwracalna!'
-    );
-
-    if (!confirmed) return;
+    if (!confirm(`Czy na pewno chcesz wyczyścić ${selectedKeys.size} dokumentów? Przed usunięciem zostanie utworzona kopia zapasowa w Firebase.`)) return;
 
     setIsCleaning(true);
     setLogs([]);
-    addLog('🧹 Rozpoczynam czyszczenie danych zawodników...');
+    addLog('🧹 Rozpoczynam czyszczenie PII...');
 
     try {
-      const playersCollection = collection(getDB(), 'players');
-      const playersSnapshot = await getDocs(playersCollection);
-      
-      let processedCount = 0;
-      let cleanedCount = 0;
+      const selectedFindings = findings.filter((f) => selectedKeys.has(`${f.collection}/${f.id}`));
+      const backupId = `backup_${Date.now()}`;
 
-      for (const playerDoc of playersSnapshot.docs) {
-        const playerData = playerDoc.data();
-        const playerId = playerDoc.id;
-        
-        const hasActionsSent = playerData.actionsSent !== undefined;
-        const hasActionsReceived = playerData.actionsReceived !== undefined;
-        const hasMatchesInfo = playerData.matchesInfo !== undefined;
-        
-        if (hasActionsSent || hasActionsReceived || hasMatchesInfo) {
-          addLog(`🔄 Czyszczę zawodnika: ${playerData.firstName} ${playerData.lastName}`);
-          
-          const updates: any = {};
-          
-          if (hasActionsSent) {
-            updates.actionsSent = deleteField();
-            addLog(`  ❌ Usuwam actionsSent (${Object.keys(playerData.actionsSent || {}).length} meczów)`);
-          }
-          
-          if (hasActionsReceived) {
-            updates.actionsReceived = deleteField();
-            addLog(`  ❌ Usuwam actionsReceived (${Object.keys(playerData.actionsReceived || {}).length} meczów)`);
-          }
-          
-          if (hasMatchesInfo) {
-            updates.matchesInfo = deleteField();
-            addLog(`  ❌ Usuwam matchesInfo (${Object.keys(playerData.matchesInfo || {}).length} meczów)`);
-          }
-          
-          const playerRef = doc(getDB(), 'players', playerId);
-          await updateDoc(playerRef, updates);
-          
-          cleanedCount++;
-          addLog(`  ✅ Wyczyszczono zawodnika ${playerData.firstName} ${playerData.lastName}`);
-        }
-        
-        processedCount++;
+      // 1. Kopia zapasowa do Firebase przed usunięciem
+      addLog(`📦 Tworzę kopię zapasową w ${PII_CLEANUP_BACKUPS_COLLECTION}/${backupId}...`);
+      const backupMetaRef = doc(getDB(), PII_CLEANUP_BACKUPS_COLLECTION, backupId);
+      await setDoc(backupMetaRef, {
+        backupAt: new Date().toISOString(),
+        documentCount: selectedFindings.length,
+        source: 'pii_cleanup',
+      });
+      for (const finding of selectedFindings) {
+        const docBackupId = `${finding.collection}__${finding.id}`.replace(/\//g, '__');
+        const backupDocRef = doc(getDB(), PII_CLEANUP_BACKUPS_COLLECTION, backupId, 'documents', docBackupId);
+        await setDoc(backupDocRef, {
+          sourceCollection: finding.collection,
+          sourceId: finding.id,
+          data: finding.data,
+        });
       }
+      addLog(`✅ Kopia zapasowa utworzona: ${PII_CLEANUP_BACKUPS_COLLECTION}/${backupId} (${selectedFindings.length} dokumentów)`);
 
-      const results: CleanupStats = {
-        totalPlayers: playersSnapshot.size,
-        playersWithActionsSent: analysisResults.playersWithActionsSent,
-        playersWithActionsReceived: analysisResults.playersWithActionsReceived,
-        playersWithMatchesInfo: analysisResults.playersWithMatchesInfo,
-        cleanedPlayers: cleanedCount,
-        processedPlayers: processedCount
-      };
-
-      setCleanupResults(results);
-      
-      addLog('🎉 Czyszczenie zakończone!');
-      addLog(`📊 Przetworzono: ${processedCount} zawodników`);
-      addLog(`🧹 Wyczyszczono: ${cleanedCount} zawodników`);
-      addLog(`✨ Pomiętych: ${processedCount - cleanedCount} zawodników`);
-      
-      addLog('💾 Korzyści z czyszczenia:');
-      addLog('• Usunięto duplikaty akcji które były przechowywane w matches');
-      addLog('• Usunięto duplikaty minut zawodników które były przechowywane w matches');
-      addLog('• Zmniejszono rozmiar dokumentów zawodników');
-      addLog('• Uprościono strukturę danych');
-      addLog('• Poprawiono wydajność zapytań');
-
+      // 2. Czyszczenie PII w oryginalnych dokumentach
+      let cleaned = 0;
+      for (const finding of selectedFindings) {
+        const key = `${finding.collection}/${finding.id}`;
+        const sanitized = sanitizeData(finding.data);
+        await setDoc(doc(getDB(), finding.collection, finding.id), sanitized, { merge: false });
+        cleaned += 1;
+        addLog(`✅ Wyczyszczono ${key} (${finding.hits.length} pól)`);
+      }
+      addLog(`🎉 Czyszczenie zakończone. Zaktualizowano: ${cleaned} dokumentów`);
     } catch (error) {
       console.error('Błąd czyszczenia:', error);
-      addLog(`❌ Błąd czyszczenia: ${error}`);
+      addLog(`❌ Błąd czyszczenia: ${String(error)}`);
     } finally {
       setIsCleaning(false);
     }
@@ -214,80 +276,97 @@ export default function CleanupPage() {
 
   return (
     <div className={styles.container}>
-      <h1>🧹 Czyszczenie danych zawodników</h1>
-      
+      <h1>🧹 Czyszczenie PII w matches/gps/archiwach</h1>
+
       <div className={styles.section}>
-        <h2>Problem z duplikacją danych</h2>
+        <h2>Analiza</h2>
         <p>
-          Wcześniej akcje były zapisywane w dwóch miejscach:
+          Skanuje kolekcje <code>matches</code>, <code>gps</code> oraz wszystkie kolekcje z sufiksem <code>_archive</code> i
+          wykrywa pola PII zabronione poza <code>players</code>.
         </p>
-        <ul>
-          <li><strong>matches/{`{matchId}`}.actions_packing[]</strong> - główne źródło danych akcji (używane w UI)</li>
-          <li><strong>matches/{`{matchId}`}.playerMinutes[]</strong> - główne źródło danych minut (używane w UI)</li>
-          <li><strong>players/{`{playerId}`}.actionsSent/actionsReceived</strong> - duplikaty akcji (nieużywane)</li>
-          <li><strong>players/{`{playerId}`}.matchesInfo</strong> - duplikaty minut (nieużywane)</li>
-        </ul>
-        <p>
-          Ten panel pozwala usunąć niepotrzebne duplikaty z dokumentów zawodników:
-        </p>
-        <ul>
-          <li><strong>actionsSent/actionsReceived</strong> - duplikaty akcji</li>
-          <li><strong>matchesInfo</strong> - duplikaty minut zawodników</li>
-        </ul>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button onClick={createBackup} disabled={isBackingUp} className={styles.button}>
+            {isBackingUp ? 'Tworzę kopię...' : '📦 Utwórz kopię zapasową'}
+          </button>
+          <button onClick={analyzeCollections} disabled={isAnalyzing} className={styles.button}>
+            {isAnalyzing ? 'Analizuję...' : '🔍 Skanuj PII'}
+          </button>
+        </div>
       </div>
 
       <div className={styles.section}>
-        <h2>Analiza danych</h2>
-        <button
-          onClick={analyzePlayerData}
-          disabled={isAnalyzing}
-          className={styles.button}
-        >
-          {isAnalyzing ? 'Analizuję...' : '🔍 Analizuj dane zawodników'}
-        </button>
-        
-        {analysisResults && (
-          <div className={styles.results}>
-            <h3>Wyniki analizy:</h3>
-            <ul>
-              <li>Łącznie zawodników: {analysisResults.totalPlayers}</li>
-              <li>Zawodnicy z actionsSent: {analysisResults.playersWithActionsSent}</li>
-              <li>Zawodnicy z actionsReceived: {analysisResults.playersWithActionsReceived}</li>
-              <li>Zawodnicy z matchesInfo: {analysisResults.playersWithMatchesInfo}</li>
-              <li>Status: {analysisResults.playersWithActionsSent === 0 && analysisResults.playersWithActionsReceived === 0 && analysisResults.playersWithMatchesInfo === 0 ? '✅ Baza czysta' : '⚠️ Wymaga czyszczenia'}</li>
-            </ul>
-          </div>
+        <h2>Wyniki</h2>
+        {findings.length === 0 ? (
+          <p>Brak wyników — uruchom skanowanie.</p>
+        ) : (
+          <>
+            <div className={styles.results}>
+              <h3>Podsumowanie</h3>
+              <ul>
+                <li>Dokumenty z PII: {findings.length}</li>
+                {Object.entries(findingsByCollection).map(([name, count]) => (
+                  <li key={name}>{name}: {count}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className={styles.actionsRow}>
+              <button type="button" className={styles.button} onClick={selectAll}>
+                Zaznacz wszystkie
+              </button>
+              <button type="button" className={styles.button} onClick={clearSelection}>
+                Wyczyść zaznaczenie
+              </button>
+              <button
+                type="button"
+                className={`${styles.button} ${styles.dangerButton}`}
+                disabled={isCleaning || selectedKeys.size === 0}
+                onClick={cleanSelected}
+              >
+                {isCleaning ? 'Czyszczę...' : `🧹 Wyczyść (${selectedKeys.size})`}
+              </button>
+            </div>
+
+            <div className={styles.results}>
+              <h3>Dokumenty</h3>
+              <ul>
+                {findings.map((finding) => {
+                  const key = `${finding.collection}/${finding.id}`;
+                  return (
+                    <li key={key}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={selectedKeys.has(key)}
+                          onChange={() => toggleSelection(key)}
+                          aria-label={`Wybierz ${key}`}
+                        />
+                        <strong> {key}</strong> — {finding.hits.length} pól
+                      </label>
+                      <div className={styles.logs}>
+                        {finding.hits.slice(0, 6).map((hit, index) => (
+                          <div key={`${key}-${index}`} className={styles.logEntry}>
+                            {hit.path} ({hit.field}){hit.preview ? `: "${hit.preview}"` : ""}
+                          </div>
+                        ))}
+                        {finding.hits.length > 6 && (
+                          <div className={styles.logEntry}>… +{finding.hits.length - 6} więcej</div>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </>
         )}
       </div>
 
       <div className={styles.section}>
-        <h2>Czyszczenie</h2>
-        <button
-          onClick={cleanupPlayerData}
-          disabled={isCleaning || !analysisResults || (analysisResults.playersWithActionsSent === 0 && analysisResults.playersWithActionsReceived === 0 && analysisResults.playersWithMatchesInfo === 0)}
-          className={`${styles.button} ${styles.dangerButton}`}
-        >
-          {isCleaning ? 'Czyszczę...' : '🧹 Usuń duplikaty akcji'}
-        </button>
-        
-        {cleanupResults && (
-          <div className={styles.results}>
-            <h3>Wyniki czyszczenia:</h3>
-            <ul>
-              <li>Przetworzono: {cleanupResults.processedPlayers} zawodników</li>
-              <li>Wyczyszczono: {cleanupResults.cleanedPlayers} zawodników</li>
-              <li>Bez zmian: {cleanupResults.processedPlayers - cleanupResults.cleanedPlayers} zawodników</li>
-              <li>Status: ✅ Czyszczenie zakończone</li>
-            </ul>
-          </div>
-        )}
-      </div>
-
-      <div className={styles.section}>
-        <h2>Logi operacji</h2>
+        <h2>Logi</h2>
         <div className={styles.logs}>
           {logs.length === 0 ? (
-            <p>Brak logów - wykonaj analizę lub czyszczenie</p>
+            <p>Brak logów — uruchom skanowanie lub czyszczenie.</p>
           ) : (
             logs.map((log, index) => (
               <div key={index} className={styles.logEntry}>
@@ -299,4 +378,4 @@ export default function CleanupPage() {
       </div>
     </div>
   );
-} 
+}

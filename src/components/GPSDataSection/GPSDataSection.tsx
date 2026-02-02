@@ -5,7 +5,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { TeamInfo, Player, GPSDataEntry, GPSProvider } from "@/types";
 import { TEAMS } from "@/constants/teams";
 import { analyzeCSVStructure, parseCSV, CSVStructure } from "@/utils/csvAnalyzer";
-import { getPlayerFirstName, getPlayerFullName, getPlayerLastName, sortPlayersByLastName } from "@/utils/playerUtils";
+import { buildPlayersIndex, getPlayerFirstName, getPlayerFullName, getPlayerLabel, getPlayerLastName, sortPlayersByLastName } from "@/utils/playerUtils";
 import { getDB } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, orderBy, limit } from "firebase/firestore";
 import styles from "./GPSDataSection.module.css";
@@ -288,6 +288,7 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState<"add" | "view" | "config">("add");
   const [expandedGPSEntries, setExpandedGPSEntries] = useState<Set<string>>(new Set());
+  const playersIndex = React.useMemo(() => buildPlayersIndex(players), [players]);
 
   const availableMetrics = React.useMemo(() => {
     if (selectedProvider === "Catapult") {
@@ -1109,7 +1110,6 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
           teamId: selectedTeam,
           date: selectedDate,
           playerId: finalPlayer.id,
-          playerName: getPlayerFullName(finalPlayer),
           day: selectedDay,
           firstHalf,
           secondHalf,
@@ -1371,8 +1371,8 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
   }, [activeTab, selectedTeam, selectedDate, gpsDataFromFirebase, players, selectedProvider]);
 
   // Funkcja do usuwania danych GPS
-  const handleDeleteGPSData = async (entryId: string, playerName: string, day: string) => {
-    if (!confirm(`Czy na pewno chcesz usunąć dane GPS dla ${playerName} (${day})?`)) {
+  const handleDeleteGPSData = async (entryId: string, playerId: string, day: string) => {
+    if (!confirm(`Czy na pewno chcesz usunąć dane GPS dla ${getPlayerLabel(playerId, playersIndex)} (${day})?`)) {
       return;
     }
 
@@ -1550,7 +1550,7 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                           <strong>{mapped.playerName}</strong>
                           {mapped.player ? (
                             <span className={styles.matchedLabel}>
-                              → {getPlayerFullName(mapped.player)} {mapped.player.number ? `#${mapped.player.number}` : ''}
+                              → {getPlayerLabel(mapped.player.id, playersIndex)} {mapped.player.number ? `#${mapped.player.number}` : ''}
                             </span>
                           ) : (
                             <span className={styles.unmatchedLabel}>❌ Nie znaleziono w bazie</span>
@@ -1586,7 +1586,7 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                             </select>
                             {mapped.matched && mapped.player && !mapped.manualPlayerId && (
                               <small className={styles.suggestionHint}>
-                                💡 Sugestia aplikacji: {`${getPlayerLastName(mapped.player)} ${getPlayerFirstName(mapped.player)}`.trim()}{" "}
+                                💡 Sugestia aplikacji: {getPlayerLabel(mapped.player.id, playersIndex)}{" "}
                                 {mapped.player.number ? `#${mapped.player.number}` : ""}
                               </small>
                             )}
@@ -2160,10 +2160,7 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                               <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                             </svg>
                           </button>
-                          <h4>
-                            {player ? getPlayerFullName(player) : entry.playerName}
-                            {player?.number && ` #${player.number}`}
-                          </h4>
+                          <h4>{getPlayerLabel(entry.playerId, playersIndex, { includeNumber: true })}</h4>
                           <div className={styles.gpsDataMeta}>
                             <span>Dzień: {entry.day}</span>
                             <span>Dostawca: {entry.provider || "STATSports"}</span>

@@ -1,7 +1,7 @@
 // src/components/MatchInfoHeader/MatchInfoHeader.tsx
 "use client";
 
-import React, { useState, KeyboardEvent, useEffect } from "react";
+import React, { useState, KeyboardEvent, useEffect, useMemo } from "react";
 import { TeamInfo, Player } from "@/types";
 import { TEAMS } from "@/constants/teams";
 import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
@@ -11,6 +11,7 @@ import MatchDataModal from "@/components/MatchDataModal/MatchDataModal";
 import { getDB } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import styles from "./MatchInfoHeader.module.css";
+import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 
 // Nowy komponent do wyświetlania informacji o bieżącym meczu
 interface CurrentMatchInfoProps {
@@ -20,6 +21,7 @@ interface CurrentMatchInfoProps {
 }
 
 const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players, allAvailableTeams = [] }) => {
+  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
   if (!matchInfo || !matchInfo.matchId) {
     return null;
   }
@@ -109,8 +111,8 @@ const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players,
           const words = name.trim().split(/\s+/);
           return words[words.length - 1].toLowerCase();
         };
-        const lastNameA = getLastName(a.player.name);
-        const lastNameB = getLastName(b.player.name);
+        const lastNameA = getLastName(getPlayerLabel(a.player.id, playersIndex));
+        const lastNameB = getLastName(getPlayerLabel(b.player.id, playersIndex));
         return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
       });
     });
@@ -128,7 +130,7 @@ const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players,
                 {playersByPosition[position].map((item) => (
                   <div key={item.playerMinute.playerId} className={styles.playerMinuteItem}>
                     <span className={styles.playerName}>
-                      {item.player.name}
+                      {getPlayerLabel(item.player.id, playersIndex)}
                       {item.player.isTestPlayer && (
                         <span className={styles.testPlayerBadge}>T</span>
                       )}

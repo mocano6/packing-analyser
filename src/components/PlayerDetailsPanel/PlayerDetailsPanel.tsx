@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import { Player, Action, TeamInfo } from "@/types";
-import { getPlayerFullName } from "@/utils/playerUtils";
+import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 import styles from "./PlayerDetailsPanel.module.css";
 
 interface PlayerDetailsPanelProps {
@@ -20,6 +20,7 @@ const PlayerDetailsPanel: React.FC<PlayerDetailsPanelProps> = ({
   selectedMatchIds,
   onClose,
 }) => {
+  const playersIndex = useMemo(() => (player ? buildPlayersIndex([player]) : new Map()), [player]);
   // Filtruj akcje dla wybranego zawodnika i meczów
   const playerStats = useMemo(() => {
     if (!player) return null;
@@ -129,7 +130,7 @@ const PlayerDetailsPanel: React.FC<PlayerDetailsPanelProps> = ({
             <div className={styles.imageContainer}>
               <img
                 src={player.imageUrl}
-                alt={getPlayerFullName(player)}
+                alt={getPlayerLabel(player.id, playersIndex)}
                 className={styles.playerImage}
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = "none";
@@ -138,7 +139,7 @@ const PlayerDetailsPanel: React.FC<PlayerDetailsPanelProps> = ({
             </div>
           )}
           <div className={styles.playerInfo}>
-            <h2 className={styles.playerName}>{getPlayerFullName(player)}</h2>
+            <h2 className={styles.playerName}>{getPlayerLabel(player.id, playersIndex)}</h2>
             {player.number && (
               <div className={styles.playerNumber}>#{player.number}</div>
             )}

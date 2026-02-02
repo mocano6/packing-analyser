@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Shot, Player, TeamInfo } from "@/types";
-import { getPlayerFullName } from "@/utils/playerUtils";
+import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 import styles from "./ShotModal.module.css";
 
 export interface ShotModalProps {
@@ -42,7 +42,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
 }) => {
   const [formData, setFormData] = useState({
     playerId: "",
-    playerName: "",
     minute: 1,
     xG: 0,
     bodyPart: "foot" as "foot" | "head" | "other",
@@ -63,12 +62,12 @@ const ShotModal: React.FC<ShotModalProps> = ({
     isContact2: false,
     isContact3Plus: false,
     assistantId: "",
-    assistantName: "",
     isControversial: false,
     previousShotId: "",
     isFromPK: false,
   });
   const isEditMode = Boolean(editingShot);
+  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
   const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
   const [controversyNote, setControversyNote] = useState<string>(""); // Notatka dotycząca kontrowersyjnej akcji
@@ -347,7 +346,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
     if (editingShot) {
       setFormData({
         playerId: editingShot.playerId || "",
-        playerName: editingShot.playerName || "",
         minute: editingShot.minute,
         // Odwróć modyfikatory, aby uzyskać bazowe xG (przed modyfikatorami)
         xG: reverseFinalXG(Math.round(editingShot.xG * 100), editingShot),
@@ -369,7 +367,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
         isContact2: editingShot.isContact2 || false,
         isContact3Plus: editingShot.isContact3Plus || false,
         assistantId: (editingShot as any)?.assistantId || "",
-        assistantName: (editingShot as any)?.assistantName || "",
         isControversial: editingShot.isControversial || false,
         previousShotId: editingShot.previousShotId || "",
         isFromPK: (editingShot as any)?.isFromPK || false,
@@ -383,7 +380,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
       
       setFormData({
         playerId: "",
-        playerName: "",
         minute: 1,
         xG: Math.round(xG * 100), // Konwersja z ułamka na całe procenty
         bodyPart: "foot",
@@ -404,7 +400,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
         isContact2: false,
         isContact3Plus: false,
         assistantId: "",
-        assistantName: "",
         isControversial: false,
         previousShotId: "",
         isFromPK: false,
@@ -418,26 +413,21 @@ const ShotModal: React.FC<ShotModalProps> = ({
       setFormData(prev => ({
         ...prev,
         playerId: defaultGoalkeeper.id,
-        playerName: `${defaultGoalkeeper.firstName} ${defaultGoalkeeper.lastName}`,
       }));
     }
   }, [formData.teamContext, defaultGoalkeeper, formData.playerId]);
 
   const handlePlayerSelect = (playerId: string) => {
-    const player = filteredPlayers.find(p => p.id === playerId);
     setFormData({
       ...formData,
       playerId,
-      playerName: player ? `${player.firstName} ${player.lastName}` : "",
     });
   };
 
   const handleAssistantSelect = (playerId: string) => {
-    const player = filteredPlayers.find(p => p.id === playerId);
     setFormData({
       ...formData,
       assistantId: playerId,
-      assistantName: player ? `${player.firstName} ${player.lastName}` : "",
     });
   };
 
@@ -459,7 +449,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
       ...formData,
       teamContext,
       playerId: "", // Reset wyboru zawodnika przy zmianie kontekstu
-      playerName: "",
       blockingPlayers: [], // Reset zawodników blokujących
       linePlayers: [], // Reset zawodników na linii
       linePlayersCount: 0, // Reset liczby zawodników na linii
@@ -589,9 +578,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
     if (chain.length > 1) {
       // Jeśli jest łańcuch, pokaż go
       const chainText = chain.map(s => `${s.minute}'`).join(' → ');
-      return `${chainText} | ${shot.playerName || "Brak"} | xG: ${Math.round(shot.xG * 100)}%`;
+      return `${chainText} | ${getPlayerLabel(shot.playerId, playersIndex)} | xG: ${Math.round(shot.xG * 100)}%`;
     }
-    return `${shot.minute}' | ${shot.playerName || "Brak"} | xG: ${Math.round(shot.xG * 100)}%`;
+    return `${shot.minute}' | ${getPlayerLabel(shot.playerId, playersIndex)} | xG: ${Math.round(shot.xG * 100)}%`;
   };
 
   const handlePreviousShotSelect = (shotId: string) => {
@@ -879,7 +868,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
       y: editingShot ? editingShot.y : y,
       xG: finalXG / 100, // Konwersja z procentów na ułamek
       playerId: formData.playerId,
-      playerName: formData.playerName,
       minute: lockedMinute,
       isGoal: formData.shotType === "goal",
       bodyPart: formData.bodyPart,
@@ -897,7 +885,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
       isContact2: formData.isContact2,
       isContact3Plus: formData.isContact3Plus,
       assistantId: formData.assistantId || undefined,
-      assistantName: formData.assistantName || undefined,
       isControversial: formData.isControversial,
       controversyNote: formData.isControversial && controversyNote.trim() ? controversyNote.trim() : undefined,
       previousShotId: formData.previousShotId || undefined,
@@ -1059,7 +1046,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                             <div className={styles.playerContent}>
                               <div className={styles.number}>{player.number}</div>
                               <div className={styles.playerInfo}>
-                                <div className={styles.name}>{getPlayerFullName(player)}</div>
+                                <div className={styles.name}>{getPlayerLabel(player.id, playersIndex)}</div>
                               </div>
                             </div>
                           </div>
@@ -1101,7 +1088,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                               <div className={styles.playerContent}>
                                 <div className={styles.number}>{player.number}</div>
                                 <div className={styles.playerInfo}>
-                                  <div className={styles.name}>{getPlayerFullName(player)}</div>
+                                  <div className={styles.name}>{getPlayerLabel(player.id, playersIndex)}</div>
                                 </div>
                               </div>
                             </div>
@@ -1278,7 +1265,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                               <div className={styles.playerContent}>
                                 <div className={styles.number}>{player.number}</div>
                                 <div className={styles.playerInfo}>
-                                  <div className={styles.name}>{getPlayerFullName(player)}</div>
+                                  <div className={styles.name}>{getPlayerLabel(player.id, playersIndex)}</div>
                                 </div>
                               </div>
                             </div>
@@ -1440,7 +1427,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     ? `Dobitka - wybierz ten strzał jako poprzedni. Łańcuch dobitek: ${chain.map(s => `${s.minute}'`).join(' → ')}. xG tego strzału będzie obliczone jako: xG * (1 - xG_poprzedni/100)`
                     : `Dobitka - wybierz ten strzał jako poprzedni. xG tego strzału będzie obliczone jako: xG * (1 - xG_poprzedni/100)`;
                   // Czytelniejszy tekst: minuta, zawodnik i xG z separatorami
-                  const playerName = shot.playerName || "Brak";
+                  const playerName = getPlayerLabel(shot.playerId, playersIndex);
                   const xgValue = Math.round(shot.xG * 100);
                   const buttonText = `${shot.minute}' - ${playerName} (xG: ${xgValue}%)`;
                   return (
@@ -1490,7 +1477,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                               <div className={styles.playerContent}>
                                 <div className={styles.number}>{player.number}</div>
                                 <div className={styles.playerInfo}>
-                                  <div className={styles.name}>{getPlayerFullName(player)}</div>
+                                  <div className={styles.name}>{getPlayerLabel(player.id, playersIndex)}</div>
                                 </div>
                               </div>
                             </div>

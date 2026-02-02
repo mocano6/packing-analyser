@@ -18,7 +18,7 @@ import { isIn1TZoneCanonical, isInOpponent1TZoneCanonical } from "@/utils/pitchZ
 import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPitch";
 import XGPitch from "@/components/XGPitch/XGPitch";
 import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
-import { getPlayerFullName } from "@/utils/playerUtils";
+import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import styles from "./statystyki-zespolu.module.css";
@@ -32,6 +32,7 @@ export default function StatystykiZespoluPage() {
   const [isPlayersListCollapsed, setIsPlayersListCollapsed] = useState<boolean>(true);
   const [selectedPlayerForVideo, setSelectedPlayerForVideo] = useState<string | null>(null);
   const { players } = usePlayersState();
+  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
   
   // Resetuj stan zwijania gdy zmienia się wybrane KPI
   useEffect(() => {
@@ -649,7 +650,7 @@ export default function StatystykiZespoluPage() {
           list.push({
             id: docSnap.id,
             playerId: d.playerId ?? '',
-            playerName: d.playerName ?? '',
+            playerName: getPlayerLabel(d.playerId ?? '', playersIndex),
             firstHalf: d.firstHalf ?? {},
             secondHalf: d.secondHalf ?? {},
             total: d.total ?? {},
@@ -3176,7 +3177,7 @@ export default function StatystykiZespoluPage() {
             const player = players.find(p => p.id === playerId);
             return {
               playerId,
-              playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+              playerName: getPlayerLabel(playerId, playersIndex),
               pxt: stats.pxt,
               passes: stats.passes,
             };
@@ -4526,7 +4527,7 @@ export default function StatystykiZespoluPage() {
                       const player = players.find(p => p.id === playerId);
                       return {
                         playerId,
-                        playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                        playerName: getPlayerLabel(playerId, playersIndex),
                         count: data.shots.length,
                         totalXG: data.totalXG,
                         percentage: teamShotsCount > 0 ? (data.shots.length / teamShotsCount) * 100 : 0,
@@ -4686,7 +4687,7 @@ export default function StatystykiZespoluPage() {
                       const contact1Percentage = data.shots.length > 0 ? (data.contact1Count / data.shots.length) * 100 : 0;
                       return {
                         playerId,
-                        playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                        playerName: getPlayerLabel(playerId, playersIndex),
                         count: data.shots.length,
                         totalXG: data.totalXG,
                         contact1Count: data.contact1Count,
@@ -4854,7 +4855,7 @@ export default function StatystykiZespoluPage() {
                       const player = players.find(p => p.id === playerId);
                       return {
                         playerId,
-                        playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                        playerName: getPlayerLabel(playerId, playersIndex),
                         count: data.loses.length,
                         percentage: losesInPMAreaCount > 0 ? (data.loses.length / losesInPMAreaCount) * 100 : 0,
                         loses: data.loses
@@ -5028,7 +5029,7 @@ export default function StatystykiZespoluPage() {
                       const player = players.find(p => p.id === playerId);
                       return {
                         playerId,
-                        playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                        playerName: getPlayerLabel(playerId, playersIndex),
                         count: data.regains.length,
                         percentage: totalRegainsOpponentHalf > 0 
                           ? (data.regains.length / totalRegainsOpponentHalf) * 100 
@@ -5281,7 +5282,7 @@ export default function StatystykiZespoluPage() {
                       const totalForPercentage = regainsOnOpponentHalfWithTimestamp.length;
                       return {
                         playerId,
-                        playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                        playerName: getPlayerLabel(playerId, playersIndex),
                         count: countToShow,
                         successfulCount: data.successful.length,
                         percentage: totalForPercentage > 0 
@@ -6201,13 +6202,13 @@ export default function StatystykiZespoluPage() {
                         </span>
                       </span>
                     </div>
-                    {(selectedPKEntry.senderName || selectedPKEntry.receiverName) && (
+                    {(selectedPKEntry.senderId || selectedPKEntry.receiverId) && (
                       <div className={styles.detailsRow}>
                         <span className={styles.detailsLabel}>ZAWODNICY:</span>
                         <span className={styles.detailsValue}>
                           <span className={styles.valueMain}>
-                            {selectedPKEntry.senderName ? selectedPKEntry.senderName : '—'}
-                            {selectedPKEntry.receiverName ? ` → ${selectedPKEntry.receiverName}` : ''}
+                            {getPlayerLabel(selectedPKEntry.senderId, playersIndex)}
+                            {selectedPKEntry.receiverId ? ` → ${getPlayerLabel(selectedPKEntry.receiverId, playersIndex)}` : ''}
                           </span>
                         </span>
                       </div>
@@ -6560,7 +6561,7 @@ export default function StatystykiZespoluPage() {
                               const player = players.find(p => p.id === playerId);
                               return {
                                 playerId,
-                                playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                                playerName: getPlayerLabel(playerId, playersIndex),
                                 regainXT: stats.regainXT,
                                 regains: stats.regains,
                                 actions: stats.actions.sort((a, b) => a.minute - b.minute),
@@ -6610,7 +6611,7 @@ export default function StatystykiZespoluPage() {
                             <div className={styles.zonePlayersList}>
                               {regainZoneDetails.players.length > 0 ? regainZoneDetails.players.map((player) => (
                                 <div key={player.playerId} className={styles.zonePlayerItem}>
-                                  <div className={styles.zonePlayerName}>{player.playerName}</div>
+                                  <div className={styles.zonePlayerName}>{getPlayerLabel(player.playerId, playersIndex)}</div>
                                   <div className={styles.zonePlayerStats}>
                                     <div className={styles.zonePlayerStat}>
                                       <span className={styles.zoneLabel}>xT:</span>
@@ -6646,7 +6647,7 @@ export default function StatystykiZespoluPage() {
                                     onClick={() => {
                                       setSelectedPlayerForModal({
                                         playerId: player.playerId,
-                                        playerName: player.playerName,
+                                        playerName: getPlayerLabel(player.playerId, playersIndex),
                                         zoneName: regainZoneDetails.zoneName
                                       });
                                       setActionsModalOpen(true);
@@ -7098,7 +7099,7 @@ export default function StatystykiZespoluPage() {
                               const player = players.find(p => p.id === playerId);
                               return {
                                 playerId,
-                                playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                                playerName: getPlayerLabel(playerId, playersIndex),
                                 losesXT: stats.losesXT,
                                 loses: stats.loses,
                                 actions: stats.actions.sort((a, b) => a.minute - b.minute),
@@ -7148,7 +7149,7 @@ export default function StatystykiZespoluPage() {
                             <div className={styles.zonePlayersList}>
                               {losesZoneDetails.players.length > 0 ? losesZoneDetails.players.map((player) => (
                                 <div key={player.playerId} className={styles.zonePlayerItem}>
-                                  <div className={styles.zonePlayerName}>{player.playerName}</div>
+                                  <div className={styles.zonePlayerName}>{getPlayerLabel(player.playerId, playersIndex)}</div>
                                   <div className={styles.zonePlayerStats}>
                                     <div className={styles.zonePlayerStat}>
                                       <span className={styles.zoneLabel}>xT:</span>
@@ -7187,7 +7188,7 @@ export default function StatystykiZespoluPage() {
                                     onClick={() => {
                                       setSelectedPlayerForModal({
                                         playerId: player.playerId,
-                                        playerName: player.playerName,
+                                        playerName: getPlayerLabel(player.playerId, playersIndex),
                                         zoneName: losesZoneDetails.zoneName
                                       });
                                       setActionsModalOpen(true);
@@ -8086,6 +8087,7 @@ export default function StatystykiZespoluPage() {
                           });
                         })()}
                         onShotAdd={() => {}}
+                        players={players}
                           onShotClick={(shot) => setSelectedShot(shot)}
                           selectedShotId={selectedShot?.id}
                         matchInfo={selectedMatchInfo}
@@ -8178,7 +8180,7 @@ export default function StatystykiZespoluPage() {
                           <div className={styles.shotInfoContent}>
                             <div className={styles.shotInfoRow}>
                               <span className={styles.shotInfoLabel}>Zawodnik:</span>
-                              <span className={styles.shotInfoValue}>{selectedShot.playerName || 'Nieznany'}</span>
+                              <span className={styles.shotInfoValue}>{getPlayerLabel(selectedShot.playerId, playersIndex)}</span>
                             </div>
                             <div className={styles.shotInfoRow}>
                               <span className={styles.shotInfoLabel}>Minuta:</span>
@@ -8222,10 +8224,10 @@ export default function StatystykiZespoluPage() {
                                 </span>
                               </div>
                             )}
-                            {selectedShot.assistantName && (
+                            {selectedShot.assistantId && (
                               <div className={styles.shotInfoRow}>
                                 <span className={styles.shotInfoLabel}>Asysta:</span>
-                                <span className={styles.shotInfoValue}>{selectedShot.assistantName}</span>
+                                <span className={styles.shotInfoValue}>{getPlayerLabel(selectedShot.assistantId, playersIndex)}</span>
                               </div>
                             )}
                             {selectedShot.actionPhase && (
@@ -10656,7 +10658,7 @@ export default function StatystykiZespoluPage() {
                                   const player = players.find(p => p.id === playerId);
                                   return {
                                     playerId,
-                                    playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                                    playerName: getPlayerLabel(playerId, playersIndex),
                                     pxt: stats.pxt,
                                     passes: stats.passes,
                                   };
@@ -10699,7 +10701,7 @@ export default function StatystykiZespoluPage() {
                               <div className={styles.zonePlayersList}>
                                 {zoneDetails.players.map((player) => (
                                   <div key={player.playerId} className={styles.zonePlayerItem}>
-                                    <div className={styles.zonePlayerName}>{player.playerName}</div>
+                                    <div className={styles.zonePlayerName}>{getPlayerLabel(player.playerId, playersIndex)}</div>
                                     <div className={styles.zonePlayerStats}>
                                       <div className={styles.zonePlayerStat}>
                                         <span className={styles.zoneLabel}>PxT:</span>
@@ -10715,7 +10717,7 @@ export default function StatystykiZespoluPage() {
                                       onClick={() => {
                                         setSelectedPlayerForModal({
                                           playerId: player.playerId,
-                                          playerName: player.playerName,
+                                          playerName: getPlayerLabel(player.playerId, playersIndex),
                                           zoneName: zoneDetails.zoneName
                                         });
                                         setActionsModalOpen(true);

@@ -1,10 +1,11 @@
 // src/components/SelectionContainer/SelectionContainer.tsx
 "use client";
 
-import React, { memo, useEffect, useCallback } from "react";
+import React, { memo, useEffect, useCallback, useMemo } from "react";
 import styles from "./SelectionContainer.module.css";
 import ActionTypeToggle from "../ActionTypeToggle/ActionTypeToggle";
 import { Player } from "@/types"; // Zaktualizowana ścieżka dla Next.js
+import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 
 export interface SelectionContainerProps {
   players: Player[];
@@ -32,6 +33,7 @@ const SelectionContainer = memo(function SelectionContainer({
   const availableReceivers = players.filter(
     (player) => player.id !== selectedPlayerId
   );
+  const playersIndex = useMemo(() => buildPlayersIndex(availableReceivers), [availableReceivers]);
 
   // Resetujemy odbiorcę jeśli nadawca i odbiorca to ten sam zawodnik
   useEffect(() => {
@@ -103,7 +105,7 @@ const SelectionContainer = memo(function SelectionContainer({
             <option value="">Wybierz zawodnika</option>
             {availableReceivers.map((player) => (
               <option key={player.id} value={player.id}>
-                {player.name} ({player.number})
+                {getPlayerLabel(player.id, playersIndex)} ({player.number})
               </option>
             ))}
           </select>

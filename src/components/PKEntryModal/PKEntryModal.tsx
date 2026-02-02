@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { PKEntry, Player, TeamInfo } from "@/types";
-import { getPlayerFullName } from "@/utils/playerUtils";
 import styles from "./PKEntryModal.module.css";
 import PlayerCard from "../ActionModal/PlayerCard";
 
@@ -43,9 +42,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
 }) => {
   const [formData, setFormData] = useState({
     senderId: "",
-    senderName: "",
     receiverId: "",
-    receiverName: "",
     minute: 1,
     isSecondHalf: false,
     entryType: "pass" as "pass" | "dribble" | "sfg",
@@ -340,9 +337,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     if (editingEntry) {
       setFormData({
         senderId: editingEntry.senderId || "",
-        senderName: editingEntry.senderName || "",
         receiverId: editingEntry.receiverId || "",
-        receiverName: editingEntry.receiverName || "",
         minute: editingEntry.minute,
         isSecondHalf: editingEntry.isSecondHalf,
         entryType: editingEntry.entryType || "pass",
@@ -367,9 +362,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
       
       setFormData({
         senderId: "",
-        senderName: "",
         receiverId: "",
-        receiverName: "",
         minute: 1,
         isSecondHalf: isP2,
         entryType: "pass",
@@ -393,9 +386,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
   }, [isOpen]);
 
   const handlePlayerClick = (playerId: string) => {
-    const player = filteredPlayers.find(p => p.id === playerId);
-    const playerName = player ? `${player.firstName} ${player.lastName}` : "";
-    
     // Dla dryblingu - tylko jeden zawodnik (sender)
     if (formData.entryType === "dribble") {
       if (playerId === formData.senderId) {
@@ -403,16 +393,13 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         setFormData({
           ...formData,
           senderId: "",
-          senderName: "",
         });
       } else {
         // W przeciwnym razie zaznaczamy nowego zawodnika jako sender
         setFormData({
           ...formData,
           senderId: playerId,
-          senderName: playerName,
           receiverId: "", // Upewniamy się, że nie ma odbiorcy przy dryblingu
-          receiverName: "",
         });
       }
       return;
@@ -425,7 +412,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         setFormData({
           ...formData,
           senderId: "",
-          senderName: "",
         });
         return;
       }
@@ -435,7 +421,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         setFormData({
           ...formData,
           receiverId: "",
-          receiverName: "",
         });
         return;
       }
@@ -445,7 +430,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         setFormData({
           ...formData,
           senderId: playerId,
-          senderName: playerName,
         });
         return;
       }
@@ -455,7 +439,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         setFormData({
           ...formData,
           receiverId: playerId,
-          receiverName: playerName,
         });
         return;
       }
@@ -464,9 +447,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
       setFormData({
         ...formData,
         senderId: playerId,
-        senderName: playerName,
         receiverId: "",
-        receiverName: "",
       });
       return;
     }
@@ -478,9 +459,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         setFormData({
           ...formData,
           senderId: formData.receiverId || "",
-          senderName: formData.receiverName || "",
           receiverId: "",
-          receiverName: "",
         });
         return;
       }
@@ -490,7 +469,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         setFormData({
           ...formData,
           receiverId: "",
-          receiverName: "",
         });
         return;
       }
@@ -500,7 +478,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         setFormData({
           ...formData,
           senderId: playerId,
-          senderName: playerName,
         });
         return;
       }
@@ -510,7 +487,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         setFormData({
           ...formData,
           receiverId: playerId,
-          receiverName: playerName,
         });
         return;
       }
@@ -519,9 +495,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
       setFormData({
         ...formData,
         senderId: playerId,
-        senderName: playerName,
         receiverId: "",
-        receiverName: "",
       });
     }
   };
@@ -664,7 +638,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         minute: lockedMinute,
         isSecondHalf: lockedIsSecondHalf,
         senderId: "",
-        senderName: "",
         entryType: formData.entryType,
         teamContext: formData.teamContext,
         isPossible1T: formData.isPossible1T,
@@ -676,7 +649,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         isControversial: formData.isControversial,
         ...(formData.isControversial && controversyNote && controversyNote.trim() ? { controversyNote: controversyNote.trim() } : {}),
         receiverId: undefined,
-        receiverName: undefined,
       };
       
       // Pobierz czas wideo z localStorage
@@ -740,9 +712,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     const receiverId = formData.receiverId && formData.receiverId.trim() !== "" 
       ? formData.receiverId 
       : undefined;
-    const receiverName = formData.receiverName && formData.receiverName.trim() !== "" 
-      ? formData.receiverName 
-      : undefined;
 
     // Pobierz czas wideo z localStorage (tak jak w Acc8sModal)
     const videoTimestamp = typeof window !== 'undefined' 
@@ -782,7 +751,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
       minute: lockedMinute,
       isSecondHalf: lockedIsSecondHalf,
       senderId: formData.senderId,
-      senderName: formData.senderName,
       entryType: formData.entryType,
       teamContext: formData.teamContext,
       isPossible1T: formData.isPossible1T,
@@ -802,14 +770,12 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
       onSave({
         ...entryDataToSave,
         receiverId: undefined,
-        receiverName: undefined,
       });
     } else {
       // Dla pozostałych typów (pass, sfg, regain)
       onSave({
         ...entryDataToSave,
         receiverId: receiverId,
-        receiverName: receiverName,
       });
     }
 
@@ -863,9 +829,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                 ...formData, 
                 teamContext: "defense",
                 senderId: "",
-                senderName: "",
                 receiverId: "",
-                receiverName: "",
               })}
             >
               Obrona
@@ -908,7 +872,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                   ...formData, 
                   entryType: "pass",
                   receiverId: formData.receiverId || "", // Zachowaj odbiorcę jeśli istnieje
-                  receiverName: formData.receiverName || "",
                 })}
               >
                 Podanie
@@ -920,7 +883,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                   ...formData, 
                   entryType: "dribble",
                   receiverId: "", // Usuń odbiorcę przy dryblingu
-                  receiverName: "",
                 })}
               >
                 Drybling
@@ -932,7 +894,6 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                   ...formData, 
                   entryType: "sfg",
                   receiverId: formData.receiverId || "", // Zachowaj odbiorcę jeśli istnieje
-                  receiverName: formData.receiverName || "",
                 })}
               >
                 SFG

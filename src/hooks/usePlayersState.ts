@@ -5,8 +5,8 @@ import { Player } from "../types";
 import { getDB } from "../lib/firebase";
 import { getPlayerFullName } from '@/utils/playerUtils';
 import { 
-  collection, getDocs, addDoc, updateDoc, 
-  deleteDoc, doc, setDoc, getDoc
+  collection, getDocs, addDoc, updateDoc,
+  doc, setDoc, getDoc
 } from "firebase/firestore";
 import { NewPlayer, TeamMembership } from "@/types/migration";
 
@@ -158,6 +158,9 @@ export function usePlayersState() {
                   if (!playerData) {
                     return;
                   }
+                  if (playerData.isDeleted === true) {
+                    return;
+                  }
                   
 
                   
@@ -218,7 +221,7 @@ export function usePlayersState() {
           return [];
         }
 
-             const playersList = playersSnapshot.docs.map(doc => {
+      const playersList = playersSnapshot.docs.map(doc => {
          const data = doc.data() as Player;
          const { id, ...dataWithoutId } = data;
          const player = {
@@ -236,7 +239,7 @@ export function usePlayersState() {
          }
          
          return player;
-       }) as Player[];
+       }).filter(player => player.isDeleted !== true) as Player[];
 
 
       
@@ -351,8 +354,8 @@ export function usePlayersState() {
         throw new Error("Firebase nie jest zainicjalizowane");
       }
       
-      // Usuń tylko ze starej struktury players (z polem teams)
-        await deleteDoc(doc(getDB(), "players", playerId));
+      // Soft delete w players - zachowujemy PII
+      await updateDoc(doc(getDB(), "players", playerId), { isDeleted: true });
       
               // Aktualizuj lokalny stan
       setPlayers((prev) => prev.filter((p) => p.id !== playerId));

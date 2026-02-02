@@ -2667,73 +2667,6 @@ export default function Page() {
     await forceRefreshFromFirebase(selectedTeam);
   };
 
-  // Przekażę informację do ActionsTable, aby można było zaktualizować dane akcji o imiona graczy
-  const handleRefreshPlayersData = () => {
-    if (!players || !matchInfo?.matchId) return;
-    
-    // Uzupełniamy dane graczy w akcjach
-    const enrichedActions = actions.map(action => {
-      const updatedAction = { ...action };
-      
-      // Dodaj dane nadawcy (sender)
-      if (action.senderId && (!action.senderName || !action.senderNumber)) {
-        const senderPlayer = players.find(p => p.id === action.senderId);
-        if (senderPlayer) {
-          updatedAction.senderName = senderPlayer.name;
-          updatedAction.senderNumber = senderPlayer.number;
-        }
-      }
-      
-      // Dodaj dane odbiorcy (receiver)
-      if (action.receiverId && (!action.receiverName || !action.receiverNumber)) {
-        const receiverPlayer = players.find(p => p.id === action.receiverId);
-        if (receiverPlayer) {
-          updatedAction.receiverName = receiverPlayer.name;
-          updatedAction.receiverNumber = receiverPlayer.number;
-        }
-      }
-      
-      return updatedAction;
-    });
-    
-    // Jeśli dokonano jakichkolwiek zmian, zapisz do Firebase
-    const hasChanges = enrichedActions.some((updatedAction, index) => 
-      updatedAction.senderName !== actions[index].senderName || 
-      updatedAction.senderNumber !== actions[index].senderNumber ||
-      updatedAction.receiverName !== actions[index].receiverName ||
-      updatedAction.receiverNumber !== actions[index].receiverNumber
-    );
-    
-    if (hasChanges) {
-      // Synchronizuj z bazą danych
-      if (syncEnrichedActions) {
-        syncEnrichedActions(matchInfo.matchId, enrichedActions);
-      }
-      
-      // Aktualizuj lokalny stan akcji
-      setActions(enrichedActions);
-    }
-  };
-
-  // Obsługa synchronizacji wzbogaconych akcji z Firebase
-  const syncEnrichedActions = async (matchId: string, updatedActions: Action[]) => {
-    try {
-      const db = getDB();
-      
-      // Pobierz referencję do dokumentu meczu
-      const matchRef = doc(db, "matches", matchId);
-      
-      // Aktualizuj dokument z wzbogaconymi akcjami
-      await updateDoc(matchRef, {
-        actions_packing: updatedActions.map(action => removeUndefinedFields(action))
-      });
-      
-      return true;
-    } catch (error) {
-      console.error("Błąd podczas synchronizacji wzbogaconych akcji:", error);
-      return false;
-    }
-  };
 
   // Obsługa edycji akcji
   // Funkcja do określenia kategorii akcji
@@ -4185,6 +4118,7 @@ export default function Page() {
           <div style={{ position: 'relative' }}>
             <XGPitch
               shots={shots}
+              players={players}
               onShotAdd={handleShotAdd}
               onShotClick={handleShotClick}
               selectedShotId={selectedShotId}
@@ -5814,7 +5748,6 @@ export default function Page() {
             players={players}
             onDeleteAction={handleDeleteAction}
             onEditAction={handleEditAction}
-            onRefreshPlayersData={handleRefreshPlayersData}
             youtubeVideoRef={youtubeVideoRef}
             customVideoRef={customVideoRef}
             actionCategory={actionCategory}

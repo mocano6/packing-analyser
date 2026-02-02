@@ -17,6 +17,7 @@ import {
   Bar
 } from 'recharts';
 import { Player, Action, TeamInfo } from '@/types';
+import { buildPlayersIndex, getPlayerLabel } from '@/utils/playerUtils';
 import styles from './PackingChart.module.css';
 
 interface NetworkNode {
@@ -115,6 +116,7 @@ export default function PackingChart({
   const [showNetworkChart, setShowNetworkChart] = useState<boolean>(false);
   const [isPer90Minutes, setIsPer90Minutes] = useState<boolean>(false);
   const [chartStartIndex, setChartStartIndex] = useState<number>(0);
+  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
   const [minMinutesFilter, setMinMinutesFilter] = useState<number>(0);
   const [tableMetric, setTableMetric] = useState<'packing' | 'pxt' | 'xt'>('pxt');
   const [additionalActionsRole, setAdditionalActionsRole] = useState<'sender' | 'receiver'>('sender');
@@ -307,7 +309,7 @@ export default function PackingChart({
       // Dodajemy punkty dla nadawcy
       if (action.senderId && shouldIncludeAction(action, action.senderId)) {
         const current = playerStats.get(action.senderId) || ({ 
-          name: action.senderName || 'Nieznany zawodnik', 
+          name: getPlayerLabel(action.senderId, playersIndex), 
           totalPacking: 0, senderPacking: 0, receiverPacking: 0,
           totalPxT: 0, senderPxT: 0, receiverPxT: 0,
           totalXT: 0, senderXT: 0, receiverXT: 0,
@@ -371,7 +373,7 @@ export default function PackingChart({
       // Dodajemy punkty dla odbiorcy (tylko dla podań)
       if (action.receiverId && !isDribble && shouldIncludeAction(action, action.receiverId)) {
         const current = playerStats.get(action.receiverId) || ({ 
-          name: action.receiverName || 'Nieznany zawodnik', 
+          name: getPlayerLabel(action.receiverId, playersIndex),
           totalPacking: 0, senderPacking: 0, receiverPacking: 0,
           totalPxT: 0, senderPxT: 0, receiverPxT: 0,
           totalXT: 0, senderXT: 0, receiverXT: 0,
@@ -1782,7 +1784,7 @@ export default function PackingChart({
                     <div className={styles.playerInfo}>
                       <div className={styles.playerNameRow}>
                         <span className={styles.playerNameText}>
-                          {player.name}
+                          {getPlayerLabel(player.id, playersIndex)}
                         </span>
                         {(player as any).birthYear && (
                           <span className={styles.birthYear}> ({(player as any).birthYear})</span>

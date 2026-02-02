@@ -19,8 +19,18 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// Collections to backup
-const COLLECTIONS = ['teams', 'players', 'matches', 'actions'];
+// Collections to backup (PII pozostaje tylko w players)
+const BASE_COLLECTIONS = ['teams', 'players', 'matches', 'actions', 'gps'];
+const ARCHIVE_SUFFIX = '_archive';
+const EXTRA_ARCHIVE_COLLECTIONS = (process.env.BACKUP_ARCHIVE_COLLECTIONS || '')
+  .split(',')
+  .map((name) => name.trim())
+  .filter(Boolean);
+const ARCHIVE_COLLECTIONS = Array.from(new Set([
+  ...BASE_COLLECTIONS.map((name) => `${name}${ARCHIVE_SUFFIX}`),
+  ...EXTRA_ARCHIVE_COLLECTIONS
+]));
+const COLLECTIONS = [...BASE_COLLECTIONS, ...ARCHIVE_COLLECTIONS];
 
 // Function to get all documents from a collection
 async function getCollectionData(collectionName) {

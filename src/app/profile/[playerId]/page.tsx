@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import Link from "next/link";
-import { getPlayerFullName } from "@/utils/playerUtils";
+import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPitch";
@@ -27,6 +27,7 @@ export default function PlayerDetailsPage() {
   const playerId = typeof params?.playerId === "string" ? params.playerId : "";
 
   const { players } = usePlayersState();
+  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
   const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
   const { teams, isLoading: isTeamsLoading } = useTeams();
   const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, logout } = useAuth();
@@ -3602,7 +3603,7 @@ export default function PlayerDetailsPage() {
                 {player.imageUrl && (
                   <img
                     src={player.imageUrl}
-                    alt={getPlayerFullName(player)}
+                    alt={getPlayerLabel(player.id, playersIndex)}
                     className={styles.printPhoto}
                   />
                 )}
@@ -3610,7 +3611,7 @@ export default function PlayerDetailsPage() {
               <div className={styles.printHeaderMain}>
                 <div className={styles.printTitle}>Profil zawodnika</div>
                 <div className={styles.printSubtitle}>
-                  {getPlayerFullName(player)}{player.number ? ` (#${player.number})` : ""}{player.position ? ` • ${player.position}` : ""}
+                  {getPlayerLabel(player.id, playersIndex)}{player.number ? ` (#${player.number})` : ""}{player.position ? ` • ${player.position}` : ""}
                 </div>
               </div>
               <div className={styles.printMeta}>
@@ -3942,7 +3943,7 @@ export default function PlayerDetailsPage() {
             className={styles.playerSelectButton}
           >
             {selectedPlayerForView 
-              ? getPlayerFullName(filteredPlayers.find(p => p.id === selectedPlayerForView) || filteredPlayers[0])
+              ? getPlayerLabel(filteredPlayers.find(p => p.id === selectedPlayerForView)?.id || filteredPlayers[0]?.id, playersIndex)
               : "Wybierz zawodnika..."}
           </button>
         </div>
@@ -3972,7 +3973,7 @@ export default function PlayerDetailsPage() {
             <div className={styles.imageContainer}>
               <img
                 src={player.imageUrl}
-                alt={getPlayerFullName(player)}
+                alt={getPlayerLabel(player.id, playersIndex)}
                 className={styles.playerImage}
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = "none";
@@ -3982,7 +3983,7 @@ export default function PlayerDetailsPage() {
           )}
           <div className={styles.playerInfo}>
             <div className={styles.playerNameRow}>
-              <h2 className={styles.playerName}>{getPlayerFullName(player)}</h2>
+              <h2 className={styles.playerName}>{getPlayerLabel(player.id, playersIndex)}</h2>
               {player.number && (
                 <span className={styles.playerNumber}>#{player.number}</span>
               )}
@@ -4192,6 +4193,7 @@ export default function PlayerDetailsPage() {
                           <>
                             <XGPitch
                               shots={[...xgStats.playerShots, ...xgStats.assistShots]}
+                              players={players}
                               onShotClick={(shot) => {
                                 setSelectedXGShotIdForView(shot.id);
                                 setSelectedXGShotForView(shot);
@@ -4283,10 +4285,10 @@ export default function PlayerDetailsPage() {
                                                 <span className={styles.valueMain}>
                                                   <strong>{status}</strong>
                                                 </span>
-                                                {(selectedShot.playerName || selectedShot.assistantName) && (
+                                                {(selectedShot.playerId || selectedShot.assistantId) && (
                                                   <span className={styles.valueSecondary} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "11px" }}>
-                                                    {selectedShot.playerName && <span>Strzał: {selectedShot.playerName}</span>}
-                                                    {selectedShot.assistantName && <span>Asysta: {selectedShot.assistantName}</span>}
+                                                    {selectedShot.playerId && <span>Strzał: {getPlayerLabel(selectedShot.playerId, playersIndex)}</span>}
+                                                    {selectedShot.assistantId && <span>Asysta: {getPlayerLabel(selectedShot.assistantId, playersIndex)}</span>}
                                                   </span>
                                                 )}
                                               </span>
@@ -4521,7 +4523,7 @@ export default function PlayerDetailsPage() {
                                 <div className={styles.zoneDetailsHeader}>
                                   <h4>
                                     {selectedPKEntry.minute}' {selectedPKEntry.isSecondHalf ? "(II)" : "(I)"} • {(selectedPKEntry.entryType || "pass").toUpperCase()}
-                                    {selectedPKEntry.senderName && ` • ${selectedPKEntry.senderName}`}
+                                    {selectedPKEntry.senderId && ` • ${getPlayerLabel(selectedPKEntry.senderId, playersIndex)}`}
                                   </h4>
                                   <button
                                     type="button"
@@ -5722,7 +5724,7 @@ export default function PlayerDetailsPage() {
                                       const player = players.find(p => p.id === playerId);
                                       return {
                                         playerId,
-                                        playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                                        playerName: getPlayerLabel(playerId, playersIndex),
                                         passes: stats.passes,
                                         pxt: stats.pxt,
                                         p1Count: stats.p1Count,
@@ -5755,7 +5757,7 @@ export default function PlayerDetailsPage() {
                                       const player = players.find(p => p.id === playerId);
                                       return {
                                         playerId,
-                                        playerName: player ? getPlayerFullName(player) : `Zawodnik ${playerId}`,
+                                        playerName: getPlayerLabel(playerId, playersIndex),
                                         passes: stats.passes,
                                         pxt: stats.pxt,
                                         p1Count: stats.p1Count,
@@ -5801,18 +5803,18 @@ export default function PlayerDetailsPage() {
                               <p className={styles.zoneDetailsSubtitle}>
                                 {selectedPxtCategory === 'receiver' ? (
                                   heatmapDirection === 'from' 
-                                    ? `Zawodnicy, którzy podawali z tej strefy do ${getPlayerFullName(player!)}:`
-                                    : `Zawodnicy, którzy podawali do tej strefy (gdzie ${getPlayerFullName(player!)} przyjmował):`
+                                    ? `Zawodnicy, którzy podawali z tej strefy do ${getPlayerLabel(player?.id, playersIndex)}:`
+                                    : `Zawodnicy, którzy podawali do tej strefy (gdzie ${getPlayerLabel(player?.id, playersIndex)} przyjmował):`
                                 ) : (
                                   heatmapDirection === 'from' 
-                                    ? `Zawodnicy, którzy przyjmowali podania z tej strefy (gdzie ${getPlayerFullName(player!)} podawał):`
-                                    : `Zawodnicy, którzy przyjmowali podania do tej strefy (gdzie ${getPlayerFullName(player!)} podawał):`
+                                    ? `Zawodnicy, którzy przyjmowali podania z tej strefy (gdzie ${getPlayerLabel(player?.id, playersIndex)} podawał):`
+                                    : `Zawodnicy, którzy przyjmowali podania do tej strefy (gdzie ${getPlayerLabel(player?.id, playersIndex)} podawał):`
                                 )}
                               </p>
                               <div className={styles.zonePlayersList}>
                                 {zoneDetails.players.map((playerInfo) => (
                                   <div key={playerInfo.playerId} className={styles.zonePlayerItem}>
-                                    <div className={styles.zonePlayerName}>{playerInfo.playerName}</div>
+                                  <div className={styles.zonePlayerName}>{getPlayerLabel(playerInfo.playerId, playersIndex)}</div>
                                     <div className={styles.zonePlayerStats}>
                                       <span className={styles.zonePlayerStat}>
                                         <strong>{playerInfo.passes}</strong> {playerInfo.passes === 1 ? 'podań' : 'podań'}
@@ -5829,7 +5831,7 @@ export default function PlayerDetailsPage() {
                                       onClick={() => {
                                         setSelectedPlayerForModal({
                                           playerId: playerInfo.playerId,
-                                          playerName: playerInfo.playerName,
+                                          playerName: getPlayerLabel(playerInfo.playerId, playersIndex),
                                           zoneName: zoneDetails.zoneName
                                         });
                                         setActionsModalOpen(true);
@@ -6156,14 +6158,11 @@ export default function PlayerDetailsPage() {
                                 <>
                                   <h5>{partnerSortMode === 'passes' ? 'Do kogo zawodnik podaje najczęściej' : 'Z kim na największe PxT'}</h5>
                                   {Array.from(playerStats.partnerStatsAsSender.entries())
-                                    .map(([playerId, stats]) => {
-                                      const partner = players.find(p => p.id === playerId);
-                                      return {
-                                        playerId,
-                                        playerName: partner ? `${partner.firstName} ${partner.lastName}` : `Zawodnik ${playerId}`,
-                                        ...stats
-                                      };
-                                    })
+                                    .map(([playerId, stats]) => ({
+                                      playerId,
+                                      playerName: getPlayerLabel(playerId, playersIndex),
+                                      ...stats
+                                    }))
                                     .sort((a, b) => partnerSortMode === 'passes' ? b.passes - a.passes : b.pxt - a.pxt)
                                     .slice(0, 5)
                                     .map((partner, index) => (
@@ -6182,14 +6181,11 @@ export default function PlayerDetailsPage() {
                                 <>
                                   <h5>{partnerSortMode === 'passes' ? 'Od kogo zawodnik otrzymuje najwięcej' : 'Od kogo największe PxT'}</h5>
                                   {Array.from(playerStats.partnerStatsAsReceiver.entries())
-                                    .map(([playerId, stats]) => {
-                                      const partner = players.find(p => p.id === playerId);
-                                      return {
-                                        playerId,
-                                        playerName: partner ? `${partner.firstName} ${partner.lastName}` : `Zawodnik ${playerId}`,
-                                        ...stats
-                                      };
-                                    })
+                                    .map(([playerId, stats]) => ({
+                                      playerId,
+                                      playerName: getPlayerLabel(playerId, playersIndex),
+                                      ...stats
+                                    }))
                                     .sort((a, b) => partnerSortMode === 'passes' ? b.passes - a.passes : b.pxt - a.pxt)
                                     .slice(0, 5)
                                     .map((partner, index) => (
@@ -8394,7 +8390,7 @@ export default function PlayerDetailsPage() {
                             {player.number && (
                               <span className={styles.playerSelectPlayerNumber}>{player.number}</span>
                             )}
-                            <span className={styles.playerSelectPlayerName}>{getPlayerFullName(player)}</span>
+                            <span className={styles.playerSelectPlayerName}>{getPlayerLabel(player.id, playersIndex)}</span>
                           </div>
                         </button>
                       ))}

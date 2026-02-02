@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { PlayerMinutesModalProps, PlayerMinutes } from "@/types";
 import styles from "./PlayerMinutesModal.module.css";
 import { TEAMS } from "@/constants/teams";
+import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 
 // Lista pozycji do wyboru - taka sama jak w PlayerModal
 const POSITIONS = [
@@ -54,6 +55,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
 }) => {
   const [playerMinutes, setPlayerMinutes] = useState<PlayerMinutes[]>([]);
   const [initialized, setInitialized] = useState(false);
+  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
 
   // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
   const getTeamName = (teamId: string) => {
@@ -308,7 +310,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
                 <div key={player.id} className={styles.playerRow}>
                       <div className={styles.playerName}>
                         <span className={styles.playerNumber}>{player.number}</span>
-                        <span>{player.name}</span>
+                        <span>{getPlayerLabel(player.id, playersIndex)}</span>
                         {player.isTestPlayer && (
                           <span className={styles.testPlayerBadge}>T</span>
                         )}

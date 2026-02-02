@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { PKEntry, Player } from "@/types";
-import { getPlayerFullName } from "@/utils/playerUtils";
+import { buildPlayersIndex, getPlayerLabel, PlayersIndex } from "@/utils/playerUtils";
 import { useAuth } from "@/hooks/useAuth";
 import styles from "./PKEntriesTable.module.css";
 import sharedStyles from "@/styles/sharedTableStyles.module.css";
@@ -84,28 +84,24 @@ const getTeamContextLabel = (teamContext?: string): string => {
 // Komponent wiersza wejścia PK
 const PKEntryRow = ({
   entry,
+  playersIndex,
   onDelete,
   onEdit,
   onUpdateEntry,
   onVideoTimeClick,
-  players,
 }: {
   entry: PKEntry;
+  playersIndex: PlayersIndex;
   onDelete?: (entryId: string) => void;
   onEdit?: (entry: PKEntry) => void;
   onUpdateEntry?: (entryId: string, entryData: Partial<PKEntry>) => Promise<boolean>;
   onVideoTimeClick?: (timestamp: number) => void;
-  players: Player[];
 }) => {
   const { isAdmin } = useAuth();
   const isSecondHalf = entry.isSecondHalf;
 
-  // Znajdź zawodników
-  const senderPlayer = players.find(p => p.id === entry.senderId);
-  const receiverPlayer = entry.receiverId ? players.find(p => p.id === entry.receiverId) : null;
-
-  const senderDisplay = entry.senderName || (senderPlayer ? getPlayerFullName(senderPlayer) : 'Nieznany');
-  const receiverDisplay = entry.receiverName || (receiverPlayer ? getPlayerFullName(receiverPlayer) : null) || '-';
+  const senderDisplay = getPlayerLabel(entry.senderId, playersIndex);
+  const receiverDisplay = entry.receiverId ? getPlayerLabel(entry.receiverId, playersIndex) : "-";
 
   // Funkcja do zamiany strony wejścia (odbicie współrzędnych)
   const handleFlipSide = async () => {
@@ -254,6 +250,7 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
     key: 'minute',
     direction: 'asc',
   });
+  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
 
   // State dla filtra kontrowersyjnego
   const [showOnlyControversial, setShowOnlyControversial] = useState(false);
@@ -290,12 +287,12 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
 
       switch (sortConfig.key) {
         case 'senderName':
-          aValue = a.senderName || '';
-          bValue = b.senderName || '';
+          aValue = getPlayerLabel(a.senderId, playersIndex);
+          bValue = getPlayerLabel(b.senderId, playersIndex);
           break;
         case 'receiverName':
-          aValue = a.receiverName || '';
-          bValue = b.receiverName || '';
+          aValue = a.receiverId ? getPlayerLabel(a.receiverId, playersIndex) : "";
+          bValue = b.receiverId ? getPlayerLabel(b.receiverId, playersIndex) : "";
           break;
         case 'entryTypeLabel':
           aValue = getEntryTypeLabel(a.entryType);
@@ -449,13 +446,13 @@ const PKEntriesTable: React.FC<PKEntriesTableProps> = ({
               <PKEntryRow
                 key={entry.id}
                 entry={entry}
+                playersIndex={playersIndex}
                 onDelete={onDeleteEntry}
                 onEdit={onEditEntry}
                 onUpdateEntry={onUpdateEntry}
                 onVideoTimeClick={(timestamp) => {
                   handleVideoTimeClick(timestamp);
                 }}
-                players={players}
               />
             ))
           )}

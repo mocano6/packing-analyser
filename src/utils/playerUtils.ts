@@ -1,6 +1,6 @@
 // Utility funkcje do obsługi zawodników
 
-import { Player } from '@/types';
+import { Player, TeamInfo } from '@/types';
 
 /**
  * Pobiera pełne imię i nazwisko zawodnika
@@ -52,4 +52,32 @@ export const sortPlayersByLastName = (players: Player[]): Player[] => {
     const lastNameB = getPlayerLastName(b).toLowerCase();
     return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
   });
-}; 
+};
+
+export type PlayersIndex = Map<string, Player>;
+
+export const buildPlayersIndex = (players: Player[]): PlayersIndex => {
+  return new Map(players.map(player => [player.id, player]));
+};
+
+export const getPlayerLabel = (
+  playerId: string | null | undefined,
+  playersIndex: PlayersIndex,
+  options?: { includeNumber?: boolean }
+): string => {
+  if (!playerId) return "Zawodnik usunięty";
+  const player = playersIndex.get(playerId);
+  if (!player || player.isDeleted) return "Zawodnik usunięty";
+  const name = getPlayerFullName(player).trim();
+  const number = options?.includeNumber && player.number ? ` #${player.number}` : "";
+  return `${name || "Zawodnik"}${number}`.trim();
+};
+
+export const getPositionInMatch = (
+  matchInfo: TeamInfo | null | undefined,
+  playerId: string | null | undefined
+): string | undefined => {
+  if (!matchInfo || !playerId) return undefined;
+  const minutes = matchInfo.playerMinutes?.find(pm => pm.playerId === playerId);
+  return minutes?.position;
+};

@@ -5,8 +5,8 @@ import Link from "next/link";
 import { Player, Action } from '@/types';
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useAuth } from "@/hooks/useAuth";
-import { getPlayerFullName } from '@/utils/playerUtils';
-import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { buildPlayersIndex, getPlayerLabel } from '@/utils/playerUtils';
+import { collection, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { getDB } from '@/lib/firebase';
 import styles from './page.module.css';
 
@@ -21,6 +21,7 @@ export default function ListaZawodnikow() {
 
   const { isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
   const { players, handleDeletePlayer: deletePlayer } = usePlayersState();
+  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
 
   // WSZYSTKIE HOOKI MUSZĄ BYĆ PRZED WARUNKAMI RETURN!
   
@@ -72,7 +73,7 @@ export default function ListaZawodnikow() {
   // Filtrowanie i sortowanie
   const filteredAndSortedPlayers = useMemo(() => {
     let filtered = playersWithStats.filter(player =>
-      getPlayerFullName(player).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getPlayerLabel(player.id, playersIndex).toLowerCase().includes(searchTerm.toLowerCase()) ||
       (player.number?.toString() || '').includes(searchTerm) ||
       (player.teamsString.toLowerCase().includes(searchTerm.toLowerCase())) ||
       player.id.toLowerCase().includes(searchTerm.toLowerCase())
@@ -141,7 +142,7 @@ export default function ListaZawodnikow() {
     
     // Grupowanie tylko po nazwie (imię i nazwisko)
     playersWithStats.forEach(player => {
-      const originalName = getPlayerFullName(player) || '';
+      const originalName = getPlayerLabel(player.id, playersIndex) || '';
       const normalizedName = normalizeName(originalName);
       
       
@@ -305,40 +306,54 @@ export default function ListaZawodnikow() {
           
           for (const matchDoc of matchesSnapshot.docs) {
             const matchData = matchDoc.data();
+            const actionFields = ["actions_packing", "actions_unpacking", "actions_regain", "actions_loses"] as const;
+            const updates: Record<string, Action[]> = {};
             let actionsChanged = false;
-            
-            if (matchData.actions_packing && Array.isArray(matchData.actions_packing)) {
-              const updatedActions = matchData.actions_packing.map((action: Action) => {
-                const updatedAction = { ...action };
-                
-                // Sprawdź czy akcja ma senderId lub receiverId duplikatu
+
+            actionFields.forEach((field) => {
+              const actions = matchData[field];
+              if (!Array.isArray(actions)) return;
+
+              const updatedActions = actions.map((action: Action) => {
+                const {
+                  senderName,
+                  senderNumber,
+                  receiverName,
+                  receiverNumber,
+                  ...rest
+                } = action as Action & {
+                  senderName?: string;
+                  senderNumber?: number;
+                  receiverName?: string;
+                  receiverNumber?: number;
+                };
+                const updatedAction: Action = { ...rest };
+
+                if (senderName || senderNumber || receiverName || receiverNumber) {
+                  actionsChanged = true;
+                }
+
                 duplicatesToMerge.forEach(duplicate => {
                   if (action.senderId === duplicate.id) {
                     updatedAction.senderId = mainPlayer.id;
-                    updatedAction.senderName = getPlayerFullName(mainPlayer) || 'Brak nazwy';
-                    updatedAction.senderNumber = mainPlayer.number;
                     actionsChanged = true;
                     totalActionsUpdated++;
                   }
-                  
                   if (action.receiverId === duplicate.id) {
                     updatedAction.receiverId = mainPlayer.id;
-                    updatedAction.receiverName = getPlayerFullName(mainPlayer) || 'Brak nazwy';
-                    updatedAction.receiverNumber = mainPlayer.number;
                     actionsChanged = true;
                     totalActionsUpdated++;
                   }
                 });
-                
+
                 return updatedAction;
               });
 
-              // Zapisz zaktualizowane akcje jeśli były zmiany
-              if (actionsChanged) {
-                await updateDoc(doc(getDB(), 'matches', matchDoc.id), {
-                  actions_packing: updatedActions
-                });
-              }
+              updates[field] = updatedActions;
+            });
+
+            if (actionsChanged) {
+              await updateDoc(doc(getDB(), 'matches', matchDoc.id), updates);
             }
           }
           
@@ -369,15 +384,15 @@ export default function ListaZawodnikow() {
             position: updatedMainPlayer.position,
             birthYear: updatedMainPlayer.birthYear
           });
-          // Krok 3: Usuń duplikaty
+          // Krok 3: Soft delete duplikaty
           for (const duplicate of duplicatesToMerge) {
-            await deleteDoc(doc(getDB(), 'players', duplicate.id));
+            await updateDoc(doc(getDB(), 'players', duplicate.id), { isDeleted: true });
           }
 
           mergedCount++;
 
         } catch (error) {
-          console.error(`❌ Błąd podczas sparowywania duplikatów dla ${getPlayerFullName(mainPlayer) || 'Brak nazwy'}:`, error);
+          console.error(`❌ Błąd podczas sparowywania duplikatów dla ${getPlayerLabel(mainPlayer.id, playersIndex) || 'Brak nazwy'}:`, error);
           errorCount++;
         }
       }
@@ -416,12 +431,13 @@ export default function ListaZawodnikow() {
     return sortDirection === 'asc' ? '↑' : '↓';
   };
 
-  const handleDeletePlayerFromList = async (playerId: string, playerName: string) => {
-    if (window.confirm(`Czy na pewno chcesz usunąć zawodnika ${playerName}?`)) {
+  const handleDeletePlayerFromList = async (playerId: string) => {
+    const playerLabel = getPlayerLabel(playerId, playersIndex);
+    if (window.confirm(`Czy na pewno chcesz usunąć zawodnika ${playerLabel}?`)) {
       const success = await deletePlayer(playerId);
       
       if (success) {
-        alert(`Zawodnik ${playerName} został usunięty`);
+        alert(`Zawodnik ${playerLabel} został usunięty`);
         // Odśwież stronę aby zaktualizować listę
         window.location.reload();
       } else {
@@ -505,7 +521,7 @@ export default function ListaZawodnikow() {
                 {duplicatePlayers.map(player => (
                   <div key={player.id} className={styles.duplicateItem}>
                     <div className={styles.playerInfo}>
-                      <span className={styles.playerName}>{getPlayerFullName(player)}</span>
+                      <span className={styles.playerName}>{getPlayerLabel(player.id, playersIndex)}</span>
                       <span className={styles.playerNumber}>#{player.number || 'Brak'}</span>
                       <span className={styles.playerBirthYear}>
                         {player.birthYear ? `ur. ${player.birthYear}` : 'Brak roku urodzenia'}
@@ -515,7 +531,7 @@ export default function ListaZawodnikow() {
                       <span className={styles.playerId} title="ID zawodnika">ID: {player.id}</span>
                     </div>
                     <button
-                      onClick={() => handleDeletePlayerFromList(player.id, getPlayerFullName(player) || 'Brak nazwy')}
+                      onClick={() => handleDeletePlayerFromList(player.id)}
                       className={styles.deleteButton}
                       title="Usuń tego zawodnika"
                     >
@@ -553,7 +569,7 @@ export default function ListaZawodnikow() {
           <tbody>
             {filteredAndSortedPlayers.map((player) => (
               <tr key={player.id} className={styles.tableRow}>
-                <td className={styles.playerName}>{getPlayerFullName(player)}</td>
+                <td className={styles.playerName}>{getPlayerLabel(player.id, playersIndex)}</td>
                 <td className={styles.playerNumber}>#{player.number || 'Brak'}</td>
                 <td className={styles.playerId} title={player.id}>{player.id.slice(0, 8)}...</td>
                 <td>{player.birthYear || '-'}</td>
@@ -576,7 +592,7 @@ export default function ListaZawodnikow() {
                 </td>
                 <td>
                   <button
-                    onClick={() => handleDeletePlayerFromList(player.id, getPlayerFullName(player) || 'Brak nazwy')}
+                    onClick={() => handleDeletePlayerFromList(player.id)}
                     className={styles.deleteButton}
                     title="Usuń zawodnika"
                     disabled={player.actionsCount > 0}
@@ -604,7 +620,7 @@ export default function ListaZawodnikow() {
           return (
             <div key={`actions-${playerId}`} className={styles.expandedActionsSection}>
               <div className={styles.actionsHeader}>
-                <h3>Akcje zawodnika: {getPlayerFullName(player)}</h3>
+                <h3>Akcje zawodnika: {getPlayerLabel(player.id, playersIndex)}</h3>
                 <button 
                   onClick={() => togglePlayerActions(playerId)}
                   className={styles.closeActionsButton}
@@ -636,8 +652,7 @@ export default function ListaZawodnikow() {
                   <tbody>
                     {playerActions.map((action, index) => {
                       const isActionSender = action.senderId === playerId;
-                      const partnerName = isActionSender ? action.receiverName : action.senderName;
-                      const partnerNumber = isActionSender ? action.receiverNumber : action.senderNumber;
+                      const partnerId = isActionSender ? action.receiverId : action.senderId;
                       
                       return (
                         <tr key={`${action.id}-${index}`} className={styles.actionRow}>
@@ -649,9 +664,9 @@ export default function ListaZawodnikow() {
                             {isActionSender ? '📤 Nadawca' : '📥 Odbiorca'}
                           </td>
                           <td className={styles.actionPartner}>
-                            {action.actionType === 'pass' && partnerName ? 
-                              `${partnerName} (#${partnerNumber})` : 
-                              '-'}
+                            {action.actionType === 'pass' && partnerId
+                              ? getPlayerLabel(partnerId, playersIndex, { includeNumber: true })
+                              : '-'}
                           </td>
                           <td className={styles.actionZone}>
                             {action.startZone && action.endZone ? 

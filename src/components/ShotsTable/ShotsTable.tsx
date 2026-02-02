@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { Shot, Player } from "@/types";
-import { getPlayerFullName } from "@/utils/playerUtils";
+import { buildPlayersIndex, getPlayerLabel, PlayersIndex } from "@/utils/playerUtils";
 import { useAuth } from "@/hooks/useAuth";
 import styles from "./ShotsTable.module.css";
 import sharedStyles from "@/styles/sharedTableStyles.module.css";
@@ -107,11 +107,13 @@ const getTeamContextLabel = (teamContext: string): string => {
 // Komponent wiersza strzału
 const ShotRow = ({
   shot,
+  playersIndex,
   onDelete,
   onEdit,
   onVideoTimeClick,
 }: {
   shot: Shot;
+  playersIndex: PlayersIndex;
   onDelete?: (shotId: string) => void;
   onEdit?: (shot: Shot) => void;
   onVideoTimeClick?: (timestamp: number) => void;
@@ -140,7 +142,7 @@ const ShotRow = ({
         )}
       </div>
       <div className={sharedStyles.cell}>
-        {shot.playerName || 'Nieznany zawodnik'}
+        {getPlayerLabel(shot.playerId, playersIndex)}
       </div>
       <div className={sharedStyles.cell}>
         <span className={shot.teamContext === 'attack' ? sharedStyles.attack : sharedStyles.defense}>
@@ -227,6 +229,7 @@ const ShotsTable: React.FC<ShotsTableProps> = ({
 
   // State dla filtra kontrowersyjnego
   const [showOnlyControversial, setShowOnlyControversial] = useState(false);
+  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
 
   // Liczba akcji kontrowersyjnych
   const controversialCount = useMemo(() => {
@@ -252,8 +255,8 @@ const ShotsTable: React.FC<ShotsTableProps> = ({
 
       switch (sortConfig.key) {
         case 'playerName':
-          aValue = a.playerName || '';
-          bValue = b.playerName || '';
+          aValue = getPlayerLabel(a.playerId, playersIndex);
+          bValue = getPlayerLabel(b.playerId, playersIndex);
           break;
         case 'actionTypeLabel':
           aValue = getActionTypeLabel(a.actionType, (a as any)?.sfgSubtype, (a as any)?.actionPhase);
@@ -335,6 +338,7 @@ const ShotsTable: React.FC<ShotsTableProps> = ({
               <ShotRow
                 key={shot.id}
                 shot={shot}
+                playersIndex={playersIndex}
                 onDelete={onDeleteShot}
                 onEdit={onEditShot}
                 onVideoTimeClick={onVideoTimeClick}

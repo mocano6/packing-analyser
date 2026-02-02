@@ -7,7 +7,6 @@ import { getDB } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs, doc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 // Usunięto import funkcji synchronizacji - akcje są teraz tylko w matches
-import { getPlayerFullName } from '@/utils/playerUtils';
 import { getOppositeXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString, getZoneData } from '@/constants/xtValues';
 
 // Funkcja do konwersji numeru strefy na format literowo-liczbowy
@@ -40,6 +39,22 @@ function removeUndefinedFields<T extends object>(obj: T): T {
   
   
   return result;
+}
+
+function stripPIIFromAction(action: Action): Action {
+  const {
+    senderName,
+    senderNumber,
+    receiverName,
+    receiverNumber,
+    ...rest
+  } = action as Action & {
+    senderName?: string;
+    senderNumber?: number;
+    receiverName?: string;
+    receiverNumber?: number;
+  };
+  return rest as Action;
 }
 
 export function usePackingActions(players: Player[], matchInfo: TeamInfo | null, actionMode?: "attack" | "defense", selectedDefensePlayers?: string[], actionCategory?: "packing" | "regain" | "loses", loadBothRegainLoses?: boolean) {
@@ -104,37 +119,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   const [actions, setActions] = useState<Action[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Funkcja synchronizująca wzbogacone akcje z bazą Firebase
-  const syncEnrichedActions = useCallback(async (matchId: string, enrichedActions: Action[]) => {
-    // Sprawdzamy, czy mamy jakieś akcje do synchronizacji
-    if (!matchId || !enrichedActions.length) return;
-
-    try {
-      // Pobierz aktualny dokument meczu
-      const matchRef = doc(getDB(), "matches", matchId);
-      
-      // Określamy kolekcję na podstawie kategorii akcji
-      let collectionField: string;
-      if (actionCategory === "regain") {
-        collectionField = "actions_regain";
-      } else if (actionCategory === "loses") {
-        collectionField = "actions_loses";
-      } else {
-        collectionField = "actions_packing";
-      }
-      
-      // Aktualizuj dokument z wzbogaconymi akcjami
-      await updateDoc(matchRef, {
-        [collectionField]: enrichedActions.map(action => removeUndefinedFields(action))
-      });
-
-    } catch (error) {
-      console.error("❌ Błąd podczas synchronizacji uzupełnionych akcji:", error);
-      // Obsługa błędu wewnętrznego stanu Firestore
-      await handleFirestoreError(error, getDB());
-    }
-  }, [actionCategory]);
-
   // Funkcja ładująca akcje dla danego meczu
   const loadActionsForMatch = useCallback(async (matchId: string) => {
     try {
@@ -167,51 +151,15 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         
 
         
-        // Uzupełniamy brakujące dane zawodników w akcjach
-        const enrichedActions = loadedActions.map(action => {
-          // Najpierw oczyszczamy akcję z wartości undefined
-          const cleanedAction = removeUndefinedFields(action) as Action;
-          
-          // Upewniamy się, że isSecondHalf jest wartością boolean
-          const actionWithValidHalf = {
+        const sanitizedActions = loadedActions.map(action => {
+          const cleanedAction = removeUndefinedFields(stripPIIFromAction(action)) as Action;
+          return {
             ...cleanedAction,
-            // Jeśli isSecondHalf jest undefined lub null, ustawiamy na false (domyślnie pierwsza połowa)
             isSecondHalf: cleanedAction.isSecondHalf === true
           } as Action;
-          
-          // Dodajemy brakujące dane nadawcy (sender)
-          if (actionWithValidHalf.senderId && (!actionWithValidHalf.senderName || !actionWithValidHalf.senderNumber)) {
-            const senderPlayer = players.find(p => p.id === actionWithValidHalf.senderId);
-            if (senderPlayer) {
-              actionWithValidHalf.senderName = getPlayerFullName(senderPlayer);
-              actionWithValidHalf.senderNumber = senderPlayer.number;
-            }
-          }
-          
-          // Dodajemy brakujące dane odbiorcy (receiver)
-          if (actionWithValidHalf.receiverId && (!actionWithValidHalf.receiverName || !actionWithValidHalf.receiverNumber)) {
-            const receiverPlayer = players.find(p => p.id === actionWithValidHalf.receiverId);
-            if (receiverPlayer) {
-              actionWithValidHalf.receiverName = getPlayerFullName(receiverPlayer);
-              actionWithValidHalf.receiverNumber = receiverPlayer.number;
-            }
-          }
-          
-          return actionWithValidHalf;
         });
         
-        // Sprawdźmy, czy jakieś dane zostały uzupełnione
-        const dataWasEnriched = enrichedActions.some((action, i) => 
-          (action.senderName && !loadedActions[i].senderName) || 
-          (action.receiverName && !loadedActions[i].receiverName)
-        );
-        
-        if (dataWasEnriched) {
-          // Synchronizujemy wzbogacone akcje z bazą Firebase
-          syncEnrichedActions(matchId, enrichedActions);
-        }
-        
-        setActions(enrichedActions);
+        setActions(sanitizedActions);
       } else {
         setActions([]);
       }
@@ -220,7 +168,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     } finally {
       setIsLoading(false);
     }
-  }, [actionCategory, players, syncEnrichedActions]);
+  }, [actionCategory]);
 
   // Pobieranie akcji przy zmianie meczu lub kategorii akcji
   useEffect(() => {
@@ -643,24 +591,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         })())
       };
       
-      // Dodajemy dane graczy do akcji
-      if (selectedPlayerId) {
-        const senderPlayer = players.find(p => p.id === selectedPlayerId);
-        if (senderPlayer) {
-          newAction.senderName = getPlayerFullName(senderPlayer);
-          newAction.senderNumber = senderPlayer.number;
-        }
-      }
-      
-      // Jeśli to podanie, dodajemy dane odbiorcy
-      if (actionType === "pass" && selectedReceiverId) {
-        const receiverPlayer = players.find(p => p.id === selectedReceiverId);
-        if (receiverPlayer) {
-          newAction.receiverName = getPlayerFullName(receiverPlayer);
-          newAction.receiverNumber = receiverPlayer.number;
-        }
-      }
-      
       // DEBUG: Sprawdzamy wartości stanu przed zapisem
       if (actionCategory === "loses") {
       }
@@ -760,12 +690,14 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           const currentActions = (matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
           
           // Upewniamy się, że wszystkie akcje są oczyszczone z undefined
-          const cleanedActions = currentActions.map((action: Action) => removeUndefinedFields(action));
+          const cleanedActions = currentActions.map((action: Action) =>
+            removeUndefinedFields(stripPIIFromAction(action))
+          );
           
           // Dodaj nową (oczyszczoną) akcję i aktualizuj dokument
           // Upewniamy się, że wszystkie pola boolean są zapisane, nawet jeśli są false
           const actionToSave = {
-            ...cleanedAction,
+            ...stripPIIFromAction(cleanedAction),
             ...(actionCategory === "regain" || actionCategory === "loses" ? {
               isP0: cleanedAction.isP0 ?? false,
               isP1: cleanedAction.isP1 ?? false,
@@ -1147,6 +1079,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     resetActionState,
     resetActionPoints,
     loadActionsForMatch,
-    syncEnrichedActions
+    
   };
 } 

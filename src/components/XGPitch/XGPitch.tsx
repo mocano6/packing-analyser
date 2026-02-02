@@ -1,13 +1,16 @@
 "use client";
 
-import React, { memo, useState, useEffect } from "react";
-import { Shot } from "@/types";
+import React, { memo, useState, useEffect, useMemo } from "react";
+import { Player, Shot } from "@/types";
 import styles from "./XGPitch.module.css";
 import PitchHeader from "../PitchHeader/PitchHeader";
 import pitchHeaderStyles from "../PitchHeader/PitchHeader.module.css";
+import { buildPlayersIndex, getPlayerLabel, PlayersIndex } from "@/utils/playerUtils";
 
 export interface XGPitchProps {
   shots?: Shot[];
+  players?: Player[];
+  playersIndex?: PlayersIndex;
   onShotAdd?: (x: number, y: number, xG: number) => void;
   onShotClick?: (shot: Shot) => void;
   selectedShotId?: string;
@@ -65,6 +68,8 @@ const calculateXG = (x: number, y: number): number => {
 
 const XGPitch = memo(function XGPitch({
   shots = [],
+  players = [],
+  playersIndex,
   onShotAdd,
   onShotClick,
   selectedShotId,
@@ -74,6 +79,10 @@ const XGPitch = memo(function XGPitch({
   hideToggleButton = false,
   rightExtraContent,
 }: XGPitchProps) {
+  const localPlayersIndex = useMemo(
+    () => playersIndex ?? buildPlayersIndex(players),
+    [playersIndex, players]
+  );
   // Stan przełącznika orientacji boiska - przywróć z localStorage (wspólny dla wszystkich zakładek)
   const [isFlipped, setIsFlipped] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -277,7 +286,7 @@ const XGPitch = memo(function XGPitch({
                 boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
               }}
               onClick={(e) => handleShotClick(e, shot)}
-              title={`${isAssist ? '⚽ Asysta: ' : ''}${shot.playerName || 'Nieznany'} - ${shot.minute}' - xG: ${shot.xG.toFixed(2)} ${shot.isGoal ? '⚽' : ''} - ${shot.actionType || 'open_play'}`}
+              title={`${isAssist ? '⚽ Asysta: ' : ''}${getPlayerLabel(shot.playerId, localPlayersIndex)} - ${shot.minute}' - xG: ${shot.xG.toFixed(2)} ${shot.isGoal ? '⚽' : ''} - ${shot.actionType || 'open_play'}`}
             >
               <div className={styles.shotInner}>
                 <span 

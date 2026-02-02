@@ -2,9 +2,26 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Podstawowe reguły dla uwierzytelnionego dostępu
+    function hasForbiddenPIIKeys(data) {
+      return data.keys().hasAny([
+        "firstName",
+        "lastName",
+        "name",
+        "birthYear",
+        "number",
+        "playerName",
+        "senderName",
+        "receiverName",
+        "assistantName",
+        "senderNumber",
+        "receiverNumber"
+      ]);
+    }
+
+    // Domyślnie tylko odczyt
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow write: if false;
     }
     
     // Kolekcja użytkowników - tylko właściciel i admini
@@ -20,19 +37,65 @@ service cloud.firestore {
       allow write: if request.auth != null && 
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+
+    match /teams/{teamId}/members/{memberId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
     
-    // Mecze - tylko użytkownicy z dostępem do zespołu
+    // Mecze - użytkownicy z dostępem do zespołu; admin może zapisywać (np. czyszczenie PII)
     match /matches/{matchId} {
-      allow read, write: if request.auth != null && 
+      allow read: if request.auth != null && 
         resource.data.teamId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.allowedTeams;
+      allow write: if request.auth != null &&
+        !hasForbiddenPIIKeys(request.resource.data) &&
+        (request.resource.data.teamId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.allowedTeams ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    // Kolekcje archiwalne (nazwa musi być podana wprost – Firestore nie obsługuje {x}_archive)
+    match /players_archive/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && !hasForbiddenPIIKeys(request.resource.data);
+    }
+    match /matches_archive/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && !hasForbiddenPIIKeys(request.resource.data);
+    }
+    match /gps_archive/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && !hasForbiddenPIIKeys(request.resource.data);
+    }
+    match /actions_archive/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && !hasForbiddenPIIKeys(request.resource.data);
+    }
+    match /teams_archive/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && !hasForbiddenPIIKeys(request.resource.data);
     }
     
     // Gracze - tylko użytkownicy z dostępem do co najmniej jednego z zespołów gracza
     match /players/{playerId} {
-      allow read, write: if request.auth != null && 
+      allow read: if request.auth != null && 
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         resource.data.teams != null &&
         resource.data.teams.hasAny(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.allowedTeams);
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        request.resource.data.teams != null &&
+        request.resource.data.teams.hasAny(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.allowedTeams);
+    }
+
+    match /gps/{gpsId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && !hasForbiddenPIIKeys(request.resource.data);
+    }
+
+    match /gps_norms/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
     }
     
     // Akcje - dla uproszczenia, wszyscy zalogowani użytkownicy
@@ -43,6 +106,16 @@ service cloud.firestore {
     // Kolekcja testowa do sprawdzania uprawnień
     match /permission_tests/{document} {
       allow read, write: if request.auth != null;
+    }
+
+    // Kopie zapasowe przed czyszczeniem PII - tylko admini
+    match /pii_cleanup_backups/{backupId} {
+      allow read, write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      match /documents/{docId} {
+        allow read, write: if request.auth != null &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
     }
     
     // Kolekcja ustawień - dostępna dla wszystkich
