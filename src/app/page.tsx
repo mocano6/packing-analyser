@@ -1472,13 +1472,13 @@ export default function Page() {
       if (shotModalData?.editingShot) {
         const success = await updateShot(shotModalData.editingShot.id, shotDataWithTimestamp);
         if (!success) {
-          alert("Nie udało się zaktualizować strzału. Spróbuj ponownie.");
+          toast.error("Nie udało się zaktualizować strzału. Sprawdź uprawnienia do zespołu tego meczu.");
           return;
         }
       } else {
         const newShot = await addShot(shotDataWithTimestamp);
         if (!newShot) {
-          alert("Nie udało się dodać strzału. Spróbuj ponownie.");
+          toast.error("Nie udało się dodać strzału. Sprawdź uprawnienia do zespołu tego meczu.");
           return;
         }
       }
@@ -1491,7 +1491,8 @@ export default function Page() {
       setSelectedShotId(undefined);
     } catch (error) {
       console.error("Błąd podczas zapisywania strzału:", error);
-      alert("Wystąpił błąd podczas zapisywania strzału. Spróbuj ponownie.");
+      const msg = error instanceof Error ? error.message : String(error);
+      toast.error(msg.includes("permission") || msg.includes("uprawnień") ? "Brak uprawnień do zapisu. Sprawdź dostęp do zespołu tego meczu." : "Wystąpił błąd podczas zapisywania strzału. Spróbuj ponownie.");
     }
   };
 
@@ -2277,6 +2278,12 @@ export default function Page() {
       toggleMatchModal(true);
       return;
     }
+    // Sprawdzenie uprawnień do zespołu meczu (zgodne z firestore.rules)
+    const matchTeamId = (matchInfo as { teamId?: string }).teamId ?? matchInfo.team;
+    if (!isAdmin && (!userTeams?.length || !matchTeamId || !userTeams.includes(matchTeamId))) {
+      toast.error("Brak uprawnień do zapisu dla zespołu tego meczu. Skontaktuj się z administratorem.");
+      return;
+    }
     
     // Walidacja w zależności od kategorii i trybu
     if (actionCategory === "regain") {
@@ -2399,9 +2406,16 @@ export default function Page() {
             // Możemy wysłać wiadomość do zewnętrznego okna, ale nie otwieramy nowego
             window.postMessage({ type: 'FOCUS_WINDOW' }, '*');
           }
+        } else {
+          toast.error("Nie udało się zapisać akcji. Sprawdź, czy masz uprawnienia do zespołu tego meczu.");
         }
       } catch (error) {
-        alert("Wystąpił błąd podczas zapisywania akcji: " + (error instanceof Error ? error.message : String(error)));
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes("permission") || msg.includes("uprawnień")) {
+          toast.error("Brak uprawnień do zapisu. Sprawdź dostęp do zespołu tego meczu.");
+        } else {
+          toast.error("Wystąpił błąd podczas zapisywania akcji: " + msg);
+        }
       }
     } catch (error) {
       console.error("Błąd podczas przygotowywania danych stref:", error);
@@ -4079,13 +4093,25 @@ export default function Page() {
                   setAcc8sModalData(null);
                 }}
                 onSave={async (entryData) => {
-                  if (acc8sModalData.editingEntry) {
-                    await updateAcc8sEntry(acc8sModalData.editingEntry.id, entryData);
-                  } else {
-                    await addAcc8sEntry(entryData);
+                  try {
+                    let ok = false;
+                    if (acc8sModalData.editingEntry) {
+                      ok = await updateAcc8sEntry(acc8sModalData.editingEntry.id, entryData);
+                    } else {
+                      const result = await addAcc8sEntry(entryData);
+                      ok = result != null;
+                    }
+                    if (!ok) {
+                      toast.error("Nie udało się zapisać. Sprawdź uprawnienia do zespołu tego meczu.");
+                      return;
+                    }
+                    setIsAcc8sModalOpen(false);
+                    setAcc8sModalData(null);
+                  } catch (error) {
+                    console.error("Błąd podczas zapisywania akcji 8s ACC:", error);
+                    const msg = error instanceof Error ? error.message : String(error);
+                    toast.error(msg.includes("permission") || msg.includes("uprawnień") ? "Brak uprawnień do zapisu. Sprawdź dostęp do zespołu tego meczu." : "Wystąpił błąd podczas zapisywania. Spróbuj ponownie.");
                   }
-                  setIsAcc8sModalOpen(false);
-                  setAcc8sModalData(null);
                 }}
                 onDelete={async (entryId) => {
                   await deleteAcc8sEntry(entryId);
@@ -5482,14 +5508,28 @@ export default function Page() {
               setSelectedPKEntryId(undefined);
             }}
             onSave={async (entryData) => {
-              if (pkEntryModalData.editingEntry) {
-                await updatePKEntry(pkEntryModalData.editingEntry.id, entryData);
-              } else {
-                await addPKEntry(entryData);
+              try {
+                if (pkEntryModalData.editingEntry) {
+                  const ok = await updatePKEntry(pkEntryModalData.editingEntry.id, entryData);
+                  if (!ok) {
+                    toast.error("Nie udało się zaktualizować wpisu PK. Sprawdź uprawnienia do zespołu tego meczu.");
+                    return;
+                  }
+                } else {
+                  const result = await addPKEntry(entryData);
+                  if (result == null) {
+                    toast.error("Nie udało się dodać wpisu PK. Sprawdź uprawnienia do zespołu tego meczu.");
+                    return;
+                  }
+                }
+                setIsPKEntryModalOpen(false);
+                setPkEntryModalData(null);
+                setSelectedPKEntryId(undefined);
+              } catch (error) {
+                console.error("Błąd podczas zapisywania wpisu PK:", error);
+                const msg = error instanceof Error ? error.message : String(error);
+                toast.error(msg.includes("permission") || msg.includes("uprawnień") ? "Brak uprawnień do zapisu. Sprawdź dostęp do zespołu tego meczu." : "Wystąpił błąd podczas zapisywania. Spróbuj ponownie.");
               }
-              setIsPKEntryModalOpen(false);
-              setPkEntryModalData(null);
-              setSelectedPKEntryId(undefined);
             }}
             onDelete={async (entryId) => {
               await deletePKEntry(entryId);

@@ -133,21 +133,21 @@ const ActionRow = ({
   // Określamy, czy akcja jest w drugiej połowie - jeśli isSecondHalf jest undefined, uznajemy za false
   const isSecondHalf = action.isSecondHalf === true;
 
-  // Przygotuj dane zawodników w bezpieczny sposób
+  // Przygotuj dane zawodników w bezpieczny sposób (bez numeru na koszulce)
   let senderDisplay = action.senderId
-    ? getPlayerLabel(action.senderId, playersIndex, { includeNumber: true })
+    ? getPlayerLabel(action.senderId, playersIndex)
     : "-";
     
   // W trybie obrony wyświetlaj zawodników miniętych
   if (actionModeFilter === 'defense' && action.defensePlayers && action.defensePlayers.length > 0) {
     const defensePlayerNames = action.defensePlayers.map(playerId =>
-      getPlayerLabel(playerId, playersIndex, { includeNumber: true })
+      getPlayerLabel(playerId, playersIndex)
     );
     senderDisplay = defensePlayerNames.join(', ');
   }
     
   const receiverDisplay = action.receiverId
-    ? getPlayerLabel(action.receiverId, playersIndex, { includeNumber: true })
+    ? getPlayerLabel(action.receiverId, playersIndex)
     : "-";
 
   // Funkcja formatująca czas wideo (sekundy -> mm:ss)

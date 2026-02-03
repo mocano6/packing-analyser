@@ -71,6 +71,17 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     return mins * 60 + secs;
   };
 
+  // Minuta meczu na żywo z pola MM:SS (korekta -10s jak w videoTimestamp)
+  const matchMinuteFromVideoInput = useMemo(() => {
+    const rawSeconds = mmssToSeconds(videoTimeMMSS);
+    const correctedSeconds = Math.max(0, rawSeconds - 10);
+    const minutesIntoHalf = Math.floor(correctedSeconds / 60);
+    if (formData.isSecondHalf) {
+      return Math.min(90, 45 + minutesIntoHalf + 1);
+    }
+    return Math.min(45, minutesIntoHalf + 1);
+  }, [videoTimeMMSS, formData.isSecondHalf]);
+
   // Pobieranie czasu z wideo przy otwarciu modalu
   useEffect(() => {
     if (isOpen) {
@@ -556,7 +567,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
                   maxLength={5}
                 />
                 <span className={styles.matchMinuteInfo}>
-                  {currentMatchMinute !== null ? currentMatchMinute : (editingEntry?.minute || formData.minute)}'
+                  {matchMinuteFromVideoInput}'
                 </span>
               </div>
             </div>

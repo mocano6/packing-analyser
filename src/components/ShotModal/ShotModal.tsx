@@ -97,6 +97,17 @@ const ShotModal: React.FC<ShotModalProps> = ({
     return mins * 60 + secs;
   };
 
+  // Minuta meczu na żywo z pola MM:SS (korekta -10s jak w videoTimestamp); isP2Active = druga połowa
+  const matchMinuteFromVideoInput = useMemo(() => {
+    const rawSeconds = mmssToSeconds(videoTimeMMSS);
+    const correctedSeconds = Math.max(0, rawSeconds - 10);
+    const minutesIntoHalf = Math.floor(correctedSeconds / 60);
+    if (formData.isP2Active) {
+      return Math.min(90, 45 + minutesIntoHalf + 1);
+    }
+    return Math.min(45, minutesIntoHalf + 1);
+  }, [videoTimeMMSS, formData.isP2Active]);
+
   // Refs do śledzenia poprzednich wartości, aby uniknąć nadpisywania podczas edycji
   const prevVideoTimestampRawRef = useRef<number | undefined>(undefined);
   const prevVideoTimestampRef = useRef<number | undefined>(undefined);
@@ -1552,7 +1563,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     maxLength={5}
                   />
                   <span className={styles.matchMinuteInfo}>
-                    {currentMatchMinute !== null ? currentMatchMinute : (editingShot?.minute || formData.minute)}'
+                    {matchMinuteFromVideoInput}'
                   </span>
                 </div>
               </div>

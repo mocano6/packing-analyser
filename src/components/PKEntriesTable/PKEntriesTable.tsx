@@ -100,8 +100,9 @@ const PKEntryRow = ({
   const { isAdmin } = useAuth();
   const isSecondHalf = entry.isSecondHalf;
 
-  const senderDisplay = getPlayerLabel(entry.senderId, playersIndex);
-  const receiverDisplay = entry.receiverId ? getPlayerLabel(entry.receiverId, playersIndex) : "-";
+  // W obronie nie przypisujemy zawodników – to wejście przeciwnika
+  const senderDisplay = entry.teamContext === 'defense' ? 'Przeciwnik' : getPlayerLabel(entry.senderId, playersIndex);
+  const receiverDisplay = entry.teamContext === 'defense' ? '-' : (entry.receiverId ? getPlayerLabel(entry.receiverId, playersIndex) : '-');
 
   // Funkcja do zamiany strony wejścia (odbicie współrzędnych)
   const handleFlipSide = async () => {
