@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { PKEntry, Player, TeamInfo } from "@/types";
 import styles from "./PKEntryModal.module.css";
 import PlayerCard from "../ActionModal/PlayerCard";
+import { TEAMS } from "@/constants/teams";
 
 export interface PKEntryModalProps {
   isOpen: boolean;
@@ -234,6 +235,12 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
 
     return playersWithMinutes;
   }, [players, matchInfo]);
+
+  // Funkcja do pobierania nazwy zespołu (dla etykiet)
+  const getTeamName = useCallback((teamId: string) => {
+    const team = Object.values(TEAMS).find(team => team.id === teamId);
+    return team ? team.name : teamId;
+  }, []);
 
   // Funkcja pomocnicza do ograniczania wartości do zakresu 0-10
   const clamp0to10 = (value: number) => Math.max(0, Math.min(10, value));
@@ -1009,10 +1016,10 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                 data-tooltip="Liczba zawodników w polu karnym"
               >
                 {renderCountRow(
-                  "Partnerzy w PK",
+                  matchInfo?.team ? `${getTeamName(matchInfo.team)} w PK` : "Partnerzy w PK",
                   clamp0to10(formData.pkPlayersCount),
                   (n) => setFormData({...formData, pkPlayersCount: clamp0to10(n)}),
-                  "Partnerzy w PK (0-10)"
+                  matchInfo?.team ? `${getTeamName(matchInfo.team)} w PK (0-10)` : "Partnerzy w PK (0-10)"
                 )}
                 {renderCountRow(
                   "Przeciwnicy w PK",

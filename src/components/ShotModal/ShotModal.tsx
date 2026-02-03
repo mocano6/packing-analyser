@@ -112,6 +112,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
   const prevVideoTimestampRawRef = useRef<number | undefined>(undefined);
   const prevVideoTimestampRef = useRef<number | undefined>(undefined);
   const prevEditingShotIdRef = useRef<string | undefined>(undefined);
+  // Ref: inicjalizacja formularza tylko przy „otwarciu” (isOpen false→true) lub zmianie editingShot?.id; zapobiega resetowi przy zmianie typu strzału
+  const lastInitOpenRef = useRef(false);
+  const lastInitEditingShotIdRef = useRef<string | undefined>(undefined);
 
   // Pobieranie czasu z wideo przy otwarciu modalu
   useEffect(() => {
@@ -353,12 +356,32 @@ const ShotModal: React.FC<ShotModalProps> = ({
     }
   }, [isOpen, editingShot, onCalculateMinuteFromVideo]);
 
+  // Inicjalizacja formularza tylko przy faktycznym otwarciu modalu (isOpen false→true) lub zmianie edytowanego strzału (editingShot?.id).
+  // Używamy refów, żeby NIE uruchamiać inicjalizacji przy każdym re-renderze (np. po kliknięciu typu strzału).
   useEffect(() => {
+    const editingShotId = editingShot?.id;
+    const wasOpen = lastInitOpenRef.current;
+    const prevEditingId = lastInitEditingShotIdRef.current;
+
+    if (!isOpen) {
+      lastInitOpenRef.current = false;
+      lastInitEditingShotIdRef.current = undefined;
+      return;
+    }
+
+    const shouldInit =
+      !wasOpen || // modal właśnie się otworzył
+      editingShotId !== prevEditingId; // zmieniono strzał do edycji (lub tryb dodaj→edytuj i na odwrót)
+
+    if (!shouldInit) return;
+
+    lastInitOpenRef.current = true;
+    lastInitEditingShotIdRef.current = editingShotId;
+
     if (editingShot) {
       setFormData({
         playerId: editingShot.playerId || "",
         minute: editingShot.minute,
-        // Odwróć modyfikatory, aby uzyskać bazowe xG (przed modyfikatorami)
         xG: reverseFinalXG(Math.round(editingShot.xG * 100), editingShot),
         bodyPart: editingShot.bodyPart || "foot",
         shotType: editingShot.isGoal ? "goal" : (editingShot.shotType || "on_target"),
@@ -384,15 +407,12 @@ const ShotModal: React.FC<ShotModalProps> = ({
       });
       setControversyNote(editingShot.controversyNote || "");
     } else {
-      // Automatyczne wykrywanie kontekstu zespołu na podstawie pozycji
-      // Lewa strona boiska (x < 50%) = obrona, prawa strona (x >= 50%) = atak
       const autoTeamContext = x < 50 ? "defense" : "attack";
       const autoTeamId = autoTeamContext === "defense" ? matchInfo?.opponent : matchInfo?.team;
-      
       setFormData({
         playerId: "",
         minute: 1,
-        xG: Math.round(xG * 100), // Konwersja z ułamka na całe procenty
+        xG: Math.round(xG * 100),
         bodyPart: "foot",
         shotType: "on_target",
         teamContext: autoTeamContext,
@@ -416,7 +436,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         isFromPK: false,
       });
     }
-  }, [editingShot, isOpen, matchInfo, xG, x]);
+  }, [isOpen, editingShot, editingShot?.id, x, xG, matchInfo]);
 
   // Ustaw domyślnego bramkarza gdy zmienia się na obronę
   useEffect(() => {
@@ -446,11 +466,11 @@ const ShotModal: React.FC<ShotModalProps> = ({
     setFormData(prev => ({
       ...prev,
       shotType,
-      // Dla strzałów zablokowanych zachowujemy informacje o blokujących,
-      // dla pozostałych typów czyścimy tylko dane stricte związane z blokadą.
+      // Dla strzałów zablokowanych zachowujemy informacje o blokujących; dla pozostałych czyścimy tylko blockingPlayers.
       blockingPlayers: shotType === "blocked" ? prev.blockingPlayers : [],
-      linePlayers: shotType === "blocked" ? prev.linePlayers : [],
-      linePlayersCount: shotType === "blocked" ? prev.linePlayersCount : 0,
+      // Zawodnicy na linii strzału są wspólni dla wszystkich typów (celny, niecelny, zablokowany, gol) – nie zerujemy przy zmianie typu.
+      linePlayers: prev.linePlayers,
+      linePlayersCount: prev.linePlayersCount,
       // NIE zmieniamy pkPlayersCount ani wyboru 1P/2P przy zmianie typu strzału
     }));
   };
@@ -601,8 +621,15 @@ const ShotModal: React.FC<ShotModalProps> = ({
     });
   };
 
+  // Stała wartość xG dla karnego (zgodnie z literaturą)
+  const PENALTY_XG_PERCENT = 76;
+
   // Oblicz finalny xG z uwzględnieniem zawodników na linii, SFG bezpośredni, dobitki i części ciała
   const calculateFinalXG = () => {
+    // Karny ma zawsze stały xG 76%
+    if (formData.actionType === "penalty") {
+      return PENALTY_XG_PERCENT;
+    }
     let finalXG = formData.xG;
     
     // Każdy zawodnik na linii obniża xG o 1%
@@ -962,7 +989,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
               </button>
               {formData.teamContext === "attack" && (
                 <div className={styles.linePlayersCountInput}>
-                  <label htmlFor="line-players-count">Przeciwnik na linii strzału:</label>
+                  <label htmlFor="line-players-count">Zawodnik na linii strzału:</label>
                   <input
                     type="number"
                     id="line-players-count"
@@ -1073,7 +1100,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
           {/* Zawodnicy na linii strzału (tylko w obronie) */}
           {formData.teamContext === "defense" && (
             <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
-              <label>Przeciwnik na linii strzału:</label>
+              <label>Zawodnik na linii strzału:</label>
               <div className={styles.playersGridContainer}>
                 {(() => {
                   // Filtruj bramkarzy - w obronie bramkarz nie liczy się w linii strzału
@@ -1135,6 +1162,24 @@ const ShotModal: React.FC<ShotModalProps> = ({
             </div>
           </div>
 
+          {/* Rodzaj akcji (typ stałego fragmentu) – widoczny tylko gdy wybrano SFG */}
+          {formData.actionCategory === "sfg" && (
+            <div className={styles.fieldGroup}>
+              <label>Rodzaj akcji:</label>
+              <div className={styles.actionTypeSelector}>
+                {getAvailableActionTypes().map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`${styles.actionTypeButton} ${formData.actionType === opt.value ? styles.active : ""}`}
+                    onClick={() => setFormData((prev) => ({ ...prev, actionType: opt.value as typeof prev.actionType }))}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Podrodzaj SFG */}
           {formData.actionCategory === "sfg" && formData.actionType !== "penalty" && (

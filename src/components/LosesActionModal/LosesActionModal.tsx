@@ -848,7 +848,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   style={{ cursor: 'pointer', position: 'relative' }}
                 >
                   <span className={styles.compactLabel}>
-                    Partnerzy
+                    {matchInfo?.team ? getTeamName(matchInfo.team) : "Partnerzy"}
                   </span>
                   <span className={styles.pointsValue}><b>{playersLeftField}</b></span>
                   <button
@@ -1126,7 +1126,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                     onClick={onAutToggle}
                     aria-pressed={isAutActive}
                     type="button"
-                    data-tooltip="Aut - strata na własnej połowie"
+                    data-tooltip="Aut"
                   >
                     Aut
                   </button>
@@ -1140,7 +1140,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
               data-tooltip="Liczymy zawodników do swojej bramki."
             >
               {renderCountRow(
-                "Partner (bez bramkarza)",
+                matchInfo?.team ? `${getTeamName(matchInfo.team)} (bez bramkarza)` : "Partner (bez bramkarza)",
                 clamp0to10(playersBehindBall),
                 (n) => onPlayersBehindBallChange(clamp0to10(n)),
                 "Partnerzy pod piłką (0-10)"

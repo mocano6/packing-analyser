@@ -834,7 +834,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                   style={{ cursor: 'pointer', position: 'relative' }}
                 >
                   <span className={styles.compactLabel}>
-                    Partnerzy
+                    {matchInfo?.team ? getTeamName(matchInfo.team) : "Partnerzy"}
                   </span>
                   <span className={styles.pointsValue}><b>{playersLeftField}</b></span>
                   <button
@@ -1049,7 +1049,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
               data-tooltip="Liczymy zawodników wyraźnie do bramki przeciwnika."
             >
               {renderCountRow(
-                "Partner",
+                matchInfo?.team ? getTeamName(matchInfo.team) : "Partner",
                 clamp0to10(playersBehindBall),
                 (n) => onPlayersBehindBallChange(clamp0to10(n)),
                 "Partnerzy przed piłką (0-10)"
