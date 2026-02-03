@@ -286,15 +286,14 @@ const ActionSection = memo(function ActionSection({
       const isExternalWindowOpenFromStorage = localStorage.getItem('externalVideoWindowOpen') === 'true';
       
       if (isExternalWindowOpen) {
-        // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
-        externalWindow.postMessage({
-          type: 'GET_CURRENT_TIME'
-        }, '*');
-        
-        // Czekaj na odpowiedź z zewnętrznego okna
+        try {
+          externalWindow.postMessage({ type: 'GET_CURRENT_TIME' }, '*');
+        } catch {
+          return null;
+        }
         const timeFromExternal = await new Promise<number | null>((resolve) => {
           const handleTimeResponse = (event: MessageEvent) => {
-            if (event.data.type === 'CURRENT_TIME_RESPONSE' || event.data.type === 'VIDEO_TIME_RESPONSE') {
+            if (event.data?.type === 'CURRENT_TIME_RESPONSE' || event.data?.type === 'VIDEO_TIME_RESPONSE') {
               window.removeEventListener('message', handleTimeResponse);
               resolve(event.data.time);
             }
@@ -302,14 +301,12 @@ const ActionSection = memo(function ActionSection({
           window.addEventListener('message', handleTimeResponse);
           setTimeout(() => {
             window.removeEventListener('message', handleTimeResponse);
-            resolve(null); // timeout
+            resolve(null);
           }, 2000);
         });
-        
         if (timeFromExternal === null || timeFromExternal === undefined) {
           return null;
         }
-        
         currentVideoTime = timeFromExternal;
       } else if (youtubeVideoRef?.current) {
         try {
@@ -369,15 +366,14 @@ const ActionSection = memo(function ActionSection({
       const isExternalWindowOpenFromStorage = localStorage.getItem('externalVideoWindowOpen') === 'true';
       
       if (isExternalWindowOpen) {
-        // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
-        externalWindow.postMessage({
-          type: 'GET_CURRENT_TIME'
-        }, '*');
-        
-        // Czekaj na odpowiedź z zewnętrznego okna
+        try {
+          externalWindow.postMessage({ type: 'GET_CURRENT_TIME' }, '*');
+        } catch {
+          return 0;
+        }
         const timeFromExternal = await new Promise<number | null>((resolve) => {
           const handleTimeResponse = (event: MessageEvent) => {
-            if (event.data.type === 'CURRENT_TIME_RESPONSE' || event.data.type === 'VIDEO_TIME_RESPONSE') {
+            if (event.data?.type === 'CURRENT_TIME_RESPONSE' || event.data?.type === 'VIDEO_TIME_RESPONSE') {
               window.removeEventListener('message', handleTimeResponse);
               resolve(event.data.time);
             }
@@ -385,10 +381,9 @@ const ActionSection = memo(function ActionSection({
           window.addEventListener('message', handleTimeResponse);
           setTimeout(() => {
             window.removeEventListener('message', handleTimeResponse);
-            resolve(null); // timeout
+            resolve(null);
           }, 2000);
         });
-        
         if (timeFromExternal !== null && timeFromExternal !== undefined) {
           return timeFromExternal;
         }

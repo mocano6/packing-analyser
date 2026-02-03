@@ -222,6 +222,12 @@ const XGPitch = memo(function XGPitch({
           
           // Sprawdź, czy to strzał z asystą
           const isAssist = !!shot.assistantId;
+          // Klasy dla gola i stałego fragmentu (głowa bez zmiany kształtu – kółko)
+          const isGoalClass = shot.isGoal ? styles.isGoal : '';
+          const setPieceTypes = ['corner', 'free_kick', 'direct_free_kick', 'penalty', 'throw_in'];
+          const isSetPiece = !!(shot.actionType && setPieceTypes.includes(shot.actionType));
+          const isSetPieceClass = isSetPiece ? styles.isSetPiece : '';
+          const isGoalAndSetPiece = shot.isGoal && isSetPiece;
           
           // Oblicz rozmiar kropki na podstawie xG (min 12px, max 36px)
           // Im wyższy xG, tym większa kropka
@@ -271,36 +277,53 @@ const XGPitch = memo(function XGPitch({
           return (
             <div
               key={shot.id}
-              className={`${styles.shotMarker} ${selectedShotId === shot.id ? styles.selected : ''}`}
+              className={`${styles.shotMarker} ${selectedShotId === shot.id ? styles.selected : ''} ${isGoalClass} ${isSetPieceClass}`}
               style={{
                 left: `${displayX}%`,
                 top: `${displayY}%`,
                 width: `${dotSize}px`,
                 height: `${dotSize}px`,
-                backgroundColor: xGColor,
-                background: xGColor,
+                ...(isGoalAndSetPiece ? {} : { backgroundColor: xGColor, background: xGColor }),
                 opacity: 1,
-                border: 'none',
-                borderRadius: '50%',
+                ...(shot.isGoal && !isSetPiece ? {} : { border: 'none' }),
+                borderRadius: isSetPiece ? '0' : '50%',
                 transform: 'translate(-50%, -50%)',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
               }}
               onClick={(e) => handleShotClick(e, shot)}
               title={`${isAssist ? '⚽ Asysta: ' : ''}${getPlayerLabel(shot.playerId, localPlayersIndex)} - ${shot.minute}' - xG: ${shot.xG.toFixed(2)} ${shot.isGoal ? '⚽' : ''} - ${shot.actionType || 'open_play'}`}
             >
-              <div className={styles.shotInner}>
-                <span 
-                  className={styles.xgValue} 
-                  style={{ 
-                    fontSize: `${Math.max(9, Math.min(14, dotSize * 0.4))}px`,
-                    fontWeight: '700',
-                    color: '#ffffff',
-                    textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.5)'
-                  }}
-                >
-                  {Math.round(shot.xG * 100)}
-                </span>
-              </div>
+              {isGoalAndSetPiece ? (
+                <div className={styles.shotMarkerGoalInner} style={{ backgroundColor: xGColor }}>
+                  <div className={styles.shotInner}>
+                    <span
+                      className={styles.xgValue}
+                      style={{
+                        fontSize: `${Math.max(9, Math.min(14, dotSize * 0.4))}px`,
+                        fontWeight: '700',
+                        color: '#ffffff',
+                        textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.5)'
+                      }}
+                    >
+                      {Math.round(shot.xG * 100)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className={styles.shotInner}>
+                  <span 
+                    className={styles.xgValue} 
+                    style={{ 
+                      fontSize: `${Math.max(9, Math.min(14, dotSize * 0.4))}px`,
+                      fontWeight: '700',
+                      color: '#ffffff',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.5)'
+                    }}
+                  >
+                    {Math.round(shot.xG * 100)}
+                  </span>
+                </div>
+              )}
             </div>
           );
         })}

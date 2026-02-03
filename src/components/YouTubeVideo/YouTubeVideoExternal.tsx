@@ -65,7 +65,7 @@ const YouTubeVideoExternal: React.FC<YouTubeVideoExternalProps> = ({
                 (event.source as Window).postMessage({
                   type: 'CURRENT_TIME_RESPONSE',
                   time: currentTime
-                }, (typeof event.origin === 'string' && event.origin.length > 0 ? event.origin : '*'));
+                }, '*');
               } else if (window.opener) {
                 window.opener.postMessage({
                   type: 'CURRENT_TIME_RESPONSE',
@@ -80,7 +80,7 @@ const YouTubeVideoExternal: React.FC<YouTubeVideoExternalProps> = ({
                 (event.source as Window).postMessage({
                   type: 'CURRENT_TIME_RESPONSE',
                   time: 0
-                }, (typeof event.origin === 'string' && event.origin.length > 0 ? event.origin : '*'));
+                }, '*');
               } else if (window.opener) {
                 window.opener.postMessage({
                   type: 'CURRENT_TIME_RESPONSE',
@@ -94,7 +94,7 @@ const YouTubeVideoExternal: React.FC<YouTubeVideoExternalProps> = ({
               (event.source as Window).postMessage({
                 type: 'CURRENT_TIME_RESPONSE',
                 time: 0
-              }, (typeof event.origin === 'string' && event.origin.length > 0 ? event.origin : '*'));
+              }, '*');
             } else if (window.opener) {
               window.opener.postMessage({
                 type: 'CURRENT_TIME_RESPONSE',

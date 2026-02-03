@@ -283,6 +283,47 @@
   z-index: 30;
 }
 
+/* Gol – jasnozielona cienka ramka (jak przy PK) */
+.shotMarker.isGoal {
+  border: 2px solid #90ee90;
+  box-sizing: border-box;
+}
+
+/* Strzał z głowy – bez zmiany kształtu (kółko), trójkąt cofnięty – liczba xG była zakryta */
+
+/* Strzał ze stałego fragmentu – sześciokąt */
+.shotMarker.isSetPiece {
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
+.shotMarker.isSetPiece .shotInner {
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
+/* Gol + sześciokąt: ramka widoczna dookoła (border jest obcinany przez clip-path, więc używamy wrappera z paddingiem) */
+.shotMarker.isGoal.isSetPiece {
+  padding: 2px;
+  background: #90ee90 !important;
+  border: none;
+  box-sizing: border-box;
+}
+
+.shotMarker.isGoal.isSetPiece .shotMarkerGoalInner {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shotMarker.isGoal.isSetPiece .shotMarkerGoalInner .shotInner {
+  clip-path: none;
+}
+
 .shotInner {
   width: 100%;
   height: 100%;

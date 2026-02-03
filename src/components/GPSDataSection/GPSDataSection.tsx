@@ -3,11 +3,10 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { TeamInfo, Player, GPSDataEntry, GPSProvider } from "@/types";
-import { TEAMS } from "@/constants/teams";
 import { analyzeCSVStructure, parseCSV, CSVStructure } from "@/utils/csvAnalyzer";
 import { buildPlayersIndex, getPlayerFirstName, getPlayerFullName, getPlayerLabel, getPlayerLastName, sortPlayersByLastName } from "@/utils/playerUtils";
 import { getDB } from "@/lib/firebase";
-import { collection, addDoc, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, orderBy, limit } from "firebase/firestore";
+import { collection, addDoc, query, where, getDocs, deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore";
 import styles from "./GPSDataSection.module.css";
 
 // Tooltipy informacyjne STATSports GPS (definicje)
@@ -89,105 +88,10 @@ function getGpsMetricTooltip(metricName: string, provider: GPSProvider): string 
   return undefined;
 }
 
-const CATAPULT_METRICS_FALLBACK = [
-  "Max Acceleration",
-  "Max Deceleration",
-  "Acceleration Efforts",
-  "Deceleration Efforts",
-  "Accel + Decel Efforts",
-  "Accel + Decel Efforts Per Minute",
-  "Duration",
-  "Distance",
-  "Player Load",
-  "Max Velocity",
-  "Max Vel (% Max)",
-  "Meterage Per Minute",
-  "Player Load Per Minute",
-  "Work/Rest Ratio",
-  "Max Heart Rate",
-  "Avg Heart Rate",
-  "Max HR (% Max)",
-  "Avg HR (% Max)",
-  "HR Exertion",
-  "Red Zone",
-  "Heart Rate Band 1 Duration",
-  "Heart Rate Band 2 Duration",
-  "Heart Rate Band 3 Duration",
-  "Heart Rate Band 4 Duration",
-  "Heart Rate Band 5 Duration",
-  "Heart Rate Band 6 Duration",
-  "Energy",
-  "High Metabolic Load Distance",
-  "Standing Distance",
-  "Walking Distance",
-  "Jogging Distance",
-  "Running Distance",
-  "HI Distance",
-  "Sprint Distance",
-  "Sprint Efforts",
-  "Sprint Dist Per Min",
-  "High Speed Distance",
-  "High Speed Efforts",
-  "High Speed Distance Per Minute",
-  "Impacts",
-] as const;
-
 const GPS_DAY_KEYS = ["MD-4", "MD-3", "MD-2", "MD-1", "MD", "MD+1", "MD+2", "MD+3"] as const;
 type GPSDayKey = (typeof GPS_DAY_KEYS)[number];
 
-type GPSMetricNorm = {
-  min?: number;
-  max?: number;
-};
-
-type GPSDayMetricConfig = {
-  enabled: boolean;
-  norm?: GPSMetricNorm;
-};
-
-type GPSDisplayConfigV1 = {
-  version: 1;
-  days: Record<GPSDayKey, { metrics: Record<string, GPSDayMetricConfig> }>;
-};
-
-function createEmptyGPSDisplayConfigV1(): GPSDisplayConfigV1 {
-  return {
-    version: 1,
-    days: {
-      "MD-4": { metrics: {} },
-      "MD-3": { metrics: {} },
-      "MD-2": { metrics: {} },
-      "MD-1": { metrics: {} },
-      MD: { metrics: {} },
-      "MD+1": { metrics: {} },
-      "MD+2": { metrics: {} },
-      "MD+3": { metrics: {} },
-    },
-  };
-}
-
-function normalizeNormTargetKey(value: string | undefined | null): string {
-  const v = String(value ?? "").trim();
-  return v ? v : "all";
-}
-
-function buildGpsNormsDocId(provider: GPSProvider, teamId: string, positionKey: string): string {
-  // Firestore docId nie może zawierać "/", więc kodujemy elementy.
-  const safeProvider = encodeURIComponent(provider);
-  const safeTeam = encodeURIComponent(teamId);
-  const safePos = encodeURIComponent(positionKey);
-  return `gps_norms_v1_${safeProvider}_${safeTeam}_${safePos}`;
-}
-
-function buildGpsNormsActiveKey(provider: GPSProvider, teamId: string, positionKey: string): string {
-  const safeProvider = encodeURIComponent(provider);
-  const safeTeam = encodeURIComponent(teamId);
-  const safePos = encodeURIComponent(positionKey);
-  return `gps_active_norms_v1_${safeProvider}_${safeTeam}_${safePos}`;
-}
-
 const GPS_DATA_COLLECTION = "gps";
-const GPS_NORMS_COLLECTION = "gps_norms";
 
 interface GPSDataSectionProps {
   players: Player[];
@@ -286,410 +190,17 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
   }>>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [activeTab, setActiveTab] = useState<"add" | "view" | "config">("add");
+  const [activeTab, setActiveTab] = useState<"add" | "view">("add");
   const [expandedGPSEntries, setExpandedGPSEntries] = useState<Set<string>>(new Set());
+  const [editingAssignmentEntryId, setEditingAssignmentEntryId] = useState<string | null>(null);
+  const [reassignPlayerId, setReassignPlayerId] = useState<string>("");
+  const [isReassigning, setIsReassigning] = useState(false);
   const playersIndex = React.useMemo(() => buildPlayersIndex(players), [players]);
 
-  const availableMetrics = React.useMemo(() => {
-    if (selectedProvider === "Catapult") {
-      const excluded = new Set([
-        "Player Name",
-        "Period Name",
-        "Period Number",
-        "Date",
-        "Athlete Tags",
-        "Activity Tags",
-        "Game Tags",
-        "Athlete Participation Tags",
-        "Period Tags",
-      ]);
-      const fromFile =
-        csvStructure?.headers?.includes("Player Name") && csvStructure?.headers?.includes("Period Name")
-          ? csvStructure.headers.filter((h) => !excluded.has(h))
-          : [];
-      const base = fromFile.length > 0 ? fromFile : Array.from(CATAPULT_METRICS_FALLBACK);
-      return Array.from(new Set(base)).sort((a, b) => a.localeCompare(b, "pl"));
-    }
-
-    // STATSports
-    const extra = [
-      "Total Distance",
-      "Distance Per Min",
-      "Max Speed",
-      "Sprints",
-      "Sprint Distance",
-      "HML Distance",
-      "HML Efforts",
-      "Distance Zone 4 - Zone 6 (Absolute)",
-      "Distance Zone 3 - Zone 6 (Absolute)",
-    ];
-    return Array.from(new Set([...Object.keys(STATSPORTS_GPS_TOOLTIPS), ...extra])).sort((a, b) => a.localeCompare(b, "pl"));
-  }, [selectedProvider, csvStructure]);
-
-  const [gpsNormsByPosition, setGpsNormsByPosition] = useState<Record<string, GPSDisplayConfigV1>>({});
-  const [configDay, setConfigDay] = useState<GPSDayKey>("MD");
-  const [configPlayerId, setConfigPlayerId] = useState<string>("all");
-  const [metricSearch, setMetricSearch] = useState("");
-  const [isSavingNorms, setIsSavingNorms] = useState(false);
-  const [saveNormsSuccess, setSaveNormsSuccess] = useState(false);
-  const [saveNormsError, setSaveNormsError] = useState<string | null>(null);
-  const [normSetName, setNormSetName] = useState("");
-  const [selectedNormSetId, setSelectedNormSetId] = useState<string | null>(null);
-  const [normValidFrom, setNormValidFrom] = useState<string>(() => new Date().toISOString().slice(0, 10));
-  const [normValidTo, setNormValidTo] = useState<string>("");
-  const [savedNormSets, setSavedNormSets] = useState<Array<{ id: string; name: string; updatedAt?: string; validFrom?: string; validTo?: string; playerId?: string }>>([]);
-  const [isLoadingNormSets, setIsLoadingNormSets] = useState(false);
-  const [viewNormSets, setViewNormSets] = useState<Array<{ id: string; playerId: string; validFrom?: string; validTo?: string }>>([]);
-  const [viewNormConfigsById, setViewNormConfigsById] = useState<Record<string, GPSDisplayConfigV1>>({});
-
-  const playerOptions = React.useMemo(() => {
-    const teamPlayers = selectedTeam
-      ? players.filter((p) => (p.teams?.includes(selectedTeam) || (p as any).teamId === selectedTeam))
-      : players;
-    const sorted = [...teamPlayers].sort((a, b) => {
-      const lastCmp = String(a.lastName || "").localeCompare(String(b.lastName || ""), "pl");
-      if (lastCmp !== 0) return lastCmp;
-      const firstCmp = String(a.firstName || "").localeCompare(String(b.firstName || ""), "pl");
-      if (firstCmp !== 0) return firstCmp;
-      return String(a.id).localeCompare(String(b.id), "pl");
-    });
-    return [{ id: "all", label: "Wszyscy" }, ...sorted.map((p) => ({
-      id: p.id,
-      label: `${String(p.lastName || "").trim()} ${String(p.firstName || "").trim()}${p.number ? ` #${p.number}` : ""}`.trim(),
-    }))];
-  }, [players, selectedTeam]);
-
-  const configPlayerKey = React.useMemo(() => normalizeNormTargetKey(configPlayerId), [configPlayerId]);
-  const currentConfig = gpsNormsByPosition[configPlayerKey] ?? null;
-  const activeNormsStorageKey = React.useMemo(() => {
-    if (!selectedTeam) return null;
-    return buildGpsNormsActiveKey(selectedProvider, selectedTeam, configPlayerKey);
-  }, [selectedProvider, selectedTeam, configPlayerKey]);
-
-  const gpsDisplayConfigStorageKey = React.useMemo(() => {
-    if (!selectedTeam) return null;
-    return `gps_display_config_v1_${selectedProvider}_${selectedTeam}_${configPlayerKey}`;
-  }, [selectedProvider, selectedTeam, configPlayerKey]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!gpsDisplayConfigStorageKey) {
-      return;
-    }
-    // docId w Firebase zależy od provider/team/player
-    (async () => {
-      if (!selectedTeam) return;
-      const db = getDB();
-      const activeId = activeNormsStorageKey ? localStorage.getItem(activeNormsStorageKey) : null;
-      const docIdsToTry = Array.from(
-        new Set(
-          [activeId, buildGpsNormsDocId(selectedProvider, selectedTeam, configPlayerKey)].filter(Boolean) as string[]
-        )
-      );
-      try {
-        for (const docId of docIdsToTry) {
-          const snap = await getDoc(doc(db, GPS_NORMS_COLLECTION, docId));
-          if (snap.exists()) {
-            const d: any = snap.data();
-            if (d?.docType === "gps_norms" && d?.days) {
-              const base = createEmptyGPSDisplayConfigV1();
-              const days = d.days || {};
-              setGpsNormsByPosition((prev) => ({
-                ...prev,
-                [configPlayerKey]: {
-                  version: 1,
-                  days: { ...base.days, ...days },
-                },
-              }));
-              // Jeśli to był aktywny preset, ustaw stan UI
-              if (activeId && docId === activeId) {
-                setSelectedNormSetId(activeId);
-                setNormSetName(String(d?.name || ""));
-              }
-              return;
-            }
-          }
-        }
-      } catch {
-        // ignore - fallback local
-      }
-
-      const raw = localStorage.getItem(gpsDisplayConfigStorageKey);
-      if (!raw) {
-        setGpsNormsByPosition((prev) => ({
-          ...prev,
-          [configPlayerKey]: createEmptyGPSDisplayConfigV1(),
-        }));
-        return;
-      }
-      try {
-        const parsed = JSON.parse(raw) as Partial<GPSDisplayConfigV1>;
-        const base = createEmptyGPSDisplayConfigV1();
-        const days = parsed?.days || {};
-        setGpsNormsByPosition((prev) => ({
-          ...prev,
-          [configPlayerKey]: {
-            version: 1,
-            days: { ...base.days, ...days },
-          },
-        }));
-      } catch {
-        setGpsNormsByPosition((prev) => ({
-          ...prev,
-          [configPlayerKey]: createEmptyGPSDisplayConfigV1(),
-        }));
-      }
-    })();
-  }, [gpsDisplayConfigStorageKey, selectedTeam, selectedProvider, configPlayerKey]);
-
-  useEffect(() => {
-    // Wczytaj listę zapisanych zestawów norm (Firebase) dla team/provider/player
-    if (activeTab !== "config") return;
-    if (!selectedTeam) return;
-    let cancelled = false;
-
-    const loadList = async () => {
-      setIsLoadingNormSets(true);
-      try {
-        const db = getDB();
-        const baseRef = collection(db, GPS_NORMS_COLLECTION);
-
-        const tryQueries = [
-          query(
-            baseRef,
-            where("docType", "==", "gps_norms"),
-            where("teamId", "==", selectedTeam),
-            where("provider", "==", selectedProvider),
-            where("playerId", "==", configPlayerKey),
-            orderBy("updatedAt", "desc"),
-            limit(50)
-          ),
-          query(
-            baseRef,
-            where("docType", "==", "gps_norms"),
-            where("teamId", "==", selectedTeam),
-            where("provider", "==", selectedProvider),
-            orderBy("updatedAt", "desc"),
-            limit(50)
-          ),
-          query(baseRef, where("docType", "==", "gps_norms"), where("teamId", "==", selectedTeam), orderBy("updatedAt", "desc"), limit(50)),
-          query(baseRef, where("docType", "==", "gps_norms"), orderBy("updatedAt", "desc"), limit(100)),
-        ];
-
-        let snaps = null as any;
-        for (const q of tryQueries) {
-          try {
-            snaps = await getDocs(q);
-            break;
-          } catch {
-            // spróbuj szerszego zapytania (bez indeksu)
-          }
-        }
-        if (!snaps) snaps = await getDocs(query(baseRef, where("docType", "==", "gps_norms")));
-
-        const list: Array<{ id: string; name: string; updatedAt?: string; validFrom?: string; validTo?: string; playerId?: string }> = [];
-        snaps.forEach((docSnap: any) => {
-          const d: any = docSnap.data();
-          if (d?.docType !== "gps_norms") return;
-          if (d?.teamId !== selectedTeam) return;
-          if (d?.provider !== selectedProvider) return;
-          if (normalizeNormTargetKey(d?.playerId) !== configPlayerKey) return;
-          list.push({
-            id: docSnap.id,
-            name: String(d?.name || docSnap.id),
-            updatedAt: d?.updatedAt ? String(d.updatedAt) : undefined,
-            validFrom: d?.validFrom ? String(d.validFrom) : undefined,
-            validTo: d?.validTo ? String(d.validTo) : undefined,
-            playerId: d?.playerId ? String(d.playerId) : undefined,
-          });
-        });
-
-        // Migracja wsteczna: jeśli są normy zapisane w starej kolekcji `gps`, skopiuj je do `gps_norms`
-        if (list.length === 0) {
-          try {
-            const oldRef = collection(db, GPS_DATA_COLLECTION);
-            const oldSnaps = await getDocs(
-              query(
-                oldRef,
-                where("docType", "==", "gps_norms"),
-                where("teamId", "==", selectedTeam),
-                where("provider", "==", selectedProvider)
-              )
-            );
-            const migrateTasks: Promise<void>[] = [];
-            oldSnaps.forEach((docSnap: any) => {
-              const d: any = docSnap.data();
-              if (d?.docType !== "gps_norms") return;
-              if (d?.teamId !== selectedTeam) return;
-              if (d?.provider !== selectedProvider) return;
-              // stare dane (position) traktujemy jako globalne "all"
-              if (configPlayerKey !== "all") return;
-              migrateTasks.push(
-                (async () => {
-                  await setDoc(doc(db, GPS_NORMS_COLLECTION, docSnap.id), d, { merge: true });
-                  try {
-                    await deleteDoc(doc(db, GPS_DATA_COLLECTION, docSnap.id));
-                  } catch {
-                    // brak uprawnień do kasowania? pomiń
-                  }
-                })()
-              );
-            });
-            await Promise.all(migrateTasks);
-          } catch {
-            // jeśli nie ma indeksów / uprawnień, pomijamy migrację
-          }
-        }
-
-        // Jeśli migracja przeniosła dokumenty, dociągnij listę jeszcze raz (best-effort)
-        if (list.length === 0) {
-          try {
-            const snaps2 = await getDocs(
-              query(
-                collection(db, GPS_NORMS_COLLECTION),
-                where("docType", "==", "gps_norms"),
-                where("teamId", "==", selectedTeam),
-                where("provider", "==", selectedProvider)
-              )
-            );
-            snaps2.forEach((docSnap: any) => {
-              const d: any = docSnap.data();
-              if (d?.docType !== "gps_norms") return;
-              if (d?.teamId !== selectedTeam) return;
-              if (d?.provider !== selectedProvider) return;
-              if (normalizeNormTargetKey(d?.playerId) !== configPlayerKey) return;
-              list.push({
-                id: docSnap.id,
-                name: String(d?.name || docSnap.id),
-                updatedAt: d?.updatedAt ? String(d.updatedAt) : undefined,
-                validFrom: d?.validFrom ? String(d.validFrom) : undefined,
-                validTo: d?.validTo ? String(d.validTo) : undefined,
-                playerId: d?.playerId ? String(d.playerId) : undefined,
-              });
-            });
-          } catch {
-            // ignore
-          }
-        }
-
-        list.sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
-
-        if (cancelled) return;
-        setSavedNormSets(list);
-
-        // Ustaw domyślny wybór: aktywny preset z localStorage -> pierwszy z listy -> null
-        const activeId = activeNormsStorageKey ? localStorage.getItem(activeNormsStorageKey) : null;
-        const initialId = activeId && list.some((x) => x.id === activeId) ? activeId : list[0]?.id || null;
-        setSelectedNormSetId(initialId);
-
-        if (initialId) {
-          const snap = await getDoc(doc(db, GPS_NORMS_COLLECTION, initialId));
-          if (snap.exists()) {
-            const d: any = snap.data();
-            setNormSetName(String(d?.name || ""));
-            setNormValidFrom(String(d?.validFrom || new Date().toISOString().slice(0, 10)));
-            setNormValidTo(String(d?.validTo || ""));
-            if (d?.days) {
-              const base = createEmptyGPSDisplayConfigV1();
-              const days = d.days || {};
-              setGpsNormsByPosition((prev) => ({
-                ...prev,
-                [configPlayerKey]: { version: 1, days: { ...base.days, ...days } },
-              }));
-              if (typeof window !== "undefined" && gpsDisplayConfigStorageKey) {
-                localStorage.setItem(
-                  gpsDisplayConfigStorageKey,
-                  JSON.stringify({ version: 1, days: { ...base.days, ...days } } as GPSDisplayConfigV1)
-                );
-              }
-            }
-            if (activeNormsStorageKey) {
-              localStorage.setItem(activeNormsStorageKey, initialId);
-            }
-          }
-        } else {
-          setNormSetName("");
-          setNormValidFrom(new Date().toISOString().slice(0, 10));
-          setNormValidTo("");
-        }
-      } finally {
-        if (!cancelled) setIsLoadingNormSets(false);
-      }
-    };
-
-    loadList();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab, selectedTeam, selectedProvider, configPlayerKey]);
-
-  const setMetricEnabledForDay = (day: GPSDayKey, metricKey: string, enabled: boolean) => {
-    setGpsNormsByPosition((prev) => {
-      const base = prev[configPlayerKey] ?? createEmptyGPSDisplayConfigV1();
-      const prevMetric = base.days[day].metrics[metricKey];
-      const next: GPSDisplayConfigV1 = {
-        ...base,
-        days: {
-          ...base.days,
-          [day]: {
-            ...base.days[day],
-            metrics: {
-              ...base.days[day].metrics,
-              [metricKey]: { ...(prevMetric || {}), enabled },
-            },
-          },
-        },
-      };
-      if (typeof window !== "undefined" && gpsDisplayConfigStorageKey) {
-        localStorage.setItem(gpsDisplayConfigStorageKey, JSON.stringify(next));
-      }
-      return { ...prev, [configPlayerKey]: next };
-    });
-  };
-
-  const setMetricNormForDay = (day: GPSDayKey, metricKey: string, patch: Partial<GPSMetricNorm>) => {
-    setGpsNormsByPosition((prev) => {
-      const base = prev[configPlayerKey] ?? createEmptyGPSDisplayConfigV1();
-      const prevMetric = base.days[day].metrics[metricKey] || { enabled: true };
-      const next: GPSDisplayConfigV1 = {
-        ...base,
-        days: {
-          ...base.days,
-          [day]: {
-            ...base.days[day],
-            metrics: {
-              ...base.days[day].metrics,
-              [metricKey]: { ...prevMetric, norm: { ...(prevMetric.norm || {}), ...patch } },
-            },
-          },
-        },
-      };
-      if (typeof window !== "undefined" && gpsDisplayConfigStorageKey) {
-        localStorage.setItem(gpsDisplayConfigStorageKey, JSON.stringify(next));
-      }
-      return { ...prev, [configPlayerKey]: next };
-    });
-  };
-
-  const parseMetricNumber = (value: any): number | null => {
-    if (value === null || value === undefined) return null;
-    const s = String(value).trim().replace(",", ".");
-    if (!s) return null;
-    const n = Number(s);
-    return Number.isFinite(n) ? n : null;
-  };
   const [gpsDataFromFirebase, setGpsDataFromFirebase] = useState<any[]>([]);
   const [isLoadingGPSData, setIsLoadingGPSData] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<"firstHalf" | "secondHalf" | "total">("total");
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Funkcja do pobierania nazwy zespołu
-  const getTeamName = (teamId: string) => {
-    const team = allAvailableTeams.find(t => t.id === teamId);
-    if (team) return team.name;
-    const defaultTeam = Object.values(TEAMS).find(t => t.id === teamId);
-    return defaultTeam ? defaultTeam.name : teamId;
-  };
 
   // Funkcja do normalizacji polskich znaków - zamienia znaki zapytania na możliwe polskie znaki
   // Używa kontekstu do określenia, który polski znak powinien być użyty
@@ -1174,92 +685,6 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
     return gpsData;
   };
 
-  const ensureNormsLoadedForPositions = async (positionKeys: string[]) => {
-    if (!selectedTeam) return;
-    const missing = positionKeys
-      .map((p) => normalizeNormTargetKey(p))
-      .filter((p) => !gpsNormsByPosition[p]);
-    if (missing.length === 0) return;
-
-    const db = getDB();
-    const loaded: Record<string, GPSDisplayConfigV1> = {};
-    await Promise.all(
-      missing.map(async (posKey) => {
-        const idsToTry: string[] = [];
-        if (typeof window !== "undefined") {
-          const activeKey = buildGpsNormsActiveKey(selectedProvider, selectedTeam, posKey);
-          const activeId = localStorage.getItem(activeKey);
-          if (activeId) idsToTry.push(activeId);
-        }
-        // Fallback na stary deterministyczny docId
-        idsToTry.push(buildGpsNormsDocId(selectedProvider, selectedTeam, posKey));
-
-        for (const docId of Array.from(new Set(idsToTry))) {
-          try {
-            const snap = await getDoc(doc(db, GPS_NORMS_COLLECTION, docId));
-            if (snap.exists()) {
-              const d: any = snap.data();
-              if (d?.docType === "gps_norms" && d?.days) {
-                const base = createEmptyGPSDisplayConfigV1();
-                loaded[posKey] = { version: 1, days: { ...base.days, ...(d.days || {}) } };
-                return;
-              }
-            }
-          } catch {
-            // ignore
-          }
-        }
-
-        // Back-compat: spróbuj jeszcze starej kolekcji `gps`
-        for (const docId of Array.from(new Set(idsToTry))) {
-          try {
-            const snap = await getDoc(doc(db, GPS_DATA_COLLECTION, docId));
-            if (snap.exists()) {
-              const d: any = snap.data();
-              if (d?.docType === "gps_norms" && d?.days) {
-                const base = createEmptyGPSDisplayConfigV1();
-                loaded[posKey] = { version: 1, days: { ...base.days, ...(d.days || {}) } };
-                return;
-              }
-            }
-          } catch {
-            // ignore
-          }
-        }
-      })
-    );
-
-    if (Object.keys(loaded).length > 0) {
-      setGpsNormsByPosition((prev) => ({ ...prev, ...loaded }));
-    }
-  };
-
-  const normalizeDaysToConfig = (days: any): GPSDisplayConfigV1 => {
-    const base = createEmptyGPSDisplayConfigV1();
-    return {
-      version: 1,
-      days: { ...base.days, ...(days || {}) },
-    };
-  };
-
-  const pickBestNormConfigForEntry = (playerId: string, dateIso: string): GPSDisplayConfigV1 | null => {
-    const pid = normalizeNormTargetKey(playerId);
-    const candidates = viewNormSets.filter((s) => normalizeNormTargetKey(s.playerId) === pid);
-    const fallbackAll = viewNormSets.filter((s) => normalizeNormTargetKey(s.playerId) === "all");
-    const pool = candidates.length > 0 ? candidates : fallbackAll;
-
-    const best = pool
-      .filter((s) => {
-        const from = (s.validFrom || "0000-01-01").slice(0, 10);
-        const to = (s.validTo || "").slice(0, 10);
-        return dateIso >= from && (!to || dateIso <= to);
-      })
-      .sort((a, b) => String(b.validFrom || "").localeCompare(String(a.validFrom || "")))[0];
-
-    if (!best) return null;
-    return viewNormConfigsById[best.id] || null;
-  };
-
   // Pobierz dane GPS z Firebase dla podglądu
   useEffect(() => {
     const loadGPSData = async () => {
@@ -1283,92 +708,31 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
     loadGPSData();
   }, [selectedTeam, selectedDate, activeTab, selectedProvider]);
 
-  // Wczytaj normy (gps_norms) dla zawodników widocznych w podglądzie, żeby porównywać do norm z tamtego okresu
-  useEffect(() => {
-    if (activeTab !== "view") return;
-    if (!selectedTeam || !selectedDate) return;
-    if (gpsDataFromFirebase.length === 0) return;
+  // Przypisz dane GPS do innego zawodnika (edycja bez wgrywania od zera)
+  const handleReassignGPSData = async (entryId: string, newPlayerId: string) => {
+    if (!newPlayerId || !selectedTeam) return;
+    const teamPlayers = players.filter(
+      (p) => selectedTeam && (p.teams?.includes(selectedTeam) || (p as any).teamId === selectedTeam)
+    );
+    if (!teamPlayers.some((p) => p.id === newPlayerId)) return;
 
-    let cancelled = false;
-
-    const loadNorms = async () => {
-      const playerIds = new Set<string>();
-      playerIds.add("all");
-      gpsDataFromFirebase.forEach((e: any) => {
-        const pid = normalizeNormTargetKey(e?.playerId);
-        if (pid) playerIds.add(pid);
-      });
-
-      try {
-        const db = getDB();
-        const baseRef = collection(db, GPS_NORMS_COLLECTION);
-
-        const tryQueries = [
-          query(
-            baseRef,
-            where("docType", "==", "gps_norms"),
-            where("teamId", "==", selectedTeam),
-            where("provider", "==", selectedProvider),
-            orderBy("updatedAt", "desc"),
-            limit(250)
-          ),
-          query(baseRef, where("docType", "==", "gps_norms"), where("teamId", "==", selectedTeam), orderBy("updatedAt", "desc"), limit(250)),
-          query(baseRef, where("docType", "==", "gps_norms"), where("teamId", "==", selectedTeam), limit(500)),
-          query(baseRef, where("docType", "==", "gps_norms"), limit(500)),
-        ];
-
-        let snaps: any = null;
-        for (const q of tryQueries) {
-          try {
-            snaps = await getDocs(q);
-            break;
-          } catch {
-            // brak indeksu → spróbuj szerszego zapytania
-          }
-        }
-        if (!snaps) snaps = await getDocs(query(baseRef, where("docType", "==", "gps_norms")));
-
-        const sets: Array<{ id: string; playerId: string; validFrom?: string; validTo?: string }> = [];
-        const cfgById: Record<string, GPSDisplayConfigV1> = {};
-
-        snaps.forEach((docSnap: any) => {
-          const d: any = docSnap.data();
-          if (d?.docType !== "gps_norms") return;
-          if (d?.teamId !== selectedTeam) return;
-          if (d?.provider !== selectedProvider) return;
-
-          const pid = normalizeNormTargetKey(d?.playerId);
-          if (!playerIds.has(pid) && pid !== "all") return;
-
-          sets.push({
-            id: docSnap.id,
-            playerId: pid,
-            validFrom: d?.validFrom ? String(d.validFrom) : undefined,
-            validTo: d?.validTo ? String(d.validTo) : undefined,
-          });
-          if (d?.days) {
-            cfgById[docSnap.id] = normalizeDaysToConfig(d.days);
-          }
-        });
-
-        // sort: najnowsze validFrom na górze (ułatwia wybór best-fit)
-        sets.sort((a, b) => String(b.validFrom || "").localeCompare(String(a.validFrom || "")));
-
-        if (cancelled) return;
-        setViewNormSets(sets);
-        setViewNormConfigsById(cfgById);
-      } catch {
-        if (cancelled) return;
-        setViewNormSets([]);
-        setViewNormConfigsById({});
-      }
-    };
-
-    loadNorms();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab, selectedTeam, selectedDate, gpsDataFromFirebase, players, selectedProvider]);
+    setIsReassigning(true);
+    setError(null);
+    try {
+      const db = getDB();
+      const docRef = doc(db, GPS_DATA_COLLECTION, entryId);
+      await updateDoc(docRef, { playerId: newPlayerId });
+      const gpsData = await fetchGPSDataFromFirebase();
+      setGpsDataFromFirebase(gpsData);
+      setEditingAssignmentEntryId(null);
+      setReassignPlayerId("");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Błąd podczas przypisywania danych GPS";
+      setError(errorMessage);
+    } finally {
+      setIsReassigning(false);
+    }
+  };
 
   // Funkcja do usuwania danych GPS
   const handleDeleteGPSData = async (entryId: string, playerId: string, day: string) => {
@@ -1486,12 +850,6 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
         >
           Podgląd danych
         </button>
-        <button
-          className={`${styles.tab} ${activeTab === "config" ? styles.tabActive : ""}`}
-          onClick={() => setActiveTab("config")}
-        >
-          Widok i normy
-        </button>
       </div>
 
       {/* Zakładka: Dodaj dane */}
@@ -1550,7 +908,7 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                           <strong>{mapped.playerName}</strong>
                           {mapped.player ? (
                             <span className={styles.matchedLabel}>
-                              → {getPlayerLabel(mapped.player.id, playersIndex)} {mapped.player.number ? `#${mapped.player.number}` : ''}
+                              → {getPlayerLabel(mapped.player.id, playersIndex)}
                             </span>
                           ) : (
                             <span className={styles.unmatchedLabel}>❌ Nie znaleziono w bazie</span>
@@ -1579,15 +937,13 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                                 )
                               ).map((player) => (
                                   <option key={player.id} value={player.id}>
-                                    {`${getPlayerLastName(player)} ${getPlayerFirstName(player)}`.trim()}{" "}
-                                    {player.number ? `#${player.number}` : ""}
+                                    {`${getPlayerLastName(player)} ${getPlayerFirstName(player)}`.trim()}
                                   </option>
                                 ))}
                             </select>
                             {mapped.matched && mapped.player && !mapped.manualPlayerId && (
                               <small className={styles.suggestionHint}>
-                                💡 Sugestia aplikacji: {getPlayerLabel(mapped.player.id, playersIndex)}{" "}
-                                {mapped.player.number ? `#${mapped.player.number}` : ""}
+                                💡 Sugestia aplikacji: {getPlayerLabel(mapped.player.id, playersIndex)}
                               </small>
                             )}
                           </div>
@@ -1721,345 +1077,6 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
         </>
       )}
 
-      {/* Zakładka: Widok i normy */}
-      {activeTab === "config" && (
-        <div className={styles.configSection}>
-          {!selectedTeam ? (
-            <div className={styles.noMatchSelected}>
-              <p>Wybierz zespół, żeby skonfigurować widok i normy dla dni.</p>
-            </div>
-          ) : (
-            <>
-              <div className={styles.configHeader}>
-                <div className={styles.configControls}>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="norm-set-select">Zapisane normy:</label>
-                    <select
-                      id="norm-set-select"
-                      value={selectedNormSetId ?? ""}
-                      onChange={async (e) => {
-                        const nextId = e.target.value || null;
-                        setSelectedNormSetId(nextId);
-                        setSaveNormsError(null);
-                        setSaveNormsSuccess(false);
-
-                        if (!selectedTeam) return;
-                        if (!nextId) {
-                          setNormSetName("");
-                          setNormValidFrom(new Date().toISOString().slice(0, 10));
-                          setNormValidTo("");
-                          return;
-                        }
-
-                        try {
-                          const db = getDB();
-                          const snap = await getDoc(doc(db, GPS_NORMS_COLLECTION, nextId));
-                          if (!snap.exists()) return;
-                          const d: any = snap.data();
-                          setNormSetName(String(d?.name || ""));
-                          setNormValidFrom(String(d?.validFrom || new Date().toISOString().slice(0, 10)));
-                          setNormValidTo(String(d?.validTo || ""));
-                          if (d?.days) {
-                            const base = createEmptyGPSDisplayConfigV1();
-                            const days = d.days || {};
-                            const nextCfg: GPSDisplayConfigV1 = { version: 1, days: { ...base.days, ...days } };
-                            setGpsNormsByPosition((prev) => ({ ...prev, [configPlayerKey]: nextCfg }));
-                            if (typeof window !== "undefined" && gpsDisplayConfigStorageKey) {
-                              localStorage.setItem(gpsDisplayConfigStorageKey, JSON.stringify(nextCfg));
-                            }
-                          }
-                          if (typeof window !== "undefined" && activeNormsStorageKey) {
-                            localStorage.setItem(activeNormsStorageKey, nextId);
-                          }
-                        } catch (err) {
-                          const msg = err instanceof Error ? err.message : "Błąd podczas wczytywania norm z Firebase";
-                          setSaveNormsError(msg);
-                        }
-                      }}
-                      className={styles.select}
-                      disabled={isLoadingNormSets}
-                    >
-                      <option value="">
-                        {isLoadingNormSets ? "Ładowanie..." : "➕ Nowy zestaw (niezapisany)"}
-                      </option>
-                      {savedNormSets.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                          {s.validFrom ? ` (od ${s.validFrom}${s.validTo ? ` do ${s.validTo}` : ""})` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="config-day-select">Wybierz dzień treningowy:</label>
-                    <select
-                      id="config-day-select"
-                      value={configDay}
-                      onChange={(e) => setConfigDay(e.target.value as GPSDayKey)}
-                      className={styles.select}
-                    >
-                      {dayOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="config-player-select">Zawodnik:</label>
-                    <select
-                      id="config-player-select"
-                      value={configPlayerId}
-                      onChange={(e) => setConfigPlayerId(e.target.value)}
-                      className={styles.select}
-                    >
-                      {playerOptions.map((opt) => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="norm-set-name">Nazwa:</label>
-                    <input
-                      id="norm-set-name"
-                      type="text"
-                      value={normSetName}
-                      onChange={(e) => setNormSetName(e.target.value)}
-                      className={styles.select}
-                      placeholder="np. Microcycle - standard"
-                    />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="norm-valid-from">Obowiązuje od:</label>
-                    <input
-                      id="norm-valid-from"
-                      type="date"
-                      value={normValidFrom}
-                      onChange={(e) => setNormValidFrom(e.target.value)}
-                      className={styles.select}
-                    />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="norm-valid-to">Obowiązuje do (opcjonalnie):</label>
-                    <input
-                      id="norm-valid-to"
-                      type="date"
-                      value={normValidTo}
-                      onChange={(e) => setNormValidTo(e.target.value)}
-                      className={styles.select}
-                    />
-                  </div>
-                </div>
-
-              <p className={styles.helpText}>
-                Zaznacz parametry, które mają się wyświetlać dla wybranego dnia, i dodaj normy (min/max). Konfiguracja jest per{" "}
-                <strong>zespół</strong>, <strong>dostawca</strong> i <strong>zawodnik</strong>. Termin „obowiązuje od/do” pozwala porównywać dane historycznie do norm z danego okresu.
-              </p>
-
-              <div className={styles.configSaveRow}>
-                <button
-                  type="button"
-                  className={styles.saveButton}
-                  disabled={!selectedTeam || !currentConfig || isSavingNorms}
-                  onClick={async () => {
-                    if (!selectedTeam || !currentConfig) return;
-                    setIsSavingNorms(true);
-                    setSaveNormsError(null);
-                    setSaveNormsSuccess(false);
-                    try {
-                      const teamName =
-                        allAvailableTeams.find((t) => t.id === selectedTeam)?.name ||
-                        (TEAMS as any)?.[selectedTeam]?.name ||
-                        selectedTeam;
-                      const db = getDB();
-                      const nowIso = new Date().toISOString();
-                      const selectedPlayerLabel =
-                        configPlayerKey === "all"
-                          ? "Wszyscy"
-                          : playerOptions.find((p) => p.id === configPlayerKey)?.label || "Zawodnik";
-                      const finalName =
-                        normSetName.trim() ||
-                        `${teamName} / ${selectedProvider} / ${selectedPlayerLabel} / ${nowIso.slice(0, 10)}`;
-
-                      let savedId: string;
-                      if (selectedNormSetId) {
-                        await setDoc(
-                          doc(db, GPS_NORMS_COLLECTION, selectedNormSetId),
-                          {
-                            docType: "gps_norms",
-                            version: 1,
-                            provider: selectedProvider,
-                            teamId: selectedTeam,
-                            teamName,
-                            playerId: configPlayerKey,
-                            playerName: configPlayerKey === "all" ? "Wszyscy" : (playerOptions.find((p) => p.id === configPlayerKey)?.label || ""),
-                            name: finalName,
-                            validFrom: normValidFrom || nowIso.slice(0, 10),
-                            validTo: normValidTo || "",
-                            days: currentConfig.days,
-                            updatedAt: nowIso,
-                          },
-                          { merge: true }
-                        );
-                        savedId = selectedNormSetId;
-                        setSavedNormSets((prev) => {
-                          const next = prev.map((x) =>
-                            x.id === selectedNormSetId
-                              ? { ...x, name: finalName, updatedAt: nowIso, validFrom: normValidFrom || nowIso.slice(0, 10), validTo: normValidTo || "" }
-                              : x
-                          );
-                          next.sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
-                          return next;
-                        });
-                      } else {
-                        const ref = await addDoc(collection(db, GPS_NORMS_COLLECTION), {
-                          docType: "gps_norms",
-                          version: 1,
-                          provider: selectedProvider,
-                          teamId: selectedTeam,
-                          teamName,
-                          playerId: configPlayerKey,
-                          playerName: configPlayerKey === "all" ? "Wszyscy" : (playerOptions.find((p) => p.id === configPlayerKey)?.label || ""),
-                          name: finalName,
-                          validFrom: normValidFrom || nowIso.slice(0, 10),
-                          validTo: normValidTo || "",
-                          days: currentConfig.days,
-                          createdAt: nowIso,
-                          updatedAt: nowIso,
-                        });
-                        savedId = ref.id;
-                        setSelectedNormSetId(savedId);
-                        setSavedNormSets((prev) => [{ id: savedId, name: finalName, updatedAt: nowIso, validFrom: normValidFrom || nowIso.slice(0, 10), validTo: normValidTo || "", playerId: configPlayerKey }, ...prev]);
-                      }
-
-                      if (typeof window !== "undefined" && activeNormsStorageKey) {
-                        // Po zapisie ustaw ten zestaw jako aktywny (dla podglądu)
-                        localStorage.setItem(activeNormsStorageKey, savedId);
-                      }
-
-                      setSaveNormsSuccess(true);
-                      setTimeout(() => setSaveNormsSuccess(false), 3500);
-                    } catch (err) {
-                      const msg = err instanceof Error ? err.message : "Błąd podczas zapisywania norm do Firebase";
-                      setSaveNormsError(msg);
-                    } finally {
-                      setIsSavingNorms(false);
-                    }
-                  }}
-                >
-                  {isSavingNorms ? "Zapisywanie norm..." : "Zapisz normy"}
-                </button>
-                <button
-                  type="button"
-                  className={styles.deleteAllButton}
-                  disabled={!selectedNormSetId || isSavingNorms}
-                  onClick={async () => {
-                    if (!selectedNormSetId) return;
-                    const nameToShow = normSetName.trim() || "ten zestaw";
-                    if (!confirm(`Czy na pewno chcesz usunąć ${nameToShow}?`)) return;
-                    setIsSavingNorms(true);
-                    setSaveNormsError(null);
-                    try {
-                      const db = getDB();
-                      await deleteDoc(doc(db, GPS_NORMS_COLLECTION, selectedNormSetId));
-                      setSavedNormSets((prev) => prev.filter((x) => x.id !== selectedNormSetId));
-                      if (typeof window !== "undefined" && activeNormsStorageKey) {
-                        const activeId = localStorage.getItem(activeNormsStorageKey);
-                        if (activeId === selectedNormSetId) {
-                          localStorage.removeItem(activeNormsStorageKey);
-                        }
-                      }
-                      setSelectedNormSetId(null);
-                      setNormSetName("");
-                      // zostawiamy bieżący układ w UI jako "niezapisany" — można od razu zapisać jako nowy
-                    } catch (err) {
-                      const msg = err instanceof Error ? err.message : "Błąd podczas usuwania norm z Firebase";
-                      setSaveNormsError(msg);
-                    } finally {
-                      setIsSavingNorms(false);
-                    }
-                  }}
-                >
-                  Usuń zestaw
-                </button>
-                {saveNormsSuccess && <span className={styles.saveNormsOk}>✅ Zapisano</span>}
-              </div>
-              {saveNormsError && <div className={styles.error}>{saveNormsError}</div>}
-
-              <div className={styles.configSearchRow}>
-                <div className={styles.formGroup}>
-                  <label htmlFor="metric-search">Szukaj parametru:</label>
-                  <input
-                    id="metric-search"
-                    type="text"
-                    value={metricSearch}
-                    onChange={(e) => setMetricSearch(e.target.value)}
-                    className={styles.select}
-                    placeholder="np. Total Distance"
-                  />
-                </div>
-              </div>
-
-              </div>
-
-              <div className={styles.metricsConfigList}>
-                {availableMetrics
-                  .filter((m) => m.toLowerCase().includes(metricSearch.trim().toLowerCase()))
-                  .map((metricKey) => {
-                    const metricCfg = currentConfig?.days?.[configDay]?.metrics?.[metricKey];
-                    const enabled = Boolean(metricCfg?.enabled);
-                    const norm = metricCfg?.norm;
-                    const tooltip = getGpsMetricTooltip(metricKey, selectedProvider);
-
-                    return (
-                      <div key={metricKey} className={styles.metricConfigRow}>
-                        <label className={styles.metricConfigLabel} title={tooltip}>
-                          <input
-                            type="checkbox"
-                            checked={enabled}
-                            onChange={(e) => setMetricEnabledForDay(configDay, metricKey, e.target.checked)}
-                          />
-                          <span className={styles.metricConfigName}>{metricKey}</span>
-                        </label>
-
-                        <div className={styles.metricNormInputs}>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            className={styles.metricNormInput}
-                            placeholder="min"
-                            value={norm?.min ?? ""}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setMetricNormForDay(configDay, metricKey, { min: v === "" ? undefined : Number(v) });
-                            }}
-                            disabled={!enabled}
-                          />
-                          <span className={styles.metricNormSeparator}>–</span>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            className={styles.metricNormInput}
-                            placeholder="max"
-                            value={norm?.max ?? ""}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setMetricNormForDay(configDay, metricKey, { max: v === "" ? undefined : Number(v) });
-                            }}
-                            disabled={!enabled}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
       {/* Zakładka: Podgląd danych */}
       {activeTab === "view" && (
         <div className={styles.viewSection}>
@@ -2114,23 +1131,6 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                     });
                   };
 
-                  const entryDayKey = (GPS_DAY_KEYS.includes(entry.day) ? entry.day : "MD") as GPSDayKey;
-                  const entryPlayerId = String(entry.playerId || player?.id || "");
-                  const normDate = String(entry.date || selectedDate || "").slice(0, 10);
-                  const cfgForEntry =
-                    (normDate ? pickBestNormConfigForEntry(entryPlayerId, normDate) : null) ||
-                    gpsNormsByPosition[normalizeNormTargetKey(entryPlayerId)] ||
-                    gpsNormsByPosition["all"] ||
-                    null;
-                  const entryDayCfg = cfgForEntry?.days?.[entryDayKey];
-                  const enabledMetricKeys = entryDayCfg
-                    ? Object.entries(entryDayCfg.metrics)
-                        .filter(([, cfg]) => cfg.enabled)
-                        .map(([k]) => k)
-                    : [];
-                  const shouldFilterMetrics = enabledMetricKeys.length > 0;
-                  const enabledMetricSet = new Set(enabledMetricKeys);
-
                   return (
                     <div key={entry.id || index} className={styles.gpsDataItem}>
                       <div
@@ -2160,7 +1160,7 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                               <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                             </svg>
                           </button>
-                          <h4>{getPlayerLabel(entry.playerId, playersIndex, { includeNumber: true })}</h4>
+                          <h4>{getPlayerLabel(entry.playerId, playersIndex)}</h4>
                           <div className={styles.gpsDataMeta}>
                             <span>Dzień: {entry.day}</span>
                             <span>Dostawca: {entry.provider || "STATSports"}</span>
@@ -2170,6 +1170,65 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                       </div>
                       {isExpanded && (
                       <div className={styles.gpsDataContent}>
+                        {/* Przypisz do innego zawodnika */}
+                        <div className={styles.reassignRow}>
+                          {editingAssignmentEntryId === entry.id ? (
+                            <>
+                              <label htmlFor={`reassign-${entry.id}`}>Przypisz te dane do zawodnika:</label>
+                              <select
+                                id={`reassign-${entry.id}`}
+                                value={reassignPlayerId}
+                                onChange={(e) => setReassignPlayerId(e.target.value)}
+                                className={styles.select}
+                                disabled={isReassigning}
+                              >
+                                <option value="">-- Wybierz zawodnika --</option>
+                                {selectedTeam &&
+                                  sortPlayersByLastName(
+                                    players.filter(
+                                      (p) =>
+                                        selectedTeam &&
+                                        (p.teams?.includes(selectedTeam) || (p as any).teamId === selectedTeam)
+                                    )
+                                  ).map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                      {`${getPlayerLastName(p)} ${getPlayerFirstName(p)}`.trim()}
+                                    </option>
+                                  ))}
+                              </select>
+                              <button
+                                type="button"
+                                className={styles.saveButton}
+                                disabled={!reassignPlayerId || isReassigning}
+                                onClick={() => handleReassignGPSData(entry.id, reassignPlayerId)}
+                              >
+                                {isReassigning ? "Zapisywanie…" : "Zapisz"}
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.clearButton}
+                                onClick={() => {
+                                  setEditingAssignmentEntryId(null);
+                                  setReassignPlayerId("");
+                                }}
+                                disabled={isReassigning}
+                              >
+                                Anuluj
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              className={styles.reassignLinkButton}
+                              onClick={() => {
+                                setEditingAssignmentEntryId(entry.id);
+                                setReassignPlayerId(entry.playerId || "");
+                              }}
+                            >
+                              Zmień zawodnika
+                            </button>
+                          )}
+                        </div>
                         {/* Przełącznik okresu */}
                         <div className={styles.periodTabs}>
                           <button
@@ -2202,120 +1261,51 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                         {selectedPeriod === "firstHalf" && Object.keys(entry.firstHalf).length > 0 && (
                           <div className={styles.gpsDataPeriod}>
                             <div className={styles.gpsDataMetrics}>
-                              {Object.entries(entry.firstHalf)
-                                .filter(([key]) => !shouldFilterMetrics || enabledMetricSet.has(key))
-                                .map(([key, value]) => {
-                                  const norm = entryDayCfg?.metrics?.[key]?.norm;
-                                  const num = parseMetricNumber(value);
-                                  const hasNorm = Boolean(norm && (norm.min !== undefined || norm.max !== undefined));
-                                  const tooLow = hasNorm && num !== null && norm?.min !== undefined && num < norm.min;
-                                  const tooHigh = hasNorm && num !== null && norm?.max !== undefined && num > norm.max;
-                                  const ok = hasNorm && num !== null && !tooLow && !tooHigh;
-
-                                  return (
-                                    <div key={key} className={styles.gpsMetric}>
-                                      <span
-                                        className={styles.metricLabel}
-                                        title={getGpsMetricTooltip(key, (entry.provider || selectedProvider) as GPSProvider)}
-                                        data-tooltip={getGpsMetricTooltip(key, (entry.provider || selectedProvider) as GPSProvider)}
-                                      >
-                                        {key}:
-                                      </span>
-                                      <span className={styles.metricValue}>
-                                        {String(value)}
-                                        {hasNorm && (
-                                          <span
-                                            className={`${styles.metricNorm} ${
-                                              ok ? styles.metricNormOk : tooLow || tooHigh ? styles.metricNormBad : ""
-                                            }`}
-                                          >
-                                            Norma: {norm?.min ?? "—"}–{norm?.max ?? "—"}
-                                          </span>
-                                        )}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
+                              {Object.entries(entry.firstHalf).map(([key, value]) => (
+                                <div key={key} className={styles.gpsMetric}>
+                                  <span
+                                    className={styles.metricLabel}
+                                    title={getGpsMetricTooltip(key, (entry.provider || selectedProvider) as GPSProvider)}
+                                  >
+                                    {key}:
+                                  </span>
+                                  <span className={styles.metricValue}>{String(value)}</span>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )}
                         {selectedPeriod === "secondHalf" && Object.keys(entry.secondHalf).length > 0 && (
                           <div className={styles.gpsDataPeriod}>
                             <div className={styles.gpsDataMetrics}>
-                              {Object.entries(entry.secondHalf)
-                                .filter(([key]) => !shouldFilterMetrics || enabledMetricSet.has(key))
-                                .map(([key, value]) => {
-                                  const norm = entryDayCfg?.metrics?.[key]?.norm;
-                                  const num = parseMetricNumber(value);
-                                  const hasNorm = Boolean(norm && (norm.min !== undefined || norm.max !== undefined));
-                                  const tooLow = hasNorm && num !== null && norm?.min !== undefined && num < norm.min;
-                                  const tooHigh = hasNorm && num !== null && norm?.max !== undefined && num > norm.max;
-                                  const ok = hasNorm && num !== null && !tooLow && !tooHigh;
-
-                                  return (
-                                    <div key={key} className={styles.gpsMetric}>
-                                      <span
-                                        className={styles.metricLabel}
-                                        title={getGpsMetricTooltip(key, (entry.provider || selectedProvider) as GPSProvider)}
-                                        data-tooltip={getGpsMetricTooltip(key, (entry.provider || selectedProvider) as GPSProvider)}
-                                      >
-                                        {key}:
-                                      </span>
-                                      <span className={styles.metricValue}>
-                                        {String(value)}
-                                        {hasNorm && (
-                                          <span
-                                            className={`${styles.metricNorm} ${
-                                              ok ? styles.metricNormOk : tooLow || tooHigh ? styles.metricNormBad : ""
-                                            }`}
-                                          >
-                                            Norma: {norm?.min ?? "—"}–{norm?.max ?? "—"}
-                                          </span>
-                                        )}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
+                              {Object.entries(entry.secondHalf).map(([key, value]) => (
+                                <div key={key} className={styles.gpsMetric}>
+                                  <span
+                                    className={styles.metricLabel}
+                                    title={getGpsMetricTooltip(key, (entry.provider || selectedProvider) as GPSProvider)}
+                                  >
+                                    {key}:
+                                  </span>
+                                  <span className={styles.metricValue}>{String(value)}</span>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )}
                         {selectedPeriod === "total" && Object.keys(entry.total).length > 0 && (
                           <div className={styles.gpsDataPeriod}>
                             <div className={styles.gpsDataMetrics}>
-                              {Object.entries(entry.total)
-                                .filter(([key]) => !shouldFilterMetrics || enabledMetricSet.has(key))
-                                .map(([key, value]) => {
-                                  const norm = entryDayCfg?.metrics?.[key]?.norm;
-                                  const num = parseMetricNumber(value);
-                                  const hasNorm = Boolean(norm && (norm.min !== undefined || norm.max !== undefined));
-                                  const tooLow = hasNorm && num !== null && norm?.min !== undefined && num < norm.min;
-                                  const tooHigh = hasNorm && num !== null && norm?.max !== undefined && num > norm.max;
-                                  const ok = hasNorm && num !== null && !tooLow && !tooHigh;
-
-                                  return (
-                                    <div key={key} className={styles.gpsMetric}>
-                                      <span
-                                        className={styles.metricLabel}
-                                        title={getGpsMetricTooltip(key, (entry.provider || selectedProvider) as GPSProvider)}
-                                        data-tooltip={getGpsMetricTooltip(key, (entry.provider || selectedProvider) as GPSProvider)}
-                                      >
-                                        {key}:
-                                      </span>
-                                      <span className={styles.metricValue}>
-                                        {String(value)}
-                                        {hasNorm && (
-                                          <span
-                                            className={`${styles.metricNorm} ${
-                                              ok ? styles.metricNormOk : tooLow || tooHigh ? styles.metricNormBad : ""
-                                            }`}
-                                          >
-                                            Norma: {norm?.min ?? "—"}–{norm?.max ?? "—"}
-                                          </span>
-                                        )}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
+                              {Object.entries(entry.total).map(([key, value]) => (
+                                <div key={key} className={styles.gpsMetric}>
+                                  <span
+                                    className={styles.metricLabel}
+                                    title={getGpsMetricTooltip(key, (entry.provider || selectedProvider) as GPSProvider)}
+                                  >
+                                    {key}:
+                                  </span>
+                                  <span className={styles.metricValue}>{String(value)}</span>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )}
@@ -2336,25 +1326,32 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
                         return;
                       }
 
+                      const entriesWithId = gpsDataFromFirebase.filter((e) => e?.id);
+                      if (entriesWithId.length !== gpsDataFromFirebase.length) {
+                        setError("Część wpisów nie ma poprawnego ID dokumentu. Odśwież listę i spróbuj ponownie.");
+                        return;
+                      }
+
                       setIsLoadingGPSData(true);
                       setError(null);
 
                       try {
                         const db = getDB();
-                        const deletePromises = gpsDataFromFirebase.map(entry => 
+                        const deletePromises = entriesWithId.map((entry) =>
                           deleteDoc(doc(db, GPS_DATA_COLLECTION, entry.id))
                         );
-                        
+
                         await Promise.all(deletePromises);
                         console.log("Wszystkie dane GPS usunięte z Firebase");
 
                         // Odśwież dane
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        await new Promise((resolve) => setTimeout(resolve, 500));
                         const gpsData = await fetchGPSDataFromFirebase();
                         setGpsDataFromFirebase(gpsData);
                       } catch (err) {
                         console.error("Błąd podczas usuwania wszystkich danych GPS:", err);
-                        const errorMessage = err instanceof Error ? err.message : 'Błąd podczas usuwania danych GPS';
+                        const errorMessage =
+                          err instanceof Error ? err.message : "Błąd podczas usuwania danych GPS";
                         setError(errorMessage);
                       } finally {
                         setIsLoadingGPSData(false);

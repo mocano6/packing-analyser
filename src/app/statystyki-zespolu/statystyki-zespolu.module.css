@@ -2269,6 +2269,74 @@
   box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
 }
 
+/* Legenda mapy xG – nad filtrami */
+.xgMapLegend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-bottom: 12px;
+  padding: 8px 0;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.xgMapLegendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.xgMapLegendDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.xgMapLegendDot.hex {
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
+.xgMapLegendDot.goalRing {
+  border: 2px solid #90ee90;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+/* Legenda mapy wejść w PK – pod boiskiem */
+.pkMapLegend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-top: 12px;
+  padding: 8px 0;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.pkMapLegendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pkMapLegendLine {
+  width: 20px;
+  height: 3px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.pkMapLegendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .xgMapFilters {
   display: flex;
   flex-direction: column;

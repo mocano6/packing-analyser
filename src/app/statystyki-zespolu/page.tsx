@@ -6179,6 +6179,33 @@ export default function StatystykiZespoluPage() {
                       hideFlipButton={false}
                       hideInstructions={true}
                     />
+                    {/* Legenda mapy wejść w PK */}
+                    <div className={styles.pkMapLegend} role="img" aria-label="Legenda wejść w pole karne">
+                      <span className={styles.pkMapLegendItem}>
+                        <span className={styles.pkMapLegendLine} style={{ background: '#ef4444' }} />
+                        <span>Podanie</span>
+                      </span>
+                      <span className={styles.pkMapLegendItem}>
+                        <span className={styles.pkMapLegendLine} style={{ background: '#1e40af' }} />
+                        <span>Drybling</span>
+                      </span>
+                      <span className={styles.pkMapLegendItem}>
+                        <span className={styles.pkMapLegendLine} style={{ background: '#10b981' }} />
+                        <span>SFG</span>
+                      </span>
+                      <span className={styles.pkMapLegendItem}>
+                        <span className={styles.pkMapLegendDot} style={{ background: '#86efac', border: '1px solid #fff', boxSizing: 'border-box' }} />
+                        <span>Gol</span>
+                      </span>
+                      <span className={styles.pkMapLegendItem}>
+                        <span className={styles.pkMapLegendDot} style={{ background: '#111827', border: '1px solid #fff', boxSizing: 'border-box' }} />
+                        <span>Strzał</span>
+                      </span>
+                      <span className={styles.pkMapLegendItem}>
+                        <span className={styles.pkMapLegendDot} style={{ background: 'white', border: '1.5px solid #f59e0b', boxSizing: 'border-box' }} />
+                        <span>Regain (kropka)</span>
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -8095,6 +8122,29 @@ export default function StatystykiZespoluPage() {
                           hideToggleButton={true}
                         />
                       
+                      {/* Legenda mapy xG – nad filtrami */}
+                      <div className={styles.xgMapLegend} role="img" aria-label="Legenda mapy xG">
+                        <span className={styles.xgMapLegendItem}>
+                          <span className={styles.xgMapLegendDot} style={{ background: '#10b981' }} />
+                          <span>Niski xG</span>
+                        </span>
+                        <span className={styles.xgMapLegendItem}>
+                          <span className={styles.xgMapLegendDot} style={{ background: '#fbbf24' }} />
+                          <span>Średni xG</span>
+                        </span>
+                        <span className={styles.xgMapLegendItem}>
+                          <span className={styles.xgMapLegendDot} style={{ background: '#dc2626' }} />
+                          <span>Wysoki xG</span>
+                        </span>
+                        <span className={styles.xgMapLegendItem}>
+                          <span className={`${styles.xgMapLegendDot} ${styles.goalRing}`} />
+                          <span>Gol</span>
+                        </span>
+                        <span className={styles.xgMapLegendItem}>
+                          <span className={`${styles.xgMapLegendDot} ${styles.hex}`} style={{ background: '#94a3b8' }} />
+                          <span>Stały fragment</span>
+                        </span>
+                      </div>
                       {/* Filtry na mapie - pod mapą */}
                       <div className={styles.xgMapFilters}>
                         <div className={styles.xgMapFilterGroup}>

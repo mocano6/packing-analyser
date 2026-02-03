@@ -193,15 +193,14 @@ export default function Page() {
     const isExternalWindowOpen = externalWindow && !externalWindow.closed;
     
     if (isExternalWindowOpen) {
-      // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
-      externalWindow.postMessage({
-        type: 'GET_CURRENT_TIME'
-      }, '*');
-      
-      // Czekaj na odpowiedź z zewnętrznego okna
+      try {
+        externalWindow.postMessage({ type: 'GET_CURRENT_TIME' }, '*');
+      } catch {
+        return 0;
+      }
       const timeFromExternal = await new Promise<number | null>((resolve) => {
         const handleTimeResponse = (event: MessageEvent) => {
-          if (event.data.type === 'CURRENT_TIME_RESPONSE' || event.data.type === 'VIDEO_TIME_RESPONSE') {
+          if (event.data?.type === 'CURRENT_TIME_RESPONSE' || event.data?.type === 'VIDEO_TIME_RESPONSE') {
             window.removeEventListener('message', handleTimeResponse);
             resolve(event.data.time);
           }
@@ -209,10 +208,9 @@ export default function Page() {
         window.addEventListener('message', handleTimeResponse);
         setTimeout(() => {
           window.removeEventListener('message', handleTimeResponse);
-          resolve(null); // timeout
+          resolve(null);
         }, 2000);
       });
-      
       if (timeFromExternal !== null && timeFromExternal !== undefined && timeFromExternal >= 0) {
         return timeFromExternal;
       }
@@ -458,20 +456,17 @@ export default function Page() {
 
   // Funkcja do otwierania ActionModal z zapisaniem czasu YouTube
   const openActionModalWithVideoTime = async () => {
-    // Sprawdź czy mamy otwarte zewnętrzne okno wideo - tylko jeśli jest NAPRAWDĘ otwarte
     const externalWindow = (window as any).externalVideoWindow;
     const isExternalWindowOpen = externalWindow && !externalWindow.closed;
-    
     if (isExternalWindowOpen) {
-      // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
-      externalWindow.postMessage({
-        type: 'GET_CURRENT_TIME'
-      }, '*');
-      
-      // Czekaj na odpowiedź z zewnętrznego okna
+      try {
+        externalWindow.postMessage({ type: 'GET_CURRENT_TIME' }, '*');
+      } catch {
+        // okno zamknięte lub cross-origin
+      }
       const waitForTime = new Promise<number | null>((resolve) => {
         const handleTimeResponse = (event: MessageEvent) => {
-          if (event.data.type === 'CURRENT_TIME_RESPONSE') {
+          if (event.data?.type === 'CURRENT_TIME_RESPONSE') {
             window.removeEventListener('message', handleTimeResponse);
             resolve(event.data.time);
           }
@@ -479,38 +474,27 @@ export default function Page() {
         window.addEventListener('message', handleTimeResponse);
         setTimeout(() => {
           window.removeEventListener('message', handleTimeResponse);
-          resolve(null); // null oznacza timeout
+          resolve(null);
         }, 1000);
       });
-      
       const time = await waitForTime;
-      
       if (time !== null && time >= 0) {
-        // Cofnij czas o 10 sekund
         const rawTime = Math.max(0, time);
         const adjustedTime = Math.max(0, rawTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
         localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
       } else {
-        // Timeout - nie udało się pobrać czasu
         localStorage.setItem('tempVideoTimestamp', '0');
         localStorage.setItem('tempVideoTimestampRaw', '0');
       }
     } else {
-      // Spróbuj kilka razy pobrać czas (YouTube player może potrzebować czasu na załadowanie)
       let currentTime = 0;
       const maxAttempts = 5;
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         currentTime = await getActiveVideoTime();
-        if (currentTime > 0) {
-          break;
-        }
-        // Poczekaj 200ms przed kolejną próbą
-        if (attempt < maxAttempts - 1) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
+        if (currentTime > 0) break;
+        if (attempt < maxAttempts - 1) await new Promise(resolve => setTimeout(resolve, 200));
       }
-      
       if (currentTime > 0) {
         const rawTime = Math.max(0, currentTime);
         const adjustedTime = Math.max(0, rawTime - 10);
@@ -522,20 +506,17 @@ export default function Page() {
   };
 
   const openAcc8sModalWithVideoTime = async () => {
-    // Sprawdź czy mamy otwarte zewnętrzne okno wideo - tylko jeśli jest NAPRAWDĘ otwarte
     const externalWindow = (window as any).externalVideoWindow;
     const isExternalWindowOpen = externalWindow && !externalWindow.closed;
-    
     if (isExternalWindowOpen) {
-      // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
-      externalWindow.postMessage({
-        type: 'GET_CURRENT_TIME'
-      }, '*');
-      
-      // Czekaj na odpowiedź z zewnętrznego okna
+      try {
+        externalWindow.postMessage({ type: 'GET_CURRENT_TIME' }, '*');
+      } catch {
+        // okno zamknięte lub cross-origin
+      }
       const waitForTime = new Promise<number | null>((resolve) => {
         const handleTimeResponse = (event: MessageEvent) => {
-          if (event.data.type === 'CURRENT_TIME_RESPONSE') {
+          if (event.data?.type === 'CURRENT_TIME_RESPONSE') {
             window.removeEventListener('message', handleTimeResponse);
             resolve(event.data.time);
           }
@@ -543,20 +524,16 @@ export default function Page() {
         window.addEventListener('message', handleTimeResponse);
         setTimeout(() => {
           window.removeEventListener('message', handleTimeResponse);
-          resolve(null); // null oznacza timeout
+          resolve(null);
         }, 1000);
       });
-      
       const time = await waitForTime;
-      
       if (time !== null && time >= 0) {
-        // Cofnij czas o 10 sekund
         const rawTime = Math.max(0, time);
         const adjustedTime = Math.max(0, rawTime - 10);
         localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
         localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
       } else {
-        // Timeout - nie udało się pobrać czasu
         localStorage.setItem('tempVideoTimestamp', '0');
         localStorage.setItem('tempVideoTimestampRaw', '0');
       }
@@ -1209,15 +1186,14 @@ export default function Page() {
       const hasExternalVideoTime = externalVideoTime > 0;
       
       if (isExternalWindowOpen) {
-        // Wyślij wiadomość do zewnętrznego okna o pobranie aktualnego czasu
-        externalWindow.postMessage({
-          type: 'GET_CURRENT_TIME'
-        }, '*');
-        
-        // Czekaj na odpowiedź z zewnętrznego okna
+        try {
+          externalWindow.postMessage({ type: 'GET_CURRENT_TIME' }, '*');
+        } catch {
+          return null;
+        }
         const timeFromExternal = await new Promise<number | null>((resolve) => {
           const handleTimeResponse = (event: MessageEvent) => {
-            if (event.data.type === 'CURRENT_TIME_RESPONSE' || event.data.type === 'VIDEO_TIME_RESPONSE') {
+            if (event.data?.type === 'CURRENT_TIME_RESPONSE' || event.data?.type === 'VIDEO_TIME_RESPONSE') {
               window.removeEventListener('message', handleTimeResponse);
               resolve(event.data.time);
             }
@@ -1225,14 +1201,12 @@ export default function Page() {
           window.addEventListener('message', handleTimeResponse);
           setTimeout(() => {
             window.removeEventListener('message', handleTimeResponse);
-            resolve(null); // timeout
+            resolve(null);
           }, 2000);
         });
-        
         if (timeFromExternal === null || timeFromExternal === undefined) {
-        return null;
+          return null;
         }
-        
         currentVideoTime = timeFromExternal;
       } else if (youtubeVideoRef?.current) {
         try {
@@ -4072,11 +4046,11 @@ export default function Page() {
                 const externalWindow = (window as any).externalVideoWindow;
                 
                 if (isExternalWindowOpen && externalWindow && !externalWindow.closed) {
-                  // Wyślij wiadomość do zewnętrznego okna
-                  externalWindow.postMessage({
-                    type: 'SEEK_TO_TIME',
-                    time: timestamp
-                  }, '*');
+                  try {
+                    externalWindow.postMessage({ type: 'SEEK_TO_TIME', time: timestamp }, '*');
+                  } catch {
+                    await seekActiveVideo(timestamp);
+                  }
                 } else {
                   await seekActiveVideo(timestamp);
                 }
@@ -5845,11 +5819,11 @@ export default function Page() {
               const externalWindow = (window as any).externalVideoWindow;
               
               if (isExternalWindowOpen && externalWindow && !externalWindow.closed) {
-                // Wyślij wiadomość do zewnętrznego okna
-                externalWindow.postMessage({
-                  type: 'SEEK_TO_TIME',
-                  time: timestamp
-                }, '*');
+                try {
+                  externalWindow.postMessage({ type: 'SEEK_TO_TIME', time: timestamp }, '*');
+                } catch {
+                  await seekActiveVideo(timestamp);
+                }
               } else {
                 await seekActiveVideo(timestamp);
               }

@@ -135,23 +135,12 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
     
     if (isExternalWindowOpen) {
       try {
-        // Wyślij wiadomość do zewnętrznego okna (używamy window.location.origin dla bezpieczeństwa)
-        const targetOrigin = window.location.origin;
         externalWindow.postMessage({
           type: 'SEEK_TO_TIME',
           time: videoTimestamp
-        }, targetOrigin);
+        }, '*');
       } catch (error) {
-        console.error('Acc8sTable - błąd podczas wysyłania wiadomości do zewnętrznego okna:', error);
-        // Fallback - spróbuj z '*' jako origin
-        try {
-          externalWindow.postMessage({
-            type: 'SEEK_TO_TIME',
-            time: videoTimestamp
-          }, '*');
-        } catch (fallbackError) {
-          console.error('Acc8sTable - błąd również przy fallback:', fallbackError);
-        }
+        console.warn('Acc8sTable - nie udało się wysłać SEEK_TO_TIME do okna wideo (np. inna domena):', error);
       }
     } else if (youtubeVideoRef?.current) {
       try {

@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDB } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs, doc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
+import toast from "react-hot-toast";
 // Usunięto import funkcji synchronizacji - akcje są teraz tylko w matches
 import { getOppositeXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString, getZoneData } from '@/constants/xtValues';
 
@@ -881,15 +882,16 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       }
       
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Błąd podczas usuwania akcji:", error);
-      
-      // Obsługa błędu wewnętrznego stanu Firestore
-      await handleFirestoreError(error, getDB());
-      
-      // Pokaż użytkownikowi błąd
-      alert("Wystąpił błąd podczas usuwania akcji. Spróbuj ponownie.");
-      
+      await handleFirestoreError(error as Error, getDB());
+      const msg = error && typeof error === 'object' && 'code' in error ? String((error as { code?: string }).code) : '';
+      const errMsg = error instanceof Error ? error.message : String(error);
+      if (msg === 'permission-denied' || errMsg.includes('permission') || errMsg.includes('uprawnień')) {
+        toast.error("Brak uprawnień do usunięcia akcji. Sprawdź dostęp do zespołu tego meczu.");
+      } else {
+        toast.error("Wystąpił błąd podczas usuwania akcji. Spróbuj ponownie.");
+      }
       return false;
     }
   }, [matchInfo?.matchId, actions]);
