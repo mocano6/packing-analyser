@@ -8,26 +8,12 @@ import { db } from "@/lib/firebase";
 import {
   collection,
   doc,
-  getDoc,
   getDocs,
   setDoc,
   deleteDoc,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
 import styles from "./page.module.css";
-
-const CHANGELOG_META_PATH = "app_meta/changelog";
-
-export interface ChangelogEntry {
-  hash: string;
-  subject: string;
-  date: string;
-}
-
-export interface ChangelogData {
-  commits: ChangelogEntry[];
-  updatedAt?: string | null;
-}
 
 export type QuadrantId =
   | "urgent-important"
@@ -75,77 +61,6 @@ export default function AdminZadaniaPage() {
 
   const uid = user?.uid ?? null;
 
-  const [changelogCommits, setChangelogCommits] = useState<ChangelogEntry[]>([]);
-  const [changelogSource, setChangelogSource] = useState<"build" | "firestore">("build");
-  const [changelogLoading, setChangelogLoading] = useState(true);
-  const buildChangelogRef = React.useRef<ChangelogEntry[]>([]);
-
-  const loadChangelog = useCallback(async () => {
-    setChangelogLoading(true);
-    try {
-      const [buildRes, firestoreSnap] = await Promise.all([
-        fetch("/changelog.json").then((r) => (r.ok ? r.json() : { commits: [] })),
-        db ? getDoc(doc(db, CHANGELOG_META_PATH)) : Promise.resolve(null),
-      ]);
-      const buildList: ChangelogEntry[] = Array.isArray(buildRes?.commits)
-        ? buildRes.commits
-        : [];
-      buildChangelogRef.current = buildList;
-
-      const stored = firestoreSnap?.data?.();
-      const storedCommits: ChangelogEntry[] = Array.isArray(stored?.commits)
-        ? stored.commits
-        : [];
-
-      if (storedCommits.length > 0) {
-        setChangelogCommits(storedCommits);
-        setChangelogSource("firestore");
-      } else {
-        setChangelogCommits(buildList);
-        setChangelogSource("build");
-      }
-    } catch (e) {
-      console.error("Błąd ładowania changelogu:", e);
-      setChangelogCommits(buildChangelogRef.current);
-      setChangelogSource("build");
-    } finally {
-      setChangelogLoading(false);
-    }
-  }, []);
-
-  const saveChangelogToFirestore = useCallback(async () => {
-    if (!db) return;
-    const list = buildChangelogRef.current;
-    try {
-      await setDoc(doc(db, CHANGELOG_META_PATH), {
-        commits: list,
-        updatedAt: new Date().toISOString(),
-      });
-      setChangelogCommits(list);
-      setChangelogSource("firestore");
-      toast.success("Lista zmian zapisana.");
-    } catch (e) {
-      console.error("Błąd zapisu changelogu:", e);
-      toast.error("Nie udało się zapisać listy. Sprawdź reguły Firestore (app_meta/changelog).");
-    }
-  }, []);
-
-  const resetChangelog = useCallback(async () => {
-    if (!db) return;
-    try {
-      await setDoc(doc(db, CHANGELOG_META_PATH), {
-        commits: [],
-        updatedAt: null,
-      });
-      setChangelogCommits(buildChangelogRef.current);
-      setChangelogSource("build");
-      toast.success("Lista zresetowana. Wyświetlana jest lista z tego buildu.");
-    } catch (e) {
-      console.error("Błąd resetu changelogu:", e);
-      toast.error("Nie udało się zresetować listy.");
-    }
-  }, []);
-
   const loadTasks = useCallback(async () => {
     if (!db || !uid) {
       setTasksLoading(false);
@@ -182,10 +97,6 @@ export default function AdminZadaniaPage() {
     }
     loadTasks();
   }, [uid, isAuthenticated, loadTasks]);
-
-  useEffect(() => {
-    if (isAdmin) loadChangelog();
-  }, [isAdmin, loadChangelog]);
 
   const persistTask = useCallback(
     async (task: EisenhowerTask) => {
@@ -467,51 +378,6 @@ export default function AdminZadaniaPage() {
           </div>
         ))}
       </div>
-
-      <section className={styles.changelogSection} aria-labelledby="changelog-heading">
-        <h2 id="changelog-heading" className={styles.changelogTitle}>
-          Zmiany od ostatniego merge (main)
-        </h2>
-        <p className={styles.changelogDesc}>
-          Lista commitów od ostatniej aktualizacji main. Zapisana lista w Firebase ma pierwszeństwo nad listą z buildu.
-        </p>
-        {changelogLoading ? (
-          <p className={styles.changelogLoading}>Ładowanie listy…</p>
-        ) : (
-          <>
-            <div className={styles.changelogActions}>
-              <button
-                type="button"
-                className={styles.changelogButton}
-                onClick={saveChangelogToFirestore}
-                disabled={buildChangelogRef.current.length === 0}
-              >
-                Zapisz listę z tego buildu
-              </button>
-              <button
-                type="button"
-                className={styles.changelogResetButton}
-                onClick={resetChangelog}
-              >
-                Reset listy
-              </button>
-            </div>
-            {changelogCommits.length === 0 ? (
-              <p className={styles.changelogEmpty}>Brak commitów od ostatniego merge z main.</p>
-            ) : (
-              <ul className={styles.changelogList} role="list">
-                {changelogCommits.map((entry) => (
-                  <li key={`${entry.hash}-${entry.date}`} className={styles.changelogItem}>
-                    <code className={styles.changelogHash}>{entry.hash}</code>
-                    <span className={styles.changelogSubject}>{entry.subject}</span>
-                    <span className={styles.changelogDate}>{entry.date}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-      </section>
     </div>
   );
 }
