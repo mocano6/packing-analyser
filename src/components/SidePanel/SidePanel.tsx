@@ -123,6 +123,10 @@ const SidePanel: React.FC<SidePanelProps> = ({
                 <span className={styles.icon}>⚙️</span>
                 <span>Panel administratora</span>
               </Link>
+              <Link href="/admin/zadania" className={styles.menuItem}>
+                <span className={styles.icon}>✅</span>
+                <span>Zadania</span>
+              </Link>
             </div>
           )}
 

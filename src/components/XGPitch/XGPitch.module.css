@@ -291,15 +291,15 @@
 
 /* Strzał z głowy – bez zmiany kształtu (kółko), trójkąt cofnięty – liczba xG była zakryta */
 
-/* Strzał ze stałego fragmentu – sześciokąt */
+/* Strzał ze stałego fragmentu – foremny sześciokąt (flat top/bottom, proporcja √3/2) */
 .shotMarker.isSetPiece {
   border-radius: 0;
-  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
 }
 
 .shotMarker.isSetPiece .shotInner {
   border-radius: 0;
-  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
 }
 
 /* Gol + sześciokąt: ramka widoczna dookoła (border jest obcinany przez clip-path, więc używamy wrappera z paddingiem) */
@@ -314,7 +314,7 @@
   width: 100%;
   height: 100%;
   border-radius: 0;
-  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
   display: flex;
   align-items: center;
   justify-content: center;

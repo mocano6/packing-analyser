@@ -8,7 +8,7 @@ import {
   collection, getDocs, addDoc, updateDoc, deleteDoc, 
   doc, query, where, orderBy, writeBatch, getDoc, setDoc
 } from "firebase/firestore";
-import { handleFirestoreError, resetFirestoreConnection } from "@/utils/firestoreErrorHandler";
+import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
 // Usunięto import synchronizacji - minuty są teraz tylko w matches
@@ -23,6 +23,8 @@ declare global {
 // Klucz dla localStorage
 const LOCAL_MATCHES_CACHE_KEY = 'packing_matches_cache';
 const PERMISSION_CHECK_TTL_MS = 60 * 1000;
+const OFFLINE_TOAST_MESSAGE =
+  "Brak połączenia. Dane zapisują się lokalnie i zostaną wysłane do bazy po powrocie internetu.";
 
 // Funkcja do generowania unikalnych ID
 function generateId() {
@@ -113,6 +115,7 @@ export function useMatchInfo() {
   const [error, setError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const offlineToastShownRef = useRef(false);
   
   // Referencja do lokalnego cache'u
   const localCacheRef = useRef<MatchesCache>({
@@ -341,7 +344,10 @@ export function useMatchInfo() {
                 localStorage.setItem('firestore_offline_mode', 'true');
               }
               
-              notifyUser("Aplikacja działa w trybie offline z lokalnym cache.", "info");
+              if (!offlineToastShownRef.current) {
+                notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+                offlineToastShownRef.current = true;
+              }
               
               // Zwracamy dane z cache zamiast rzucać wyjątek
               const cachedMatches = localCacheRef.current.data;
@@ -386,7 +392,10 @@ export function useMatchInfo() {
           localStorage.setItem('firestore_offline_mode', 'true');
         }
         
-        notifyUser("Aplikacja działa w trybie offline z lokalnym cache.", "info");
+        if (!offlineToastShownRef.current) {
+          notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+          offlineToastShownRef.current = true;
+        }
       }
       
       // W przypadku błędu, używamy danych z cache
@@ -497,7 +506,10 @@ export function useMatchInfo() {
                     localStorage.setItem('firestore_offline_mode', 'true');
                   }
                   
-                  notifyUser("Wykryto tryb offline. Aplikacja działa z lokalnym cache.", "info");
+                  if (!offlineToastShownRef.current) {
+                    notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+                    offlineToastShownRef.current = true;
+                  }
                   
                   return null;
                 }
@@ -561,7 +573,10 @@ export function useMatchInfo() {
             // Dodajemy rozszerzoną obsługę błędów
             if (String(error).includes("client is offline") || String(error).includes("Failed to get document because the client is offline")) {
               // Wykryto tryb offline. Przełączam aplikację na tryb lokalnego cache.
-              notifyUser("Aplikacja działa w trybie offline z lokalnym cache.", "info");
+              if (!offlineToastShownRef.current) {
+                notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+                offlineToastShownRef.current = true;
+              }
               setIsOfflineMode(true);
               
               // Zapisz status offline do localStorage
@@ -570,10 +585,16 @@ export function useMatchInfo() {
               }
             } 
             else if (String(error).includes("FirebaseError: [code=unavailable]")) {
-              notifyUser("Serwer Firebase jest niedostępny. Działamy w trybie offline z lokalnym cache.", "info");
+              if (!offlineToastShownRef.current) {
+                notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+                offlineToastShownRef.current = true;
+              }
               setIsOfflineMode(true);
             } else if (String(error).includes("permission") || String(error).includes("auth/") || String(error).includes("Missing or insufficient permissions")) {
-              notifyUser("Problem z autoryzacją lub uprawnieniami Firebase. Działamy w trybie offline.", "info");
+              if (!offlineToastShownRef.current) {
+                notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+                offlineToastShownRef.current = true;
+              }
               setIsOfflineMode(true);
               
               // Dodatkowe logowanie diagnostyczne
@@ -584,7 +605,10 @@ export function useMatchInfo() {
                 localStorage.setItem('firestore_offline_mode', 'true');
               }
             } else if (String(error).includes("Failed to fetch") || String(error).includes("NetworkError")) {
-              notifyUser("Problem z połączeniem sieciowym. Działamy w trybie offline z lokalnym cache.", "info");
+              if (!offlineToastShownRef.current) {
+                notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+                offlineToastShownRef.current = true;
+              }
               setIsOfflineMode(true);
             } else {
               setError(`Błąd podczas synchronizacji: ${String(error).slice(0, 100)}...`);
@@ -597,7 +621,10 @@ export function useMatchInfo() {
           
           if (String(permissionError).includes("client is offline") || String(permissionError).includes("Failed to get document because the client is offline")) {
             // Klient jest offline - pomijam synchronizację z Firebase
-            notifyUser("Wykryto tryb offline. Działamy z lokalną pamięcią podręczną.", "info");
+            if (!offlineToastShownRef.current) {
+              notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+              offlineToastShownRef.current = true;
+            }
             setIsOfflineMode(true);
             
             // Zapisz informację o trybie offline do localStorage
@@ -608,7 +635,10 @@ export function useMatchInfo() {
           else if (String(permissionError).includes("permission") || 
               String(permissionError).includes("auth/") || 
               String(permissionError).includes("Missing or insufficient permissions")) {
-            notifyUser("Wykryto problem z uprawnieniami do bazy danych. Przełączam na tryb offline.", "info");
+            if (!offlineToastShownRef.current) {
+              notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+              offlineToastShownRef.current = true;
+            }
             setIsOfflineMode(true);
             
             // Zapisz informację o trybie offline do localStorage
@@ -627,7 +657,10 @@ export function useMatchInfo() {
       // Sprawdzamy, czy to błąd związany z trybem offline
       if (String(err).includes("client is offline") || String(err).includes("Failed to get document because the client is offline")) {
         // Klient jest offline - przełączam na tryb offline
-        notifyUser("Wykryto tryb offline. Działamy z lokalnym cache.", "info");
+        if (!offlineToastShownRef.current) {
+          notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+          offlineToastShownRef.current = true;
+        }
         setIsOfflineMode(true);
         
         // Zapisz informację o trybie offline do localStorage
@@ -640,7 +673,10 @@ export function useMatchInfo() {
       else if (String(err).includes("permission") || 
           String(err).includes("auth/") || 
           String(err).includes("Missing or insufficient permissions")) {
-        notifyUser("Krytyczny błąd uprawnień. Działamy w trybie offline.", "error");
+        if (!offlineToastShownRef.current) {
+          notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+          offlineToastShownRef.current = true;
+        }
         setIsOfflineMode(true);
         
         // Zapisz informację o trybie offline do localStorage
@@ -708,7 +744,10 @@ export function useMatchInfo() {
       // Sprawdzamy, czy to błąd związany z trybem offline
       if (String(error).includes("client is offline") || String(error).includes("Failed to get document because the client is offline")) {
         console.warn("📴 Wykryto tryb offline podczas próby odświeżenia danych");
-        notifyUser("Wykryto tryb offline. Odświeżenie danych z serwera jest niemożliwe.", "info");
+        if (!offlineToastShownRef.current) {
+          notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+          offlineToastShownRef.current = true;
+        }
         setIsOfflineMode(true);
         
         // Zapisz informację o trybie offline do localStorage
@@ -800,7 +839,10 @@ export function useMatchInfo() {
           // Sprawdzamy, czy błąd dotyczy trybu offline
           if (String(firebaseError).includes("client is offline") || String(firebaseError).includes("Failed to get document because the client is offline")) {
             console.warn("📴 Wykryto tryb offline podczas zapisu. Dane zostały zapisane tylko lokalnie.");
-            notifyUser("Mecz zapisany lokalnie. Synchronizacja nastąpi po przywróceniu połączenia.", "info");
+            if (!offlineToastShownRef.current) {
+              notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+              offlineToastShownRef.current = true;
+            }
             setIsOfflineMode(true);
             
             // Zapisz informację o trybie offline do localStorage
@@ -835,7 +877,10 @@ export function useMatchInfo() {
       // Sprawdzamy, czy błąd dotyczy trybu offline
       if (String(error).includes("client is offline") || String(error).includes("Failed to get document because the client is offline")) {
         console.warn("📴 Wykryto tryb offline podczas operacji. Przełączam na tryb lokalny.");
-        notifyUser("Aplikacja działa w trybie offline. Dane zostały zapisane lokalnie.", "info");
+        if (!offlineToastShownRef.current) {
+          notifyUser(OFFLINE_TOAST_MESSAGE, "info");
+          offlineToastShownRef.current = true;
+        }
         setIsOfflineMode(true);
         
         // Zapisz informację o trybie offline do localStorage

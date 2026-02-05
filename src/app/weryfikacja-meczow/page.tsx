@@ -591,6 +591,27 @@ export default function WeryfikacjaMeczow() {
                       <span className={`${styles.status} ${match.packing.isVerified ? styles.verified : styles.unverified}`}>
                         {match.packing.isVerified ? '✅' : '❌'}
                       </span>
+                      {(() => {
+                        const pos = match.matchData?.possession;
+                        const p1Team = pos?.teamFirstHalf ?? null;
+                        const p1Opp = pos?.opponentFirstHalf ?? null;
+                        const p2Team = pos?.teamSecondHalf ?? null;
+                        const p2Opp = pos?.opponentSecondHalf ?? null;
+                        const hasPossession = [p1Team, p1Opp, p2Team, p2Opp].some(v => v != null && v !== undefined);
+                        if (!hasPossession) {
+                          return <div className={styles.possessionRow}>Posiadanie: brak danych</div>;
+                        }
+                        const fmt = (v: number | null | undefined) => (v != null ? v.toFixed(1) : '–');
+                        const isLow = (v: number | null | undefined) => v != null && v < 1;
+                        const wrapLow = (v: number | null | undefined, label: string) =>
+                          isLow(v) ? <span className={styles.possessionLow}>{label}</span> : label;
+                        return (
+                          <div className={styles.possessionRow}>
+                            <div>Posiadanie P1: zespół {wrapLow(p1Team, fmt(p1Team))} min, przeciwnik {wrapLow(p1Opp, fmt(p1Opp))} min</div>
+                            <div>Posiadanie P2: zespół {wrapLow(p2Team, fmt(p2Team))} min, przeciwnik {wrapLow(p2Opp, fmt(p2Opp))} min</div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </td>
                   <td 

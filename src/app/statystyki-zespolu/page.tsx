@@ -6086,6 +6086,20 @@ export default function StatystykiZespoluPage() {
                       <span className={styles.valueSecondary}>({pkEntriesSideStats.total.toFixed(1)} / 90 min)</span>
                     </span>
                   </div>
+                  {selectedMatchInfo?.matchData?.possession && (() => {
+                    const pos = selectedMatchInfo.matchData!.possession!;
+                    const isOurTeamHome = selectedMatchInfo.team === selectedTeam;
+                    const ourPossessionMin = (isOurTeamHome ? (pos.teamFirstHalf ?? 0) + (pos.teamSecondHalf ?? 0) : (pos.opponentFirstHalf ?? 0) + (pos.opponentSecondHalf ?? 0));
+                    const pkPerMinPossession = ourPossessionMin > 0 ? (pkEntriesSideStats.total / ourPossessionMin) : null;
+                    return pkPerMinPossession !== null ? (
+                      <div className={styles.detailsRow}>
+                        <span className={styles.detailsLabel}>WEJŚCIA W PK/MIN POSIADANIA ({teamsObject[selectedTeam]?.name ?? selectedTeam}):</span>
+                        <span className={styles.detailsValue}>
+                          <span className={styles.valueMain}>{pkPerMinPossession.toFixed(2)}</span>
+                        </span>
+                      </div>
+                    ) : null;
+                  })()}
                   <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}>GOLE:</span>
                     <span className={styles.detailsValue}><span className={styles.valueMain}>{pkEntriesSideStats.goals}</span></span>
@@ -6095,7 +6109,7 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.detailsValue}><span className={styles.valueMain}>{pkEntriesSideStats.shots}</span></span>
                   </div>
                   <div className={styles.detailsRow}>
-                    <span className={styles.detailsLabel}>PRZECHWYT:</span>
+                    <span className={styles.detailsLabel}>WEJŚCIA PO PRZECHWYCIE:</span>
                     <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span className={styles.valueMain}>{pkEntriesSideStats.regains}</span>
                       <span className={styles.valueSecondary}>({pkEntriesSideStats.regainPct.toFixed(1)}%)</span>
@@ -6376,6 +6390,20 @@ export default function StatystykiZespoluPage() {
                       <span className={styles.valueSecondary}> • ({teamStats.regainsPer90.toFixed(1)} / 90)</span>
                     </span>
                   </div>
+                  {selectedMatchInfo?.matchData?.possession && (() => {
+                    const pos = selectedMatchInfo.matchData!.possession!;
+                    const isOurTeamHome = selectedMatchInfo.team === selectedTeam;
+                    const opponentPossessionMin = (isOurTeamHome ? (pos.opponentFirstHalf ?? 0) + (pos.opponentSecondHalf ?? 0) : (pos.teamFirstHalf ?? 0) + (pos.teamSecondHalf ?? 0));
+                    const regainsPerMinOppPossession = opponentPossessionMin > 0 ? (teamRegainStats.totalRegains / opponentPossessionMin) : null;
+                    return regainsPerMinOppPossession !== null ? (
+                      <div className={styles.detailsRow}>
+                        <span className={styles.detailsLabel}>PRZECHWYTY/MIN POSIADANIA PRZECIWNIKA:</span>
+                        <span className={styles.detailsValue}>
+                          <span className={styles.valueMain}>{regainsPerMinOppPossession.toFixed(2)}</span>
+                        </span>
+                      </div>
+                    ) : null;
+                  })()}
                   <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}>PRZECHWYTY NA POŁOWIE PRZECIWNIKA:</span>
                     <span className={styles.detailsValue}>
@@ -6888,6 +6916,21 @@ export default function StatystykiZespoluPage() {
                       })()}
                     </span>
                   </div>
+                  {selectedMatchInfo?.matchData?.possession && (() => {
+                    const pos = selectedMatchInfo.matchData!.possession!;
+                    const isOurTeamHome = selectedMatchInfo.team === selectedTeam;
+                    const ourPossessionMin = (isOurTeamHome ? (pos.teamFirstHalf ?? 0) + (pos.teamSecondHalf ?? 0) : (pos.opponentFirstHalf ?? 0) + (pos.opponentSecondHalf ?? 0));
+                    const filteredLosesCount = teamLosesStats.totalLosesOwnHalf + teamLosesStats.totalLosesOpponentHalf;
+                    const losesPerMinOurPossession = ourPossessionMin > 0 ? (filteredLosesCount / ourPossessionMin) : null;
+                    return losesPerMinOurPossession !== null ? (
+                      <div className={styles.detailsRow}>
+                        <span className={styles.detailsLabel}>STRATY/MIN POSIADANIA ({teamsObject[selectedTeam]?.name ?? selectedTeam}):</span>
+                        <span className={styles.detailsValue}>
+                          <span className={styles.valueMain}>{losesPerMinOurPossession.toFixed(2)}</span>
+                        </span>
+                      </div>
+                    ) : null;
+                  })()}
                   <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}><span className={styles.preserveCase}>xT</span> W ATAKU:</span>
                     <span className={styles.detailsValue}>
@@ -7927,21 +7970,21 @@ export default function StatystykiZespoluPage() {
                           <div className={styles.xgStatsSummary}>
                             <div className={styles.detailsSection}>
                               <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>NP XG:</span>
+                                <span className={styles.detailsLabel}>NP xG:</span>
                                 <span className={styles.detailsValue}>
                                   <span className={styles.valueMain}>{teamXGNoPenalty.toFixed(2)}</span>
                                   <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGNoPenalty.toFixed(2)}</span>
                                 </span>
                                 </div>
                               <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>XG:</span>
+                                <span className={styles.detailsLabel}>xG:</span>
                                 <span className={styles.detailsValue}>
                                   <span className={styles.valueMain}>{teamXG.toFixed(2)}</span>
                                   <span className={styles.valueSecondary}> • Przeciwnik: {opponentXG.toFixed(2)}</span>
                                 </span>
                                 </div>
                               <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>XG/STRZAŁ:</span>
+                                <span className={styles.detailsLabel}>xG/STRZAŁ:</span>
                                 <span className={styles.detailsValue}>
                                   <span 
                                     className={styles.valueMain}
@@ -7956,7 +7999,7 @@ export default function StatystykiZespoluPage() {
                                 </span>
                                 </div>
                               <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>XG OT:</span>
+                                <span className={styles.detailsLabel}>xG STRZAŁÓW CELNYCH:</span>
                                 <span className={styles.detailsValue}>
                                   <span className={styles.valueMain}>{teamXGOT.toFixed(2)}</span>
                                   <span className={styles.valueSecondary}> ({teamShotsOnTarget.length}/{teamShotsCount})</span>
@@ -7972,14 +8015,14 @@ export default function StatystykiZespoluPage() {
                                 </span>
                               </div>
                               <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>XG/MIN POSIADANIA:</span>
+                                <span className={styles.detailsLabel}>xG/MIN POSIADANIA:</span>
                                 <span className={styles.detailsValue}>
                                   <span className={styles.valueMain}>{teamXGPerMinPossession.toFixed(3)}</span>
                                   <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGPerMinPossession.toFixed(3)}</span>
                                 </span>
                                 </div>
                               <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>RÓŻNICA XG-BRAMKI:</span>
+                                <span className={styles.detailsLabel}>RÓŻNICA xG-BRAMKI:</span>
                                 <span className={styles.detailsValue}>
                                   <span 
                                     className={styles.valueMain}
@@ -7993,10 +8036,17 @@ export default function StatystykiZespoluPage() {
                                 </span>
                                 </div>
                               <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>XG ZABLOKOWANE:</span>
+                                <span className={styles.detailsLabel}>xG ZABLOKOWANE:</span>
                                 <span className={styles.detailsValue}>
                                   <span className={styles.valueMain}>{teamXGBlocked.toFixed(2)}</span>
                                   <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGBlocked.toFixed(2)}</span>
+                                </span>
+                              </div>
+                              <div className={styles.detailsRow}>
+                                <span className={styles.detailsLabel}>xG/MIN POSIADANIA ({teamsObject[selectedTeam]?.name ?? selectedTeam}):</span>
+                                <span className={styles.detailsValue}>
+                                  <span className={styles.valueMain}>{teamXGPerMinPossession.toFixed(3)}</span>
+                                  <span className={styles.valueSecondary}> • Przeciwnik: {opponentXGPerMinPossession.toFixed(3)}</span>
                                 </span>
                               </div>
                               <div className={styles.detailsRow}>
@@ -10034,16 +10084,19 @@ export default function StatystykiZespoluPage() {
                 {selectedMetric === 'xt' && 'xT'}
                 {selectedMetric === 'packing' && 'Packing'}
               </div>
-              {/* PxT/min posiadania dla 1. połowy */}
+              {/* PxT/min posiadania dla 1. połowy – ujednolicone z kafelkiem Łącznie; fallback na połowę łącznego posiadania */}
               {selectedMetric === 'pxt' && selectedMatchInfo?.matchData?.possession && (() => {
                 const isHome = selectedMatchInfo.isHome;
-                const teamPossession = isHome 
-                  ? (selectedMatchInfo.matchData.possession.teamFirstHalf || 0)
-                  : (selectedMatchInfo.matchData.possession.opponentFirstHalf || 0);
-                if (teamPossession > 0) {
+                const totalPossession = isHome
+                  ? ((selectedMatchInfo.matchData.possession.teamFirstHalf || 0) + (selectedMatchInfo.matchData.possession.teamSecondHalf || 0))
+                  : ((selectedMatchInfo.matchData.possession.opponentFirstHalf || 0) + (selectedMatchInfo.matchData.possession.opponentSecondHalf || 0));
+                const teamPossessionFirst = isHome
+                  ? (selectedMatchInfo.matchData.possession.teamFirstHalf ?? totalPossession / 2)
+                  : (selectedMatchInfo.matchData.possession.opponentFirstHalf ?? totalPossession / 2);
+                if (totalPossession > 0 && teamPossessionFirst > 0) {
                   return (
                     <div className={styles.statSubValue}>
-                      {(halfTimeStats.firstHalf.pxt / teamPossession).toFixed(3)} PxT/min posiadania
+                      {(halfTimeStats.firstHalf.pxt / teamPossessionFirst).toFixed(3)} PxT/min posiadania
                     </div>
                   );
                 }
@@ -10088,16 +10141,19 @@ export default function StatystykiZespoluPage() {
                 {selectedMetric === 'xt' && 'xT'}
                 {selectedMetric === 'packing' && 'Packing'}
               </div>
-              {/* PxT/min posiadania dla 2. połowy */}
+              {/* PxT/min posiadania dla 2. połowy – ujednolicone z kafelkiem Łącznie; fallback na połowę łącznego posiadania */}
               {selectedMetric === 'pxt' && selectedMatchInfo?.matchData?.possession && (() => {
                 const isHome = selectedMatchInfo.isHome;
-                const teamPossession = isHome 
-                  ? (selectedMatchInfo.matchData.possession.teamSecondHalf || 0)
-                  : (selectedMatchInfo.matchData.possession.opponentSecondHalf || 0);
-                if (teamPossession > 0) {
+                const totalPossession = isHome
+                  ? ((selectedMatchInfo.matchData.possession.teamFirstHalf || 0) + (selectedMatchInfo.matchData.possession.teamSecondHalf || 0))
+                  : ((selectedMatchInfo.matchData.possession.opponentFirstHalf || 0) + (selectedMatchInfo.matchData.possession.opponentSecondHalf || 0));
+                const teamPossessionSecond = isHome
+                  ? (selectedMatchInfo.matchData.possession.teamSecondHalf ?? totalPossession / 2)
+                  : (selectedMatchInfo.matchData.possession.opponentSecondHalf ?? totalPossession / 2);
+                if (totalPossession > 0 && teamPossessionSecond > 0) {
                   return (
                     <div className={styles.statSubValue}>
-                      {(halfTimeStats.secondHalf.pxt / teamPossession).toFixed(3)} PxT/min posiadania
+                      {(halfTimeStats.secondHalf.pxt / teamPossessionSecond).toFixed(3)} PxT/min posiadania
                     </div>
                   );
                 }

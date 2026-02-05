@@ -29,7 +29,6 @@ import ImportButton from "@/components/ImportButton/ImportButton";
 import { initializeTeams, checkTeamsCollection } from "@/utils/initializeTeams";
 import { useAuth } from "@/hooks/useAuth";
 import toast from 'react-hot-toast';
-import OfflineStatusBanner from "@/components/OfflineStatusBanner/OfflineStatusBanner";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { getDB } from "@/lib/firebase";
 import pitchHeaderStyles from "@/components/PitchHeader/PitchHeader.module.css";
@@ -3563,7 +3562,7 @@ export default function Page() {
 
   return (
     <div className={styles.container}>
-      <OfflineStatusBanner />
+      <OfflineStatus isOfflineMode={isOfflineMode} />
       <div className={styles.topHeader}>
         <div className={styles.headerControlsWrapper}>
           <div className={styles.selectorsGroup}>
@@ -3646,11 +3645,6 @@ export default function Page() {
             </div>
           </div>
           <div className={styles.controlsContainer}>
-            {isOfflineMode && (
-              <div className={styles.offlineBadge}>
-                Tryb offline 📴
-              </div>
-            )}
             <button 
               className={styles.addButton}
               onClick={openNewMatchModal}
@@ -5891,8 +5885,6 @@ export default function Page() {
           onImportError={handleImportError}
           onLogout={handleLogout}
         />
-
-        <OfflineStatus />
 
         {/* Przycisk scrollowania do wideo YouTube - fixed w prawym dolnym rogu */}
         {isVideoVisible && isVideoInternal && showScrollToVideoButton && (

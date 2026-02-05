@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Shot, Player, TeamInfo } from "@/types";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
+import { isInPenaltyAreaCanonical, isInOpponentPenaltyAreaCanonical } from "@/utils/pitchZones";
 import styles from "./ShotModal.module.css";
 
 export interface ShotModalProps {
@@ -67,6 +68,15 @@ const ShotModal: React.FC<ShotModalProps> = ({
     isFromPK: false,
   });
   const isEditMode = Boolean(editingShot);
+  const shotCoords = useMemo(
+    () => ({ x: editingShot?.x ?? x, y: editingShot?.y ?? y }),
+    [editingShot?.x, editingShot?.y, x, y]
+  );
+  const isShotInPenaltyArea = useMemo(() => {
+    return formData.teamContext === "defense"
+      ? isInOpponentPenaltyAreaCanonical(shotCoords)
+      : isInPenaltyAreaCanonical(shotCoords);
+  }, [formData.teamContext, shotCoords]);
   const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
   const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
@@ -403,12 +413,21 @@ const ShotModal: React.FC<ShotModalProps> = ({
         assistantId: (editingShot as any)?.assistantId || "",
         isControversial: editingShot.isControversial || false,
         previousShotId: editingShot.previousShotId || "",
-        isFromPK: (editingShot as any)?.isFromPK || false,
+        isFromPK:
+          (editingShot.teamContext === "defense"
+            ? isInOpponentPenaltyAreaCanonical(editingShot)
+            : isInPenaltyAreaCanonical(editingShot)) ||
+          (editingShot as any)?.isFromPK ||
+          false,
       });
       setControversyNote(editingShot.controversyNote || "");
     } else {
       const autoTeamContext = x < 50 ? "defense" : "attack";
       const autoTeamId = autoTeamContext === "defense" ? matchInfo?.opponent : matchInfo?.team;
+      const isFromPKByPosition =
+        autoTeamContext === "defense"
+          ? isInOpponentPenaltyAreaCanonical({ x, y })
+          : isInPenaltyAreaCanonical({ x, y });
       setFormData({
         playerId: "",
         minute: 1,
@@ -433,10 +452,10 @@ const ShotModal: React.FC<ShotModalProps> = ({
         assistantId: "",
         isControversial: false,
         previousShotId: "",
-        isFromPK: false,
+        isFromPK: isFromPKByPosition,
       });
     }
-  }, [isOpen, editingShot, editingShot?.id, x, xG, matchInfo]);
+  }, [isOpen, editingShot, editingShot?.id, x, y, xG, matchInfo]);
 
   // Ustaw domyślnego bramkarza gdy zmienia się na obronę
   useEffect(() => {
@@ -976,17 +995,19 @@ const ShotModal: React.FC<ShotModalProps> = ({
                 className={styles.input}
                 required
               />
-              <button
-                type="button"
-                className={`${styles.pkFlagButton} ${styles.tooltipTrigger} ${formData.isFromPK ? styles.pkFlagButtonActive : ""}`}
-                onClick={() => setFormData({ ...formData, isFromPK: !formData.isFromPK })}
-                aria-pressed={formData.isFromPK}
-                aria-label="Czy strzał był z pola karnego?"
-                data-tooltip="Czy strzał był z pola karnego?"
-                title="Czy strzał był z pola karnego?"
-              >
-                PK
-              </button>
+              {!isShotInPenaltyArea && (
+                <button
+                  type="button"
+                  className={`${styles.pkFlagButton} ${styles.tooltipTrigger} ${formData.isFromPK ? styles.pkFlagButtonActive : ""}`}
+                  onClick={() => setFormData({ ...formData, isFromPK: !formData.isFromPK })}
+                  aria-pressed={formData.isFromPK}
+                  aria-label="Czy strzał był z pola karnego?"
+                  data-tooltip="Czy strzał był z pola karnego?"
+                  title="Czy strzał był z pola karnego?"
+                >
+                  PK
+                </button>
+              )}
               {formData.teamContext === "attack" && (
                 <div className={styles.linePlayersCountInput}>
                   <label htmlFor="line-players-count">Zawodnik na linii strzału:</label>
@@ -1272,10 +1293,10 @@ const ShotModal: React.FC<ShotModalProps> = ({
             </div>
           </div>
 
-          {/* Wybór asystenta (tylko gdy gol) */}
-          {formData.shotType === "goal" && formData.teamContext === "attack" && (
+          {/* Asystent / ostatnie podanie – przy każdym typie strzału */}
+          {formData.teamContext === "attack" && (
             <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
-              <label>Asystent:</label>
+              <label>Asystent / Ostatnie podanie:</label>
               <div className={styles.playersGridContainer}>
                 <div className={styles.positionGroup}>
                   <div className={styles.playersGrid}>

@@ -1,210 +1,60 @@
-.offlineStatus {
-  position: fixed;
-  bottom: 1rem;
-  right: 1rem;
-  padding: 0.75rem;
-  background-color: rgba(255, 255, 255, 0.9);
-  border-radius: 0.5rem;
-  border: 1px solid #ddd;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.offlineBanner {
+  position: sticky;
+  top: 0.75rem;
   z-index: 1000;
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-width: 240px;
-  max-width: 90vw;
-  font-size: 0.875rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0.75rem 0;
+  border-radius: 0.75rem;
+  background-color: #fff4e6;
+  border: 1px solid #ffd8a8;
+  color: #7a4b00;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
 }
 
-.offlineStatus.error {
-  border-left-color: #e53e3e;
+.content {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  line-height: 1.4;
+  font-size: 0.9rem;
 }
 
-.offlineStatus.warning {
-  border-left-color: #ed8936;
-}
-
-.statusText {
+.message {
   font-weight: 500;
 }
 
-.resetButton {
-  background-color: #e03131 !important;
-  color: white !important;
-  border-color: #e03131 !important;
-  margin-top: 0.5rem;
-  width: 100%;
+.icon {
+  font-size: 1.2rem;
 }
 
-.resetButton:disabled {
-  background-color: #a0aec0;
-  cursor: not-allowed;
-}
-
-.errorContainer {
-  background-color: #fff5f5;
-  color: #e03131;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.statusContainer {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-}
-
-.statusIndicator {
-  width: 0.75rem;
-  height: 0.75rem;
-  border-radius: 50%;
-}
-
-.online {
-  background-color: #51cf66;
-  box-shadow: 0 0 0 2px rgba(81, 207, 102, 0.3);
-}
-
-.offline {
-  background-color: #ffa8a8;
-  box-shadow: 0 0 0 2px rgba(255, 168, 168, 0.3);
-}
-
-.forcedOffline {
-  background-color: #66d9e8;
-  box-shadow: 0 0 0 2px rgba(102, 217, 232, 0.3);
-}
-
-.actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.actions button {
-  padding: 0.375rem 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid #dee2e6;
-  background-color: white;
-  font-size: 0.75rem;
+.actionButton {
+  border: 1px solid #ffa94d;
+  background-color: #fff;
+  color: #c05600;
+  padding: 0.45rem 0.75rem;
+  border-radius: 0.6rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
-  flex: 1;
+  transition: background-color 0.2s, border-color 0.2s, transform 0.2s;
+  white-space: nowrap;
 }
 
-.actions button:hover:not(:disabled) {
-  background-color: #f8f9fa;
-  border-color: #ced4da;
+.actionButton:hover {
+  background-color: #fff0dd;
+  border-color: #ff922b;
 }
 
-.actions button:active:not(:disabled) {
+.actionButton:active {
   transform: translateY(1px);
 }
 
-.actions button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.testButton, .reloadButton {
-  color: #1864ab;
-}
-
-.syncButton {
-  background-color: #1864ab !important;
-  color: white !important;
-  border-color: #1864ab !important;
-}
-
-.offlineButton {
-  background-color: #1098ad !important;
-  color: white !important;
-  border-color: #1098ad !important;
-}
-
-.onlineButton {
-  background-color: #51cf66 !important;
-  color: white !important;
-  border-color: #51cf66 !important;
-}
-
-.offlineIndicator, 
-.forcedOfflineIndicator {
-  padding: 0.5rem;
-  border-radius: 0.375rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.offlineIndicator {
-  background-color: #fff3bf;
-  color: #e67700;
-}
-
-.forcedOfflineIndicator {
-  background-color: #e3fafc;
-  color: #1098ad;
-}
-
-.errorMessage {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.icon {
-  font-size: 1.25rem;
-}
-
-.networkButton {
-  background-color: rgba(255, 255, 255, 0.3);
-  border: none;
-  border-radius: 4px;
-  color: white;
-  padding: 4px 8px;
-  margin-left: 10px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: background-color 0.3s;
-}
-
-.networkButton:hover {
-  background-color: rgba(255, 255, 255, 0.4);
-}
-
-.networkButton:active {
-  background-color: rgba(255, 255, 255, 0.5);
-}
-
-.reloadButton {
-  background-color: white;
-  color: #d32f2f;
-  border: none;
-  border-radius: 4px;
-  padding: 6px 12px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: all 0.3s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.reloadButton:hover {
-  background-color: #f5f5f5;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-}
-
-@media (max-width: 600px) {
-  .offlineStatus {
-    padding: 6px 10px;
-    font-size: 12px;
-  }
-  
-  .errorContainer {
+@media (max-width: 720px) {
+  .offlineBanner {
     flex-direction: column;
-    gap: 5px;
+    align-items: flex-start;
   }
-} 
+}

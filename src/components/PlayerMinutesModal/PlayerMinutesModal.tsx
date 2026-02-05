@@ -3,47 +3,9 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { PlayerMinutesModalProps, PlayerMinutes } from "@/types";
 import styles from "./PlayerMinutesModal.module.css";
+import { POSITIONS, getDefaultPosition } from "@/constants/positions";
 import { TEAMS } from "@/constants/teams";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
-
-// Lista pozycji do wyboru - taka sama jak w PlayerModal
-const POSITIONS = [
-  { value: "GK", label: "Bramkarz (GK)" },
-  { value: "CB", label: "Środkowy obrońca (CB)" },
-  { value: "DM", label: "Defensywny pomocnik (DM)" },
-  { value: "AM", label: "Ofensywny pomocnik (AM)" },
-  { value: "LW", label: "Lewy skrzydłowy (LW)" },
-  { value: "RW", label: "Prawy skrzydłowy (RW)" },
-  { value: "ST", label: "Napastnik (ST)" },
-];
-
-// Mapowanie starych pozycji na nowe (dla kompatybilności wstecznej)
-const mapOldPositionToNew = (position: string): string => {
-  const mapping: { [key: string]: string } = {
-    'LS': 'LW',  // Left Side -> Left Wing
-    'RS': 'RW',  // Right Side -> Right Wing
-    'CF': 'ST',  // Center Forward -> Striker
-    'CAM': 'AM', // Central Attacking Midfielder -> Attacking Midfielder
-    'CDM': 'DM', // Central Defensive Midfielder -> Defensive Midfielder
-  };
-  
-  return mapping[position] || position;
-};
-
-// Funkcja do określenia domyślnej pozycji w zależności od naturalnej pozycji zawodnika
-const getDefaultPosition = (playerPosition: string | undefined): string => {
-  if (!playerPosition) return "CB"; // Jeśli brak pozycji, domyślnie CB
-  
-  const normalizedPosition = mapOldPositionToNew(playerPosition);
-  
-  // Jeśli pozycja jest prawidłowa, zwróć ją
-  if (POSITIONS.some(pos => pos.value === normalizedPosition)) {
-    return normalizedPosition;
-  }
-  
-  // Fallback na CB jeśli pozycja nie została rozpoznana
-  return "CB";
-};
 
 const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
   isOpen,

@@ -5,6 +5,8 @@ import {
   getFirestore, 
   enableNetwork,
   disableNetwork,
+  enableIndexedDbPersistence,
+  enableMultiTabIndexedDbPersistence,
   Firestore
 } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
@@ -31,6 +33,19 @@ if (typeof window !== 'undefined') {
   
   // Uproszę konfigurację Firestore - używam standardowej inicjalizacji
   db = getFirestore(app);
+
+  // Włącz offline persistence (preferuj multi-tab, fallback do single-tab)
+  enableMultiTabIndexedDbPersistence(db).catch((error) => {
+    if (error?.code === 'failed-precondition') {
+      enableIndexedDbPersistence(db).catch((fallbackError) => {
+        console.warn('⚠️ Nie udało się włączyć offline persistence:', fallbackError);
+      });
+    } else if (error?.code === 'unimplemented') {
+      console.warn('⚠️ Przeglądarka nie wspiera offline persistence Firestore.');
+    } else {
+      console.warn('⚠️ Błąd włączania offline persistence Firestore:', error);
+    }
+  });
 
   // Inicjalizacja auth i storage
   auth = getAuth(app);

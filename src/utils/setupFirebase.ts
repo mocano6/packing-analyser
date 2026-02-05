@@ -1,8 +1,9 @@
 /**
- * Moduł inicjalizujący Firebase w aplikacji produkcyjnej
- * 
- * Ten plik zawiera logikę potrzebną do inicjalizacji Firebase,
- * wsparcia dla trybu offline i obsługi błędów połączenia.
+ * Moduł inicjalizujący Firebase w aplikacji produkcyjnej.
+ *
+ * Ten plik nie jest obecnie używany w runtime — inicjalizacja
+ * odbywa się w `src/lib/firebase.ts`. Zostawiamy go na później,
+ * aby nie duplikować inicjalizacji.
  */
 
 import { initializeApp, FirebaseApp, FirebaseOptions } from 'firebase/app';

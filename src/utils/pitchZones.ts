@@ -40,3 +40,23 @@ export function isInOpponent1TZoneCanonical(shot: ShotLike): boolean {
   return y >= 39 && y <= 61 && x >= 0 && x <= 10;
 }
 
+/**
+ * Pole karne (nasze) w kanonicznym układzie – strzał z pola karnego w kierunku bramki przeciwnika:
+ * - x: 84.3..100 (16.5 m od linii bramkowej = 15.7% długości)
+ * - y: 20.3..79.7 (40.32 m szerokości wyśrodkowane)
+ */
+export function isInPenaltyAreaCanonical(shot: ShotLike): boolean {
+  const { x, y } = getShotXYCanonical(shot);
+  return x >= 84.3 && x <= 100 && y >= 20.3 && y <= 79.7;
+}
+
+/**
+ * Pole karne przeciwnika w kanonicznym układzie – strzał przeciwnika z pola karnego (obrona):
+ * - x: 0..15.7 (lewa strona boiska, przed naszą bramką)
+ * - y: 20.3..79.7 (40.32 m szerokości wyśrodkowane)
+ */
+export function isInOpponentPenaltyAreaCanonical(shot: ShotLike): boolean {
+  const { x, y } = getShotXYCanonical(shot);
+  return x >= 0 && x <= 15.7 && y >= 20.3 && y <= 79.7;
+}
+

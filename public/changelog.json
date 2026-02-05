@@ -1,0 +1,15 @@
+{
+  "commits": [
+    {
+      "hash": "847472a",
+      "subject": "chore: update firestore rules, GPS section, stats pages and packing components",
+      "date": "2026-02-03 23:27:29 +0100"
+    },
+    {
+      "hash": "e7d8158",
+      "subject": "feat: dynamic team names in modals, ShotModal label to 'Zawodnik na linii strzału'",
+      "date": "2026-02-03 22:33:23 +0100"
+    }
+  ],
+  "generatedAt": "2026-02-05T23:20:58.867Z"
+}

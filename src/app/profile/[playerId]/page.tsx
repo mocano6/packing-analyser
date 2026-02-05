@@ -888,8 +888,10 @@ export default function PlayerDetailsPage() {
       return;
     }
 
+    // Gdy brak wyboru i użytkownik nie odznaczył „wszystkie” – domyślnie wybierz ostatni mecz na liście (najbliższy)
     if (!manuallyDeselectedAll && filteredSelected.length === 0) {
-      setSelectedMatchIds(availableMatchIds);
+      const lastMatchId = availableMatchIds[availableMatchIds.length - 1];
+      setSelectedMatchIds(lastMatchId ? [lastMatchId] : []);
     }
   }, [filteredMatchesBySeason, manuallyDeselectedAll, selectedMatchIds]);
 

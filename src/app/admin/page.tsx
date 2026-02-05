@@ -75,6 +75,14 @@ export default function AdminPage() {
       </section>
 
       <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Zadania</h2>
+        <p className={styles.sectionDesc}>Kwadrant Eisenhowera — zarządzaj zadaniami według pilności i ważności.</p>
+        <Link href="/admin/zadania" className={styles.linkButton}>
+          Otwórz zadania
+        </Link>
+      </section>
+
+      <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Czyszczenie PII</h2>
         <p className={styles.sectionDesc}>Skanuj matches, gps i archiwa, usuń pola PII z wybranych dokumentów (przed usunięciem tworzona jest kopia).</p>
         <Link href="/admin/cleanup" className={styles.linkButton}>
