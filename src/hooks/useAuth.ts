@@ -5,13 +5,25 @@ import { AuthService, AuthState } from "@/utils/authService";
 import { toast } from "react-hot-toast";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 
+export type UserRole = 'user' | 'admin' | 'coach' | 'player';
+export type UserStatus = 'pending' | 'approved';
+
+export interface RegistrationData {
+  firstName: string;
+  lastName: string;
+  birthYear?: number;
+}
+
 // Typ dla użytkownika z uprawnieniami do zespołów
 export interface UserData {
   email: string;
   allowedTeams: string[];
-  role: 'user' | 'admin' | 'coach';
+  role: UserRole;
+  status?: UserStatus;
+  linkedPlayerId?: string | null;
+  registrationData?: RegistrationData;
   createdAt: Date;
-  lastLogin: Date;
+  lastLogin: Date | null;
 }
 
 interface UseAuthReturnType {
@@ -20,7 +32,10 @@ interface UseAuthReturnType {
   user: any;
   userTeams: string[];
   isAdmin: boolean;
-  userRole: 'user' | 'admin' | 'coach' | null;
+  userRole: UserRole | null;
+  userStatus: UserStatus | null;
+  linkedPlayerId: string | null;
+  isPlayer: boolean;
   logout: () => void;
   refreshUserData: () => Promise<void>;
 }
@@ -35,7 +50,9 @@ export function useAuth(): UseAuthReturnType {
   });
   const [userTeams, setUserTeams] = useState<string[]>([]);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [userRole, setUserRole] = useState<'user' | 'admin' | 'coach' | null>(null);
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [userStatus, setUserStatus] = useState<UserStatus | null>(null);
+  const [linkedPlayerId, setLinkedPlayerId] = useState<string | null>(null);
   const [isUserDataLoading, setIsUserDataLoading] = useState<boolean>(false);
 
   const authService = AuthService.getInstance();
@@ -121,6 +138,8 @@ export function useAuth(): UseAuthReturnType {
       setUserTeams(userData.allowedTeams);
       setIsAdmin(userData.role === 'admin');
       setUserRole(userData.role);
+      setUserStatus(userData.status ?? null);
+      setLinkedPlayerId(userData.linkedPlayerId ?? null);
     }
     setIsUserDataLoading(false);
   };
@@ -143,6 +162,8 @@ export function useAuth(): UseAuthReturnType {
             setUserTeams(userData.allowedTeams);
             setIsAdmin(userData.role === 'admin');
             setUserRole(userData.role);
+            setUserStatus(userData.status ?? null);
+            setLinkedPlayerId(userData.linkedPlayerId ?? null);
           }
           if (isMounted) {
             setIsUserDataLoading(false);
@@ -154,6 +175,8 @@ export function useAuth(): UseAuthReturnType {
           setUserTeams([]);
           setIsAdmin(false);
           setUserRole(null);
+          setUserStatus(null);
+          setLinkedPlayerId(null);
           setIsUserDataLoading(false);
         }
       }
@@ -172,6 +195,8 @@ export function useAuth(): UseAuthReturnType {
       setUserTeams([]);
       setIsAdmin(false);
       setUserRole(null);
+      setUserStatus(null);
+      setLinkedPlayerId(null);
       setIsUserDataLoading(false);
       
       await authService.signOut();
@@ -191,6 +216,9 @@ export function useAuth(): UseAuthReturnType {
     userTeams,
     isAdmin,
     userRole,
+    userStatus,
+    linkedPlayerId,
+    isPlayer: userRole === 'player',
     logout,
     refreshUserData
   };

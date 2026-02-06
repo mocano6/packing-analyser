@@ -2195,6 +2195,16 @@
   font-size: 14px;
 }
 
+.selectorStaticValue {
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  font-size: 15px;
+  color: #111827;
+  font-weight: 600;
+}
+
 .selectorSelect {
   padding: 8px 12px;
   border: 1px solid #e0e0e0;

@@ -52,6 +52,7 @@ const PlayerTile = memo(function PlayerTile({
   // Obsługa edycji z klawiaturą
   const handleEditKeyDown = useCallback(
     (e: KeyboardEvent<HTMLButtonElement>) => {
+      if (!onEdit) return;
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         e.stopPropagation();
@@ -64,6 +65,7 @@ const PlayerTile = memo(function PlayerTile({
   // Obsługa usuwania z klawiaturą
   const handleDeleteKeyDown = useCallback(
     (e: KeyboardEvent<HTMLButtonElement>) => {
+      if (!onDelete) return;
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         e.stopPropagation();
@@ -129,30 +131,34 @@ const PlayerTile = memo(function PlayerTile({
       <div className={styles.playerContent}>
         <div className={styles.number}>{player.number}</div>
 
-        <button
-          className={styles.editBtn}
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(player.id);
-          }}
-          onKeyDown={handleEditKeyDown}
-          title="Edytuj"
-          aria-label={`Edytuj gracza: ${getPlayerLabel(player.id, playersIndex)}`}
-        >
-          ✎
-        </button>
-        <button
-          className={styles.deleteBtn}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(player.id);
-          }}
-          onKeyDown={handleDeleteKeyDown}
-          title="Usuń"
-          aria-label={`Usuń gracza: ${getPlayerLabel(player.id, playersIndex)}`}
-        >
-          ✕
-        </button>
+        {onEdit && (
+          <button
+            className={styles.editBtn}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(player.id);
+            }}
+            onKeyDown={handleEditKeyDown}
+            title="Edytuj"
+            aria-label={`Edytuj gracza: ${getPlayerLabel(player.id, playersIndex)}`}
+          >
+            ✎
+          </button>
+        )}
+        {onDelete && (
+          <button
+            className={styles.deleteBtn}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(player.id);
+            }}
+            onKeyDown={handleDeleteKeyDown}
+            title="Usuń"
+            aria-label={`Usuń gracza: ${getPlayerLabel(player.id, playersIndex)}`}
+          >
+            ✕
+          </button>
+        )}
 
         <div className={styles.playerInfo}>
           <div className={styles.name}>{getPlayerLabel(player.id, playersIndex)}</div>

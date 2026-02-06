@@ -5,4 +5,5 @@ import "../utils/pitchZones.test";
 import "../components/Tabs/tabShortcuts.test";
 import "../utils/timeFormat.test";
 import "../utils/playerUtils.test";
+import "../utils/playerMatching.test";
 

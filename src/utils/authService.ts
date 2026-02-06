@@ -236,17 +236,17 @@ export class AuthService {
   }
   
   // Rejestruje nowego użytkownika przez email i hasło
-  public async registerWithEmail(email: string, password: string): Promise<void> {
+  public async registerWithEmail(email: string, password: string): Promise<User> {
     await this.waitForInitialization();
     
     try {
       this.updateAuthState({ isLoading: true, error: null });
       
       const auth = getAuth();
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
       this.savePreferredAuthMode('email');
-
+      return userCredential.user;
     } catch (error) {
       const response = handleFirebaseError(error, 'rejestracja');
       

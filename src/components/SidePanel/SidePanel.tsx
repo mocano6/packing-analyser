@@ -14,7 +14,7 @@ interface SidePanelProps {
   actions: Action[];
   matchInfo: TeamInfo | null;
   isAdmin: boolean;
-  userRole?: 'user' | 'admin' | 'coach' | null;
+  userRole?: 'user' | 'admin' | 'coach' | 'player' | null;
   selectedTeam: string;
   onRefreshData: () => Promise<void>;
   onImportSuccess: (data: { players: Player[], actions: Action[], matchInfo: any }) => void;
@@ -36,6 +36,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const isPlayer = userRole === 'player';
 
   const handleRefreshClick = async () => {
     try {
@@ -87,24 +88,39 @@ const SidePanel: React.FC<SidePanelProps> = ({
           {/* Sekcja Statystyki */}
           <div className={styles.section}>
             <h4>📊 Statystyki</h4>
-            {userRole !== 'coach' && (
-              <Link href="/zawodnicy" className={styles.menuItem}>
-                <span className={styles.icon}>👥</span>
-                <span>Statystyki zawodników</span>
-              </Link>
+            {isPlayer ? (
+              <>
+                <Link href="/statystyki-zespolu" className={styles.menuItem}>
+                  <span className={styles.icon}>📊</span>
+                  <span>Statystyki zespołu</span>
+                </Link>
+                <Link href="/profile" className={styles.menuItem}>
+                  <span className={styles.icon}>👤</span>
+                  <span>Profil zawodnika</span>
+                </Link>
+              </>
+            ) : (
+              <>
+                {userRole !== 'coach' && (
+                  <Link href="/zawodnicy" className={styles.menuItem}>
+                    <span className={styles.icon}>👥</span>
+                    <span>Statystyki zawodników</span>
+                  </Link>
+                )}
+                <Link href="/statystyki-zespolu" className={styles.menuItem}>
+                  <span className={styles.icon}>📊</span>
+                  <span>Statystyki zespołu</span>
+                </Link>
+                <Link href={players.length > 0 ? "/profile" : "/zawodnicy"} className={styles.menuItem}>
+                  <span className={styles.icon}>👤</span>
+                  <span>Profil zawodnika</span>
+                </Link>
+                <Link href="/gps" className={styles.menuItem}>
+                  <span className={styles.icon}>📍</span>
+                  <span>Dane GPS</span>
+                </Link>
+              </>
             )}
-            <Link href="/statystyki-zespolu" className={styles.menuItem}>
-              <span className={styles.icon}>📊</span>
-              <span>Statystyki zespołu</span>
-            </Link>
-            <Link href={players.length > 0 ? "/profile" : "/zawodnicy"} className={styles.menuItem}>
-              <span className={styles.icon}>👤</span>
-              <span>Profil zawodnika</span>
-            </Link>
-            <Link href="/gps" className={styles.menuItem}>
-              <span className={styles.icon}>📍</span>
-              <span>Dane GPS</span>
-            </Link>
           </div>
 
           {/* Sekcja Admin (tylko dla adminów) */}
@@ -131,7 +147,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
           )}
 
           {/* Sekcja Narzędzia - ukryta dla coach */}
-          {userRole !== 'coach' && (
+          {!isPlayer && userRole !== 'coach' && (
             <div className={styles.section}>
               <h4>🔧 Narzędzia</h4>
               <button 

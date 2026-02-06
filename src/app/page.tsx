@@ -1629,7 +1629,7 @@ export default function Page() {
     }
   }, [actions, actionCategory, activeTab]);
 
-  const { isAuthenticated, isLoading, userTeams, isAdmin, userRole, logout } = useAuth();
+  const { isAuthenticated, isLoading, userTeams, isAdmin, userRole, userStatus, linkedPlayerId, isPlayer, logout } = useAuth();
 
   // Pobierz zespoły z Firebase
   useEffect(() => {
@@ -1676,6 +1676,11 @@ export default function Page() {
     return filtered;
   }, [userTeams, isAdmin, allTeams]);
 
+  const selectedTeamLabel = useMemo(() => {
+    const found = availableTeams.find(team => team.id === selectedTeam);
+    return found?.name || selectedTeam || "Brak zespołu";
+  }, [availableTeams, selectedTeam]);
+
   // Użyj tylko stanu ładowania z useAuth - nie dodawaj własnej logiki
   // Hook useAuth już obsługuje kombinację ładowania uwierzytelniania i danych użytkownika
   const isAppLoading = isLoading;
@@ -1719,6 +1724,14 @@ export default function Page() {
   }, [hookSelectedZone]);
 
   const filteredPlayers = useMemo(() => {
+    if (userRole === 'player') {
+      if (!linkedPlayerId) {
+        return [];
+      }
+      const linkedPlayer = players.find(player => player.id === linkedPlayerId);
+      return linkedPlayer ? [linkedPlayer] : [];
+    }
+
     // Filtruj graczy na podstawie wybranego zespołu z normalizacją
     const teamFiltered = players.filter(player => {
       // Normalizuj teams - upewnij się że to zawsze tablica
@@ -1736,7 +1749,7 @@ export default function Page() {
     
     // Sortowanie alfabetyczne po nazwisku
     return sortPlayersByLastName(teamFiltered);
-  }, [players, selectedTeam]);
+  }, [players, selectedTeam, userRole, linkedPlayerId]);
 
   // Posegregowani zawodnicy według pozycji dla rozwiniętej listy
   const playersByPosition = useMemo(() => {
@@ -3368,6 +3381,32 @@ export default function Page() {
     );
   }
 
+  if (isAuthenticated && userRole === 'player' && userStatus !== 'approved') {
+    return (
+      <div className={styles.container}>
+        <div className={styles.noTeamsAccess}>
+          <h2>⏳ Konto oczekuje na zatwierdzenie</h2>
+          <p>Twoje konto zostało utworzone, ale nie zostało jeszcze zatwierdzone przez administratora.</p>
+          <div className={styles.coachLinks}>
+            <Link href="/oczekuje" className={styles.coachLink}>
+              <span className={styles.coachLinkIcon}>ℹ️</span>
+              <div className={styles.coachLinkContent}>
+                <h3>Status konta</h3>
+                <p>Sprawdź informacje o zatwierdzeniu</p>
+              </div>
+            </Link>
+          </div>
+          <button 
+            onClick={handleLogout}
+            className={styles.logoutButton}
+          >
+            Wyloguj się
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Sprawdź czy użytkownik ma dostęp do jakichkolwiek zespołów
   if (isAuthenticated && !isAdmin && (!userTeams || userTeams.length === 0)) {
     return (
@@ -3386,8 +3425,8 @@ export default function Page() {
     );
   }
 
-  // Dla coach - pokaż stronę z linkami do statystyk (bez Statystyk zawodników)
-  if (isAuthenticated && userRole === 'coach') {
+  // Dla coach i player (zatwierdzonego) – tylko widok wyboru: Statystyki zespołu i Profil zawodnika (bez edycji, bez listy meczów)
+  if (isAuthenticated && (userRole === 'coach' || (userRole === 'player' && userStatus === 'approved'))) {
     return (
       <div className={styles.container}>
         <div className={styles.coachWelcome}>
@@ -3405,7 +3444,7 @@ export default function Page() {
               <span className={styles.coachLinkIcon}>👤</span>
               <div className={styles.coachLinkContent}>
                 <h3>Profil zawodnika</h3>
-                <p>Szczegółowy profil wybranego zawodnika</p>
+                <p>{userRole === 'player' ? 'Twój profil i statystyki' : 'Szczegółowy profil wybranego zawodnika'}</p>
               </div>
             </Link>
           </div>
@@ -3566,15 +3605,22 @@ export default function Page() {
       <div className={styles.topHeader}>
         <div className={styles.headerControlsWrapper}>
           <div className={styles.selectorsGroup}>
-            <TeamsSelector
-              selectedTeam={selectedTeam}
-              onChange={setSelectedTeam}
-              className={styles.teamDropdown}
-              availableTeams={availableTeams}
-              showLabel={true}
-              isExpanded={isTeamsSelectorExpanded}
-              onToggle={() => setIsTeamsSelectorExpanded(!isTeamsSelectorExpanded)}
-            />
+            {isPlayer ? (
+              <div className={styles.teamStatic}>
+                <span className={styles.teamStaticLabel}>Zespół:</span>
+                <span className={styles.teamStaticValue}>{selectedTeamLabel}</span>
+              </div>
+            ) : (
+              <TeamsSelector
+                selectedTeam={selectedTeam}
+                onChange={setSelectedTeam}
+                className={styles.teamDropdown}
+                availableTeams={availableTeams}
+                showLabel={true}
+                isExpanded={isTeamsSelectorExpanded}
+                onToggle={() => setIsTeamsSelectorExpanded(!isTeamsSelectorExpanded)}
+              />
+            )}
             {selectedSeason && (
               <SeasonSelector
                 selectedSeason={selectedSeason}
@@ -3589,9 +3635,9 @@ export default function Page() {
                 players={filteredPlayers}
                 selectedPlayerId={selectedPlayerId}
                 onPlayerSelect={setSelectedPlayerId}
-                onAddPlayer={() => setIsModalOpen(true)}
-                onEditPlayer={handleEditPlayer}
-                onDeletePlayer={onDeletePlayer}
+                onAddPlayer={isPlayer ? undefined : () => setIsModalOpen(true)}
+                onEditPlayer={isPlayer ? undefined : handleEditPlayer}
+                onDeletePlayer={isPlayer ? undefined : onDeletePlayer}
                 isExpanded={isPlayersGridExpanded}
                 onToggle={() => setIsPlayersGridExpanded(!isPlayersGridExpanded)}
               />
@@ -3644,14 +3690,16 @@ export default function Page() {
               </div>
             </div>
           </div>
-          <div className={styles.controlsContainer}>
-            <button 
-              className={styles.addButton}
-              onClick={openNewMatchModal}
-            >
-              + Dodaj mecz
-            </button>
-          </div>
+          {!isPlayer && (
+            <div className={styles.controlsContainer}>
+              <button 
+                className={styles.addButton}
+                onClick={openNewMatchModal}
+              >
+                + Dodaj mecz
+              </button>
+            </div>
+          )}
         </div>
         <Instructions />
       </div>
@@ -3661,14 +3709,16 @@ export default function Page() {
             <div className={styles.playersGridHeader}>
               <h3 className={styles.playersGridTitle}>Zawodnicy</h3>
               <div className={styles.playersGridHeaderActions}>
-                <button
-                  className={styles.addPlayerButton}
-                  onClick={() => setIsModalOpen(true)}
-                  aria-label="Dodaj nowego zawodnika"
-                  title="Dodaj nowego zawodnika"
-                >
-                  +
-                </button>
+                {!isPlayer && (
+                  <button
+                    className={styles.addPlayerButton}
+                    onClick={() => setIsModalOpen(true)}
+                    aria-label="Dodaj nowego zawodnika"
+                    title="Dodaj nowego zawodnika"
+                  >
+                    +
+                  </button>
+                )}
                 <button
                   className={styles.closePlayersGridButton}
                   onClick={() => setIsPlayersGridExpanded(false)}
@@ -3693,8 +3743,8 @@ export default function Page() {
                           player={player}
                           isSelected={player.id === selectedPlayerId}
                           onSelect={setSelectedPlayerId}
-                          onEdit={handleEditPlayer}
-                          onDelete={onDeletePlayer}
+                          onEdit={isPlayer ? undefined : handleEditPlayer}
+                          onDelete={isPlayer ? undefined : onDeletePlayer}
                         />
                       ))}
                     </div>

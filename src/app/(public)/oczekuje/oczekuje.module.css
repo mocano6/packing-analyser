@@ -1,0 +1,54 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  padding: 24px;
+}
+
+.card {
+  max-width: 540px;
+  width: 100%;
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  text-align: center;
+}
+
+.title {
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 12px;
+}
+
+.subtitle {
+  font-size: 1rem;
+  color: #334155;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.note {
+  font-size: 0.95rem;
+  color: #64748b;
+  margin-bottom: 24px;
+}
+
+.logoutButton {
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+  background-color: #ef4444;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.logoutButton:hover {
+  background-color: #dc2626;
+}

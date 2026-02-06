@@ -30,7 +30,7 @@ export default function PlayerDetailsPage() {
   const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
   const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
   const { teams, isLoading: isTeamsLoading } = useTeams();
-  const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, logout } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, userRole, userStatus, linkedPlayerId, isPlayer, logout } = useAuth();
 
   const [allActions, setAllActions] = useState<Action[]>([]);
   const [allShots, setAllShots] = useState<any[]>([]);
@@ -88,14 +88,26 @@ export default function PlayerDetailsPage() {
 
   useEffect(() => {
     if (!playerId) return;
+
+    const targetPlayerId = isPlayer && linkedPlayerId ? linkedPlayerId : playerId;
+
     if (typeof window !== "undefined") {
-      localStorage.setItem("selectedPlayerForView", playerId);
+      localStorage.setItem("selectedPlayerForView", targetPlayerId);
     }
-    if (selectedPlayerForView !== playerId) {
-      setSelectedPlayerForView(playerId);
+    if (selectedPlayerForView !== targetPlayerId) {
+      setSelectedPlayerForView(targetPlayerId);
     }
     router.replace("/profile");
-  }, [playerId, router, selectedPlayerForView]);
+  }, [playerId, router, selectedPlayerForView, isPlayer, linkedPlayerId]);
+
+  useEffect(() => {
+    if (authLoading || !isAuthenticated) {
+      return;
+    }
+    if (userRole === 'player' && userStatus !== 'approved') {
+      router.replace("/oczekuje");
+    }
+  }, [authLoading, isAuthenticated, userRole, userStatus, router]);
   // Inicjalizuj expandedCategory z localStorage
   const [expandedCategory, setExpandedCategory] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
@@ -245,6 +257,10 @@ export default function PlayerDetailsPage() {
 
   // Filtrowani zawodnicy według wybranego zespołu
   const filteredPlayers = useMemo(() => {
+    if (isPlayer && linkedPlayerId) {
+      const linked = players.find(player => player.id === linkedPlayerId);
+      return linked ? [linked] : [];
+    }
     if (!selectedTeam) return players;
     return players.filter(player => {
       let playerTeams = player.teams;
@@ -255,7 +271,7 @@ export default function PlayerDetailsPage() {
       }
       return playerTeams.includes(selectedTeam);
     });
-  }, [players, selectedTeam]);
+  }, [players, selectedTeam, isPlayer, linkedPlayerId]);
 
   // Wejścia w PK (rysowane ręcznie w module PK) - dane z meczów (matches.pkEntries)
   const pkEntriesStats = useMemo(() => {
@@ -3905,50 +3921,71 @@ export default function PlayerDetailsPage() {
 
       {/* Selektor zespołu, zawodnika, sezonu i meczów na górze */}
       <div className={styles.playerSelectorContainer}>
-        <div className={styles.selectorGroup}>
-          <label htmlFor="team-select" className={styles.selectorLabel}>Zespół:</label>
-          <select
-            id="team-select"
-            value={selectedTeam}
-            onChange={async (e) => {
-              const newTeam = e.target.value;
-              setSelectedTeam(newTeam);
-              // Zapisz wybór zespołu w localStorage
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('selectedTeam', newTeam);
-              }
-              // Resetuj wybór zawodnika przy zmianie zespołu - ustaw pusty string, aby useEffect mógł ustawić pierwszego dostępnego
-              setSelectedPlayerForView("");
-              // Wyczyść akcje, aby wymusić przeładowanie
-              setAllActions([]);
-              setAllShots([]);
-              setSelectedMatchIds([]);
-              // Wyczyść localStorage dla selectedPlayerForView, aby wymusić wybór pierwszego zawodnika z nowego zespołu
-              if (typeof window !== 'undefined') {
-                localStorage.removeItem('selectedPlayerForView');
-              }
-              // Zresetuj lastLoadedTeamRef, aby umożliwić załadowanie meczów dla nowego zespołu
-              lastLoadedTeamRef.current = null;
-            }}
-            className={styles.selectorSelect}
-          >
-            {availableTeams.map(team => (
-              <option key={team.id} value={team.id}>{team.name}</option>
-            ))}
-          </select>
-        </div>
-        <div className={styles.selectorGroup}>
-          <label htmlFor="player-select" className={styles.selectorLabel}>Zawodnik:</label>
-          <button
-            id="player-select"
-            onClick={() => setIsPlayerSelectModalOpen(true)}
-            className={styles.playerSelectButton}
-          >
-            {selectedPlayerForView 
-              ? getPlayerLabel(filteredPlayers.find(p => p.id === selectedPlayerForView)?.id || filteredPlayers[0]?.id, playersIndex)
-              : "Wybierz zawodnika..."}
-          </button>
-        </div>
+        {isPlayer ? (
+          <>
+            <div className={styles.selectorGroup}>
+              <div className={styles.selectorLabel}>Zespół:</div>
+              <div className={styles.selectorStaticValue}>
+                {availableTeams.find(team => team.id === selectedTeam)?.name || selectedTeam || "-"}
+              </div>
+            </div>
+            <div className={styles.selectorGroup}>
+              <div className={styles.selectorLabel}>Zawodnik:</div>
+              <div className={styles.selectorStaticValue}>
+                {linkedPlayerId
+                  ? getPlayerLabel(linkedPlayerId, playersIndex)
+                  : "Brak przypisanego zawodnika"}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={styles.selectorGroup}>
+              <label htmlFor="team-select" className={styles.selectorLabel}>Zespół:</label>
+              <select
+                id="team-select"
+                value={selectedTeam}
+                onChange={async (e) => {
+                  const newTeam = e.target.value;
+                  setSelectedTeam(newTeam);
+                  // Zapisz wybór zespołu w localStorage
+                  if (typeof window !== 'undefined') {
+                    localStorage.setItem('selectedTeam', newTeam);
+                  }
+                  // Resetuj wybór zawodnika przy zmianie zespołu - ustaw pusty string, aby useEffect mógł ustawić pierwszego dostępnego
+                  setSelectedPlayerForView("");
+                  // Wyczyść akcje, aby wymusić przeładowanie
+                  setAllActions([]);
+                  setAllShots([]);
+                  setSelectedMatchIds([]);
+                  // Wyczyść localStorage dla selectedPlayerForView, aby wymusić wybór pierwszego zawodnika z nowego zespołu
+                  if (typeof window !== 'undefined') {
+                    localStorage.removeItem('selectedPlayerForView');
+                  }
+                  // Zresetuj lastLoadedTeamRef, aby umożliwić załadowanie meczów dla nowego zespołu
+                  lastLoadedTeamRef.current = null;
+                }}
+                className={styles.selectorSelect}
+              >
+                {availableTeams.map(team => (
+                  <option key={team.id} value={team.id}>{team.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className={styles.selectorGroup}>
+              <label htmlFor="player-select" className={styles.selectorLabel}>Zawodnik:</label>
+              <button
+                id="player-select"
+                onClick={() => setIsPlayerSelectModalOpen(true)}
+                className={styles.playerSelectButton}
+              >
+                {selectedPlayerForView 
+                  ? getPlayerLabel(filteredPlayers.find(p => p.id === selectedPlayerForView)?.id || filteredPlayers[0]?.id, playersIndex)
+                  : "Wybierz zawodnika..."}
+              </button>
+            </div>
+          </>
+        )}
         <div className={styles.selectorGroup}>
           <label htmlFor="season-select" className={styles.selectorLabel}>Sezon:</label>
           <SeasonSelector

@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { getDB } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from "firebase/auth";
 import { Team, getTeamsArray } from "@/constants/teamsLoader";
 import { UserData } from "@/hooks/useAuth";
+import { Player } from "@/types";
+import { getPlayerFullName } from "@/utils/playerUtils";
+import { getPlayerMatchSuggestions } from "@/utils/playerMatching";
 import { toast } from "react-hot-toast";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 
@@ -20,21 +23,25 @@ interface UserWithId extends UserData {
 const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) => {
   const [users, setUsers] = useState<UserWithId[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoadingPlayers, setIsLoadingPlayers] = useState<boolean>(false);
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [showAddUserModal, setShowAddUserModal] = useState<boolean>(false);
   const [newUserEmail, setNewUserEmail] = useState<string>("");
   const [newUserPassword, setNewUserPassword] = useState<string>("");
-  const [newUserRole, setNewUserRole] = useState<'user' | 'admin' | 'coach'>('user');
+  const [newUserRole, setNewUserRole] = useState<'user' | 'admin' | 'coach' | 'player'>('user');
   const [newUserTeams, setNewUserTeams] = useState<string[]>([]);
   const [isCreatingUser, setIsCreatingUser] = useState<boolean>(false);
   const [showEditUserModal, setShowEditUserModal] = useState<boolean>(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editUserEmail, setEditUserEmail] = useState<string>("");
-  const [editUserRole, setEditUserRole] = useState<'user' | 'admin' | 'coach'>('user');
+  const [editUserRole, setEditUserRole] = useState<'user' | 'admin' | 'coach' | 'player'>('user');
   const [editUserTeams, setEditUserTeams] = useState<string[]>([]);
   const [newPassword, setNewPassword] = useState<string>("");
   const [isUpdatingUser, setIsUpdatingUser] = useState<boolean>(false);
+  const [selectedPlayerByUser, setSelectedPlayerByUser] = useState<Record<string, string>>({});
+  const [playerSearchByUser, setPlayerSearchByUser] = useState<Record<string, string>>({});
 
   // Pobierz wszystkich użytkowników
   const fetchUsers = async () => {
@@ -80,6 +87,29 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
     }
   };
 
+  const fetchPlayersData = async () => {
+    if (!currentUserIsAdmin) return;
+
+    setIsLoadingPlayers(true);
+    try {
+      const db = getDB();
+      const playersCollection = collection(db, "players");
+      const playersSnapshot = await getDocs(playersCollection);
+      const playersData: Player[] = [];
+
+      playersSnapshot.forEach(playerDoc => {
+        playersData.push({ id: playerDoc.id, ...(playerDoc.data() as Omit<Player, "id">) });
+      });
+
+      setPlayers(playersData);
+    } catch (error) {
+      console.error("Błąd podczas pobierania zawodników:", error);
+      toast.error("Błąd podczas pobierania listy zawodników");
+    } finally {
+      setIsLoadingPlayers(false);
+    }
+  };
+
   // Aktualizuj uprawnienia użytkownika do zespołów
   const updateUserTeams = async (userId: string, newTeams: string[]) => {
     try {
@@ -108,7 +138,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
   };
 
   // Zmiana roli użytkownika
-  const updateUserRole = async (userId: string, newRole: 'user' | 'admin' | 'coach') => {
+  const updateUserRole = async (userId: string, newRole: 'user' | 'admin' | 'coach' | 'player') => {
     try {
       const db = getDB();
       const userRef = doc(db, "users", userId);
@@ -304,6 +334,87 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
     }
   };
 
+  const pendingUsers = useMemo(() => {
+    return users.filter(user => user.role === 'player' && user.status === 'pending');
+  }, [users]);
+
+  const sortedPlayers = useMemo(() => {
+    return [...players].sort((a, b) =>
+      getPlayerFullName(a).localeCompare(getPlayerFullName(b), "pl", { sensitivity: "base" })
+    );
+  }, [players]);
+
+  const filterPlayersBySearch = (list: Player[], query: string): Player[] => {
+    const q = (query || "").trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+    if (!q) return list;
+    return list.filter((p) => {
+      const name = (getPlayerFullName(p) + " " + (p.birthYear ?? "")).normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+      return name.includes(q);
+    });
+  };
+
+  const resolvePlayerTeams = (player: Player): string[] => {
+    if (!player?.teams) {
+      return [];
+    }
+    if (Array.isArray(player.teams)) {
+      return player.teams.filter(Boolean);
+    }
+    return [player.teams].filter(Boolean);
+  };
+
+  const handleApprovePlayerAccount = async (user: UserWithId, playerId: string) => {
+    const selectedPlayer = players.find(player => player.id === playerId);
+    if (!selectedPlayer) {
+      toast.error("Nie znaleziono wybranego zawodnika");
+      return;
+    }
+
+    const existingLink = users.find(existingUser =>
+      existingUser.id !== user.id &&
+      existingUser.role === 'player' &&
+      existingUser.linkedPlayerId === playerId
+    );
+
+    if (existingLink) {
+      toast.error("Ten zawodnik jest już przypisany do innego konta");
+      return;
+    }
+
+    try {
+      const db = getDB();
+      const userRef = doc(db, "users", user.id);
+      const allowedTeams = resolvePlayerTeams(selectedPlayer);
+
+      await updateDoc(userRef, {
+        role: 'player',
+        status: 'approved',
+        linkedPlayerId: playerId,
+        allowedTeams
+      }).catch(error => {
+        handleFirestoreError(error, db);
+        throw error;
+      });
+
+      setUsers(prev => prev.map(item =>
+        item.id === user.id
+          ? { ...item, role: 'player', status: 'approved', linkedPlayerId: playerId, allowedTeams }
+          : item
+      ));
+
+      setSelectedPlayerByUser(prev => {
+        const next = { ...prev };
+        delete next[user.id];
+        return next;
+      });
+
+      toast.success("Konto zawodnika zostało zatwierdzone");
+    } catch (error) {
+      console.error("Błąd podczas zatwierdzania konta zawodnika:", error);
+      toast.error("Błąd podczas zatwierdzania konta zawodnika");
+    }
+  };
+
   // Dodaj nowego użytkownika
   const createUser = async () => {
     if (!newUserEmail || !newUserPassword) {
@@ -338,7 +449,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
         allowedTeams: newUserTeams,
         role: newUserRole,
         createdAt: new Date(),
-        lastLogin: null as any
+        lastLogin: null as any,
+        ...(newUserRole === 'player'
+          ? { status: 'pending', linkedPlayerId: null }
+          : {})
       };
 
       await setDoc(userRef, newUserData).catch(error => {
@@ -385,6 +499,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
   useEffect(() => {
     fetchUsers();
     fetchTeamsData();
+    fetchPlayersData();
   }, [currentUserIsAdmin]);
 
   if (!currentUserIsAdmin) {
@@ -459,6 +574,139 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
         <strong>Status:</strong> {users.length} użytkowników, {teams.length} zespołów dostępnych
       </div>
 
+      {pendingUsers.length > 0 && (
+        <div style={{ marginBottom: "20px", padding: "20px", backgroundColor: "#fefce8", borderRadius: "12px", border: "1px solid #facc15", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <h4 style={{ marginTop: 0, marginBottom: "4px", fontSize: "1.1rem", color: "#854d0e" }}>
+            Oczekujące konta zawodników ({pendingUsers.length})
+          </h4>
+          <p style={{ marginTop: 0, marginBottom: "16px", fontSize: "0.875rem", color: "#6c757d" }}>
+            Przypisz każde konto do profilu zawodnika z listy. Użyj sugestii lub wyszukaj po imieniu, nazwisku lub roku urodzenia.
+          </p>
+          {isLoadingPlayers && (
+            <p style={{ marginTop: "6px", color: "#6c757d", fontSize: "0.875rem" }}>Ładowanie listy zawodników...</p>
+          )}
+          {pendingUsers.map(user => {
+            const registration = user.registrationData;
+            const suggestions = registration ? getPlayerMatchSuggestions(sortedPlayers, registration) : [];
+            const selectedPlayerId = selectedPlayerByUser[user.id] || "";
+            const searchQuery = (playerSearchByUser[user.id] || "").trim();
+            const filteredForSelect = filterPlayersBySearch(sortedPlayers, searchQuery);
+
+            return (
+              <div
+                key={user.id}
+                style={{
+                  backgroundColor: "white",
+                  borderRadius: "10px",
+                  padding: "16px",
+                  border: "1px solid #fde047",
+                  marginBottom: "16px",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.04)"
+                }}
+              >
+                <div style={{ marginBottom: "12px", paddingBottom: "12px", borderBottom: "1px solid #fef3c7" }}>
+                  <strong style={{ fontSize: "1rem" }}>{user.email}</strong>
+                  {registration ? (
+                    <div style={{ fontSize: "0.9rem", color: "#57534e", marginTop: "4px" }}>
+                      <span style={{ fontWeight: 600 }}>Dane rejestracyjne:</span> {registration.firstName} {registration.lastName}
+                      {registration.birthYear ? `, ur. ${registration.birthYear}` : ""}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: "0.9rem", color: "#78716c" }}>Brak danych rejestracyjnych</div>
+                  )}
+                </div>
+
+                {suggestions.length > 0 && (
+                  <div style={{ marginBottom: "12px" }}>
+                    <div style={{ fontWeight: 600, marginBottom: "6px", fontSize: "0.9rem", color: "#374151" }}>
+                      Sugestie dopasowania:
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      {suggestions.map(player => (
+                        <button
+                          key={player.id}
+                          type="button"
+                          onClick={() => setSelectedPlayerByUser(prev => ({ ...prev, [user.id]: player.id }))}
+                          style={{
+                            padding: "8px 12px",
+                            borderRadius: "8px",
+                            border: selectedPlayerId === player.id ? "2px solid #16a34a" : "1px solid #e5e7eb",
+                            backgroundColor: selectedPlayerId === player.id ? "#dcfce7" : "#f9fafb",
+                            cursor: "pointer",
+                            fontSize: "0.875rem",
+                            fontWeight: selectedPlayerId === player.id ? 600 : 400
+                          }}
+                        >
+                          {getPlayerFullName(player)}{player.birthYear ? ` (${player.birthYear})` : ""}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ marginBottom: "12px" }}>
+                  <label style={{ display: "block", fontWeight: 600, marginBottom: "6px", fontSize: "0.9rem" }}>
+                    Wyszukaj i wybierz zawodnika
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Imię, nazwisko lub rok urodzenia..."
+                    value={playerSearchByUser[user.id] || ""}
+                    onChange={(e) => setPlayerSearchByUser(prev => ({ ...prev, [user.id]: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #e5e7eb",
+                      fontSize: "0.9rem",
+                      marginBottom: "8px",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                  <select
+                    value={selectedPlayerId}
+                    onChange={(e) => setSelectedPlayerByUser(prev => ({ ...prev, [user.id]: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #e5e7eb",
+                      fontSize: "0.9rem",
+                      boxSizing: "border-box"
+                    }}
+                  >
+                    <option value="">{filteredForSelect.length === 0 && searchQuery ? "Brak wyników" : "Wybierz z listy..."}</option>
+                    {filteredForSelect.map(player => (
+                      <option key={player.id} value={player.id}>
+                        {getPlayerFullName(player)}{player.birthYear ? ` (${player.birthYear})` : ""}{player.position ? ` · ${player.position}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleApprovePlayerAccount(user, selectedPlayerId)}
+                  disabled={!selectedPlayerId || isLoadingPlayers}
+                  style={{
+                    padding: "10px 18px",
+                    backgroundColor: (!selectedPlayerId || isLoadingPlayers) ? "#d1d5db" : "#16a34a",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: (!selectedPlayerId || isLoadingPlayers) ? "not-allowed" : "pointer",
+                    fontWeight: 600,
+                    fontSize: "0.9rem"
+                  }}
+                >
+                  Przypisz i zatwierdź
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {users.length === 0 ? (
         <p>Brak użytkowników do wyświetlenia.</p>
       ) : (
@@ -488,7 +736,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                   <td style={{ padding: "12px", border: "1px solid #ddd" }}>
                     <select
                       value={user.role}
-                      onChange={(e) => updateUserRole(user.id, e.target.value as 'user' | 'admin' | 'coach')}
+                      onChange={(e) => updateUserRole(user.id, e.target.value as 'user' | 'admin' | 'coach' | 'player')}
                       style={{
                         padding: "4px 8px",
                         border: "1px solid #ddd",
@@ -498,6 +746,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                       <option value="user">User</option>
                       <option value="admin">Admin</option>
                       <option value="coach">Coach</option>
+                      <option value="player">Player</option>
                     </select>
                   </td>
                   <td style={{ padding: "12px", border: "1px solid #ddd" }}>
@@ -641,7 +890,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
               </label>
               <select
                 value={newUserRole}
-                onChange={(e) => setNewUserRole(e.target.value as 'user' | 'admin' | 'coach')}
+                onChange={(e) => setNewUserRole(e.target.value as 'user' | 'admin' | 'coach' | 'player')}
                 style={{
                   width: "100%",
                   padding: "8px",
@@ -654,6 +903,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                 <option value="user">User</option>
                 <option value="admin">Admin</option>
                 <option value="coach">Coach</option>
+                <option value="player">Player</option>
               </select>
             </div>
 
@@ -796,7 +1046,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
               </label>
               <select
                 value={editUserRole}
-                onChange={(e) => setEditUserRole(e.target.value as 'user' | 'admin' | 'coach')}
+                onChange={(e) => setEditUserRole(e.target.value as 'user' | 'admin' | 'coach' | 'player')}
                 style={{
                   width: "100%",
                   padding: "8px",
@@ -809,6 +1059,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                 <option value="user">User</option>
                 <option value="admin">Admin</option>
                 <option value="coach">Coach</option>
+                <option value="player">Player</option>
               </select>
             </div>
 
