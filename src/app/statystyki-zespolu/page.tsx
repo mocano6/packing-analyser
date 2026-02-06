@@ -25,7 +25,7 @@ import styles from "./statystyki-zespolu.module.css";
 
 export default function StatystykiZespoluPage() {
   const { teams, isLoading: isTeamsLoading } = useTeams();
-  const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, logout } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, userRole, linkedPlayerId, logout } = useAuth();
   const [isVideoVisible, setIsVideoVisible] = useState(false);
   const [selectedKpiForVideo, setSelectedKpiForVideo] = useState<string | null>(null);
   const [expandedKpiForPlayers, setExpandedKpiForPlayers] = useState<string | null>(null);
@@ -11144,6 +11144,8 @@ export default function StatystykiZespoluPage() {
         actions={allActions}
         matchInfo={selectedMatchInfo || null}
         isAdmin={isAdmin}
+        userRole={userRole}
+        linkedPlayerId={linkedPlayerId}
         selectedTeam={selectedTeam}
         onRefreshData={() => forceRefreshFromFirebase().then(() => {})}
         onImportSuccess={() => {}}

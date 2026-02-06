@@ -8447,6 +8447,8 @@ export default function PlayerDetailsPage() {
         actions={allActions}
         matchInfo={null}
         isAdmin={isAdmin}
+        userRole={userRole}
+        linkedPlayerId={linkedPlayerId}
         selectedTeam={selectedTeam}
         onRefreshData={() => forceRefreshFromFirebase().then(() => {})}
         onImportSuccess={() => {}}

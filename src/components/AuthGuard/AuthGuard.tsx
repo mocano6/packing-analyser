@@ -9,18 +9,16 @@ interface AuthGuardProps {
   children: React.ReactNode;
 }
 
-/** Strony dozwolone dla roli player (tylko Statystyki zespołu + Profil zawodnika + strona główna z jednym zawodnikiem) */
-const PLAYER_ALLOWED_PATHS = ['/', '/statystyki-zespolu', '/profile', '/oczekuje'] as const;
-
+/** Dla roli player dozwolony tylko Profil zawodnika; strona startowa = profil */
 function isPathAllowedForPlayer(pathname: string | null): boolean {
   if (!pathname) return true;
-  if (PLAYER_ALLOWED_PATHS.includes(pathname as any)) return true;
+  if (pathname === '/oczekuje') return true;
   if (pathname.startsWith('/profile')) return true;
   return false;
 }
 
 export default function AuthGuard({ children }: AuthGuardProps) {
-  const { isAuthenticated, isLoading, isPlayer, userStatus } = useAuth();
+  const { isAuthenticated, isLoading, isPlayer, userStatus, linkedPlayerId } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -30,13 +28,25 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     }
   }, [isLoading, isAuthenticated, router, pathname]);
 
+  /* Player: strona startowa = profil zawodnika; tylko profil i oczekuje są dozwolone */
   useEffect(() => {
     if (isLoading || !isAuthenticated || !isPlayer) return;
     if (userStatus !== 'approved') return;
     if (!isPathAllowedForPlayer(pathname)) {
-      router.replace('/');
+      const profilePath = linkedPlayerId ? `/profile/${linkedPlayerId}` : '/profile';
+      router.replace(profilePath);
     }
-  }, [isLoading, isAuthenticated, isPlayer, userStatus, pathname, router]);
+  }, [isLoading, isAuthenticated, isPlayer, userStatus, pathname, router, linkedPlayerId]);
+
+  /* Player zalogowany wchodzi na "/" → przekieruj na profil */
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || !isPlayer) return;
+    if (userStatus !== 'approved') return;
+    if (pathname === '/') {
+      const profilePath = linkedPlayerId ? `/profile/${linkedPlayerId}` : '/profile';
+      router.replace(profilePath);
+    }
+  }, [isLoading, isAuthenticated, isPlayer, userStatus, pathname, router, linkedPlayerId]);
 
   if (isLoading) {
     return (

@@ -15,6 +15,7 @@ interface SidePanelProps {
   matchInfo: TeamInfo | null;
   isAdmin: boolean;
   userRole?: 'user' | 'admin' | 'coach' | 'player' | null;
+  linkedPlayerId?: string | null;
   selectedTeam: string;
   onRefreshData: () => Promise<void>;
   onImportSuccess: (data: { players: Player[], actions: Action[], matchInfo: any }) => void;
@@ -28,6 +29,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
   matchInfo,
   isAdmin,
   userRole,
+  linkedPlayerId,
   selectedTeam,
   onRefreshData,
   onImportSuccess,
@@ -71,7 +73,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
         className={`${styles.panel} ${isOpen ? styles.panelOpen : ''}`}
       >
         <div className={styles.header}>
-          <Link href="/" className={styles.homeButton}>
+          <Link href={isPlayer && linkedPlayerId ? `/profile/${linkedPlayerId}` : isPlayer ? '/profile' : '/'} className={styles.homeButton}>
             <svg className={styles.homeIcon} width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M8 1L2 6V14H6V10H10V14H14V6L8 1Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
             </svg>
@@ -90,16 +92,10 @@ const SidePanel: React.FC<SidePanelProps> = ({
           <div className={styles.section}>
             <h4>📊 Statystyki</h4>
             {isPlayer ? (
-              <>
-                <Link href="/statystyki-zespolu" className={styles.menuItem}>
-                  <span className={styles.icon}>📊</span>
-                  <span>Statystyki zespołu</span>
-                </Link>
-                <Link href="/profile" className={styles.menuItem}>
-                  <span className={styles.icon}>👤</span>
-                  <span>Profil zawodnika</span>
-                </Link>
-              </>
+              <Link href={linkedPlayerId ? `/profile/${linkedPlayerId}` : '/profile'} className={styles.menuItem}>
+                <span className={styles.icon}>👤</span>
+                <span>Profil zawodnika</span>
+              </Link>
             ) : (
               <>
                 {userRole !== 'coach' && userRole !== 'player' && (

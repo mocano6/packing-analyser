@@ -78,7 +78,7 @@ export default function ZawodnicyPage() {
 
   const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
   const { teams, isLoading: isTeamsLoading } = useTeams();
-  const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, logout } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, userRole, linkedPlayerId, logout } = useAuth();
 
   // Funkcja do mapowania pozycji na etykiety
   const getPositionLabel = (position: string): string => {
@@ -1002,6 +1002,8 @@ export default function ZawodnicyPage() {
         actions={allActions}
         matchInfo={null}
         isAdmin={isAdmin}
+        userRole={userRole}
+        linkedPlayerId={linkedPlayerId}
         selectedTeam={selectedTeams.length > 0 ? selectedTeams[0] : ''}
         onRefreshData={() => forceRefreshFromFirebase().then(() => {})}
         onImportSuccess={() => {}}

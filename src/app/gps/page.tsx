@@ -18,7 +18,7 @@ export default function GPSPage() {
   });
   const { players } = usePlayersState(selectedTeam);
   const { teams: allAvailableTeams } = useTeams();
-  const { isAdmin, userRole, userTeams, logout } = useAuth();
+  const { isAdmin, userRole, userTeams, linkedPlayerId, logout } = useAuth();
 
   // Automatycznie aktywuj tryb deweloperski (obejście uwierzytelniania)
   React.useEffect(() => {
@@ -56,6 +56,7 @@ export default function GPSPage() {
         matchInfo={null}
         isAdmin={isAdmin}
         userRole={userRole}
+        linkedPlayerId={linkedPlayerId}
         selectedTeam={selectedTeam}
         onRefreshData={handleRefreshData}
         onImportSuccess={() => {}}

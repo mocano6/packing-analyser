@@ -48,7 +48,7 @@ export default function WeryfikacjaMeczow() {
   const [chartData, setChartData] = useState<any[]>([]);
   const [isLoadingChart, setIsLoadingChart] = useState(false);
 
-  const { isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isAdmin, isLoading: authLoading, userRole, linkedPlayerId } = useAuth();
 
   // Zamknij dropdown przy kliknięciu poza nim
   useEffect(() => {
@@ -763,6 +763,8 @@ export default function WeryfikacjaMeczow() {
         actions={[]}
         matchInfo={null}
         isAdmin={isAdmin}
+        userRole={userRole}
+        linkedPlayerId={linkedPlayerId}
         selectedTeam={selectedTeam}
         onRefreshData={async () => {}}
         onImportSuccess={() => {}}

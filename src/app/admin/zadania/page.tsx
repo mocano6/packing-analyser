@@ -292,6 +292,7 @@ export default function AdminZadaniaPage() {
         matchInfo={null}
         isAdmin={isAdmin ?? false}
         userRole={userRole ?? undefined}
+        linkedPlayerId={null}
         selectedTeam=""
         onRefreshData={async () => {
           toast.success("Odśwież dane na stronie głównej aplikacji.");

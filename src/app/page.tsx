@@ -3455,6 +3455,7 @@ export default function Page() {
           matchInfo={matchInfo}
           isAdmin={isAdmin}
           userRole={userRole}
+          linkedPlayerId={linkedPlayerId}
           selectedTeam={selectedTeam}
           onRefreshData={handleRefreshData}
           onImportSuccess={handleImportSuccess}
@@ -5929,6 +5930,7 @@ export default function Page() {
           matchInfo={matchInfo}
           isAdmin={isAdmin}
           userRole={userRole}
+          linkedPlayerId={linkedPlayerId}
           selectedTeam={selectedTeam}
           onRefreshData={handleRefreshData}
           onImportSuccess={handleImportSuccess}
