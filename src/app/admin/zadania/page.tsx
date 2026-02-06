@@ -3,8 +3,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import Link from "next/link";
 import { db } from "@/lib/firebase";
+import SidePanel from "@/components/SidePanel/SidePanel";
+import type { Player, Action, TeamInfo } from "@/types";
 import {
   collection,
   doc,
@@ -52,7 +53,7 @@ function taskDoc(uid: string, taskId: string) {
 
 export default function AdminZadaniaPage() {
   const router = useRouter();
-  const { isAuthenticated, isAdmin, isLoading, user } = useAuth();
+  const { isAuthenticated, isAdmin, isLoading, user, userRole, logout } = useAuth();
   const [tasks, setTasks] = useState<EisenhowerTask[]>([]);
   const [newText, setNewText] = useState("");
   const [tasksLoading, setTasksLoading] = useState(true);
@@ -237,6 +238,12 @@ export default function AdminZadaniaPage() {
     toRemove.forEach((t) => removeTaskFromFirestore(t.id));
   }, [tasks, removeTaskFromFirestore]);
 
+  const handleLogout = useCallback(() => {
+    if (typeof window !== "undefined" && window.confirm("Czy na pewno chcesz się wylogować?")) {
+      logout();
+    }
+  }, [logout]);
+
   if (isLoading || tasksLoading) {
     return (
       <div className={styles.loadingWrap}>
@@ -279,13 +286,22 @@ export default function AdminZadaniaPage() {
 
   return (
     <div className={styles.container}>
+      <SidePanel
+        players={[]}
+        actions={[]}
+        matchInfo={null}
+        isAdmin={isAdmin ?? false}
+        userRole={userRole ?? undefined}
+        selectedTeam=""
+        onRefreshData={async () => {
+          toast.success("Odśwież dane na stronie głównej aplikacji.");
+        }}
+        onImportSuccess={() => {}}
+        onImportError={(err) => toast.error(err)}
+        onLogout={handleLogout}
+      />
       <header className={styles.header}>
         <h1 className={styles.title}>Zadania — kwadrant Eisenhowera</h1>
-        <div className={styles.headerActions}>
-          <Link href="/admin" className={styles.backButton}>
-            ← Panel administratora
-          </Link>
-        </div>
       </header>
 
       <section className={styles.addSection}>

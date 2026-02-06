@@ -36,7 +36,8 @@ const SidePanel: React.FC<SidePanelProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-  const isPlayer = userRole === 'player';
+  /* Player widzi tylko Statystyki zespołu i Profil; bez roli traktujemy jak player (restrykcyjnie) */
+  const isPlayer = userRole === 'player' || userRole == null;
 
   const handleRefreshClick = async () => {
     try {
@@ -101,7 +102,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
               </>
             ) : (
               <>
-                {userRole !== 'coach' && (
+                {userRole !== 'coach' && userRole !== 'player' && (
                   <Link href="/zawodnicy" className={styles.menuItem}>
                     <span className={styles.icon}>👥</span>
                     <span>Statystyki zawodników</span>
@@ -115,10 +116,12 @@ const SidePanel: React.FC<SidePanelProps> = ({
                   <span className={styles.icon}>👤</span>
                   <span>Profil zawodnika</span>
                 </Link>
-                <Link href="/gps" className={styles.menuItem}>
-                  <span className={styles.icon}>📍</span>
-                  <span>Dane GPS</span>
-                </Link>
+                {userRole !== 'player' && (
+                  <Link href="/gps" className={styles.menuItem}>
+                    <span className={styles.icon}>📍</span>
+                    <span>Dane GPS</span>
+                  </Link>
+                )}
               </>
             )}
           </div>
@@ -146,8 +149,8 @@ const SidePanel: React.FC<SidePanelProps> = ({
             </div>
           )}
 
-          {/* Sekcja Narzędzia - ukryta dla coach */}
-          {!isPlayer && userRole !== 'coach' && (
+          {/* Sekcja Narzędzia - tylko dla admin/user (ukryta dla coach i player) */}
+          {!isPlayer && userRole !== 'coach' && userRole !== 'player' && (
             <div className={styles.section}>
               <h4>🔧 Narzędzia</h4>
               <button 
