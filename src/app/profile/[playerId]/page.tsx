@@ -715,10 +715,21 @@ export default function PlayerDetailsPage() {
     }
   }, [selectedSeason, defaultSeason, availableSeasons]);
 
-  // Dostępne zespoły
+  // Dostępne zespoły — dla roli player tylko zespół(y) przypisanego zawodnika
   const availableTeams = useMemo(() => {
-    return teams || [];
-  }, [teams]);
+    const allTeams = teams || [];
+    if (isPlayer && linkedPlayerId) {
+      const linked = players.find((p) => p.id === linkedPlayerId);
+      if (!linked) return [];
+      let playerTeamIds: string[] = Array.isArray(linked.teams)
+        ? linked.teams
+        : typeof linked.teams === "string"
+          ? [linked.teams]
+          : [];
+      return allTeams.filter((t) => playerTeamIds.includes(t.id));
+    }
+    return allTeams;
+  }, [teams, isPlayer, linkedPlayerId, players]);
 
   // Załaduj mecze dla wszystkich zespołów, jeśli allMatches nie zawiera meczów dla aktualnego zespołu
   useEffect(() => {
@@ -822,18 +833,21 @@ export default function PlayerDetailsPage() {
   }, [selectedTeam, filteredMatchesBySeason, filteredPlayers, db]);
 
   // Inicjalizuj selectedTeam - sprawdź czy wybrany zespół jest dostępny, jeśli nie - ustaw pierwszy dostępny
+  // Dla gracza (isPlayer) po załadowaniu ustaw zespół na dozwolony (jego zespoły), nie na wartość z localStorage
   useEffect(() => {
-    if (availableTeams.length > 0) {
-      // Jeśli selectedTeam jest pusty lub wybrany zespół nie jest dostępny, ustaw pierwszy dostępny
-      if (!selectedTeam || !availableTeams.some(team => team.id === selectedTeam)) {
-        setSelectedTeam(availableTeams[0].id);
-        // Zapisz pierwszy dostępny zespół w localStorage
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('selectedTeam', availableTeams[0].id);
-        }
+    if (availableTeams.length === 0) return;
+    const teamId = availableTeams[0].id;
+    const isAllowed = availableTeams.some((team) => team.id === selectedTeam);
+    if (isPlayer) {
+      if (!isAllowed) {
+        setSelectedTeam(teamId);
+        if (typeof window !== "undefined") localStorage.setItem("selectedTeam", teamId);
       }
+    } else if (!selectedTeam || !isAllowed) {
+      setSelectedTeam(teamId);
+      if (typeof window !== "undefined") localStorage.setItem("selectedTeam", teamId);
     }
-  }, [selectedTeam, availableTeams]);
+  }, [availableTeams, isPlayer, selectedTeam]);
 
   // Inicjalizuj selectedPlayerForView - priorytet ma localStorage, jeśli zawodnik jest dostępny
   useEffect(() => {
@@ -3644,7 +3658,7 @@ export default function PlayerDetailsPage() {
                 <div className={styles.printItem}>
                   <div className={styles.printLabel}>Zespół</div>
                   <div className={styles.printValue}>
-                    {teams?.find(t => t.id === selectedTeam)?.name || selectedTeam || "-"}
+                    {availableTeams.find(t => t.id === selectedTeam)?.name ?? availableTeams[0]?.name ?? "-"}
                   </div>
                 </div>
                 <div className={styles.printItem}>
@@ -3926,7 +3940,7 @@ export default function PlayerDetailsPage() {
             <div className={styles.selectorGroup}>
               <div className={styles.selectorLabel}>Zespół:</div>
               <div className={styles.selectorStaticValue}>
-                {availableTeams.find(team => team.id === selectedTeam)?.name || selectedTeam || "-"}
+                {availableTeams.find(team => team.id === selectedTeam)?.name ?? availableTeams[0]?.name ?? "-"}
               </div>
             </div>
             <div className={styles.selectorGroup}>
