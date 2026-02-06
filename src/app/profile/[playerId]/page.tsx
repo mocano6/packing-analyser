@@ -241,9 +241,24 @@ export default function PlayerDetailsPage() {
     return matches;
   }, [allMatches, selectedSeason, selectedTeam]);
 
-  // Filtruj mecze według typu (liga, puchar, towarzyski) - używane w modalu wyboru meczów
+  // Mecze, w których zawodnik zagrał co najmniej 1 minutę — tylko te są dostępne do wyboru
+  const selectableMatchesBySeason = useMemo(() => {
+    const targetPlayerId = selectedPlayerForView || playerId;
+    return filteredMatchesBySeason.filter((match) => {
+      const playerMinutes = match.playerMinutes;
+      if (!playerMinutes?.length) return false;
+      const pm = playerMinutes.find((p: { playerId: string }) => p.playerId === targetPlayerId);
+      if (!pm) return false;
+      const start = (pm as { startMinute?: number }).startMinute ?? 0;
+      const end = (pm as { endMinute?: number }).endMinute ?? 0;
+      const minutes = start === 0 && end === 0 ? 0 : end - start + 1;
+      return minutes >= 1;
+    });
+  }, [filteredMatchesBySeason, selectedPlayerForView, playerId]);
+
+  // Filtruj mecze według typu (liga, puchar, towarzyski) - używane w modalu wyboru meczów (tylko mecze z min. 1 min)
   const filteredMatchesByType = useMemo(() => {
-    return filteredMatchesBySeason.filter(match => {
+    return selectableMatchesBySeason.filter(match => {
       const matchType = match.matchType;
       
       // Jeśli mecz nie ma typu, traktuj jako "liga" (domyślnie)
@@ -253,7 +268,7 @@ export default function PlayerDetailsPage() {
       
       return matchTypeFilters[matchType];
     });
-  }, [filteredMatchesBySeason, matchTypeFilters]);
+  }, [selectableMatchesBySeason, matchTypeFilters]);
 
   // Filtrowani zawodnicy według wybranego zespołu
   const filteredPlayers = useMemo(() => {
@@ -272,6 +287,17 @@ export default function PlayerDetailsPage() {
       return playerTeams.includes(selectedTeam);
     });
   }, [players, selectedTeam, isPlayer, linkedPlayerId]);
+
+  // Dla rankingu: gracz widzi miejsce w całym zespole; coach/admin w filteredPlayers (wybrany zespół)
+  const playersForRanking = useMemo(() => {
+    if (isPlayer && linkedPlayerId && selectedTeam) {
+      return players.filter((p) => {
+        const t = Array.isArray(p.teams) ? p.teams : typeof p.teams === "string" ? [p.teams] : [];
+        return t.includes(selectedTeam);
+      });
+    }
+    return filteredPlayers;
+  }, [players, selectedTeam, isPlayer, linkedPlayerId, filteredPlayers]);
 
   // Wejścia w PK (rysowane ręcznie w module PK) - dane z meczów (matches.pkEntries)
   const pkEntriesStats = useMemo(() => {
@@ -715,13 +741,18 @@ export default function PlayerDetailsPage() {
     }
   }, [selectedSeason, defaultSeason, availableSeasons]);
 
-  // Dostępne zespoły — dla roli player tylko zespół(y) przypisanego zawodnika
+  // Dostępne zespoły — dla roli player zespoły z konta (userTeams), żeby wybór był aktywny gdy admin przypisał wiele zespołów
   const availableTeams = useMemo(() => {
     const allTeams = teams || [];
     if (isPlayer && linkedPlayerId) {
+      // Użyj userTeams (allowedTeams konta), żeby gracz widział dropdown przy wielu przypisanych zespołach
+      if (userTeams && userTeams.length > 0) {
+        return allTeams.filter((t) => userTeams.includes(t.id));
+      }
+      // Fallback: zespoły z dokumentu zawodnika
       const linked = players.find((p) => p.id === linkedPlayerId);
       if (!linked) return [];
-      let playerTeamIds: string[] = Array.isArray(linked.teams)
+      const playerTeamIds: string[] = Array.isArray(linked.teams)
         ? linked.teams
         : typeof linked.teams === "string"
           ? [linked.teams]
@@ -729,7 +760,7 @@ export default function PlayerDetailsPage() {
       return allTeams.filter((t) => playerTeamIds.includes(t.id));
     }
     return allTeams;
-  }, [teams, isPlayer, linkedPlayerId, players]);
+  }, [teams, isPlayer, linkedPlayerId, players, userTeams]);
 
   // Załaduj mecze dla wszystkich zespołów, jeśli allMatches nie zawiera meczów dla aktualnego zespołu
   useEffect(() => {
@@ -772,7 +803,7 @@ export default function PlayerDetailsPage() {
   // Pobierz wszystkie akcje zespołu dla rankingu
   useEffect(() => {
     const loadAllTeamActions = async () => {
-      if (!selectedTeam || !db || filteredPlayers.length === 0) {
+      if (!selectedTeam || !db || playersForRanking.length === 0) {
         setAllTeamActions([]);
         return;
       }
@@ -806,8 +837,8 @@ export default function PlayerDetailsPage() {
                 ...losesActions.map(a => ({ ...a, matchId: match.matchId!, _actionSource: 'loses' as const }))
               ];
 
-              // Filtruj tylko akcje zawodników z wybranego zespołu
-              const teamPlayersIds = filteredPlayers.map(p => p.id);
+              // Filtruj tylko akcje zawodników z wybranego zespołu (dla gracza: cały zespół do rankingu)
+              const teamPlayersIds = playersForRanking.map(p => p.id);
               const teamMatchActions = allMatchActions.filter(
                 action =>
                   (action.senderId && teamPlayersIds.includes(action.senderId)) ||
@@ -830,7 +861,7 @@ export default function PlayerDetailsPage() {
     };
 
     loadAllTeamActions();
-  }, [selectedTeam, filteredMatchesBySeason, filteredPlayers, db]);
+  }, [selectedTeam, filteredMatchesBySeason, playersForRanking, db]);
 
   // Inicjalizuj selectedTeam - sprawdź czy wybrany zespół jest dostępny, jeśli nie - ustaw pierwszy dostępny
   // Dla gracza (isPlayer) po załadowaniu ustaw zespół na dozwolony (jego zespoły), nie na wartość z localStorage
@@ -899,7 +930,7 @@ export default function PlayerDetailsPage() {
     }
   }, [manuallyDeselectedAll]);
   useEffect(() => {
-    const availableMatchIds = filteredMatchesBySeason
+    const availableMatchIds = selectableMatchesBySeason
       .filter(m => m.matchId)
       .map(m => m.matchId!);
 
@@ -923,7 +954,7 @@ export default function PlayerDetailsPage() {
       const lastMatchId = availableMatchIds[availableMatchIds.length - 1];
       setSelectedMatchIds(lastMatchId ? [lastMatchId] : []);
     }
-  }, [filteredMatchesBySeason, manuallyDeselectedAll, selectedMatchIds]);
+  }, [selectableMatchesBySeason, manuallyDeselectedAll, selectedMatchIds]);
 
   // Oblicz minuty gry zawodnika i według pozycji
   const { totalMinutes, positionMinutes } = useMemo(() => {
@@ -3315,14 +3346,14 @@ export default function PlayerDetailsPage() {
     };
   }, [player, allActions, filteredMatchesBySeason, selectedMatchIds, totalMinutes, positionMinutes, selectedPlayerForView, heatmapDirection, selectedActionFilter, selectedRegainPackingFilter, selectedLosesPackingFilter, playerMatchStatsByMatchId]);
 
-  // Oblicz ranking w zespole dla statystyk zawodnika
+  // Oblicz ranking w zespole dla statystyk zawodnika (dla gracza: względem całego zespołu)
   const teamRanking = useMemo(() => {
-    if (!playerStats || !selectedTeam || filteredPlayers.length === 0) return null;
+    if (!playerStats || !selectedTeam || playersForRanking.length === 0) return null;
     
     const targetPlayerId = selectedPlayerForView || playerId;
     
     // Oblicz statystyki dla wszystkich zawodników w zespole
-    const teamPlayerStats = filteredPlayers.map(teamPlayer => {
+    const teamPlayerStats = playersForRanking.map(teamPlayer => {
       // Oblicz minuty dla zawodnika
       let playerMinutes = 0;
       filteredMatchesBySeason.forEach(match => {
@@ -3596,7 +3627,7 @@ export default function PlayerDetailsPage() {
       regainXTInAttackPercentage: teamTotalRegainXTInAttack > 0 ? ((currentPlayerStats.regainXTInAttack || 0) / teamTotalRegainXTInAttack) * 100 : 0,
       regainXTInDefensePercentage: teamTotalRegainXTInDefense > 0 ? ((currentPlayerStats.regainXTInDefense || 0) / teamTotalRegainXTInDefense) * 100 : 0,
     };
-  }, [playerStats, selectedTeam, filteredPlayers, allTeamActions, selectedMatchIds, filteredMatchesBySeason, selectedPlayerForView, playerId, selectedActionFilter]);
+  }, [playerStats, selectedTeam, playersForRanking, allTeamActions, selectedMatchIds, filteredMatchesBySeason, selectedPlayerForView, playerId, selectedActionFilter]);
 
   if (authLoading) {
     return (
@@ -3938,10 +3969,31 @@ export default function PlayerDetailsPage() {
         {isPlayer ? (
           <>
             <div className={styles.selectorGroup}>
-              <div className={styles.selectorLabel}>Zespół:</div>
-              <div className={styles.selectorStaticValue}>
-                {availableTeams.find(team => team.id === selectedTeam)?.name ?? availableTeams[0]?.name ?? "-"}
-              </div>
+              <label htmlFor="player-team-select" className={styles.selectorLabel}>Zespół:</label>
+              {availableTeams.length > 1 ? (
+                <select
+                  id="player-team-select"
+                  value={selectedTeam}
+                  onChange={(e) => {
+                    const newTeam = e.target.value;
+                    setSelectedTeam(newTeam);
+                    if (typeof window !== "undefined") localStorage.setItem("selectedTeam", newTeam);
+                    setAllActions([]);
+                    setAllShots([]);
+                    setSelectedMatchIds([]);
+                    lastLoadedTeamRef.current = null;
+                  }}
+                  className={styles.selectorSelect}
+                >
+                  {availableTeams.map((team) => (
+                    <option key={team.id} value={team.id}>{team.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className={styles.selectorStaticValue}>
+                  {availableTeams.find((t) => t.id === selectedTeam)?.name ?? availableTeams[0]?.name ?? "-"}
+                </div>
+              )}
             </div>
             <div className={styles.selectorGroup}>
               <div className={styles.selectorLabel}>Zawodnik:</div>
@@ -4015,7 +4067,7 @@ export default function PlayerDetailsPage() {
             className={styles.matchSelectButton}
             onClick={() => setIsMatchSelectModalOpen(true)}
           >
-            Wybrane mecze ({filteredMatchesBySeason.filter(m => selectedMatchIds.includes(m.matchId || "")).length}/{filteredMatchesBySeason.length})
+            Wybrane mecze ({selectableMatchesBySeason.filter(m => selectedMatchIds.includes(m.matchId || "")).length}/{selectableMatchesBySeason.length})
           </button>
         </div>
       </div>
@@ -6384,90 +6436,6 @@ export default function PlayerDetailsPage() {
                             )}
                           </>
                         )}
-                        {/* Wykres pokazuje różnicę zawodników - używa wartości zależnych od trybu */}
-                        {(() => {
-                          const actionCount = playerStats.totalRegains;
-                          
-                          // Wartości zależą od trybu
-                          const isAttackMode = regainAttackDefenseMode === 'attack';
-                          // Dla ataku: partnerzy za piłką, przeciwnicy przed piłką
-                          // Dla obrony: partnerzy za piłką (totalPlayersOnField - bramkarz - playersBehindBall), przeciwnicy za piłką (totalOpponentsOnField - bramkarz - opponentsBehindBall)
-                          const displayPlayersValue = isAttackMode
-                            ? playerStats.regainAverageAttackPlayersBehind // Zawodnicy za piłką w ataku
-                            : playerStats.regainAverageDefensePlayersUnderBall; // Zawodnicy za piłką w obronie
-                          const displayOpponentsValue = isAttackMode
-                            ? playerStats.regainAverageAttackOpponentsBehind // Przeciwnicy za piłką w ataku
-                            : playerStats.regainAverageDefenseOpponentsUnderBall; // Przeciwnicy za piłką w obronie
-                          
-                          // Oblicz różnicę z wartości wyświetlanych w tekście
-                          // Dla ataku: partnerzy za piłką - przeciwnicy za piłką
-                          // Dla obrony: przeciwnicy za piłką - nasi za piłką
-                          // Wzór dla obrony: (totalOpponentsOnField - bramkarz - opponentsBehindBall) - (totalPlayersOnField - bramkarz - playersBehindBall)
-                          const playerDifference = isAttackMode 
-                            ? (displayPlayersValue || 0) - (displayOpponentsValue || 0) // Atak: partnerzy za piłką - przeciwnicy za piłką
-                            : (displayOpponentsValue || 0) - (displayPlayersValue || 0); // Obrona: przeciwnicy za piłką - nasi za piłką
-                          
-                          if (actionCount > 0) {
-                            // Oblicz pozycję na osi: -5 do +5, gdzie 0 to środek
-                            // Wartości ujemne (obrona) → w lewo, wartości dodatnie (atak) → w prawo
-                            const normalizedValue = Math.max(-5, Math.min(5, playerDifference));
-                            
-                            // Pozycja w procentach: 
-                            // -5 = 0% (skrajna lewa), 0 = 50% (środek), +5 = 100% (skrajna prawa)
-                            // Formuła: position = ((value + 5) / 10) * 100
-                            const position = ((normalizedValue + 5) / 10) * 100;
-                            
-                            return (
-                              <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>
-                                  {regainAttackDefenseMode === 'attack' ? 'ZAWODNICY PRZED PIŁKĄ' : 'ZAWODNICY ZA PIŁKĄ'}
-                                </span>
-                                <div className={styles.attackDefenseSlider}>
-                                  <div className={styles.sliderLabels}>
-                                    <span className={styles.sliderLabel}>Obrona</span>
-                                    <span className={styles.sliderLabel}>Atak</span>
-                                  </div>
-                                  <div className={styles.sliderTrack}>
-                                    <div 
-                                      className={styles.sliderFill}
-                                      style={{
-                                        width: `${position}%`,
-                                        backgroundColor: normalizedValue >= 0 
-                                          ? '#3b82f6' 
-                                          : '#10b981'
-                                      }}
-                                    />
-                                    <div 
-                                      className={styles.sliderIndicator}
-                                      style={{
-                                        left: `${position}%`,
-                                        borderColor: normalizedValue >= 0 
-                                          ? '#3b82f6' 
-                                          : '#10b981'
-                                      }}
-                                    >
-                                      <span className={styles.sliderValue}>{Math.abs(playerDifference).toFixed(2)}</span>
-                                    </div>
-                                  </div>
-                                  <div className={styles.sliderScale}>
-                                    <span className={styles.scaleMark}>5</span>
-                                    <span className={styles.scaleMark}>4</span>
-                                    <span className={styles.scaleMark}>3</span>
-                                    <span className={styles.scaleMark}>2</span>
-                                    <span className={styles.scaleMark}>1</span>
-                                    <span className={styles.scaleMark}>0</span>
-                                    <span className={styles.scaleMark}>1</span>
-                                    <span className={styles.scaleMark}>2</span>
-                                    <span className={styles.scaleMark}>3</span>
-                                    <span className={styles.scaleMark}>4</span>
-                                    <span className={styles.scaleMark}>5</span>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
                       </div>
                       <div className={styles.actionCounts}>
                         <div className={styles.countItemsWrapper}>
@@ -7284,87 +7252,6 @@ export default function PlayerDetailsPage() {
                             )}
                           </>
                         )}
-                        {/* Wykres pokazuje różnicę zawodników - używa wartości zależnych od trybu */}
-                        {(() => {
-                          const actionCount = playerStats.totalLoses;
-                          
-                          // Wartości zależą od trybu - podobnie jak dla przechwytów
-                          const isAttackMode = losesAttackDefenseMode === 'attack';
-                          // Dla ataku: partnerzy za piłką, przeciwnicy przed piłką
-                          // Dla obrony: partnerzy za piłką (totalPlayersOnField - bramkarz - playersBehindBall), przeciwnicy za piłką (totalOpponentsOnField - bramkarz - opponentsBehindBall)
-                          const displayPlayersValue = isAttackMode
-                            ? (playerStats.losesAverageAttackPlayersBehind || 0) // Zawodnicy za piłką w ataku
-                            : (playerStats.losesAverageDefensePlayersUnderBall || 0); // Zawodnicy za piłką w obronie
-                          const displayOpponentsValue = isAttackMode
-                            ? (playerStats.losesAverageAttackOpponentsBehind || 0) // Przeciwnicy za piłką w ataku
-                            : (playerStats.losesAverageDefenseOpponentsUnderBall || 0); // Przeciwnicy za piłką w obronie
-                          
-                          // Oblicz różnicę z wartości wyświetlanych w tekście
-                          // Dla ataku: partnerzy za piłką - przeciwnicy za piłką
-                          // Dla obrony: przeciwnicy za piłką - nasi za piłką
-                          // Wzór dla obrony: (totalOpponentsOnField - bramkarz - opponentsBehindBall) - (totalPlayersOnField - bramkarz - playersBehindBall)
-                          const playerDifference = isAttackMode
-                            ? (displayPlayersValue || 0) - (displayOpponentsValue || 0) // Atak: partnerzy za piłką - przeciwnicy za piłką
-                            : (displayOpponentsValue || 0) - (displayPlayersValue || 0); // Obrona: przeciwnicy za piłką - nasi za piłką
-                          
-                          if (actionCount > 0) {
-                            // Oblicz pozycję na osi: -5 do +5, gdzie 0 to środek
-                            const normalizedValue = Math.max(-5, Math.min(5, playerDifference));
-                            
-                            // Pozycja w procentach
-                            const position = ((normalizedValue + 5) / 10) * 100;
-                            
-                            return (
-                              <div className={styles.detailsRow}>
-                                <span className={styles.detailsLabel}>
-                                  {losesAttackDefenseMode === 'attack' ? 'ZAWODNICY PRZED PIŁKĄ' : 'ZAWODNICY ZA PIŁKĄ'}
-                                </span>
-                                <div className={styles.attackDefenseSlider}>
-                                  <div className={styles.sliderLabels}>
-                                    <span className={styles.sliderLabel}>Obrona</span>
-                                    <span className={styles.sliderLabel}>Atak</span>
-                                  </div>
-                                  <div className={styles.sliderTrack}>
-                                    <div 
-                                      className={styles.sliderFill}
-                                      style={{
-                                        width: `${position}%`,
-                                        backgroundColor: normalizedValue >= 0 
-                                          ? '#3b82f6' 
-                                          : '#10b981'
-                                      }}
-                                    />
-                                    <div 
-                                      className={styles.sliderIndicator}
-                                      style={{
-                                        left: `${position}%`,
-                                        borderColor: normalizedValue >= 0 
-                                          ? '#3b82f6' 
-                                          : '#10b981'
-                                      }}
-                                    >
-                                      <span className={styles.sliderValue}>{Math.abs(playerDifference).toFixed(2)}</span>
-                                    </div>
-                                  </div>
-                                  <div className={styles.sliderScale}>
-                                    <span className={styles.scaleMark}>5</span>
-                                    <span className={styles.scaleMark}>4</span>
-                                    <span className={styles.scaleMark}>3</span>
-                                    <span className={styles.scaleMark}>2</span>
-                                    <span className={styles.scaleMark}>1</span>
-                                    <span className={styles.scaleMark}>0</span>
-                                    <span className={styles.scaleMark}>1</span>
-                                    <span className={styles.scaleMark}>2</span>
-                                    <span className={styles.scaleMark}>3</span>
-                                    <span className={styles.scaleMark}>4</span>
-                                    <span className={styles.scaleMark}>5</span>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
                       </div>
                       <div className={styles.actionCounts}>
                         <div className={styles.countItemsWrapper}>
