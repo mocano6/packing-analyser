@@ -128,12 +128,10 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+/* Bez position/z-index/isolation – jak w RegainActionModal, żeby tooltipy w compactButtonsRow nie były zasłaniane. */
 .form {
   padding: 12px;
   overflow: visible;
-  position: relative;
-  z-index: 1;
-  isolation: isolate;
 }
 
 .controversyButton {
@@ -1054,7 +1052,7 @@
 
 /* Sekcja przycisków - zastąpiona kompaktowym layoutem */ 
 
-/* Kompaktowy rząd wszystkich przycisków */
+/* Kompaktowy rząd – bez position/z-index, jak w RegainActionModal (tooltipy nad countSelectorContainer). */
 .compactButtonsRow {
   display: flex;
   gap: 6px;
@@ -1062,8 +1060,6 @@
   flex-wrap: wrap;
   align-items: flex-start;
   overflow: visible;
-  position: relative;
-  z-index: 20;
 }
 
 /* Grupa P1, P2, P3 jako jeden element */
@@ -1101,7 +1097,7 @@
   height: 44px; /* Dokładna wysokość dolnego rzędu */
 }
 
-/* Kontener dla sekcji z nagłówkiem i przyciskami */
+/* Kontener dla sekcji z nagłówkiem i przyciskami – z-index: 2 jak w Regain, żeby tooltipy z lewej były nad countSelectorContainer. */
 .pSectionContainer {
   display: flex;
   flex-direction: column;
@@ -1110,7 +1106,7 @@
   justify-content: flex-start;
   overflow: visible;
   position: relative;
-  z-index: 0;
+  z-index: 2;
 }
 
 .pSectionLabel {
@@ -1134,6 +1130,7 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Jak w RegainActionModal – wysoki z-index, żeby tooltip był nad innymi elementami w tej samej kolumnie. */
 .tooltipTrigger {
   position: relative;
   cursor: pointer;
@@ -1188,6 +1185,22 @@
   transform: translateX(-50%) translateY(-4px);
 }
 
+/* Tooltip wyrównany w prawo – lewa krawędź tooltipa przy triggerze, żeby nie był zasłonięty/ucinany po lewej */
+.tooltipTrigger.tooltipRight[data-tooltip]::before {
+  left: 0;
+  transform: translateX(0);
+}
+.tooltipTrigger.tooltipRight[data-tooltip]:hover::before {
+  transform: translateX(0) translateY(-4px);
+}
+.tooltipTrigger.tooltipRight[data-tooltip]::after {
+  left: 24px;
+  transform: translateX(-50%);
+}
+.tooltipTrigger.tooltipRight[data-tooltip]:hover::after {
+  transform: translateX(-50%) translateY(-4px);
+}
+
 /* Style dla przycisków Podanie/Drybling w actionTypeSelector */
 .actionTypeSelector .actionTypeButton.activePassButton {
   background-color: #dcfce7;
@@ -1214,7 +1227,7 @@
   align-items: center;
   overflow: visible;
   position: relative;
-  z-index: 0;
+  z-index: 2;
 }
 
 .actionTypeButton {
@@ -1250,7 +1263,7 @@
 .actionTypeSelectorSecond {
   margin-top: 0;
   position: relative;
-  z-index: 0;
+  z-index: 2;
 }
 
 /* Grupa przycisków kontaktów - bez ramki */
@@ -1271,7 +1284,7 @@
   flex: 0 0 auto; /* Nie rozciągaj się */
   overflow: visible;
   position: relative;
-  z-index: 0;
+  z-index: 2;
 }
 
 /* Szybki wybór liczby zawodników "pod piłką" */

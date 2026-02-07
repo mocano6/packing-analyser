@@ -1009,7 +1009,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
               {/* Grupa przycisków kontaktów i reakcji 5s */}
               <div className={styles.pSectionContainer}>
                 {/* Sekcja z przyciskami P0-P3 - przestrzeń w której piłka została stracona */}
-                <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Przestrzeń w której piłka została stracona">
+                <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger} ${styles.tooltipRight}`} data-tooltip="Przestrzeń w której piłka została stracona">
                   <button
                     className={`${styles.actionTypeButton} ${
                       isP0Active ? styles.active : ""
@@ -1094,39 +1094,39 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                 className={`${styles.actionTypeSelector} ${styles.actionTypeSelectorSecond}`}
               >
                 <button
-                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
+                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${styles.tooltipRight} ${
                     isReaction5sActive ? styles.active : ""
                   }`}
                   onClick={onReaction5sToggle}
                   aria-pressed={isReaction5sActive}
                   type="button"
-                  data-tooltip={`Kontrpressing (do 5s po stracie).\n• 2 kontakty z piłką lub podanie/strzał (5 sekunda przy pierwszym kontakcie).\n• Sfaulujemy przeciwnika, akcja zostaje przerwana.`}
+                  data-tooltip={`Kontrpressing (do 5s po stracie).\n• 2 kontakty z piłką lub podanie/strzał (5 sekunda przy pierwszym kontakcie).\n• Sfaulujemy przeciwnika, akcja zostaje przerwana.\n• Przeciwnik podał 2 linie do tyłu.`}
                   title="5s - dobre"
                 >
                   <span style={{ fontSize: '14px', color: '#10b981', marginRight: '4px' }}>✓</span>
                   <span>5s</span>
                 </button>
                 <button
-                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
-                    isBadReaction5sActive ? styles.active : ""
-                  }`}
-                  onClick={onBadReaction5sToggle}
-                  aria-pressed={isBadReaction5sActive}
-                  type="button"
-                  data-tooltip="Nieudane 5s"
+className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${styles.tooltipRight} ${
+                  isBadReaction5sActive ? styles.active : ""
+                }`}
+                onClick={onBadReaction5sToggle}
+                aria-pressed={isBadReaction5sActive}
+                type="button"
+                data-tooltip="Przeciwnik utrzymał się przy piłce przez 5s od naszej straty, wszedł w PK, lub oddał strzał."
                   title="Nieudane 5s"
                 >
                   <span style={{ fontSize: '14px', color: '#dc2626', marginRight: '4px' }}>✗</span>
                   <span>5s</span>
                 </button>
                   <button
-                    className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
-                      isAutActive ? styles.active : ""
-                    }`}
-                    onClick={onAutToggle}
-                    aria-pressed={isAutActive}
-                    type="button"
-                    data-tooltip="Aut"
+className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${styles.tooltipRight} ${
+                    isAutActive ? styles.active : ""
+                  }`}
+                  onClick={onAutToggle}
+                  aria-pressed={isAutActive}
+                  type="button"
+                  data-tooltip="Aut"
                   >
                     Aut
                   </button>
@@ -1136,7 +1136,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
             
             {/* Środek: Sekcja z szybkimi wyborami liczby zawodników "pod piłką" */}
             <div
-              className={`${styles.countSelectorContainer} ${styles.tooltipTrigger}`}
+              className={`${styles.countSelectorContainer} ${styles.tooltipTrigger} ${styles.tooltipRight}`}
               data-tooltip="Liczymy zawodników do swojej bramki."
             >
               {renderCountRow(
