@@ -10,7 +10,8 @@ import PackingChart from '@/components/PackingChart/PackingChart';
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import ActionSection from "@/components/ActionSection/ActionSection";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, getDocs, updateDoc } from "firebase/firestore";
+import { doc, collection, getDocs, updateDoc } from "firebase/firestore";
+import { getMatchDocCached } from "@/utils/matchDocCache";
 import { buildPlayersIndex, getPlayerLabel, sortPlayersByLastName } from "@/utils/playerUtils";
 import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
@@ -339,11 +340,11 @@ export default function ZawodnicyPage() {
           if (!match.matchId) continue;
           
           try {
-            // Pobierz dokument meczu
-            const matchDoc = await getDoc(doc(db, "matches", match.matchId));
+            // Pobierz dokument meczu (cache 10 min)
+            const matchDoc = await getMatchDocCached(match.matchId);
             
-            if (matchDoc.exists()) {
-              const matchData = matchDoc.data();
+            if (matchDoc.exists) {
+              const matchData = matchDoc.data;
               
               // Sprawdź czy mecz ma akcje w polu actions_packing
               if (matchData.actions_packing && Array.isArray(matchData.actions_packing)) {

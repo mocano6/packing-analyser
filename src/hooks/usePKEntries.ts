@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { PKEntry } from "@/types";
 import { getDB } from "@/lib/firebase";
-import { doc, updateDoc, getDoc } from "firebase/firestore";
+import { doc, updateDoc } from "firebase/firestore";
+import { getMatchDocCached } from "@/utils/matchDocCache";
 
 export const usePKEntries = (matchId: string) => {
   const [pkEntries, setPkEntries] = useState<PKEntry[]>([]);
@@ -18,10 +19,9 @@ export const usePKEntries = (matchId: string) => {
     setError(null);
     
     try {
-      const db = getDB();
-      const matchDoc = await getDoc(doc(db, "matches", matchId));
-      if (matchDoc.exists()) {
-        const matchData = matchDoc.data();
+      const matchDoc = await getMatchDocCached(matchId);
+      if (matchDoc.exists) {
+        const matchData = matchDoc.data;
         const rawEntries = matchData.pkEntries || [];
         setPkEntries(rawEntries);
       } else {

@@ -22,6 +22,8 @@ export default function ListaZawodnikow() {
   const { isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
   const { players, handleDeletePlayer: deletePlayer } = usePlayersState();
   const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
+  const ACTIONS_CACHE_KEY = "admin_all_actions_cache";
+  const ACTIONS_CACHE_TTL_MS = 10 * 60 * 1000;
 
   // WSZYSTKIE HOOKI MUSZĄ BYĆ PRZED WARUNKAMI RETURN!
   
@@ -30,6 +32,23 @@ export default function ListaZawodnikow() {
     const fetchAllActions = async () => {
       setIsLoading(true);
       try {
+        const cachedRaw = localStorage.getItem(ACTIONS_CACHE_KEY);
+        if (cachedRaw) {
+          try {
+            const parsed = JSON.parse(cachedRaw) as { ts: number; data: Action[] };
+            if (parsed?.ts && Array.isArray(parsed.data)) {
+              const isFresh = Date.now() - parsed.ts < ACTIONS_CACHE_TTL_MS;
+              if (isFresh) {
+                setAllActions(parsed.data);
+                setIsLoading(false);
+                return;
+              }
+            }
+          } catch {
+            // ignore cache parse errors
+          }
+        }
+
         // Pobierz wszystkie mecze
         const matchesSnapshot = await getDocs(collection(getDB(), 'matches'));
         const allMatchActions: Action[] = [];
@@ -44,6 +63,10 @@ export default function ListaZawodnikow() {
 
 
         setAllActions(allMatchActions);
+        localStorage.setItem(
+          ACTIONS_CACHE_KEY,
+          JSON.stringify({ ts: Date.now(), data: allMatchActions })
+        );
       } catch (error) {
         console.error('Błąd podczas pobierania akcji:', error);
         setAllActions([]);

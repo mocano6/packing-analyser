@@ -271,6 +271,29 @@
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
+.refreshButton {
+  padding: 8px 12px;
+  background-color: #ffffff;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.refreshButton:hover {
+  border-color: #9ca3af;
+  background-color: #f9fafb;
+}
+
+.refreshButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .offlineBadge {
   padding: 6px 12px;
   background-color: #ff9800;

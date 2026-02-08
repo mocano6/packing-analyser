@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Acc8sEntry } from "@/types";
 import { getDB } from "@/lib/firebase";
-import { doc, updateDoc, getDoc } from "firebase/firestore";
+import { doc, updateDoc } from "firebase/firestore";
+import { getMatchDocCached } from "@/utils/matchDocCache";
 
 export const useAcc8sEntries = (matchId: string) => {
   const [acc8sEntries, setAcc8sEntries] = useState<Acc8sEntry[]>([]);
@@ -18,10 +19,9 @@ export const useAcc8sEntries = (matchId: string) => {
     setError(null);
     
     try {
-      const db = getDB();
-      const matchDoc = await getDoc(doc(db, "matches", matchId));
-      if (matchDoc.exists()) {
-        const matchData = matchDoc.data();
+      const matchDoc = await getMatchDocCached(matchId);
+      if (matchDoc.exists) {
+        const matchData = matchDoc.data;
         const rawEntries = matchData.acc8sEntries || [];
         setAcc8sEntries(rawEntries);
       } else {

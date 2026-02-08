@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { getDB } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
 import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from "firebase/auth";
@@ -42,6 +43,51 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
   const [isUpdatingUser, setIsUpdatingUser] = useState<boolean>(false);
   const [selectedPlayerByUser, setSelectedPlayerByUser] = useState<Record<string, string>>({});
   const [playerSearchByUser, setPlayerSearchByUser] = useState<Record<string, string>>({});
+  const [openTeamsDropdownUserId, setOpenTeamsDropdownUserId] = useState<string | null>(null);
+  const [dropdownAnchorRect, setDropdownAnchorRect] = useState<DOMRect | null>(null);
+  const [sortByRole, setSortByRole] = useState<'asc' | 'desc' | null>(null);
+  const teamsDropdownRef = useRef<HTMLDivElement>(null);
+  const teamsDropdownButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  // Posortowana lista użytkowników (według roli)
+  const sortedUsers = useMemo(() => {
+    if (sortByRole === null) return users;
+    const order = sortByRole === 'asc' ? 1 : -1;
+    return [...users].sort((a, b) => order * (a.role.localeCompare(b.role)));
+  }, [users, sortByRole]);
+
+  // Zamknij dropdown zespołów po kliknięciu poza nim
+  useEffect(() => {
+    if (openTeamsDropdownUserId === null) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const inPortal = teamsDropdownRef.current?.contains(target);
+      const inButton = teamsDropdownButtonRef.current?.contains(target);
+      if (!inPortal && !inButton) {
+        setOpenTeamsDropdownUserId(null);
+        setDropdownAnchorRect(null);
+        teamsDropdownButtonRef.current = null;
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openTeamsDropdownUserId]);
+
+  // Aktualizuj pozycję dropdownu przy scrollu i resize
+  useEffect(() => {
+    if (openTeamsDropdownUserId === null || !teamsDropdownButtonRef.current) return;
+    const updateRect = () => {
+      if (teamsDropdownButtonRef.current) {
+        setDropdownAnchorRect(teamsDropdownButtonRef.current.getBoundingClientRect());
+      }
+    };
+    window.addEventListener("scroll", updateRect, true);
+    window.addEventListener("resize", updateRect);
+    return () => {
+      window.removeEventListener("scroll", updateRect, true);
+      window.removeEventListener("resize", updateRect);
+    };
+  }, [openTeamsDropdownUserId]);
 
   // Pobierz wszystkich użytkowników
   const fetchUsers = async () => {
@@ -716,31 +762,57 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
             borderCollapse: "collapse",
             backgroundColor: "white",
             borderRadius: "8px",
-            overflow: "hidden"
+            overflow: "hidden",
+            tableLayout: "fixed"
           }}>
             <thead>
               <tr style={{ backgroundColor: "#f0f0f0" }}>
-                <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>Email</th>
-                <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>Rola</th>
-                <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>Dostępne zespoły</th>
-                <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>Ostatnie logowanie</th>
-                <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>Akcje</th>
+                <th style={{ padding: "6px 8px", border: "1px solid #ddd", textAlign: "left", fontSize: "0.8rem", width: "180px" }}>Email</th>
+                <th style={{ padding: "6px 8px", border: "1px solid #ddd", textAlign: "left", fontSize: "0.8rem", width: "96px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setSortByRole(prev => prev === null ? 'asc' : prev === 'asc' ? 'desc' : null)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: 0,
+                      border: "none",
+                      background: "none",
+                      fontSize: "0.8rem",
+                      cursor: "pointer",
+                      color: "inherit",
+                      fontWeight: "inherit"
+                    }}
+                    title={sortByRole === null ? "Sortuj według roli" : sortByRole === 'asc' ? "Sortuj malejąco (kliknij aby wyłączyć)" : "Wyłącz sortowanie"}
+                    aria-sort={sortByRole === null ? undefined : sortByRole === 'asc' ? 'ascending' : 'descending'}
+                  >
+                    Rola
+                    {sortByRole === 'asc' && " ↑"}
+                    {sortByRole === 'desc' && " ↓"}
+                  </button>
+                </th>
+                <th style={{ padding: "6px 8px", border: "1px solid #ddd", textAlign: "left", fontSize: "0.8rem", width: "180px" }}>Dostępne zespoły</th>
+                <th style={{ padding: "6px 8px", border: "1px solid #ddd", textAlign: "left", fontSize: "0.8rem", width: "120px" }}>Ostatnie logowanie</th>
+                <th style={{ padding: "6px 8px", border: "1px solid #ddd", textAlign: "left", fontSize: "0.8rem", width: "240px" }}>Akcje</th>
               </tr>
             </thead>
             <tbody>
-              {users.map(user => (
+              {sortedUsers.map(user => (
                 <tr key={user.id}>
-                  <td style={{ padding: "12px", border: "1px solid #ddd" }}>
+                  <td style={{ padding: "6px 8px", border: "1px solid #ddd", fontSize: "0.85rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={user.email || ""}>
                     {user.email || 'Brak emaila'}
                   </td>
-                  <td style={{ padding: "12px", border: "1px solid #ddd" }}>
+                  <td style={{ padding: "6px 8px", border: "1px solid #ddd" }}>
                     <select
                       value={user.role}
                       onChange={(e) => updateUserRole(user.id, e.target.value as 'user' | 'admin' | 'coach' | 'player')}
                       style={{
-                        padding: "4px 8px",
+                        padding: "4px 6px",
                         border: "1px solid #ddd",
-                        borderRadius: "4px"
+                        borderRadius: "4px",
+                        fontSize: "0.8rem",
+                        width: "100%"
                       }}
                     >
                       <option value="user">User</option>
@@ -749,35 +821,64 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                       <option value="player">Player</option>
                     </select>
                   </td>
-                  <td style={{ padding: "12px", border: "1px solid #ddd" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                      {teams.map(team => (
-                        <label key={team.id} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <input
-                            type="checkbox"
-                            checked={user.allowedTeams.includes(team.id)}
-                            onChange={() => handleTeamToggle(user.id, team.id, user.allowedTeams)}
-                          />
-                          <span style={{ fontSize: "0.9rem" }}>{team.name}</span>
-                        </label>
-                      ))}
+                  <td style={{ padding: "6px 8px", border: "1px solid #ddd", verticalAlign: "middle", position: "relative" }}>
+                    <div style={{ position: "relative" }}>
+                      <button
+                        ref={(el) => {
+                          if (openTeamsDropdownUserId === user.id) teamsDropdownButtonRef.current = el;
+                        }}
+                        type="button"
+                        onClick={(e) => {
+                          const btn = e.currentTarget;
+                          if (openTeamsDropdownUserId === user.id) {
+                            setOpenTeamsDropdownUserId(null);
+                            setDropdownAnchorRect(null);
+                            teamsDropdownButtonRef.current = null;
+                          } else {
+                            teamsDropdownButtonRef.current = btn;
+                            setDropdownAnchorRect(btn.getBoundingClientRect());
+                            setOpenTeamsDropdownUserId(user.id);
+                          }
+                        }}
+                        aria-expanded={openTeamsDropdownUserId === user.id}
+                        aria-haspopup="listbox"
+                        style={{
+                          width: "100%",
+                          padding: "4px 8px",
+                          border: "1px solid #ddd",
+                          borderRadius: "4px",
+                          fontSize: "0.8rem",
+                          textAlign: "left",
+                          backgroundColor: "white",
+                          cursor: "pointer",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap"
+                        }}
+                      >
+                        {user.allowedTeams.length === 0
+                          ? "Wybierz zespoły"
+                          : user.allowedTeams.length <= 2
+                            ? teams.filter(t => user.allowedTeams.includes(t.id)).map(t => t.name).join(", ")
+                            : `${user.allowedTeams.length} zespołów`}
+                      </button>
                     </div>
                   </td>
-                  <td style={{ padding: "12px", border: "1px solid #ddd" }}>
+                  <td style={{ padding: "6px 8px", border: "1px solid #ddd", fontSize: "0.8rem" }}>
                     {user.lastLogin ? new Date(user.lastLogin).toLocaleString('pl-PL') : 'Nigdy'}
                   </td>
-                  <td style={{ padding: "12px", border: "1px solid #ddd" }}>
-                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <td style={{ padding: "6px 8px", border: "1px solid #ddd" }}>
+                    <div style={{ display: "flex", gap: "4px", flexWrap: "nowrap", whiteSpace: "nowrap" }}>
                       <button
                         onClick={() => openEditUserModal(user)}
                         style={{
-                          padding: "6px 12px",
+                          padding: "4px 8px",
                           backgroundColor: "#17a2b8",
                           color: "white",
                           border: "none",
                           borderRadius: "4px",
                           cursor: "pointer",
-                          fontSize: "0.8rem"
+                          fontSize: "0.75rem"
                         }}
                       >
                         Edytuj
@@ -785,13 +886,13 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                       <button
                         onClick={() => sendPasswordReset(user.email)}
                         style={{
-                          padding: "6px 12px",
+                          padding: "4px 8px",
                           backgroundColor: "#ffc107",
                           color: "#212529",
                           border: "none",
                           borderRadius: "4px",
                           cursor: "pointer",
-                          fontSize: "0.8rem"
+                          fontSize: "0.75rem"
                         }}
                       >
                         Reset hasła
@@ -799,13 +900,13 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                       <button
                         onClick={() => deleteUser(user.id, user.email)}
                         style={{
-                          padding: "6px 12px",
+                          padding: "4px 8px",
                           backgroundColor: "#e74c3c",
                           color: "white",
                           border: "none",
                           borderRadius: "4px",
                           cursor: "pointer",
-                          fontSize: "0.8rem"
+                          fontSize: "0.75rem"
                         }}
                       >
                         Usuń
@@ -818,6 +919,54 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
           </table>
         </div>
       )}
+
+      {/* Portal: lista zespołów (poza overflow, żeby nie była przycinana) */}
+      {typeof document !== "undefined" &&
+        openTeamsDropdownUserId &&
+        dropdownAnchorRect &&
+        (() => {
+          const openUser = users.find((u) => u.id === openTeamsDropdownUserId);
+          if (!openUser) return null;
+          return createPortal(
+            <div
+              ref={teamsDropdownRef}
+              role="listbox"
+              aria-multiselectable
+              aria-label="Dostępne zespoły"
+              style={{
+                position: "fixed",
+                top: dropdownAnchorRect.bottom + 2,
+                left: dropdownAnchorRect.left,
+                width: dropdownAnchorRect.width,
+                maxHeight: "200px",
+                overflowY: "auto",
+                backgroundColor: "white",
+                border: "1px solid #ddd",
+                borderRadius: "4px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                zIndex: 10050,
+                padding: "4px"
+              }}
+            >
+              {teams.map((team) => (
+                <label
+                  key={team.id}
+                  role="option"
+                  aria-selected={openUser.allowedTeams.includes(team.id)}
+                  style={{ display: "flex", alignItems: "center", gap: "6px", padding: "4px 6px", cursor: "pointer", fontSize: "0.8rem" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={openUser.allowedTeams.includes(team.id)}
+                    onChange={() => handleTeamToggle(openUser.id, team.id, openUser.allowedTeams)}
+                  />
+                  <span>{team.name}</span>
+                </label>
+              ))}
+            </div>,
+            document.body
+          );
+        })()}
 
       {/* Modal dodawania użytkownika */}
       {showAddUserModal && (

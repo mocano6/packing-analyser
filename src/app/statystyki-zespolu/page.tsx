@@ -10,7 +10,8 @@ import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, collection, query, where, getDocs } from "firebase/firestore";
+import { getMatchDocCached, invalidateMatchCache } from "@/utils/matchDocCache";
 import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
@@ -102,6 +103,8 @@ export default function StatystykiZespoluPage() {
   const [allPKEntries, setAllPKEntries] = useState<any[]>([]);
   const [allAcc8sEntries, setAllAcc8sEntries] = useState<any[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
+  const [isRefreshingData, setIsRefreshingData] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [expandedCategory, setExpandedCategory] = useState<'kpi' | 'pxt' | 'xg' | 'matchData' | 'pkEntries' | 'regains' | 'loses' | 'gps' | null>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('statystykiZespolu_expandedCategory');
@@ -112,6 +115,18 @@ export default function StatystykiZespoluPage() {
     }
     return 'kpi';
   });
+
+  const handleRefreshData = async () => {
+    if (isRefreshingData) return;
+    try {
+      setIsRefreshingData(true);
+      invalidateMatchCache(selectedMatch);
+      await forceRefreshFromFirebase(selectedTeam || undefined);
+      setRefreshKey((prev) => prev + 1);
+    } finally {
+      setIsRefreshingData(false);
+    }
+  };
 
   // Zapisuj wybraną kategorię w localStorage przy każdej zmianie
   useEffect(() => {
@@ -384,10 +399,10 @@ export default function StatystykiZespoluPage() {
           return;
         }
 
-        const matchDoc = await getDoc(doc(db, "matches", selectedMatch));
+        const matchDoc = await getMatchDocCached(selectedMatch);
         
-        if (matchDoc.exists()) {
-          const matchData = matchDoc.data() as TeamInfo;
+        if (matchDoc.exists) {
+          const matchData = matchDoc.data as TeamInfo;
           const actions = matchData.actions_packing || [];
           const shots = matchData.shots || [];
           const pkEntries = matchData.pkEntries || [];
@@ -429,7 +444,7 @@ export default function StatystykiZespoluPage() {
     };
 
     loadActionsForMatch();
-  }, [selectedMatch, selectedTeam]);
+  }, [selectedMatch, selectedTeam, refreshKey]);
 
   // Przygotuj dane dla wykresów zespołowych
   const teamChartData = useMemo(() => {
@@ -3280,7 +3295,19 @@ export default function StatystykiZespoluPage() {
         <Link href="/" className={styles.backButton} title="Powrót do głównej">
           ←
         </Link>
-        <h1>Statystyki zespołu - Analiza meczu</h1>
+        <div className={styles.headerTitleRow}>
+          <h1>Statystyki zespołu - Analiza meczu</h1>
+          <button
+            type="button"
+            className={styles.refreshButton}
+            onClick={handleRefreshData}
+            disabled={isRefreshingData}
+            aria-disabled={isRefreshingData}
+            title="Odśwież dane z Firebase"
+          >
+            {isRefreshingData ? "Odświeżanie..." : "Odśwież dane"}
+          </button>
+        </div>
       </div>
 
       {/* Kompaktowa sekcja wyboru */}

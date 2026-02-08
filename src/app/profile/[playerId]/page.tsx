@@ -8,7 +8,8 @@ import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
 import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc } from "firebase/firestore";
+import { getMatchDocCached, invalidateMatchCache } from "@/utils/matchDocCache";
 import Link from "next/link";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
@@ -35,6 +36,8 @@ export default function PlayerDetailsPage() {
   const [allActions, setAllActions] = useState<Action[]>([]);
   const [allShots, setAllShots] = useState<any[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
+  const [isRefreshingData, setIsRefreshingData] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [allTeamActions, setAllTeamActions] = useState<Action[]>([]); // Wszystkie akcje zespołu dla rankingu
   const [playerMatchStatsByMatchId, setPlayerMatchStatsByMatchId] = useState<Record<string, PlayerMatchStats>>({});
   const [selectedMatchIds, setSelectedMatchIds] = useState<string[]>(() => {
@@ -133,6 +136,18 @@ export default function PlayerDetailsPage() {
       localStorage.setItem("profile_selectedSeason", selectedSeason);
     }
   }, [selectedSeason]);
+
+  const handleRefreshData = async () => {
+    if (isRefreshingData) return;
+    try {
+      setIsRefreshingData(true);
+      invalidateMatchCache();
+      await forceRefreshFromFirebase(selectedTeam || undefined);
+      setRefreshKey((prev) => prev + 1);
+    } finally {
+      setIsRefreshingData(false);
+    }
+  };
 
   const [selectedPxtCategory, setSelectedPxtCategory] = useState<"sender" | "receiver" | "dribbler">("sender");
   const [heatmapMode, setHeatmapMode] = useState<"pxt" | "count">("pxt");
@@ -659,9 +674,9 @@ export default function PlayerDetailsPage() {
           if (!match.matchId) continue;
 
           try {
-            const matchDoc = await getDoc(doc(db, "matches", match.matchId));
-            if (matchDoc.exists()) {
-              const matchData = matchDoc.data() as TeamInfo;
+            const matchDoc = await getMatchDocCached(match.matchId);
+            if (matchDoc.exists) {
+              const matchData = matchDoc.data as TeamInfo;
               
               // Pobierz ręcznie wpisane statystyki zawodnika (podania celne/niecelne + czas posiadania)
               const playerMatchStats = matchData?.matchData?.playerStats?.find(
@@ -718,7 +733,7 @@ export default function PlayerDetailsPage() {
     };
 
     loadPlayerActions();
-  }, [playerId, selectedPlayerForView, filteredMatchesBySeason, filteredPlayers, db]);
+  }, [playerId, selectedPlayerForView, filteredMatchesBySeason, filteredPlayers, db, refreshKey]);
 
   // Oblicz dostępne sezony
   const availableSeasons = useMemo(() => {
@@ -819,9 +834,9 @@ export default function PlayerDetailsPage() {
           if (!match.matchId) continue;
 
           try {
-            const matchDoc = await getDoc(doc(db, "matches", match.matchId));
-            if (matchDoc.exists()) {
-              const matchData = matchDoc.data() as TeamInfo;
+            const matchDoc = await getMatchDocCached(match.matchId);
+            if (matchDoc.exists) {
+              const matchData = matchDoc.data as TeamInfo;
               
               // Pobierz akcje z różnych kolekcji
               const packingActions = matchData.actions_packing || [];
@@ -861,7 +876,7 @@ export default function PlayerDetailsPage() {
     };
 
     loadAllTeamActions();
-  }, [selectedTeam, filteredMatchesBySeason, playersForRanking, db]);
+  }, [selectedTeam, filteredMatchesBySeason, playersForRanking, db, refreshKey]);
 
   // Inicjalizuj selectedTeam - sprawdź czy wybrany zespół jest dostępny, jeśli nie - ustaw pierwszy dostępny
   // Dla gracza (isPlayer) po załadowaniu ustaw zespół na dozwolony (jego zespoły), nie na wartość z localStorage
@@ -3950,6 +3965,15 @@ export default function PlayerDetailsPage() {
           </Link>
           <div className={styles.headerTitleRow}>
             <h1>Profil zawodnika</h1>
+            <button
+              type="button"
+              className={styles.refreshButton}
+              onClick={handleRefreshData}
+              disabled={isRefreshingData}
+              title="Odśwież dane z Firebase"
+            >
+              {isRefreshingData ? "Odświeżanie..." : "Odśwież dane"}
+            </button>
             {isAdmin && (
               <button
                 type="button"

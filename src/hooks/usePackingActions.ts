@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Player, Action, TeamInfo } from "@/types";
 import { v4 as uuidv4 } from 'uuid';
 import { getDB } from "@/lib/firebase";
-import { collection, addDoc, query, where, getDocs, doc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
+import { getMatchDocCached } from "@/utils/matchDocCache";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 import toast from "react-hot-toast";
 // Usunięto import funkcji synchronizacji - akcje są teraz tylko w matches
 import { getOppositeXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString, getZoneData } from '@/constants/xtValues';
+import { enqueue, initActionsSyncQueue, isOnline, markDirty, registerStateProvider } from "@/utils/actionsSyncQueue";
 
 // Funkcja do konwersji numeru strefy na format literowo-liczbowy
 function convertZoneNumberToString(zoneNumber: number | string): string {
@@ -119,6 +120,21 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   // Dane o akcjach
   const [actions, setActions] = useState<Action[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const actionsRef = useRef<Action[]>([]);
+  actionsRef.current = actions;
+
+  const getCurrentCollectionField = useCallback((): string => {
+    if (actionCategory === "regain") return "actions_regain";
+    if (actionCategory === "loses") return "actions_loses";
+    return actionMode === "defense" ? "actions_unpacking" : "actions_packing";
+  }, [actionCategory, actionMode]);
+
+  useEffect(() => {
+    initActionsSyncQueue();
+    if (!matchInfo?.matchId) return;
+    const collectionField = getCurrentCollectionField();
+    return registerStateProvider(matchInfo.matchId, collectionField, () => actionsRef.current);
+  }, [matchInfo?.matchId, getCurrentCollectionField]);
 
   // Funkcja ładująca akcje dla danego meczu
   const loadActionsForMatch = useCallback(async (matchId: string) => {
@@ -126,11 +142,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       setIsLoading(true);
       
       // Pobierz dokument meczu
-      const matchRef = doc(getDB(), "matches", matchId);
-      const matchDoc = await getDoc(matchRef);
+      const matchDoc = await getMatchDocCached(matchId);
       
-      if (matchDoc.exists()) {
-        const matchData = matchDoc.data() as TeamInfo;
+      if (matchDoc.exists) {
+        const matchData = matchDoc.data as TeamInfo;
         // Ładujemy akcje z odpowiedniej kolekcji w zależności od kategorii
         let loadedActions: Action[];
         if (loadBothRegainLoses) {
@@ -670,36 +685,12 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       if (actionCategory === "loses") {
       }
       
-      // Zapisujemy do Firebase
-      try {
-        // Pobierz aktualny dokument meczu
-        const matchRef = doc(getDB(), "matches", matchInfoArg.matchId);
-        const matchDoc = await getDoc(matchRef);
-        
-        if (matchDoc.exists()) {
-          const matchData = matchDoc.data() as TeamInfo;
-          
-          // Wybieramy kolekcję w zależności od kategorii i trybu
-          let collectionField: string;
-          if (actionCategory === "regain") {
-            collectionField = "actions_regain";
-          } else if (actionCategory === "loses") {
-            collectionField = "actions_loses";
-          } else {
-            collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
-          }
-          const currentActions = (matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
-          
-          // Upewniamy się, że wszystkie akcje są oczyszczone z undefined
-          const cleanedActions = currentActions.map((action: Action) =>
-            removeUndefinedFields(stripPIIFromAction(action))
-          );
-          
-          // Dodaj nową (oczyszczoną) akcję i aktualizuj dokument
-          // Upewniamy się, że wszystkie pola boolean są zapisane, nawet jeśli są false
-          const actionToSave = {
-            ...stripPIIFromAction(cleanedAction),
-            ...(actionCategory === "regain" || actionCategory === "loses" ? {
+      // Przygotuj dane do zapisu (batch/offline)
+      const collectionField = getCurrentCollectionField();
+      const actionToSave = {
+        ...stripPIIFromAction(cleanedAction),
+        ...(actionCategory === "regain" || actionCategory === "loses"
+          ? {
               isP0: cleanedAction.isP0 ?? false,
               isP1: cleanedAction.isP1 ?? false,
               isP2: cleanedAction.isP2 ?? false,
@@ -712,40 +703,26 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
               isPenaltyAreaEntry: cleanedAction.isPenaltyAreaEntry ?? false,
               ...(actionCategory === "loses" && {
                 isPMArea: (cleanedAction as any).isPMArea ?? false,
-                isAut: (cleanedAction as any).isAut ?? false
-              })
-            } : {})
-          };
-          
-          await updateDoc(matchRef, {
-            [collectionField]: [...cleanedActions, actionToSave]
-          });
-          
-          // Console log z całym obiektem zapisanej akcji
-          
-          // Specjalny console log dla akcji loses
-          if (actionCategory === "loses") {
-          }
-          
-          // Akcje są teraz przechowywane tylko w matches - nie duplikujemy w players
-          
-          // Po udanym zapisie odświeżamy akcje z bazy - WAŻNE: używamy await, aby upewnić się, że akcje są załadowane
-          await loadActionsForMatch(matchInfoArg.matchId);
-          
-          // Dodajemy akcję do lokalnego stanu po odświeżeniu z bazy (aby uniknąć duplikacji)
-          // setActions jest już wywoływane w loadActionsForMatch, więc nie musimy tego robić tutaj
-        } else {
-          console.error("Nie znaleziono meczu o ID:", matchInfoArg.matchId);
-        }
-      } catch (firebaseError) {
-          console.error("Błąd podczas zapisywania akcji w Firebase:", firebaseError);
-        
-        // Obsługa błędu wewnętrznego stanu Firestore
-        const errorHandled = await handleFirestoreError(firebaseError, getDB());
-        
-          if (!errorHandled) {
-            // Akcja została dodana tylko lokalnie - synchronizacja z Firebase nieudana
-        }
+                isAut: (cleanedAction as any).isAut ?? false,
+              }),
+            }
+          : {}),
+      };
+
+      // Aktualizacja lokalna (optimistic)
+      setActions((prev) => [...prev, actionToSave]);
+
+      // Batch/Offline sync
+      enqueue({
+        type: "add",
+        matchId: matchInfoArg.matchId,
+        collectionField,
+        action: actionToSave,
+      });
+      if (isOnline()) {
+        markDirty(matchInfoArg.matchId, collectionField);
+      } else {
+        toast("Zapisano lokalnie. Synchronizacja po powrocie internetu.");
       }
       
       // Po zapisaniu resetujemy stan
@@ -760,7 +737,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       return false;
     }
-  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP0StartActive, isP1StartActive, isP2StartActive, isP3StartActive, isP0Active, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf, isBelow8sActive, isReaction5sActive, isBadReaction5sActive, isAutActive, isPMAreaActive, playersBehindBall, opponentsBehindBall, playersLeftField, opponentsLeftField, actionCategory, actionMode, selectedDefensePlayers, loadActionsForMatch]);
+  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP0StartActive, isP1StartActive, isP2StartActive, isP3StartActive, isP0Active, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf, isBelow8sActive, isReaction5sActive, isBadReaction5sActive, isAutActive, isPMAreaActive, playersBehindBall, opponentsBehindBall, playersLeftField, opponentsLeftField, actionCategory, actionMode, selectedDefensePlayers, getCurrentCollectionField]);
 
   // Funkcja pomocnicza do określenia kategorii akcji
   const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
@@ -788,99 +765,45 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       return false;
     }
     
-    try {
-      // Sprawdzamy dostępność bazy danych przez próbę dostępu
-      getDB();
-    } catch (dbError) {
-      console.error("Brak połączenia z bazą danych");
-      return false;
-    }
-    
     // Dodaj potwierdzenie przed usunięciem
     if (!window.confirm("Czy na pewno chcesz usunąć tę akcję?")) {
       return false;
     }
     
     try {
-      // NAJPIERW usuwamy z Firebase
-      const matchRef = doc(getDB(), "matches", matchInfo.matchId);
-      const matchDoc = await getDoc(matchRef);
-      
-      if (matchDoc.exists()) {
-        const matchData = matchDoc.data() as TeamInfo;
-        
-        // Znajdź akcję w lokalnym stanie, aby określić jej kategorię
-        const actionToDelete = actions.find(a => a.id === actionId);
-        
-        // Jeśli nie ma w lokalnym stanie, sprawdź wszystkie kolekcje w Firebase
-        let foundAction: Action | undefined = actionToDelete;
-        let collectionField: string = "actions_packing";
-        
-        if (!foundAction) {
-          // Sprawdź wszystkie kolekcje
-          const packingActions = matchData.actions_packing || [];
-          const unpackingActions = matchData.actions_unpacking || [];
-          const regainActions = matchData.actions_regain || [];
-          const losesActions = matchData.actions_loses || [];
-          
-          foundAction = [...packingActions, ...unpackingActions, ...regainActions, ...losesActions]
-            .find((action: Action) => action.id === actionId);
-          
-          if (foundAction) {
-            const actionCategory = getActionCategory(foundAction);
-            if (actionCategory === "regain") {
-              collectionField = "actions_regain";
-            } else if (actionCategory === "loses") {
-              collectionField = "actions_loses";
-            } else {
-              // Dla packing sprawdzamy tryb (attack/defense)
-              const isDefense = foundAction.mode === "defense";
-              collectionField = isDefense ? "actions_unpacking" : "actions_packing";
-            }
-          }
-        } else {
-          // Określ kategorię na podstawie akcji z lokalnego stanu
-          const actionCategory = getActionCategory(foundAction);
-          if (actionCategory === "regain") {
-            collectionField = "actions_regain";
-          } else if (actionCategory === "loses") {
-            collectionField = "actions_loses";
-          } else {
-            // Dla packing sprawdzamy tryb (attack/defense)
-            const isDefense = foundAction.mode === "defense";
-            collectionField = isDefense ? "actions_unpacking" : "actions_packing";
-          }
-        }
-        
-        if (!foundAction) {
-          console.error("Nie znaleziono akcji o ID:", actionId);
-          return false;
-        }
-        
-        // Pobierz akcje z odpowiedniej kolekcji
-        const currentActions = (matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
-        
-        // Filtrujemy akcje, aby usunąć tę o podanym ID
-        const updatedActions = currentActions.filter((action: Action) => action.id !== actionId);
-        
-        // Oczyszczamy wszystkie akcje z wartości undefined
-        const cleanedActions = updatedActions.map((action: Action) => removeUndefinedFields(action));
-        
-        // Aktualizujemy dokument z oczyszczonymi akcjami
-        await updateDoc(matchRef, {
-          [collectionField]: cleanedActions
-        });
-        
-        // Akcje są teraz przechowywane tylko w matches - nie duplikujemy w players
-        
-        // DOPIERO PO UDANYM ZAPISIE usuwamy z lokalnego stanu
-        setActions(prevActions => prevActions.filter(action => action.id !== actionId));
-        
-      } else {
-        console.error("Nie znaleziono meczu o ID:", matchInfo.matchId);
+      const actionToDelete = actions.find((a) => a.id === actionId);
+      if (!actionToDelete) {
+        console.error("Nie znaleziono akcji o ID:", actionId);
         return false;
       }
-      
+
+      const category = getActionCategory(actionToDelete);
+      let collectionField = "actions_packing";
+      if (category === "regain") {
+        collectionField = "actions_regain";
+      } else if (category === "loses") {
+        collectionField = "actions_loses";
+      } else {
+        const isDefense = actionToDelete.mode === "defense";
+        collectionField = isDefense ? "actions_unpacking" : "actions_packing";
+      }
+
+      // Aktualizacja lokalna (optimistic)
+      setActions((prevActions) => prevActions.filter((action) => action.id !== actionId));
+
+      // Batch/Offline sync
+      enqueue({
+        type: "delete",
+        matchId: matchInfo.matchId,
+        collectionField,
+        actionId,
+      });
+      if (isOnline()) {
+        markDirty(matchInfo.matchId, collectionField);
+      } else {
+        toast("Usunięto lokalnie. Synchronizacja po powrocie internetu.");
+      }
+
       return true;
     } catch (error: unknown) {
       console.error("Błąd podczas usuwania akcji:", error);
@@ -905,26 +828,21 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     
     if (window.confirm("Czy na pewno chcesz usunąć wszystkie akcje?")) {
       try {
-        // Pobierz aktualny dokument meczu, aby uzyskać listę akcji do usunięcia z danych zawodników
-        const matchRef = doc(getDB(), "matches", matchInfo.matchId);
-        const matchDoc = await getDoc(matchRef);
-        
-        let actionsToRemove: Action[] = [];
-        if (matchDoc.exists()) {
-          const matchData = matchDoc.data() as TeamInfo;
-          actionsToRemove = matchData.actions_packing || [];
-        }
-        
-        // Aktualizacja dokumentu meczu - ustawienie pustej tablicy akcji
-        await updateDoc(matchRef, {
-          actions_packing: []
-        });
-        
-        // Akcje są teraz przechowywane tylko w matches - nie duplikujemy w players
-    
-        
         // Czyścimy stan lokalny
         setActions([]);
+        
+        const collectionField = "actions_packing";
+        enqueue({
+          type: "delete",
+          matchId: matchInfo.matchId,
+          collectionField,
+          actionId: "__all__",
+        });
+        if (isOnline()) {
+          markDirty(matchInfo.matchId, collectionField);
+        } else {
+          toast("Wyczyszczono lokalnie. Synchronizacja po powrocie internetu.");
+        }
         return true;
       } catch (error) {
         console.error("Błąd podczas usuwania wszystkich akcji:", error);

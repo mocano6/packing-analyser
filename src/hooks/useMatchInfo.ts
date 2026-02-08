@@ -250,8 +250,8 @@ export function useMatchInfo() {
         }
       }
       
-      // Sprawdź, czy jesteśmy online i dane są stale (starsze niż 30 sekund)
-      const isStale = Date.now() - cachedData.timestamp > 30 * 1000; // Zmieniono z 5 minut na 30 sekund dla aplikacji wieloużytkownikowej
+      // Sprawdź, czy jesteśmy online i dane są stale (starsze niż 10 minut)
+      const isStale = Date.now() - cachedData.timestamp > 10 * 60 * 1000;
       if (!isOfflineMode && isStale) {
         // Usunięto console.log - cache odświeża się często, więc niepotrzebny
         fetchFromFirebase(cachedData.lastTeamId).catch(err => {

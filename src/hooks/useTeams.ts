@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { db } from "@/lib/firebase";
-import { 
-  collection, getDocs, addDoc, updateDoc, deleteDoc, 
-  doc, query, orderBy 
-} from "firebase/firestore";
+import { addDoc, updateDoc, deleteDoc, doc, collection } from "firebase/firestore";
+import { getTeamsArray, clearTeamsCache } from "@/constants/teamsLoader";
 
 export interface Team {
   id: string;
@@ -18,20 +16,11 @@ export function useTeams() {
   const fetchTeams = useCallback(async () => {
     try {
       setIsLoading(true);
-      const teamsCollection = collection(db, "teams");
-      const q = query(teamsCollection, orderBy("name"));
-      const teamsSnapshot = await getDocs(q);
-      
-      if (!teamsSnapshot.empty) {
-        const teamsList = teamsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Team[];
-        
-        setTeams(teamsList);
-      } else {
-        setTeams([]);
-      }
+      const teamsList = await getTeamsArray();
+      const sorted = teamsList.sort((a, b) =>
+        a.name.localeCompare(b.name, "pl", { sensitivity: "base" })
+      );
+      setTeams(sorted);
       setError(null);
     } catch (err) {
       console.error("Error fetching teams:", err);
@@ -53,6 +42,7 @@ export function useTeams() {
       
       // Dodanie zespołu lokalnie
       setTeams(prev => [...prev, { id: teamRef.id, name }]);
+      clearTeamsCache();
       return true;
     } catch (err) {
       console.error("Error adding team:", err);
@@ -70,6 +60,7 @@ export function useTeams() {
       setTeams(prev => prev.map(team => 
         team.id === id ? { ...team, name } : team
       ));
+      clearTeamsCache();
       return true;
     } catch (err) {
       console.error("Error updating team:", err);
@@ -84,6 +75,7 @@ export function useTeams() {
       
       // Usunięcie zespołu lokalnie
       setTeams(prev => prev.filter(team => team.id !== id));
+      clearTeamsCache();
       return true;
     } catch (err) {
       console.error("Error deleting team:", err);
