@@ -35,6 +35,8 @@ export interface UserData {
 interface UseAuthReturnType {
   isAuthenticated: boolean;
   isLoading: boolean;
+  /** True dopiero po zakończeniu pierwszego pobrania danych użytkownika (unika migania "Brak uprawnień") */
+  userDataResolved: boolean;
   user: any;
   userTeams: string[];
   isAdmin: boolean;
@@ -60,6 +62,7 @@ export function useAuth(): UseAuthReturnType {
   const [userStatus, setUserStatus] = useState<UserStatus | null>(null);
   const [linkedPlayerId, setLinkedPlayerId] = useState<string | null>(null);
   const [isUserDataLoading, setIsUserDataLoading] = useState<boolean>(false);
+  const [userDataResolved, setUserDataResolved] = useState<boolean>(false);
 
   const authService = AuthService.getInstance();
 
@@ -159,23 +162,30 @@ export function useAuth(): UseAuthReturnType {
 
     const unsubscribe = authService.subscribe(async (newAuthState) => {
       if (!isMounted) return;
-      
+
+      // Ustaw isUserDataLoading PRZED setAuthState, żeby po odświeżeniu nie pokazać
+      // na chwilę "Brak uprawnień" (gdy userTeams jeszcze puste przed fetchUserData).
+      if (newAuthState.isAuthenticated && newAuthState.user && !newAuthState.isAnonymous) {
+        setIsUserDataLoading(true);
+      } else {
+        setIsUserDataLoading(false);
+      }
       setAuthState(newAuthState);
 
       if (newAuthState.isAuthenticated && newAuthState.user && !newAuthState.isAnonymous) {
         // Pobierz dane użytkownika z Firestore
         if (isMounted) {
-          setIsUserDataLoading(true);
           const userData = await fetchUserData(newAuthState.user.uid, newAuthState.user.email || undefined, newAuthState.isAuthenticated, () => isMounted);
-          if (userData && isMounted) {
-            setUserTeams(userData.allowedTeams);
-            setIsAdmin(userData.role === 'admin');
-            setUserRole(userData.role);
-            setUserStatus(userData.status ?? null);
-            setLinkedPlayerId(userData.linkedPlayerId ?? null);
-          }
           if (isMounted) {
+            if (userData) {
+              setUserTeams(userData.allowedTeams);
+              setIsAdmin(userData.role === 'admin');
+              setUserRole(userData.role);
+              setUserStatus(userData.status ?? null);
+              setLinkedPlayerId(userData.linkedPlayerId ?? null);
+            }
             setIsUserDataLoading(false);
+            setUserDataResolved(true);
           }
         }
       } else {
@@ -186,7 +196,7 @@ export function useAuth(): UseAuthReturnType {
           setUserRole(null);
           setUserStatus(null);
           setLinkedPlayerId(null);
-          setIsUserDataLoading(false);
+          setUserDataResolved(false);
         }
       }
     });
@@ -220,12 +230,16 @@ export function useAuth(): UseAuthReturnType {
     }
   };
 
-  // Kombinuj stan ładowania uwierzytelniania i danych użytkownika
-  const isLoading = authState.isLoading || (authState.isAuthenticated && !authState.isAnonymous && isUserDataLoading);
+  // Kombinuj stan ładowania: auth + dane użytkownika; dla zalogowanego użytkownika uznajemy
+  // ładowanie za zakończone dopiero gdy userDataResolved (unika migania "Brak uprawnień").
+  const isLoading =
+    authState.isLoading ||
+    (authState.isAuthenticated && !authState.isAnonymous && (isUserDataLoading || !userDataResolved));
 
   return {
     isAuthenticated: authState.isAuthenticated && !authState.isAnonymous,
     isLoading,
+    userDataResolved,
     user: authState.user,
     userTeams,
     isAdmin,

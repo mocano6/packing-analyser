@@ -44,6 +44,20 @@ function removeUndefinedFields<T extends object>(obj: T): T {
   return result;
 }
 
+function dedupeActionsById(list: Action[]): Action[] {
+  const seen = new Set<string>();
+  const deduped: Action[] = [];
+  for (const action of list) {
+    const id = action?.id;
+    if (id) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+    }
+    deduped.push(action);
+  }
+  return deduped;
+}
+
 function stripPIIFromAction(action: Action): Action {
   const {
     senderName,
@@ -178,8 +192,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
             isSecondHalf: cleanedAction.isSecondHalf === true
           } as Action;
         });
-        
-        setActions(sanitizedActions);
+        const dedupedActions = dedupeActionsById(sanitizedActions);
+        setActions(dedupedActions);
       } else {
         setActions([]);
       }
@@ -211,7 +225,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
             isSecondHalf: cleanedAction.isSecondHalf === true
           } as Action;
         });
-        setActions(sanitizedActions);
+        const dedupedActions = dedupeActionsById(sanitizedActions);
+        setActions(dedupedActions);
       } else {
         setActions([]);
       }

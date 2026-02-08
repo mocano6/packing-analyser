@@ -172,6 +172,7 @@ export default function Page() {
   const [isActionEditModalOpen, setIsActionEditModalOpen] = React.useState(false);
   const [editingAction, setEditingAction] = React.useState<Action | null>(null);
   const [allTeams, setAllTeams] = React.useState<Team[]>([]);
+  const [isTeamsLoading, setIsTeamsLoading] = React.useState<boolean>(true);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
 
   // Ref do YouTube Video
@@ -1569,71 +1570,14 @@ export default function Page() {
     setActions,
   } = packingActions;
 
-  // Filtruj akcje według kategorii
-  const filteredActions = useMemo(() => {
-    if (activeTab === "regain_loses") {
-      // Dla zakładki regain_loses zwracamy wszystkie akcje regain i loses
-      // ActionsTable sam je przefiltruje po actionModeFilter
-      return actions.filter(action => {
-        // Regain: ma playersBehindBall lub opponentsBehindBall, ale NIE ma isReaction5s
-        const isRegain = (action.playersBehindBall !== undefined || 
-                         action.opponentsBehindBall !== undefined ||
-                         action.totalPlayersOnField !== undefined ||
-                         action.totalOpponentsOnField !== undefined ||
-                         action.playersLeftField !== undefined ||
-                         action.opponentsLeftField !== undefined) &&
-                        action.isReaction5s === undefined &&
-                        action.isAut === undefined &&
-                        action.isBadReaction5s === undefined;
-        
-        // Loses: ma isReaction5s, isAut lub isBadReaction5s
-        const isLoses = action.isReaction5s !== undefined || 
-                       action.isAut !== undefined || 
-                       action.isBadReaction5s !== undefined;
-        
-        return isRegain || isLoses;
-      });
-    } else if (actionCategory === "regain") {
-      // Regain: ma playersBehindBall lub opponentsBehindBall, ale NIE ma isReaction5s
-      // Kluczowa różnica: regain NIE ma isReaction5s
-      return actions.filter(action => 
-        (action.playersBehindBall !== undefined || 
-         action.opponentsBehindBall !== undefined ||
-         action.totalPlayersOnField !== undefined ||
-         action.totalOpponentsOnField !== undefined ||
-         action.playersLeftField !== undefined ||
-         action.opponentsLeftField !== undefined) &&
-        action.isReaction5s === undefined &&
-        action.isAut === undefined &&
-        action.isBadReaction5s === undefined
-      );
-    } else if (actionCategory === "loses") {
-      // Loses: ma isReaction5s, isAut lub isBadReaction5s (którekolwiek z tych pól zdefiniowane)
-      return actions.filter(action => 
-        action.isReaction5s !== undefined || 
-        action.isAut !== undefined || 
-        action.isBadReaction5s !== undefined
-      );
-    } else {
-      // Packing: nie ma pól charakterystycznych dla regain/loses
-      return actions.filter(action => 
-        action.isBelow8s === undefined &&
-        action.playersBehindBall === undefined &&
-        action.opponentsBehindBall === undefined &&
-        action.isReaction5s === undefined &&
-        action.totalPlayersOnField === undefined &&
-        action.totalOpponentsOnField === undefined &&
-        action.playersLeftField === undefined &&
-        action.opponentsLeftField === undefined
-      );
-    }
-  }, [actions, actionCategory, activeTab]);
+  // Akcje filtrujemy tylko w ActionsTable, żeby uniknąć podwójnego filtrowania i duplikacji logiki
 
-  const { isAuthenticated, isLoading, userTeams, isAdmin, userRole, userStatus, linkedPlayerId, isPlayer, logout } = useAuth();
+  const { isAuthenticated, isLoading, userDataResolved, userTeams, isAdmin, userRole, userStatus, linkedPlayerId, isPlayer, logout } = useAuth();
 
   // Pobierz zespoły z Firebase
   useEffect(() => {
     const loadTeams = async () => {
+      setIsTeamsLoading(true);
       try {
         const teams = await getTeamsArray();
         setAllTeams(teams);
@@ -1641,6 +1585,8 @@ export default function Page() {
         console.error("Błąd podczas pobierania zespołów:", error);
         // Jeśli nie udało się pobrać, użyj domyślnych zespołów
         setAllTeams(Object.values(TEAMS));
+      } finally {
+        setIsTeamsLoading(false);
       }
     };
 
@@ -1683,7 +1629,7 @@ export default function Page() {
 
   // Użyj tylko stanu ładowania z useAuth - nie dodawaj własnej logiki
   // Hook useAuth już obsługuje kombinację ładowania uwierzytelniania i danych użytkownika
-  const isAppLoading = isLoading;
+  const isAppLoading = isLoading || isTeamsLoading;
 
   // Ustaw domyślny zespół na pierwszy dostępny i zapisz w localStorage
   useEffect(() => {
@@ -2153,7 +2099,8 @@ export default function Page() {
     );
   }
 
-  if (availableTeams.length === 0) {
+  // Pokaż "Brak uprawnień" tylko gdy dane użytkownika są już rozstrzygnięte (unikamy migania po odświeżeniu)
+  if (userDataResolved && !isAppLoading && availableTeams.length === 0) {
     return (
       <div style={{ padding: "20px", textAlign: "center" }}>
         <h1>Brak uprawnień</h1>
@@ -3418,8 +3365,8 @@ export default function Page() {
     );
   }
 
-  // Sprawdź czy użytkownik ma dostęp do jakichkolwiek zespołów
-  if (isAuthenticated && !isAdmin && (!userTeams || userTeams.length === 0)) {
+  // Sprawdź czy użytkownik ma dostęp do jakichkolwiek zespołów (tylko gdy dane rozstrzygnięte)
+  if (userDataResolved && !isTeamsLoading && isAuthenticated && !isAdmin && (!userTeams || userTeams.length === 0)) {
     return (
       <div className={styles.container}>
         <div className={styles.noTeamsAccess}>
@@ -5814,7 +5761,7 @@ export default function Page() {
 
         {activeTab === "packing" || activeTab === "regain_loses" ? (
           <ActionsTable
-            actions={filteredActions}
+            actions={actions}
             players={players}
             onDeleteAction={handleDeleteAction}
             onEditAction={handleEditAction}

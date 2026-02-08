@@ -43,6 +43,7 @@ const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
 
 type SortKey =
   | "minute"
+  | "videoTimestamp"
   | "sender"
   | "senderXT"
   | "receiver"
@@ -51,10 +52,11 @@ type SortKey =
   | "endZone"
   | "type"
   | "xt"
+  | "oppositeXT"
   | "packing"
+  | "playersBehindBall"
   | "pxt"
-  | "events"
-  | "videoTimestamp";
+  | "events";
 
 type SortDirection = "asc" | "desc";
 
@@ -597,8 +599,18 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         }
       }
     } else {
-      // Dla packing zapisz wybór
-      if (typeof window !== 'undefined' && (actionModeFilter === 'attack' || actionModeFilter === 'defense')) {
+      // Dla packing: upewnij się, że mamy poprawny tryb (attack/defense)
+      if (actionModeFilter !== 'attack' && actionModeFilter !== 'defense') {
+        if (typeof window !== 'undefined') {
+          const saved = localStorage.getItem('actionModeFilter_packing');
+          setActionModeFilter(saved === 'defense' ? 'defense' : 'attack');
+        } else {
+          setActionModeFilter('attack');
+        }
+        return;
+      }
+      // Zapisz wybór dla packing
+      if (typeof window !== 'undefined') {
         localStorage.setItem('actionModeFilter_packing', actionModeFilter);
       }
     }
@@ -700,12 +712,18 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
       let comparison = 0;
 
       switch (key) {
-        case "minute":
-          // Najpierw sortujemy po połowie, a potem po minucie
-          if ((a.isSecondHalf === true) !== (b.isSecondHalf === true)) {
-            return (a.isSecondHalf === true ? 1 : -1) * (direction === "asc" ? 1 : -1);
+        case "minute": {
+          const halfA = a.isSecondHalf === true ? 1 : 0;
+          const halfB = b.isSecondHalf === true ? 1 : 0;
+          if (halfA !== halfB) {
+            comparison = halfA - halfB;
+            break;
           }
-          comparison = a.minute - b.minute;
+          comparison = (a.minute ?? 0) - (b.minute ?? 0);
+          break;
+        }
+        case "videoTimestamp":
+          comparison = (a.videoTimestamp ?? 0) - (b.videoTimestamp ?? 0);
           break;
         case "sender":
           comparison = getPlayerLabel(a.senderId, playersIndex).localeCompare(
@@ -742,9 +760,21 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           comparison = getXTDifference(a) - getXTDifference(b);
           break;
         }
+        case "oppositeXT": {
+          const oa = a.oppositeXT ?? a.regainAttackXT ?? a.losesAttackXT ?? 0;
+          const ob = b.oppositeXT ?? b.regainAttackXT ?? b.losesAttackXT ?? 0;
+          comparison = oa - ob;
+          break;
+        }
         case "packing":
           comparison = (a.packingPoints || 0) - (b.packingPoints || 0);
           break;
+        case "playersBehindBall": {
+          // Sortowanie po liczbie partnerów przed piłką (np. "3/2" -> 3 i 2)
+          const getVal = (action: any) => (action.playersBehindBall ?? 0) * 100 + (action.opponentsBehindBall ?? 0);
+          comparison = getVal(a) - getVal(b);
+          break;
+        }
         case "pxt": {
           // Sortowanie według obliczonej wartości PxT
           const getPxTValue = (action: any) => {
@@ -769,12 +799,17 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           comparison = getEventPriority(a) - getEventPriority(b);
           break;
         }
-        case "videoTimestamp":
-          comparison = (a.videoTimestamp || 0) - (b.videoTimestamp || 0);
-          break;
       }
 
-      return comparison * multiplier;
+      if (comparison !== 0) return comparison * multiplier;
+      // Tie-breaker przy równości: czas wideo → minuta → id (deterministyczna kolejność)
+      const va = a.videoTimestamp ?? 0;
+      const vb = b.videoTimestamp ?? 0;
+      if (va !== vb) return va - vb;
+      const ma = (a.minute ?? 0) + (a.isSecondHalf ? 1000 : 0);
+      const mb = (b.minute ?? 0) + (b.isSecondHalf ? 1000 : 0);
+      if (ma !== mb) return ma - mb;
+      return (a.id || "").localeCompare(b.id || "");
     });
   }, [actions, sortConfig, actionModeFilter, actionCategory, showOnlyControversial, playersIndex]);
 
