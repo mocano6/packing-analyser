@@ -1,4 +1,4 @@
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs } from "@/lib/firestoreWithMetrics";
 import { db } from "@/lib/firebase";
 import { toast } from "react-hot-toast";
 

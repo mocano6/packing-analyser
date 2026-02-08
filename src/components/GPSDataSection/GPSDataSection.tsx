@@ -7,7 +7,7 @@ import { analyzeCSVStructure, parseCSV, CSVStructure } from "@/utils/csvAnalyzer
 import { buildPlayersIndex, getPlayerFirstName, getPlayerFullName, getPlayerLabel, getPlayerLastName, sortPlayersByLastName } from "@/utils/playerUtils";
 import { getAvailableSeasonsFromMatches, getSeasonForDate } from "@/utils/seasonUtils";
 import { getDB } from "@/lib/firebase";
-import { collection, addDoc, query, where, orderBy, getDocs, deleteDoc, doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
+import { collection, addDoc, query, where, orderBy, getDocs, deleteDoc, doc, getDoc, updateDoc, setDoc } from "@/lib/firestoreWithMetrics";
 import { POSITIONS, mapOldPositionToNew } from "@/constants/positions";
 import styles from "./GPSDataSection.module.css";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";

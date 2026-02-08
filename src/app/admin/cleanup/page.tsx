@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc } from '@/lib/firestoreWithMetrics';
 import { getDB } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import styles from './cleanup.module.css';

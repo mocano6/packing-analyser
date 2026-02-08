@@ -7,7 +7,7 @@ import { getDB } from "@/lib/firebase";
 import { 
   collection, addDoc, getDocs, query, where, 
   doc, writeBatch
-} from "firebase/firestore";
+} from "@/lib/firestoreWithMetrics";
 
 interface ImportButtonProps {
   onImportSuccess: (data: { players: Player[], actions: Action[], matchInfo: any }) => void;

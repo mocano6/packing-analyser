@@ -10,7 +10,9 @@ import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "@/lib/firestoreWithMetrics";
+import { getCached, setCached } from "@/lib/sessionCache";
+import { getMatchDocumentFromCache, setMatchDocumentInCache } from "@/lib/matchDocumentCache";
 import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
@@ -22,6 +24,8 @@ import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import styles from "./statystyki-zespolu.module.css";
+
+const GPS_MATCH_DAY_CACHE_TTL_MS = 10 * 60 * 1000;
 
 export default function StatystykiZespoluPage() {
   const { teams, isLoading: isTeamsLoading } = useTeams();
@@ -189,6 +193,8 @@ export default function StatystykiZespoluPage() {
   });
   const [selectedPKEntryIdForView, setSelectedPKEntryIdForView] = useState<string | undefined>(undefined);
   const [pkEntryTypeFilter, setPkEntryTypeFilter] = useState<"all" | "pass" | "dribble" | "sfg">("all");
+  const [matchSelectOpen, setMatchSelectOpen] = useState(false);
+  const matchSelectRef = useRef<HTMLDivElement>(null);
   const [pkOnlyRegain, setPkOnlyRegain] = useState(false);
   const [pkOnlyShot, setPkOnlyShot] = useState(false);
   const [pkOnlyGoal, setPkOnlyGoal] = useState(false);
@@ -342,7 +348,7 @@ export default function StatystykiZespoluPage() {
     return getAvailableSeasonsFromMatches(teamFiltered);
   }, [allMatches, selectedTeam]);
 
-  // Wybierz pierwszy mecz domyślnie przy zmianie zespołu
+  // Domyślnie zaznacz najnowszy mecz (ostatni w czasie); bez możliwości odznaczenia
   useEffect(() => {
     if (teamMatches.length === 0) {
       if (selectedMatch) {
@@ -361,8 +367,33 @@ export default function StatystykiZespoluPage() {
       return;
     }
 
-    setSelectedMatch(teamMatches[0].matchId || "");
+    const byDateDesc = [...teamMatches].sort((a, b) => {
+      const ta = new Date(a.date || 0).getTime();
+      const tb = new Date(b.date || 0).getTime();
+      return tb - ta;
+    });
+    const newestMatchId = byDateDesc[0]?.matchId || "";
+    setSelectedMatch(newestMatchId);
   }, [teamMatches, selectedMatch]);
+
+  // Zamknij dropdown meczu przy kliknięciu poza lub Escape
+  useEffect(() => {
+    if (!matchSelectOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (matchSelectRef.current && !matchSelectRef.current.contains(e.target as Node)) {
+        setMatchSelectOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMatchSelectOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [matchSelectOpen]);
 
   // Pobierz akcje dla wybranego meczu
   useEffect(() => {
@@ -384,10 +415,25 @@ export default function StatystykiZespoluPage() {
           return;
         }
 
-        const matchDoc = await getDoc(doc(db, "matches", selectedMatch));
-        
-        if (matchDoc.exists()) {
-          const matchData = matchDoc.data() as TeamInfo;
+        const cachedMatch = getMatchDocumentFromCache(selectedMatch);
+        let matchData: TeamInfo | null = cachedMatch;
+
+        if (!matchData) {
+          const matchDoc = await getDoc(doc(db, "matches", selectedMatch));
+          if (!matchDoc.exists()) {
+            setAllActions([]);
+            setAllRegainActions([]);
+            setAllLosesActions([]);
+            setAllShots([]);
+            setAllPKEntries([]);
+            setAllAcc8sEntries([]);
+            return;
+          }
+          matchData = matchDoc.data() as TeamInfo;
+          setMatchDocumentInCache(selectedMatch, matchData);
+        }
+
+        if (matchData) {
           const actions = matchData.actions_packing || [];
           const shots = matchData.shots || [];
           const pkEntries = matchData.pkEntries || [];
@@ -592,6 +638,14 @@ export default function StatystykiZespoluPage() {
   const selectedMatchInfo = useMemo(() => {
     return teamMatches.find(match => match.matchId === selectedMatch);
   }, [teamMatches, selectedMatch]);
+
+  // Etykieta w selektorze meczu: wybrany lub (gdy są mecze) najnowszy – żeby nigdy nie było pusto
+  const matchSelectDisplayInfo = useMemo(() => {
+    if (selectedMatchInfo) return selectedMatchInfo;
+    if (teamMatches.length === 0) return null;
+    const byDateDesc = [...teamMatches].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+    return byDateDesc[0] ?? null;
+  }, [selectedMatchInfo, teamMatches]);
   
   // Resetuj wybranego zawodnika gdy zmienia się KPI lub mecz
   useEffect(() => {
@@ -612,6 +666,13 @@ export default function StatystykiZespoluPage() {
         : '';
     if (!matchDateStr) {
       setGpsMatchDayData([]);
+      return;
+    }
+    const cacheKey = `gps_md_${selectedTeam}_${matchDateStr}`;
+    const cached = getCached<typeof gpsMatchDayData>(cacheKey, GPS_MATCH_DAY_CACHE_TTL_MS);
+    if (cached) {
+      setGpsMatchDayData(cached);
+      setGpsMatchDayLoading(false);
       return;
     }
     setGpsMatchDayLoading(true);
@@ -657,6 +718,7 @@ export default function StatystykiZespoluPage() {
           });
         });
         setGpsMatchDayData(list);
+        setCached(cacheKey, list);
       } catch {
         setGpsMatchDayData([]);
       } finally {
@@ -3277,11 +3339,11 @@ export default function StatystykiZespoluPage() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <Link href="/" className={styles.backButton} title="Powrót do głównej">
-          ←
-        </Link>
-        <h1>Statystyki zespołu - Analiza meczu</h1>
-      </div>
+          <Link href="/" className={styles.backButton} title="Powrót do głównej">
+            ←
+          </Link>
+          <h1>Statystyki zespołu - Analiza meczu</h1>
+        </div>
 
       {/* Kompaktowa sekcja wyboru */}
       <div className={styles.compactSelectorsContainer}>
@@ -3325,26 +3387,55 @@ export default function StatystykiZespoluPage() {
           />
       </div>
 
-        <div className={styles.compactSelectorGroup}>
-          <label htmlFor="match-select" className={styles.compactLabel}>
+        <div className={styles.compactSelectorGroup} ref={matchSelectRef}>
+          <label id="match-select-label" className={styles.compactLabel}>
             Mecz:
           </label>
           {teamMatches.length === 0 ? (
             <p className={styles.noMatchesCompact}>Brak meczów</p>
           ) : (
-            <select
-              id="match-select"
-              value={selectedMatch}
-              onChange={(e) => setSelectedMatch(e.target.value)}
-              className={styles.compactSelect}
-            >
-              <option value="">-- Wybierz mecz --</option>
-              {teamMatches.map(match => (
-                <option key={match.matchId || match.opponent} value={match.matchId || ""}>
-                  {match.opponent} ({match.date}) - {match.competition} - {match.isHome ? 'Dom' : 'Wyjazd'}
-                </option>
-              ))}
-            </select>
+            <div className={styles.matchSelectWrapper}>
+              <button
+                type="button"
+                id="match-select"
+                aria-haspopup="listbox"
+                aria-expanded={matchSelectOpen}
+                aria-labelledby="match-select-label"
+                className={styles.compactSelect}
+                onClick={() => setMatchSelectOpen((open) => !open)}
+              >
+                <span className={styles.compactSelectButtonText}>
+                  {matchSelectDisplayInfo
+                    ? `${matchSelectDisplayInfo.opponent} (${matchSelectDisplayInfo.date}) - ${matchSelectDisplayInfo.competition} - ${matchSelectDisplayInfo.isHome ? "Dom" : "Wyjazd"}`
+                    : ""}
+                </span>
+                <span className={styles.matchSelectChevron} aria-hidden>
+                  {matchSelectOpen ? "▲" : "▼"}
+                </span>
+              </button>
+              {matchSelectOpen && (
+                <ul
+                  className={styles.matchSelectDropdown}
+                  role="listbox"
+                  aria-labelledby="match-select-label"
+                >
+                  {teamMatches.map((match) => (
+                    <li key={match.matchId || match.opponent} role="option">
+                      <button
+                        type="button"
+                        className={styles.matchSelectOption}
+                        onClick={() => {
+                          setSelectedMatch(match.matchId || "");
+                          setMatchSelectOpen(false);
+                        }}
+                      >
+                        {match.opponent} ({match.date}) - {match.competition} - {match.isHome ? "Dom" : "Wyjazd"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </div>
         </div>

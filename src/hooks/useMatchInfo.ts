@@ -7,7 +7,7 @@ import { getDB } from "@/lib/firebase";
 import { 
   collection, getDocs, addDoc, updateDoc, deleteDoc, 
   doc, query, where, orderBy, writeBatch, getDoc, setDoc
-} from "firebase/firestore";
+} from "@/lib/firestoreWithMetrics";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
@@ -23,6 +23,8 @@ declare global {
 // Klucz dla localStorage
 const LOCAL_MATCHES_CACHE_KEY = 'packing_matches_cache';
 const PERMISSION_CHECK_TTL_MS = 60 * 1000;
+/** Cache listy meczów uznajemy za świeży przez 5 min — mniej odczytów getDocs(matches) */
+const MATCHES_CACHE_STALE_MS = 5 * 60 * 1000;
 const OFFLINE_TOAST_MESSAGE =
   "Brak połączenia. Dane zapisują się lokalnie i zostaną wysłane do bazy po powrocie internetu.";
 
@@ -158,9 +160,9 @@ export function useMatchInfo() {
       } catch (err: any) {
         if (err?.name === 'QuotaExceededError' || err?.message?.includes('quota')) {
           console.warn('localStorage quota przekroczony, próba zmniejszenia cache...');
-          // Próbuj zmniejszyć cache - zostaw tylko ostatnie 50 meczów
+          // Zostaw 50 najnowszych meczów (data jest date desc — najnowsze na początku)
           try {
-            const reducedData = localCacheRef.current.data.slice(-50);
+            const reducedData = localCacheRef.current.data.slice(0, 50);
             const reducedCache = {
               data: reducedData,
               timestamp: localCacheRef.current.timestamp,
@@ -211,12 +213,11 @@ export function useMatchInfo() {
     return null;
   };
 
-  // Funkcja do aktualizacji lokalnego cache'u
+  // Funkcja do aktualizacji lokalnego cache'u (newData jest po dacie desc — najnowsze pierwsze)
   const updateLocalCache = (newData: TeamInfo[], teamId?: string) => {
-    // Ogranicz cache do maksymalnie 100 meczów, aby uniknąć problemów z localStorage
     const maxCacheSize = 100;
-    const limitedData = newData.length > maxCacheSize 
-      ? newData.slice(-maxCacheSize) 
+    const limitedData = newData.length > maxCacheSize
+      ? newData.slice(0, maxCacheSize)
       : newData;
     
     localCacheRef.current = {
@@ -250,8 +251,7 @@ export function useMatchInfo() {
         }
       }
       
-      // Sprawdź, czy jesteśmy online i dane są stale (starsze niż 30 sekund)
-      const isStale = Date.now() - cachedData.timestamp > 30 * 1000; // Zmieniono z 5 minut na 30 sekund dla aplikacji wieloużytkownikowej
+      const isStale = Date.now() - cachedData.timestamp > MATCHES_CACHE_STALE_MS;
       if (!isOfflineMode && isStale) {
         // Usunięto console.log - cache odświeża się często, więc niepotrzebny
         fetchFromFirebase(cachedData.lastTeamId).catch(err => {
@@ -465,8 +465,12 @@ export function useMatchInfo() {
         setMatchInfo(null);
       }
       
-      // 5. W tle odświeżamy dane z Firebase tylko jeśli jesteśmy online
+      // 5. W tle odświeżamy dane z Firebase tylko jeśli jesteśmy online i cache jest nieświeży
       if (!isOfflineMode) {
+        const cacheAge = localCacheRef.current?.timestamp ? Date.now() - localCacheRef.current.timestamp : Infinity;
+        if (cacheAge < MATCHES_CACHE_STALE_MS) {
+          return filteredMatches; // cache świeży — pomijamy odczyt Firestore
+        }
         // Dodatkowe sprawdzenie statusu online przed próbą dostępu do Firebase
         const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
         

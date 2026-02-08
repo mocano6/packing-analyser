@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthService } from '@/utils/authService';
 import { getDB } from '@/lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from '@/lib/firestoreWithMetrics';
 import { handleFirestoreError } from '@/utils/firestoreErrorHandler';
 import { useAuth } from '@/hooks/useAuth';
 import styles from './LoginForm.module.css';

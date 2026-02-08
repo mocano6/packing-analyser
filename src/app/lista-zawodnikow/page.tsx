@@ -6,7 +6,7 @@ import { Player, Action } from '@/types';
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useAuth } from "@/hooks/useAuth";
 import { buildPlayersIndex, getPlayerLabel } from '@/utils/playerUtils';
-import { collection, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, getDoc } from '@/lib/firestoreWithMetrics';
 import { getDB } from '@/lib/firebase';
 import styles from './page.module.css';
 

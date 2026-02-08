@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase";
-import { collection, addDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, addDoc, deleteDoc, doc } from "@/lib/firestoreWithMetrics";
 
 /**
  * Sprawdza uprawnienia do zapisu w Firebase Firestore

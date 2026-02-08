@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { getDB } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc } from "@/lib/firestoreWithMetrics";
 import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from "firebase/auth";
 import { Team, getTeamsArray } from "@/constants/teamsLoader";
 import { UserData } from "@/hooks/useAuth";

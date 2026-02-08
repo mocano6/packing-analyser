@@ -4,6 +4,7 @@ import { Inter } from 'next/font/google';
 import type { Metadata } from 'next';
 import AuthGuard from '@/components/AuthGuard/AuthGuard';
 import ConsoleSilencer from '@/components/ConsoleSilencer/ConsoleSilencer';
+import FirestoreMetricsBadge from '@/components/FirestoreMetricsBadge/FirestoreMetricsBadge';
 import { Toaster } from 'react-hot-toast';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -77,6 +78,7 @@ export default function RootLayout({
         <AuthGuard>
           {children}
         </AuthGuard>
+        <FirestoreMetricsBadge />
         <Toaster position="top-right" />
       </body>
     </html>

@@ -1,0 +1,156 @@
+.wrapper {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 9999;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+  color: #374151;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.trigger:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.trigger[aria-expanded="true"] {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.icon {
+  font-size: 14px;
+}
+
+.counts {
+  display: flex;
+  gap: 8px;
+}
+
+.counts span {
+  white-space: nowrap;
+}
+
+.panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  min-width: 220px;
+  max-width: 320px;
+  max-height: 320px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 10px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.panelTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.resetButton {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #6b7280;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.resetButton:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.summary {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.summary strong {
+  color: #1f2937;
+}
+
+.operations {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 8px;
+}
+
+.operationsTitle {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.operationsList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+}
+
+.operationItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.opRead,
+.opWrite {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  font-weight: 600;
+  border-radius: 2px;
+}
+
+.opRead {
+  color: #059669;
+  background: #d1fae5;
+}
+
+.opWrite {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.opLabel {
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

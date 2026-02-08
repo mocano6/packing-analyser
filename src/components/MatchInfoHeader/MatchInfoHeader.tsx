@@ -9,7 +9,7 @@ import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import MatchDataModal from "@/components/MatchDataModal/MatchDataModal";
 import { getDB } from "@/lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc } from "@/lib/firestoreWithMetrics";
 import styles from "./MatchInfoHeader.module.css";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 

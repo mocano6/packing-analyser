@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Player, Action, TeamInfo } from "@/types";
 import { v4 as uuidv4 } from 'uuid';
 import { getDB } from "@/lib/firebase";
-import { collection, addDoc, query, where, getDocs, doc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, query, where, getDocs, doc, deleteDoc, getDoc, updateDoc } from "@/lib/firestoreWithMetrics";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 import toast from "react-hot-toast";
 // Usunięto import funkcji synchronizacji - akcje są teraz tylko w matches

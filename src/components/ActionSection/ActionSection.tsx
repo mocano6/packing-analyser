@@ -10,7 +10,7 @@ import PlayerMatchStatsModal from "../PlayerMatchStatsModal/PlayerMatchStatsModa
 import styles from "./ActionSection.module.css";
 import { Player, TeamInfo, Action, PlayerMatchStats } from "@/types";
 import { getDB } from "@/lib/firebase";
-import { doc, updateDoc, getDoc } from "firebase/firestore";
+import { doc, updateDoc, getDoc } from "@/lib/firestoreWithMetrics";
 
 export interface ActionSectionProps {
   selectedZone: string | number | null;

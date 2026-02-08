@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Acc8sEntry } from "@/types";
 import { getDB } from "@/lib/firebase";
-import { doc, updateDoc, getDoc } from "firebase/firestore";
+import { doc, updateDoc, getDoc } from "@/lib/firestoreWithMetrics";
 
 export const useAcc8sEntries = (matchId: string) => {
   const [acc8sEntries, setAcc8sEntries] = useState<Acc8sEntry[]>([]);

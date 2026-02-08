@@ -10,7 +10,7 @@ import PackingChart from '@/components/PackingChart/PackingChart';
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import ActionSection from "@/components/ActionSection/ActionSection";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, getDocs, updateDoc } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, updateDoc } from "@/lib/firestoreWithMetrics";
 import { buildPlayersIndex, getPlayerLabel, sortPlayersByLastName } from "@/utils/playerUtils";
 import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";

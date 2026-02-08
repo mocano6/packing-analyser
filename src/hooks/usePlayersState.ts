@@ -7,8 +7,11 @@ import { getPlayerFullName } from '@/utils/playerUtils';
 import { 
   collection, getDocs, addDoc, updateDoc,
   doc, setDoc, getDoc
-} from "firebase/firestore";
+} from "@/lib/firestoreWithMetrics";
+import { getCachedWithTimestamp, setCached, invalidateCache, CACHE_KEYS } from "@/lib/sessionCache";
 import { NewPlayer, TeamMembership } from "@/types/migration";
+
+const PLAYERS_CACHE_TTL_MS = 3 * 60 * 1000; // 3 min
 
 // Helper do generowania ID
 const generateId = () => {
@@ -253,19 +256,30 @@ export function usePlayersState() {
 
   // Główna funkcja pobierająca zawodników (hybrydowo)
   const fetchAllPlayers = useCallback(async () => {
+    if (!getDB()) {
+      setPlayers([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const cached = getCachedWithTimestamp<Player[]>(CACHE_KEYS.PLAYERS_LIST, PLAYERS_CACHE_TTL_MS);
+    if (cached?.data) {
+      setPlayers(cached.data);
+      playersRef.current = cached.data;
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
-      
-      if (!getDB()) {
-        setPlayers([]);
-        return;
-      }
 
       // Sprawdź ile zawodników jest w każdej strukturze
       const playersFromOldStructure = await fetchPlayersFromOldStructure();
       const cachedCheck = newStructureCheckRef.current ?? readNewStructureCheck();
       const isRecentCheck = cachedCheck && (Date.now() - cachedCheck.checkedAt < NEW_STRUCTURE_CHECK_TTL_MS);
-      const shouldCheckNewStructure = playersFromOldStructure.length === 0 || !isRecentCheck || cachedCheck?.hasNewStructure;
+      const shouldCheckNewStructure =
+        playersFromOldStructure.length === 0 ||
+        Boolean(cachedCheck && cachedCheck.hasNewStructure && isRecentCheck);
       const playersFromNewStructure = shouldCheckNewStructure ? await fetchPlayersFromNewStructure() : [];
       if (shouldCheckNewStructure) {
         const hasNewStructure = playersFromNewStructure.length > 0;
@@ -317,7 +331,8 @@ export function usePlayersState() {
       
       setPlayers(playersList);
       playersRef.current = playersList;
-      
+      setCached(CACHE_KEYS.PLAYERS_LIST, playersList);
+
     } catch (error) {
       console.error('❌ Błąd pobierania zawodników:', error);
       setPlayers([]);
@@ -356,8 +371,8 @@ export function usePlayersState() {
       
       // Soft delete w players - zachowujemy PII
       await updateDoc(doc(getDB(), "players", playerId), { isDeleted: true });
-      
-              // Aktualizuj lokalny stan
+      invalidateCache(CACHE_KEYS.PLAYERS_LIST);
+      // Aktualizuj lokalny stan
       setPlayers((prev) => prev.filter((p) => p.id !== playerId));
       return true;
       
@@ -527,7 +542,7 @@ export function usePlayersState() {
             );
             
             await updateDoc(doc(getDB(), "players", editingPlayerId), updateData);
-            
+            invalidateCache(CACHE_KEYS.PLAYERS_LIST);
             const { id: _, ...playerDataWithoutId } = playerData as any;
             setPlayers((prev) =>
               prev.map((p) =>
@@ -541,8 +556,8 @@ export function usePlayersState() {
               ...playerData,
               teams: Array.isArray(playerData.teams) ? playerData.teams : [playerData.teams].filter(Boolean),
             });
-            
-                         const { id, ...playerDataWithoutId } = playerData as any;
+            invalidateCache(CACHE_KEYS.PLAYERS_LIST);
+            const { id, ...playerDataWithoutId } = playerData as any;
              const newPlayer: Player = {
                id: playerRef.id,
                ...playerDataWithoutId,

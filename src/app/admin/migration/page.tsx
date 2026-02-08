@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import { getDB } from "@/lib/firebase";
-import { collection, getDocs, doc, setDoc, addDoc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, addDoc, deleteDoc } from "@/lib/firestoreWithMetrics";
 import Link from "next/link";
 import { NewPlayer, TeamMembership } from "@/types/migration";
 

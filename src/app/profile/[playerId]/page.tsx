@@ -12,7 +12,6 @@ import { doc, getDoc } from "@/lib/firestoreWithMetrics";
 import {
   getMatchDocumentFromCache,
   setMatchDocumentInCache,
-  isMatchOlderThan4Days,
   sortMatchesByDateDesc,
 } from "@/lib/matchDocumentCache";
 import Link from "next/link";
@@ -636,15 +635,18 @@ export default function PlayerDetailsPage() {
       isPlayerValid &&
       matchCount > 0
     );
-    // Sygnatura oparta na zestawie ID meczów — unikamy ponownego ładowania gdy tylko referencja tablicy się zmienia (data → ładowanie → data)
-    const matchIdsKey = ready
-      ? [...filteredMatchesBySeason]
-          .map((m) => m.matchId)
-          .filter(Boolean)
-          .sort()
-          .join(",")
-      : "";
-    const loadSignature = ready ? `${selectedTeam}|${targetPlayerId}|${matchIdsKey}` : null;
+    // Gdy jest wybór — ładujemy tylko wybrane; gdy brak wyboru i są mecze — czekamy na domyślny (najnowszy), żeby nie ładować 2× (wszystkie → 1)
+    const sortedByDate = sortMatchesByDateDesc(filteredMatchesBySeason);
+    const selectableIds = new Set(selectableMatchesBySeason.map((m) => m.matchId).filter(Boolean));
+    const idsToLoad =
+      selectedMatchIds.length > 0
+        ? selectedMatchIds.filter((id) => sortedByDate.some((m) => m.matchId === id))
+        : selectableIds.size > 0
+          ? [] // poczekaj na ustawienie domyślnego [najnowszy] w drugim efekcie
+          : (sortedByDate.map((m) => m.matchId).filter(Boolean) as string[]);
+    const matchIdsKey = idsToLoad.slice().sort().join(",");
+    const loadSignature =
+      ready && idsToLoad.length > 0 ? `${selectedTeam}|${targetPlayerId}|${matchIdsKey}` : ready && idsToLoad.length === 0 && selectableIds.size === 0 ? `${selectedTeam}|${targetPlayerId}|` : null;
 
     // Nie gotowe: pokazuj ładowanie do momentu, aż dane będą gotowe i load się wykona. Nie ustawiaj false z opóźnieniem — to powodowało: widok → ładowanie → dane (2 przeładowania).
     // Wyjątek: mamy zespół i zawodnika, 0 meczów po filtracji A lista meczów jest już wczytana (allMatches.length > 0) — wtedy pokaż pusty stan.
@@ -666,8 +668,9 @@ export default function PlayerDetailsPage() {
       if (shouldShowLoading) {
         setIsLoadingActions(true);
       }
-      // Najnowszy pierwszy — tylko ten pobieramy z sieci, reszta starsza niż 4 dni z cache
-      const matchesToLoad = sortMatchesByDateDesc(filteredMatchesBySeason);
+      // Tylko wybrane mecze (lub domyślnie najnowszy); zawsze cache first — getDoc tylko gdy brak w cache
+      const idSet = new Set(idsToLoad);
+      const matchesToLoad = sortedByDate.filter((m) => m.matchId && idSet.has(m.matchId));
 
       const allActionsData: Action[] = [];
       const allShotsData: any[] = [];
@@ -675,16 +678,10 @@ export default function PlayerDetailsPage() {
       const allTeamActionsData: Action[] = [];
 
       try {
-        const newestMatchId = matchesToLoad[0]?.matchId ?? null;
-
         for (const match of matchesToLoad) {
           if (!match.matchId) continue;
 
-          // Tylko najnowszy mecz zawsze z sieci; starsze niż 4 dni i reszta — z cache, a gdy brak w cache: pobierz raz i zapisz
-          const isNewest = match.matchId === newestMatchId;
-          const useCacheFirst = !isNewest;
-          let matchData: TeamInfo | null =
-            useCacheFirst ? getMatchDocumentFromCache(match.matchId) : null;
+          let matchData: TeamInfo | null = getMatchDocumentFromCache(match.matchId);
 
           if (matchData === null) {
             try {
@@ -753,7 +750,7 @@ export default function PlayerDetailsPage() {
     };
 
     loadActionsAndTeamActions();
-  }, [playerId, selectedPlayerForView, filteredMatchesBySeason, filteredPlayers, selectedTeam, playersForRanking, db, allMatches]);
+  }, [playerId, selectedPlayerForView, filteredMatchesBySeason, selectableMatchesBySeason, selectedMatchIds, filteredPlayers, selectedTeam, playersForRanking, db, allMatches]);
 
   // Oblicz dostępne sezony
   const availableSeasons = useMemo(() => {
@@ -765,13 +762,17 @@ export default function PlayerDetailsPage() {
     return availableSeasons.length > 0 ? availableSeasons[0].id : "all";
   }, [availableSeasons]);
 
-  // Ustaw domyślny sezon, jeśli nie jest ustawiony lub nie jest dostępny
+  // Domyślnie ostatni (najnowszy) sezon; ustaw też gdy wybrany sezon nie jest już dostępny
   useEffect(() => {
     if (!selectedSeason) {
       setSelectedSeason(defaultSeason);
       return;
     }
     if (selectedSeason !== "all" && !availableSeasons.some(season => season.id === selectedSeason)) {
+      setSelectedSeason(defaultSeason);
+      return;
+    }
+    if (selectedSeason === "all" && availableSeasons.length > 0) {
       setSelectedSeason(defaultSeason);
     }
   }, [selectedSeason, defaultSeason, availableSeasons]);

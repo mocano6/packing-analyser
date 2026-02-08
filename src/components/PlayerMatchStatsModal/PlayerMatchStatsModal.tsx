@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Player, TeamInfo, PlayerMatchStats } from "@/types";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 import { getDB } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc } from "@/lib/firestoreWithMetrics";
 import styles from "./PlayerMatchStatsModal.module.css";
 
 interface PlayerMatchStatsModalProps {

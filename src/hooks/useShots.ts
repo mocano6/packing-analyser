@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Shot } from "@/types";
 import { db } from "@/lib/firebase";
-import { doc, updateDoc, getDoc } from "firebase/firestore";
+import { doc, updateDoc, getDoc } from "@/lib/firestoreWithMetrics";
 
 export const useShots = (matchId: string) => {
   const [shots, setShots] = useState<Shot[]>([]);

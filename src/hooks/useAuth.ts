@@ -1,9 +1,15 @@
 import { useState, useEffect } from "react";
 import { getDB } from "@/lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "@/lib/firestoreWithMetrics";
 import { AuthService, AuthState } from "@/utils/authService";
 import { toast } from "react-hot-toast";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
+
+const USER_DATA_CACHE_TTL_MS = 2 * 60 * 1000; // 2 min — pomijamy getDoc gdy świeży
+const LAST_LOGIN_WRITE_INTERVAL_MS = 5 * 60 * 1000; // zapis lastLogin co najwyżej co 5 min
+
+const userDataCache = new Map<string, { data: UserData; timestamp: number }>();
+const lastLoginWriteAt = new Map<string, number>();
 
 export type UserRole = 'user' | 'admin' | 'coach' | 'player';
 export type UserStatus = 'pending' | 'approved';
@@ -57,11 +63,24 @@ export function useAuth(): UseAuthReturnType {
 
   const authService = AuthService.getInstance();
 
-  // Pobiera dane użytkownika z Firestore na podstawie UID
+  // Pobiera dane użytkownika z Firestore na podstawie UID (z cache 2 min, lastLogin zapis co 5 min)
   const fetchUserData = async (uid: string, userEmail?: string, isUserAuthenticated: boolean = true, isMounted: () => boolean = () => true): Promise<UserData | null> => {
-    // Nie próbuj pobierać danych jeśli użytkownik nie jest zalogowany
-    if (!isUserAuthenticated) {
-      return null;
+    if (!isUserAuthenticated) return null;
+
+    const now = Date.now();
+    const cached = userDataCache.get(uid);
+    if (cached && now - cached.timestamp < USER_DATA_CACHE_TTL_MS) {
+      const lastWrite = lastLoginWriteAt.get(uid) ?? 0;
+      if (now - lastWrite >= LAST_LOGIN_WRITE_INTERVAL_MS) {
+        lastLoginWriteAt.set(uid, now);
+        const db = getDB();
+        const userRef = doc(db, "users", uid);
+        setDoc(userRef, { lastLogin: new Date() }, { merge: true }).catch(err => {
+          handleFirestoreError(err, db);
+          console.error("Błąd zapisu lastLogin:", err);
+        });
+      }
+      return { ...cached.data, lastLogin: cached.data.lastLogin ?? new Date() };
     }
 
     try {
@@ -73,64 +92,54 @@ export function useAuth(): UseAuthReturnType {
       });
 
       if (!userDoc.exists()) {
-        // Jeśli użytkownik nie istnieje, tworzymy nowy dokument
-        
         const newUserData: UserData = {
           email: userEmail || '',
-          allowedTeams: [], // Domyślnie brak dostępu do zespołów
+          allowedTeams: [],
           role: 'user',
           createdAt: new Date(),
           lastLogin: new Date()
         };
-
-
         await setDoc(userRef, newUserData).catch(error => {
           handleFirestoreError(error, db);
           throw error;
         });
-
+        userDataCache.set(uid, { data: newUserData, timestamp: now });
+        lastLoginWriteAt.set(uid, now);
         return newUserData;
       }
 
       const userData = userDoc.data() as UserData;
-      
-      // Sprawdź czy trzeba zaktualizować email (może być pusty w starych dokumentach)
       const needsEmailUpdate = !userData.email && userEmail;
-      
-      // Aktualizuj ostatnie logowanie i email jeśli potrzeba
-      const updateData: any = {
-        lastLogin: new Date()
-      };
-      
-      if (needsEmailUpdate) {
-        updateData.email = userEmail;
-      }
-      
+      const updateData: any = { lastLogin: new Date() };
+      if (needsEmailUpdate) updateData.email = userEmail;
+
       await setDoc(userRef, updateData, { merge: true }).catch(error => {
         handleFirestoreError(error, db);
         console.error('Błąd aktualizacji danych użytkownika:', error);
       });
 
-      return {
+      const result: UserData = {
         ...userData,
-        email: userData.email || userEmail || '', // Użyj zaktualizowanego emaila
+        email: userData.email || userEmail || '',
         lastLogin: new Date()
       };
+      userDataCache.set(uid, { data: result, timestamp: now });
+      lastLoginWriteAt.set(uid, now);
+      return result;
     } catch (error) {
       console.error("Błąd podczas pobierania danych użytkownika:", error);
-      
-      // Wyświetlaj błąd tylko jeśli użytkownik jest nadal zalogowany i komponent jest zamontowany
       if (isUserAuthenticated && isMounted()) {
         toast.error("Błąd podczas pobierania uprawnień użytkownika");
       }
-      
       return null;
     }
   };
 
-  // Odświeża dane użytkownika
+  // Odświeża dane użytkownika (pomija cache)
   const refreshUserData = async (): Promise<void> => {
     if (!authState.user?.uid || !authState.isAuthenticated) return;
+    userDataCache.delete(authState.user.uid);
+    lastLoginWriteAt.delete(authState.user.uid);
 
     setIsUserDataLoading(true);
     const userData = await fetchUserData(authState.user.uid, authState.user.email || undefined, authState.isAuthenticated, () => true);
@@ -191,6 +200,11 @@ export function useAuth(): UseAuthReturnType {
   // Funkcja wylogowania
   const logout = async () => {
     try {
+      const uid = authState.user?.uid;
+      if (uid) {
+        userDataCache.delete(uid);
+        lastLoginWriteAt.delete(uid);
+      }
       // Wyczyść dane użytkownika od razu
       setUserTeams([]);
       setIsAdmin(false);

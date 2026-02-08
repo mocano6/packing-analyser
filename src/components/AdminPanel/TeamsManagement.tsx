@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { getDB } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc, setDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc, setDoc } from "@/lib/firestoreWithMetrics";
 import { toast } from "react-hot-toast";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 import { Team, clearTeamsCache } from "@/constants/teamsLoader";

@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, setDoc, query, where, getDoc } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, query, where, getDoc } from "@/lib/firestoreWithMetrics";
 import { TEAMS } from "@/constants/teams";
 import toast from "react-hot-toast";
 

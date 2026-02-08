@@ -29,7 +29,7 @@ import ImportButton from "@/components/ImportButton/ImportButton";
 import { initializeTeams, checkTeamsCollection } from "@/utils/initializeTeams";
 import { useAuth } from "@/hooks/useAuth";
 import toast from 'react-hot-toast';
-import { doc, updateDoc, getDoc } from "firebase/firestore";
+import { doc, updateDoc, getDoc } from "@/lib/firestoreWithMetrics";
 import { getDB } from "@/lib/firebase";
 import pitchHeaderStyles from "@/components/PitchHeader/PitchHeader.module.css";
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
