@@ -4,11 +4,22 @@ import { useState, useEffect, useCallback } from "react";
 import { Shot } from "@/types";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc, getDoc } from "@/lib/firestoreWithMetrics";
+import { getMatchDocumentFromCache, setMatchDocumentInCache } from "@/lib/matchDocumentCache";
+import { clearPendingMatchUpdate, getPendingField, setPendingMatchUpdate } from "@/lib/offlineMatchPending";
 
 export const useShots = (matchId: string) => {
   const [shots, setShots] = useState<Shot[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isOfflineError = (err: unknown) => {
+    const msg = String(err);
+    return (
+      msg.includes("offline") ||
+      msg.includes("Failed to fetch") ||
+      msg.includes("NetworkError") ||
+      msg.includes("unavailable")
+    );
+  };
 
   // Pobierz strzały z Firebase
   const fetchShots = useCallback(async () => {
@@ -21,7 +32,8 @@ export const useShots = (matchId: string) => {
       const matchDoc = await getDoc(doc(db, "matches", matchId));
       if (matchDoc.exists()) {
         const matchData = matchDoc.data();
-        const rawShots = matchData.shots || [];
+        const pendingShots = getPendingField<Shot[]>(matchId, "shots");
+        const rawShots = pendingShots ?? (matchData.shots || []);
         
         // Dodaj domyślne wartości dla nowych pól w istniejących strzałach
         const shotsWithDefaults = rawShots.map((shot: any) => ({
@@ -39,6 +51,16 @@ export const useShots = (matchId: string) => {
         setShots([]);
       }
     } catch (err) {
+      const pendingShots = getPendingField<Shot[]>(matchId, "shots");
+      const cachedMatch = getMatchDocumentFromCache(matchId);
+      const cachedShots = cachedMatch?.shots || [];
+      if (pendingShots) {
+        setShots(pendingShots);
+      } else if (cachedShots.length > 0) {
+        setShots(cachedShots as Shot[]);
+      } else {
+        setShots([]);
+      }
       console.error("Błąd podczas pobierania strzałów:", err);
       setError("Nie udało się pobrać strzałów");
     } finally {
@@ -87,14 +109,54 @@ export const useShots = (matchId: string) => {
       await updateDoc(matchRef, {
         shots: cleanedShots
       });
+      clearPendingMatchUpdate(matchId, "shots");
       setShots(updatedShots);
+      const cached = getMatchDocumentFromCache(matchId);
+      if (cached) {
+        setMatchDocumentInCache(matchId, { ...cached, shots: cleanedShots });
+      }
       return true;
     } catch (err) {
       console.error("Błąd podczas zapisywania strzałów:", err);
+      if (isOfflineError(err)) {
+        const cleanedShots = removeUndefinedValues(updatedShots);
+        setPendingMatchUpdate(matchId, "shots", cleanedShots);
+        setShots(updatedShots);
+        const cached = getMatchDocumentFromCache(matchId);
+        if (cached) {
+          setMatchDocumentInCache(matchId, { ...cached, shots: cleanedShots });
+        }
+        return true;
+      }
       setError("Nie udało się zapisać strzałów");
       return false;
     }
   }, [matchId]);
+
+  const syncPendingShots = useCallback(async () => {
+    if (!matchId || !db) return;
+    const pending = getPendingField<Shot[]>(matchId, "shots");
+    if (!pending) return;
+    try {
+      const matchRef = doc(db, "matches", matchId);
+      await updateDoc(matchRef, { shots: pending });
+      clearPendingMatchUpdate(matchId, "shots");
+      const cached = getMatchDocumentFromCache(matchId);
+      if (cached) {
+        setMatchDocumentInCache(matchId, { ...cached, shots: pending });
+      }
+      setShots(pending);
+    } catch (err) {
+      // nadal offline lub błąd — zostawiamy pending
+    }
+  }, [matchId]);
+
+  useEffect(() => {
+    syncPendingShots();
+    const handleOnline = () => syncPendingShots();
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [syncPendingShots]);
 
   // Dodaj nowy strzał
   const addShot = useCallback(async (shotData: Omit<Shot, "id" | "timestamp">) => {

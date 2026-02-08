@@ -9,6 +9,8 @@ import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 import toast from "react-hot-toast";
 // Usunięto import funkcji synchronizacji - akcje są teraz tylko w matches
 import { getOppositeXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString, getZoneData } from '@/constants/xtValues';
+import { getMatchDocumentFromCache, setMatchDocumentInCache } from "@/lib/matchDocumentCache";
+import { clearPendingMatchUpdate, getPendingField, setPendingMatchUpdate } from "@/lib/offlineMatchPending";
 
 // Funkcja do konwersji numeru strefy na format literowo-liczbowy
 function convertZoneNumberToString(zoneNumber: number | string): string {
@@ -119,6 +121,15 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   // Dane o akcjach
   const [actions, setActions] = useState<Action[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const isOfflineError = (err: unknown) => {
+    const msg = String(err);
+    return (
+      msg.includes("offline") ||
+      msg.includes("Failed to fetch") ||
+      msg.includes("NetworkError") ||
+      msg.includes("unavailable")
+    );
+  };
 
   // Funkcja ładująca akcje dla danego meczu
   const loadActionsForMatch = useCallback(async (matchId: string) => {
@@ -131,21 +142,26 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       if (matchDoc.exists()) {
         const matchData = matchDoc.data() as TeamInfo;
+        setMatchDocumentInCache(matchId, matchData);
+        const pendingPacking = getPendingField<Action[]>(matchId, "actions_packing");
+        const pendingUnpacking = getPendingField<Action[]>(matchId, "actions_unpacking");
+        const pendingRegain = getPendingField<Action[]>(matchId, "actions_regain");
+        const pendingLoses = getPendingField<Action[]>(matchId, "actions_loses");
         // Ładujemy akcje z odpowiedniej kolekcji w zależności od kategorii
         let loadedActions: Action[];
         if (loadBothRegainLoses) {
           // Gdy chcemy pokazać obie kategorie (regain i loses), ładujemy z obu kolekcji
-          const regainActions = matchData.actions_regain || [];
-          const losesActions = matchData.actions_loses || [];
+          const regainActions = pendingRegain ?? (matchData.actions_regain || []);
+          const losesActions = pendingLoses ?? (matchData.actions_loses || []);
           loadedActions = [...regainActions, ...losesActions];
         } else if (actionCategory === "regain") {
-          loadedActions = matchData.actions_regain || [];
+          loadedActions = pendingRegain ?? (matchData.actions_regain || []);
         } else if (actionCategory === "loses") {
-          loadedActions = matchData.actions_loses || [];
+          loadedActions = pendingLoses ?? (matchData.actions_loses || []);
         } else {
           // Dla packing ładujemy akcje z obu kolekcji (packing i unpacking)
-          const packingActions = matchData.actions_packing || [];
-          const unpackingActions = matchData.actions_unpacking || [];
+          const packingActions = pendingPacking ?? (matchData.actions_packing || []);
+          const unpackingActions = pendingUnpacking ?? (matchData.actions_unpacking || []);
           loadedActions = [...packingActions, ...unpackingActions];
         }
         
@@ -165,11 +181,42 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         setActions([]);
       }
     } catch (error) {
+      const cachedMatch = getMatchDocumentFromCache(matchId);
+      if (cachedMatch) {
+        const pendingPacking = getPendingField<Action[]>(matchId, "actions_packing");
+        const pendingUnpacking = getPendingField<Action[]>(matchId, "actions_unpacking");
+        const pendingRegain = getPendingField<Action[]>(matchId, "actions_regain");
+        const pendingLoses = getPendingField<Action[]>(matchId, "actions_loses");
+        let loadedActions: Action[] = [];
+        if (loadBothRegainLoses) {
+          const regainActions = pendingRegain ?? (cachedMatch.actions_regain || []);
+          const losesActions = pendingLoses ?? (cachedMatch.actions_loses || []);
+          loadedActions = [...regainActions, ...losesActions];
+        } else if (actionCategory === "regain") {
+          loadedActions = pendingRegain ?? (cachedMatch.actions_regain || []);
+        } else if (actionCategory === "loses") {
+          loadedActions = pendingLoses ?? (cachedMatch.actions_loses || []);
+        } else {
+          const packingActions = pendingPacking ?? (cachedMatch.actions_packing || []);
+          const unpackingActions = pendingUnpacking ?? (cachedMatch.actions_unpacking || []);
+          loadedActions = [...packingActions, ...unpackingActions];
+        }
+        const sanitizedActions = loadedActions.map(action => {
+          const cleanedAction = removeUndefinedFields(stripPIIFromAction(action)) as Action;
+          return {
+            ...cleanedAction,
+            isSecondHalf: cleanedAction.isSecondHalf === true
+          } as Action;
+        });
+        setActions(sanitizedActions);
+      } else {
+        setActions([]);
+      }
       console.error("Błąd podczas ładowania akcji:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [actionCategory]);
+  }, [actionCategory, loadBothRegainLoses]);
 
   // Pobieranie akcji przy zmianie meczu lub kategorii akcji
   useEffect(() => {
@@ -187,6 +234,43 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       setActions([]);
     }
   }, [matchInfo?.matchId, actionCategory, loadBothRegainLoses, loadActionsForMatch]);
+
+  const syncPendingActions = useCallback(async () => {
+    if (!matchInfo?.matchId) return;
+    const matchId = matchInfo.matchId;
+    const pendingPacking = getPendingField<Action[]>(matchId, "actions_packing");
+    const pendingUnpacking = getPendingField<Action[]>(matchId, "actions_unpacking");
+    const pendingRegain = getPendingField<Action[]>(matchId, "actions_regain");
+    const pendingLoses = getPendingField<Action[]>(matchId, "actions_loses");
+    const updateData: Partial<TeamInfo> = {};
+    if (pendingPacking) updateData.actions_packing = pendingPacking;
+    if (pendingUnpacking) updateData.actions_unpacking = pendingUnpacking;
+    if (pendingRegain) updateData.actions_regain = pendingRegain;
+    if (pendingLoses) updateData.actions_loses = pendingLoses;
+    if (Object.keys(updateData).length === 0) return;
+    try {
+      const matchRef = doc(getDB(), "matches", matchId);
+      await updateDoc(matchRef, updateData);
+      if (pendingPacking) clearPendingMatchUpdate(matchId, "actions_packing");
+      if (pendingUnpacking) clearPendingMatchUpdate(matchId, "actions_unpacking");
+      if (pendingRegain) clearPendingMatchUpdate(matchId, "actions_regain");
+      if (pendingLoses) clearPendingMatchUpdate(matchId, "actions_loses");
+      const cached = getMatchDocumentFromCache(matchId);
+      if (cached) {
+        setMatchDocumentInCache(matchId, { ...cached, ...updateData } as TeamInfo);
+      }
+      await loadActionsForMatch(matchId);
+    } catch {
+      // nadal offline lub błąd — zostawiamy pending
+    }
+  }, [matchInfo?.matchId, loadActionsForMatch]);
+
+  useEffect(() => {
+    syncPendingActions();
+    const handleOnline = () => syncPendingActions();
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [syncPendingActions]);
 
   // Obsługa wyboru strefy - może przyjmować różną liczbę argumentów
   const handleZoneSelect = useCallback((
@@ -717,9 +801,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
             } : {})
           };
           
+          const updatedActions = [...cleanedActions, actionToSave];
           await updateDoc(matchRef, {
-            [collectionField]: [...cleanedActions, actionToSave]
+            [collectionField]: updatedActions
           });
+          clearPendingMatchUpdate(matchInfoArg.matchId, collectionField);
           
           // Console log z całym obiektem zapisanej akcji
           
@@ -738,13 +824,61 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           console.error("Nie znaleziono meczu o ID:", matchInfoArg.matchId);
         }
       } catch (firebaseError) {
-          console.error("Błąd podczas zapisywania akcji w Firebase:", firebaseError);
-        
-        // Obsługa błędu wewnętrznego stanu Firestore
+        console.error("Błąd podczas zapisywania akcji w Firebase:", firebaseError);
         const errorHandled = await handleFirestoreError(firebaseError, getDB());
-        
-          if (!errorHandled) {
-            // Akcja została dodana tylko lokalnie - synchronizacja z Firebase nieudana
+        if (isOfflineError(firebaseError)) {
+          // Zapis offline: lokalny stan + kolejka pending
+          const matchRef = doc(getDB(), "matches", matchInfoArg.matchId);
+          const matchDoc = await getDoc(matchRef).catch(() => null);
+          const matchData = matchDoc && "data" in matchDoc && matchDoc.exists?.() ? (matchDoc.data() as TeamInfo) : null;
+          let collectionField: string;
+          if (actionCategory === "regain") {
+            collectionField = "actions_regain";
+          } else if (actionCategory === "loses") {
+            collectionField = "actions_loses";
+          } else {
+            collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
+          }
+          const currentActions = matchData
+            ? ((matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [])
+            : [];
+          const cleanedActions = currentActions.map((action: Action) =>
+            removeUndefinedFields(stripPIIFromAction(action))
+          );
+          const actionToSave = {
+            ...stripPIIFromAction(cleanedAction),
+            ...(actionCategory === "regain" || actionCategory === "loses" ? {
+              isP0: cleanedAction.isP0 ?? false,
+              isP1: cleanedAction.isP1 ?? false,
+              isP2: cleanedAction.isP2 ?? false,
+              isP3: cleanedAction.isP3 ?? false,
+              isContact1: cleanedAction.isContact1 ?? false,
+              isContact2: cleanedAction.isContact2 ?? false,
+              isContact3Plus: cleanedAction.isContact3Plus ?? false,
+              isShot: cleanedAction.isShot ?? false,
+              isGoal: cleanedAction.isGoal ?? false,
+              isPenaltyAreaEntry: cleanedAction.isPenaltyAreaEntry ?? false,
+              ...(actionCategory === "loses" && {
+                isPMArea: (cleanedAction as any).isPMArea ?? false,
+                isAut: (cleanedAction as any).isAut ?? false
+              })
+            } : {})
+          };
+          const updatedActions = [...cleanedActions, actionToSave];
+          setPendingMatchUpdate(matchInfoArg.matchId, collectionField, updatedActions);
+          setActions((prev) => {
+            const filtered = prev.filter((a) => a.id !== actionToSave.id);
+            return [...filtered, actionToSave];
+          });
+          const cached = getMatchDocumentFromCache(matchInfoArg.matchId);
+          if (cached) {
+            setMatchDocumentInCache(matchInfoArg.matchId, { ...cached, [collectionField]: updatedActions } as TeamInfo);
+          }
+          toast("Brak połączenia. Zmiany zapisane lokalnie i zostaną wysłane po powrocie internetu.");
+          return true;
+        }
+        if (!errorHandled) {
+          // Akcja została dodana tylko lokalnie - synchronizacja z Firebase nieudana
         }
       }
       

@@ -4,11 +4,22 @@ import { useState, useEffect, useCallback } from "react";
 import { Acc8sEntry } from "@/types";
 import { getDB } from "@/lib/firebase";
 import { doc, updateDoc, getDoc } from "@/lib/firestoreWithMetrics";
+import { getMatchDocumentFromCache, setMatchDocumentInCache } from "@/lib/matchDocumentCache";
+import { clearPendingMatchUpdate, getPendingField, setPendingMatchUpdate } from "@/lib/offlineMatchPending";
 
 export const useAcc8sEntries = (matchId: string) => {
   const [acc8sEntries, setAcc8sEntries] = useState<Acc8sEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isOfflineError = (err: unknown) => {
+    const msg = String(err);
+    return (
+      msg.includes("offline") ||
+      msg.includes("Failed to fetch") ||
+      msg.includes("NetworkError") ||
+      msg.includes("unavailable")
+    );
+  };
 
   // Pobierz akcje 8s ACC z Firebase
   const fetchAcc8sEntries = useCallback(async () => {
@@ -22,12 +33,23 @@ export const useAcc8sEntries = (matchId: string) => {
       const matchDoc = await getDoc(doc(db, "matches", matchId));
       if (matchDoc.exists()) {
         const matchData = matchDoc.data();
-        const rawEntries = matchData.acc8sEntries || [];
+        const pendingEntries = getPendingField<Acc8sEntry[]>(matchId, "acc8sEntries");
+        const rawEntries = pendingEntries ?? (matchData.acc8sEntries || []);
         setAcc8sEntries(rawEntries);
       } else {
         setAcc8sEntries([]);
       }
     } catch (err) {
+      const pendingEntries = getPendingField<Acc8sEntry[]>(matchId, "acc8sEntries");
+      const cachedMatch = getMatchDocumentFromCache(matchId);
+      const cachedEntries = cachedMatch?.acc8sEntries || [];
+      if (pendingEntries) {
+        setAcc8sEntries(pendingEntries);
+      } else if (cachedEntries.length > 0) {
+        setAcc8sEntries(cachedEntries as Acc8sEntry[]);
+      } else {
+        setAcc8sEntries([]);
+      }
       console.error("Błąd podczas pobierania akcji 8s ACC:", err);
       setError("Nie udało się pobrać akcji 8s ACC");
     } finally {
@@ -64,14 +86,67 @@ export const useAcc8sEntries = (matchId: string) => {
       await updateDoc(matchRef, {
         acc8sEntries: cleanedEntries
       });
+      clearPendingMatchUpdate(matchId, "acc8sEntries");
       setAcc8sEntries(entriesToSave);
+      const cached = getMatchDocumentFromCache(matchId);
+      if (cached) {
+        setMatchDocumentInCache(matchId, { ...cached, acc8sEntries: cleanedEntries });
+      }
       return true;
     } catch (err) {
       console.error("Błąd podczas zapisywania akcji 8s ACC:", err);
+      if (isOfflineError(err)) {
+        // Jeśli updatedEntries jest funkcją, policz wartosc na podstawie obecnego stanu
+        const entriesToSave = typeof updatedEntries === 'function'
+          ? updatedEntries(acc8sEntries)
+          : updatedEntries;
+        const cleanedEntries = entriesToSave.map(entry => {
+          const cleaned: any = {};
+          Object.keys(entry).forEach(key => {
+            if (entry[key as keyof Acc8sEntry] !== undefined) {
+              cleaned[key] = entry[key as keyof Acc8sEntry];
+            }
+          });
+          return cleaned;
+        });
+        setPendingMatchUpdate(matchId, "acc8sEntries", cleanedEntries);
+        setAcc8sEntries(entriesToSave);
+        const cached = getMatchDocumentFromCache(matchId);
+        if (cached) {
+          setMatchDocumentInCache(matchId, { ...cached, acc8sEntries: cleanedEntries });
+        }
+        return true;
+      }
       setError("Nie udało się zapisać akcji 8s ACC");
       return false;
     }
   }, [matchId, acc8sEntries]);
+
+  const syncPendingAcc8sEntries = useCallback(async () => {
+    if (!matchId) return;
+    const pending = getPendingField<Acc8sEntry[]>(matchId, "acc8sEntries");
+    if (!pending) return;
+    try {
+      const db = getDB();
+      const matchRef = doc(db, "matches", matchId);
+      await updateDoc(matchRef, { acc8sEntries: pending });
+      clearPendingMatchUpdate(matchId, "acc8sEntries");
+      const cached = getMatchDocumentFromCache(matchId);
+      if (cached) {
+        setMatchDocumentInCache(matchId, { ...cached, acc8sEntries: pending });
+      }
+      setAcc8sEntries(pending);
+    } catch {
+      // nadal offline lub błąd — zostawiamy pending
+    }
+  }, [matchId]);
+
+  useEffect(() => {
+    syncPendingAcc8sEntries();
+    const handleOnline = () => syncPendingAcc8sEntries();
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [syncPendingAcc8sEntries]);
 
   // Dodaj nową akcję 8s ACC
   const addAcc8sEntry = useCallback(async (entryData: Omit<Acc8sEntry, "id" | "timestamp">) => {

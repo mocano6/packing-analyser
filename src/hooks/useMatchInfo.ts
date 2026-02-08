@@ -33,11 +33,14 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
+const MATCHES_CACHE_VERSION = 2; // 2 = zapisujemy 100 najnowszych (slice(0,100)); wersja 1 miała błąd (slice(-100))
+
 // Typ dla lokalnego cache'u meczów
 interface MatchesCache {
   data: TeamInfo[];
-  timestamp: number; // Kiedy ostatnio pobrano dane z Firebase
-  lastTeamId?: string; // Ostatni wybrany zespół
+  timestamp: number;
+  lastTeamId?: string;
+  cacheVersion?: number;
 }
 
 // Bufor operacji Firebase dla uniknięcia kolizji - kolejka operacji
@@ -160,13 +163,13 @@ export function useMatchInfo() {
       } catch (err: any) {
         if (err?.name === 'QuotaExceededError' || err?.message?.includes('quota')) {
           console.warn('localStorage quota przekroczony, próba zmniejszenia cache...');
-          // Zostaw 50 najnowszych meczów (data jest date desc — najnowsze na początku)
           try {
             const reducedData = localCacheRef.current.data.slice(0, 50);
             const reducedCache = {
               data: reducedData,
               timestamp: localCacheRef.current.timestamp,
-              lastTeamId: localCacheRef.current.lastTeamId
+              lastTeamId: localCacheRef.current.lastTeamId,
+              cacheVersion: MATCHES_CACHE_VERSION
             };
             localStorage.setItem(LOCAL_MATCHES_CACHE_KEY, JSON.stringify(reducedCache));
             localCacheRef.current = reducedCache;
@@ -197,13 +200,14 @@ export function useMatchInfo() {
     }
   };
   
-  // Funkcja do ładowania cache'u z localStorage
+  // Ładowanie cache z localStorage; pomijamy stare wersje (bez cacheVersion lub < 2 — błąd slice(-100))
   const loadLocalCache = (): MatchesCache | null => {
     if (typeof window !== "undefined") {
       try {
         const cachedData = localStorage.getItem(LOCAL_MATCHES_CACHE_KEY);
         if (cachedData) {
           const parsedCache = JSON.parse(cachedData) as MatchesCache;
+          if ((parsedCache.cacheVersion ?? 1) < MATCHES_CACHE_VERSION) return null;
           return parsedCache;
         }
       } catch (err) {
@@ -219,11 +223,12 @@ export function useMatchInfo() {
     const limitedData = newData.length > maxCacheSize
       ? newData.slice(0, maxCacheSize)
       : newData;
-    
+
     localCacheRef.current = {
       data: limitedData,
       timestamp: Date.now(),
-      lastTeamId: teamId || localCacheRef.current.lastTeamId
+      lastTeamId: teamId || localCacheRef.current.lastTeamId,
+      cacheVersion: MATCHES_CACHE_VERSION
     };
     saveLocalCache();
   };

@@ -1705,6 +1705,17 @@ export default function Page() {
     }
   }, [selectedTeam]);
 
+  // Gdy mamy matchInfo (np. z cache) ale selectedTeam jest pusty — ustaw zespół z bieżącego meczu,
+  // żeby MatchInfoHeader mógł poprawnie przefiltrować allMatches i pokazać listę meczów
+  useEffect(() => {
+    if (selectedTeam === "" && matchInfo?.team) {
+      setSelectedTeam(matchInfo.team);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("selectedTeam", matchInfo.team);
+      }
+    }
+  }, [matchInfo?.team, selectedTeam]);
+
   // Inicjalizuj selectedSeason na najnowszy sezon na podstawie meczów
   useEffect(() => {
     if (selectedSeason === null && allMatches.length > 0) {
