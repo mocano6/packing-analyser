@@ -8,7 +8,13 @@ import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
 import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc } from "@/lib/firestoreWithMetrics";
+import {
+  getMatchDocumentFromCache,
+  setMatchDocumentInCache,
+  isMatchOlderThan4Days,
+  sortMatchesByDateDesc,
+} from "@/lib/matchDocumentCache";
 import Link from "next/link";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
@@ -34,7 +40,7 @@ export default function PlayerDetailsPage() {
 
   const [allActions, setAllActions] = useState<Action[]>([]);
   const [allShots, setAllShots] = useState<any[]>([]);
-  const [isLoadingActions, setIsLoadingActions] = useState(false);
+  const [isLoadingActions, setIsLoadingActions] = useState(true);
   const [allTeamActions, setAllTeamActions] = useState<Action[]>([]); // Wszystkie akcje zespołu dla rankingu
   const [playerMatchStatsByMatchId, setPlayerMatchStatsByMatchId] = useState<Record<string, PlayerMatchStats>>({});
   const [selectedMatchIds, setSelectedMatchIds] = useState<string[]>(() => {
@@ -217,6 +223,12 @@ export default function PlayerDetailsPage() {
   // Ref do śledzenia, czy już załadowaliśmy mecze dla danego zespołu
   const lastLoadedTeamRef = useRef<string | null>(null);
   const isLoadingMatchesRef = useRef(false);
+  // Jedno ładowanie na kombinację (zespół, zawodnik, liczba meczów) — unikamy wielokrotnego odświeżania
+  const lastLoadSignatureRef = useRef<string | null>(null);
+  // Flaga sesyjna: czy użytkownik ręcznie odznaczył wszystkie mecze
+  const manualDeselectTriggeredRef = useRef(false);
+  // Czy mamy już załadowane akcje dla bieżącego kontekstu (bez migania "Ładowanie statystyk...")
+  const hasLoadedActionsRef = useRef(false);
 
   // Znajdź zawodnika - użyj selectedPlayerForView jeśli jest ustawiony, w przeciwnym razie playerId z URL
   const player = useMemo(() => {
@@ -598,127 +610,150 @@ export default function PlayerDetailsPage() {
     setAllActions([]);
     setAllShots([]);
     setSelectedMatchIds([]);
+    setManuallyDeselectedAll(false);
+    manualDeselectTriggeredRef.current = false;
+    hasLoadedActionsRef.current = false;
     setIsPlayerSelectModalOpen(false);
   };
 
-  // Pobierz wszystkie akcje dla zawodnika
+  // Pobierz akcje zawodnika i zespołu w jednej pętli — jeden getDoc na mecz (mniej odczytów Firestore)
+  // Sygnatura: jedno ładowanie na (team, player, liczba meczów) — bez wielokrotnego odświeżania UI
   useEffect(() => {
-    const loadPlayerActions = async () => {
-      // Poczekaj aż filteredPlayers się zaktualizuje po zmianie zespołu
-      if (filteredPlayers.length === 0) {
-        setAllActions([]);
-        setAllShots([]);
-        setSelectedMatchIds([]);
-        setIsLoadingActions(false);
-        return;
-      }
-      
-      // Jeśli nie ma wybranego zawodnika, poczekaj aż zostanie ustawiony przez useEffect
-      if (!selectedPlayerForView) {
-        setAllActions([]);
-        setAllShots([]);
-        setSelectedMatchIds([]);
-        setIsLoadingActions(false);
-        return;
-      }
-      
-      const targetPlayerId = selectedPlayerForView;
-      if (!targetPlayerId || !db) {
-        setAllActions([]);
-        setAllShots([]);
-        setSelectedMatchIds([]);
-        setIsLoadingActions(false);
-        return;
-      }
-      
-      // Sprawdź czy zawodnik jest dostępny w przefiltrowanych zawodnikach
-      if (!filteredPlayers.some(p => p.id === targetPlayerId)) {
-        // Jeśli zawodnik nie jest dostępny, wyczyść dane i poczekaj na ustawienie nowego zawodnika
-        setAllActions([]);
-        setAllShots([]);
-        setSelectedMatchIds([]);
-        setIsLoadingActions(false);
-        return;
-      }
-      
-      // Sprawdź czy są mecze do załadowania
-      // Jeśli nie ma meczów, to też OK - po prostu nie ma danych dla tego zespołu/sezonu
-      // Ale musimy załadować dane (nawet jeśli będzie puste), aby pokazać że dane zostały załadowane
+    if (!db) {
+      setIsLoadingActions(false);
+      return;
+    }
 
-      setIsLoadingActions(true);
+    const targetPlayerId = selectedPlayerForView;
+    const teamPlayersIds = playersForRanking.map((p) => p.id);
+    const isPlayerValid =
+      targetPlayerId &&
+      filteredPlayers.length > 0 &&
+      filteredPlayers.some((p) => p.id === targetPlayerId);
+    const matchCount = filteredMatchesBySeason.length;
+    const ready = !!(
+      selectedTeam &&
+      isPlayerValid &&
+      matchCount > 0
+    );
+    // Sygnatura oparta na zestawie ID meczów — unikamy ponownego ładowania gdy tylko referencja tablicy się zmienia (data → ładowanie → data)
+    const matchIdsKey = ready
+      ? [...filteredMatchesBySeason]
+          .map((m) => m.matchId)
+          .filter(Boolean)
+          .sort()
+          .join(",")
+      : "";
+    const loadSignature = ready ? `${selectedTeam}|${targetPlayerId}|${matchIdsKey}` : null;
+
+    // Nie gotowe: pokazuj ładowanie do momentu, aż dane będą gotowe i load się wykona. Nie ustawiaj false z opóźnieniem — to powodowało: widok → ładowanie → dane (2 przeładowania).
+    // Wyjątek: mamy zespół i zawodnika, 0 meczów po filtracji A lista meczów jest już wczytana (allMatches.length > 0) — wtedy pokaż pusty stan.
+    // Gdy allMatches.length === 0, nie ustawiaj false — unikamy sekwencji: zera → ładowanie → dane (wielokrotne przeładowanie kontenera).
+    if (!loadSignature) {
+      if (selectedTeam && targetPlayerId && matchCount === 0 && allMatches.length > 0) {
+        setIsLoadingActions(false);
+      }
+      return;
+    }
+
+    if (loadSignature === lastLoadSignatureRef.current) {
+      return;
+    }
+    lastLoadSignatureRef.current = loadSignature;
+
+    const loadActionsAndTeamActions = async () => {
+      const shouldShowLoading = !hasLoadedActionsRef.current;
+      if (shouldShowLoading) {
+        setIsLoadingActions(true);
+      }
+      // Najnowszy pierwszy — tylko ten pobieramy z sieci, reszta starsza niż 4 dni z cache
+      const matchesToLoad = sortMatchesByDateDesc(filteredMatchesBySeason);
+
+      const allActionsData: Action[] = [];
+      const allShotsData: any[] = [];
+      const matchStatsMap: Record<string, PlayerMatchStats> = {};
+      const allTeamActionsData: Action[] = [];
+
       try {
-        const allActionsData: Action[] = [];
-        const allShotsData: any[] = [];
-        const matchStatsMap: Record<string, PlayerMatchStats> = {};
+        const newestMatchId = matchesToLoad[0]?.matchId ?? null;
 
-        // Użyj już przefiltrowanych meczów
-        const matchesToLoad = filteredMatchesBySeason;
-
-        // Pobierz akcje ze wszystkich meczów
         for (const match of matchesToLoad) {
           if (!match.matchId) continue;
 
-          try {
-            const matchDoc = await getDoc(doc(db, "matches", match.matchId));
-            if (matchDoc.exists()) {
-              const matchData = matchDoc.data() as TeamInfo;
-              
-              // Pobierz ręcznie wpisane statystyki zawodnika (podania celne/niecelne + czas posiadania)
-              const playerMatchStats = matchData?.matchData?.playerStats?.find(
-                (s: any) => s?.playerId === targetPlayerId
-              );
-              if (playerMatchStats) {
-                matchStatsMap[match.matchId] = playerMatchStats as PlayerMatchStats;
-              }
-              
-              // Pobierz akcje z różnych kolekcji
-              const packingActions = matchData.actions_packing || [];
-              const unpackingActions = matchData.actions_unpacking || [];
-              const regainActions = matchData.actions_regain || [];
-              const losesActions = matchData.actions_loses || [];
+          // Tylko najnowszy mecz zawsze z sieci; starsze niż 4 dni i reszta — z cache, a gdy brak w cache: pobierz raz i zapisz
+          const isNewest = match.matchId === newestMatchId;
+          const useCacheFirst = !isNewest;
+          let matchData: TeamInfo | null =
+            useCacheFirst ? getMatchDocumentFromCache(match.matchId) : null;
 
-              // Dodaj matchId do każdej akcji oraz informację o źródle (kolekcji)
-              const allMatchActions = [
-                ...packingActions.map(a => ({ ...a, matchId: match.matchId!, _actionSource: 'packing' as const })),
-                ...unpackingActions.map(a => ({ ...a, matchId: match.matchId!, _actionSource: 'unpacking' as const })),
-                ...regainActions.map(a => ({ ...a, matchId: match.matchId!, _actionSource: 'regain' as const })),
-                ...losesActions.map(a => ({ ...a, matchId: match.matchId!, _actionSource: 'loses' as const }))
-              ];
-
-              // Filtruj akcje dla wybranego zawodnika
-              const playerActions = allMatchActions.filter(
-                action =>
-                  action.senderId === targetPlayerId ||
-                  action.receiverId === targetPlayerId ||
-                  (action as any).playerId === targetPlayerId
-              );
-
-              allActionsData.push(...playerActions);
-              
-              // Pobierz strzały dla zawodnika
-              const matchShots = matchData.shots || [];
-              const playerShots = matchShots.filter((shot: any) => shot.playerId === targetPlayerId);
-              allShotsData.push(...playerShots.map((shot: any) => ({ ...shot, matchId: match.matchId! })));
+          if (matchData === null) {
+            try {
+              const matchDoc = await getDoc(doc(db, "matches", match.matchId));
+              if (!matchDoc.exists()) continue;
+              matchData = matchDoc.data() as TeamInfo;
+              setMatchDocumentInCache(match.matchId, matchData);
+            } catch (error) {
+              console.error(`Błąd podczas pobierania danych meczu ${match.matchId}:`, error);
+              continue;
             }
-          } catch (error) {
-            console.error(`Błąd podczas pobierania akcji dla meczu ${match.matchId}:`, error);
           }
+
+          const packingActions = matchData.actions_packing || [];
+          const unpackingActions = matchData.actions_unpacking || [];
+          const regainActions = matchData.actions_regain || [];
+          const losesActions = matchData.actions_loses || [];
+
+          const allMatchActions = [
+            ...packingActions.map((a) => ({ ...a, matchId: match.matchId!, _actionSource: "packing" as const })),
+            ...unpackingActions.map((a) => ({ ...a, matchId: match.matchId!, _actionSource: "unpacking" as const })),
+            ...regainActions.map((a) => ({ ...a, matchId: match.matchId!, _actionSource: "regain" as const })),
+            ...losesActions.map((a) => ({ ...a, matchId: match.matchId!, _actionSource: "loses" as const })),
+          ];
+
+          const playerActions = allMatchActions.filter(
+            (action) =>
+              action.senderId === targetPlayerId ||
+              action.receiverId === targetPlayerId ||
+              (action as any).playerId === targetPlayerId
+          );
+          allActionsData.push(...playerActions);
+
+          const playerMatchStats = matchData?.matchData?.playerStats?.find((s: any) => s?.playerId === targetPlayerId);
+          if (playerMatchStats) {
+            matchStatsMap[match.matchId] = playerMatchStats as PlayerMatchStats;
+          }
+
+          const matchShots = matchData.shots || [];
+          const playerShots = matchShots.filter((shot: any) => shot.playerId === targetPlayerId);
+          allShotsData.push(...playerShots.map((shot: any) => ({ ...shot, matchId: match.matchId! })));
+
+          const teamMatchActions = allMatchActions.filter(
+            (action) =>
+              (action.senderId && teamPlayersIds.includes(action.senderId)) ||
+              (action.receiverId && teamPlayersIds.includes(action.receiverId)) ||
+              ((action as any).playerId && teamPlayersIds.includes((action as any).playerId))
+          );
+          allTeamActionsData.push(...teamMatchActions);
         }
 
         setAllActions(allActionsData);
         setAllShots(allShotsData);
         setPlayerMatchStatsByMatchId(matchStatsMap);
+        setAllTeamActions(selectedTeam && teamPlayersIds.length > 0 ? allTeamActionsData : []);
       } catch (error) {
         console.error("Błąd podczas pobierania akcji:", error);
         setAllActions([]);
+        setAllShots([]);
         setPlayerMatchStatsByMatchId({});
+        setAllTeamActions([]);
       } finally {
+        hasLoadedActionsRef.current = true;
         setIsLoadingActions(false);
       }
     };
 
-    loadPlayerActions();
-  }, [playerId, selectedPlayerForView, filteredMatchesBySeason, filteredPlayers, db]);
+    loadActionsAndTeamActions();
+  }, [playerId, selectedPlayerForView, filteredMatchesBySeason, filteredPlayers, selectedTeam, playersForRanking, db, allMatches]);
 
   // Oblicz dostępne sezony
   const availableSeasons = useMemo(() => {
@@ -799,69 +834,6 @@ export default function PlayerDetailsPage() {
     
     return () => clearTimeout(timeoutId);
   }, [selectedTeam]); // Tylko selectedTeam w zależnościach
-
-  // Pobierz wszystkie akcje zespołu dla rankingu
-  useEffect(() => {
-    const loadAllTeamActions = async () => {
-      if (!selectedTeam || !db || playersForRanking.length === 0) {
-        setAllTeamActions([]);
-        return;
-      }
-
-      try {
-        const allTeamActionsData: Action[] = [];
-
-        // Użyj filteredMatchesBySeason zamiast allMatches, żeby uwzględnić filtr sezonu
-        const matchesToLoad = filteredMatchesBySeason;
-
-        // Pobierz akcje ze wszystkich meczów dla wszystkich zawodników
-        for (const match of matchesToLoad) {
-          if (!match.matchId) continue;
-
-          try {
-            const matchDoc = await getDoc(doc(db, "matches", match.matchId));
-            if (matchDoc.exists()) {
-              const matchData = matchDoc.data() as TeamInfo;
-              
-              // Pobierz akcje z różnych kolekcji
-              const packingActions = matchData.actions_packing || [];
-              const unpackingActions = matchData.actions_unpacking || [];
-              const regainActions = matchData.actions_regain || [];
-              const losesActions = matchData.actions_loses || [];
-
-              // Dodaj matchId do każdej akcji - NIE filtruj po zawodniku!
-              const allMatchActions = [
-                ...packingActions.map(a => ({ ...a, matchId: match.matchId!, _actionSource: 'packing' as const })),
-                ...unpackingActions.map(a => ({ ...a, matchId: match.matchId!, _actionSource: 'unpacking' as const })),
-                ...regainActions.map(a => ({ ...a, matchId: match.matchId!, _actionSource: 'regain' as const })),
-                ...losesActions.map(a => ({ ...a, matchId: match.matchId!, _actionSource: 'loses' as const }))
-              ];
-
-              // Filtruj tylko akcje zawodników z wybranego zespołu (dla gracza: cały zespół do rankingu)
-              const teamPlayersIds = playersForRanking.map(p => p.id);
-              const teamMatchActions = allMatchActions.filter(
-                action =>
-                  (action.senderId && teamPlayersIds.includes(action.senderId)) ||
-                  (action.receiverId && teamPlayersIds.includes(action.receiverId)) ||
-                  ((action as any).playerId && teamPlayersIds.includes((action as any).playerId))
-              );
-
-              allTeamActionsData.push(...teamMatchActions);
-            }
-          } catch (error) {
-            console.error(`Błąd podczas pobierania akcji zespołu dla meczu ${match.matchId}:`, error);
-          }
-        }
-
-        setAllTeamActions(allTeamActionsData);
-      } catch (error) {
-        console.error("Błąd podczas pobierania akcji zespołu:", error);
-        setAllTeamActions([]);
-      }
-    };
-
-    loadAllTeamActions();
-  }, [selectedTeam, filteredMatchesBySeason, playersForRanking, db]);
 
   // Inicjalizuj selectedTeam - sprawdź czy wybrany zespół jest dostępny, jeśli nie - ustaw pierwszy dostępny
   // Dla gracza (isPlayer) po załadowaniu ustaw zespół na dozwolony (jego zespoły), nie na wartość z localStorage
@@ -949,10 +921,22 @@ export default function PlayerDetailsPage() {
       return;
     }
 
-    // Gdy brak wyboru i użytkownik nie odznaczył „wszystkie” – domyślnie wybierz ostatni mecz na liście (najbliższy)
-    if (!manuallyDeselectedAll && filteredSelected.length === 0) {
-      const lastMatchId = availableMatchIds[availableMatchIds.length - 1];
-      setSelectedMatchIds(lastMatchId ? [lastMatchId] : []);
+    const effectiveManualDeselected = manuallyDeselectedAll && manualDeselectTriggeredRef.current;
+
+    // Gdy brak wyboru i użytkownik nie odznaczył „wszystkie” w tej sesji – domyślnie wybierz najnowszy mecz
+    if (!effectiveManualDeselected && filteredSelected.length === 0) {
+      const sorted = sortMatchesByDateDesc(selectableMatchesBySeason);
+      const newestMatchId = sorted[0]?.matchId;
+      if (newestMatchId) {
+        // Unikaj zbędnego setState gdy już mamy ten sam wybór (np. [newestMatchId])
+        if (selectedMatchIds.length !== 1 || selectedMatchIds[0] !== newestMatchId) {
+          setSelectedMatchIds([newestMatchId]);
+          setManuallyDeselectedAll(false);
+          manualDeselectTriggeredRef.current = false;
+        }
+      } else if (selectedMatchIds.length > 0) {
+        setSelectedMatchIds([]);
+      }
     }
   }, [selectableMatchesBySeason, manuallyDeselectedAll, selectedMatchIds]);
 
@@ -3981,6 +3965,9 @@ export default function PlayerDetailsPage() {
                     setAllActions([]);
                     setAllShots([]);
                     setSelectedMatchIds([]);
+                    setManuallyDeselectedAll(false);
+                    manualDeselectTriggeredRef.current = false;
+                    hasLoadedActionsRef.current = false;
                     lastLoadedTeamRef.current = null;
                   }}
                   className={styles.selectorSelect}
@@ -4024,6 +4011,9 @@ export default function PlayerDetailsPage() {
                   setAllActions([]);
                   setAllShots([]);
                   setSelectedMatchIds([]);
+                  setManuallyDeselectedAll(false);
+                  manualDeselectTriggeredRef.current = false;
+                  hasLoadedActionsRef.current = false;
                   // Wyczyść localStorage dla selectedPlayerForView, aby wymusić wybór pierwszego zawodnika z nowego zespołu
                   if (typeof window !== 'undefined') {
                     localStorage.removeItem('selectedPlayerForView');
@@ -4056,7 +4046,10 @@ export default function PlayerDetailsPage() {
           <label htmlFor="season-select" className={styles.selectorLabel}>Sezon:</label>
           <SeasonSelector
             selectedSeason={selectedSeason ?? defaultSeason}
-            onChange={setSelectedSeason}
+            onChange={(season) => {
+              setSelectedSeason(season);
+              hasLoadedActionsRef.current = false;
+            }}
             showLabel={false}
             availableSeasons={availableSeasons}
           />
@@ -8242,6 +8235,7 @@ export default function PlayerDetailsPage() {
                         .map(m => m.matchId!);
                       setSelectedMatchIds(allIds);
                       setManuallyDeselectedAll(false);
+                      manualDeselectTriggeredRef.current = false;
                     }}
                   >
                     Zaznacz wszystkie
@@ -8251,6 +8245,7 @@ export default function PlayerDetailsPage() {
                     onClick={() => {
                       setSelectedMatchIds([]);
                       setManuallyDeselectedAll(true);
+                      manualDeselectTriggeredRef.current = true;
                     }}
                   >
                     Odznacz wszystkie
@@ -8356,7 +8351,7 @@ export default function PlayerDetailsPage() {
         onImportError={() => {}}
         onLogout={logout}
       />
-    </div>
+      </div>
     </div>
   );
 }
