@@ -512,7 +512,16 @@ const ActionRow = ({
             ✎
           </button>
         )}
-        <button onClick={() => onDelete(action.id)} className={sharedStyles.deleteBtn} title="Usuń akcję">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if (action.id) onDelete(action.id);
+          }}
+          className={sharedStyles.deleteBtn}
+          title="Usuń akcję"
+        >
           ✕
         </button>
       </div>

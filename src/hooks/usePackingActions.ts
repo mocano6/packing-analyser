@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Player, Action, TeamInfo } from "@/types";
 import { v4 as uuidv4 } from 'uuid';
 import { getDB } from "@/lib/firebase";
-import { collection, addDoc, query, where, getDocs, doc, deleteDoc, getDoc, updateDoc } from "@/lib/firestoreWithMetrics";
+import { collection, addDoc, query, where, getDocs, doc, deleteDoc, getDoc, getDocFromServer, updateDoc } from "@/lib/firestoreWithMetrics";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 import toast from "react-hot-toast";
 // Usunięto import funkcji synchronizacji - akcje są teraz tylko w matches
@@ -136,9 +136,12 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     try {
       setIsLoading(true);
       
-      // Pobierz dokument meczu
+      // Pobierz dokument meczu — dla regain/loses zawsze ze serwera, żeby dane były od razu aktualne
       const matchRef = doc(getDB(), "matches", matchId);
-      const matchDoc = await getDoc(matchRef);
+      const useServer = loadBothRegainLoses || actionCategory === "regain" || actionCategory === "loses";
+      const matchDoc = useServer
+        ? await getDocFromServer(matchRef).catch(() => getDoc(matchRef))
+        : await getDoc(matchRef);
       
       if (matchDoc.exists()) {
         const matchData = matchDoc.data() as TeamInfo;
@@ -807,19 +810,17 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           });
           clearPendingMatchUpdate(matchInfoArg.matchId, collectionField);
           
-          // Console log z całym obiektem zapisanej akcji
-          
-          // Specjalny console log dla akcji loses
-          if (actionCategory === "loses") {
+          // Aktualizacja optymistyczna — od razu pokazujemy nową akcję w tabeli (live),
+          // bez polegania na loadActionsForMatch, które może zwrócić dane z cache
+          const sanitizedNew = {
+            ...removeUndefinedFields(stripPIIFromAction(actionToSave)),
+            isSecondHalf: (actionToSave as Action).isSecondHalf === true
+          } as Action;
+          setActions((prev) => [...prev, sanitizedNew]);
+          const cached = getMatchDocumentFromCache(matchInfoArg.matchId);
+          if (cached) {
+            setMatchDocumentInCache(matchInfoArg.matchId, { ...cached, [collectionField]: updatedActions } as TeamInfo);
           }
-          
-          // Akcje są teraz przechowywane tylko w matches - nie duplikujemy w players
-          
-          // Po udanym zapisie odświeżamy akcje z bazy - WAŻNE: używamy await, aby upewnić się, że akcje są załadowane
-          await loadActionsForMatch(matchInfoArg.matchId);
-          
-          // Dodajemy akcję do lokalnego stanu po odświeżeniu z bazy (aby uniknąć duplikacji)
-          // setActions jest już wywoływane w loadActionsForMatch, więc nie musimy tego robić tutaj
         } else {
           console.error("Nie znaleziono meczu o ID:", matchInfoArg.matchId);
         }
@@ -917,6 +918,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
 
   // Usuwanie akcji
   const handleDeleteAction = useCallback(async (actionId: string) => {
+    if (!actionId) {
+      console.error("Brak ID akcji do usunięcia");
+      return false;
+    }
     if (!matchInfo?.matchId) {
       console.error("Brak ID meczu, nie można usunąć akcji");
       return false;
@@ -935,16 +940,27 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       return false;
     }
     
+    const removedAction = actions.find((a) => a.id === actionId);
+    // Optymistyczne usunięcie z UI — od razu zniknie z listy
+    setActions((prev) => prev.filter((a) => a.id !== actionId));
+    
     try {
-      // NAJPIERW usuwamy z Firebase
+      // Usuwamy z Firebase
       const matchRef = doc(getDB(), "matches", matchInfo.matchId);
       const matchDoc = await getDoc(matchRef);
       
       if (matchDoc.exists()) {
         const matchData = matchDoc.data() as TeamInfo;
         
-        // Znajdź akcję w lokalnym stanie, aby określić jej kategorię
-        const actionToDelete = actions.find(a => a.id === actionId);
+        // Znajdź akcję (z zapisanego stanu lub Firebase), aby określić kolekcję
+        const actionToDelete = removedAction ?? (() => {
+          const packingActions = matchData.actions_packing || [];
+          const unpackingActions = matchData.actions_unpacking || [];
+          const regainActions = matchData.actions_regain || [];
+          const losesActions = matchData.actions_loses || [];
+          return [...packingActions, ...unpackingActions, ...regainActions, ...losesActions]
+            .find((a: Action) => a.id === actionId);
+        })();
         
         // Jeśli nie ma w lokalnym stanie, sprawdź wszystkie kolekcje w Firebase
         let foundAction: Action | undefined = actionToDelete;
@@ -1005,19 +1021,21 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           [collectionField]: cleanedActions
         });
         
-        // Akcje są teraz przechowywane tylko w matches - nie duplikujemy w players
-        
-        // DOPIERO PO UDANYM ZAPISIE usuwamy z lokalnego stanu
-        setActions(prevActions => prevActions.filter(action => action.id !== actionId));
-        
+        // Stan UI został już zaktualizowany optymistycznie
       } else {
         console.error("Nie znaleziono meczu o ID:", matchInfo.matchId);
+        if (removedAction) {
+          setActions((prev) => [...prev, removedAction]);
+        }
         return false;
       }
       
       return true;
     } catch (error: unknown) {
       console.error("Błąd podczas usuwania akcji:", error);
+      if (removedAction) {
+        setActions((prev) => [...prev, removedAction]);
+      }
       await handleFirestoreError(error as Error, getDB());
       const msg = error && typeof error === 'object' && 'code' in error ? String((error as { code?: string }).code) : '';
       const errMsg = error instanceof Error ? error.message : String(error);

@@ -502,6 +502,14 @@
   font-family: 'Courier New', monospace;
 }
 
+.matchIdRow {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  font-family: monospace;
+  margin-top: 2px;
+  word-break: break-all;
+}
+
 .noData {
   text-align: center;
   padding: 60px 20px;

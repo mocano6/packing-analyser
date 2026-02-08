@@ -470,11 +470,14 @@ export function useMatchInfo() {
         setMatchInfo(null);
       }
       
-      // 5. W tle odświeżamy dane z Firebase tylko jeśli jesteśmy online i cache jest nieświeży
+      // 5. W tle odświeżamy dane z Firebase gdy: online i (cache nieświeży LUB brak meczów dla tego zespołu w cache)
+      // Przy zmianie zespołu cache ma dane poprzedniego zespołu — wtedy filteredMatches=[], trzeba pobrać z Firebase
       if (!isOfflineMode) {
         const cacheAge = localCacheRef.current?.timestamp ? Date.now() - localCacheRef.current.timestamp : Infinity;
-        if (cacheAge < MATCHES_CACHE_STALE_MS) {
-          return filteredMatches; // cache świeży — pomijamy odczyt Firestore
+        const cacheIsForThisTeam = localCacheRef.current?.lastTeamId === teamId;
+        const skipFetch = cacheAge < MATCHES_CACHE_STALE_MS && cacheIsForThisTeam && filteredMatches.length > 0;
+        if (skipFetch) {
+          return filteredMatches; // cache świeży i mamy dane dla tego zespołu — pomijamy odczyt Firestore
         }
         // Dodatkowe sprawdzenie statusu online przed próbą dostępu do Firebase
         const isOnline = typeof navigator !== 'undefined' && navigator.onLine;

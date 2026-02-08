@@ -565,7 +565,10 @@ export default function WeryfikacjaMeczow() {
                     className={styles.clickableCell}
                   >{formatDate(match.date)}</td>
                   <td>{formatDate(match.deadline)}</td>
-                  <td>{memoizedGetTeamName(match.team)}</td>
+                  <td>
+                    <span>{memoizedGetTeamName(match.team)}</span>
+                    <div className={styles.matchIdRow}>{match.id}</div>
+                  </td>
                   <td>{match.opponent}</td>
                   <td>
                     <span className={styles.matchType}>
