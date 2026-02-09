@@ -8,6 +8,8 @@ const MAX_LAST_OPERATIONS = 50;
 export interface FirestoreOperation {
   type: "read" | "write";
   label: string;
+  /** Ścieżka dokumentu (np. "matches/abc123") – brak dla getDocs (zapytanie) */
+  path?: string;
   timestamp: number;
 }
 
@@ -37,18 +39,18 @@ function notify() {
   listeners.forEach((cb) => cb(state));
 }
 
-export function recordFirestoreRead(label: string = "read") {
+export function recordFirestoreRead(label: string = "read", path?: string) {
   sessionReads += 1;
-  lastOperations.push({ type: "read", label, timestamp: Date.now() });
+  lastOperations.push({ type: "read", label, path, timestamp: Date.now() });
   if (lastOperations.length > MAX_LAST_OPERATIONS) {
     lastOperations.shift();
   }
   notify();
 }
 
-export function recordFirestoreWrite(label: string = "write") {
+export function recordFirestoreWrite(label: string = "write", path?: string) {
   sessionWrites += 1;
-  lastOperations.push({ type: "write", label, timestamp: Date.now() });
+  lastOperations.push({ type: "write", label, path, timestamp: Date.now() });
   if (lastOperations.length > MAX_LAST_OPERATIONS) {
     lastOperations.shift();
   }

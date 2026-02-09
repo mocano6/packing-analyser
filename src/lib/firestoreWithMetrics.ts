@@ -46,7 +46,7 @@ import type { DocumentReference, Query, DocumentData, SetOptions, UpdateData } f
 // Opakowane funkcje z rejestracją metryk
 export async function getDoc<T = DocumentData>(reference: DocumentReference<T>) {
   const result = await firestoreGetDoc(reference);
-  recordFirestoreRead("getDoc");
+  recordFirestoreRead("getDoc", reference.path);
   return result;
 }
 
@@ -66,7 +66,7 @@ export async function setDoc<T = DocumentData>(
   } else {
     await firestoreSetDoc(reference, data);
   }
-  recordFirestoreWrite("setDoc");
+  recordFirestoreWrite("setDoc", reference.path);
 }
 
 export async function updateDoc<T = DocumentData>(
@@ -74,7 +74,7 @@ export async function updateDoc<T = DocumentData>(
   data: UpdateData<T>
 ) {
   await firestoreUpdateDoc(reference, data);
-  recordFirestoreWrite("updateDoc");
+  recordFirestoreWrite("updateDoc", reference.path);
 }
 
 export async function addDoc<T = DocumentData>(
@@ -82,11 +82,11 @@ export async function addDoc<T = DocumentData>(
   data: T
 ) {
   const result = await firestoreAddDoc(reference, data);
-  recordFirestoreWrite("addDoc");
+  recordFirestoreWrite("addDoc", reference.path);
   return result;
 }
 
 export async function deleteDoc(reference: DocumentReference<unknown>) {
   await firestoreDeleteDoc(reference);
-  recordFirestoreWrite("deleteDoc");
+  recordFirestoreWrite("deleteDoc", reference.path);
 }

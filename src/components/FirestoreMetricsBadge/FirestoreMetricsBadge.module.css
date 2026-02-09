@@ -153,4 +153,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+}
+
+.opPath {
+  color: #6b7280;
+  font-size: 10px;
 }

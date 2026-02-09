@@ -1278,7 +1278,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
             
             <button
               className={styles.saveButton}
-              onClick={handleSave}
               type="submit"
             >
               Zapisz akcję

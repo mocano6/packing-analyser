@@ -10,6 +10,8 @@ const LAST_LOGIN_WRITE_INTERVAL_MS = 5 * 60 * 1000; // zapis lastLogin co najwy�
 
 const userDataCache = new Map<string, { data: UserData; timestamp: number }>();
 const lastLoginWriteAt = new Map<string, number>();
+/** Jedno równoległe wywołanie fetchUserData na uid – unika wielu setDoc przy wielu subskrybentach useAuth. */
+const fetchUserDataInFlight = new Map<string, Promise<UserData | null>>();
 
 export type UserRole = 'user' | 'admin' | 'coach' | 'player';
 export type UserStatus = 'pending' | 'approved';
@@ -66,27 +68,31 @@ export function useAuth(): UseAuthReturnType {
 
   const authService = AuthService.getInstance();
 
-  // Pobiera dane użytkownika z Firestore na podstawie UID (z cache 2 min, lastLogin zapis co 5 min)
+  // Pobiera dane użytkownika z Firestore (cache 2 min, lastLogin co 5 min). Równoległe wywołania dla tego samego uid współdzielą jedno zapytanie.
   const fetchUserData = async (uid: string, userEmail?: string, isUserAuthenticated: boolean = true, isMounted: () => boolean = () => true): Promise<UserData | null> => {
     if (!isUserAuthenticated) return null;
 
-    const now = Date.now();
-    const cached = userDataCache.get(uid);
-    if (cached && now - cached.timestamp < USER_DATA_CACHE_TTL_MS) {
-      const lastWrite = lastLoginWriteAt.get(uid) ?? 0;
-      if (now - lastWrite >= LAST_LOGIN_WRITE_INTERVAL_MS) {
-        lastLoginWriteAt.set(uid, now);
-        const db = getDB();
-        const userRef = doc(db, "users", uid);
-        setDoc(userRef, { lastLogin: new Date() }, { merge: true }).catch(err => {
-          handleFirestoreError(err, db);
-          console.error("Błąd zapisu lastLogin:", err);
-        });
-      }
-      return { ...cached.data, lastLogin: cached.data.lastLogin ?? new Date() };
-    }
+    const existing = fetchUserDataInFlight.get(uid);
+    if (existing) return existing;
 
-    try {
+    const promise = (async (): Promise<UserData | null> => {
+      const now = Date.now();
+      const cached = userDataCache.get(uid);
+      if (cached && now - cached.timestamp < USER_DATA_CACHE_TTL_MS) {
+        const lastWrite = lastLoginWriteAt.get(uid) ?? 0;
+        if (now - lastWrite >= LAST_LOGIN_WRITE_INTERVAL_MS) {
+          lastLoginWriteAt.set(uid, now);
+          const db = getDB();
+          const userRef = doc(db, "users", uid);
+          setDoc(userRef, { lastLogin: new Date() }, { merge: true }).catch(err => {
+            handleFirestoreError(err, db);
+            console.error("Błąd zapisu lastLogin:", err);
+          });
+        }
+        return { ...cached.data, lastLogin: cached.data.lastLogin ?? new Date() };
+      }
+
+      try {
       const db = getDB();
       const userRef = doc(db, "users", uid);
       const userDoc = await getDoc(userRef).catch(error => {
@@ -113,13 +119,19 @@ export function useAuth(): UseAuthReturnType {
 
       const userData = userDoc.data() as UserData;
       const needsEmailUpdate = !userData.email && userEmail;
-      const updateData: any = { lastLogin: new Date() };
-      if (needsEmailUpdate) updateData.email = userEmail;
+      const lastWrite = lastLoginWriteAt.get(uid) ?? 0;
+      const shouldWriteLastLogin = now - lastWrite >= LAST_LOGIN_WRITE_INTERVAL_MS;
+      const shouldWrite = needsEmailUpdate || shouldWriteLastLogin;
 
-      await setDoc(userRef, updateData, { merge: true }).catch(error => {
-        handleFirestoreError(error, db);
-        console.error('Błąd aktualizacji danych użytkownika:', error);
-      });
+      if (shouldWrite) {
+        lastLoginWriteAt.set(uid, now);
+        const updateData: Record<string, unknown> = { lastLogin: new Date() };
+        if (needsEmailUpdate) updateData.email = userEmail;
+        await setDoc(userRef, updateData as UserData, { merge: true }).catch(error => {
+          handleFirestoreError(error, db);
+          console.error('Błąd aktualizacji danych użytkownika:', error);
+        });
+      }
 
       const result: UserData = {
         ...userData,
@@ -127,14 +139,21 @@ export function useAuth(): UseAuthReturnType {
         lastLogin: new Date()
       };
       userDataCache.set(uid, { data: result, timestamp: now });
-      lastLoginWriteAt.set(uid, now);
       return result;
-    } catch (error) {
-      console.error("Błąd podczas pobierania danych użytkownika:", error);
-      if (isUserAuthenticated && isMounted()) {
-        toast.error("Błąd podczas pobierania uprawnień użytkownika");
+      } catch (error) {
+        console.error("Błąd podczas pobierania danych użytkownika:", error);
+        if (isUserAuthenticated && isMounted()) {
+          toast.error("Błąd podczas pobierania uprawnień użytkownika");
+        }
+        return null;
       }
-      return null;
+    })();
+
+    fetchUserDataInFlight.set(uid, promise);
+    try {
+      return await promise;
+    } finally {
+      fetchUserDataInFlight.delete(uid);
     }
   };
 
@@ -143,6 +162,7 @@ export function useAuth(): UseAuthReturnType {
     if (!authState.user?.uid || !authState.isAuthenticated) return;
     userDataCache.delete(authState.user.uid);
     lastLoginWriteAt.delete(authState.user.uid);
+    fetchUserDataInFlight.delete(authState.user.uid);
 
     setIsUserDataLoading(true);
     const userData = await fetchUserData(authState.user.uid, authState.user.email || undefined, authState.isAuthenticated, () => true);
@@ -214,6 +234,7 @@ export function useAuth(): UseAuthReturnType {
       if (uid) {
         userDataCache.delete(uid);
         lastLoginWriteAt.delete(uid);
+        fetchUserDataInFlight.delete(uid);
       }
       // Wyczyść dane użytkownika od razu
       setUserTeams([]);

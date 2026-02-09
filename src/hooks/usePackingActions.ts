@@ -9,7 +9,7 @@ import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 import toast from "react-hot-toast";
 // Usunięto import funkcji synchronizacji - akcje są teraz tylko w matches
 import { getOppositeXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString, getZoneData } from '@/constants/xtValues';
-import { getMatchDocumentFromCache, setMatchDocumentInCache } from "@/lib/matchDocumentCache";
+import { getMatchDocumentFromCache, setMatchDocumentInCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import { clearPendingMatchUpdate, getPendingField, setPendingMatchUpdate } from "@/lib/offlineMatchPending";
 
 // Funkcja do konwersji numeru strefy na format literowo-liczbowy
@@ -74,6 +74,38 @@ function stripPIIFromAction(action: Action): Action {
   return rest as Action;
 }
 
+/** Wyprowadza listę akcji z danych meczu + pending, bez getDoc */
+function deriveActionsFromMatchData(
+  matchId: string,
+  matchData: TeamInfo,
+  actionCategory: "packing" | "regain" | "loses",
+  loadBothRegainLoses: boolean
+): Action[] {
+  const pendingPacking = getPendingField<Action[]>(matchId, "actions_packing");
+  const pendingUnpacking = getPendingField<Action[]>(matchId, "actions_unpacking");
+  const pendingRegain = getPendingField<Action[]>(matchId, "actions_regain");
+  const pendingLoses = getPendingField<Action[]>(matchId, "actions_loses");
+  let loadedActions: Action[];
+  if (loadBothRegainLoses) {
+    const regainActions = pendingRegain ?? (matchData.actions_regain || []);
+    const losesActions = pendingLoses ?? (matchData.actions_loses || []);
+    loadedActions = [...regainActions, ...losesActions];
+  } else if (actionCategory === "regain") {
+    loadedActions = pendingRegain ?? (matchData.actions_regain || []);
+  } else if (actionCategory === "loses") {
+    loadedActions = pendingLoses ?? (matchData.actions_loses || []);
+  } else {
+    const packingActions = pendingPacking ?? (matchData.actions_packing || []);
+    const unpackingActions = pendingUnpacking ?? (matchData.actions_unpacking || []);
+    loadedActions = [...packingActions, ...unpackingActions];
+  }
+  const sanitized = loadedActions.map((action: Action) => {
+    const cleaned = removeUndefinedFields(stripPIIFromAction(action)) as Action;
+    return { ...cleaned, isSecondHalf: cleaned.isSecondHalf === true } as Action;
+  });
+  return dedupeActionsById(sanitized);
+}
+
 export function usePackingActions(players: Player[], matchInfo: TeamInfo | null, actionMode?: "attack" | "defense", selectedDefensePlayers?: string[], actionCategory?: "packing" | "regain" | "loses", loadBothRegainLoses?: boolean) {
   // Stany dla wybranego zawodnika
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -135,6 +167,9 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   // Dane o akcjach
   const [actions, setActions] = useState<Action[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  // Cache pełnego dokumentu meczu — przy zmianie zakładki używamy go zamiast getDoc
+  const [cachedMatchData, setCachedMatchData] = useState<TeamInfo | null>(null);
+  const [cachedMatchId, setCachedMatchId] = useState<string | null>(null);
   const isOfflineError = (err: unknown) => {
     const msg = String(err);
     return (
@@ -145,113 +180,62 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     );
   };
 
-  // Funkcja ładująca akcje dla danego meczu
-  const loadActionsForMatch = useCallback(async (matchId: string) => {
+  // Ładuje dokument meczu (współdzielone z useShots/usePKEntries/useAcc8sEntries – 1 getDoc na zmianę meczu).
+  const loadMatchIntoCache = useCallback(async (matchId: string) => {
     try {
       setIsLoading(true);
-      
-      // Pobierz dokument meczu — dla regain/loses zawsze ze serwera, żeby dane były od razu aktualne
-      const matchRef = doc(getDB(), "matches", matchId);
-      const useServer = loadBothRegainLoses || actionCategory === "regain" || actionCategory === "loses";
-      const matchDoc = useServer
-        ? await getDocFromServer(matchRef).catch(() => getDoc(matchRef))
-        : await getDoc(matchRef);
-      
-      if (matchDoc.exists()) {
-        const matchData = matchDoc.data() as TeamInfo;
-        setMatchDocumentInCache(matchId, matchData);
-        const pendingPacking = getPendingField<Action[]>(matchId, "actions_packing");
-        const pendingUnpacking = getPendingField<Action[]>(matchId, "actions_unpacking");
-        const pendingRegain = getPendingField<Action[]>(matchId, "actions_regain");
-        const pendingLoses = getPendingField<Action[]>(matchId, "actions_loses");
-        // Ładujemy akcje z odpowiedniej kolekcji w zależności od kategorii
-        let loadedActions: Action[];
-        if (loadBothRegainLoses) {
-          // Gdy chcemy pokazać obie kategorie (regain i loses), ładujemy z obu kolekcji
-          const regainActions = pendingRegain ?? (matchData.actions_regain || []);
-          const losesActions = pendingLoses ?? (matchData.actions_loses || []);
-          loadedActions = [...regainActions, ...losesActions];
-        } else if (actionCategory === "regain") {
-          loadedActions = pendingRegain ?? (matchData.actions_regain || []);
-        } else if (actionCategory === "loses") {
-          loadedActions = pendingLoses ?? (matchData.actions_loses || []);
-        } else {
-          // Dla packing ładujemy akcje z obu kolekcji (packing i unpacking)
-          const packingActions = pendingPacking ?? (matchData.actions_packing || []);
-          const unpackingActions = pendingUnpacking ?? (matchData.actions_unpacking || []);
-          loadedActions = [...packingActions, ...unpackingActions];
-        }
-        
-        
-
-        
-        const sanitizedActions = loadedActions.map(action => {
-          const cleanedAction = removeUndefinedFields(stripPIIFromAction(action)) as Action;
-          return {
-            ...cleanedAction,
-            isSecondHalf: cleanedAction.isSecondHalf === true
-          } as Action;
-        });
-        const dedupedActions = dedupeActionsById(sanitizedActions);
-        setActions(dedupedActions);
+      const matchData = await getOrLoadMatchDocument(matchId);
+      if (matchData) {
+        setCachedMatchData(matchData);
+        setCachedMatchId(matchId);
       } else {
-        setActions([]);
+        setCachedMatchData(null);
+        setCachedMatchId(null);
       }
     } catch (error) {
       const cachedMatch = getMatchDocumentFromCache(matchId);
       if (cachedMatch) {
-        const pendingPacking = getPendingField<Action[]>(matchId, "actions_packing");
-        const pendingUnpacking = getPendingField<Action[]>(matchId, "actions_unpacking");
-        const pendingRegain = getPendingField<Action[]>(matchId, "actions_regain");
-        const pendingLoses = getPendingField<Action[]>(matchId, "actions_loses");
-        let loadedActions: Action[] = [];
-        if (loadBothRegainLoses) {
-          const regainActions = pendingRegain ?? (cachedMatch.actions_regain || []);
-          const losesActions = pendingLoses ?? (cachedMatch.actions_loses || []);
-          loadedActions = [...regainActions, ...losesActions];
-        } else if (actionCategory === "regain") {
-          loadedActions = pendingRegain ?? (cachedMatch.actions_regain || []);
-        } else if (actionCategory === "loses") {
-          loadedActions = pendingLoses ?? (cachedMatch.actions_loses || []);
-        } else {
-          const packingActions = pendingPacking ?? (cachedMatch.actions_packing || []);
-          const unpackingActions = pendingUnpacking ?? (cachedMatch.actions_unpacking || []);
-          loadedActions = [...packingActions, ...unpackingActions];
-        }
-        const sanitizedActions = loadedActions.map(action => {
-          const cleanedAction = removeUndefinedFields(stripPIIFromAction(action)) as Action;
-          return {
-            ...cleanedAction,
-            isSecondHalf: cleanedAction.isSecondHalf === true
-          } as Action;
-        });
-        const dedupedActions = dedupeActionsById(sanitizedActions);
-        setActions(dedupedActions);
+        setCachedMatchData(cachedMatch);
+        setCachedMatchId(matchId);
       } else {
-        setActions([]);
+        setCachedMatchData(null);
+        setCachedMatchId(null);
       }
       console.error("Błąd podczas ładowania akcji:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [actionCategory, loadBothRegainLoses]);
+  }, []);
 
-  // Pobieranie akcji przy zmianie meczu lub kategorii akcji
+  // Pobieranie akcji tylko przy zmianie meczu (1 odczyt). Przy zmianie zakładki używamy cache.
   useEffect(() => {
     if (matchInfo?.matchId) {
-      loadActionsForMatch(matchInfo.matchId);
-      
-      // Sprawdź, czy jest zapisana wartość połowy w localStorage
-      const savedHalf = localStorage.getItem('currentHalf');
-      if (savedHalf) {
-        const isP2 = savedHalf === 'P2';
-        setIsSecondHalf(isP2);
-      }
+      loadMatchIntoCache(matchInfo.matchId);
+      const savedHalf = localStorage.getItem("currentHalf");
+      if (savedHalf) setIsSecondHalf(savedHalf === "P2");
     } else {
-      // Resetuj akcje jeśli nie ma wybranego meczu
       setActions([]);
+      setCachedMatchData(null);
+      setCachedMatchId(null);
     }
-  }, [matchInfo?.matchId, actionCategory, loadBothRegainLoses, loadActionsForMatch]);
+  }, [matchInfo?.matchId, loadMatchIntoCache]);
+
+  // Wyprowadź actions z cache przy załadowaniu meczu lub zmianie zakładki (bez getDoc)
+  useEffect(() => {
+    if (!matchInfo?.matchId || !cachedMatchData || cachedMatchId !== matchInfo.matchId) return;
+    const derived = deriveActionsFromMatchData(
+      matchInfo.matchId,
+      cachedMatchData,
+      actionCategory ?? "packing",
+      loadBothRegainLoses ?? false
+    );
+    setActions(derived);
+  }, [cachedMatchData, cachedMatchId, matchInfo?.matchId, actionCategory, loadBothRegainLoses]);
+
+  const loadActionsForMatch = useCallback(
+    (matchId: string) => loadMatchIntoCache(matchId),
+    [loadMatchIntoCache]
+  );
 
   const syncPendingActions = useCallback(async () => {
     if (!matchInfo?.matchId) return;
@@ -772,81 +756,72 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       if (actionCategory === "loses") {
       }
       
-      // Zapisujemy do Firebase
+      // Zapisujemy do Firebase — używamy stanu actions zamiast getDoc (1 odczyt mniej)
       try {
-        // Pobierz aktualny dokument meczu
         const matchRef = doc(getDB(), "matches", matchInfoArg.matchId);
-        const matchDoc = await getDoc(matchRef);
-        
-        if (matchDoc.exists()) {
-          const matchData = matchDoc.data() as TeamInfo;
-          
-          // Wybieramy kolekcję w zależności od kategorii i trybu
-          let collectionField: string;
-          if (actionCategory === "regain") {
-            collectionField = "actions_regain";
-          } else if (actionCategory === "loses") {
-            collectionField = "actions_loses";
-          } else {
-            collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
-          }
-          const currentActions = (matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
-          
-          // Upewniamy się, że wszystkie akcje są oczyszczone z undefined
-          const cleanedActions = currentActions.map((action: Action) =>
-            removeUndefinedFields(stripPIIFromAction(action))
-          );
-          
-          // Dodaj nową (oczyszczoną) akcję i aktualizuj dokument
-          // Upewniamy się, że wszystkie pola boolean są zapisane, nawet jeśli są false
-          const actionToSave = {
-            ...stripPIIFromAction(cleanedAction),
-            ...(actionCategory === "regain" || actionCategory === "loses" ? {
-              isP0: cleanedAction.isP0 ?? false,
-              isP1: cleanedAction.isP1 ?? false,
-              isP2: cleanedAction.isP2 ?? false,
-              isP3: cleanedAction.isP3 ?? false,
-              isContact1: cleanedAction.isContact1 ?? false,
-              isContact2: cleanedAction.isContact2 ?? false,
-              isContact3Plus: cleanedAction.isContact3Plus ?? false,
-              isShot: cleanedAction.isShot ?? false,
-              isGoal: cleanedAction.isGoal ?? false,
-              isPenaltyAreaEntry: cleanedAction.isPenaltyAreaEntry ?? false,
-              ...(actionCategory === "loses" && {
-                isPMArea: (cleanedAction as any).isPMArea ?? false,
-                isAut: (cleanedAction as any).isAut ?? false
-              })
-            } : {})
-          };
-          
-          const updatedActions = [...cleanedActions, actionToSave];
-          await updateDoc(matchRef, {
-            [collectionField]: updatedActions
-          });
-          clearPendingMatchUpdate(matchInfoArg.matchId, collectionField);
-          
-          // Aktualizacja optymistyczna — od razu pokazujemy nową akcję w tabeli (live),
-          // bez polegania na loadActionsForMatch, które może zwrócić dane z cache
-          const sanitizedNew = {
-            ...removeUndefinedFields(stripPIIFromAction(actionToSave)),
-            isSecondHalf: (actionToSave as Action).isSecondHalf === true
-          } as Action;
-          setActions((prev) => [...prev, sanitizedNew]);
-          const cached = getMatchDocumentFromCache(matchInfoArg.matchId);
-          if (cached) {
-            setMatchDocumentInCache(matchInfoArg.matchId, { ...cached, [collectionField]: updatedActions } as TeamInfo);
-          }
+
+        // Wybieramy kolekcję w zależności od kategorii i trybu
+        let collectionField: string;
+        if (actionCategory === "regain") {
+          collectionField = "actions_regain";
+        } else if (actionCategory === "loses") {
+          collectionField = "actions_loses";
         } else {
-          console.error("Nie znaleziono meczu o ID:", matchInfoArg.matchId);
+          collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
+        }
+
+        // Bierzemy aktualną listę ze stanu (już załadowaną przy wejściu na mecz)
+        const cleanedActions = actions.map((action: Action) =>
+          removeUndefinedFields(stripPIIFromAction(action))
+        );
+
+        // Dodaj nową (oczyszczoną) akcję i aktualizuj dokument
+        const actionToSave = {
+          ...stripPIIFromAction(cleanedAction),
+          ...(actionCategory === "regain" || actionCategory === "loses" ? {
+            isP0: cleanedAction.isP0 ?? false,
+            isP1: cleanedAction.isP1 ?? false,
+            isP2: cleanedAction.isP2 ?? false,
+            isP3: cleanedAction.isP3 ?? false,
+            isContact1: cleanedAction.isContact1 ?? false,
+            isContact2: cleanedAction.isContact2 ?? false,
+            isContact3Plus: cleanedAction.isContact3Plus ?? false,
+            isShot: cleanedAction.isShot ?? false,
+            isGoal: cleanedAction.isGoal ?? false,
+            isPenaltyAreaEntry: cleanedAction.isPenaltyAreaEntry ?? false,
+            ...(actionCategory === "loses" && {
+              isPMArea: (cleanedAction as any).isPMArea ?? false,
+              isAut: (cleanedAction as any).isAut ?? false
+            })
+          } : {})
+        };
+
+        const updatedActions = [...cleanedActions, actionToSave];
+        await updateDoc(matchRef, {
+          [collectionField]: updatedActions
+        });
+        clearPendingMatchUpdate(matchInfoArg.matchId, collectionField);
+
+        // Aktualizacja optymistyczna — od razu pokazujemy nową akcję w tabeli
+        const sanitizedNew = {
+          ...removeUndefinedFields(stripPIIFromAction(actionToSave)),
+          isSecondHalf: (actionToSave as Action).isSecondHalf === true
+        } as Action;
+        setActions((prev) => [...prev, sanitizedNew]);
+        const cached = getMatchDocumentFromCache(matchInfoArg.matchId);
+        if (cached) {
+          const updated = { ...cached, [collectionField]: updatedActions } as TeamInfo;
+          setMatchDocumentInCache(matchInfoArg.matchId, updated);
+          if (cachedMatchId === matchInfoArg.matchId) {
+            setCachedMatchData(updated);
+          }
         }
       } catch (firebaseError) {
         console.error("Błąd podczas zapisywania akcji w Firebase:", firebaseError);
         const errorHandled = await handleFirestoreError(firebaseError, getDB());
         if (isOfflineError(firebaseError)) {
-          // Zapis offline: lokalny stan + kolejka pending
+          // Zapis offline: używamy stanu actions + kolejka pending (bez getDoc)
           const matchRef = doc(getDB(), "matches", matchInfoArg.matchId);
-          const matchDoc = await getDoc(matchRef).catch(() => null);
-          const matchData = matchDoc && "data" in matchDoc && matchDoc.exists?.() ? (matchDoc.data() as TeamInfo) : null;
           let collectionField: string;
           if (actionCategory === "regain") {
             collectionField = "actions_regain";
@@ -855,10 +830,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           } else {
             collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
           }
-          const currentActions = matchData
-            ? ((matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [])
-            : [];
-          const cleanedActions = currentActions.map((action: Action) =>
+          const cleanedActions = actions.map((action: Action) =>
             removeUndefinedFields(stripPIIFromAction(action))
           );
           const actionToSave = {
@@ -888,7 +860,9 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           });
           const cached = getMatchDocumentFromCache(matchInfoArg.matchId);
           if (cached) {
-            setMatchDocumentInCache(matchInfoArg.matchId, { ...cached, [collectionField]: updatedActions } as TeamInfo);
+            const updated = { ...cached, [collectionField]: updatedActions } as TeamInfo;
+            setMatchDocumentInCache(matchInfoArg.matchId, updated);
+            if (cachedMatchId === matchInfoArg.matchId) setCachedMatchData(updated);
           }
           toast("Brak połączenia. Zmiany zapisane lokalnie i zostaną wysłane po powrocie internetu.");
           return true;
@@ -910,7 +884,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       return false;
     }
-  }, [selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP0StartActive, isP1StartActive, isP2StartActive, isP3StartActive, isP0Active, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf, isBelow8sActive, isReaction5sActive, isBadReaction5sActive, isAutActive, isPMAreaActive, playersBehindBall, opponentsBehindBall, playersLeftField, opponentsLeftField, actionCategory, actionMode, selectedDefensePlayers, loadActionsForMatch]);
+  }, [actions, cachedMatchId, selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP0StartActive, isP1StartActive, isP2StartActive, isP3StartActive, isP0Active, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf, isBelow8sActive, isReaction5sActive, isBadReaction5sActive, isAutActive, isPMAreaActive, playersBehindBall, opponentsBehindBall, playersLeftField, opponentsLeftField, actionCategory, actionMode, selectedDefensePlayers]);
 
   // Funkcja pomocnicza do określenia kategorii akcji
   const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
@@ -1035,8 +1009,14 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         await updateDoc(matchRef, {
           [collectionField]: cleanedActions
         });
-        
-        // Stan UI został już zaktualizowany optymistycznie
+        if (cachedMatchId === matchInfo.matchId) {
+          setCachedMatchData((prev) => {
+            if (!prev) return prev;
+            const key = collectionField as keyof TeamInfo;
+            const arr = ((prev[key] as Action[] | undefined) || []).filter((a: Action) => a.id !== actionId);
+            return { ...prev, [key]: arr } as TeamInfo;
+          });
+        }
       } else {
         console.error("Nie znaleziono meczu o ID:", matchInfo.matchId);
         if (removedAction) {
@@ -1061,7 +1041,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       }
       return false;
     }
-  }, [matchInfo?.matchId, actions]);
+  }, [matchInfo?.matchId, actions, cachedMatchId]);
 
   // Usuwanie wszystkich akcji
   const handleDeleteAllActions = useCallback(async () => {
@@ -1082,15 +1062,12 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           actionsToRemove = matchData.actions_packing || [];
         }
         
-        // Aktualizacja dokumentu meczu - ustawienie pustej tablicy akcji
         await updateDoc(matchRef, {
           actions_packing: []
         });
-        
-        // Akcje są teraz przechowywane tylko w matches - nie duplikujemy w players
-    
-        
-        // Czyścimy stan lokalny
+        if (cachedMatchId === matchInfo.matchId) {
+          setCachedMatchData((prev) => (prev ? { ...prev, actions_packing: [] } : null));
+        }
         setActions([]);
         return true;
       } catch (error) {
@@ -1103,7 +1080,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       }
     }
     return false;
-  }, [matchInfo?.matchId]);
+  }, [matchInfo?.matchId, cachedMatchId]);
 
   // Dodaj nową funkcję do ustawiania połowy meczu
   const setCurrentHalf = useCallback((value: boolean) => {

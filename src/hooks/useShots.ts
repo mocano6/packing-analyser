@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Shot } from "@/types";
 import { db } from "@/lib/firebase";
-import { doc, updateDoc, getDoc } from "@/lib/firestoreWithMetrics";
-import { getMatchDocumentFromCache, setMatchDocumentInCache } from "@/lib/matchDocumentCache";
+import { doc, updateDoc } from "@/lib/firestoreWithMetrics";
+import { getMatchDocumentFromCache, setMatchDocumentInCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import { clearPendingMatchUpdate, getPendingField, setPendingMatchUpdate } from "@/lib/offlineMatchPending";
 
 export const useShots = (matchId: string) => {
@@ -29,9 +29,8 @@ export const useShots = (matchId: string) => {
     setError(null);
     
     try {
-      const matchDoc = await getDoc(doc(db, "matches", matchId));
-      if (matchDoc.exists()) {
-        const matchData = matchDoc.data();
+      const matchData = await getOrLoadMatchDocument(matchId);
+      if (matchData) {
         const pendingShots = getPendingField<Shot[]>(matchId, "shots");
         const rawShots = pendingShots ?? (matchData.shots || []);
         

@@ -90,7 +90,12 @@ export default function FirestoreMetricsBadge() {
                     <span className={op.type === "read" ? styles.opRead : styles.opWrite}>
                       {op.type === "read" ? "R" : "Z"}
                     </span>
-                    <span className={styles.opLabel}>{op.label}</span>
+                    <span className={styles.opLabel} title={op.path ?? op.label}>
+                      {op.label}
+                      {op.path != null && (
+                        <span className={styles.opPath}> {op.path}</span>
+                      )}
+                    </span>
                   </li>
                 ))}
               </ul>

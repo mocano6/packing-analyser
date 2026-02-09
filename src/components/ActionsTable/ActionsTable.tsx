@@ -135,6 +135,11 @@ const ActionRow = ({
   // Określamy, czy akcja jest w drugiej połowie - jeśli isSecondHalf jest undefined, uznajemy za false
   const isSecondHalf = action.isSecondHalf === true;
 
+  // Dla zakładki regain/loses: kategoria tej akcji (do delikatnego koloru tła wiersza)
+  const rowActionCategory = (actionCategory === "regain" || actionCategory === "loses")
+    ? getActionCategory(action)
+    : null;
+
   // Przygotuj dane zawodników w bezpieczny sposób (bez numeru na koszulce)
   let senderDisplay = action.senderId
     ? getPlayerLabel(action.senderId, playersIndex)
@@ -176,7 +181,7 @@ const ActionRow = ({
 
   return (
     <div 
-      className={`${sharedStyles.actionRow} ${styles.actionRow} ${isSecondHalf ? sharedStyles.secondHalfRow : sharedStyles.firstHalfRow}`}
+      className={`${sharedStyles.actionRow} ${styles.actionRow} ${isSecondHalf ? sharedStyles.secondHalfRow : sharedStyles.firstHalfRow} ${rowActionCategory === 'regain' ? styles.actionRowRegain : ''} ${rowActionCategory === 'loses' ? styles.actionRowLoses : ''}`}
       style={{ gridTemplateColumns: gridColumns }}
     >
       <div className={sharedStyles.cell}>
@@ -552,54 +557,40 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   // Używamy PxT na stałe
   const selectedMetric = 'pxt';
   
-  // State dla filtrowania trybu akcji - dla packing używamy attack/defense, dla regain/loses używamy regain/loses
+  // State dla filtrowania trybu akcji - dla packing używamy attack/defense, dla regain/loses używamy dwóch flag
   // Zapamiętujemy ostatni wybór w localStorage
-  const [actionModeFilter, setActionModeFilter] = useState<'attack' | 'defense' | 'regain' | 'loses'>(() => {
-    if (actionCategory === "regain" || actionCategory === "loses") {
-      // Przywróć ostatni wybór z localStorage lub użyj domyślnej wartości
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem(`actionModeFilter_${actionCategory}`);
-        if (saved === 'regain' || saved === 'loses') {
-          return saved;
-        }
-      }
-      return actionCategory;
-    } else {
-      // Dla packing przywróć ostatni wybór lub użyj 'attack'
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('actionModeFilter_packing');
-        if (saved === 'attack' || saved === 'defense') {
-          return saved;
-        }
-      }
-      return 'attack';
+  const [actionModeFilter, setActionModeFilter] = useState<'attack' | 'defense'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('actionModeFilter_packing');
+      if (saved === 'attack' || saved === 'defense') return saved;
     }
+    return 'attack';
   });
 
-  // Synchronizuj actionModeFilter z actionCategory i zapisuj wybór w localStorage
+  // Dla zakładki regain/loses: dwie niezależne flagi – obie zaznaczone = pokazuj regain i loses
+  const [showRegain, setShowRegain] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('actionModeFilter_regain_loses_showRegain');
+      if (saved === 'true' || saved === 'false') return saved === 'true';
+    }
+    return true;
+  });
+  const [showLoses, setShowLoses] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('actionModeFilter_regain_loses_showLoses');
+      if (saved === 'true' || saved === 'false') return saved === 'true';
+    }
+    return true;
+  });
+
+  // Synchronizuj actionModeFilter (packing) i zapisuj showRegain/showLoses w localStorage
   useEffect(() => {
     if (actionCategory === "regain" || actionCategory === "loses") {
-      // Jeśli actionModeFilter nie jest zgodny z actionCategory, zsynchronizuj go
-      if (actionModeFilter !== 'regain' && actionModeFilter !== 'loses') {
-        // Przywróć ostatni wybór z localStorage lub użyj actionCategory
-        if (typeof window !== 'undefined') {
-          const saved = localStorage.getItem(`actionModeFilter_${actionCategory}`);
-          if (saved === 'regain' || saved === 'loses') {
-            setActionModeFilter(saved);
-          } else {
-            setActionModeFilter(actionCategory);
-          }
-        } else {
-      setActionModeFilter(actionCategory);
-        }
-      } else {
-        // Zapisz wybór w localStorage
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(`actionModeFilter_${actionCategory}`, actionModeFilter);
-        }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('actionModeFilter_regain_loses_showRegain', String(showRegain));
+        localStorage.setItem('actionModeFilter_regain_loses_showLoses', String(showLoses));
       }
     } else {
-      // Dla packing: upewnij się, że mamy poprawny tryb (attack/defense)
       if (actionModeFilter !== 'attack' && actionModeFilter !== 'defense') {
         if (typeof window !== 'undefined') {
           const saved = localStorage.getItem('actionModeFilter_packing');
@@ -609,12 +600,14 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         }
         return;
       }
-      // Zapisz wybór dla packing
       if (typeof window !== 'undefined') {
         localStorage.setItem('actionModeFilter_packing', actionModeFilter);
       }
     }
-  }, [actionCategory, actionModeFilter]);
+  }, [actionCategory, actionModeFilter, showRegain, showLoses]);
+
+  // Dla nagłówków i wierszy: w zakładce regain/loses używamy layoutu jak "attack" (Zawodnik start)
+  const displayMode: 'attack' | 'defense' = (actionCategory === "regain" || actionCategory === "loses") ? 'attack' : actionModeFilter;
 
   // State dla filtra kontrowersyjnego
   const [showOnlyControversial, setShowOnlyControversial] = useState(false);
@@ -684,14 +677,8 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
     // Filtrujemy akcje według trybu lub kategorii
     let filteredActions = actions.filter(action => {
       if (actionCategory === "regain" || actionCategory === "loses") {
-        // Dla regain/loses używamy funkcji getActionCategory do identyfikacji kategorii akcji
         const actionCat = getActionCategory(action);
-        // Sprawdzamy, czy actionModeFilter jest 'regain' lub 'loses' (nie 'attack' lub 'defense')
-        if (actionModeFilter === 'regain' || actionModeFilter === 'loses') {
-          return actionCat === actionModeFilter;
-        }
-        // Fallback: jeśli actionModeFilter nie jest poprawny, użyj actionCategory
-        return actionCat === actionCategory;
+        return (showRegain && actionCat === 'regain') || (showLoses && actionCat === 'loses');
       } else {
         // Dla packing filtrujemy po trybie (attack/defense)
         const actionMode = action.mode || 'attack';
@@ -811,7 +798,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
       if (ma !== mb) return ma - mb;
       return (a.id || "").localeCompare(b.id || "");
     });
-  }, [actions, sortConfig, actionModeFilter, actionCategory, showOnlyControversial, playersIndex]);
+  }, [actions, sortConfig, actionModeFilter, actionCategory, showRegain, showLoses, showOnlyControversial, playersIndex]);
 
   return (
     <div className={sharedStyles.tableContainer}>
@@ -833,16 +820,22 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           
           {/* Przełącznik trybu akcji */}
           {actionCategory === "regain" || actionCategory === "loses" ? (
-            <div className={styles.modeToggle}>
+            <div className={styles.modeToggle} role="group" aria-label="Filtruj typy akcji: Regain i Loses">
               <button
-                className={`${styles.modeButton} ${actionModeFilter === 'regain' ? styles.active : ''}`}
-                onClick={() => setActionModeFilter('regain')}
+                type="button"
+                className={`${styles.modeButton} ${showRegain ? styles.modeButtonActiveRegain : ''}`}
+                onClick={() => setShowRegain(prev => !prev)}
+                aria-pressed={showRegain}
+                aria-label={showRegain ? 'Ukryj Regain' : 'Pokaż Regain'}
               >
                 Regain
               </button>
               <button
-                className={`${styles.modeButton} ${actionModeFilter === 'loses' ? styles.active : ''}`}
-                onClick={() => setActionModeFilter('loses')}
+                type="button"
+                className={`${styles.modeButton} ${showLoses ? styles.modeButtonActiveLoses : ''}`}
+                onClick={() => setShowLoses(prev => !prev)}
+                aria-pressed={showLoses}
+                aria-label={showLoses ? 'Ukryj Loses' : 'Pokaż Loses'}
               >
                 Loses
               </button>
@@ -877,7 +870,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
                 return "0.4fr 80px 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 120px";
               }
               // Dla packing: 10 kolumn (z "Zawodnik koniec" i "PxT", bez "Partnerzy przed piłką")
-              if (actionModeFilter === 'attack') {
+              if (displayMode === 'attack') {
                 return "0.4fr 80px 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 120px";
               }
               // Dla defense: 9 kolumn (bez "Zawodnik koniec")
@@ -900,14 +893,14 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             onSort={handleSort}
           />
           <HeaderCell
-            label={actionModeFilter === 'defense' ? "Zawodnicy minięci" : "Zawodnik start"}
+            label={displayMode === 'defense' ? "Zawodnicy minięci" : "Zawodnik start"}
             sortKey="sender"
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}
             onSort={handleSort}
           />
           {/* Ukryj kolumnę "Zawodnik koniec" dla regain i loses */}
-          {actionModeFilter === 'attack' && actionCategory === "packing" && (
+          {displayMode === 'attack' && actionCategory === "packing" && (
             <HeaderCell
               label="Zawodnik koniec"
               sortKey="receiver"
@@ -988,7 +981,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
                 onEdit={onEditAction}
                 onVideoTimeClick={handleVideoTimeClick}
                 selectedMetric={selectedMetric}
-                actionModeFilter={actionModeFilter}
+                actionModeFilter={displayMode}
                 playersIndex={playersIndex}
                 actionCategory={actionCategory}
               />

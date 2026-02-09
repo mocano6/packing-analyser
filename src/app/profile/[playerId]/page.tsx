@@ -7692,7 +7692,7 @@ export default function PlayerDetailsPage() {
                               ? action.losesDefenseXT
                               : (() => {
                                   const losesDefenseZone = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
-                                  const losesZoneName = convertZoneToName(losesDefenseZone);
+                                  const losesZoneName = convertZoneToNameHelper(losesDefenseZone);
                                   if (losesZoneName) {
                                     const idx = zoneNameToIndex(losesZoneName);
                                     if (idx !== null) return getXTValueForZone(idx);
@@ -7738,7 +7738,7 @@ export default function PlayerDetailsPage() {
                               ? action.losesDefenseXT
                               : (() => {
                                   const losesDefenseZone = action.losesDefenseZone || action.fromZone || action.toZone || action.startZone;
-                                  const losesZoneName = convertZoneToName(losesDefenseZone);
+                                  const losesZoneName = convertZoneToNameHelper(losesDefenseZone);
                                   if (losesZoneName) {
                                     const idx = zoneNameToIndex(losesZoneName);
                                     if (idx !== null) return getXTValueForZone(idx);

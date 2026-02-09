@@ -1110,14 +1110,18 @@ export default function Page() {
     if (!matchId) return;
     setIsPossessionSaving(true);
     try {
+      // Nie nadpisuj połowy zerem, jeśli w zapisanym meczu jest już wartość (chroni przed skasowaniem 1. przy zapisie 2. i odwrotnie)
+      const existing = (matchInfo as any)?.matchData?.possession || {};
+      const keepIfZero = (sec: number, existingMin: number | undefined) =>
+        sec > 0 ? secondsToMinutesDecimal(sec) : (existingMin ?? 0);
       const patch = {
         possession: {
-          teamFirstHalf: secondsToMinutesDecimal(possessionSec.teamFirstHalf),
-          opponentFirstHalf: secondsToMinutesDecimal(possessionSec.opponentFirstHalf),
-          teamSecondHalf: secondsToMinutesDecimal(possessionSec.teamSecondHalf),
-          opponentSecondHalf: secondsToMinutesDecimal(possessionSec.opponentSecondHalf),
-          deadFirstHalf: secondsToMinutesDecimal(possessionSec.deadFirstHalf),
-          deadSecondHalf: secondsToMinutesDecimal(possessionSec.deadSecondHalf),
+          teamFirstHalf: keepIfZero(possessionSec.teamFirstHalf, existing.teamFirstHalf),
+          opponentFirstHalf: keepIfZero(possessionSec.opponentFirstHalf, existing.opponentFirstHalf),
+          teamSecondHalf: keepIfZero(possessionSec.teamSecondHalf, existing.teamSecondHalf),
+          opponentSecondHalf: keepIfZero(possessionSec.opponentSecondHalf, existing.opponentSecondHalf),
+          deadFirstHalf: keepIfZero(possessionSec.deadFirstHalf, existing.deadFirstHalf),
+          deadSecondHalf: keepIfZero(possessionSec.deadSecondHalf, existing.deadSecondHalf),
         },
       };
       await handleUpdateMatchData(matchId, patch, { persistToFirebase: true });

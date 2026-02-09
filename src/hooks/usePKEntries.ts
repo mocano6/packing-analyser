@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { PKEntry } from "@/types";
 import { getDB } from "@/lib/firebase";
-import { doc, updateDoc, getDoc } from "@/lib/firestoreWithMetrics";
-import { getMatchDocumentFromCache, setMatchDocumentInCache } from "@/lib/matchDocumentCache";
+import { doc, updateDoc } from "@/lib/firestoreWithMetrics";
+import { getMatchDocumentFromCache, setMatchDocumentInCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import { clearPendingMatchUpdate, getPendingField, setPendingMatchUpdate } from "@/lib/offlineMatchPending";
 
 export const usePKEntries = (matchId: string) => {
@@ -29,10 +29,8 @@ export const usePKEntries = (matchId: string) => {
     setError(null);
     
     try {
-      const db = getDB();
-      const matchDoc = await getDoc(doc(db, "matches", matchId));
-      if (matchDoc.exists()) {
-        const matchData = matchDoc.data();
+      const matchData = await getOrLoadMatchDocument(matchId);
+      if (matchData) {
         const pendingEntries = getPendingField<PKEntry[]>(matchId, "pkEntries");
         const rawEntries = pendingEntries ?? (matchData.pkEntries || []);
         setPkEntries(rawEntries);
