@@ -53,22 +53,13 @@ export class AuthService {
     this.initializeWhenReady();
   }
 
-  // Inicjalizuje Auth Service gdy Firebase jest gotowy
+  // Inicjalizuje Auth Service gdy Firebase jest gotowy (lazy init w firebase.ts — bez pętli 5s)
   private async initializeWhenReady() {
-    // Czekaj aż Firebase będzie gotowy (tylko po stronie klienta)
-    if (typeof window === 'undefined') {
-      return;
-    }
+    if (typeof window === 'undefined') return;
 
-    // Sprawdź czy Firebase jest gotowy, jeśli nie - czekaj
-    let attempts = 0;
-    while (!isFirebaseReady() && attempts < 50) { // Max 5 sekund oczekiwania
-      await new Promise(resolve => setTimeout(resolve, 100));
-      attempts++;
-    }
-
+    // isFirebaseReady() wywołuje lazy init — na kliencie db jest ustawiane od razu
     if (!isFirebaseReady()) {
-      console.error('Firebase nie został zainicjalizowany w czasie');
+      console.error('Firebase nie jest dostępny (np. brak window)');
       this.updateAuthState({
         ...this._authState,
         isLoading: false,
@@ -78,7 +69,6 @@ export class AuthService {
     }
 
     try {
-      // Inicjalizacja nasłuchiwania stanu uwierzytelniania
       const auth = getAuth();
       
       onAuthStateChanged(auth, (user) => {

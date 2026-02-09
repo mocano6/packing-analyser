@@ -1,14 +1,7 @@
 'use client';
 
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  enableNetwork,
-  disableNetwork,
-  enableIndexedDbPersistence,
-  enableMultiTabIndexedDbPersistence,
-  Firestore
-} from 'firebase/firestore';
+import { getFirestore, enableNetwork, disableNetwork, Firestore } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
@@ -27,33 +20,18 @@ let db: Firestore | undefined;
 let auth: Auth | undefined;
 let storage: FirebaseStorage | undefined;
 
-if (typeof window !== 'undefined') {
-  // Inicjalizacja Firebase tylko po stronie klienta
+/** Inicjalizacja Firebase po stronie klienta (lazy) — przy pierwszym wywołaniu getDB/isFirebaseReady. Unika 5s blokady gdy moduł załadował się na SSR. */
+function ensureFirebaseInitialized(): void {
+  if (typeof window === 'undefined' || db) return;
   app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-  
-  // Uproszę konfigurację Firestore - używam standardowej inicjalizacji
   db = getFirestore(app);
-
-  // Włącz offline persistence (preferuj multi-tab, fallback do single-tab)
-  enableMultiTabIndexedDbPersistence(db).catch((error) => {
-    if (error?.code === 'failed-precondition') {
-      enableIndexedDbPersistence(db).catch((fallbackError) => {
-        console.warn('⚠️ Nie udało się włączyć offline persistence:', fallbackError);
-      });
-    } else if (error?.code === 'unimplemented') {
-      console.warn('⚠️ Przeglądarka nie wspiera offline persistence Firestore.');
-    } else {
-      console.warn('⚠️ Błąd włączania offline persistence Firestore:', error);
-    }
-  });
-
-  // Inicjalizacja auth i storage
   auth = getAuth(app);
   storage = getStorage(app);
 }
 
 // Funkcja do wymuszenia trybu offline - użyta w komponentach
 export const forceOfflineMode = async () => {
+  ensureFirebaseInitialized();
   if (typeof window !== 'undefined' && db) {
     try {
       await disableNetwork(db);
@@ -69,6 +47,7 @@ export const forceOfflineMode = async () => {
 
 // Funkcja do przywrócenia trybu online
 export const enableOnlineMode = async () => {
+  ensureFirebaseInitialized();
   if (typeof window !== 'undefined' && db) {
     try {
       await enableNetwork(db);
@@ -85,8 +64,9 @@ export const enableOnlineMode = async () => {
 // Eksport instancji usług - UWAGA: db może być undefined po stronie serwera
 export { db, auth, storage };
 
-// Helper funkcje dla łatwiejszego dostępu
+// Helper funkcje dla łatwiejszego dostępu (wywołują lazy init na kliencie)
 export const getDB = (): Firestore => {
+  ensureFirebaseInitialized();
   if (!db) {
     throw new Error('Firestore nie jest zainicjalizowane. Upewnij się, że kod działa po stronie klienta.');
   }
@@ -94,6 +74,7 @@ export const getDB = (): Firestore => {
 };
 
 export const isFirebaseReady = (): boolean => {
+  ensureFirebaseInitialized();
   return typeof window !== 'undefined' && !!db;
 };
 
