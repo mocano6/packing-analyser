@@ -203,6 +203,28 @@ export const useAcc8sEntries = (matchId: string) => {
     }
   }, [matchId, saveAcc8sEntries]);
 
+  // Zbiorcza aktualizacja wielu akcji 8s ACC (jedna transakcja zapisu – unika nadpisywania przy pętli)
+  const bulkUpdateAcc8sEntries = useCallback(
+    async (updates: Array<{ id: string; isShotUnder8s: boolean; isPKEntryUnder8s: boolean }>) => {
+      if (!matchId || updates.length === 0) return false;
+      try {
+        return await saveAcc8sEntries(prevEntries => {
+          const byId = new Map(updates.map(u => [u.id, u]));
+          return prevEntries.map(entry => {
+            const u = byId.get(entry.id);
+            if (!u) return entry;
+            return { ...entry, isShotUnder8s: u.isShotUnder8s, isPKEntryUnder8s: u.isPKEntryUnder8s };
+          });
+        });
+      } catch (err) {
+        console.error("Błąd podczas zbiorczej aktualizacji akcji 8s ACC:", err);
+        setError("Nie udało się zaktualizować akcji 8s ACC");
+        return false;
+      }
+    },
+    [matchId, saveAcc8sEntries]
+  );
+
   // Pobierz akcje 8s ACC przy załadowaniu lub zmianie matchId
   useEffect(() => {
     fetchAcc8sEntries();
@@ -215,6 +237,7 @@ export const useAcc8sEntries = (matchId: string) => {
     addAcc8sEntry,
     updateAcc8sEntry,
     deleteAcc8sEntry,
+    bulkUpdateAcc8sEntries,
     refetch: fetchAcc8sEntries,
   };
 };

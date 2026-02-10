@@ -1282,7 +1282,7 @@ export default function Page() {
   const { pkEntries, addPKEntry, updatePKEntry, deletePKEntry } = usePKEntries(matchInfo?.matchId || "");
 
   // Hook do zarządzania akcjami 8s ACC
-  const { acc8sEntries, addAcc8sEntry, updateAcc8sEntry, deleteAcc8sEntry } = useAcc8sEntries(matchInfo?.matchId || "");
+  const { acc8sEntries, addAcc8sEntry, updateAcc8sEntry, deleteAcc8sEntry, bulkUpdateAcc8sEntries } = useAcc8sEntries(matchInfo?.matchId || "");
 
   // Stan dla filtrowania strzałów
 
@@ -1826,29 +1826,12 @@ export default function Page() {
   // Dodajemy useRef, aby śledzić, czy efekt już został wykonany
   const initEffectExecutedRef = useRef(false);
   
-  // Dodajemy efekt inicjalizujący, który odświeży listę meczów przy pierwszym renderowaniu
+  // Efekt inicjalizujący: nie wykonujemy dodatkowego fetchMatches, bo odświeżenie
+  // i tak wykona efekt zależny od selectedTeam (unikamy podwójnego odczytu przy starcie).
   React.useEffect(() => {
     if (initEffectExecutedRef.current) return;
     initEffectExecutedRef.current = true;
-    
-    // Używamy setTimeout, aby zapewnić, że Firebase jest w pełni zainicjalizowany
-    const timer = setTimeout(async () => {
-      try {
-        // Wywołuj fetchMatches tylko jeśli selectedTeam jest ustawiony
-        if (selectedTeam) {
-          await fetchMatches(selectedTeam);
-        } else {
-        }
-        // Nie aktualizujemy licznika tutaj - to tylko inicjalne pobranie danych
-      } catch (error) {
-        console.error("Błąd podczas inicjalizacji listy meczów:", error);
-      }
-    }, 300);
-    
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [fetchMatches, selectedTeam]);
+  }, []);
 
   // Nasłuchuj na zmiany w hashu URL, aby ewentualnie obsłużyć odświeżenie strony
   React.useEffect(() => {
@@ -1882,6 +1865,11 @@ export default function Page() {
             
             // Unikamy nakładających się operacji
             if (window._isRefreshingMatches) {
+              return;
+            }
+
+            // Gdy przełączamy team, fetch zrobi efekt zależny od selectedTeam.
+            if (teamId !== selectedTeam) {
               return;
             }
             
@@ -3226,14 +3214,9 @@ export default function Page() {
                 [collectionField]: [...newActions, actionWithBooleans]
               });
               
-              // Aktualizuj lokalny stan
+              // Aktualizuj lokalny stan bez dodatkowego odczytu z Firestore
               if (matchInfo && editedAction.matchId === matchInfo.matchId) {
-                const refreshedMatchDoc = await getDoc(matchRef);
-                if (refreshedMatchDoc.exists()) {
-                  const refreshedMatchData = refreshedMatchDoc.data() as TeamInfo;
-                  const refreshedActions = (refreshedMatchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
-                  setActions(refreshedActions);
-                }
+                setActions([...newActions, actionWithBooleans]);
               }
               
               setIsActionEditModalOpen(false);
@@ -3292,20 +3275,9 @@ export default function Page() {
           [collectionField]: updatedActions
         });
 
-        // Aktualizuj lokalny stan jeśli to aktualny mecz
+        // Aktualizuj lokalny stan jeśli to aktualny mecz (bez read-after-write)
         if (matchInfo && editedAction.matchId === matchInfo.matchId) {
-          // Dla regain/loses musimy załadować akcje z odpowiedniej kolekcji
-          if (actionCategory === "regain" || actionCategory === "loses") {
-            // Odśwież akcje z bazy dla odpowiedniej kategorii
-            const refreshedMatchDoc = await getDoc(matchRef);
-            if (refreshedMatchDoc.exists()) {
-              const refreshedMatchData = refreshedMatchDoc.data() as TeamInfo;
-              const refreshedActions = (refreshedMatchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
-              setActions(refreshedActions);
-            }
-          } else {
-            setActions(updatedActions);
-          }
+          setActions(updatedActions);
         }
       }
 
@@ -4031,17 +4003,12 @@ export default function Page() {
                 if (!matchInfo?.matchId) return;
                 
                 try {
-                  for (const update of updates) {
-                    const entry = acc8sEntries.find(e => e.id === update.id);
-                    if (entry) {
-                      await updateAcc8sEntry(update.id, {
-                        ...entry,
-                        isShotUnder8s: update.isShotUnder8s,
-                        isPKEntryUnder8s: update.isPKEntryUnder8s,
-                      } as any);
-                    }
+                  const ok = await bulkUpdateAcc8sEntries(updates);
+                  if (ok) {
+                    alert(`Zaktualizowano ${updates.length} akcji 8s ACC.`);
+                  } else {
+                    alert('Wystąpił błąd podczas aktualizacji. Spróbuj ponownie.');
                   }
-                  alert(`Zaktualizowano ${updates.length} akcji 8s ACC.`);
                 } catch (error) {
                   console.error('Błąd podczas masowej aktualizacji:', error);
                   alert('Wystąpił błąd podczas aktualizacji. Spróbuj ponownie.');
@@ -4629,6 +4596,8 @@ export default function Page() {
                     // Pobierz pkEntries bezpośrednio z Firebase, aby mieć aktualne dane
                     let pkEntriesFromFirebase: PKEntry[] = [];
                     let regainActionsForTeam: Action[] = [];
+                    let losesActionsForTeam: Action[] = [];
+                    let allShotsForMatch: Shot[] = [];
                     try {
                       const db = getDB();
                       console.log("Pobieranie dokumentu meczu:", matchInfo.matchId);
@@ -4671,10 +4640,23 @@ export default function Page() {
                           if (!action.teamId) return true;
                           return action.teamId === matchInfo.team;
                         });
+
+                        const allLosesActions = (matchData.actions_loses || []).map(action => ({
+                          ...action,
+                          _actionSource: "loses"
+                        })) as Action[];
+                        losesActionsForTeam = allLosesActions.filter(action => {
+                          if (!action.teamId) return true;
+                          return action.teamId === matchInfo.team;
+                        });
+
+                        allShotsForMatch = (matchData.shots || []) as Shot[];
                         
                         console.log("Regains dla zespołu (po filtrowaniu):", regainActionsForTeam.length);
                         console.log("matchInfo.team:", matchInfo.team);
                         console.log("Przykładowe regains dla zespołu:", regainActionsForTeam.slice(0, 3));
+                        console.log("Loses dla zespołu (po filtrowaniu):", losesActionsForTeam.length);
+                        console.log("Pobrano strzały z Firebase:", allShotsForMatch.length);
                       } else {
                         console.error("Dokument meczu nie istnieje!");
                         alert("Nie znaleziono meczu w bazie danych.");
@@ -4696,41 +4678,6 @@ export default function Page() {
                       const regainTimeString = `${regainMinutes}:${regainSeconds.toString().padStart(2, "0")}`;
                       console.log(`  Regain ${index + 1}: ${regainTimeString} (${regainTimeRaw}s), teamId: ${regain.teamId}, attackZoneRaw: ${attackZoneRaw}, attackZoneName: ${attackZoneName}`);
                     });
-
-                    // Pobierz loses bezpośrednio z Firebase (z actions_loses)
-                    let losesActionsForTeam: Action[] = [];
-                    try {
-                      const db = getDB();
-                      const matchDoc = await getDoc(doc(db, "matches", matchInfo.matchId));
-                      if (matchDoc.exists()) {
-                        const matchData = matchDoc.data() as TeamInfo;
-                        const allLosesActions = (matchData.actions_loses || []).map(action => ({
-                          ...action,
-                          _actionSource: "loses"
-                        })) as Action[];
-                        
-                        losesActionsForTeam = allLosesActions.filter(action => {
-                          if (!action.teamId) return true;
-                          return action.teamId === matchInfo.team;
-                        });
-                      }
-                    } catch (error) {
-                      console.error("Błąd podczas pobierania loses z Firebase:", error);
-                    }
-
-                    // Pobierz strzały bezpośrednio z Firebase (z shots)
-                    let allShotsForMatch: Shot[] = [];
-                    try {
-                      const db = getDB();
-                      const matchDoc = await getDoc(doc(db, "matches", matchInfo.matchId));
-                      if (matchDoc.exists()) {
-                        const matchData = matchDoc.data() as TeamInfo;
-                        allShotsForMatch = (matchData.shots || []) as Shot[];
-                        console.log("Pobrano strzały z Firebase:", allShotsForMatch.length);
-                      }
-                    } catch (error) {
-                      console.error("Błąd podczas pobierania strzałów z Firebase:", error);
-                    }
 
                     // Filtruj regains na połowie przeciwnika i wypisz w konsoli
                     // Połowa przeciwnika = regainAttackZone w strefach a-h 7-12 (kolumny 6-11)
