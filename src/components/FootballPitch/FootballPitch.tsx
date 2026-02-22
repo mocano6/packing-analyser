@@ -36,6 +36,8 @@ export interface FootballPitchProps {
   hideTeamLogos?: boolean;
   onOpenPlayerStatsModal?: () => void;
   isAdmin?: boolean;
+  /** Zawodnik może wpisywać tylko swoje statystyki – pokazuje przycisk "Moje statystyki" */
+  isPlayer?: boolean;
 }
 
 const FootballPitch = memo(function FootballPitch({
@@ -50,6 +52,7 @@ const FootballPitch = memo(function FootballPitch({
   hideTeamLogos = false,
   onOpenPlayerStatsModal,
   isAdmin = false,
+  isPlayer = false,
 }: FootballPitchProps) {
   // Stan przełącznika orientacji boiska - przywróć z localStorage (wspólny dla wszystkich zakładek)
   const [isFlipped, setIsFlipped] = useState(() => {
@@ -228,15 +231,15 @@ const FootballPitch = memo(function FootballPitch({
         hideTeamLogos={hideTeamLogos}
         rightContent={
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            {isAdmin && onOpenPlayerStatsModal && (
+            {(isAdmin || isPlayer) && onOpenPlayerStatsModal && (
               <button
                 type="button"
                 className={pitchHeaderStyles.headerButton}
                 onClick={onOpenPlayerStatsModal}
-                title="Dodaj statystyki zawodnika"
-                aria-label="Dodaj statystyki zawodnika"
+                title={isPlayer ? "Wpisz moje statystyki z meczu" : "Dodaj statystyki zawodnika"}
+                aria-label={isPlayer ? "Wpisz moje statystyki" : "Dodaj statystyki zawodnika"}
               >
-                Statystyki
+                {isPlayer ? "Moje statystyki" : "Statystyki"}
               </button>
             )}
             <button

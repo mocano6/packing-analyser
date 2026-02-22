@@ -10,7 +10,7 @@ import PackingChart from '@/components/PackingChart/PackingChart';
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import ActionSection from "@/components/ActionSection/ActionSection";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, getDocs, updateDoc } from "@/lib/firestoreWithMetrics";
+import { doc, collection, getDocs, updateDoc } from "@/lib/firestoreWithMetrics";
 import { buildPlayersIndex, getPlayerLabel, sortPlayersByLastName } from "@/utils/playerUtils";
 import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
@@ -322,61 +322,21 @@ export default function ZawodnicyPage() {
         return;
       }
 
-      // Sprawdź czy Firebase jest dostępne
-      if (!db) {
-        console.error("🔄 Resetowanie akcji - Firebase nie zainicjalizowane");
-        setAllActions([]);
-        return;
-      }
-
       setIsLoadingActions(true);
 
       try {
         const allActionsData: Action[] = [];
 
-        // Pobierz akcje ze wszystkich meczów dla wybranego zespołu
+        // Używamy danych meczów już załadowanych przez useMatchInfo (bez N+1 getDoc per mecz).
         for (const match of teamMatches) {
           if (!match.matchId) continue;
-          
-          try {
-            // Pobierz dokument meczu
-            const matchDoc = await getDoc(doc(db, "matches", match.matchId));
-            
-            if (matchDoc.exists()) {
-              const matchData = matchDoc.data();
-              
-              // Sprawdź czy mecz ma akcje w polu actions_packing
-              if (matchData.actions_packing && Array.isArray(matchData.actions_packing)) {
-                matchData.actions_packing.forEach((actionData: Action) => {
-                  if (match.matchId) {
-                    allActionsData.push({
-                      ...actionData,
-                      matchId: match.matchId
-                    });
-                  }
-                });
-              }
-              
-              // Sprawdź też kolekcję actions (stara struktura)
-              const actionsCollectionRef = collection(db, "matches", match.matchId, "actions");
-              const actionsSnapshot = await getDocs(actionsCollectionRef);
-              
-              if (!actionsSnapshot.empty) {
-                actionsSnapshot.forEach((actionDoc) => {
-                  const actionData = actionDoc.data() as Action;
-                  if (match.matchId) {
-                    allActionsData.push({
-                      ...actionData,
-                      id: actionDoc.id,
-                      matchId: match.matchId
-              });
-            }
-                });
-              }
-            }
-          } catch (error) {
-            console.error(`Błąd podczas pobierania akcji dla meczu ${match.matchId}:`, error);
-          }
+          const packingActions = Array.isArray(match.actions_packing) ? match.actions_packing : [];
+          packingActions.forEach((actionData: Action) => {
+            allActionsData.push({
+              ...actionData,
+              matchId: match.matchId
+            });
+          });
         }
 
         // Filtruj tylko akcje zawodników z wybranych zespołów

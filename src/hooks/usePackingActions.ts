@@ -158,11 +158,42 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   // Dodaj stan opponentsBehindBall dla regain/loses (liczba przeciwników za piłką)
   const [opponentsBehindBall, setOpponentsBehindBall] = useState<number>(0);
   
-  // Dodaj stan playersLeftField dla regain/loses (liczba zawodników naszego zespołu, którzy opuścili boisko)
-  const [playersLeftField, setPlayersLeftField] = useState<number>(0);
-  
-  // Dodaj stan opponentsLeftField dla regain/loses (liczba zawodników przeciwnika, którzy opuścili boisko)
-  const [opponentsLeftField, setOpponentsLeftField] = useState<number>(0);
+  const parseCachedCount = (key: string): number => {
+    if (typeof window === "undefined") return 0;
+    const raw = localStorage.getItem(key);
+    if (raw === null || raw === "") return 0;
+    const n = parseInt(raw, 10);
+    return Number.isNaN(n) || n < 0 || n > 10 ? 0 : n;
+  };
+
+  // Stan playersLeftField/opponentsLeftField z inicjalizacją z cache (ostatni wybór w Regain/Loses)
+  const [playersLeftField, setPlayersLeftFieldState] = useState<number>(() =>
+    parseCachedCount("regain_playersLeftField")
+  );
+  const [opponentsLeftField, setOpponentsLeftFieldState] = useState<number>(() =>
+    parseCachedCount("regain_opponentsLeftField")
+  );
+
+  const setPlayersLeftField = useCallback((value: React.SetStateAction<number>) => {
+    setPlayersLeftFieldState((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      const clamped = Math.max(0, Math.min(10, next));
+      if (typeof window !== "undefined") {
+        localStorage.setItem("regain_playersLeftField", String(clamped));
+      }
+      return clamped;
+    });
+  }, []);
+  const setOpponentsLeftField = useCallback((value: React.SetStateAction<number>) => {
+    setOpponentsLeftFieldState((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      const clamped = Math.max(0, Math.min(10, next));
+      if (typeof window !== "undefined") {
+        localStorage.setItem("regain_opponentsLeftField", String(clamped));
+      }
+      return clamped;
+    });
+  }, []);
   
   // Dane o akcjach
   const [actions, setActions] = useState<Action[]>([]);

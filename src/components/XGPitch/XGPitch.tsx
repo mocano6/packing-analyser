@@ -139,9 +139,10 @@ const XGPitch = memo(function XGPitch({
     let x = ((event.clientX - rect.left) / rect.width) * 100;
     let y = ((event.clientY - rect.top) / rect.height) * 100;
     
-    // Dostosuj pozycję dla orientacji odbitej
+    // Dostosuj pozycję dla orientacji obróconej (przeciwległa strona boiska, nie lustro)
     if (isFlipped) {
       x = 100 - x;
+      y = 100 - y;
     }
     
     const xG = calculateXG(x, y);
@@ -215,9 +216,10 @@ const XGPitch = memo(function XGPitch({
           let displayX = shot.x;
           let displayY = shot.y;
           
-          // Dostosuj pozycję dla orientacji odbitej
+          // Dostosuj pozycję dla orientacji obróconej (przeciwległa strona boiska, nie lustro)
           if (isFlipped) {
             displayX = 100 - shot.x;
+            displayY = 100 - shot.y;
           }
           
           // Sprawdź, czy to strzał z asystą

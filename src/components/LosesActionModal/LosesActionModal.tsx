@@ -262,16 +262,47 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
     return mins * 60 + secs;
   };
 
-  // Minuta meczu na żywo z pola MM:SS (korekta -10s jak w videoTimestamp)
+  // Minuta meczu na żywo z pola MM:SS - spójna z logiką calculateMatchMinuteFromVideoTime
+  const calculateMatchMinuteFromVideoSeconds = useCallback(
+    (videoSeconds: number) => {
+      const firstHalfStart = matchInfo?.firstHalfStartTime;
+      const secondHalfStart = matchInfo?.secondHalfStartTime;
+
+      if (secondHalfStart !== undefined && videoSeconds >= secondHalfStart) {
+        const secondsIntoSecondHalf = videoSeconds - secondHalfStart;
+        const minute = Math.floor(secondsIntoSecondHalf / 60) + 46;
+        return Math.max(46, Math.min(90, minute));
+      }
+
+      if (firstHalfStart !== undefined && videoSeconds >= firstHalfStart) {
+        const secondsIntoFirstHalf = videoSeconds - firstHalfStart;
+        const minute = Math.floor(secondsIntoFirstHalf / 60) + 1;
+        return Math.max(1, Math.min(45, minute));
+      }
+
+      if (secondHalfStart !== undefined && videoSeconds < secondHalfStart) {
+        const minute = Math.floor(videoSeconds / 60) + 1;
+        return Math.max(1, Math.min(45, minute));
+      }
+
+      // Fallback gdy brak czasów startu połów: MM:SS = czas absolutny w nagraniu,
+      // druga połowa od 45:00 wideo (2700 s).
+      const DEFAULT_SECOND_HALF_START = 45 * 60;
+      if (videoSeconds >= DEFAULT_SECOND_HALF_START) {
+        const secondsIntoSecondHalf = videoSeconds - DEFAULT_SECOND_HALF_START;
+        const minute = Math.floor(secondsIntoSecondHalf / 60) + 46;
+        return Math.max(46, Math.min(90, minute));
+      }
+      const minute = Math.floor(videoSeconds / 60) + 1;
+      return Math.max(1, Math.min(45, minute));
+    },
+    [matchInfo?.firstHalfStartTime, matchInfo?.secondHalfStartTime]
+  );
+
   const matchMinuteFromVideoInput = useMemo(() => {
     const rawSeconds = mmssToSeconds(videoTimeMMSS);
-    const correctedSeconds = Math.max(0, rawSeconds - 10);
-    const minutesIntoHalf = Math.floor(correctedSeconds / 60);
-    if (isSecondHalf) {
-      return Math.min(90, 45 + minutesIntoHalf + 1);
-    }
-    return Math.min(45, minutesIntoHalf + 1);
-  }, [videoTimeMMSS, isSecondHalf]);
+    return calculateMatchMinuteFromVideoSeconds(rawSeconds);
+  }, [videoTimeMMSS, calculateMatchMinuteFromVideoSeconds]);
 
   // Pobieranie czasu z wideo przy otwarciu modalu
   useEffect(() => {

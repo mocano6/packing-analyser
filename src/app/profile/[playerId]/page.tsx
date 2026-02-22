@@ -7,10 +7,9 @@ import { usePlayersState } from "@/hooks/usePlayersState";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc } from "@/lib/firestoreWithMetrics";
 import {
   getMatchDocumentFromCache,
+  getOrLoadMatchDocument,
   setMatchDocumentInCache,
   sortMatchesByDateDesc,
 } from "@/lib/matchDocumentCache";
@@ -24,6 +23,9 @@ import SidePanel from "@/components/SidePanel/SidePanel";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
 import XGPitch from "@/components/XGPitch/XGPitch";
+import PlayerMatchStatsModal from "@/components/PlayerMatchStatsModal/PlayerMatchStatsModal";
+import { getDB } from "@/lib/firebase";
+import { doc, getDoc, updateDoc } from "@/lib/firestoreWithMetrics";
 import styles from "./page.module.css";
 
 export default function PlayerDetailsPage() {
@@ -63,6 +65,7 @@ export default function PlayerDetailsPage() {
     return "all";
   });
   const [showMatchSelector, setShowMatchSelector] = useState<boolean>(false);
+  const [showPlayerStatsModal, setShowPlayerStatsModal] = useState<boolean>(false);
   // Inicjalizuj selectedTeam z localStorage lub pustym stringiem
   const [selectedTeam, setSelectedTeam] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -618,11 +621,6 @@ export default function PlayerDetailsPage() {
   // Pobierz akcje zawodnika i zespołu w jednej pętli — jeden getDoc na mecz (mniej odczytów Firestore)
   // Sygnatura: jedno ładowanie na (team, player, liczba meczów) — bez wielokrotnego odświeżania UI
   useEffect(() => {
-    if (!db) {
-      setIsLoadingActions(false);
-      return;
-    }
-
     const targetPlayerId = selectedPlayerForView;
     const teamPlayersIds = playersForRanking.map((p) => p.id);
     const isPlayerValid =
@@ -685,9 +683,8 @@ export default function PlayerDetailsPage() {
 
           if (matchData === null) {
             try {
-              const matchDoc = await getDoc(doc(db, "matches", match.matchId));
-              if (!matchDoc.exists()) continue;
-              matchData = matchDoc.data() as TeamInfo;
+              matchData = await getOrLoadMatchDocument(match.matchId);
+              if (!matchData) continue;
               setMatchDocumentInCache(match.matchId, matchData);
             } catch (error) {
               console.error(`Błąd podczas pobierania danych meczu ${match.matchId}:`, error);
@@ -750,7 +747,7 @@ export default function PlayerDetailsPage() {
     };
 
     loadActionsAndTeamActions();
-  }, [playerId, selectedPlayerForView, filteredMatchesBySeason, selectableMatchesBySeason, selectedMatchIds, filteredPlayers, selectedTeam, playersForRanking, db, allMatches]);
+  }, [playerId, selectedPlayerForView, filteredMatchesBySeason, selectableMatchesBySeason, selectedMatchIds, filteredPlayers, selectedTeam, playersForRanking, allMatches]);
 
   // Oblicz dostępne sezony
   const availableSeasons = useMemo(() => {
@@ -797,6 +794,38 @@ export default function PlayerDetailsPage() {
     }
     return allTeams;
   }, [teams, isPlayer, linkedPlayerId, players, userTeams]);
+
+  // Aktualnie oglądany zawodnik na profilu (działa dla /profile i /profile/[playerId])
+  const currentProfilePlayerId = selectedPlayerForView || playerId || linkedPlayerId || "";
+
+  // Lista meczów do modala "Moje statystyki" - tylko te, gdzie zawodnik zagrał min. 1 minutę
+  const teamMatchesForPlayer = useMemo(() => {
+    return selectableMatchesBySeason
+      .filter((m) => m.matchId)
+      .map((m) => ({ matchId: m.matchId!, team: m.team, opponent: m.opponent, date: m.date }));
+  }, [selectableMatchesBySeason]);
+
+  const handleSavePlayerStatsOnProfile = React.useCallback(
+    async (stats: PlayerMatchStats, targetMatchId?: string) => {
+      const matchId = targetMatchId;
+      if (!matchId) throw new Error("Brak ID meczu.");
+      const db = getDB();
+      const matchRef = doc(db, "matches", matchId);
+      const matchSnap = await getDoc(matchRef);
+      const existingMatchData = matchSnap.exists() ? (matchSnap.data() as TeamInfo).matchData || {} : {};
+      const existingStats = existingMatchData.playerStats || [];
+      const updatedStats = [
+        ...existingStats.filter((item: PlayerMatchStats) => item.playerId !== stats.playerId),
+        stats,
+      ];
+      await updateDoc(matchRef, {
+        matchData: { ...existingMatchData, playerStats: updatedStats },
+      });
+      setPlayerMatchStatsByMatchId((prev) => ({ ...prev, [matchId]: stats }));
+      window.dispatchEvent(new CustomEvent("matchesListRefresh", { detail: { timestamp: Date.now() } }));
+    },
+    []
+  );
 
   // Załaduj mecze dla wszystkich zespołów, jeśli allMatches nie zawiera meczów dla aktualnego zespołu
   useEffect(() => {
@@ -4698,8 +4727,20 @@ export default function PlayerDetailsPage() {
 
                 {expandedCategory === 'pxt' && (
                   <div className={styles.pxtDetails}>
-                    <h3>Szczegóły PxT</h3>
-                    
+                    <div className={styles.pxtDetailsHeader}>
+                      <h3>Szczegóły PxT</h3>
+                      {Boolean(currentProfilePlayerId) && (isAdmin || (isPlayer && linkedPlayerId === currentProfilePlayerId)) && (
+                        <button
+                          type="button"
+                          className={styles.pxtSelfStatsButton}
+                          onClick={() => setShowPlayerStatsModal(true)}
+                          aria-label={isAdmin ? "Statystyki zawodnika z meczu" : "Wpisz moje statystyki z meczu"}
+                        >
+                          {isAdmin ? "Statystyki z meczu" : "Wpisz moje statystyki"}
+                        </button>
+                      )}
+                    </div>
+
                     {/* Przyciski wyboru kategorii na górze */}
                     <div className={styles.categoryControls}>
                       <button
@@ -8338,6 +8379,16 @@ export default function PlayerDetailsPage() {
           </div>
         </div>
       )}
+
+      <PlayerMatchStatsModal
+        isOpen={showPlayerStatsModal}
+        onClose={() => setShowPlayerStatsModal(false)}
+        onSave={handleSavePlayerStatsOnProfile}
+        matchInfo={null}
+        players={players}
+        presetPlayerId={currentProfilePlayerId}
+        matchesForPlayer={teamMatchesForPlayer}
+      />
 
       <SidePanel
         players={players}

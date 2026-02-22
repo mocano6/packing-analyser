@@ -52,7 +52,8 @@ export async function getDoc<T = DocumentData>(reference: DocumentReference<T>) 
 
 export async function getDocs<T = DocumentData>(q: Query<T>) {
   const result = await firestoreGetDocs(q);
-  recordFirestoreRead("getDocs");
+  // Dla getDocs liczymy read units per liczba zwróconych dokumentów.
+  recordFirestoreRead(`getDocs(${result.size})`, undefined, result.size);
   return result;
 }
 

@@ -10,7 +10,7 @@ import PlayerMatchStatsModal from "../PlayerMatchStatsModal/PlayerMatchStatsModa
 import styles from "./ActionSection.module.css";
 import { Player, TeamInfo, Action, PlayerMatchStats } from "@/types";
 import { getDB } from "@/lib/firebase";
-import { doc, updateDoc, getDoc } from "@/lib/firestoreWithMetrics";
+import { doc, getDoc, updateDoc } from "@/lib/firestoreWithMetrics";
 
 export interface ActionSectionProps {
   selectedZone: string | number | null;
@@ -124,6 +124,10 @@ export interface ActionSectionProps {
     logo?: string;
   }>;
   isAdmin?: boolean;
+  /** Zawodnik zalogowany jako gracz – może wpisywać tylko swoje statystyki */
+  isPlayer?: boolean;
+  /** ID zawodnika powiązanego z kontem (dla trybu "Moje statystyki") */
+  linkedPlayerId?: string | null;
 }
 
 const ActionSection = memo(function ActionSection({
@@ -224,19 +228,33 @@ const ActionSection = memo(function ActionSection({
   onEditingActionChange,
   getActionCategory,
   allTeams = [],
-  isAdmin = false
+  isAdmin = false,
+  isPlayer = false,
+  linkedPlayerId = null,
 }: ActionSectionProps) {
   const [isPlayerMatchStatsModalOpen, setIsPlayerMatchStatsModalOpen] = useState(false);
 
-  const handleSavePlayerMatchStats = async (stats: PlayerMatchStats) => {
-    if (!matchInfo?.matchId) {
+  const handleSavePlayerMatchStats = async (stats: PlayerMatchStats, targetMatchId?: string) => {
+    const matchId = targetMatchId ?? matchInfo?.matchId;
+    if (!matchId) {
       throw new Error("Brak ID meczu.");
     }
 
     try {
       const db = getDB();
-      const matchRef = doc(db, "matches", matchInfo.matchId);
-      const existingStats = matchInfo.matchData?.playerStats || [];
+      const matchRef = doc(db, "matches", matchId);
+      let existingStats = matchInfo?.matchData?.playerStats || [];
+      let existingMatchData = matchInfo?.matchData || {};
+
+      if (targetMatchId && targetMatchId !== matchInfo?.matchId) {
+        const matchSnap = await getDoc(matchRef);
+        if (matchSnap.exists()) {
+          const data = matchSnap.data() as TeamInfo;
+          existingMatchData = data.matchData || {};
+          existingStats = existingMatchData.playerStats || [];
+        }
+      }
+
       const updatedStats = [
         ...existingStats.filter((item) => item.playerId !== stats.playerId),
         stats,
@@ -244,20 +262,14 @@ const ActionSection = memo(function ActionSection({
 
       await updateDoc(matchRef, {
         matchData: {
-          ...(matchInfo.matchData || {}),
+          ...existingMatchData,
           playerStats: updatedStats,
         },
       });
 
-      // Odśwież dane meczu z Firebase
-      const refreshedMatchDoc = await getDoc(matchRef);
-      if (refreshedMatchDoc.exists()) {
-        const refreshedMatchData = refreshedMatchDoc.data() as TeamInfo;
-        // Wyślij event do odświeżenia danych w komponencie nadrzędnym
-        window.dispatchEvent(new CustomEvent('matchesListRefresh', {
-          detail: { timestamp: Date.now() }
-        }));
-      }
+      window.dispatchEvent(new CustomEvent('matchesListRefresh', {
+        detail: { timestamp: Date.now() }
+      }));
     } catch (error) {
       throw error;
     }
@@ -543,6 +555,7 @@ const ActionSection = memo(function ActionSection({
         allTeams={allTeams}
         onOpenPlayerStatsModal={() => setIsPlayerMatchStatsModalOpen(true)}
         isAdmin={isAdmin}
+        isPlayer={isPlayer}
       />
 
       <PlayerMatchStatsModal
@@ -551,6 +564,8 @@ const ActionSection = memo(function ActionSection({
         onSave={handleSavePlayerMatchStats}
         matchInfo={matchInfo || null}
         players={players}
+        presetPlayerId={isPlayer && linkedPlayerId ? linkedPlayerId : undefined}
+        matchesForPlayer={isPlayer && linkedPlayerId ? (allMatches || []).filter((m) => m.matchId).map((m) => ({ matchId: m.matchId!, team: m.team, opponent: m.opponent, date: m.date })) : undefined}
       />
       
       {actionCategory === "packing" ? (

@@ -48,6 +48,9 @@ const writeNewStructureCheck = (value: { checkedAt: number; hasNewStructure: boo
   }
 };
 
+/** Jedno wspólne żądanie ładowania listy – deduplikacja przy Strict Mode / wielu instancjach hooka. */
+let playersFetchInFlight: Promise<Player[]> | null = null;
+
 /**
  * Hook do zarządzania zawodnikami z hybrydowym odczytem:
  * 1. Próbuje czytać z nowej struktury teams/{teamId}/members/
@@ -270,71 +273,74 @@ export function usePlayersState() {
       return;
     }
 
+    if (playersFetchInFlight) {
+      try {
+        setIsLoading(true);
+        const list = await playersFetchInFlight;
+        setPlayers(list);
+        playersRef.current = list;
+      } catch {
+        setPlayers([]);
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    setIsLoading(true);
+    const doFetch = async (): Promise<Player[]> => {
+      try {
+        const playersFromOldStructure = await fetchPlayersFromOldStructure();
+        const shouldCheckNewStructure = playersFromOldStructure.length === 0;
+        const playersFromNewStructure = shouldCheckNewStructure ? await fetchPlayersFromNewStructure() : [];
+        if (shouldCheckNewStructure) {
+          const hasNewStructure = playersFromNewStructure.length > 0;
+          const newCheck = { checkedAt: Date.now(), hasNewStructure };
+          newStructureCheckRef.current = newCheck;
+          writeNewStructureCheck(newCheck);
+        }
+
+        let playersList = playersFromOldStructure;
+
+        if (playersFromNewStructure.length > 0 && playersFromOldStructure.length === 0) {
+          const migrationSuccess = await migratePlayersFromTeamsToPlayers();
+          if (migrationSuccess) {
+            const playersAfterMigration = await fetchPlayersFromOldStructure();
+            playersList = playersAfterMigration;
+          } else {
+            playersList = playersFromNewStructure;
+          }
+        } else if (playersFromNewStructure.length > 0 && playersFromOldStructure.length > 0) {
+          const migrationSuccess = await migratePlayersFromTeamsToPlayers();
+          if (migrationSuccess) {
+            const playersAfterMigration = await fetchPlayersFromOldStructure();
+            playersList = playersAfterMigration;
+          } else {
+            const combinedPlayers = [...playersFromOldStructure];
+            playersFromNewStructure.forEach(newPlayer => {
+              const existsInOld = playersFromOldStructure.some(oldPlayer => oldPlayer.id === newPlayer.id);
+              if (!existsInOld) combinedPlayers.push(newPlayer);
+            });
+            playersList = combinedPlayers;
+          }
+        }
+
+        setCached(CACHE_KEYS.PLAYERS_LIST, playersList);
+        return playersList;
+      } catch (error) {
+        console.error('❌ Błąd pobierania zawodników:', error);
+        return [];
+      } finally {
+        playersFetchInFlight = null;
+      }
+    };
+
+    playersFetchInFlight = doFetch();
     try {
-      setIsLoading(true);
-
-      // Sprawdź ile zawodników jest w każdej strukturze
-      const playersFromOldStructure = await fetchPlayersFromOldStructure();
-      const cachedCheck = newStructureCheckRef.current ?? readNewStructureCheck();
-      const isRecentCheck = cachedCheck && (Date.now() - cachedCheck.checkedAt < NEW_STRUCTURE_CHECK_TTL_MS);
-      const shouldCheckNewStructure =
-        playersFromOldStructure.length === 0 ||
-        Boolean(cachedCheck && cachedCheck.hasNewStructure && isRecentCheck);
-      const playersFromNewStructure = shouldCheckNewStructure ? await fetchPlayersFromNewStructure() : [];
-      if (shouldCheckNewStructure) {
-        const hasNewStructure = playersFromNewStructure.length > 0;
-        const newCheck = { checkedAt: Date.now(), hasNewStructure };
-        newStructureCheckRef.current = newCheck;
-        writeNewStructureCheck(newCheck);
-      }
-      
-      // Użyj starej struktury, ale pokaż informacje o nowej
-      let playersList = playersFromOldStructure;
-      
-      if (playersFromNewStructure.length > 0 && playersFromOldStructure.length === 0) {
-        // Automatyczna migracja
-        const migrationSuccess = await migratePlayersFromTeamsToPlayers();
-        
-        if (migrationSuccess) {
-          // Po migracji pobierz ponownie ze starej struktury
-          const playersAfterMigration = await fetchPlayersFromOldStructure();
-          playersList = playersAfterMigration;
-        } else {
-          // Jeśli migracja się nie udała, użyj tymczasowo nowej struktury
-          playersList = playersFromNewStructure;
-        }
-      } else if (playersFromNewStructure.length > 0 && playersFromOldStructure.length > 0) {
-        // Automatyczna migracja pozostałych zawodników z teams/members
-        const migrationSuccess = await migratePlayersFromTeamsToPlayers();
-        
-        if (migrationSuccess) {
-          // Po migracji pobierz ponownie ze starej struktury (teraz powinni być wszyscy)
-          const playersAfterMigration = await fetchPlayersFromOldStructure();
-          playersList = playersAfterMigration;
-        } else {
-          // Jeśli migracja się nie udała, scal ręcznie (bez duplikatów)
-          const combinedPlayers = [...playersFromOldStructure];
-          
-          // Dodaj zawodników z nowej struktury którzy nie istnieją w starej
-          playersFromNewStructure.forEach(newPlayer => {
-            const existsInOld = playersFromOldStructure.some(oldPlayer => oldPlayer.id === newPlayer.id);
-            if (!existsInOld) {
-              combinedPlayers.push(newPlayer);
-            }
-          });
-          
-          playersList = combinedPlayers;
-        }
-      }
-      
-
-      
-      setPlayers(playersList);
-      playersRef.current = playersList;
-      setCached(CACHE_KEYS.PLAYERS_LIST, playersList);
-
-    } catch (error) {
-      console.error('❌ Błąd pobierania zawodników:', error);
+      const list = await playersFetchInFlight;
+      setPlayers(list);
+      playersRef.current = list;
+    } catch {
       setPlayers([]);
     } finally {
       setIsLoading(false);

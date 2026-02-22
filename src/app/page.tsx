@@ -3868,6 +3868,8 @@ export default function Page() {
             getActionCategory={getActionCategory}
             allTeams={allTeams}
             isAdmin={isAdmin}
+            isPlayer={isPlayer}
+            linkedPlayerId={linkedPlayerId}
           />
         )}
 
@@ -3972,6 +3974,8 @@ export default function Page() {
             getActionCategory={getActionCategory}
             allTeams={allTeams}
             isAdmin={isAdmin}
+            isPlayer={isPlayer}
+            linkedPlayerId={linkedPlayerId}
           />
         )}
 

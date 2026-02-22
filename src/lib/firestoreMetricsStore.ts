@@ -10,6 +10,8 @@ export interface FirestoreOperation {
   label: string;
   /** Ścieżka dokumentu (np. "matches/abc123") – brak dla getDocs (zapytanie) */
   path?: string;
+  /** Liczba read/write units dodana przez operację (dla getDocs może być > 1). */
+  units?: number;
   timestamp: number;
 }
 
@@ -39,9 +41,10 @@ function notify() {
   listeners.forEach((cb) => cb(state));
 }
 
-export function recordFirestoreRead(label: string = "read", path?: string) {
-  sessionReads += 1;
-  lastOperations.push({ type: "read", label, path, timestamp: Date.now() });
+export function recordFirestoreRead(label: string = "read", path?: string, units: number = 1) {
+  const safeUnits = Number.isFinite(units) ? Math.max(0, Math.round(units)) : 1;
+  sessionReads += safeUnits;
+  lastOperations.push({ type: "read", label, path, units: safeUnits, timestamp: Date.now() });
   if (lastOperations.length > MAX_LAST_OPERATIONS) {
     lastOperations.shift();
   }
@@ -50,7 +53,7 @@ export function recordFirestoreRead(label: string = "read", path?: string) {
 
 export function recordFirestoreWrite(label: string = "write", path?: string) {
   sessionWrites += 1;
-  lastOperations.push({ type: "write", label, path, timestamp: Date.now() });
+  lastOperations.push({ type: "write", label, path, units: 1, timestamp: Date.now() });
   if (lastOperations.length > MAX_LAST_OPERATIONS) {
     lastOperations.shift();
   }

@@ -4,146 +4,220 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(15, 23, 42, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
   width: 100vw;
   height: 100vh;
+  padding: 16px;
 }
 
 .modalContent {
-  background: #fff;
-  border-radius: 8px;
-  padding: 16px;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 18px;
   max-width: 500px;
-  width: 90%;
+  width: min(100%, 560px);
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 20px 50px rgba(2, 6, 23, 0.35);
+  border: 1px solid #e5e7eb;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .modalContent h2 {
-  margin: 0 0 12px 0;
-  font-size: 20px;
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
   color: #1f2937;
+}
+
+.modalSubtitle {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.closeButton {
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #374151;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.closeButton:hover {
+  background: #f3f4f6;
+}
+
+.contextCard {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 12px;
 }
 
 .formGroup {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin-bottom: 8px;
+  gap: 5px;
+  margin-bottom: 10px;
 }
 
 .formGroupCentered {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin-bottom: 8px;
+  gap: 5px;
+  margin-bottom: 10px;
   align-items: center;
 }
 
 .formGroup label {
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
   color: #374151;
-  line-height: 1.2;
-  white-space: nowrap;
-  text-align: center;
+  line-height: 1.25;
+  text-align: left;
 }
 
 .formGroup input,
 .formGroup select {
-  padding: 4px 8px;
+  padding: 7px 10px;
   border: 1px solid #d1d5db;
-  border-radius: 4px;
+  border-radius: 8px;
   font-size: 13px;
   color: #1f2937;
-  height: 32px;
+  height: 36px;
+  background: #fff;
 }
 
 .formGroup select {
   width: 100%;
 }
 
+.presetPlayerName {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #1f2937;
+  background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+}
+
 .formGroup input[type="number"] {
-  max-width: 60px;
-  width: 60px;
-  text-align: center;
-  padding: 4px 4px;
-  height: 32px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  text-align: left;
+  height: 36px;
+  margin: 0;
 }
 
 .formGroup input[type="text"] {
-  max-width: 85px;
-  width: 85px;
-  padding: 4px 6px;
-  height: 32px;
+  max-width: 130px;
+  width: 130px;
+  height: 36px;
+  text-align: center;
+  letter-spacing: 0.3px;
 }
 
 .formGroupCentered input[type="text"] {
-  max-width: 85px;
-  width: 85px;
-  padding: 4px 6px;
-  height: 32px;
+  max-width: 130px;
+  width: 130px;
+  height: 36px;
   margin: 0 auto;
+  text-align: center;
+  letter-spacing: 0.3px;
 }
 
 .formGroup input:focus,
 .formGroup select:focus {
   outline: none;
-  border-color: #2196f3;
-  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
-}
-
-.formRow {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  align-items: end;
-  margin-bottom: 4px;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
 }
 
 .formRowFour {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   align-items: end;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.sectionHeader {
+  margin: 8px 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+.infoMessage {
+  padding: 9px 10px;
+  margin: 4px 0 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1e40af;
+  font-size: 12px;
 }
 
 .buttonGroup {
   display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 16px;
-  padding-top: 16px;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid #e5e7eb;
 }
 
 .cancelButton {
-  padding: 10px 18px;
+  padding: 10px 14px;
+  min-width: 120px;
   background-color: #f3f4f6;
   color: #374151;
-  border: none;
-  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .saveButton {
-  padding: 10px 18px;
-  background-color: #2196f3;
+  padding: 10px 14px;
+  min-width: 160px;
+  background-color: #2563eb;
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
+  margin-left: auto;
+}
+
+.saveButton:hover {
+  background-color: #1d4ed8;
 }
 
 .saveButton:disabled,
@@ -155,17 +229,33 @@
 
 .errorMessage {
   padding: 10px 12px;
-  margin: 12px 0 0;
+  margin: 10px 0 0;
   background-color: #fee2e2;
   border: 1px solid #fecaca;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #dc2626;
   font-size: 13px;
   font-weight: 500;
 }
 
 @media (max-width: 640px) {
-  .formRow {
+  .modalContent {
+    padding: 14px;
+    width: 100%;
+  }
+
+  .formRowFour {
     grid-template-columns: 1fr;
+  }
+
+  .buttonGroup {
+    flex-direction: column-reverse;
+  }
+
+  .saveButton,
+  .cancelButton {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
   }
 }

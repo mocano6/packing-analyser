@@ -10,9 +10,9 @@ import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, getDocs } from "@/lib/firestoreWithMetrics";
+import { collection, query, where, getDocs } from "@/lib/firestoreWithMetrics";
 import { getCached, setCached } from "@/lib/sessionCache";
-import { getMatchDocumentFromCache, setMatchDocumentInCache } from "@/lib/matchDocumentCache";
+import { getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
@@ -415,23 +415,7 @@ export default function StatystykiZespoluPage() {
           return;
         }
 
-        const cachedMatch = getMatchDocumentFromCache(selectedMatch);
-        let matchData: TeamInfo | null = cachedMatch;
-
-        if (!matchData) {
-          const matchDoc = await getDoc(doc(db, "matches", selectedMatch));
-          if (!matchDoc.exists()) {
-            setAllActions([]);
-            setAllRegainActions([]);
-            setAllLosesActions([]);
-            setAllShots([]);
-            setAllPKEntries([]);
-            setAllAcc8sEntries([]);
-            return;
-          }
-          matchData = matchDoc.data() as TeamInfo;
-          setMatchDocumentInCache(selectedMatch, matchData);
-        }
+        const matchData = await getOrLoadMatchDocument(selectedMatch);
 
         if (matchData) {
           const actions = matchData.actions_packing || [];
@@ -654,7 +638,7 @@ export default function StatystykiZespoluPage() {
 
   // Pobierz dane GPS „Mecz” (day === "MD") dla daty wybranego meczu
   useEffect(() => {
-    if (expandedCategory !== 'gps' || !selectedMatchInfo || !selectedTeam || !db) {
+    if (expandedCategory !== 'gps' || !selectedMatchInfo || !selectedTeam || !db || players.length === 0) {
       if (expandedCategory !== 'gps') setGpsMatchDayData([]);
       return;
     }
@@ -670,7 +654,7 @@ export default function StatystykiZespoluPage() {
     }
     const cacheKey = `gps_md_${selectedTeam}_${matchDateStr}`;
     const cached = getCached<typeof gpsMatchDayData>(cacheKey, GPS_MATCH_DAY_CACHE_TTL_MS);
-    if (cached) {
+    if (cached && players.length > 0) {
       setGpsMatchDayData(cached);
       setGpsMatchDayLoading(false);
       return;
@@ -718,14 +702,15 @@ export default function StatystykiZespoluPage() {
           });
         });
         setGpsMatchDayData(list);
-        setCached(cacheKey, list);
+        const allNamesResolved = list.length === 0 || list.some((e) => e.playerName !== "Zawodnik usunięty");
+        if (allNamesResolved) setCached(cacheKey, list);
       } catch {
         setGpsMatchDayData([]);
       } finally {
         setGpsMatchDayLoading(false);
       }
     })();
-  }, [expandedCategory, selectedMatchInfo, selectedTeam]);
+  }, [expandedCategory, selectedMatchInfo, selectedTeam, players.length, playersIndex]);
 
   const pkEntriesSideStats = useMemo(() => {
     // UWAGA: PKEntryModal zapisuje `teamId` jako matchInfo.team (nasz zespół) również dla wpisów przeciwnika,
@@ -7641,7 +7626,7 @@ export default function StatystykiZespoluPage() {
                           const total = getPeriodData(entry);
                           const minutes = getPlayerMinutesInPeriod(entry.playerId);
 
-                          if (col === 'playerName') return entry.playerName ?? '';
+                          if (col === 'playerName') return getPlayerLabel(entry.playerId, playersIndex);
                           if (col === 'position') return getPlayerPositionInMatch(entry.playerId);
                           if (col === 'minutes') return Number.isFinite(minutes) ? minutes : NaN;
 
@@ -7787,7 +7772,7 @@ export default function StatystykiZespoluPage() {
                                 const hmlDistanceLabel = Number.isFinite(hmlDistanceRaw) ? formatNum(applyNormalization('hmlDistance', hmlDistanceRaw, minutes)) : '—';
                                 return (
                                   <tr key={entry.id}>
-                                    <td>{entry.playerName}</td>
+                                    <td>{getPlayerLabel(entry.playerId, playersIndex)}</td>
                                     <td>{minutesLabel}</td>
                                     <td>{accRelLabel}</td>
                                     <td>{decRelLabel}</td>

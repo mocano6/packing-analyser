@@ -11,6 +11,8 @@ export interface Team {
   name: string;
 }
 
+let teamsFetchInFlight: Promise<Team[]> | null = null;
+
 export function useTeams() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -25,21 +27,36 @@ export function useTeams() {
         setIsLoading(false);
         return;
       }
-      setIsLoading(true);
-      const teamsCollection = collection(db, "teams");
-      const q = query(teamsCollection, orderBy("name"));
-      const teamsSnapshot = await getDocs(q);
-      
-      if (!teamsSnapshot.empty) {
-        const teamsList = teamsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Team[];
-        setCached(CACHE_KEYS.TEAMS_LIST, teamsList);
-        setTeams(teamsList);
-      } else {
-        setTeams([]);
+      if (teamsFetchInFlight) {
+        setIsLoading(true);
+        const list = await teamsFetchInFlight;
+        setTeams(list);
+        setError(null);
+        setIsLoading(false);
+        return;
       }
+      setIsLoading(true);
+      const doFetch = async (): Promise<Team[]> => {
+        try {
+          const teamsCollection = collection(db, "teams");
+          const q = query(teamsCollection, orderBy("name"));
+          const teamsSnapshot = await getDocs(q);
+          if (!teamsSnapshot.empty) {
+            const teamsList = teamsSnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            })) as Team[];
+            setCached(CACHE_KEYS.TEAMS_LIST, teamsList);
+            return teamsList;
+          }
+          return [];
+        } finally {
+          teamsFetchInFlight = null;
+        }
+      };
+      teamsFetchInFlight = doFetch();
+      const list = await teamsFetchInFlight;
+      setTeams(list);
       setError(null);
     } catch (err) {
       console.error("Error fetching teams:", err);

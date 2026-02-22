@@ -8,6 +8,7 @@ import { buildPlayersIndex, getPlayerFirstName, getPlayerFullName, getPlayerLabe
 import { getAvailableSeasonsFromMatches, getSeasonForDate } from "@/utils/seasonUtils";
 import { getDB } from "@/lib/firebase";
 import { collection, addDoc, query, where, orderBy, getDocs, deleteDoc, doc, getDoc, updateDoc, setDoc } from "@/lib/firestoreWithMetrics";
+import { getMatchDocumentFromCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import { POSITIONS, mapOldPositionToNew } from "@/constants/positions";
 import styles from "./GPSDataSection.module.css";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
@@ -1346,20 +1347,30 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
     }
     let cancelled = false;
     setIsLoadingTableMD(true);
-    const db = getDB();
     const toDateStr = (v: unknown): string => {
       if (!v) return "";
       if (typeof v === "string") return String(v).slice(0, 10);
       if (typeof (v as { toDate?: () => Date }).toDate === "function") return (v as { toDate: () => Date }).toDate().toISOString().slice(0, 10);
       return String(v).slice(0, 10);
     };
+    const gpsByDatePromise = new Map<string, Promise<any[]>>();
     Promise.all(
       selectedTableMatchIds.map(async (matchId) => {
-        const matchDoc = await getDoc(doc(db, "matches", matchId));
-        const matchData = matchDoc.data() as TeamInfo | undefined;
+        const matchData =
+          getMatchDocumentFromCache(matchId) ??
+          (await getOrLoadMatchDocument(matchId)) ??
+          undefined;
         const dateStr = matchData ? toDateStr(matchData.date) : "";
+        const gpsPromise = dateStr
+          ? (gpsByDatePromise.get(dateStr) ??
+             (() => {
+               const promise = fetchGPSDataForDate(selectedTeam, dateStr);
+               gpsByDatePromise.set(dateStr, promise);
+               return promise;
+             })())
+          : Promise.resolve([]);
         const [gpsData, minutes] = await Promise.all([
-          dateStr ? fetchGPSDataForDate(selectedTeam, dateStr) : Promise.resolve([]),
+          gpsPromise,
           (async () => {
             if (!matchData?.playerMinutes?.length) return {};
             const byPlayer: Record<string, number> = {};

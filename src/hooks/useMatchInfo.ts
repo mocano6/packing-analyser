@@ -25,8 +25,12 @@ const LOCAL_MATCHES_CACHE_KEY = 'packing_matches_cache';
 const PERMISSION_CHECK_TTL_MS = 60 * 1000;
 /** Cache listy meczów uznajemy za świeży przez 5 min — mniej odczytów getDocs(matches) */
 const MATCHES_CACHE_STALE_MS = 5 * 60 * 1000;
+/** Dedup krótkich, równoległych odczytów tej samej listy meczów */
+const MATCHES_FETCH_DEDUPE_WINDOW_MS = 3000;
 const OFFLINE_TOAST_MESSAGE =
   "Brak połączenia. Dane zapisują się lokalnie i zostaną wysłane do bazy po powrocie internetu.";
+let globalPermissionCheck: { checkedAt: number; ok: boolean } | null = null;
+const lastMatchesFetchAt = new Map<string, number>();
 
 // Funkcja do generowania unikalnych ID
 function generateId() {
@@ -288,6 +292,14 @@ export function useMatchInfo() {
 
   // Funkcja do pobierania meczów z Firebase
   const fetchFromFirebase = async (teamId?: string) => {
+    const requestKey = teamId || "__all__";
+    const lastFetchAt = lastMatchesFetchAt.get(requestKey) || 0;
+    if (Date.now() - lastFetchAt < MATCHES_FETCH_DEDUPE_WINDOW_MS) {
+      const cachedMatches = localCacheRef.current.data;
+      return teamId ? cachedMatches.filter(match => match.team === teamId) : cachedMatches;
+    }
+    lastMatchesFetchAt.set(requestKey, Date.now());
+
     try {
       setIsSyncing(true);
       
@@ -493,7 +505,7 @@ export function useMatchInfo() {
         
         // Przed próbą pobrania danych, sprawdzamy, czy mamy dostęp do Firebase
         try {
-          const lastCheck = permissionCheckRef.current;
+          const lastCheck = permissionCheckRef.current ?? globalPermissionCheck;
           const isRecentCheck = lastCheck && (Date.now() - lastCheck.checkedAt < PERMISSION_CHECK_TTL_MS);
 
           if (isRecentCheck && lastCheck && !lastCheck.ok) {
@@ -548,6 +560,7 @@ export function useMatchInfo() {
               checkedAt: Date.now(),
               ok: Boolean(testResult)
             };
+            globalPermissionCheck = permissionCheckRef.current;
 
             // Jeśli test zwrócił null lub undefined, oznacza to że jesteśmy offline lub wystąpił timeout
             if (!testResult) {
@@ -630,6 +643,7 @@ export function useMatchInfo() {
           // Obsługa błędu uprawnień podczas testu
           console.error("🔒 Błąd podczas testowania uprawnień Firebase:", permissionError);
           permissionCheckRef.current = { checkedAt: Date.now(), ok: false };
+          globalPermissionCheck = permissionCheckRef.current;
           
           if (String(permissionError).includes("client is offline") || String(permissionError).includes("Failed to get document because the client is offline")) {
             // Klient jest offline - pomijam synchronizację z Firebase
