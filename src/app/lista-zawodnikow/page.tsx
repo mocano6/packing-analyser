@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Player, Action } from '@/types';
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useAuth } from "@/hooks/useAuth";
-import { buildPlayersIndex, getPlayerLabel } from '@/utils/playerUtils';
+import { buildPlayersIndex, getPlayerLabel, getPlayerFullName } from '@/utils/playerUtils';
 import { collection, getDocs, doc, updateDoc, getDoc } from '@/lib/firestoreWithMetrics';
 import { getDB } from '@/lib/firebase';
 import styles from './page.module.css';
@@ -15,38 +15,51 @@ export default function ListaZawodnikow() {
   const [sortBy, setSortBy] = useState<'name' | 'actions' | 'teams'>('actions');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [allActions, setAllActions] = useState<Action[]>([]);
+  const [matchNamesById, setMatchNamesById] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isMergingDuplicates, setIsMergingDuplicates] = useState(false);
   const [expandedPlayerIds, setExpandedPlayerIds] = useState<Set<string>>(new Set());
+  const [expandedDuplicatePlayerIds, setExpandedDuplicatePlayerIds] = useState<Set<string>>(new Set());
 
   const { isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
-  const { players, handleDeletePlayer: deletePlayer } = usePlayersState();
-  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
+  const { players, handleDeletePlayer: deletePlayer, handleRestorePlayer: restorePlayer } = usePlayersState();
+  const [allPlayersIncludingDeleted, setAllPlayersIncludingDeleted] = useState<Player[]>([]);
+  const [isLoadingAllPlayers, setIsLoadingAllPlayers] = useState(true);
+
+  const playersIndex = useMemo(() => buildPlayersIndex(allPlayersIncludingDeleted), [allPlayersIncludingDeleted]);
 
   // WSZYSTKIE HOOKI MUSZĄ BYĆ PRZED WARUNKAMI RETURN!
   
-  // Pobierz wszystkie akcje z Firebase
+  // Pobierz wszystkie akcje z Firebase oraz mapę matchId -> nazwa meczu
   useEffect(() => {
     const fetchAllActions = async () => {
       setIsLoading(true);
       try {
-        // Pobierz wszystkie mecze
         const matchesSnapshot = await getDocs(collection(getDB(), 'matches'));
         const allMatchActions: Action[] = [];
+        const namesById: Record<string, string> = {};
 
-        // Przejdź przez każdy mecz i pobierz jego akcje
         matchesSnapshot.docs.forEach(doc => {
-          const matchData = doc.data();
+          const matchData = doc.data() as { team?: string; opponent?: string; date?: string; actions_packing?: Action[] };
+          const matchId = doc.id;
+          const team = matchData.team ?? 'Zespół';
+          const opponent = matchData.opponent ?? 'Przeciwnik';
+          const date = matchData.date ?? '';
+          namesById[matchId] = `${team} vs ${opponent}${date ? ` (${date})` : ''}`;
+
           if (matchData.actions_packing && Array.isArray(matchData.actions_packing)) {
-            allMatchActions.push(...matchData.actions_packing);
+            matchData.actions_packing.forEach((a: Action) => {
+              allMatchActions.push({ ...a, matchId: a.matchId ?? matchId });
+            });
           }
         });
 
-
+        setMatchNamesById(namesById);
         setAllActions(allMatchActions);
       } catch (error) {
         console.error('Błąd podczas pobierania akcji:', error);
         setAllActions([]);
+        setMatchNamesById({});
       } finally {
         setIsLoading(false);
       }
@@ -55,9 +68,43 @@ export default function ListaZawodnikow() {
     fetchAllActions();
   }, []);
 
+  // Pobierz wszystkich zawodników (w tym usuniętych) – tylko na tej stronie
+  const fetchAllPlayersIncludingDeleted = React.useCallback(async () => {
+    if (!getDB()) {
+      setAllPlayersIncludingDeleted([]);
+      setIsLoadingAllPlayers(false);
+      return;
+    }
+    setIsLoadingAllPlayers(true);
+    try {
+      const playersSnapshot = await getDocs(collection(getDB(), "players"));
+      const list = playersSnapshot.docs.map(docSnap => {
+        const data = docSnap.data() as Player;
+        const { id: _id, ...rest } = data;
+        const player: Player = {
+          id: docSnap.id,
+          ...rest,
+        };
+        if (typeof player.teams === 'string') player.teams = [player.teams];
+        else if (!Array.isArray(player.teams)) player.teams = [];
+        return player;
+      });
+      setAllPlayersIncludingDeleted(list);
+    } catch (error) {
+      console.error('Błąd pobierania listy zawodników (z usuniętymi):', error);
+      setAllPlayersIncludingDeleted([]);
+    } finally {
+      setIsLoadingAllPlayers(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAllPlayersIncludingDeleted();
+  }, [fetchAllPlayersIncludingDeleted]);
+
   // Oblicz liczbę akcji dla każdego zawodnika
   const playersWithStats = useMemo(() => {
-    return players.map(player => {
+    return allPlayersIncludingDeleted.map(player => {
       const playerActions = allActions.filter(action => 
         action.senderId === player.id || action.receiverId === player.id
       );
@@ -68,7 +115,7 @@ export default function ListaZawodnikow() {
         teamsString: player.teams ? player.teams.join(', ') : ''
       };
     });
-  }, [players, allActions]);
+  }, [allPlayersIncludingDeleted, allActions]);
 
   // Filtrowanie i sortowanie
   const filteredAndSortedPlayers = useMemo(() => {
@@ -210,9 +257,22 @@ export default function ListaZawodnikow() {
     );
   }
 
-  // Funkcja do przełączania rozwinięcia akcji zawodnika
+  // Funkcja do przełączania rozwinięcia akcji zawodnika (tabela główna)
   const togglePlayerActions = (playerId: string) => {
     setExpandedPlayerIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(playerId)) {
+        newSet.delete(playerId);
+      } else {
+        newSet.add(playerId);
+      }
+      return newSet;
+    });
+  };
+
+  // Funkcja do przełączania rozwinięcia akcji w sekcji duplikatów
+  const toggleDuplicatePlayerActions = (playerId: string) => {
+    setExpandedDuplicatePlayerIds(prev => {
       const newSet = new Set(prev);
       if (newSet.has(playerId)) {
         newSet.delete(playerId);
@@ -435,13 +495,24 @@ export default function ListaZawodnikow() {
     const playerLabel = getPlayerLabel(playerId, playersIndex);
     if (window.confirm(`Czy na pewno chcesz usunąć zawodnika ${playerLabel}?`)) {
       const success = await deletePlayer(playerId);
-      
       if (success) {
+        await fetchAllPlayersIncludingDeleted();
         alert(`Zawodnik ${playerLabel} został usunięty`);
-        // Odśwież stronę aby zaktualizować listę
-        window.location.reload();
       } else {
         alert('Wystąpił błąd podczas usuwania zawodnika');
+      }
+    }
+  };
+
+  const handleRestorePlayerFromList = async (playerId: string) => {
+    const playerLabel = getPlayerLabel(playerId, playersIndex);
+    if (window.confirm(`Czy na pewno chcesz przywrócić zawodnika ${playerLabel}?`)) {
+      const success = await restorePlayer(playerId);
+      if (success) {
+        await fetchAllPlayersIncludingDeleted();
+        alert(`Zawodnik ${playerLabel} został przywrócony`);
+      } else {
+        alert('Wystąpił błąd podczas przywracania zawodnika');
       }
     }
   };
@@ -471,11 +542,16 @@ export default function ListaZawodnikow() {
         
         <div className={styles.stats}>
           <span className={styles.totalCount}>
-            Łącznie zawodników: {players.length}
+            Łącznie: {allPlayersIncludingDeleted.length}
+            {' '}(aktywnych: {allPlayersIncludingDeleted.filter(p => !p.isDeleted).length},
+            {' '}usuniętych: {allPlayersIncludingDeleted.filter(p => p.isDeleted).length})
           </span>
           <span className={styles.filteredCount}>
             Wyświetlanych: {filteredAndSortedPlayers.length}
           </span>
+          {isLoadingAllPlayers && (
+            <span className={styles.loadingLabel}>Ładowanie listy…</span>
+          )}
           {duplicates.length > 0 && (
             <span className={styles.duplicatesWarning}>
               ⚠️ Znaleziono {duplicates.length} potencjalnych duplikatów
@@ -519,24 +595,134 @@ export default function ListaZawodnikow() {
               <h4>👥 Nazwa: "{key.charAt(0).toUpperCase() + key.slice(1)}"</h4>
               <div className={styles.duplicateList}>
                 {duplicatePlayers.map(player => (
-                  <div key={player.id} className={styles.duplicateItem}>
-                    <div className={styles.playerInfo}>
-                      <span className={styles.playerName}>{getPlayerLabel(player.id, playersIndex)}</span>
-                      <span className={styles.playerNumber}>#{player.number || 'Brak'}</span>
-                      <span className={styles.playerBirthYear}>
-                        {player.birthYear ? `ur. ${player.birthYear}` : 'Brak roku urodzenia'}
-                      </span>
-                      <span className={styles.playerTeams}>{player.teamsString || 'Brak zespołu'}</span>
-                      <span className={styles.playerActions}>{player.actionsCount} akcji</span>
-                      <span className={styles.playerId} title="ID zawodnika">ID: {player.id}</span>
+                  <div key={player.id} className={styles.duplicateItemWrapper}>
+                    <div className={styles.duplicateItem}>
+                      <div className={styles.playerInfo}>
+                        <span className={styles.playerName}>
+                          {player.isDeleted ? (
+                            <>
+                              {(getPlayerFullName(player) || player.name || 'Zawodnik').trim() || 'Zawodnik'}
+                              <span className={styles.playerDeletedLabel}> (usunięty)</span>
+                              {player.position && (
+                                <span className={styles.playerPosition}> ({player.position})</span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {getPlayerLabel(player.id, playersIndex)}
+                              {player.position && (
+                                <span className={styles.playerPosition}> ({player.position})</span>
+                              )}
+                            </>
+                          )}
+                        </span>
+                        <span className={styles.playerNumber}>#{player.number || 'Brak'}</span>
+                        <span className={styles.playerBirthYear}>
+                          {player.birthYear ? `ur. ${player.birthYear}` : 'Brak roku urodzenia'}
+                        </span>
+                        <span className={styles.playerTeams}>{player.teamsString || 'Brak zespołu'}</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleDuplicatePlayerActions(player.id)}
+                          disabled={player.actionsCount === 0}
+                          className={styles.playerActionsButton}
+                          title={player.actionsCount > 0 ? 'Kliknij aby zobaczyć akcje' : 'Brak akcji'}
+                        >
+                          {player.actionsCount} akcji
+                        </button>
+                        <span className={styles.playerId} title="ID zawodnika">ID: {player.id}</span>
+                      </div>
+                      {player.isDeleted ? (
+                        <button
+                          onClick={() => handleRestorePlayerFromList(player.id)}
+                          className={styles.restoreButton}
+                          title="Przywróć tego zawodnika"
+                        >
+                          ↩️ Przywróć
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleDeletePlayerFromList(player.id)}
+                          className={styles.deleteButton}
+                          title="Usuń tego zawodnika"
+                        >
+                          🗑️ Usuń
+                        </button>
+                      )}
                     </div>
-                    <button
-                      onClick={() => handleDeletePlayerFromList(player.id)}
-                      className={styles.deleteButton}
-                      title="Usuń tego zawodnika"
-                    >
-                      🗑️ Usuń
-                    </button>
+                    {expandedDuplicatePlayerIds.has(player.id) && player.actionsCount > 0 && (() => {
+                      const playerActions = getPlayerActions(player.id);
+                      if (playerActions.length === 0) return null;
+                      return (
+                        <div className={styles.expandedActionsSection}>
+                          <div className={styles.actionsHeader}>
+                            <h3>Akcje: {getPlayerLabel(player.id, playersIndex)}</h3>
+                            <button
+                              type="button"
+                              onClick={() => toggleDuplicatePlayerActions(player.id)}
+                              className={styles.closeActionsButton}
+                              title="Zamknij listę akcji"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <div className={styles.actionsStats}>
+                            <span>Łącznie: <strong>{playerActions.length}</strong></span>
+                            <span>Jako nadawca: <strong>{playerActions.filter(a => a.senderId === player.id).length}</strong></span>
+                            <span>Jako odbiorca: <strong>{playerActions.filter(a => a.receiverId === player.id).length}</strong></span>
+                          </div>
+                          <div className={styles.actionsTable}>
+                            <table className={styles.table}>
+                              <thead>
+                                <tr>
+                                  <th>Minuta</th>
+                                  <th>Typ akcji</th>
+                                  <th>Rola</th>
+                                  <th>Partner</th>
+                                  <th>Nazwa meczu</th>
+                                  <th>Punkty</th>
+                                  <th>Szczegóły</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {playerActions.map((action, index) => {
+                                  const isActionSender = action.senderId === player.id;
+                                  const partnerId = isActionSender ? action.receiverId : action.senderId;
+                                  return (
+                                    <tr key={`${action.id}-${index}`} className={styles.actionRow}>
+                                      <td className={styles.actionMinute}>{action.minute}'</td>
+                                      <td className={styles.actionType}>
+                                        {action.actionType === 'pass' ? '⚽ Podanie' : '🏃 Drybling'}
+                                      </td>
+                                      <td className={`${styles.actionRole} ${isActionSender ? styles.sender : styles.receiver}`}>
+                                        {isActionSender ? '📤 Nadawca' : '📥 Odbiorca'}
+                                      </td>
+                                      <td className={styles.actionPartner}>
+                                        {action.actionType === 'pass' && partnerId
+                                          ? getPlayerLabel(partnerId, playersIndex, { includeNumber: true })
+                                          : '-'}
+                                      </td>
+                                      <td className={styles.actionMatchName} title={matchNamesById[action.matchId] ?? action.matchId}>
+                                        {matchNamesById[action.matchId] ?? action.matchId ?? '-'}
+                                      </td>
+                                      <td className={`${styles.actionPoints} ${(action.packingPoints || 0) >= 3 ? styles.highPoints : ''}`}>
+                                        <strong>{action.packingPoints || 0}</strong>
+                                      </td>
+                                      <td className={styles.actionDetails}>
+                                        {action.isP3 && <span className={styles.p3Badge}>P3</span>}
+                                        {action.isShot && <span className={styles.shotBadge}>🎯 Strzał</span>}
+                                        {action.isGoal && <span className={styles.goalBadge}>⚽ Gol</span>}
+                                        {action.isPenaltyAreaEntry && <span className={styles.penaltyBadge}>📦 Pole karne</span>}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -563,12 +749,13 @@ export default function ListaZawodnikow() {
               <th onClick={() => handleSort('actions')} className={styles.sortableHeader}>
                 Liczba akcji {getSortIcon('actions')}
               </th>
+              <th>Status</th>
               <th>Akcje</th>
             </tr>
           </thead>
           <tbody>
             {filteredAndSortedPlayers.map((player) => (
-              <tr key={player.id} className={styles.tableRow}>
+              <tr key={player.id} className={`${styles.tableRow} ${player.isDeleted ? styles.rowDeleted : ''}`}>
                 <td className={styles.playerName}>{getPlayerLabel(player.id, playersIndex)}</td>
                 <td className={styles.playerNumber}>#{player.number || 'Brak'}</td>
                 <td className={styles.playerId} title={player.id}>{player.id.slice(0, 8)}...</td>
@@ -591,18 +778,37 @@ export default function ListaZawodnikow() {
                   </button>
                 </td>
                 <td>
-                  <button
-                    onClick={() => handleDeletePlayerFromList(player.id)}
-                    className={styles.deleteButton}
-                    title="Usuń zawodnika"
-                    disabled={player.actionsCount > 0}
-                  >
-                    🗑️
-                  </button>
-                  {player.actionsCount > 0 && (
-                    <span className={styles.deleteWarning} title="Nie można usunąć zawodnika z akcjami">
-                      ⚠️
-                    </span>
+                  {player.isDeleted ? (
+                    <span className={styles.statusDeleted} title="Zawodnik usunięty">Usunięty</span>
+                  ) : (
+                    <span className={styles.statusActive}>Aktywny</span>
+                  )}
+                </td>
+                <td>
+                  {player.isDeleted ? (
+                    <button
+                      onClick={() => handleRestorePlayerFromList(player.id)}
+                      className={styles.restoreButton}
+                      title="Przywróć zawodnika"
+                    >
+                      ↩️ Przywróć
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleDeletePlayerFromList(player.id)}
+                        className={styles.deleteButton}
+                        title="Usuń zawodnika"
+                        disabled={player.actionsCount > 0}
+                      >
+                        🗑️
+                      </button>
+                      {player.actionsCount > 0 && (
+                        <span className={styles.deleteWarning} title="Nie można usunąć zawodnika z akcjami">
+                          ⚠️
+                        </span>
+                      )}
+                    </>
                   )}
                 </td>
               </tr>
@@ -644,7 +850,7 @@ export default function ListaZawodnikow() {
                       <th>Typ akcji</th>
                       <th>Rola</th>
                       <th>Partner</th>
-                      <th>Strefa</th>
+                      <th>Nazwa meczu</th>
                       <th>Punkty</th>
                       <th>Szczegóły</th>
                     </tr>
@@ -668,10 +874,8 @@ export default function ListaZawodnikow() {
                               ? getPlayerLabel(partnerId, playersIndex, { includeNumber: true })
                               : '-'}
                           </td>
-                          <td className={styles.actionZone}>
-                            {action.startZone && action.endZone ? 
-                              `${action.startZone} → ${action.endZone}` : 
-                              action.startZone || action.endZone || '-'}
+                          <td className={styles.actionMatchName} title={matchNamesById[action.matchId] ?? action.matchId}>
+                            {matchNamesById[action.matchId] ?? action.matchId ?? '-'}
                           </td>
                           <td className={`${styles.actionPoints} ${(action.packingPoints || 0) >= 3 ? styles.highPoints : ''}`}>
                             <strong>{action.packingPoints || 0}</strong>

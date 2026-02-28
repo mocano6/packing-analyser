@@ -81,6 +81,12 @@
   color: #495057;
 }
 
+.loadingLabel {
+  padding: 8px 12px;
+  color: #0d6efd;
+  font-size: 14px;
+}
+
 .duplicatesWarning {
   padding: 8px 12px;
   background-color: #fff3cd;
@@ -179,6 +185,12 @@
   gap: 10px;
 }
 
+.duplicateItemWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
 .duplicateItem {
   display: flex;
   justify-content: space-between;
@@ -200,6 +212,18 @@
   font-weight: 600;
   color: #333;
   min-width: 150px;
+}
+
+.playerPosition {
+  font-weight: 500;
+  color: #6c757d;
+  font-size: 0.9em;
+}
+
+.playerDeletedLabel {
+  font-weight: 500;
+  color: #dc3545;
+  font-size: 0.9em;
 }
 
 .playerNumber {
@@ -229,6 +253,29 @@
   border-radius: 4px;
   font-weight: 500;
   font-size: 12px;
+}
+
+.playerActionsButton {
+  background-color: #6f42c1;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 12px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.playerActionsButton:hover:not(:disabled) {
+  background-color: #5a32a3;
+  text-decoration: underline;
+}
+
+.playerActionsButton:disabled {
+  background-color: #adb5bd;
+  color: #495057;
+  cursor: default;
 }
 
 .playerId {
@@ -322,6 +369,51 @@
   margin-left: 5px;
   color: #ffc107;
   font-size: 14px;
+}
+
+.rowDeleted {
+  background-color: #f8d7da;
+  opacity: 0.9;
+}
+
+.rowDeleted:hover {
+  background-color: #f5c2c7;
+}
+
+.statusDeleted {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #dc3545;
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.statusActive {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #198754;
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.restoreButton {
+  background-color: #0d6efd;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.restoreButton:hover {
+  background-color: #0b5ed7;
 }
 
 .noResults {
@@ -508,6 +600,13 @@
   font-family: monospace;
   font-weight: 500;
   min-width: 80px;
+}
+
+.actionMatchName {
+  min-width: 120px;
+  max-width: 220px;
+  word-break: break-word;
+  font-size: 13px;
 }
 
 .actionPoints {

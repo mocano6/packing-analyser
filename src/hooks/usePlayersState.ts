@@ -401,6 +401,24 @@ export function usePlayersState() {
     }
   }, [players]);
 
+  // Przywracanie zawodnika (soft delete → aktywny)
+  const handleRestorePlayer = useCallback(async (playerId: string) => {
+    try {
+      if (!getDB()) {
+        throw new Error("Firebase nie jest zainicjalizowane");
+      }
+      await updateDoc(doc(getDB(), "players", playerId), { isDeleted: false });
+      invalidateCache(CACHE_KEYS.PLAYERS_LIST);
+      await fetchAllPlayers();
+      return true;
+    } catch (error) {
+      console.error('❌ Błąd przywracania zawodnika:', error);
+      const msg = error instanceof Error ? error.message : 'Wystąpił błąd podczas przywracania zawodnika.';
+      alert(msg + ' Spróbuj ponownie.');
+      return false;
+    }
+  }, [fetchAllPlayers]);
+
   // Stan zabezpieczający przed wielokrotnym wywołaniem
   const [isSaving, setIsSaving] = useState(false);
 
@@ -650,6 +668,7 @@ export function usePlayersState() {
     isLoading,
     setIsModalOpen,
     handleDeletePlayer,
+    handleRestorePlayer,
     handleSavePlayer,
     handleEditPlayer,
     closeModal,
