@@ -93,11 +93,24 @@ export default function StatystykiZespoluPage() {
     }
   }, [selectedTeam]);
 
-  const [selectedMatch, setSelectedMatch] = useState<string>(() => {
+  // Wielokrotny wybór meczów; domyślnie ostatni (najnowszy) mecz
+  const [selectedMatches, setSelectedMatches] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("teamStats_selectedMatch") || "";
+      const stored = localStorage.getItem("teamStats_selectedMatches");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as unknown;
+          if (Array.isArray(parsed) && parsed.every((id): id is string => typeof id === "string")) {
+            return parsed;
+          }
+        } catch {
+          // ignore
+        }
+      }
+      const legacy = localStorage.getItem("teamStats_selectedMatch") || "";
+      if (legacy) return [legacy];
     }
-    return "";
+    return [];
   });
   const [allActions, setAllActions] = useState<Action[]>([]);
   const [allRegainActions, setAllRegainActions] = useState<Action[]>([]);
@@ -140,10 +153,10 @@ export default function StatystykiZespoluPage() {
   }, [selectedSeason]);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("teamStats_selectedMatch", selectedMatch);
+    if (typeof window !== "undefined" && selectedMatches.length > 0) {
+      localStorage.setItem("teamStats_selectedMatches", JSON.stringify(selectedMatches));
     }
-  }, [selectedMatch]);
+  }, [selectedMatches]);
   const [selectedMetric, setSelectedMetric] = useState<'pxt' | 'xt' | 'packing'>('pxt');
   const [selectedActionType, setSelectedActionType] = useState<'pass' | 'dribble' | 'all'>('all');
   const [heatmapMode, setHeatmapMode] = useState<"pxt" | "count">("pxt");
@@ -166,6 +179,8 @@ export default function StatystykiZespoluPage() {
   const [pkEntriesExpandedMatchData, setPkEntriesExpandedMatchData] = useState(false);
   const [possessionExpanded, setPossessionExpanded] = useState(false);
   const [shotsExpanded, setShotsExpanded] = useState(false);
+  const [kpiShotsRowExpanded, setKpiShotsRowExpanded] = useState(false);
+  const [kpiXgRowExpanded, setKpiXgRowExpanded] = useState(false);
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
   const [gpsMatchDayExpanded, setGpsMatchDayExpanded] = useState(true);
   const [gpsMatchDayPeriod, setGpsMatchDayPeriod] = useState<'total' | 'firstHalf' | 'secondHalf'>('total');
@@ -192,6 +207,8 @@ export default function StatystykiZespoluPage() {
     onTarget: true,
   });
   const [selectedPKEntryIdForView, setSelectedPKEntryIdForView] = useState<string | undefined>(undefined);
+  const [xgMapModalOpen, setXgMapModalOpen] = useState(false);
+  const [pkMapModalOpen, setPkMapModalOpen] = useState(false);
   const [pkEntryTypeFilter, setPkEntryTypeFilter] = useState<"all" | "pass" | "dribble" | "sfg">("all");
   const [matchSelectOpen, setMatchSelectOpen] = useState(false);
   const matchSelectRef = useRef<HTMLDivElement>(null);
@@ -348,12 +365,10 @@ export default function StatystykiZespoluPage() {
     return getAvailableSeasonsFromMatches(teamFiltered);
   }, [allMatches, selectedTeam]);
 
-  // Domyślnie zaznacz najnowszy mecz (ostatni w czasie); bez możliwości odznaczenia
+  // Domyślnie zaznacz ostatni (najnowszy) mecz, gdy brak wyboru lub wybrane nie są już dostępne
   useEffect(() => {
     if (teamMatches.length === 0) {
-      if (selectedMatch) {
-        setSelectedMatch("");
-      }
+      if (selectedMatches.length > 0) setSelectedMatches([]);
       return;
     }
 
@@ -363,7 +378,11 @@ export default function StatystykiZespoluPage() {
         .filter((matchId): matchId is string => !!matchId)
     );
 
-    if (selectedMatch && availableMatchIds.has(selectedMatch)) {
+    const stillValid = selectedMatches.filter(id => availableMatchIds.has(id));
+    if (stillValid.length > 0) {
+      if (stillValid.length !== selectedMatches.length) {
+        setSelectedMatches(stillValid);
+      }
       return;
     }
 
@@ -373,8 +392,8 @@ export default function StatystykiZespoluPage() {
       return tb - ta;
     });
     const newestMatchId = byDateDesc[0]?.matchId || "";
-    setSelectedMatch(newestMatchId);
-  }, [teamMatches, selectedMatch]);
+    if (newestMatchId) setSelectedMatches([newestMatchId]);
+  }, [teamMatches, selectedMatches]);
 
   // Zamknij dropdown meczu przy kliknięciu poza lub Escape
   useEffect(() => {
@@ -395,13 +414,16 @@ export default function StatystykiZespoluPage() {
     };
   }, [matchSelectOpen]);
 
-  // Pobierz akcje dla wybranego meczu
+  // Pobierz akcje dla wybranych meczów (łączenie danych z wielu meczów)
   useEffect(() => {
-    const loadActionsForMatch = async () => {
-      if (!selectedMatch) {
+    const loadActionsForMatches = async () => {
+      if (selectedMatches.length === 0) {
         setAllActions([]);
         setAllRegainActions([]);
         setAllLosesActions([]);
+        setAllShots([]);
+        setAllPKEntries([]);
+        setAllAcc8sEntries([]);
         return;
       }
 
@@ -412,54 +434,63 @@ export default function StatystykiZespoluPage() {
           setAllActions([]);
           setAllRegainActions([]);
           setAllLosesActions([]);
-          return;
-        }
-
-        const matchData = await getOrLoadMatchDocument(selectedMatch);
-
-        if (matchData) {
-          const actions = matchData.actions_packing || [];
-          const shots = matchData.shots || [];
-          const pkEntries = matchData.pkEntries || [];
-          const acc8sEntries = (matchData as any).acc8sEntries || [];
-
-          // Pobierz actions_regain i actions_loses BEZPOŚREDNIO z pól dokumentu (nie z subkolekcji!)
-          const regainActions = (matchData.actions_regain || []).map(action => ({
-            ...action,
-            _actionSource: "regain"
-          })) as Action[];
-          
-          const losesActions = (matchData.actions_loses || []).map(action => ({
-            ...action,
-            _actionSource: "loses"
-          })) as Action[];
-
-          setAllActions(actions);
-          setAllRegainActions(regainActions);
-          setAllLosesActions(losesActions);
-          setAllShots(shots);
-          setAllPKEntries(pkEntries);
-          setAllAcc8sEntries(acc8sEntries);
-        } else {
-          setAllActions([]);
-          setAllRegainActions([]);
-          setAllLosesActions([]);
           setAllShots([]);
           setAllPKEntries([]);
           setAllAcc8sEntries([]);
+          return;
         }
+
+        const results = await Promise.all(
+          selectedMatches.map((matchId) => getOrLoadMatchDocument(matchId))
+        );
+
+        const allActionsList: Action[] = [];
+        const allRegainList: Action[] = [];
+        const allLosesList: Action[] = [];
+        const allShotsList: any[] = [];
+        const allPkEntriesList: any[] = [];
+        const allAcc8sList: any[] = [];
+
+        for (const matchData of results) {
+          if (!matchData) continue;
+          allActionsList.push(...(matchData.actions_packing || []));
+          allRegainList.push(
+            ...(matchData.actions_regain || []).map((action) => ({
+              ...action,
+              _actionSource: "regain",
+            })) as Action[]
+          );
+          allLosesList.push(
+            ...(matchData.actions_loses || []).map((action) => ({
+              ...action,
+              _actionSource: "loses",
+            })) as Action[]
+          );
+          allShotsList.push(...(matchData.shots || []));
+          allPkEntriesList.push(...(matchData.pkEntries || []));
+          allAcc8sList.push(...((matchData as any).acc8sEntries || []));
+        }
+
+        setAllActions(allActionsList);
+        setAllRegainActions(allRegainList);
+        setAllLosesActions(allLosesList);
+        setAllShots(allShotsList);
+        setAllPKEntries(allPkEntriesList);
+        setAllAcc8sEntries(allAcc8sList);
       } catch {
-        // Silently handle error - UI will show empty state
         setAllActions([]);
         setAllRegainActions([]);
         setAllLosesActions([]);
+        setAllShots([]);
+        setAllPKEntries([]);
+        setAllAcc8sEntries([]);
       } finally {
         setIsLoadingActions(false);
       }
     };
 
-    loadActionsForMatch();
-  }, [selectedMatch, selectedTeam]);
+    loadActionsForMatches();
+  }, [selectedMatches, selectedTeam]);
 
   // Przygotuj dane dla wykresów zespołowych
   const teamChartData = useMemo(() => {
@@ -618,18 +649,25 @@ export default function StatystykiZespoluPage() {
     return { firstHalf, secondHalf };
   }, [allActions, selectedActionType, selectedActionFilter]);
 
-  // Znajdź wybrany mecz dla wyświetlenia informacji
+  // Pierwszy wybrany mecz – używany do metadanych (zespół, przeciwnik, isHome, matchData przy jednym meczu)
   const selectedMatchInfo = useMemo(() => {
-    return teamMatches.find(match => match.matchId === selectedMatch);
-  }, [teamMatches, selectedMatch]);
+    const firstId = selectedMatches[0];
+    if (!firstId) return undefined;
+    return teamMatches.find((match) => match.matchId === firstId);
+  }, [teamMatches, selectedMatches]);
 
-  // Etykieta w selektorze meczu: wybrany lub (gdy są mecze) najnowszy – żeby nigdy nie było pusto
+  // Etykieta przycisku: jeden mecz – pełna nazwa; wiele – "X meczów" lub pierwszy + ", +N"
   const matchSelectDisplayInfo = useMemo(() => {
-    if (selectedMatchInfo) return selectedMatchInfo;
-    if (teamMatches.length === 0) return null;
-    const byDateDesc = [...teamMatches].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-    return byDateDesc[0] ?? null;
-  }, [selectedMatchInfo, teamMatches]);
+    if (selectedMatches.length === 0) {
+      if (teamMatches.length === 0) return null;
+      const byDateDesc = [...teamMatches].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+      return byDateDesc[0] ?? null;
+    }
+    if (selectedMatches.length === 1 && selectedMatchInfo) return selectedMatchInfo;
+    const first = selectedMatchInfo;
+    if (first) return { ...first, _multiLabel: `${selectedMatches.length} meczów` as const };
+    return null;
+  }, [selectedMatchInfo, teamMatches, selectedMatches]);
   
   // Resetuj wybranego zawodnika gdy zmienia się KPI lub mecz
   useEffect(() => {
@@ -638,8 +676,9 @@ export default function StatystykiZespoluPage() {
 
   // Pobierz dane GPS „Mecz” (day === "MD") dla daty wybranego meczu
   useEffect(() => {
-    if (expandedCategory !== 'gps' || !selectedMatchInfo || !selectedTeam || !db || players.length === 0) {
-      if (expandedCategory !== 'gps') setGpsMatchDayData([]);
+    const needsGps = expandedCategory === 'gps' || expandedCategory === 'kpi';
+    if (!needsGps || !selectedMatchInfo || !selectedTeam || !db || players.length === 0) {
+      if (!needsGps) setGpsMatchDayData([]);
       return;
     }
     const matchDate = selectedMatchInfo.date;
@@ -768,7 +807,7 @@ export default function StatystykiZespoluPage() {
 
   // Przygotuj dane dla wykresu skumulowanego xG w czasie (jak w PxT)
   const xgChartData = useMemo(() => {
-    if (!selectedMatch || allShots.length === 0 || !selectedMatchInfo) return [];
+    if (selectedMatches.length === 0 || allShots.length === 0 || !selectedMatchInfo) return [];
 
     const isHome = selectedMatchInfo.isHome;
     const teamId = isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent;
@@ -808,11 +847,11 @@ export default function StatystykiZespoluPage() {
     });
 
     return data;
-  }, [allShots, selectedMatch, selectedMatchInfo]);
+  }, [allShots, selectedMatches.length, selectedMatchInfo]);
 
   // Przygotuj dane dla wykresu xG co 5 min
   const xgChartData5Min = useMemo(() => {
-    if (!selectedMatch || allShots.length === 0 || !selectedMatchInfo) return [];
+    if (selectedMatches.length === 0 || allShots.length === 0 || !selectedMatchInfo) return [];
 
     const isHome = selectedMatchInfo.isHome;
     const teamId = isHome ? selectedMatchInfo.team : selectedMatchInfo.opponent;
@@ -858,7 +897,7 @@ export default function StatystykiZespoluPage() {
     }
     
     return data;
-  }, [allShots, selectedMatch, selectedMatchInfo]);
+  }, [allShots, selectedMatches.length, selectedMatchInfo]);
 
   // Funkcja pomocnicza do klasyfikacji stref
   const isLateralZone = (zoneName: string | null | undefined): boolean => {
@@ -1959,7 +1998,7 @@ export default function StatystykiZespoluPage() {
       filteredRegainActions = filteredRegainActions.filter(action => matchesSelectedActionFilter(action));
     }
 
-    if (!selectedMatch || !selectedMatchInfo || filteredRegainActions.length === 0) {
+    if (selectedMatches.length === 0 || !selectedMatchInfo || filteredRegainActions.length === 0) {
       return {
         totalXG8s: 0,
         totalShots8s: 0,
@@ -2155,7 +2194,7 @@ export default function StatystykiZespoluPage() {
       pkEntriesPerRegain: totalRegains > 0 ? totalPKEntries8s / totalRegains : 0,
       pxt8sPerRegain: totalRegains > 0 ? totalPXT8s / totalRegains : 0,
     };
-  }, [selectedMatch, selectedMatchInfo, derivedRegainActions, allActions, allShots, allPKEntries, allLosesActions, regainHalfFilter, selectedActionFilter]);
+  }, [selectedMatches.length, selectedMatchInfo, derivedRegainActions, allActions, allShots, allPKEntries, allLosesActions, regainHalfFilter, selectedActionFilter]);
 
   const regainsTimelineXT = useMemo(() => {
     if (derivedRegainActions.length === 0) return [];
@@ -2645,7 +2684,7 @@ export default function StatystykiZespoluPage() {
       filteredLosesActions = filteredLosesActions.filter(action => matchesSelectedActionFilter(action));
     }
 
-    if (!selectedMatch || !selectedMatchInfo || filteredLosesActions.length === 0) {
+    if (selectedMatches.length === 0 || !selectedMatchInfo || filteredLosesActions.length === 0) {
       return {
         totalOpponentXG5s: 0,
         totalOpponentPKEntries5s: 0,
@@ -2810,11 +2849,11 @@ export default function StatystykiZespoluPage() {
       xGPerLose: totalLoses > 0 ? totalOpponentXG8s / totalLoses : 0,
       pkEntriesPerLose: totalLoses > 0 ? totalOpponentPKEntries8s / totalLoses : 0,
     };
-  }, [selectedMatch, selectedMatchInfo, selectedTeam, derivedLosesActions, derivedRegainActions, allShots, allPKEntries, losesHalfFilter, selectedActionFilter]);
+  }, [selectedMatches.length, selectedMatchInfo, selectedTeam, derivedLosesActions, derivedRegainActions, allShots, allPKEntries, losesHalfFilter, selectedActionFilter]);
 
   // Wykres PK entries co 5 minut (zespół vs przeciwnik)
   const pkEntriesTimeline = useMemo(() => {
-    if (!selectedMatch || allPKEntries.length === 0) return [];
+    if (selectedMatches.length === 0 || allPKEntries.length === 0) return [];
 
     const intervals: { [key: number]: { team: number; opponent: number } } = {};
     
@@ -2847,7 +2886,7 @@ export default function StatystykiZespoluPage() {
       });
     }
     return data;
-  }, [selectedMatch, allPKEntries]);
+  }, [selectedMatches.length, allPKEntries]);
 
   const teamRegainContext = teamRegainAttackDefenseMode === "attack"
     ? {
@@ -3391,7 +3430,9 @@ export default function StatystykiZespoluPage() {
               >
                 <span className={styles.compactSelectButtonText}>
                   {matchSelectDisplayInfo
-                    ? `${matchSelectDisplayInfo.opponent} (${matchSelectDisplayInfo.date}) - ${matchSelectDisplayInfo.competition} - ${matchSelectDisplayInfo.isHome ? "Dom" : "Wyjazd"}`
+                    ? (matchSelectDisplayInfo as { _multiLabel?: string })._multiLabel
+                      ? (matchSelectDisplayInfo as { _multiLabel: string })._multiLabel
+                      : `${matchSelectDisplayInfo.opponent} (${matchSelectDisplayInfo.date}) - ${matchSelectDisplayInfo.competition} - ${matchSelectDisplayInfo.isHome ? "Dom" : "Wyjazd"}`
                     : ""}
                 </span>
                 <span className={styles.matchSelectChevron} aria-hidden>
@@ -3403,21 +3444,39 @@ export default function StatystykiZespoluPage() {
                   className={styles.matchSelectDropdown}
                   role="listbox"
                   aria-labelledby="match-select-label"
+                  aria-multiselectable="true"
                 >
-                  {teamMatches.map((match) => (
-                    <li key={match.matchId || match.opponent} role="option">
-                      <button
-                        type="button"
-                        className={styles.matchSelectOption}
-                        onClick={() => {
-                          setSelectedMatch(match.matchId || "");
-                          setMatchSelectOpen(false);
-                        }}
+                  {teamMatches.map((match) => {
+                    const matchId = match.matchId || "";
+                    const isChecked = matchId ? selectedMatches.includes(matchId) : false;
+                    return (
+                      <li
+                        key={matchId || match.opponent}
+                        role="option"
+                        aria-selected={isChecked}
+                        className={styles.matchSelectOptionRow}
                       >
-                        {match.opponent} ({match.date}) - {match.competition} - {match.isHome ? "Dom" : "Wyjazd"}
-                      </button>
-                    </li>
-                  ))}
+                        <label className={styles.matchSelectOptionLabel}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              setSelectedMatches((prev) =>
+                                isChecked
+                                  ? prev.filter((id) => id !== matchId)
+                                  : [...prev, matchId]
+                              );
+                            }}
+                            className={styles.matchSelectCheckbox}
+                            aria-label={`${match.opponent} (${match.date}) - ${match.competition} - ${match.isHome ? "Dom" : "Wyjazd"}`}
+                          />
+                          <span className={styles.matchSelectOptionText}>
+                            {match.opponent} ({match.date}) - {match.competition} - {match.isHome ? "Dom" : "Wyjazd"}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -3426,7 +3485,7 @@ export default function StatystykiZespoluPage() {
         </div>
 
       {/* Zakładki z metrykami */}
-      {selectedMatch && !isLoadingActions && (
+      {selectedMatches.length > 0 && !isLoadingActions && (
         <div className={styles.statsContainer}>
           <div className={styles.statsLayout}>
             {/* Lista kategorii na górze */}
@@ -3494,28 +3553,28 @@ export default function StatystykiZespoluPage() {
             {/* Szczegóły poniżej */}
             {expandedCategory === 'kpi' && selectedMatchInfo && (
               <Fragment>
+              <div>
               <div className={styles.detailsPanel}>
-                <h3>KPI</h3>
-                
                 {(() => {
                   // Oblicz dane dla spidermapy
-                  const isSelectedTeamHome = selectedMatchInfo.isHome;
                   const teamIdInMatch = selectedTeam;
-                  const opponentIdInMatch = isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team;
+                  const opponentIdInMatch = selectedMatchInfo.opponent;
+                  const resolveShotTeamId = (shot: any): string | null => {
+                    if (shot.teamId) return shot.teamId;
+                    if (shot.teamContext === "attack") return teamIdInMatch;
+                    if (shot.teamContext === "defense") return opponentIdInMatch;
+                    return null;
+                  };
                   
                   // Filtruj strzały przeciwnika
                   const opponentShots = allShots.filter(shot => {
-                    const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
-                      ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
-                      : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                    const shotTeamId = resolveShotTeamId(shot);
                     return shotTeamId === opponentIdInMatch;
                   });
                   
                   // Filtruj strzały naszego zespołu
                   const teamShots = allShots.filter(shot => {
-                    const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
-                      ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
-                      : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                    const shotTeamId = resolveShotTeamId(shot);
                     return shotTeamId === teamIdInMatch;
                   });
                   
@@ -3526,7 +3585,56 @@ export default function StatystykiZespoluPage() {
                   const teamXG = teamShots.reduce((sum, shot) => sum + (shot.xG || 0), 0);
                   const teamShotsCount = teamShots.length;
                   const teamXGPerShot = teamShotsCount > 0 ? (teamXG / teamShotsCount) : 0;
-                  
+                  const teamGoals = teamShots.filter((shot: any) => shot.isGoal || shot.shotType === 'goal').length;
+                  const opponentGoals = opponentShots.filter((shot: any) => shot.isGoal || shot.shotType === 'goal').length;
+                  const teamOnTarget = teamShots.filter((s: any) => s.shotType === 'on_target' || s.shotType === 'goal' || s.isGoal).length;
+                  const opponentOnTarget = opponentShots.filter((s: any) => s.shotType === 'on_target' || s.shotType === 'goal' || s.isGoal).length;
+                  const teamOffTarget = teamShots.filter((s: any) => s.shotType === 'off_target').length;
+                  const opponentOffTarget = opponentShots.filter((s: any) => s.shotType === 'off_target').length;
+                  const teamBlocked = teamShots.filter((s: any) => s.shotType === 'blocked').length;
+                  const opponentBlocked = opponentShots.filter((s: any) => s.shotType === 'blocked').length;
+                  const teamXGDelta = teamGoals - teamXG;
+                  const opponentXGDelta = opponentGoals - opponentXG;
+
+                  // xG wg rodzaju: SFG, otwarta gra, regain
+                  const isSfgShot = (shot: any) =>
+                    (shot.actionCategory === 'sfg') ||
+                    shot.actionType === 'corner' || shot.actionType === 'free_kick' ||
+                    shot.actionType === 'direct_free_kick' || shot.actionType === 'penalty' || shot.actionType === 'throw_in';
+                  const teamShotsSFG = teamShots.filter(isSfgShot);
+                  const opponentShotsSFG = opponentShots.filter(isSfgShot);
+                  const teamXGSFG = teamShotsSFG.reduce((sum, s) => sum + (s.xG || 0), 0);
+                  const opponentXGSFG = opponentShotsSFG.reduce((sum, s) => sum + (s.xG || 0), 0);
+                  const allRegainCombined = [
+                    ...allRegainActions,
+                    ...allActions.filter((a: any) => a.isRegain === true || isRegainAction(a)),
+                  ];
+                  const uniqueRegains = Array.from(
+                    new Map(allRegainCombined.map(a => [a.id || `${a.minute}_${a.x}_${a.y}`, a])).values()
+                  );
+                  const regainWithTs = uniqueRegains
+                    .map(a => ({ action: a, ts: (a as any).videoTimestampRaw ?? (a as any).videoTimestamp ?? 0 }))
+                    .filter(x => x.ts > 0)
+                    .sort((a, b) => a.ts - b.ts);
+                  const shotsWithTs = [...teamShots, ...opponentShots]
+                    .map(s => ({ shot: s, ts: (s as any).videoTimestampRaw ?? (s as any).videoTimestamp ?? 0 }))
+                    .filter(x => x.ts > 0);
+                  let teamXGRegain = 0;
+                  let opponentXGRegain = 0;
+                  regainWithTs.forEach((item, i) => {
+                    const nextTs = i < regainWithTs.length - 1 ? regainWithTs[i + 1].ts : Infinity;
+                    const endTs = item.ts + 8;
+                    const regainTeamId = item.action.teamId || (item.action.teamContext === 'attack' ? teamIdInMatch : opponentIdInMatch);
+                    const shotsInWindow = shotsWithTs.filter(
+                      x => x.ts > item.ts && x.ts <= endTs && x.ts < nextTs && resolveShotTeamId(x.shot) === regainTeamId
+                    );
+                    const xg = shotsInWindow.reduce((sum, x) => sum + (x.shot.xG || 0), 0);
+                    if (regainTeamId === teamIdInMatch) teamXGRegain += xg;
+                    else opponentXGRegain += xg;
+                  });
+                  const teamXGOpenPlay = teamXG - teamXGSFG - teamXGRegain;
+                  const opponentXGOpenPlay = opponentXG - opponentXGSFG - opponentXGRegain;
+
                   // Oblicz % strzałów z 1T w strefie 1T (KANONICZNIE, niezależnie od obrotu UI)
                   const teamShots1T = teamShots.filter(isIn1TZoneCanonical);
                   const teamShots1TCount = teamShots1T.length;
@@ -3538,6 +3646,18 @@ export default function StatystykiZespoluPage() {
                     e && e.teamId === selectedTeam && (e.teamContext ?? "attack") === "defense"
                   );
                   const opponentPKEntriesCount = opponentPKEntries.length;
+                  const teamPKEntries = (allPKEntries || []).filter((e: any) =>
+                    e && e.teamId === selectedTeam && (e.teamContext ?? "attack") !== "defense"
+                  );
+                  const teamPKEntriesCount = teamPKEntries.length;
+                  const p2PassesCount = allActions.filter((action: Action) => {
+                    const isOwnAction = !action.teamId || action.teamId === selectedTeam;
+                    return isOwnAction && action.actionType === 'pass' && action.isP2 === true;
+                  }).length;
+                  const p3PassesCount = allActions.filter((action: Action) => {
+                    const isOwnAction = !action.teamId || action.teamId === selectedTeam;
+                    return isOwnAction && action.actionType === 'pass' && action.isP3 === true;
+                  }).length;
                   
                   // Oblicz % strat z isReaction5s === true
                   // 1. Wliczamy wszystkie straty z loses
@@ -4025,223 +4145,487 @@ export default function StatystykiZespoluPage() {
                   const regainsPPToPKShot8sDelta = regainsPPToPKShot8sPercentage - kpiRegainsPPToPKShot8s;
 
                   const radarData = [
-                    {
-                      metric: 'xG/strzał',
-                      value: scoreHigherIsBetter(teamXGPerShot, kpiXGPerShot),
-                      kpi: 100,
-                      actualValue: teamXGPerShot,
-                      actualLabel: `${teamXGPerShot.toFixed(2)} (${teamShotsCount} strzałów)`,
-                      kpiLabel: `KPI > ${kpiXGPerShot.toFixed(2)}`,
-                      deltaLabel: formatDelta(xgPerShotDelta, 'higher', 2),
-                    },
-                    {
-                      metric: '1T',
-                      value: scoreHigherIsBetter(team1TContact1Percentage, kpi1TPercentage),
-                      kpi: 100,
-                      actualValue: team1TContact1Percentage,
-                      actualLabel: `${team1TContact1Percentage.toFixed(1)}%`,
-                      kpiLabel: `KPI ≥ ${kpi1TPercentage}%`,
-                      deltaLabel: formatDelta(oneTDelta, 'higher', 1, 'pp'),
-                    },
-                    {
-                      metric: '5s',
-                      value: scoreHigherIsBetter(reaction5sPercentage, kpiReaction5s),
-                      kpi: 100,
-                      actualValue: reaction5sPercentage,
-                      actualLabel: `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesWith5sFlags.length})`,
-                      kpiLabel: `KPI > ${kpiReaction5s}%`,
-                      deltaLabel: formatDelta(reactionDelta, 'higher', 1, 'pp'),
-                    },
-                    {
-                      metric: 'PK przeciwnik',
-                      value: scoreLowerIsBetter(opponentPKEntriesCount, kpiPKEntries),
-                      kpi: 100,
-                      actualValue: opponentPKEntriesCount,
-                      actualLabel: `${opponentPKEntriesCount}`,
-                      kpiLabel: `KPI < ${kpiPKEntries}`,
-                      deltaLabel: formatDelta(pkDelta, 'lower', 0),
-                    },
-                    {
-                      metric: 'PM Area straty',
-                      value: scoreLowerIsBetter(losesInPMAreaCount, kpiLosesPMAreaCount),
-                      kpi: 100,
-                      actualValue: losesInPMAreaCount,
-                      actualLabel: `${losesInPMAreaCount} (${losesInPMAreaPercentage.toFixed(1)}% z ${allLoses.length})`,
-                      kpiLabel: `KPI ≤ ${kpiLosesPMAreaCount}`,
-                      deltaLabel: formatDelta(losesPmDelta, 'lower', 0),
-                    },
-                    {
-                      metric: 'Przechwyty PP',
-                      value: scoreHigherIsBetter(teamRegainStats.totalRegainsOpponentHalf, kpiRegainsOpponentHalf),
-                      kpi: 100,
-                      actualValue: teamRegainStats.totalRegainsOpponentHalf,
-                      actualLabel: `${teamRegainStats.totalRegainsOpponentHalf}`,
-                      kpiLabel: `KPI ≥ ${kpiRegainsOpponentHalf}`,
-                      deltaLabel: formatDelta(regainsOpponentHalfDelta, 'higher', 0),
-                    },
-                    {
-                      metric: '8s CA',
-                      value: scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s),
-                      kpi: 100,
-                      actualValue: regainsPPToPKShot8sPercentage,
-                      actualLabel: `${regainsPPToPKShot8sPercentage.toFixed(1)}% (${regainsPPWithPKOrShot8s}/${regainsOnOpponentHalfWithTimestamp.length})`,
-                      kpiLabel: `KPI ≥ ${kpiRegainsPPToPKShot8s}%`,
-                      deltaLabel: formatDelta(regainsPPToPKShot8sDelta, 'higher', 1, 'pp'),
-                    },
-                    {
-                      metric: '8s ACC',
-                      value: scoreHigherIsBetter(shotAndPK8sPercentage, target8sAcc),
-                      kpi: 100,
-                      actualValue: shotAndPK8sPercentage,
-                      actualLabel: `${shotAndPK8sPercentage.toFixed(1)}% (${shotAndPK8sCount}/${total8sAcc})`,
-                      kpiLabel: `KPI ≥ ${target8sAcc}%`,
-                      deltaLabel: formatDelta(accDelta, 'higher', 1, 'pp'),
-                    },
+                    { metric: 'xG/strzał', 'KPI': 100, 'Wartość': scoreHigherIsBetter(teamXGPerShot, kpiXGPerShot), value: scoreHigherIsBetter(teamXGPerShot, kpiXGPerShot), actualValue: teamXGPerShot, actualLabel: `${teamXGPerShot.toFixed(2)} (${teamShotsCount} strzałów)`, kpiLabel: `KPI > ${kpiXGPerShot.toFixed(2)}`, deltaLabel: formatDelta(xgPerShotDelta, 'higher', 2) },
+                    { metric: '1T', 'KPI': 100, 'Wartość': scoreHigherIsBetter(team1TContact1Percentage, kpi1TPercentage), value: scoreHigherIsBetter(team1TContact1Percentage, kpi1TPercentage), actualValue: team1TContact1Percentage, actualLabel: `${team1TContact1Percentage.toFixed(1)}%`, kpiLabel: `KPI ≥ ${kpi1TPercentage}%`, deltaLabel: formatDelta(oneTDelta, 'higher', 1, 'pp') },
+                    { metric: '5s', 'KPI': 100, 'Wartość': scoreHigherIsBetter(reaction5sPercentage, kpiReaction5s), value: scoreHigherIsBetter(reaction5sPercentage, kpiReaction5s), actualValue: reaction5sPercentage, actualLabel: `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesWith5sFlags.length})`, kpiLabel: `KPI > ${kpiReaction5s}%`, deltaLabel: formatDelta(reactionDelta, 'higher', 1, 'pp') },
+                    { metric: 'PK przeciwnik', 'KPI': 100, 'Wartość': scoreLowerIsBetter(opponentPKEntriesCount, kpiPKEntries), value: scoreLowerIsBetter(opponentPKEntriesCount, kpiPKEntries), actualValue: opponentPKEntriesCount, actualLabel: `${opponentPKEntriesCount}`, kpiLabel: `KPI < ${kpiPKEntries}`, deltaLabel: formatDelta(pkDelta, 'lower', 0) },
+                    { metric: 'PM Area straty', 'KPI': 100, 'Wartość': scoreLowerIsBetter(losesInPMAreaCount, kpiLosesPMAreaCount), value: scoreLowerIsBetter(losesInPMAreaCount, kpiLosesPMAreaCount), actualValue: losesInPMAreaCount, actualLabel: `${losesInPMAreaCount} (${losesInPMAreaPercentage.toFixed(1)}% z ${allLoses.length})`, kpiLabel: `KPI ≤ ${kpiLosesPMAreaCount}`, deltaLabel: formatDelta(losesPmDelta, 'lower', 0) },
+                    { metric: 'Przechwyty PP', 'KPI': 100, 'Wartość': scoreHigherIsBetter(teamRegainStats.totalRegainsOpponentHalf, kpiRegainsOpponentHalf), value: scoreHigherIsBetter(teamRegainStats.totalRegainsOpponentHalf, kpiRegainsOpponentHalf), actualValue: teamRegainStats.totalRegainsOpponentHalf, actualLabel: `${teamRegainStats.totalRegainsOpponentHalf}`, kpiLabel: `KPI ≥ ${kpiRegainsOpponentHalf}`, deltaLabel: formatDelta(regainsOpponentHalfDelta, 'higher', 0) },
+                    { metric: '8s CA', 'KPI': 100, 'Wartość': scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s), value: scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s), actualValue: regainsPPToPKShot8sPercentage, actualLabel: `${regainsPPToPKShot8sPercentage.toFixed(1)}% (${regainsPPWithPKOrShot8s}/${regainsOnOpponentHalfWithTimestamp.length})`, kpiLabel: `KPI ≥ ${kpiRegainsPPToPKShot8s}%`, deltaLabel: formatDelta(regainsPPToPKShot8sDelta, 'higher', 1, 'pp') },
+                    { metric: '8s ACC', 'KPI': 100, 'Wartość': scoreHigherIsBetter(shotAndPK8sPercentage, target8sAcc), value: scoreHigherIsBetter(shotAndPK8sPercentage, target8sAcc), actualValue: shotAndPK8sPercentage, actualLabel: `${shotAndPK8sPercentage.toFixed(1)}% (${shotAndPK8sCount}/${total8sAcc})`, kpiLabel: `KPI ≥ ${target8sAcc}%`, deltaLabel: formatDelta(accDelta, 'higher', 1, 'pp') },
                   ];
 
-                  const radarTooltip = (props: any) => {
-                    const { data, key: seriesKey, color } = props || {};
-                    if (!data) return null;
-                    
-                    let displayValue: string;
-                    if (seriesKey === 'kpi') {
-                      // Dla KPI pokazuj wartość docelową
-                      const kpiValue = data.metric === 'xG/strzał' ? kpiXGPerShot :
-                                      data.metric === '1T' ? kpi1TPercentage :
-                                      data.metric === '5s' ? kpiReaction5s :
-                                      data.metric === 'PK przeciwnik' ? kpiPKEntries :
-                                      data.metric === 'PM Area straty' ? kpiLosesPMAreaCount :
-                                      data.metric === 'Przechwyty PP' ? kpiRegainsOpponentHalf :
-                                      data.metric === '8s CA' ? kpiRegainsPPToPKShot8s :
-                                      target8sAcc;
-                      // Formatuj do maksymalnie 2 miejsc po przecinku
-                      const isPercentage = data.metric === '1T' || data.metric === '5s' || data.metric === '8s ACC' || data.metric === '8s CA';
-                      const formatted = parseFloat(kpiValue.toFixed(2));
-                      displayValue = isPercentage 
-                        ? `${formatted}%` 
-                        : formatted.toString();
-                    } else {
-                      // Dla rzeczywistej wartości pokazuj actualValue zamiast znormalizowanej
-                      const actualVal = data.actualValue;
-                      // Formatuj do maksymalnie 2 miejsc po przecinku
-                      const isPercentage = data.metric === '1T' || data.metric === '5s' || data.metric === '8s ACC' || data.metric === '8s CA';
-                      const formatted = parseFloat(actualVal.toFixed(2));
-                      displayValue = isPercentage
-                        ? `${formatted}%`
-                        : formatted.toString();
-                    }
-                    
-                    const label = seriesKey === 'kpi' ? 'KPI (cel)' : 'Wartość rzeczywista';
+                  const selectedTeamData = availableTeams.find((team) => team.id === selectedTeam);
+                  const opponentTeamData = availableTeams.find((team) => team.id === opponentIdInMatch);
+                  const isMultiMatchSelection = selectedMatches.length > 1;
+                  const selectedTeamName = selectedTeamData?.name || "Nasz zespół";
+                  const opponentName = isMultiMatchSelection
+                    ? "Przeciwnicy"
+                    : (opponentTeamData?.name || selectedMatchInfo.opponent || "Przeciwnik");
+                  const selectedTeamLogo = (selectedTeamData as any)?.logo || null;
+                  const opponentLogo = isMultiMatchSelection
+                    ? null
+                    : ((opponentTeamData as any)?.logo || selectedMatchInfo.opponentLogo || null);
+                  const scoreModeLabel = "xG";
+                  const possessionData = selectedMatchInfo.matchData?.possession;
+                  const teamPossessionFirstHalf = possessionData?.teamFirstHalf || 0;
+                  const teamPossessionSecondHalf = possessionData?.teamSecondHalf || 0;
+                  const opponentPossessionFirstHalf = possessionData?.opponentFirstHalf || 0;
+                  const opponentPossessionSecondHalf = possessionData?.opponentSecondHalf || 0;
+                  const teamPossessionMinutes = teamPossessionFirstHalf + teamPossessionSecondHalf;
+                  const opponentPossessionMinutes = opponentPossessionFirstHalf + opponentPossessionSecondHalf;
+                  const liveMinutes = teamPossessionMinutes + opponentPossessionMinutes;
+                  const explicitDeadMinutes = (possessionData?.deadFirstHalf || 0) + (possessionData?.deadSecondHalf || 0);
+                  const inferredDeadMinutes = Math.max(0, 45 - (teamPossessionFirstHalf + opponentPossessionFirstHalf))
+                    + Math.max(0, 45 - (teamPossessionSecondHalf + opponentPossessionSecondHalf));
+                  const deadMinutes = explicitDeadMinutes > 0 ? explicitDeadMinutes : inferredDeadMinutes;
+                  const totalTrackedMinutes = liveMinutes + deadMinutes;
+                  const teamPossessionPercent = liveMinutes > 0 ? (teamPossessionMinutes / liveMinutes) * 100 : 0;
+                  const opponentPossessionPercent = liveMinutes > 0 ? (opponentPossessionMinutes / liveMinutes) * 100 : 0;
+                  const deadPercent = totalTrackedMinutes > 0 ? (deadMinutes / totalTrackedMinutes) * 100 : 0;
+                  const formatMinutesToMMSS = (minutes: number): string => {
+                    if (!Number.isFinite(minutes) || minutes <= 0) return "0:00";
+                    const totalSeconds = Math.round(minutes * 60);
+                    const mins = Math.floor(totalSeconds / 60);
+                    const secs = totalSeconds % 60;
+                    return `${mins}:${secs.toString().padStart(2, "0")}`;
+                  };
+
+                  const radarSliceTooltip = ({ index }: { index: string | number; data: readonly { id: string; value: number; formattedValue: string; color: string }[] }) => {
+                    const d = typeof index === 'string'
+                      ? radarData.find((r) => r.metric === index)
+                      : radarData[index];
+                    if (!d) return null;
+                    const actualVal = d.actualValue;
+                    const isPercentage = d.metric === '1T' || d.metric === '5s' || d.metric === '8s ACC' || d.metric === '8s CA';
+                    const valueFormatted = isPercentage
+                      ? `${parseFloat(actualVal.toFixed(1))}%`
+                      : (typeof actualVal === 'number' && actualVal % 1 !== 0 ? actualVal.toFixed(2) : String(actualVal));
+                    const pctWykonania = Math.round(d.value);
+                    const achieved = d.value >= 100;
+                    const statusColor = achieved ? '#059669' : '#dc2626';
+                    const statusLabel = achieved ? 'KPI osiągnięte' : 'KPI nieosiągnięte';
                     return (
                       <div style={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                        backdropFilter: 'blur(20px) saturate(180%)',
-                        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-                        border: '1px solid rgba(0, 0, 0, 0.1)',
+                        backgroundColor: '#1e293b',
+                        border: `2px solid ${statusColor}`,
                         borderRadius: '12px',
-                        padding: '12px 16px',
-                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08)',
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif'
+                        padding: '16px 20px',
+                        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.2)',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif',
+                        minWidth: '200px'
                       }}>
-                        <p style={{ margin: 0, fontWeight: 600, marginBottom: '6px', fontSize: '12px', color: 'rgba(0, 0, 0, 0.8)', letterSpacing: '0.3px' }}>{data.metric}</p>
-                        <p style={{ margin: 0, color: color || '#6366f1', marginBottom: '4px', fontSize: '13px', fontWeight: 600 }}>{label}: {displayValue}</p>
-                        <p style={{ margin: 0, color: '#6366f1', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>{data.actualLabel}</p>
-                        <p style={{ margin: 0, color: '#34C759', fontSize: '11px', fontWeight: 500 }}>{data.kpiLabel} • {data.deltaLabel}</p>
+                        <p style={{ margin: 0, marginBottom: '8px', fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>{valueFormatted}</p>
+                        <p style={{ margin: 0, marginBottom: '8px', fontSize: '13px', color: '#94a3b8', fontWeight: 500 }}>{d.kpiLabel}</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+                          <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: statusColor, flexShrink: 0 }} aria-hidden />
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: statusColor }}>{pctWykonania}% — {statusLabel}</span>
+                        </div>
                       </div>
                     );
                   };
                   
                   return (
-                    <div className={styles.chartContainerInPanel}>
-                      <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-end' }}>
-                        <div style={{ flex: '1 1 50%', minWidth: 0 }}>
-                          <div style={{ height: 420 }}>
-                            <ResponsiveRadar
-                              data={radarData}
-                              keys={['kpi', 'value']}
-                              indexBy="metric"
-                              maxValue={200}
-                              margin={{ top: 40, right: 40, bottom: 40, left: 40 }}
-                              curve="linearClosed"
-                              borderWidth={2}
-                              borderColor={{ from: 'color' }}
-                              gridLevels={6}
-                              gridShape="circular"
-                              gridLabelOffset={12}
-                              enableDots={true}
-                              dotSize={6}
-                              dotBorderWidth={2}
-                              dotBorderColor={{ from: 'color' }}
-                              colors={['#34C759', '#6366f1']}
-                              fillOpacity={0.15}
-                              blendMode="multiply"
-                              motionConfig="wobbly"
-                              tooltip={radarTooltip}
-                              legends={[
-                                {
-                                  anchor: 'top-left',
-                                  direction: 'column',
-                                  translateX: -30,
-                                  translateY: -10,
-                                  itemWidth: 80,
-                                  itemHeight: 16,
-                                  itemTextColor: 'rgba(0, 0, 0, 0.65)',
-                                  symbolSize: 10,
-                                  symbolShape: 'circle',
-                                },
-                              ]}
-                              theme={{
-                                grid: { line: { stroke: 'rgba(0, 0, 0, 0.08)', strokeWidth: 1 } },
-                                dots: { text: { fontSize: 11 } },
-                                axis: {
-                                  ticks: {
-                                    text: {
-                                      fontSize: 12,
-                                      fill: 'rgba(0, 0, 0, 0.65)',
-                                      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif',
-                                      fontWeight: 500,
+                    <div className={`${styles.chartContainerInPanel} ${styles.kpiDashboardPanel}`}>
+                      <div className={styles.kpiTopRow}>
+                        <div className={styles.kpiMatchHeader}>
+                          <div className={styles.kpiRadarColumn}>
+                            <div className={styles.kpiRadarWrapper}>
+                              <ResponsiveRadar
+                                data={radarData}
+                                keys={['KPI', 'Wartość']}
+                                indexBy="metric"
+                                maxValue={200}
+                                margin={{ top: 40, right: 40, bottom: 40, left: 40 }}
+                                curve="linearClosed"
+                                borderWidth={2}
+                                borderColor={{ from: 'color' }}
+                                gridLevels={6}
+                                gridShape="circular"
+                                gridLabelOffset={12}
+                                enableDots={true}
+                                dotSize={6}
+                                dotBorderWidth={2}
+                                dotBorderColor={{ from: 'color' }}
+                                colors={['#34C759', '#6366f1']}
+                                fillOpacity={0.15}
+                                blendMode="multiply"
+                                motionConfig="wobbly"
+                                sliceTooltip={radarSliceTooltip}
+                                legends={[
+                                  {
+                                    anchor: 'top-left',
+                                    direction: 'column',
+                                    translateX: -30,
+                                    translateY: -10,
+                                    itemWidth: 80,
+                                    itemHeight: 16,
+                                    itemTextColor: 'rgba(0, 0, 0, 0.65)',
+                                    symbolSize: 10,
+                                    symbolShape: 'circle',
+                                  },
+                                ]}
+                                theme={{
+                                  grid: { line: { stroke: 'rgba(0, 0, 0, 0.08)', strokeWidth: 1 } },
+                                  dots: { text: { fontSize: 11 } },
+                                  axis: {
+                                    ticks: {
+                                      text: {
+                                        fontSize: 12,
+                                        fill: 'rgba(0, 0, 0, 0.65)',
+                                        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif',
+                                        fontWeight: 500,
+                                      },
                                     },
                                   },
-                                },
-                              }}
-                            />
+                                }}
+                              />
+                            </div>
                           </div>
-                      
-                          {/* Podsumowanie KPI pod spidermapą */}
-                          {(() => {
-                            const kpiCount = 8; // Całkowita liczba KPI
-                            let realizedKpiCount = 0;
-                            
-                            if (shotAndPK8sPercentage >= target8sAcc) realizedKpiCount++;
-                            if (teamXGPerShot >= kpiXGPerShot) realizedKpiCount++;
-                            if (team1TContact1Percentage >= kpi1TPercentage) realizedKpiCount++;
-                            if (opponentPKEntriesCount <= kpiPKEntries) realizedKpiCount++;
-                            if (reaction5sPercentage >= kpiReaction5s) realizedKpiCount++;
-                            if (losesInPMAreaCount <= kpiLosesPMAreaCount) realizedKpiCount++;
-                            if (teamRegainStats.totalRegainsOpponentHalf >= kpiRegainsOpponentHalf) realizedKpiCount++;
-                            if (regainsPPToPKShot8sPercentage >= kpiRegainsPPToPKShot8s) realizedKpiCount++;
-                            
-                            const kpiPercentage = (realizedKpiCount / kpiCount) * 100;
-                            const isKpiGood = kpiPercentage >= 50;
-                            
-                            return (
-                              <div className={`${styles.statTile} ${isKpiGood ? styles.statTileGood : styles.statTileBad}`} style={{ marginTop: '20px' }}>
-                                <div className={styles.statTileLabel}>KPI ZREALIZOWANE</div>
-                                <div className={styles.statTileValue}>
-                                  {kpiPercentage.toFixed(1)}%
+                          <div className={styles.kpiScoreSection}>
+                          <div className={styles.kpiScoreSectionLogos} aria-hidden>
+                            <span className={styles.kpiScoreSectionLogoWrap}>
+                              {selectedTeamLogo ? (
+                                <img src={selectedTeamLogo} alt="" className={styles.kpiScoreSectionLogo} />
+                              ) : (
+                                <span className={styles.kpiScoreSectionLogoPlaceholder}>{selectedTeamName.slice(0, 2)}</span>
+                              )}
+                              <span className={styles.kpiScoreSectionTeamName}>{selectedTeamName}</span>
+                            </span>
+                            <div
+                              className={styles.kpiScoreSectionScoreBetween}
+                              title={`xG nad bramką (my): ${(teamXG - teamGoals) >= 0 ? '+' : ''}${(teamXG - teamGoals).toFixed(2)} · xG pod bramką (rywal): ${(opponentXG - opponentGoals) >= 0 ? '+' : ''}${(opponentXG - opponentGoals).toFixed(2)}`}
+                            >
+                              <span className={styles.kpiScoreLineGoals}>{teamGoals} : {opponentGoals}</span>
+                              <span className={styles.kpiScoreSectionScoreBetweenSub} aria-hidden>
+                                <span className={(teamXG - teamGoals) >= 0 ? styles.kpiXGDeltaNegative : styles.kpiXGDeltaPositive}>
+                                  {(teamXG - teamGoals) >= 0 ? '+' : ''}{(teamXG - teamGoals).toFixed(2)}
+                                </span>
+                                {' : '}
+                                <span className={(opponentXG - opponentGoals) >= 0 ? styles.kpiXGDeltaNegative : styles.kpiXGDeltaPositive}>
+                                  {(opponentXG - opponentGoals) >= 0 ? '+' : ''}{(opponentXG - opponentGoals).toFixed(2)}
+                                </span>
+                              </span>
+                            </div>
+                            <span className={styles.kpiScoreSectionLogoWrap}>
+                              {opponentLogo ? (
+                                <img src={opponentLogo} alt="" className={styles.kpiScoreSectionLogo} />
+                              ) : (
+                                <span className={styles.kpiScoreSectionLogoPlaceholder}>{(opponentName || '').slice(0, 2)}</span>
+                              )}
+                              <span className={styles.kpiScoreSectionTeamName}>{opponentName}</span>
+                            </span>
+                          </div>
+                          <div className={styles.kpiScoreMetrics}>
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              className={`${styles.kpiScoreRowClickable} ${kpiXgRowExpanded ? styles.kpiScoreRowClickableExpanded : ''}`}
+                              onClick={() => setKpiXgRowExpanded(!kpiXgRowExpanded)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiXgRowExpanded(!kpiXgRowExpanded); } }}
+                              title={kpiXgRowExpanded ? 'Kliknij, aby zwinąć' : 'Kliknij, aby rozwinąć szczegóły xG'}
+                              aria-expanded={kpiXgRowExpanded}
+                            >
+                              <div className={styles.kpiScoreRowPossessionLeft}>
+                                <span className={styles.kpiScoreRowLabelWithIcon}>
+                                  {selectedMatchInfo && (
+                                    <button
+                                      type="button"
+                                      className={styles.kpiMapIconButton}
+                                      onClick={(e) => { e.stopPropagation(); setXgMapModalOpen(true); }}
+                                      title="Otwórz mapę xG"
+                                      aria-label="Otwórz mapę xG"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+                                        <line x1="8" y1="2" x2="8" y2="18" />
+                                        <line x1="16" y1="6" x2="16" y2="22" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                  <span className={styles.kpiScoreRowLabel}>xG</span>
+                                </span>
+                                <span
+                                  className={`${styles.kpiScoreRowCombinedDeadTime} ${(teamXG - opponentXG) >= 0 ? styles.kpiXGDeltaPositive : styles.kpiXGDeltaNegative}`}
+                                  aria-hidden
+                                >
+                                  {(teamXG - opponentXG) >= 0 ? '+' : ''}{(teamXG - opponentXG).toFixed(2)}
+                                </span>
+                              </div>
+                              <span className={styles.kpiScoreRowValuesWithIcon}>
+                                <span>{teamXG.toFixed(2)} : {opponentXG.toFixed(2)}</span>
+                                <span className={styles.kpiScoreRowExpandIcon} aria-hidden>
+                                  {kpiXgRowExpanded ? (
+                                    <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  ) : (
+                                    <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  )}
+                                </span>
+                              </span>
+                            </div>
+                            {kpiXgRowExpanded && (
+                              <div className={styles.kpiScoreGoalsDetails}>
+                                <div className={styles.kpiScoreRow}>
+                                  <span className={styles.kpiScoreRowLabel}>Otwarta gra</span>
+                                  <span className={styles.kpiScoreRowValues}>
+                                    {teamXGOpenPlay.toFixed(2)}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({teamXG > 0 ? Math.round(teamXGOpenPlay / teamXG * 100) : 0}%)
+                                    </span>
+                                    {' : '}
+                                    {opponentXGOpenPlay.toFixed(2)}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({opponentXG > 0 ? Math.round(opponentXGOpenPlay / opponentXG * 100) : 0}%)
+                                    </span>
+                                  </span>
                                 </div>
-                                <div className={styles.statTileSecondary}>
-                                  {realizedKpiCount}/{kpiCount} KPI
+                                <div className={styles.kpiScoreRow}>
+                                  <span className={styles.kpiScoreRowLabel}>SFG</span>
+                                  <span className={styles.kpiScoreRowValues}>
+                                    {teamXGSFG.toFixed(2)}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({teamXG > 0 ? Math.round(teamXGSFG / teamXG * 100) : 0}%)
+                                    </span>
+                                    {' : '}
+                                    {opponentXGSFG.toFixed(2)}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({opponentXG > 0 ? Math.round(opponentXGSFG / opponentXG * 100) : 0}%)
+                                    </span>
+                                  </span>
+                                </div>
+                                <div className={styles.kpiScoreRow}>
+                                  <span className={styles.kpiScoreRowLabel}>Regain</span>
+                                  <span className={styles.kpiScoreRowValues}>
+                                    {teamXGRegain.toFixed(2)}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({teamXG > 0 ? Math.round(teamXGRegain / teamXG * 100) : 0}%)
+                                    </span>
+                                    {' : '}
+                                    {opponentXGRegain.toFixed(2)}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({opponentXG > 0 ? Math.round(opponentXGRegain / opponentXG * 100) : 0}%)
+                                    </span>
+                                  </span>
                                 </div>
                               </div>
-                            );
-                          })()}
+                            )}
+                            {(() => {
+                              const kpiCount = 8;
+                              let realizedKpiCount = 0;
+                              if (shotAndPK8sPercentage >= target8sAcc) realizedKpiCount++;
+                              if (teamXGPerShot >= kpiXGPerShot) realizedKpiCount++;
+                              if (team1TContact1Percentage >= kpi1TPercentage) realizedKpiCount++;
+                              if (opponentPKEntriesCount <= kpiPKEntries) realizedKpiCount++;
+                              if (reaction5sPercentage >= kpiReaction5s) realizedKpiCount++;
+                              if (losesInPMAreaCount <= kpiLosesPMAreaCount) realizedKpiCount++;
+                              if (teamRegainStats.totalRegainsOpponentHalf >= kpiRegainsOpponentHalf) realizedKpiCount++;
+                              if (regainsPPToPKShot8sPercentage >= kpiRegainsPPToPKShot8s) realizedKpiCount++;
+                              const kpiPercentage = (realizedKpiCount / kpiCount) * 100;
+                              const avgWykonanie = radarData.length > 0
+                                ? radarData.reduce((sum, r) => sum + r.value, 0) / radarData.length
+                                : 0;
+                              const isKpiGood = kpiPercentage >= 50;
+                              return (
+                                <div
+                                  className={`${styles.kpiScoreRowCombined} ${isKpiGood ? styles.kpiScoreRowKpiGood : styles.kpiScoreRowKpiBad}`}
+                                  aria-label="KPI zrealizowane"
+                                >
+                                  <div className={styles.kpiScoreRowCombinedMain}>
+                                    <div className={styles.kpiScoreRowCombinedBlock}>
+                                      <span className={styles.kpiScoreRowLabel}>KPI zrealizowane</span>
+                                      <span className={styles.kpiScoreRowValues}>
+                                        {kpiPercentage.toFixed(1)}%{' '}
+                                        <span className={styles.kpiScoreRowValuesPossessionTime}>
+                                          ({realizedKpiCount}/{kpiCount} KPI)
+                                        </span>
+                                        {' · '}
+                                        <span className={styles.kpiScoreRowValuesPossessionTime}>
+                                          śr. wykonanie: {avgWykonanie.toFixed(0)}%
+                                        </span>
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              className={`${styles.kpiScoreRowClickable} ${kpiShotsRowExpanded ? styles.kpiScoreRowClickableExpanded : ''}`}
+                              onClick={() => setKpiShotsRowExpanded(!kpiShotsRowExpanded)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiShotsRowExpanded(!kpiShotsRowExpanded); } }}
+                              title={kpiShotsRowExpanded ? 'Kliknij, aby zwinąć' : 'Kliknij, aby rozwinąć szczegóły strzałów'}
+                              aria-expanded={kpiShotsRowExpanded}
+                            >
+                              <span className={styles.kpiScoreRowLabelWithIcon}>
+                                {selectedMatchInfo && (
+                                  <button
+                                    type="button"
+                                    className={styles.kpiMapIconButton}
+                                    onClick={(e) => { e.stopPropagation(); setXgMapModalOpen(true); }}
+                                    title="Otwórz mapę xG"
+                                    aria-label="Otwórz mapę xG"
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                      <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+                                      <line x1="8" y1="2" x2="8" y2="18" />
+                                      <line x1="16" y1="6" x2="16" y2="22" />
+                                    </svg>
+                                  </button>
+                                )}
+                                <span className={styles.kpiScoreRowLabel}>Strzały</span>
+                              </span>
+                              <span className={styles.kpiScoreRowValuesWithIcon}>
+                                <span>{teamShotsCount} : {opponentShotsCount}</span>
+                                <span className={styles.kpiScoreRowExpandIcon} aria-hidden>
+                                  {kpiShotsRowExpanded ? (
+                                    <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  ) : (
+                                    <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  )}
+                                </span>
+                              </span>
+                            </div>
+                            {kpiShotsRowExpanded && (
+                              <div className={styles.kpiScoreGoalsDetails}>
+                                <div className={styles.kpiScoreRow}>
+                                  <span className={styles.kpiScoreRowLabel}>Celne</span>
+                                  <span className={styles.kpiScoreRowValues}>
+                                    {teamOnTarget}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({teamShotsCount > 0 ? Math.round(teamOnTarget / teamShotsCount * 100) : 0}%)
+                                    </span>
+                                    {' : '}
+                                    {opponentOnTarget}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({opponentShotsCount > 0 ? Math.round(opponentOnTarget / opponentShotsCount * 100) : 0}%)
+                                    </span>
+                                  </span>
+                                </div>
+                                <div className={styles.kpiScoreRow}>
+                                  <span className={styles.kpiScoreRowLabel}>Niecelne</span>
+                                  <span className={styles.kpiScoreRowValues}>
+                                    {teamOffTarget}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({teamShotsCount > 0 ? Math.round(teamOffTarget / teamShotsCount * 100) : 0}%)
+                                    </span>
+                                    {' : '}
+                                    {opponentOffTarget}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({opponentShotsCount > 0 ? Math.round(opponentOffTarget / opponentShotsCount * 100) : 0}%)
+                                    </span>
+                                  </span>
+                                </div>
+                                <div className={styles.kpiScoreRow}>
+                                  <span className={styles.kpiScoreRowLabel}>Zablokowane</span>
+                                  <span className={styles.kpiScoreRowValues}>
+                                    {teamBlocked}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({teamShotsCount > 0 ? Math.round(teamBlocked / teamShotsCount * 100) : 0}%)
+                                    </span>
+                                    {' : '}
+                                    {opponentBlocked}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({opponentShotsCount > 0 ? Math.round(opponentBlocked / opponentShotsCount * 100) : 0}%)
+                                    </span>
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            <div className={styles.kpiScoreRow}>
+                              <span className={styles.kpiScoreRowLabelWithIcon}>
+                                {selectedMatchInfo && (
+                                  <button
+                                    type="button"
+                                    className={styles.kpiMapIconButton}
+                                    onClick={() => setPkMapModalOpen(true)}
+                                    title="Otwórz mapę wejść w PK"
+                                    aria-label="Otwórz mapę wejść w pole karne"
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                      <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+                                      <line x1="8" y1="2" x2="8" y2="18" />
+                                      <line x1="16" y1="6" x2="16" y2="22" />
+                                    </svg>
+                                  </button>
+                                )}
+                                <span className={styles.kpiScoreRowLabel}>PK</span>
+                              </span>
+                              <span className={styles.kpiScoreRowValues}>{teamPKEntriesCount} : {opponentPKEntriesCount}</span>
+                            </div>
+                            <div
+                              className={styles.kpiScoreRowCombined}
+                              aria-label="Posiadanie i czas martwy"
+                            >
+                              <div className={styles.kpiScoreRowCombinedMain}>
+                                <div className={styles.kpiScoreRowCombinedBlock}>
+                                  <div className={styles.kpiScoreRowPossessionLeft}>
+                                    <span className={styles.kpiScoreRowLabel}>Posiadanie</span>
+                                    <span className={styles.kpiScoreRowCombinedDeadTime} aria-hidden>
+                                      Czas martwy: {Math.round(deadPercent)}% ({formatMinutesToMMSS(deadMinutes)})
+                                    </span>
+                                  </div>
+                                  <span className={styles.kpiScoreRowValuesPossessionWrap}>
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {Math.round(teamPossessionPercent)}%{' '}
+                                      <span className={styles.kpiScoreRowValuesPossessionTime}>
+                                        ({formatMinutesToMMSS(teamPossessionMinutes)})
+                                      </span>
+                                    </span>
+                                    <span className={styles.kpiScoreRowValues}> : </span>
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {Math.round(opponentPossessionPercent)}%{' '}
+                                      <span className={styles.kpiScoreRowValuesPossessionTime}>
+                                        ({formatMinutesToMMSS(opponentPossessionMinutes)})
+                                      </span>
+                                    </span>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className={`${styles.kpiScoreRowCombined} ${styles.kpiScoreRowP3Clickable}`}
+                              onClick={() => {
+                                setSelectedKpiForVideo(selectedKpiForVideo === 'p2p3-passes' ? null : 'p2p3-passes');
+                                setExpandedKpiForPlayers(null);
+                              }}
+                              title="Podania P2/P3 – nie wlicza się do KPI"
+                              aria-label="Podania P2/P3, nie wlicza się do KPI"
+                            >
+                              <div className={styles.kpiScoreRowCombinedMain}>
+                                <div className={styles.kpiScoreRowCombinedBlock}>
+                                  <span className={styles.kpiScoreRowLabel}>Podania P2/P3</span>
+                                  <span className={styles.kpiScoreRowValues}>{p2PassesCount}/{p3PassesCount}</span>
+                                </div>
+                              </div>
+                            </button>
+                            {(() => {
+                              const findKey = (t: Record<string, any>, keys: string[]) => keys.find(k => Object.prototype.hasOwnProperty.call(t, k));
+                              const totalDistM = gpsMatchDayData.reduce((sum, e) => {
+                                const k = findKey(e.total ?? {}, ['Total Distance', 'Total distance', 'Distance']);
+                                const v = k != null && e.total?.[k] != null ? Number(e.total[k]) : NaN;
+                                return sum + (Number.isFinite(v) ? v : 0);
+                              }, 0);
+                              if (totalDistM > 0) {
+                                const km = totalDistM / 1000;
+                                return (
+                                  <div className={styles.kpiScoreRow}>
+                                    <span className={styles.kpiScoreRowLabel}>Łączny dystans</span>
+                                    <span className={styles.kpiScoreRowValues}>{km >= 1 ? km.toFixed(1) : totalDistM.toFixed(0)} {km >= 1 ? 'km' : 'm'}</span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
                         </div>
-                        
-                        {/* Sekcja KPI 8s ACC po prawej stronie */}
-                        <div style={{ flex: '1 1 50%', minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
+                      </div>
+
+                      <div className={styles.kpiMainGrid}>
+                        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
                         {/* Kafelki statystyk */}
-                        <div className={styles.statsTiles} style={{ marginTop: 'auto' }}>
+                        <div className={`${styles.statsTiles} ${styles.kpiCompactTiles}`} style={{ marginTop: 'auto' }}>
                           {(() => {
                             const isPKOpponentBad = opponentPKEntriesCount > kpiPKEntries;
                             const isLosesPMAreaBad = losesInPMAreaCount > kpiLosesPMAreaCount;
@@ -5488,10 +5872,11 @@ export default function StatystykiZespoluPage() {
                 return null;
                         })()}
                       </div>
+                    </div>
                   );
                 })()}
-                    </div>
-              
+              </div>
+
               {/* Legenda dla xG/strzał - nad panelem wideo */}
               {selectedKpiForVideo === 'xg-per-shot' && (
                 <div style={{ 
@@ -5644,9 +6029,14 @@ export default function StatystykiZespoluPage() {
                 {/* Wyświetl czasy zagrań nad wideo dla wybranego KPI */}
                 {selectedKpiForVideo && selectedMatchInfo && (() => {
                   // Oblicz potrzebne zmienne (takie same jak w bloku KPI)
-                  const isSelectedTeamHome = selectedMatchInfo.isHome;
                   const teamIdInMatch = selectedTeam;
-                  const opponentIdInMatch = isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team;
+                  const opponentIdInMatch = selectedMatchInfo.opponent;
+                  const resolveShotTeamId = (shot: any): string | null => {
+                    if (shot.teamId) return shot.teamId;
+                    if (shot.teamContext === "attack") return teamIdInMatch;
+                    if (shot.teamContext === "defense") return opponentIdInMatch;
+                    return null;
+                  };
                   
                   // Funkcje pomocnicze
                   const convertZoneToName = (zone: any): string | null => {
@@ -5715,9 +6105,7 @@ export default function StatystykiZespoluPage() {
                   } else if (selectedKpiForVideo === 'xg-per-shot') {
                     // Wszystkie strzały naszego zespołu
                     let teamShotsFiltered = (allShots || []).filter((shot: any) => {
-                      const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
-                        ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
-                        : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                      const shotTeamId = resolveShotTeamId(shot);
                       return shotTeamId === teamIdInMatch &&
                         shot && 
                         (shot.videoTimestampRaw !== undefined && shot.videoTimestampRaw !== null ||
@@ -5745,9 +6133,7 @@ export default function StatystykiZespoluPage() {
                   } else if (selectedKpiForVideo === '1t-percentage') {
                     // Wszystkie strzały naszego zespołu w strefie 1T
                     let teamShots1TFiltered = (allShots || []).filter((shot: any) => {
-                      const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
-                        ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
-                        : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                      const shotTeamId = resolveShotTeamId(shot);
                       return shotTeamId === teamIdInMatch &&
                         isIn1TZoneCanonical(shot) &&
                         shot && 
@@ -5959,9 +6345,7 @@ export default function StatystykiZespoluPage() {
                       .sort((a, b) => a.timestamp - b.timestamp);
                     
                     const teamShotsForCA = (allShots || []).filter((shot: any) => {
-                      const shotTeamId = shot.teamId || (shot.teamContext === 'attack' 
-                        ? (isSelectedTeamHome ? selectedMatchInfo.team : selectedMatchInfo.opponent)
-                        : (isSelectedTeamHome ? selectedMatchInfo.opponent : selectedMatchInfo.team));
+                      const shotTeamId = resolveShotTeamId(shot);
                       return shotTeamId === teamIdInMatch;
                     });
                     
@@ -6030,6 +6414,32 @@ export default function StatystykiZespoluPage() {
                         };
                       })
                       .filter((entry: any) => entry.time) // Filtruj tylko te z timestamp (tak jak w liście zawodników - if (!time) return null)
+                      .sort((a, b) => a.time - b.time);
+                  } else if (selectedKpiForVideo === 'p2p3-passes') {
+                    // Podania naszego zespołu kończące się w P2 lub P3
+                    let p2p3PassesWithTime = (allActions || []).filter((action: any) => {
+                      const isOwnAction = !action.teamId || action.teamId === selectedTeam;
+                      return isOwnAction &&
+                        action.actionType === 'pass' &&
+                        (action.isP2 === true || action.isP3 === true) &&
+                        (
+                          (action.videoTimestampRaw !== undefined && action.videoTimestampRaw !== null) ||
+                          (action.videoTimestamp !== undefined && action.videoTimestamp !== null)
+                        );
+                    });
+
+                    if (selectedPlayerForVideo) {
+                      p2p3PassesWithTime = p2p3PassesWithTime.filter((action: any) => action.senderId === selectedPlayerForVideo);
+                    }
+
+                    entriesWithTime = p2p3PassesWithTime
+                      .map((action: any) => ({
+                        item: action,
+                        time: action.videoTimestamp !== undefined && action.videoTimestamp !== null
+                          ? action.videoTimestamp
+                          : action.videoTimestampRaw,
+                        isSuccessful: true
+                      }))
                       .sort((a, b) => a.time - b.time);
                   }
                   
@@ -6129,6 +6539,7 @@ export default function StatystykiZespoluPage() {
                   isVisible={true}
                   isFullscreen={true}
                 />
+              </div>
               </div>
               </Fragment>
             )}
@@ -7804,7 +8215,7 @@ export default function StatystykiZespoluPage() {
                 <h3>xG</h3>
                 
                 {/* Boisko z otagowanymi strzałami */}
-                {selectedMatch && allShots.length > 0 && (
+                {selectedMatches.length > 0 && allShots.length > 0 && (
                   <div className={styles.xgPitchSection}>
                     {/* Przełącznik połowy i filtr kategorii - na samej górze */}
                     <div className={styles.xgHalfSelector}>
@@ -8428,7 +8839,7 @@ export default function StatystykiZespoluPage() {
                       <div className={styles.chartContainerInPanel}>
                         <div className={styles.chartHeader}>
                           <h3>Przyrost xG w czasie meczu</h3>
-                          {selectedMatch && xgChartData.length > 0 && (
+                          {selectedMatches.length > 0 && xgChartData.length > 0 && (
                             <span className={styles.chartInfo}>{allShots.length} strzałów</span>
                           )}
                         </div>
@@ -10016,7 +10427,7 @@ export default function StatystykiZespoluPage() {
                 <h3>Szczegóły PxT</h3>
 
       {/* Statystyki połówek */}
-      {selectedMatch && allActions.length > 0 && (
+      {selectedMatches.length > 0 && allActions.length > 0 && (
                   <div className={styles.halfTimeStatsInPanel}>
                     <div className={styles.halfTimeHeaderWithType}>
                       <h4>Statystyki połówek</h4>
@@ -10760,7 +11171,7 @@ export default function StatystykiZespoluPage() {
       )}
 
                 {/* Heatmapa zespołu */}
-                {selectedMatch && allActions.length > 0 && (
+                {selectedMatches.length > 0 && allActions.length > 0 && (
                   <div className={styles.teamHeatmapSectionInPanel}>
                     <div className={styles.heatmapHeaderInPanel}>
                       <h4>Heatmapa</h4>
@@ -10927,8 +11338,8 @@ export default function StatystykiZespoluPage() {
                 {/* Wykresy */}
         {isLoadingActions ? (
                   <p className={styles.loadingText}>Ładowanie akcji...</p>
-        ) : !selectedMatch ? (
-                  <p className={styles.noDataText}>Wybierz mecz, aby zobaczyć statystyki.</p>
+) : selectedMatches.length === 0 ? (
+          <p className={styles.noDataText}>Wybierz mecz, aby zobaczyć statystyki.</p>
         ) : teamChartData.length === 0 ? (
                   <p className={styles.noDataText}>Brak danych dla wybranego meczu.</p>
                 ) : (
@@ -10936,7 +11347,7 @@ export default function StatystykiZespoluPage() {
                     <div className={styles.chartContainerInPanel}>
                       <div className={styles.chartHeader}>
                         <h3>Przyrost statystyk zespołu w czasie meczu</h3>
-                        {!isLoadingActions && selectedMatch && teamChartData.length > 0 && (
+                        {!isLoadingActions && selectedMatches.length > 0 && teamChartData.length > 0 && (
                           <span className={styles.chartInfo}>{allActions.length} akcji</span>
                         )}
                       </div>
@@ -11073,6 +11484,58 @@ export default function StatystykiZespoluPage() {
       </div>
             )}
       </div>
+        </div>
+      )}
+
+      {/* Modal – mapa xG (strzały) */}
+      {xgMapModalOpen && selectedMatchInfo && (
+        <div className={styles.mapsModalOverlay} onClick={() => setXgMapModalOpen(false)}>
+          <div className={styles.mapsModalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.mapsModalBody}>
+              <div className={styles.mapsModalPitchWrap}>
+                {allShots.length > 0 ? (
+                  <XGPitch
+                    shots={allShots}
+                    onShotAdd={() => {}}
+                    players={players}
+                    onShotClick={(shot) => setSelectedShot(shot)}
+                    selectedShotId={selectedShot?.id}
+                    matchInfo={selectedMatchInfo}
+                    allTeams={availableTeams}
+                    hideToggleButton={true}
+                  />
+                ) : (
+                  <p className={styles.mapsModalEmpty}>Brak strzałów do wyświetlenia.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal – mapa wejść w PK */}
+      {pkMapModalOpen && selectedMatchInfo && (
+        <div className={styles.mapsModalOverlay} onClick={() => setPkMapModalOpen(false)}>
+          <div className={styles.mapsModalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.mapsModalBody}>
+              <div className={styles.mapsModalPitchWrap}>
+                {pkEntriesFilteredForView.length > 0 ? (
+                  <PKEntriesPitch
+                    pkEntries={pkEntriesFilteredForView}
+                    onEntryClick={() => {}}
+                    selectedEntryId={undefined}
+                    matchInfo={selectedMatchInfo}
+                    allTeams={availableTeams}
+                    hideTeamLogos={true}
+                    hideFlipButton={false}
+                    hideInstructions={true}
+                  />
+                ) : (
+                  <p className={styles.mapsModalEmpty}>Brak wejść w PK do wyświetlenia.</p>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

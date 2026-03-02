@@ -22,6 +22,10 @@ const nextConfig = {
     serverComponentsExternalPackages: ['@firebase/firestore', '@firebase/auth', '@firebase/storage'],
   },
   webpack: (config, { isServer, dev }) => {
+    // Wyłączenie cache w dev redukuje ostrzeżenia PackFileCacheStrategy i ENOENT vendor-chunks
+    if (dev) {
+      config.cache = false;
+    }
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,

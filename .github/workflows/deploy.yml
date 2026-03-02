@@ -36,6 +36,13 @@ jobs:
       - name: Instalacja Firebase CLI
         run: npm install -g firebase-tools
 
+      - name: Sprawdzenie FIREBASE_TOKEN
+        run: |
+          if [ -z "${{ secrets.FIREBASE_TOKEN }}" ]; then
+            echo "::error::Secret FIREBASE_TOKEN nie jest ustawiony. GitHub → Settings → Secrets and variables → Actions → New repository secret. Wygeneruj token: firebase login:ci (lub npx firebase-tools login:ci)"
+            exit 1
+          fi
+
       - name: Wdrożenie reguł Firestore
         run: firebase deploy --only firestore:rules --token ${{ secrets.FIREBASE_TOKEN }}
         

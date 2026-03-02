@@ -220,6 +220,44 @@
   outline: none;
 }
 
+.matchSelectOptionRow {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.matchSelectOptionLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #1f2937;
+  transition: background 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.matchSelectOptionLabel:hover {
+  background: #f3f4f6;
+}
+
+.matchSelectCheckbox {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.matchSelectOptionText {
+  flex: 1;
+  white-space: normal;
+  line-height: 1.3;
+  text-align: left;
+}
+
 .noMatchesCompact {
   padding: 8px 10px;
   color: #9ca3af;
@@ -723,6 +761,17 @@
   padding: 20px;
 }
 
+.mapsModalOverlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
 .modalContent {
   background-color: white;
   border-radius: 12px;
@@ -733,6 +782,89 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.mapsModalContent {
+  background-color: white;
+  width: 85%;
+  max-width: 85vw;
+  height: 85vh;
+  max-height: 85vh;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mapsModalContent .modalHeader {
+  flex-shrink: 0;
+}
+
+.mapsModalBody {
+  flex: 1;
+  padding: 16px 24px 24px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mapsModalSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mapsModalSectionTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.mapsModalPitchWrap {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  container-type: size;
+  container-name: pitch-modal;
+}
+
+.mapsModalPitchWrap :global([class*="pitchContainer"]) {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+/* Boisko foremne (105m/68m = 1.544): dopasowanie do obu wymiarów bez rozciągania */
+@container pitch-modal (min-width: 0) {
+  .mapsModalPitchWrap :global([class*="pitchWrapper"]) {
+    width: min(100cqw, 100cqh * 1.544);
+    height: min(100cqh, 100cqw / 1.544);
+    flex-shrink: 0;
+    position: relative;
+  }
+}
+
+.mapsModalEmpty {
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+  font-size: 14px;
+  color: #6b7280;
+  background: #f9fafb;
+  border-radius: 8px;
 }
 
 .modalHeader {
@@ -2396,6 +2528,12 @@
   flex-shrink: 0;
 }
 
+.matchChartContainer {
+  /* Mapa na 80% szerokości (wcześniej 100%) */
+  width: 80%;
+  margin: 0 auto;
+}
+
 .xgMapFilters {
   display: flex;
   flex-direction: column;
@@ -2458,6 +2596,9 @@
 
 .xgPitchWrapper {
   flex: 1;
+  /* Mapa na 80% szerokości (wcześniej 100%) */
+  width: 80%;
+  max-width: 100%;
   padding: 20px;
   padding-bottom: 16px;
 }
@@ -2708,6 +2849,709 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
+.kpiDashboardPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kpiTopRow {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.kpiTopRow .kpiMatchHeader {
+  width: 100%;
+}
+
+.kpiTopRow .kpiRadarColumn {
+  min-width: 0;
+}
+
+.kpiMatchHeader {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #dbe2ea;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+.kpiMatchHeader .kpiScoreSection {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.kpiMatchHeader .kpiRadarColumn {
+  flex: 1 1 360px;
+  min-width: 280px;
+  max-width: 420px;
+}
+
+.kpiMatchHeader .kpiScoreSection {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.kpiQuickStatsInHeader {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+}
+
+.kpiQuickStatsInHeader .kpiQuickStatCard {
+  min-width: 140px;
+}
+
+.kpiTeamSide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 12px;
+  min-height: 54px;
+  justify-content: center;
+}
+
+.kpiTeamSide:last-child {
+  justify-content: center;
+}
+
+.kpiTeamLogo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  flex-shrink: 0;
+  order: -1;
+}
+
+.kpiTeamName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kpiScoreSection {
+  text-align: left;
+  width: 100%;
+  border: 1px solid #dbe2ea;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 10px 14px 12px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+.kpiScoreSectionLogos {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.kpiScoreSectionScoreBetween {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.kpiScoreSectionScoreBetween .kpiScoreLineGoals {
+  margin: 0;
+}
+
+.kpiScoreSectionScoreBetweenSub {
+  font-size: 10px;
+  font-weight: 500;
+  color: #94a3b8;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiScoreSectionLogoWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+}
+
+.kpiScoreSectionTeamName {
+  font-size: 11px;
+  font-weight: 400;
+  color: #64748b;
+  text-align: center;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kpiScoreSectionLogo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.kpiScoreSectionLogoPlaceholder {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  background: #f1f5f9;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.kpiScoreLabel {
+  font-size: 10px;
+  color: #1d4ed8;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  font-weight: 700;
+}
+
+.kpiScoreLineGoals {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+  margin: 2px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiScoreLine {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+  margin: 2px 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiScoreSeparator {
+  color: #6b7280;
+}
+
+.kpiScoreSubline {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
+.kpiScoreMetrics {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kpiScoreRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.kpiScoreRowLabel {
+  font-size: 11px;
+  color: #64748b;
+  letter-spacing: 0.4px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.kpiScoreRowLabelWithIcon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kpiScoreRowValuesWithIcon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.kpiMapIconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #64748b;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.kpiMapIconButton:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #3b82f6;
+}
+
+.kpiMapIconButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
+}
+
+.kpiScoreRowValues {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.kpiScoreRowClickable {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.kpiScoreRowClickable:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.kpiScoreRowClickable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
+}
+
+.kpiScoreRowClickableExpanded {
+  border-radius: 8px 8px 0 0;
+  border-bottom-color: #f1f5f9;
+}
+
+.kpiScoreRowExpandIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.kpiScoreRowExpandIconSvg {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.kpiScoreGoalsDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: -6px;
+  padding: 4px 10px 8px 10px;
+  border-radius: 0 0 8px 8px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-top: none;
+}
+
+.kpiScoreGoalsDetails .kpiScoreRow {
+  padding: 3px 8px 4px;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  min-height: auto;
+}
+
+.kpiScoreGoalsDetails .kpiScoreRow + .kpiScoreRow {
+  border-top: 1px solid #e2e8f0;
+}
+
+.kpiXGDeltaPositive {
+  color: #059669;
+}
+
+.kpiXGDeltaNegative {
+  color: #dc2626;
+}
+
+.kpiScoreRowMain {
+  font-weight: 700;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.kpiScoreRowValuesPct {
+  font-size: 10px;
+  font-weight: 400;
+  color: #64748b;
+}
+
+/* Jedna przestrzeń: Posiadanie + Czas martwy */
+.kpiScoreRowCombined {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.kpiScoreRowCombinedMain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.kpiScoreRowCombinedBlock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.kpiScoreRowCombinedBlock .kpiScoreRowLabel {
+  flex-shrink: 0;
+}
+
+.kpiScoreRowPossessionLeft {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.kpiScoreRowPossessionLeft .kpiScoreRowCombinedDeadTime {
+  margin: 0;
+}
+
+.kpiScoreRowCombinedDeadTime {
+  font-size: 10px;
+  font-weight: 500;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.kpiScoreRowCombinedDeadTime.kpiXGDeltaPositive {
+  color: #059669;
+}
+
+.kpiScoreRowCombinedDeadTime.kpiXGDeltaNegative {
+  color: #dc2626;
+}
+
+.kpiScoreRowCombined .kpiScoreRowValues {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.kpiScoreRowValuesPossessionWrap {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.kpiScoreRowValuesPossessionWrap .kpiScoreRowValues {
+  flex-shrink: 0;
+}
+
+.kpiScoreRowValuesPossessionTime {
+  font-size: 11px;
+  font-weight: 400;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.kpiScoreRowCombinedFooter {
+  padding: 4px 12px 8px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 0;
+}
+
+.kpiScoreRowKpiGood {
+  background: rgba(52, 199, 89, 0.08);
+  border: 1px solid rgba(52, 199, 89, 0.25);
+  border-radius: 8px;
+}
+
+.kpiScoreRowKpiBad {
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+}
+
+.kpiScoreRowP3Clickable {
+  margin-top: 0;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0;
+  font: inherit;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.kpiScoreRowP3Clickable:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.kpiScoreRowP3Clickable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
+}
+
+.kpiScoreRowValuesPossession {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.kpiScoreRowValuesPossession .kpiScorePossessionPct {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiScoreRowValuesPossession .kpiScorePossessionTime {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiScoreRowCombinedDivider {
+  color: #cbd5e1;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+/* Posiadanie: procent i czas w dwóch liniach, bez przeskakiwania */
+.kpiScoreRowPossession {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  position: relative;
+}
+
+.kpiScoreRowPossession .kpiScoreRowLabel {
+  flex-shrink: 0;
+}
+
+.kpiScoreRowPossession .kpiScoreRowValues {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  width: 150px;
+  min-width: 150px;
+  text-align: right;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.kpiScorePossessionPct {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiScorePossessionTime {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiQuickStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.kpiQuickStatCard {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kpiQuickStatCardButton {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.kpiQuickStatCardButton:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  transform: translateY(-1px);
+}
+
+.kpiQuickStatCardButton:focus-visible {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+.kpiQuickStatLabel {
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+  font-weight: 600;
+}
+
+.kpiQuickStatValue {
+  font-size: 20px;
+  color: #111827;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.kpiMainGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.kpiRadarColumn {
+  min-width: 0;
+}
+
+.kpiRadarWrapper {
+  height: 340px;
+}
+
+.kpiSummaryTile {
+  margin-top: 16px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.kpiCompactTiles {
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+
+.kpiCompactTiles .statTile {
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.kpiCompactTiles .statTileLabel {
+  font-size: 10px;
+  font-weight: 400;
+  margin-bottom: 6px;
+  letter-spacing: 0.4px;
+}
+
+.kpiCompactTiles .statTileValue {
+  font-size: 19px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  line-height: 1.15;
+}
+
+.kpiCompactTiles .statTileSecondary {
+  font-size: 10px;
+  font-weight: 400;
+  margin-top: 2px;
+  line-height: 1.25;
+}
+
 .chartContainerInPanel .chartHeader {
   display: none;
 }
@@ -2923,3 +3767,82 @@
     min-width: 70px;
   }
 } 
+
+@media (max-width: 1024px) {
+  .kpiTopRow {
+    flex-direction: column;
+  }
+
+  .kpiTopRow .kpiMatchHeader {
+    width: 100%;
+  }
+
+  .kpiTopRow .kpiRadarColumn {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .kpiMatchHeader {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .kpiMatchHeader .kpiScoreSection,
+  .kpiMatchHeader .kpiRadarColumn,
+  .kpiMatchHeader .kpiQuickStatsInHeader {
+    width: 100%;
+  }
+
+  .kpiQuickStatsInHeader .kpiQuickStatCard {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .kpiTeamSide,
+  .kpiTeamSide:last-child {
+    justify-content: center;
+  }
+
+  .kpiScoreSection {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .kpiScoreLineGoals {
+    font-size: 20px;
+  }
+
+  .kpiScoreLine {
+    font-size: 24px;
+  }
+
+  .kpiQuickStats {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+
+  .kpiMainGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .kpiRadarWrapper {
+    height: 320px;
+  }
+}
+
+@media (max-width: 768px) {
+  .kpiScoreLineGoals {
+    font-size: 18px;
+  }
+
+  .kpiScoreLine {
+    font-size: 22px;
+  }
+
+  .kpiQuickStats {
+    grid-template-columns: 1fr;
+  }
+
+  .kpiRadarWrapper {
+    height: 290px;
+  }
+}
