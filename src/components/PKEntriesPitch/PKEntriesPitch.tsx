@@ -1,13 +1,20 @@
 "use client";
 
-import React, { memo, useEffect, useRef, useState, useCallback } from "react";
+import React, { memo, useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { PKEntry } from "@/types";
 import styles from "./PKEntriesPitch.module.css";
 import PitchHeader from "../PitchHeader/PitchHeader";
 import pitchHeaderStyles from "../PitchHeader/PitchHeader.module.css";
+import { buildPlayersIndex, getPlayerLabel, PlayersIndex } from "@/utils/playerUtils";
+import { Player } from "@/types";
+
+const HOVER_TOOLTIP_DELAY_MS = 1500;
 
 export interface PKEntriesPitchProps {
   pkEntries?: PKEntry[];
+  players?: Player[];
+  playersIndex?: PlayersIndex;
   onEntryAdd?: (startX: number, startY: number, endX: number, endY: number) => void;
   onEntryClick?: (entry: PKEntry) => void;
   selectedEntryId?: string;
@@ -31,6 +38,8 @@ export interface PKEntriesPitchProps {
 
 const PKEntriesPitch = memo(function PKEntriesPitch({
   pkEntries = [],
+  players = [],
+  playersIndex,
   onEntryAdd,
   onEntryClick,
   selectedEntryId,
@@ -41,6 +50,10 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
   matchInfo,
   allTeams = [],
 }: PKEntriesPitchProps) {
+  const localPlayersIndex = useMemo(
+    () => playersIndex ?? buildPlayersIndex(players),
+    [playersIndex, players]
+  );
   // Stan przełącznika orientacji boiska - przywróć z localStorage (wspólny dla wszystkich zakładek)
   const [isFlipped, setIsFlipped] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -64,6 +77,37 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
     currentX?: number;
     currentY?: number;
   }>({ isDrawing: false });
+
+  // Tooltip po najechaniu (jak w XGPitch)
+  const [hoveredEntry, setHoveredEntry] = useState<PKEntry | null>(null);
+  const [showHoverTooltip, setShowHoverTooltip] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleEntryMouseEnter = useCallback((e: React.MouseEvent<SVGElement>, entry: PKEntry) => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    setTooltipPosition({ x: centerX, y: centerY });
+    setHoveredEntry(entry);
+    setShowHoverTooltip(false);
+    hoverTimeoutRef.current = setTimeout(() => setShowHoverTooltip(true), HOVER_TOOLTIP_DELAY_MS);
+  }, []);
+
+  const handleEntryMouseLeave = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setTooltipPosition(null);
+    setHoveredEntry(null);
+    setShowHoverTooltip(false);
+  }, []);
+
+  useEffect(() => () => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+  }, []);
 
   // Zapisz orientację do localStorage przy zmianie (wspólny dla wszystkich zakładek)
   useEffect(() => {
@@ -207,64 +251,16 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
     return () => ro.disconnect();
   }, []);
 
-  // Funkcja rysowania strzałki jako SVG
-  const renderArrow = (entry: PKEntry) => {
-    if (!pitchSize) return null;
+  // Jedno wspólne SVG dla wszystkich strzałek – każda strzałka ma osobny SVG blokujący pozostałe
+  const renderArrowsSvg = () => {
+    if (!pitchSize || !showArrows) return null;
 
-    const start = convertCoordinates(entry.startX, entry.startY);
-    const end = convertCoordinates(entry.endX, entry.endY);
-    
-    const isSelected = selectedEntryId === entry.id;
-    const arrowColor = getArrowColor(entry, isSelected);
-    const isShot = entry.isShot || false;
-    const isGoal = entry.isGoal || false;
-    const isRegain = entry.isRegain || false;
-
-    // Mapowanie % boiska -> px (bez zniekształceń kółek/markerów)
-    const startPx = { x: (start.x / 100) * pitchSize.width, y: (start.y / 100) * pitchSize.height };
-    const endPx = { x: (end.x / 100) * pitchSize.width, y: (end.y / 100) * pitchSize.height };
-
-    // Hierarchia kolorów kropki: gol (najważniejszy) > strzał > regain
-    // Gol: zielony wypełnienie
-    // Strzał (bez gola): czarne wypełnienie
-    // Regain: pomarańczowe obramowanie (zawsze, gdy jest regain)
-    let dotFillColor = "white";
-    let dotStrokeColor = "white";
-    let dotStrokeWidth = 1.4;
-    
-    if (isGoal) {
-      // Gol ma najwyższy priorytet - zawsze zielone wypełnienie
-      dotFillColor = "#86efac"; // jasnozielony
-      // Jeśli jest też regain, obramowanie pomarańczowe i pogrubione
-      if (isRegain) {
-        dotStrokeColor = "#f59e0b"; // pomarańczowy
-        dotStrokeWidth = 2.0; // pogrubione
-      } else {
-        dotStrokeColor = "white";
-      }
-    } else if (isShot) {
-      // Strzał ma drugi priorytet
-      dotFillColor = "#111827"; // czarny
-      // Jeśli jest też regain, obramowanie pomarańczowe
-      if (isRegain) {
-        dotStrokeColor = "#f59e0b"; // pomarańczowy
-      } else {
-        dotStrokeColor = "white";
-      }
-    } else if (isRegain) {
-      // Regain (bez strzału i gola): białe wypełnienie, pomarańczowe obramowanie
-      dotFillColor = "white";
-      dotStrokeColor = "#f59e0b"; // pomarańczowy
-    }
-
-    // Parametry UI (px) - wszystkie strzałki mają jednakowe parametry
     const lineWidth = 1.5;
-    const dotR = 5; // trochę większa kropka dla strzał/gol
-    const arrowheadSize = 10; // jednakowy rozmiar grota dla wszystkich strzałek
-    
+    const dotR = 5;
+    const arrowheadSize = 10;
+
     return (
       <svg
-        key={entry.id}
         className={styles.arrowSvgAbsolute}
         viewBox={`0 0 ${pitchSize.width} ${pitchSize.height}`}
         preserveAspectRatio="none"
@@ -274,54 +270,109 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
           left: 0,
           width: '100%',
           height: '100%',
-          pointerEvents: 'none',
-          zIndex: isSelected ? 30 : 20,
+          pointerEvents: 'auto',
+          zIndex: 20,
         }}
       >
         <defs>
-          <marker
-            id={`arrowhead-${entry.id}`}
-            markerWidth={arrowheadSize}
-            markerHeight={arrowheadSize}
-            viewBox="0 0 10 10"
-            refX="8"
-            refY="5"
-            orient="auto"
-            markerUnits="userSpaceOnUse"
-          >
-            <path d="M0 0 L10 5 L0 10 Z" fill={arrowColor} />
-          </marker>
+          {pkEntries.map((entry) => {
+            const isSelected = selectedEntryId === entry.id;
+            const arrowColor = getArrowColor(entry, isSelected);
+            return (
+              <marker
+                key={`marker-${entry.id}`}
+                id={`arrowhead-${entry.id}`}
+                markerWidth={arrowheadSize}
+                markerHeight={arrowheadSize}
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                orient="auto"
+                markerUnits="userSpaceOnUse"
+              >
+                <path d="M0 0 L10 5 L0 10 Z" fill={arrowColor} />
+              </marker>
+            );
+          })}
         </defs>
-        {/* Linia podstawowa */}
-        <line
-          x1={startPx.x}
-          y1={startPx.y}
-          x2={endPx.x}
-          y2={endPx.y}
-          stroke={arrowColor}
-          strokeWidth={lineWidth}
-          markerEnd={`url(#arrowhead-${entry.id})`}
-          pointerEvents="stroke"
-          style={{ cursor: 'pointer' }}
-          // round cap powoduje "wystawanie" linii poza punkt końcowy i optycznie wygląda,
-          // jakby grot był bliżej środka. Butt daje czysty styk linia -> grot.
-          strokeLinecap="butt"
-          strokeLinejoin="round"
-          data-pk-entry-arrow="true"
-          onClick={(e) => handleEntryClick(e, entry)}
-        />
-        {/* Kropka na początku strzałki, jeśli był strzał, gol lub regain */}
-        {(isShot || isGoal || isRegain) && (
-          <circle
-            cx={startPx.x}
-            cy={startPx.y}
-            r={dotR}
-            fill={dotFillColor}
-            stroke={dotStrokeColor}
-            strokeWidth={dotStrokeWidth}
-            pointerEvents="none"
-          />
-        )}
+        {[...pkEntries]
+          .sort((a, b) => (selectedEntryId === a.id ? 1 : 0) - (selectedEntryId === b.id ? 1 : 0))
+          .map((entry) => {
+          const start = convertCoordinates(entry.startX, entry.startY);
+          const end = convertCoordinates(entry.endX, entry.endY);
+          const startPx = { x: (start.x / 100) * pitchSize.width, y: (start.y / 100) * pitchSize.height };
+          const endPx = { x: (end.x / 100) * pitchSize.width, y: (end.y / 100) * pitchSize.height };
+          const isSelected = selectedEntryId === entry.id;
+          const arrowColor = getArrowColor(entry, isSelected);
+          const isShot = entry.isShot || false;
+          const isGoal = entry.isGoal || false;
+          const isRegain = entry.isRegain || false;
+
+          let dotFillColor = "white";
+          let dotStrokeColor = "white";
+          let dotStrokeWidth = 1.4;
+          if (isGoal) {
+            dotFillColor = "#86efac";
+            dotStrokeColor = isRegain ? "#f59e0b" : "white";
+            dotStrokeWidth = isRegain ? 2.0 : 1.4;
+          } else if (isShot) {
+            dotFillColor = "#111827";
+            dotStrokeColor = isRegain ? "#f59e0b" : "white";
+          } else if (isRegain) {
+            dotFillColor = "white";
+            dotStrokeColor = "#f59e0b";
+          }
+
+          return (
+            <g key={entry.id} style={{ pointerEvents: 'none' }}>
+              <line
+                x1={startPx.x}
+                y1={startPx.y}
+                x2={endPx.x}
+                y2={endPx.y}
+                stroke={arrowColor}
+                strokeWidth={lineWidth}
+                markerEnd={`url(#arrowhead-${entry.id})`}
+                strokeLinecap="butt"
+                strokeLinejoin="round"
+                data-pk-entry-arrow="true"
+              />
+              {(isShot || isGoal || isRegain) && (
+                <circle
+                  cx={startPx.x}
+                  cy={startPx.y}
+                  r={dotR}
+                  fill={dotFillColor}
+                  stroke={dotStrokeColor}
+                  strokeWidth={dotStrokeWidth}
+                />
+              )}
+            </g>
+          );
+        })}
+        {/* Niewidoczne prostokąty – każdy nad swoją strzałką */}
+        {pkEntries.map((entry) => {
+          const start = convertCoordinates(entry.startX, entry.startY);
+          const end = convertCoordinates(entry.endX, entry.endY);
+          const startPx = { x: (start.x / 100) * pitchSize.width, y: (start.y / 100) * pitchSize.height };
+          const endPx = { x: (end.x / 100) * pitchSize.width, y: (end.y / 100) * pitchSize.height };
+          const pad = 14;
+          return (
+            <rect
+              key={`hit-${entry.id}`}
+              x={Math.min(startPx.x, endPx.x) - pad}
+              y={Math.min(startPx.y, endPx.y) - pad}
+              width={Math.abs(endPx.x - startPx.x) + pad * 2}
+              height={Math.abs(endPx.y - startPx.y) + pad * 2}
+              fill="transparent"
+              pointerEvents="all"
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => handleEntryClick(e, entry)}
+              onMouseEnter={(e) => handleEntryMouseEnter(e, entry)}
+              onMouseLeave={handleEntryMouseLeave}
+            />
+          );
+        })}
       </svg>
     );
   };
@@ -475,11 +526,50 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
           <div className={`${styles.attackRectangle} ${isFlipped ? styles.attackRectangleLeft : styles.attackRectangleRight}`} />
         </div>
 
-        {/* Renderowanie strzałek */}
-        {showArrows && pkEntries.map(entry => renderArrow(entry))}
+        {/* Jedno SVG ze wszystkimi strzałkami – każda ma swój obszar najechania */}
+        {renderArrowsSvg()}
         
         {/* Tymczasowa strzałka podczas rysowania */}
         {renderTemporaryArrow()}
+
+        {/* Tooltip po najechaniu (dokładnie jak w XGPitch) */}
+        {showHoverTooltip && hoveredEntry && tooltipPosition && (() => {
+          const entryTypeLabel = hoveredEntry.entryType === 'pass' ? 'Podanie' : hoveredEntry.entryType === 'dribble' ? 'Drybling' : hoveredEntry.entryType === 'sfg' ? 'SFG' : hoveredEntry.entryType === 'regain' ? 'Regain' : hoveredEntry.entryType || 'Wejście';
+          const playerLabel = hoveredEntry.senderId
+            ? getPlayerLabel(hoveredEntry.senderId, localPlayersIndex)
+            : null;
+          const receiverLabel = hoveredEntry.receiverId
+            ? getPlayerLabel(hoveredEntry.receiverId, localPlayersIndex)
+            : null;
+          const tooltipContent = (
+            <div
+              className={styles.pkEntryHoverTooltip}
+              style={{
+                position: 'fixed',
+                left: tooltipPosition.x,
+                top: tooltipPosition.y,
+                transform: 'translate(-50%, calc(-100% - 8px))',
+                zIndex: 999999,
+              }}
+              role="tooltip"
+            >
+              <div className={styles.pkEntryHoverTooltipInner}>
+                {hoveredEntry.isGoal && <span className={`${styles.pkEntryHoverTooltipBadge} ${styles.pkEntryHoverTooltipGoal}`}>Gol</span>}
+                {hoveredEntry.isShot && !hoveredEntry.isGoal && <span className={styles.pkEntryHoverTooltipBadge}>Strzał</span>}
+                {hoveredEntry.isRegain && <span className={styles.pkEntryHoverTooltipBadge}>Regain</span>}
+                {playerLabel && (
+                  <strong>
+                    {playerLabel}
+                    {receiverLabel ? ` → ${receiverLabel}` : ''}
+                  </strong>
+                )}
+                {!playerLabel && <strong>Wejście w PK</strong>}
+                <span>{hoveredEntry.minute}&#8242; · {entryTypeLabel}</span>
+              </div>
+            </div>
+          );
+          return createPortal(tooltipContent, document.body);
+        })()}
         </div>
       </div>
     </div>

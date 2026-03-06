@@ -120,17 +120,17 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
         // Pobierz nazwę strefy
         const zoneNameStr = getZoneNameForPosition(row, col);
         
-        // Gdy mapa jest odwrócona, heatmapa już ma klucze jako opposite strefy
-        // Więc używamy zoneNameStr bezpośrednio (który już jest opposite dla odwróconej mapy)
-        // Gdy mapa nie jest odwrócona, używamy zoneNameStr normalnie
-        let heatmapXTValue = heatmapData.get(zoneNameStr) || 0;
-        // Jeśli nie znaleziono, spróbuj z małą literą
-        if (heatmapXTValue === 0 && zoneNameStr) {
-          heatmapXTValue = heatmapData.get(zoneNameStr.toLowerCase()) || 0;
-        }
-        // Jeśli nadal nie znaleziono, spróbuj z wielką literą
-        if (heatmapXTValue === 0 && zoneNameStr) {
-          heatmapXTValue = heatmapData.get(zoneNameStr.toUpperCase()) || 0;
+        // Pobierz wartość z heatmapy - obsługa różnych formatów kluczy (A1, a1, A 1)
+        const normalizedForLookup = zoneNameStr ? zoneNameStr.toUpperCase().replace(/\s+/g, '') : '';
+        let heatmapXTValue = heatmapData.get(zoneNameStr) ?? heatmapData.get(zoneNameStr?.toLowerCase() ?? '') ?? heatmapData.get(normalizedForLookup) ?? 0;
+        // Fallback: szukaj po znormalizowanym kluczu wśród wszystkich kluczy mapy
+        if (heatmapXTValue === 0 && normalizedForLookup) {
+          for (const [key, val] of heatmapData) {
+            if (key.toUpperCase().replace(/\s+/g, '') === normalizedForLookup) {
+              heatmapXTValue = val;
+              break;
+            }
+          }
         }
         
         const handleZoneClick = () => {
@@ -183,8 +183,10 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
   const heatmapStats = useMemo(() => {
     const values = Array.from(heatmapData.values());
     if (values.length === 0) return null;
+    const positiveValues = values.filter(v => v > 0);
+    if (positiveValues.length === 0) return null;
     const max = Math.max(...values);
-    const min = Math.min(...values.filter(v => v > 0));
+    const min = Math.min(...positiveValues);
     const avg = values.reduce((a, b) => a + b, 0) / values.length;
     return { max, min, avg };
   }, [heatmapData]);

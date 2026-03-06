@@ -26,7 +26,7 @@ interface MatchWithActions extends TeamInfo {
   regain: CategoryStatus;
   loses: CategoryStatus;
   deadline: string; // Termin (piątek tygodnia po meczu)
-  isWithin21Days: boolean;
+  isWithin60Days: boolean;
   // Informacyjne liczby
   shotsCount: number;
   pkEntriesCount: number;
@@ -111,9 +111,9 @@ export default function WeryfikacjaMeczow() {
           const pkEntriesCount = (matchData.pkEntries || []).length;
           const acc8sCount = ((matchData as any).acc8sEntries || []).length;
           
-          // Oblicz termin i sprawdź czy mecz jest z ostatnich 21 dni
+          // Oblicz termin i sprawdź czy mecz jest z ostatnich 60 dni
           const deadline = calculateDeadline(matchData.date);
-          const within21Days = isWithin21Days(matchData.date);
+          const within60Days = isWithin60Days(matchData.date);
 
           allMatches.push({
             ...matchData,
@@ -122,7 +122,7 @@ export default function WeryfikacjaMeczow() {
             regain,
             loses,
             deadline,
-            isWithin21Days: within21Days,
+            isWithin60Days: within60Days,
             shotsCount,
             pkEntriesCount,
             acc8sCount
@@ -148,8 +148,8 @@ export default function WeryfikacjaMeczow() {
   const filteredAndSortedMatches = useMemo(() => {
     let filtered = matches;
 
-    // Filtruj tylko mecze z ostatnich 21 dni
-    filtered = filtered.filter(match => match.isWithin21Days);
+    // Filtruj tylko mecze z ostatnich 60 dni
+    filtered = filtered.filter(match => match.isWithin60Days);
 
     // Filtruj po zespołach
     if (selectedTeam !== 'all') {
@@ -236,13 +236,13 @@ export default function WeryfikacjaMeczow() {
     return deadline.toISOString().split('T')[0];
   };
 
-  // Funkcja sprawdzająca czy mecz jest z ostatnich 21 dni
-  const isWithin21Days = (matchDate: string): boolean => {
+  // Funkcja sprawdzająca czy mecz jest z ostatnich 60 dni
+  const isWithin60Days = (matchDate: string): boolean => {
     const date = new Date(matchDate);
     const now = new Date();
     const diffTime = now.getTime() - date.getTime();
     const diffDays = diffTime / (1000 * 60 * 60 * 24);
-    return diffDays <= 21;
+    return diffDays <= 60;
   };
 
   // Funkcja sprawdzająca status kategorii
@@ -461,7 +461,7 @@ export default function WeryfikacjaMeczow() {
           </Link>
         </div>
                  <p className={styles.description}>
-           Weryfikacja kompletności raportów analitycznych dla meczów z ostatnich 21 dni. 
+           Weryfikacja kompletności raportów analitycznych dla meczów z ostatnich 60 dni. 
            <strong> Packing: każda połowa musi mieć co najmniej 20 akcji. Termin uzupełnienia: najbliższy piątek tygodnia po meczu.</strong>
          </p>
       </div>

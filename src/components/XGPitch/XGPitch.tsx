@@ -1,11 +1,14 @@
 "use client";
 
-import React, { memo, useState, useEffect, useMemo } from "react";
+import React, { memo, useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Player, Shot } from "@/types";
 import styles from "./XGPitch.module.css";
 import PitchHeader from "../PitchHeader/PitchHeader";
 import pitchHeaderStyles from "../PitchHeader/PitchHeader.module.css";
 import { buildPlayersIndex, getPlayerLabel, PlayersIndex } from "@/utils/playerUtils";
+
+const HOVER_TOOLTIP_DELAY_MS = 1500;
 
 export interface XGPitchProps {
   shots?: Shot[];
@@ -93,6 +96,11 @@ const XGPitch = memo(function XGPitch({
   });
   // Stan przełącznika widoczności strzałów
   const [showShots, setShowShots] = useState(true);
+  // Tooltip po dłuższym najechaniu (1,5 s)
+  const [hoveredShot, setHoveredShot] = useState<Shot | null>(null);
+  const [showHoverTooltip, setShowHoverTooltip] = useState(false);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoveredMarkerRef = useRef<HTMLDivElement | null>(null);
 
   // Zapisz orientację do localStorage przy zmianie (wspólny dla wszystkich zakładek)
   useEffect(() => {
@@ -154,6 +162,28 @@ const XGPitch = memo(function XGPitch({
     event.stopPropagation();
     onShotClick?.(shot);
   };
+
+  const handleShotMouseEnter = (e: React.MouseEvent<HTMLDivElement>, shot: Shot) => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    hoveredMarkerRef.current = e.currentTarget;
+    setHoveredShot(shot);
+    setShowHoverTooltip(false);
+    hoverTimeoutRef.current = setTimeout(() => setShowHoverTooltip(true), HOVER_TOOLTIP_DELAY_MS);
+  };
+
+  const handleShotMouseLeave = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    hoveredMarkerRef.current = null;
+    setHoveredShot(null);
+    setShowHoverTooltip(false);
+  };
+
+  useEffect(() => () => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+  }, []);
 
   return (
     <div className={styles.pitchContainer}>
@@ -293,7 +323,10 @@ const XGPitch = memo(function XGPitch({
                 boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
               }}
               onClick={(e) => handleShotClick(e, shot)}
-              title={`${isAssist ? '⚽ Asysta: ' : ''}${getPlayerLabel(shot.playerId, localPlayersIndex)} - ${shot.minute}' - xG: ${shot.xG.toFixed(2)} ${shot.isGoal ? '⚽' : ''} - ${shot.actionType || 'open_play'}`}
+              onMouseEnter={(e) => handleShotMouseEnter(e, shot)}
+              onMouseLeave={handleShotMouseLeave}
+              title={undefined}
+              aria-label={`Strzał ${getPlayerLabel(shot.playerId, localPlayersIndex)}, ${shot.minute}′, xG ${shot.xG.toFixed(2)}${shot.isGoal ? ', gol' : ''}`}
             >
               {isGoalAndSetPiece ? (
                 <div className={styles.shotMarkerGoalInner} style={{ backgroundColor: xGColor }}>
@@ -329,6 +362,40 @@ const XGPitch = memo(function XGPitch({
             </div>
           );
         })}
+        {showHoverTooltip && hoveredShot && (() => {
+          const isAssist = !!hoveredShot.assistantId;
+          const actionTypeLabel = hoveredShot.actionType === 'open_play' ? 'Otwarta gra' : hoveredShot.actionType === 'penalty' ? 'Karny' : hoveredShot.actionType === 'corner' ? 'Rzut rożny' : hoveredShot.actionType === 'direct_free_kick' ? 'Rzut wolny bezpośredni' : hoveredShot.actionType || 'Otwarta gra';
+          const rect = hoveredMarkerRef.current?.getBoundingClientRect();
+          const tooltipContent = (
+            <div
+              className={styles.shotHoverTooltip}
+              style={
+                rect
+                  ? {
+                      position: 'fixed',
+                      left: rect.left + rect.width / 2,
+                      top: rect.top,
+                      transform: 'translate(-50%, calc(-100% - 8px))',
+                      zIndex: 10000,
+                    }
+                  : undefined
+              }
+              role="tooltip"
+            >
+              <div className={styles.shotHoverTooltipInner}>
+                {isAssist && <span className={styles.shotHoverTooltipBadge}>Asysta</span>}
+                <strong>{getPlayerLabel(hoveredShot.playerId, localPlayersIndex)}</strong>
+                <span>{hoveredShot.minute}&#8242; · xG: {hoveredShot.xG.toFixed(2)}</span>
+                {hoveredShot.isGoal && <span className={styles.shotHoverTooltipGoal}>Gol</span>}
+                <span className={styles.shotHoverTooltipType}>{actionTypeLabel}</span>
+              </div>
+            </div>
+          );
+          if (typeof document !== 'undefined' && rect) {
+            return createPortal(tooltipContent, document.body);
+          }
+          return null;
+        })()}
         </div>
       </div>
     </div>

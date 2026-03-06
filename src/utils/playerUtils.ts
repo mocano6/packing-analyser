@@ -60,12 +60,16 @@ export const buildPlayersIndex = (players: Player[]): PlayersIndex => {
   return new Map(players.map(player => [player.id, player]));
 };
 
+/** Stały identyfikator używany w Shot dla bramki samobójczej */
+export const OWN_GOAL_PLAYER_ID = "own_goal";
+
 export const getPlayerLabel = (
   playerId: string | null | undefined,
   playersIndex: PlayersIndex,
   options?: { includeNumber?: boolean }
 ): string => {
   if (!playerId) return "Zawodnik usunięty";
+  if (playerId === OWN_GOAL_PLAYER_ID) return "Bramka samobójcza";
   const player = playersIndex.get(playerId);
   if (!player || player.isDeleted) return "Zawodnik usunięty";
   const name = getPlayerFullName(player).trim();

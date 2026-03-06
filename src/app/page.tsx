@@ -671,7 +671,7 @@ export default function Page() {
   };
 
   const secondsToMinutesDecimal = (seconds: number): number => {
-    const s = Number.isFinite(seconds) ? Math.max(0, Math.round(seconds)) : 0;
+    const s = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
     return s / 60;
   };
 
@@ -856,6 +856,7 @@ export default function Page() {
     lastCountedVideoSecRef.current = lastCountedVideoSec;
   }, [lastCountedVideoSec]);
 
+  const POSSESSION_EPS = 1e-6; // dla łączenia sąsiednich przedziałów (ułamki sekund)
   const mergePossessionIntervals = (intervals: PossessionInterval[]): PossessionInterval[] => {
     const sorted = [...intervals]
       .map(([a, b]) => [Math.min(a, b), Math.max(a, b)] as PossessionInterval)
@@ -867,7 +868,7 @@ export default function Page() {
         continue;
       }
       const last = out[out.length - 1];
-      if (s <= last[1] + 1) {
+      if (s <= last[1] + POSSESSION_EPS) {
         last[1] = Math.max(last[1], e);
       } else {
         out.push([s, e]);
@@ -888,8 +889,8 @@ export default function Page() {
     for (const [s, e] of union) {
       if (e < cursor) continue;
       if (s > e0) break;
-      if (s > cursor) uncovered.push([cursor, Math.min(e0, s - 1)]);
-      cursor = Math.max(cursor, e + 1);
+      if (s > cursor) uncovered.push([cursor, Math.min(e0, s)]);
+      cursor = Math.max(cursor, e);
       if (cursor > e0) break;
     }
     if (cursor <= e0) uncovered.push([cursor, e0]);
@@ -979,23 +980,12 @@ export default function Page() {
     const leftOwner: "team" | "opponent" = isFlipped ? "team" : "opponent";
     const rightOwner: "team" | "opponent" = isFlipped ? "opponent" : "team";
 
-    const accum = delta + videoRemainderRef.current;
-    const whole = Math.floor(accum);
-    videoRemainderRef.current = accum - whole;
-
-    if (whole <= 0) {
-      lastVideoTimeRef.current = current;
-      return;
-    }
-
-    // Zabezpieczenie przed policzeniem 2x tego samego fragmentu:
-    // przeliczamy tylko "niepokryte" sekundy na osi czasu wideo.
-    const startSec = Math.floor(last) + 1;
-    const endSec = Math.floor(last) + whole;
+    // Obserwowany przedział w czasie wideo (ułamki sekund — bez tracenia czasu przy częstych tickach).
+    const observedStart = last;
+    const observedEnd = current;
     const unionBefore = countedIntervalsRef.current;
-    const uncovered = subtractFromUnion(unionBefore, startSec, endSec);
-    // Zaktualizuj unię o obserwowany fragment (nawet jeśli w całości był już policzony)
-    countedIntervalsRef.current = mergePossessionIntervals([...unionBefore, [startSec, endSec]]);
+    const uncovered = subtractFromUnion(unionBefore, observedStart, observedEnd);
+    countedIntervalsRef.current = mergePossessionIntervals([...unionBefore, [observedStart, observedEnd]]);
 
     if (uncovered.length === 0) {
       lastVideoTimeRef.current = current;
@@ -1003,7 +993,6 @@ export default function Page() {
       return;
     }
 
-    // Policzymy ile sekund wpada do których pól, a potem zrobimy 1 setState.
     const add: PossessionCountersSec = {
       teamFirstHalf: 0,
       opponentFirstHalf: 0,
@@ -1017,16 +1006,16 @@ export default function Page() {
       add[field] += by;
     };
 
-    const boundary = typeof secondHalfStart === "number" && Number.isFinite(secondHalfStart) ? Math.floor(secondHalfStart) : null;
+    const boundary = typeof secondHalfStart === "number" && Number.isFinite(secondHalfStart) ? secondHalfStart : null;
     const splitByHalf = (a: number, b: number): Array<{ is2: boolean; len: number }> => {
-      const len = b - a + 1;
+      const len = b - a;
       if (len <= 0) return [];
       if (boundary === null) return [{ is2: fallbackIsSecondHalf, len }];
-      const firstEnd = Math.min(b, boundary - 1);
+      const firstEnd = Math.min(b, boundary);
       const secondStart = Math.max(a, boundary);
       const parts: Array<{ is2: boolean; len: number }> = [];
-      if (a <= firstEnd) parts.push({ is2: false, len: firstEnd - a + 1 });
-      if (secondStart <= b) parts.push({ is2: true, len: b - secondStart + 1 });
+      if (a < firstEnd) parts.push({ is2: false, len: firstEnd - a });
+      if (secondStart < b) parts.push({ is2: true, len: b - secondStart });
       return parts;
     };
 
@@ -1056,7 +1045,6 @@ export default function Page() {
       deadSecondHalf: prev.deadSecondHalf + add.deadSecondHalf,
     }));
 
-    // Zapamiętaj ostatnią sekundę, w której realnie coś doliczyliśmy (do skoku po refreshu)
     const maxUncovered = uncovered.reduce((m, [, e]) => Math.max(m, e), 0);
     if (maxUncovered > 0) {
       setLastCountedVideoSec(maxUncovered);
@@ -4509,6 +4497,7 @@ export default function Page() {
           <div style={{ position: 'relative' }}>
             <PKEntriesPitch
               pkEntries={pkEntries}
+              players={players}
               onEntryAdd={async (startX, startY, endX, endY) => {
                 if (!matchInfo?.matchId || !matchInfo?.team) {
                   alert("Wybierz mecz, aby dodać wejście PK!");

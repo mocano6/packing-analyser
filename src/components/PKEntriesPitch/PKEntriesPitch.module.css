@@ -257,7 +257,48 @@
   left: 0;
   width: 100%;
   height: 100%;
+}
+
+/* Tooltip po 1,5 s najechania na strzałkę (jak w XGPitch) */
+.pkEntryHoverTooltip {
+  position: absolute;
+  z-index: 50;
   pointer-events: none;
+  padding-bottom: 8px;
+}
+
+.pkEntryHoverTooltipInner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.95);
+  color: #fff;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  max-width: 240px;
+}
+
+.pkEntryHoverTooltipInner strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pkEntryHoverTooltipBadge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #fbbf24;
+  margin-bottom: 2px;
+}
+
+.pkEntryHoverTooltipGoal {
+  font-weight: 700;
+  color: #86efac;
 }
 
 @media (max-width: 600px) {
@@ -276,6 +317,12 @@
   .instruction {
     font-size: 11px;
     padding: 6px 12px;
+  }
+
+  .pkEntryHoverTooltipInner {
+    font-size: 11px;
+    padding: 8px 10px;
+    max-width: 200px;
   }
 }
 

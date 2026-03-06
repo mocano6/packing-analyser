@@ -284,34 +284,51 @@ export default function PlayerDetailsPage() {
     });
   }, [selectableMatchesBySeason, matchTypeFilters]);
 
-  // Filtrowani zawodnicy według wybranego zespołu
+  // Zawodnicy dostępni do wyboru w profilu:
+  // - gracz: tylko przypisany zawodnik
+  // - admin/coach: zawodnicy z kontekstu wybranego zespołu:
+  //   aktualny skład + byli zawodnicy, którzy mają minuty/statystyki w meczach tego zespołu
   const filteredPlayers = useMemo(() => {
     if (isPlayer && linkedPlayerId) {
       const linked = players.find(player => player.id === linkedPlayerId);
       return linked ? [linked] : [];
     }
     if (!selectedTeam) return players;
-    return players.filter(player => {
-      let playerTeams = player.teams;
-      if (typeof playerTeams === 'string') {
-        playerTeams = [playerTeams];
-      } else if (!Array.isArray(playerTeams)) {
-        playerTeams = [];
-      }
-      return playerTeams.includes(selectedTeam);
-    });
-  }, [players, selectedTeam, isPlayer, linkedPlayerId]);
 
-  // Dla rankingu: gracz widzi miejsce w całym zespole; coach/admin w filteredPlayers (wybrany zespół)
-  const playersForRanking = useMemo(() => {
-    if (isPlayer && linkedPlayerId && selectedTeam) {
-      return players.filter((p) => {
-        const t = Array.isArray(p.teams) ? p.teams : typeof p.teams === "string" ? [p.teams] : [];
-        return t.includes(selectedTeam);
+    const playerIdsInSelectedTeam = new Set<string>();
+
+    // 1) Aktualny skład (players.teams)
+    players.forEach((player) => {
+      const playerTeams = Array.isArray(player.teams)
+        ? player.teams
+        : typeof player.teams === "string"
+          ? [player.teams]
+          : [];
+      if (playerTeams.includes(selectedTeam)) {
+        playerIdsInSelectedTeam.add(player.id);
+      }
+    });
+
+    // 2) Historyczni zawodnicy z minutami/statystykami w meczach wybranego zespołu
+    allMatches.forEach((match) => {
+      if (match.team !== selectedTeam) return;
+      const minutes = Array.isArray(match.playerMinutes) ? match.playerMinutes : [];
+      minutes.forEach((pm: { playerId?: string }) => {
+        if (pm.playerId) playerIdsInSelectedTeam.add(pm.playerId);
       });
-    }
+
+      const stats = Array.isArray(match.matchData?.playerStats) ? match.matchData.playerStats : [];
+      stats.forEach((stat: { playerId?: string }) => {
+        if (stat.playerId) playerIdsInSelectedTeam.add(stat.playerId);
+      });
+    });
+    return players.filter((player) => playerIdsInSelectedTeam.has(player.id));
+  }, [players, allMatches, selectedTeam, isPlayer, linkedPlayerId]);
+
+  // Dla rankingu i statystyk zespołu używamy tej samej listy kontekstowej.
+  const playersForRanking = useMemo(() => {
     return filteredPlayers;
-  }, [players, selectedTeam, isPlayer, linkedPlayerId, filteredPlayers]);
+  }, [filteredPlayers]);
 
   // Wejścia w PK (rysowane ręcznie w module PK) - dane z meczów (matches.pkEntries)
   const pkEntriesStats = useMemo(() => {
@@ -3053,31 +3070,75 @@ export default function PlayerDetailsPage() {
     let manualPassAccurate = 0;
     let manualPassInaccurate = 0;
     let manualPossessionMinutes = 0;
+    let manualOpponentPossessionMinutes = 0;
     let hasManualPasses = false;
     let hasManualPossession = false;
+
+    // Posiadanie zespołu i przeciwnika na podstawie danych meczowych (matchData.possession),
+    // przeskalowane do minut gry zawodnika.
+    let teamPossessionFromMatchData = 0;
+    let opponentPossessionFromMatchData = 0;
 
     playerMatches.forEach((m) => {
       const matchId = m.matchId || "";
       if (!matchId) return;
+
+      // Ręczne statystyki zawodnika
       const s = playerMatchStatsByMatchId[matchId];
-      if (!s) return;
+      if (s) {
+        const ownAcc = typeof s.passesOwnHalfAccurate === "number" && !Number.isNaN(s.passesOwnHalfAccurate) ? s.passesOwnHalfAccurate : undefined;
+        const ownInacc = typeof s.passesOwnHalfInaccurate === "number" && !Number.isNaN(s.passesOwnHalfInaccurate) ? s.passesOwnHalfInaccurate : undefined;
+        const oppAcc = typeof s.passesOppHalfAccurate === "number" && !Number.isNaN(s.passesOppHalfAccurate) ? s.passesOppHalfAccurate : undefined;
+        const oppInacc = typeof s.passesOppHalfInaccurate === "number" && !Number.isNaN(s.passesOppHalfInaccurate) ? s.passesOppHalfInaccurate : undefined;
 
-      const ownAcc = typeof s.passesOwnHalfAccurate === "number" && !Number.isNaN(s.passesOwnHalfAccurate) ? s.passesOwnHalfAccurate : undefined;
-      const ownInacc = typeof s.passesOwnHalfInaccurate === "number" && !Number.isNaN(s.passesOwnHalfInaccurate) ? s.passesOwnHalfInaccurate : undefined;
-      const oppAcc = typeof s.passesOppHalfAccurate === "number" && !Number.isNaN(s.passesOppHalfAccurate) ? s.passesOppHalfAccurate : undefined;
-      const oppInacc = typeof s.passesOppHalfInaccurate === "number" && !Number.isNaN(s.passesOppHalfInaccurate) ? s.passesOppHalfInaccurate : undefined;
+        if (ownAcc !== undefined || ownInacc !== undefined || oppAcc !== undefined || oppInacc !== undefined) {
+          hasManualPasses = true;
+          manualPassAccurate += (ownAcc ?? 0) + (oppAcc ?? 0);
+          manualPassInaccurate += (ownInacc ?? 0) + (oppInacc ?? 0);
+        }
 
-      if (ownAcc !== undefined || ownInacc !== undefined || oppAcc !== undefined || oppInacc !== undefined) {
-        hasManualPasses = true;
-        manualPassAccurate += (ownAcc ?? 0) + (oppAcc ?? 0);
-        manualPassInaccurate += (ownInacc ?? 0) + (oppInacc ?? 0);
+        if (typeof s.possessionMinutes === "number" && !Number.isNaN(s.possessionMinutes)) {
+          hasManualPossession = true;
+          manualPossessionMinutes += s.possessionMinutes;
+        }
       }
 
-      if (typeof s.possessionMinutes === "number" && !Number.isNaN(s.possessionMinutes)) {
-        hasManualPossession = true;
-        manualPossessionMinutes += s.possessionMinutes;
+      // Posiadanie z danych meczowych – skaluje czas posiadania zespołu/przeciwnika do minut gry zawodnika
+      const match = filteredMatchesBySeason.find(mm => mm.matchId === matchId);
+      if (match?.matchData?.possession) {
+        const p = match.matchData.possession;
+        const teamPosTotal =
+          (p.teamFirstHalf ?? 0) +
+          (p.teamSecondHalf ?? 0);
+        const oppPosTotal =
+          (p.opponentFirstHalf ?? 0) +
+          (p.opponentSecondHalf ?? 0);
+
+        // minuty zawodnika w tym meczu
+        const pm = match.playerMinutes?.find((pm: any) => pm.playerId === targetPlayerId);
+        const playerMinutesInMatch = pm ? Math.max(0, pm.endMinute - pm.startMinute) : 0;
+
+        if (playerMinutesInMatch > 0 && (teamPosTotal > 0 || oppPosTotal > 0)) {
+          const matchDuration = (p.teamFirstHalf ?? 0) + (p.teamSecondHalf ?? 0) + (p.opponentFirstHalf ?? 0) + (p.opponentSecondHalf ?? 0) + (p.deadFirstHalf ?? 0) + (p.deadSecondHalf ?? 0);
+          const durationForScaling = matchDuration > 0 ? matchDuration : 90;
+          const scale = playerMinutesInMatch / durationForScaling;
+
+          teamPossessionFromMatchData += teamPosTotal * scale;
+          opponentPossessionFromMatchData += oppPosTotal * scale;
+        }
       }
     });
+
+    // Jeśli nie ma ręcznie wpisanego posiadania, użyj danych meczowych
+    if (!hasManualPossession && (teamPossessionFromMatchData > 0 || opponentPossessionFromMatchData > 0)) {
+      manualPossessionMinutes = teamPossessionFromMatchData;
+      manualOpponentPossessionMinutes = opponentPossessionFromMatchData;
+      hasManualPossession = true;
+    } else if (hasManualPossession) {
+      // Przybliżenie czasu posiadania przeciwnika dla wybranego zawodnika:
+      // minuty gry zawodnika minus wpisany czas posiadania naszego zespołu.
+      manualOpponentPossessionMinutes = Math.max(0, totalMinutes - manualPossessionMinutes);
+    }
 
     return {
       totalPxT,
@@ -3165,6 +3226,7 @@ export default function PlayerDetailsPage() {
       manualPassInaccurate: hasManualPasses ? manualPassInaccurate : undefined,
       manualPassTotal: hasManualPasses ? manualPassAccurate + manualPassInaccurate : undefined,
       manualPossessionMinutes: hasManualPossession ? manualPossessionMinutes : undefined,
+      manualOpponentPossessionMinutes: hasManualPossession ? manualOpponentPossessionMinutes : undefined,
       // Liczniki akcji jako podający - miejsca startowe (P0-P3 Start)
       senderP0StartCount,
       senderP1StartCount,
@@ -4035,8 +4097,6 @@ export default function PlayerDetailsPage() {
                   if (typeof window !== 'undefined') {
                     localStorage.setItem('selectedTeam', newTeam);
                   }
-                  // Resetuj wybór zawodnika przy zmianie zespołu - ustaw pusty string, aby useEffect mógł ustawić pierwszego dostępnego
-                  setSelectedPlayerForView("");
                   // Wyczyść akcje, aby wymusić przeładowanie
                   setAllActions([]);
                   setAllShots([]);
@@ -4044,10 +4104,6 @@ export default function PlayerDetailsPage() {
                   setManuallyDeselectedAll(false);
                   manualDeselectTriggeredRef.current = false;
                   hasLoadedActionsRef.current = false;
-                  // Wyczyść localStorage dla selectedPlayerForView, aby wymusić wybór pierwszego zawodnika z nowego zespołu
-                  if (typeof window !== 'undefined') {
-                    localStorage.removeItem('selectedPlayerForView');
-                  }
                   // Zresetuj lastLoadedTeamRef, aby umożliwić załadowanie meczów dla nowego zespołu
                   lastLoadedTeamRef.current = null;
                 }}
@@ -4564,7 +4620,7 @@ export default function PlayerDetailsPage() {
                             </div>
                             <PKEntriesPitch
                               pkEntries={pkEntriesFilteredForView}
-                              // Celowo nie podświetlamy po kliknięciu – klik ma pokazywać szczegóły niżej
+                              playersIndex={playersIndex}
                               selectedEntryId={undefined}
                               onEntryClick={(entry) => setSelectedPKEntryIdForView(entry.id)}
                               hideTeamLogos
@@ -6401,6 +6457,16 @@ export default function PlayerDetailsPage() {
                                 )}
                               </span>
                             </div>
+                            <div className={styles.detailsRow}>
+                              <span className={styles.detailsLabel}>/ min posiadania przeciwnika:</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueMain}>
+                                  {playerStats.manualOpponentPossessionMinutes !== undefined && playerStats.manualOpponentPossessionMinutes > 0
+                                    ? (playerStats.totalRegains / playerStats.manualOpponentPossessionMinutes).toFixed(3)
+                                    : 'brak danych'}
+                                </span>
+                              </span>
+                            </div>
                             {regainAttackDefenseMode === 'attack' && (
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', marginBottom: '8px' }}>
                                 <div className={styles.detailsRow}>
@@ -6465,6 +6531,16 @@ export default function PlayerDetailsPage() {
                                         </span>
                                       </>
                                     )}
+                                  </span>
+                                </div>
+                                <div className={styles.detailsRow}>
+                                  <span className={styles.detailsLabel}><span className={styles.preserveCase}>xT</span> / min posiadania przeciwnika:</span>
+                                  <span className={styles.detailsValue}>
+                                    <span className={styles.valueMain}>
+                                      {playerStats.manualOpponentPossessionMinutes !== undefined && playerStats.manualOpponentPossessionMinutes > 0
+                                        ? (playerStats.regainXTInDefense / playerStats.manualOpponentPossessionMinutes).toFixed(3)
+                                        : 'brak danych'}
+                                    </span>
                                   </span>
                                 </div>
                               </div>
@@ -7255,6 +7331,16 @@ export default function PlayerDetailsPage() {
                                 <span className={styles.valueSecondary}>({playerStats.losesPer90.toFixed(1)} / 90 min)</span>
                               </span>
             </div>
+                            <div className={styles.detailsRow}>
+                              <span className={styles.detailsLabel}>/ min posiadania:</span>
+                              <span className={styles.detailsValue}>
+                                <span className={styles.valueMain}>
+                                  {playerStats.manualPossessionMinutes !== undefined && playerStats.manualPossessionMinutes > 0
+                                    ? (playerStats.totalLoses / playerStats.manualPossessionMinutes).toFixed(3)
+                                    : 'brak danych'}
+                                </span>
+                              </span>
+                            </div>
                             {losesAttackDefenseMode === 'attack' && (
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', marginBottom: '8px' }}>
                                 <div className={styles.detailsRow}>
@@ -7281,6 +7367,16 @@ export default function PlayerDetailsPage() {
                                         <span className={styles.valueSecondary}> • {(playerStats.losesXTInDefense / playerStats.losesDefenseCount).toFixed(3)}/akcję</span>
                                       </>
                                     )}
+                                  </span>
+                                </div>
+                                <div className={styles.detailsRow}>
+                                  <span className={styles.detailsLabel}><span className={styles.preserveCase}>xT</span> / min posiadania:</span>
+                                  <span className={styles.detailsValue}>
+                                    <span className={styles.valueMain}>
+                                      {playerStats.manualPossessionMinutes !== undefined && playerStats.manualPossessionMinutes > 0
+                                        ? (playerStats.losesXTInDefense / playerStats.manualPossessionMinutes).toFixed(3)
+                                        : 'brak danych'}
+                                    </span>
                                   </span>
                                 </div>
                               </div>

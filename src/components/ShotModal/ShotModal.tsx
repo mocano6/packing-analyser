@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Shot, Player, TeamInfo } from "@/types";
-import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
+import { buildPlayersIndex, getPlayerLabel, OWN_GOAL_PLAYER_ID } from "@/utils/playerUtils";
 import { isInPenaltyAreaCanonical, isInOpponentPenaltyAreaCanonical } from "@/utils/pitchZones";
 import styles from "./ShotModal.module.css";
 
@@ -66,6 +66,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     isControversial: false,
     previousShotId: "",
     isFromPK: false,
+    isOwnGoal: false, // Tylko w obronie: bramka samobójcza (bramkarz wybrany osobno)
   });
   const isEditMode = Boolean(editingShot);
   const shotCoords = useMemo(
@@ -389,8 +390,22 @@ const ShotModal: React.FC<ShotModalProps> = ({
     lastInitEditingShotIdRef.current = editingShotId;
 
     if (editingShot) {
+      const isOwnGoalShot = (editingShot as any).isOwnGoal || editingShot.playerId === OWN_GOAL_PLAYER_ID;
+      const editingTeamContext = editingShot.teamContext || "attack";
+      const defenseOwnGoalPlayerId =
+        editingTeamContext === "defense" && isOwnGoalShot && editingShot.playerId !== OWN_GOAL_PLAYER_ID
+          ? editingShot.playerId
+          : editingTeamContext === "defense" && isOwnGoalShot
+          ? "" // stary zapis: OG bez konkretnego bramkarza
+          : editingShot.playerId || "";
       setFormData({
-        playerId: editingShot.playerId || "",
+        playerId:
+          editingTeamContext === "attack" && isOwnGoalShot
+            ? OWN_GOAL_PLAYER_ID
+            : editingTeamContext === "defense"
+            ? defenseOwnGoalPlayerId
+            : (editingShot.playerId || ""),
+        isOwnGoal: editingTeamContext === "defense" ? isOwnGoalShot : false,
         minute: editingShot.minute,
         xG: reverseFinalXG(Math.round(editingShot.xG * 100), editingShot),
         bodyPart: editingShot.bodyPart || "foot",
@@ -453,6 +468,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         isControversial: false,
         previousShotId: "",
         isFromPK: isFromPKByPosition,
+        isOwnGoal: false,
       });
     }
   }, [isOpen, editingShot, editingShot?.id, x, y, xG, matchInfo]);
@@ -468,10 +484,12 @@ const ShotModal: React.FC<ShotModalProps> = ({
   }, [formData.teamContext, defaultGoalkeeper, formData.playerId]);
 
   const handlePlayerSelect = (playerId: string) => {
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       playerId,
-    });
+      // Bramka samobójcza = gol
+      shotType: playerId === OWN_GOAL_PLAYER_ID ? "goal" : prev.shotType,
+    }));
   };
 
   const handleAssistantSelect = (playerId: string) => {
@@ -505,6 +523,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       pkPlayersCount: 1, // Reset liczby zawodników w PK
       isP1Active: true,
       isP2Active: false,
+      isOwnGoal: false, // Reset przy przełączaniu na atak/obronę
     });
   };
 
@@ -925,6 +944,10 @@ const ShotModal: React.FC<ShotModalProps> = ({
       y: editingShot ? editingShot.y : y,
       xG: finalXG / 100, // Konwersja z procentów na ułamek
       playerId: formData.playerId,
+      isOwnGoal:
+        formData.teamContext === "defense"
+          ? formData.isOwnGoal
+          : formData.playerId === OWN_GOAL_PLAYER_ID,
       minute: lockedMinute,
       isGoal: formData.shotType === "goal",
       bodyPart: formData.bodyPart,
@@ -1076,8 +1099,10 @@ const ShotModal: React.FC<ShotModalProps> = ({
           {/* Wybór zawodnika z kafelków */}
           <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
             <label>
-              {formData.teamContext === "attack" 
-                ? "Zawodnik (atak - zielony):" 
+              {formData.teamContext === "attack"
+                ? "Zawodnik (atak - zielony):"
+                : formData.isOwnGoal
+                ? "Strzelec z naszego zespołu (własna bramka):"
                 : "Bramkarz (obrona - czerwony):"
               }
             </label>
@@ -1085,35 +1110,73 @@ const ShotModal: React.FC<ShotModalProps> = ({
               {(() => {
                 const playersToShow = formData.teamContext === "defense" ? filteredGoalkeepers : filteredPlayers;
                 const playersByPosition = getPlayersByPosition(playersToShow);
-                return playersByPosition.sortedPositions.map((position) => (
-                  <div key={position} className={styles.positionGroup}>
-                    <div className={styles.playersGrid}>
-                      <div className={styles.positionLabel}>
-                        {position === 'Skrzydłowi' ? 'W' : position}
-                      </div>
-                      <div className={styles.playersGridItems}>
-                        {playersByPosition.byPosition[position].map(player => (
-                          <div
-                            key={player.id}
-                            className={`${styles.playerTile} ${
-                              formData.playerId === player.id 
-                                ? (formData.teamContext === "attack" ? styles.playerAttackerTile : styles.playerDefenderTile)
-                                : ''
-                            }`}
-                            onClick={() => handlePlayerSelect(player.id)}
-                          >
-                            <div className={styles.playerContent}>
-                              <div className={styles.number}>{player.number}</div>
-                              <div className={styles.playerInfo}>
-                                <div className={styles.name}>{getPlayerLabel(player.id, playersIndex)}</div>
+                return (
+                  <>
+                    {/* Kafelek OG: w ataku wybór strzelca (own_goal); w obronie przełącznik bramka samobójcza + poniżej wybór bramkarza (strzelca) */}
+                    {formData.teamContext === "attack" ? (
+                      <div className={styles.positionGroup}>
+                        <div className={styles.playersGrid}>
+                          <div className={styles.positionLabel}>OG</div>
+                          <div className={styles.playersGridItems}>
+                            <div
+                              className={`${styles.playerTile} ${formData.playerId === OWN_GOAL_PLAYER_ID ? styles.playerOwnGoalTile : ""}`}
+                              onClick={() => handlePlayerSelect(OWN_GOAL_PLAYER_ID)}
+                            >
+                              <div className={styles.playerContent}>
+                                <div className={styles.ownGoalLabel}>Bramka samobójcza</div>
                               </div>
                             </div>
                           </div>
-                        ))}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ));
+                    ) : (
+                      <div className={styles.positionGroup}>
+                        <div className={styles.playersGrid}>
+                          <div className={styles.positionLabel}>OG</div>
+                          <div className={styles.playersGridItems}>
+                            <div
+                              className={`${styles.playerTile} ${formData.isOwnGoal ? styles.playerOwnGoalTile : ""}`}
+                              onClick={() => setFormData((prev) => ({ ...prev, isOwnGoal: !prev.isOwnGoal }))}
+                            >
+                              <div className={styles.playerContent}>
+                                <div className={styles.ownGoalLabel}>Bramka samobójcza</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {playersByPosition.sortedPositions.map((position) => (
+                      <div key={position} className={styles.positionGroup}>
+                        <div className={styles.playersGrid}>
+                          <div className={styles.positionLabel}>
+                            {position === 'Skrzydłowi' ? 'W' : position}
+                          </div>
+                          <div className={styles.playersGridItems}>
+                            {playersByPosition.byPosition[position].map(player => (
+                              <div
+                                key={player.id}
+                                className={`${styles.playerTile} ${
+                                  formData.playerId === player.id 
+                                    ? (formData.teamContext === "attack" ? styles.playerAttackerTile : styles.playerDefenderTile)
+                                    : ''
+                                }`}
+                                onClick={() => handlePlayerSelect(player.id)}
+                              >
+                                <div className={styles.playerContent}>
+                                  <div className={styles.number}>{player.number}</div>
+                                  <div className={styles.playerInfo}>
+                                    <div className={styles.name}>{getPlayerLabel(player.id, playersIndex)}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                );
               })()}
             </div>
           </div>

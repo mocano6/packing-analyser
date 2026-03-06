@@ -687,6 +687,20 @@
   background-color: rgba(244, 67, 54, 0.05);
 }
 
+.playerOwnGoalTile {
+  border: 2px solid #9c27b0;
+  background-color: rgba(156, 39, 176, 0.08);
+}
+
+.playerOwnGoalTile .ownGoalLabel,
+.ownGoalLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b21a8;
+  text-align: center;
+  padding: 4px 0;
+}
+
 .playerBlockingTile {
   border: 2px solid #ff9800;
   background-color: rgba(255, 152, 0, 0.05);
