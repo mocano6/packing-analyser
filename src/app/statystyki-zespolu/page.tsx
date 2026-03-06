@@ -93,22 +93,37 @@ export default function StatystykiZespoluPage() {
     }
   }, [selectedTeam]);
 
-  // Wielokrotny wybór meczów; domyślnie ostatni (najnowszy) mecz
+  // Wielokrotny wybór meczów; ostatnie zaznaczenie zapamiętywane w localStorage per zespół
   const [selectedMatches, setSelectedMatches] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("teamStats_selectedMatches");
-      if (stored) {
+      const team = localStorage.getItem("selectedTeam") || "";
+      if (team) {
+        const stored = localStorage.getItem(`teamStats_selectedMatches_${team}`);
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored) as unknown;
+            if (Array.isArray(parsed) && parsed.every((id): id is string => typeof id === "string")) {
+              return parsed.length > 0 ? [parsed[0]] : [];
+            }
+          } catch {
+            // ignore
+          }
+        }
+        const legacy = localStorage.getItem("teamStats_selectedMatch") || "";
+        if (legacy) return [legacy];
+      }
+      // fallback: stary globalny klucz (kompatybilność wsteczna)
+      const globalStored = localStorage.getItem("teamStats_selectedMatches");
+      if (globalStored) {
         try {
-          const parsed = JSON.parse(stored) as unknown;
+          const parsed = JSON.parse(globalStored) as unknown;
           if (Array.isArray(parsed) && parsed.every((id): id is string => typeof id === "string")) {
-            return parsed;
+            return parsed.length > 0 ? [parsed[0]] : [];
           }
         } catch {
           // ignore
         }
       }
-      const legacy = localStorage.getItem("teamStats_selectedMatch") || "";
-      if (legacy) return [legacy];
     }
     return [];
   });
@@ -152,11 +167,18 @@ export default function StatystykiZespoluPage() {
     }
   }, [selectedSeason]);
 
+  // Zapisuj ostatnie zaznaczenie meczów w localStorage per zespół (podręczna)
   useEffect(() => {
-    if (typeof window !== "undefined" && selectedMatches.length > 0) {
-      localStorage.setItem("teamStats_selectedMatches", JSON.stringify(selectedMatches));
+    if (typeof window !== "undefined" && selectedTeam) {
+      const key = `teamStats_selectedMatches_${selectedTeam}`;
+      if (selectedMatches.length > 0) {
+        localStorage.setItem(key, JSON.stringify(selectedMatches));
+      } else {
+        localStorage.removeItem(key);
+      }
     }
-  }, [selectedMatches]);
+  }, [selectedTeam, selectedMatches]);
+
   const [selectedMetric, setSelectedMetric] = useState<'pxt' | 'xt' | 'packing'>('pxt');
   const [selectedActionType, setSelectedActionType] = useState<'pass' | 'dribble' | 'all'>('all');
   const [heatmapMode, setHeatmapMode] = useState<"pxt" | "count">("pxt");
@@ -180,7 +202,32 @@ export default function StatystykiZespoluPage() {
   const [possessionExpanded, setPossessionExpanded] = useState(false);
   const [shotsExpanded, setShotsExpanded] = useState(false);
   const [kpiShotsRowExpanded, setKpiShotsRowExpanded] = useState(false);
+  const [kpiPkRowExpanded, setKpiPkRowExpanded] = useState(false);
   const [kpiXgRowExpanded, setKpiXgRowExpanded] = useState(false);
+  const [kpiXgPlayersModalOpen, setKpiXgPlayersModalOpen] = useState(false);
+  const [kpiShotsPlayersModalOpen, setKpiShotsPlayersModalOpen] = useState(false);
+  const [kpiPkPlayersModalOpen, setKpiPkPlayersModalOpen] = useState(false);
+  const [kpiPxtPlayersModalOpen, setKpiPxtPlayersModalOpen] = useState(false);
+  const [kpiPxtPlayersRoles, setKpiPxtPlayersRoles] = useState<{
+    sender: boolean;
+    receiver: boolean;
+    dribbler: boolean;
+  }>({ sender: true, receiver: true, dribbler: true });
+  const [kpiPxtSort, setKpiPxtSort] = useState<{ column: string | null; dir: 'asc' | 'desc' }>({ column: null, dir: 'desc' });
+  const [kpiP2P3PlayersModalOpen, setKpiP2P3PlayersModalOpen] = useState(false);
+  const [kpiP2P3Sort, setKpiP2P3Sort] = useState<{ column: string | null; dir: 'asc' | 'desc' }>({ column: null, dir: 'desc' });
+  const [kpiShotsSort, setKpiShotsSort] = useState<{ column: string | null; dir: 'asc' | 'desc' }>({ column: null, dir: 'desc' });
+  const [kpiXgSort, setKpiXgSort] = useState<{ column: string | null; dir: 'asc' | 'desc' }>({ column: null, dir: 'desc' });
+  const [kpiPkSort, setKpiPkSort] = useState<{ column: string | null; dir: 'asc' | 'desc' }>({ column: null, dir: 'desc' });
+  const [kpiPkPlayersRoles, setKpiPkPlayersRoles] = useState<{
+    sender: boolean;
+    receiver: boolean;
+    dribbler: boolean;
+  }>({
+    sender: true,
+    receiver: true,
+    dribbler: true,
+  });
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
   const [gpsMatchDayExpanded, setGpsMatchDayExpanded] = useState(true);
   const [gpsMatchDayPeriod, setGpsMatchDayPeriod] = useState<'total' | 'firstHalf' | 'secondHalf'>('total');
@@ -212,6 +259,7 @@ export default function StatystykiZespoluPage() {
   const [pkEntryTypeFilter, setPkEntryTypeFilter] = useState<"all" | "pass" | "dribble" | "sfg">("all");
   const [matchSelectOpen, setMatchSelectOpen] = useState(false);
   const matchSelectRef = useRef<HTMLDivElement>(null);
+  const lastTeamWithMatchesRef = useRef<string>("");
   const [pkOnlyRegain, setPkOnlyRegain] = useState(false);
   const [pkOnlyShot, setPkOnlyShot] = useState(false);
   const [pkOnlyGoal, setPkOnlyGoal] = useState(false);
@@ -353,10 +401,14 @@ export default function StatystykiZespoluPage() {
     }
   }, [selectedTeam]); // Tylko selectedTeam w dependency - bez funkcji żeby uniknąć infinite loop
 
-  // Filtruj mecze według wybranego zespołu i sezonu
+  // Filtruj mecze według wybranego zespołu i sezonu i sortuj od najnowszych
   const teamMatches = useMemo(() => {
     const teamFiltered = allMatches.filter(match => match.team === selectedTeam);
-    return selectedSeason ? filterMatchesBySeason(teamFiltered, selectedSeason) : teamFiltered;
+    const seasonFiltered = selectedSeason ? filterMatchesBySeason(teamFiltered, selectedSeason) : teamFiltered;
+    // Zawsze sortuj mecze malejąco po dacie, żeby najnowsze były na górze listy
+    return [...seasonFiltered].sort(
+      (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
+    );
   }, [allMatches, selectedTeam, selectedSeason]);
 
   // Oblicz dostępne sezony na podstawie meczów wybranego zespołu
@@ -365,10 +417,18 @@ export default function StatystykiZespoluPage() {
     return getAvailableSeasonsFromMatches(teamFiltered);
   }, [allMatches, selectedTeam]);
 
-  // Domyślnie zaznacz ostatni (najnowszy) mecz, gdy brak wyboru lub wybrane nie są już dostępne
+  // Domyślnie zaznacz ostatni (najnowszy) mecz, gdy brak wyboru lub wybrane nie są już dostępne.
+  // Gdy lista meczów jest pusta: nie czyść od razu (dane mogą się ładować po odświeżeniu).
+  // Czyść tylko gdy ten sam zespół już wcześniej miał załadowane dane i teraz ma 0 meczów.
+  // Przywróć zapamiętane zaznaczenie z localStorage (per zespół), także gdy selectedTeam jeszcze "" (SSR/hydration).
   useEffect(() => {
+    const prevTeam = lastTeamWithMatchesRef.current;
+    if (selectedTeam) lastTeamWithMatchesRef.current = selectedTeam;
+
     if (teamMatches.length === 0) {
-      if (selectedMatches.length > 0) setSelectedMatches([]);
+      if (selectedMatches.length > 0 && prevTeam === selectedTeam && selectedTeam) {
+        setSelectedMatches([]);
+      }
       return;
     }
 
@@ -380,10 +440,34 @@ export default function StatystykiZespoluPage() {
 
     const stillValid = selectedMatches.filter(id => availableMatchIds.has(id));
     if (stillValid.length > 0) {
-      if (stillValid.length !== selectedMatches.length) {
-        setSelectedMatches(stillValid);
+      const single = [stillValid[0]];
+      if (single.length !== selectedMatches.length || selectedMatches[0] !== single[0]) {
+        setSelectedMatches(single);
       }
       return;
+    }
+
+    // Brak ważnego wyboru — przywróć z localStorage (zespół ze state lub z localStorage przy odświeżeniu)
+    const teamForStorage =
+      selectedTeam ||
+      (typeof window !== "undefined" ? localStorage.getItem("selectedTeam") : null) ||
+      "";
+    if (typeof window !== "undefined" && teamForStorage) {
+      const stored = localStorage.getItem(`teamStats_selectedMatches_${teamForStorage}`);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as unknown;
+          if (Array.isArray(parsed) && parsed.every((id): id is string => typeof id === "string")) {
+            const restoredValid = parsed.filter(id => availableMatchIds.has(id));
+            if (restoredValid.length > 0) {
+              setSelectedMatches([restoredValid[0]]);
+              return;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
     }
 
     const byDateDesc = [...teamMatches].sort((a, b) => {
@@ -393,7 +477,7 @@ export default function StatystykiZespoluPage() {
     });
     const newestMatchId = byDateDesc[0]?.matchId || "";
     if (newestMatchId) setSelectedMatches([newestMatchId]);
-  }, [teamMatches, selectedMatches]);
+  }, [teamMatches, selectedMatches, selectedTeam]);
 
   // Zamknij dropdown meczu przy kliknięciu poza lub Escape
   useEffect(() => {
@@ -656,6 +740,25 @@ export default function StatystykiZespoluPage() {
     return teamMatches.find((match) => match.matchId === firstId);
   }, [teamMatches, selectedMatches]);
 
+  // Zagregowane posiadanie zespołu i przeciwnika z wybranych meczów (dla wskaźników /min posiadania)
+  const aggregatedPossession = useMemo(() => {
+    let teamMin = 0;
+    let opponentMin = 0;
+    selectedMatches.forEach((matchId) => {
+      const m = teamMatches.find((mm) => mm.matchId === matchId);
+      if (!m?.matchData?.possession) return;
+      const p = m.matchData.possession;
+      const isOurHome = m.team === selectedTeam;
+      teamMin += isOurHome
+        ? (p.teamFirstHalf ?? 0) + (p.teamSecondHalf ?? 0)
+        : (p.opponentFirstHalf ?? 0) + (p.opponentSecondHalf ?? 0);
+      opponentMin += isOurHome
+        ? (p.opponentFirstHalf ?? 0) + (p.opponentSecondHalf ?? 0)
+        : (p.teamFirstHalf ?? 0) + (p.teamSecondHalf ?? 0);
+    });
+    return { teamMin, opponentMin };
+  }, [selectedMatches, teamMatches, selectedTeam]);
+
   // Etykieta przycisku: jeden mecz – pełna nazwa; wiele – "X meczów" lub pierwszy + ", +N"
   const matchSelectDisplayInfo = useMemo(() => {
     if (selectedMatches.length === 0) {
@@ -794,6 +897,18 @@ export default function StatystykiZespoluPage() {
       return true;
     });
   }, [pkEntriesSideStats.entries, pkEntryTypeFilter, pkOnlyRegain, pkOnlyShot, pkOnlyGoal]);
+
+  // Na mapie w modalnym widoku chcemy pokazać wejścia w PK obu zespołów (atak + obrona)
+  const pkEntriesFilteredForMap = useMemo(() => {
+    const entries = (allPKEntries || []).filter((e: any) => e && e.teamId === selectedTeam);
+    return entries.filter((e: any) => {
+      if (pkEntryTypeFilter !== "all" && (e.entryType || "pass") !== pkEntryTypeFilter) return false;
+      if (pkOnlyRegain && !e.isRegain) return false;
+      if (pkOnlyShot && !e.isShot) return false;
+      if (pkOnlyGoal && !e.isGoal) return false;
+      return true;
+    });
+  }, [allPKEntries, selectedTeam, pkEntryTypeFilter, pkOnlyRegain, pkOnlyShot, pkOnlyGoal]);
 
   const selectedPKEntry = useMemo(() => {
     if (!selectedPKEntryIdForView) return null;
@@ -1782,6 +1897,8 @@ export default function StatystykiZespoluPage() {
     let regainDefenseCount = 0;
     let regainXTInAttack = 0;
     let regainXTInDefense = 0;
+    let regainP2Pxt = 0;
+    let regainP3Pxt = 0;
 
     let attackContextCount = 0;
     let defenseContextCount = 0;
@@ -1856,6 +1973,12 @@ export default function StatystykiZespoluPage() {
       if (isAttack) {
         regainAttackCount += 1;
         regainXTInAttack += attackXT;
+        if (action.isP2 || action.isP2Start) {
+          regainP2Pxt += attackXT;
+        }
+        if (action.isP3 || action.isP3Start) {
+          regainP3Pxt += attackXT;
+        }
         attackContextCount += 1;
         attackPlayersBehindSum += playersBehind;
         attackOpponentsBehindSum += opponentsBehind;
@@ -1906,6 +2029,8 @@ export default function StatystykiZespoluPage() {
       regainXTInDefense,
       regainXTInAttackPerAction: regainAttackCount > 0 ? regainXTInAttack / regainAttackCount : 0,
       regainXTInDefensePerAction: regainDefenseCount > 0 ? regainXTInDefense / regainDefenseCount : 0,
+      regainP2Pxt,
+      regainP3Pxt,
       attackPct: totalRegains > 0 ? (regainAttackCount / totalRegains) * 100 : 0,
       defensePct: totalRegains > 0 ? (regainDefenseCount / totalRegains) * 100 : 0,
       avgPlayersBehindAttack: attackContextCount > 0 ? attackPlayersBehindSum / attackContextCount : 0,
@@ -3444,28 +3569,26 @@ export default function StatystykiZespoluPage() {
                   className={styles.matchSelectDropdown}
                   role="listbox"
                   aria-labelledby="match-select-label"
-                  aria-multiselectable="true"
+                  aria-multiselectable="false"
                 >
                   {teamMatches.map((match) => {
                     const matchId = match.matchId || "";
-                    const isChecked = matchId ? selectedMatches.includes(matchId) : false;
+                    const isSelected = matchId ? selectedMatches.includes(matchId) : false;
                     return (
                       <li
                         key={matchId || match.opponent}
                         role="option"
-                        aria-selected={isChecked}
+                        aria-selected={isSelected}
                         className={styles.matchSelectOptionRow}
                       >
                         <label className={styles.matchSelectOptionLabel}>
                           <input
-                            type="checkbox"
-                            checked={isChecked}
+                            type="radio"
+                            name="match-select-radio"
+                            checked={isSelected}
                             onChange={() => {
-                              setSelectedMatches((prev) =>
-                                isChecked
-                                  ? prev.filter((id) => id !== matchId)
-                                  : [...prev, matchId]
-                              );
+                              setSelectedMatches([matchId]);
+                              setMatchSelectOpen(false);
                             }}
                             className={styles.matchSelectCheckbox}
                             aria-label={`${match.opponent} (${match.date}) - ${match.competition} - ${match.isHome ? "Dom" : "Wyjazd"}`}
@@ -3634,6 +3757,147 @@ export default function StatystykiZespoluPage() {
                   });
                   const teamXGOpenPlay = teamXG - teamXGSFG - teamXGRegain;
                   const opponentXGOpenPlay = opponentXG - opponentXGSFG - opponentXGRegain;
+                  const teamShotToRegainWindowMap = new Map<string, boolean>();
+                  regainWithTs.forEach((item, i) => {
+                    const nextTs = i < regainWithTs.length - 1 ? regainWithTs[i + 1].ts : Infinity;
+                    const endTs = item.ts + 8;
+                    const regainTeamId = item.action.teamId || (item.action.teamContext === 'attack' ? teamIdInMatch : opponentIdInMatch);
+                    if (regainTeamId !== teamIdInMatch) return;
+                    shotsWithTs.forEach((shotEntry) => {
+                      const shotId = shotEntry.shot?.id;
+                      if (!shotId) return;
+                      const isInWindow = shotEntry.ts > item.ts && shotEntry.ts <= endTs && shotEntry.ts < nextTs && resolveShotTeamId(shotEntry.shot) === regainTeamId;
+                      if (isInWindow) {
+                        teamShotToRegainWindowMap.set(shotId, true);
+                      }
+                    });
+                  });
+                  const xgPlayersSummary = teamShots
+                    .reduce((acc, shot) => {
+                      const xgValue = Number(shot.xG) || 0;
+                      if (xgValue <= 0) return acc;
+                      const playerIdRaw = String(shot.playerId || '').trim();
+                      const fallbackName = String(shot.playerName || shot.player || shot.playerDisplayName || '').trim();
+                      const playerId = playerIdRaw || `name:${fallbackName || 'unknown'}`;
+                      const playerName = playerIdRaw
+                        ? getPlayerLabel(playerIdRaw, playersIndex)
+                        : (fallbackName || 'Nieznany zawodnik');
+                      if (!acc[playerId]) {
+                        acc[playerId] = {
+                          playerId,
+                          playerName,
+                          xg: 0,
+                          shots: 0,
+                          goals: 0,
+                          xgSfg: 0,
+                          xgRegain: 0,
+                        };
+                      }
+                      acc[playerId].xg += xgValue;
+                      acc[playerId].shots += 1;
+                      const isGoal = shot.isGoal || shot.shotType === 'goal';
+                      if (isGoal) acc[playerId].goals += 1;
+                      if (isSfgShot(shot)) {
+                        acc[playerId].xgSfg += xgValue;
+                      }
+                      if (shot.id && teamShotToRegainWindowMap.get(shot.id)) {
+                        acc[playerId].xgRegain += xgValue;
+                      }
+                      return acc;
+                    }, {} as Record<string, {
+                      playerId: string;
+                      playerName: string;
+                      xg: number;
+                      shots: number;
+                      goals: number;
+                      xgSfg: number;
+                      xgRegain: number;
+                    }>);
+                  const xgPlayersList = Object.values(xgPlayersSummary)
+                    .map((playerStats) => ({
+                      ...playerStats,
+                      xgPerShot: playerStats.shots > 0 ? playerStats.xg / playerStats.shots : 0,
+                      xgSharePct: teamXG > 0 ? (playerStats.xg / teamXG) * 100 : 0,
+                    }))
+                    .sort((a, b) => b.xg - a.xg);
+                  const kpiXgSortCol = kpiXgSort.column;
+                  const kpiXgSortDir = kpiXgSort.dir;
+                  const sortedXgPlayersList = !kpiXgSortCol
+                    ? xgPlayersList
+                    : [...xgPlayersList].sort((a, b) => {
+                        let va: string | number;
+                        let vb: string | number;
+                        if (kpiXgSortCol === 'playerName') {
+                          va = (a.playerName ?? '');
+                          vb = (b.playerName ?? '');
+                          return kpiXgSortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+                        }
+                        if (kpiXgSortCol === 'xgMinusGoals') {
+                          va = a.xg - (a.goals ?? 0);
+                          vb = b.xg - (b.goals ?? 0);
+                        } else {
+                          va = Number((a as Record<string, unknown>)[kpiXgSortCol]) ?? 0;
+                          vb = Number((b as Record<string, unknown>)[kpiXgSortCol]) ?? 0;
+                        }
+                        return kpiXgSortDir === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number);
+                      });
+
+                  const shotsPlayersSummary = teamShots.reduce((acc, shot) => {
+                    const playerIdRaw = String(shot.playerId || '').trim();
+                    const fallbackName = String(shot.playerName || shot.player || shot.playerDisplayName || '').trim();
+                    const playerId = playerIdRaw || `name:${fallbackName || 'unknown'}`;
+                    const playerName = playerIdRaw
+                      ? getPlayerLabel(playerIdRaw, playersIndex)
+                      : (fallbackName || 'Nieznany zawodnik');
+                    if (!acc[playerId]) {
+                      acc[playerId] = {
+                        playerId,
+                        playerName,
+                        shots: 0,
+                        onTarget: 0,
+                        goals: 0,
+                        blocked: 0,
+                      };
+                    }
+                    acc[playerId].shots += 1;
+                    const isGoal = shot.isGoal || shot.shotType === 'goal';
+                    const isOnTarget = shot.shotType === 'on_target' || isGoal || shot.isGoal;
+                    const isBlocked = shot.shotType === 'blocked';
+                    if (isOnTarget) acc[playerId].onTarget += 1;
+                    if (isGoal) acc[playerId].goals += 1;
+                    if (isBlocked) acc[playerId].blocked += 1;
+                    return acc;
+                  }, {} as Record<string, {
+                    playerId: string;
+                    playerName: string;
+                    shots: number;
+                    onTarget: number;
+                    goals: number;
+                    blocked: number;
+                  }>);
+                  const shotsPlayersList = Object.values(shotsPlayersSummary)
+                    .map((playerStats) => ({
+                      ...playerStats,
+                      shotsSharePct: teamShotsCount > 0 ? (playerStats.shots / teamShotsCount) * 100 : 0,
+                      onTargetPct: playerStats.shots > 0 ? (playerStats.onTarget / playerStats.shots) * 100 : 0,
+                    }))
+                    .sort((a, b) => b.shots - a.shots);
+                  const kpiShotsSortCol = kpiShotsSort.column;
+                  const kpiShotsSortDir = kpiShotsSort.dir;
+                  const sortedShotsPlayersList = !kpiShotsSortCol
+                    ? shotsPlayersList
+                    : [...shotsPlayersList].sort((a, b) => {
+                        let va: string | number = (a as Record<string, unknown>)[kpiShotsSortCol];
+                        let vb: string | number = (b as Record<string, unknown>)[kpiShotsSortCol];
+                        if (kpiShotsSortCol === 'playerName') {
+                          va = (va as string) ?? '';
+                          vb = (vb as string) ?? '';
+                          return kpiShotsSortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+                        }
+                        va = Number(va) ?? 0;
+                        vb = Number(vb) ?? 0;
+                        return kpiShotsSortDir === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number);
+                      });
 
                   // Oblicz % strzałów z 1T w strefie 1T (KANONICZNIE, niezależnie od obrotu UI)
                   const teamShots1T = teamShots.filter(isIn1TZoneCanonical);
@@ -3650,14 +3914,344 @@ export default function StatystykiZespoluPage() {
                     e && e.teamId === selectedTeam && (e.teamContext ?? "attack") !== "defense"
                   );
                   const teamPKEntriesCount = teamPKEntries.length;
-                  const p2PassesCount = allActions.filter((action: Action) => {
-                    const isOwnAction = !action.teamId || action.teamId === selectedTeam;
-                    return isOwnAction && action.actionType === 'pass' && action.isP2 === true;
-                  }).length;
-                  const p3PassesCount = allActions.filter((action: Action) => {
-                    const isOwnAction = !action.teamId || action.teamId === selectedTeam;
-                    return isOwnAction && action.actionType === 'pass' && action.isP3 === true;
-                  }).length;
+                  const teamPKRegainCount = teamPKEntries.filter((e: any) => !!e.isRegain).length;
+                  const teamPKDribbleCount = teamPKEntries.filter((e: any) => (e.entryType || 'pass') === 'dribble').length;
+                  const teamPKPassCount = teamPKEntries.filter((e: any) => (e.entryType || 'pass') === 'pass').length;
+                  const opponentPKRegainCount = opponentPKEntries.filter((e: any) => !!e.isRegain).length;
+                  const opponentPKDribbleCount = opponentPKEntries.filter((e: any) => (e.entryType || 'pass') === 'dribble').length;
+                  const opponentPKPassCount = opponentPKEntries.filter((e: any) => (e.entryType || 'pass') === 'pass').length;
+                  const pkPlayersSummary = teamPKEntries.reduce((acc, entry: any) => {
+                    const enabledRoles = kpiPkPlayersRoles;
+                    const perEntryPlayers = new Map<string, { playerIdRaw: string; fallbackName: string }>();
+
+                    const rawType = String(entry.entryType || entry.actionType || '').toLowerCase();
+                    const isDribbleEntry = rawType === 'dribble';
+
+                    const addRolePlayer = (roleKey: 'sender' | 'receiver' | 'dribbler', idRaw?: string | null, nameRaw?: string | null) => {
+                      if (!enabledRoles[roleKey]) return;
+                      if (roleKey === 'sender' && isDribbleEntry) return;
+                      if (roleKey === 'dribbler' && !isDribbleEntry) return;
+
+                      const playerIdRaw = String(idRaw || '').trim();
+                      const fallbackName = String(nameRaw || '').trim();
+                      if (!playerIdRaw && !fallbackName) return;
+                      const key = playerIdRaw || `name:${fallbackName}`;
+                      if (!perEntryPlayers.has(key)) {
+                        perEntryPlayers.set(key, { playerIdRaw, fallbackName });
+                      }
+                    };
+
+                    addRolePlayer(
+                      'sender',
+                      entry.senderId ?? entry.playerId,
+                      entry.senderName ?? entry.playerName ?? entry.player ?? entry.playerDisplayName
+                    );
+                    addRolePlayer(
+                      'receiver',
+                      entry.receiverId ?? entry.playerId,
+                      entry.receiverName ?? entry.playerName ?? entry.player ?? entry.playerDisplayName
+                    );
+                    addRolePlayer(
+                      'dribbler',
+                      isDribbleEntry ? (entry.senderId ?? entry.playerId) : (entry.dribblerId ?? entry.playerId),
+                      isDribbleEntry
+                        ? (entry.senderName ?? entry.playerName ?? entry.player ?? entry.playerDisplayName)
+                        : (entry.dribblerName ?? entry.playerName ?? entry.player ?? entry.playerDisplayName)
+                    );
+
+                    if (perEntryPlayers.size === 0) {
+                      return acc;
+                    }
+
+                    const isRegainEntry = !!entry.isRegain;
+                    const isSfgEntry = (entry.entryType || entry.actionCategory) === 'sfg';
+                    const isShotEntry = !!entry.isShot;
+
+                    perEntryPlayers.forEach(({ playerIdRaw, fallbackName }, key) => {
+                      const hasId = !!playerIdRaw;
+                      const playerName = hasId
+                        ? getPlayerLabel(playerIdRaw, playersIndex)
+                        : fallbackName;
+                      if (!acc[key]) {
+                        acc[key] = {
+                          playerId: key,
+                          playerName,
+                          entries: 0,
+                          entriesRegain: 0,
+                          entriesSfg: 0,
+                          entriesShot: 0,
+                        };
+                      }
+                      acc[key].entries += 1;
+                      if (isRegainEntry) acc[key].entriesRegain += 1;
+                      if (isSfgEntry) acc[key].entriesSfg += 1;
+                      if (isShotEntry) acc[key].entriesShot += 1;
+                    });
+
+                    return acc;
+                  }, {} as Record<string, {
+                    playerId: string;
+                    playerName: string;
+                    entries: number;
+                    entriesRegain: number;
+                    entriesSfg: number;
+                    entriesShot: number;
+                  }>);
+                  const pkPlayersList = Object.values(pkPlayersSummary)
+                    .map((playerStats) => ({
+                      ...playerStats,
+                      entriesSharePct: teamPKEntriesCount > 0 ? (playerStats.entries / teamPKEntriesCount) * 100 : 0,
+                    }))
+                    .sort((a, b) => b.entries - a.entries);
+                  const kpiPkSortCol = kpiPkSort.column;
+                  const kpiPkSortDir = kpiPkSort.dir;
+                  const sortedPkPlayersList = !kpiPkSortCol
+                    ? pkPlayersList
+                    : [...pkPlayersList].sort((a, b) => {
+                        let va: string | number = (a as Record<string, unknown>)[kpiPkSortCol];
+                        let vb: string | number = (b as Record<string, unknown>)[kpiPkSortCol];
+                        if (kpiPkSortCol === 'playerName') {
+                          va = (va as string) ?? '';
+                          vb = (vb as string) ?? '';
+                          return kpiPkSortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+                        }
+                        va = Number(va) ?? 0;
+                        vb = Number(vb) ?? 0;
+                        return kpiPkSortDir === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number);
+                      });
+                  // Łączne PxT z całego meczu (1. + 2. połowa) – używane w KPI PxT
+                  const totalPxtAll = halfTimeStats.firstHalf.pxt + halfTimeStats.secondHalf.pxt;
+                  // PxT per zawodnik: podanie (sender), odbiór (receiver), drybling (dribbler) + ile razy zdobyli/otrzymali piłkę w P2/P3
+                  const teamPxtActions = allActions.filter((a: any) => a.teamId === selectedTeam);
+                  const pxtPlayersSummary = teamPxtActions.reduce(
+                    (
+                      acc: Record<string, {
+                        playerId: string;
+                        playerName: string;
+                        pxtSender: number;
+                        pxtReceiver: number;
+                        pxtDribbler: number;
+                        p2Sender: number;
+                        p2Receiver: number;
+                        p3Sender: number;
+                        p3Receiver: number;
+                        p2Dribbler: number;
+                        p3Dribbler: number;
+                      }>,
+                      action: any
+                    ) => {
+                      const packingPoints = action.packingPoints || 0;
+                      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+                      const pxtValue = xTDifference * packingPoints;
+                      const isDribble = (action.actionType || '').toLowerCase() === 'dribble';
+                      const isPass = (action.actionType || '').toLowerCase() === 'pass' || !isDribble;
+                      const inP2 = action.isP2 === true;
+                      const inP3 = action.isP3 === true;
+
+                      const ensurePlayer = (playerId: string) => {
+                        if (!playerId) return undefined;
+                        const name =
+                          getPlayerLabel(playerId, playersIndex) ||
+                          action.senderName ||
+                          action.receiverName ||
+                          'Nieznany zawodnik';
+                        if (!acc[playerId]) {
+                          acc[playerId] = {
+                            playerId,
+                            playerName: name,
+                            pxtSender: 0,
+                            pxtReceiver: 0,
+                            pxtDribbler: 0,
+                            p2Sender: 0,
+                            p2Receiver: 0,
+                            p3Sender: 0,
+                            p3Receiver: 0,
+                            p2Dribbler: 0,
+                            p3Dribbler: 0,
+                          };
+                        }
+                        acc[playerId].playerName = name;
+                        return acc[playerId];
+                      };
+
+                      const addPxt = (playerId: string, role: 'pxtSender' | 'pxtReceiver' | 'pxtDribbler') => {
+                        const playerStats = ensurePlayer(playerId);
+                        if (!playerStats) return;
+                        playerStats[role] += pxtValue;
+                      };
+
+                      if (isDribble && action.senderId) {
+                        addPxt(action.senderId, 'pxtDribbler');
+                      } else if (isPass) {
+                        if (action.senderId) addPxt(action.senderId, 'pxtSender');
+                        if (action.receiverId) addPxt(action.receiverId, 'pxtReceiver');
+                      }
+
+                      if (isPass) {
+                        if (action.senderId) {
+                          const senderStats = ensurePlayer(action.senderId);
+                          if (senderStats) {
+                            if (inP2) senderStats.p2Sender += 1;
+                            if (inP3) senderStats.p3Sender += 1;
+                          }
+                        }
+                        if (action.receiverId) {
+                          const receiverStats = ensurePlayer(action.receiverId);
+                          if (receiverStats) {
+                            if (inP2) receiverStats.p2Receiver += 1;
+                            if (inP3) receiverStats.p3Receiver += 1;
+                          }
+                        }
+                      }
+                      if (isDribble && action.senderId) {
+                        const dribblerStats = ensurePlayer(action.senderId);
+                        if (dribblerStats) {
+                          if (inP2) dribblerStats.p2Dribbler += 1;
+                          if (inP3) dribblerStats.p3Dribbler += 1;
+                        }
+                      }
+
+                      return acc;
+                    },
+                    {}
+                  );
+                  const enabledPxtRoles = kpiPxtPlayersRoles;
+                  const pxtPlayersList = Object.values(pxtPlayersSummary)
+                    .map((p) => {
+                      const fromRoles = (enabledPxtRoles.sender ? p.pxtSender : 0) + (enabledPxtRoles.receiver ? p.pxtReceiver : 0) + (enabledPxtRoles.dribbler ? p.pxtDribbler : 0);
+                      return {
+                        ...p,
+                        pxtTotal: p.pxtSender + p.pxtReceiver + p.pxtDribbler,
+                        pxtFromSelectedRoles: fromRoles,
+                        pxtSharePct: totalPxtAll > 0 ? (fromRoles / totalPxtAll) * 100 : 0,
+                      };
+                    })
+                    .filter((p) => p.pxtFromSelectedRoles > 0)
+                    .sort((a, b) => b.pxtFromSelectedRoles - a.pxtFromSelectedRoles);
+                  const sortCol = kpiPxtSort.column;
+                  const sortDir = kpiPxtSort.dir;
+                  const sortedPxtPlayersList = sortCol
+                    ? [...pxtPlayersList].sort((a, b) => {
+                        let va: string | number = a[sortCol as keyof typeof a];
+                        let vb: string | number = b[sortCol as keyof typeof b];
+                        if (sortCol === 'playerName') {
+                          va = (va as string) || '';
+                          vb = (vb as string) || '';
+                          return sortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+                        }
+                        va = Number(va) ?? 0;
+                        vb = Number(vb) ?? 0;
+                        return sortDir === 'asc' ? va - vb : vb - va;
+                      })
+                    : pxtPlayersList;
+                  // Per-player P2/P3: podający, przyjęcie, drybling z packing + regain
+                  // Taki sam warunek jak w teamRegainStats: tylko akcje ze strefą obrony (defenseZoneName)
+                  // oraz ten sam filtr połowy co w statystykach regain (regainHalfFilter)
+                  const isOwnHalfRegain = (zoneName: string | null | undefined): boolean => {
+                    if (!zoneName) return false;
+                    const normalized = convertZoneToName(zoneName);
+                    if (!normalized) return false;
+                    const zoneIndex = zoneNameToIndex(normalized);
+                    if (zoneIndex === null) return false;
+                    const col = zoneIndex % 12;
+                    return col <= 5;
+                  };
+                  const isPMAreaRegain = (zoneName: string | null | undefined): boolean => {
+                    if (!zoneName) return false;
+                    const normalized = convertZoneToName(zoneName);
+                    if (!normalized) return false;
+                    const pmZones = ['C5', 'C6', 'C7', 'C8', 'D5', 'D6', 'D7', 'D8', 'E5', 'E6', 'E7', 'E8', 'F5', 'F6', 'F7', 'F8'];
+                    return pmZones.includes(normalized);
+                  };
+                  let filteredRegainsForP2P3 = (derivedRegainActions || []).filter((a: any) => {
+                    if (a.teamId !== selectedTeam) return false;
+                    const defenseZoneRaw = a.regainDefenseZone || a.fromZone || a.toZone || a.startZone;
+                    const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                    if (!defenseZoneName) return false;
+                    if (regainHalfFilter === 'all') return true;
+                    if (regainHalfFilter === 'pm') return isPMAreaRegain(defenseZoneName);
+                    const isOwn = isOwnHalfRegain(defenseZoneName);
+                    return regainHalfFilter === 'own' ? !isOwn : isOwn;
+                  });
+                  const regainP2P3ByPlayer = filteredRegainsForP2P3
+                    .filter((a: any) => a.isP2 || a.isP3 || a.isP2Start === true || a.isP3Start === true)
+                    .reduce((acc: Record<string, { p2Regain: number; p3Regain: number }>, a: any) => {
+                      const id = a.senderId || (a as any).playerId;
+                      if (!id) return acc;
+                      if (!acc[id]) acc[id] = { p2Regain: 0, p3Regain: 0 };
+                      if (a.isP2 || a.isP2Start) acc[id].p2Regain += 1;
+                      if (a.isP3 || a.isP3Start) acc[id].p3Regain += 1;
+                      return acc;
+                    }, {});
+                  const allP2P3PlayerIds = new Set([
+                    ...Object.keys(pxtPlayersSummary),
+                    ...Object.keys(regainP2P3ByPlayer),
+                  ]);
+                  const p2p3PlayersList = Array.from(allP2P3PlayerIds)
+                    .map((playerId) => {
+                      const p = pxtPlayersSummary[playerId];
+                      const r = regainP2P3ByPlayer[playerId] || { p2Regain: 0, p3Regain: 0 };
+                      const p2Sender = p?.p2Sender ?? 0;
+                      const p3Sender = p?.p3Sender ?? 0;
+                      const p2Receiver = p?.p2Receiver ?? 0;
+                      const p3Receiver = p?.p3Receiver ?? 0;
+                      const p2Dribbler = p?.p2Dribbler ?? 0;
+                      const p3Dribbler = p?.p3Dribbler ?? 0;
+                      const p2Total = p2Sender + p2Dribbler + r.p2Regain;
+                      const p3Total = p3Sender + p3Dribbler + r.p3Regain;
+                      const p2Sum = r.p2Regain + p2Sender + p2Dribbler + p2Receiver;
+                      const p3Sum = r.p3Regain + p3Sender + p3Dribbler + p3Receiver;
+                      const playerName = p?.playerName ?? getPlayerLabel(playerId, playersIndex) ?? 'Nieznany zawodnik';
+                      return {
+                        playerId,
+                        playerName,
+                        p2Total,
+                        p3Total,
+                        p2Sum,
+                        p3Sum,
+                        p2Regain: r.p2Regain,
+                        p3Regain: r.p3Regain,
+                        p2Sender,
+                        p3Sender,
+                        p2Dribbler,
+                        p3Dribbler,
+                        p2Receiver,
+                        p3Receiver,
+                      };
+                    })
+                    .filter((row) => row.p2Total > 0 || row.p3Total > 0)
+                    .sort((a, b) => b.p2Total + b.p3Total - (a.p2Total + a.p3Total));
+                  const p2p3SortCol = kpiP2P3Sort.column;
+                  const p2p3SortDir = kpiP2P3Sort.dir;
+                  const getP2P3SortValue = (row: typeof p2p3PlayersList[0], col: string) => {
+                    if (col === 'playerName') return row.playerName ?? '';
+                    if (col === 'p2Regain') return row.p2Regain;
+                    if (col === 'p3Regain') return row.p3Regain;
+                    if (col === 'p2Sender') return row.p2Sender;
+                    if (col === 'p3Sender') return row.p3Sender;
+                    if (col === 'p2Dribbler') return row.p2Dribbler;
+                    if (col === 'p3Dribbler') return row.p3Dribbler;
+                    if (col === 'p2Receiver') return row.p2Receiver;
+                    if (col === 'p3Receiver') return row.p3Receiver;
+                    if (col === 'p2Sum') return row.p2Sum;
+                    if (col === 'p3Sum') return row.p3Sum;
+                    return 0;
+                  };
+                  const sortedP2P3PlayersList = p2p3SortCol
+                    ? [...p2p3PlayersList].sort((a, b) => {
+                        const va = getP2P3SortValue(a, p2p3SortCol);
+                        const vb = getP2P3SortValue(b, p2p3SortCol);
+                        if (p2p3SortCol === 'playerName') {
+                          return p2p3SortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+                        }
+                        const na = Number(va) ?? 0;
+                        const nb = Number(vb) ?? 0;
+                        return p2p3SortDir === 'asc' ? na - nb : nb - na;
+                      })
+                    : p2p3PlayersList;
+                  // Łączna liczba akcji P2/P3: podania progresywne (podający + drybling) + P2/P3 po regains
+                  const totalP2Actions = teamStats.senderP2Count + teamStats.dribblingP2Count + teamRegainStats.allRegainP2Count;
+                  const totalP3Actions = teamStats.senderP3Count + teamStats.dribblingP3Count + teamRegainStats.allRegainP3Count;
                   
                   // Oblicz % strat z isReaction5s === true
                   // 1. Wliczamy wszystkie straty z loses
@@ -4190,6 +4784,36 @@ export default function StatystykiZespoluPage() {
                     const secs = totalSeconds % 60;
                     return `${mins}:${secs.toString().padStart(2, "0")}`;
                   };
+                  const formatSignedStat = (value: number, digits = 2): string =>
+                    `${value >= 0 ? "+" : ""}${value.toFixed(digits)}`;
+                  const matchDateLabel = typeof selectedMatchInfo.date === "string" && selectedMatchInfo.date
+                    ? (() => {
+                        const rawDate = selectedMatchInfo.date.includes("T")
+                          ? selectedMatchInfo.date.slice(0, 10)
+                          : selectedMatchInfo.date;
+                        const parsedDate = new Date(rawDate);
+                        return Number.isNaN(parsedDate.getTime())
+                          ? rawDate
+                          : parsedDate.toLocaleDateString("pl-PL");
+                      })()
+                    : "";
+                  const teamXgMinusGoals = teamXG - teamGoals;
+                  const opponentXgMinusGoals = opponentXG - opponentGoals;
+                  const xgAdvantage = teamXG - opponentXG;
+                  const pkAdvantage = teamPKEntriesCount - opponentPKEntriesCount;
+                  const pxtPerPossessionMinute = teamPossessionMinutes > 0 ? totalPxtAll / teamPossessionMinutes : 0;
+                  const formatPctShare = (value: number, total: number): string =>
+                    `${value} (${total > 0 ? Math.round((value / total) * 100) : 0}%)`;
+                  const findGpsTotalKey = (entry: Record<string, any>, keys: string[]) =>
+                    keys.find((key) => Object.prototype.hasOwnProperty.call(entry, key));
+                  const totalDistanceM = gpsMatchDayData.reduce((sum, entry) => {
+                    const key = findGpsTotalKey(entry.total ?? {}, ['Total Distance', 'Total distance', 'Distance']);
+                    const value = key != null && entry.total?.[key] != null ? Number(entry.total[key]) : NaN;
+                    return sum + (Number.isFinite(value) ? value : 0);
+                  }, 0);
+                  const totalDistanceLabel = totalDistanceM > 0
+                    ? `${(totalDistanceM / 1000).toFixed(1)} km`
+                    : 'Brak danych';
 
                   const radarSliceTooltip = ({ index }: { index: string | number; data: readonly { id: string; value: number; formattedValue: string; color: string }[] }) => {
                     const d = typeof index === 'string'
@@ -4230,92 +4854,144 @@ export default function StatystykiZespoluPage() {
                       <div className={styles.kpiTopRow}>
                         <div className={styles.kpiMatchHeader}>
                           <div className={styles.kpiRadarColumn}>
-                            <div className={styles.kpiRadarWrapper}>
-                              <ResponsiveRadar
-                                data={radarData}
-                                keys={['KPI', 'Wartość']}
-                                indexBy="metric"
-                                maxValue={200}
-                                margin={{ top: 40, right: 40, bottom: 40, left: 40 }}
-                                curve="linearClosed"
-                                borderWidth={2}
-                                borderColor={{ from: 'color' }}
-                                gridLevels={6}
-                                gridShape="circular"
-                                gridLabelOffset={12}
-                                enableDots={true}
-                                dotSize={6}
-                                dotBorderWidth={2}
-                                dotBorderColor={{ from: 'color' }}
-                                colors={['#34C759', '#6366f1']}
-                                fillOpacity={0.15}
-                                blendMode="multiply"
-                                motionConfig="wobbly"
-                                sliceTooltip={radarSliceTooltip}
-                                legends={[
-                                  {
-                                    anchor: 'top-left',
-                                    direction: 'column',
-                                    translateX: -30,
-                                    translateY: -10,
-                                    itemWidth: 80,
-                                    itemHeight: 16,
-                                    itemTextColor: 'rgba(0, 0, 0, 0.65)',
-                                    symbolSize: 10,
-                                    symbolShape: 'circle',
-                                  },
-                                ]}
-                                theme={{
-                                  grid: { line: { stroke: 'rgba(0, 0, 0, 0.08)', strokeWidth: 1 } },
-                                  dots: { text: { fontSize: 11 } },
-                                  axis: {
-                                    ticks: {
-                                      text: {
-                                        fontSize: 12,
-                                        fill: 'rgba(0, 0, 0, 0.65)',
-                                        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif',
-                                        fontWeight: 500,
+                            <div className={styles.kpiAnalysisPanel}>
+                              <div className={styles.kpiAnalysisHeader}>
+                                <h4 className={styles.kpiAnalysisTitle}>Ocena modelu gry</h4>
+                              </div>
+                              <div className={styles.kpiRadarWrapper}>
+                                <ResponsiveRadar
+                                  data={radarData}
+                                  keys={['KPI', 'Wartość']}
+                                  indexBy="metric"
+                                  maxValue={200}
+                                  margin={{ top: 40, right: 40, bottom: 40, left: 40 }}
+                                  curve="linearClosed"
+                                  borderWidth={2}
+                                  borderColor={{ from: 'color' }}
+                                  gridLevels={6}
+                                  gridShape="circular"
+                                  gridLabelOffset={12}
+                                  enableDots={true}
+                                  dotSize={6}
+                                  dotBorderWidth={2}
+                                  dotBorderColor={{ from: 'color' }}
+                                  colors={['#34C759', '#6366f1']}
+                                  fillOpacity={0.15}
+                                  blendMode="multiply"
+                                  motionConfig="wobbly"
+                                  sliceTooltip={radarSliceTooltip}
+                                  legends={[
+                                    {
+                                      anchor: 'top-left',
+                                      direction: 'column',
+                                      translateX: -30,
+                                      translateY: -10,
+                                      itemWidth: 80,
+                                      itemHeight: 16,
+                                      itemTextColor: 'rgba(0, 0, 0, 0.65)',
+                                      symbolSize: 10,
+                                      symbolShape: 'circle',
+                                    },
+                                  ]}
+                                  theme={{
+                                    grid: { line: { stroke: 'rgba(0, 0, 0, 0.08)', strokeWidth: 1 } },
+                                    dots: { text: { fontSize: 11 } },
+                                    axis: {
+                                      ticks: {
+                                        text: {
+                                          fontSize: 12,
+                                          fill: 'rgba(0, 0, 0, 0.65)',
+                                          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif',
+                                          fontWeight: 500,
+                                        },
                                       },
                                     },
-                                  },
-                                }}
-                              />
+                                  }}
+                                />
+                              </div>
+                              {(() => {
+                                const kpiCount = 8;
+                                let realizedKpiCount = 0;
+                                if (shotAndPK8sPercentage >= target8sAcc) realizedKpiCount++;
+                                if (teamXGPerShot >= kpiXGPerShot) realizedKpiCount++;
+                                if (team1TContact1Percentage >= kpi1TPercentage) realizedKpiCount++;
+                                if (opponentPKEntriesCount <= kpiPKEntries) realizedKpiCount++;
+                                if (reaction5sPercentage >= kpiReaction5s) realizedKpiCount++;
+                                if (losesInPMAreaCount <= kpiLosesPMAreaCount) realizedKpiCount++;
+                                if (teamRegainStats.totalRegainsOpponentHalf >= kpiRegainsOpponentHalf) realizedKpiCount++;
+                                if (regainsPPToPKShot8sPercentage >= kpiRegainsPPToPKShot8s) realizedKpiCount++;
+                                const kpiPercentage = (realizedKpiCount / kpiCount) * 100;
+                                const avgWykonanie = radarData.length > 0
+                                  ? radarData.reduce((sum, r) => sum + r.value, 0) / radarData.length
+                                  : 0;
+                                const isKpiGood = kpiPercentage >= 50;
+                                return (
+                                  <div
+                                    className={`${styles.kpiScoreRowCombined} ${isKpiGood ? styles.kpiScoreRowKpiGood : styles.kpiScoreRowKpiBad}`}
+                                    aria-label="KPI zrealizowane"
+                                  >
+                                    <div className={styles.kpiScoreRowCombinedMain}>
+                                      <div className={styles.kpiScoreRowCombinedBlock}>
+                                        <span className={styles.kpiScoreRowLabel}>KPI zrealizowane</span>
+                                        <span className={styles.kpiScoreRowValues}>
+                                          {kpiPercentage.toFixed(1)}%{' '}
+                                          <span className={styles.kpiScoreRowValuesPossessionTime}>
+                                            ({realizedKpiCount}/{kpiCount} KPI)
+                                          </span>
+                                          {' · '}
+                                          <span className={styles.kpiScoreRowValuesPossessionTime}>
+                                            śr. wykonanie: {avgWykonanie.toFixed(0)}%
+                                          </span>
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                           <div className={styles.kpiScoreSection}>
-                          <div className={styles.kpiScoreSectionLogos} aria-hidden>
-                            <span className={styles.kpiScoreSectionLogoWrap}>
-                              {selectedTeamLogo ? (
-                                <img src={selectedTeamLogo} alt="" className={styles.kpiScoreSectionLogo} />
-                              ) : (
-                                <span className={styles.kpiScoreSectionLogoPlaceholder}>{selectedTeamName.slice(0, 2)}</span>
+                            <div className={styles.kpiScoreMetaRow}>
+                              {isMultiMatchSelection && (
+                                <span className={styles.kpiScoreMetaBadge}>
+                                  {selectedMatches.length} mecze
+                                </span>
                               )}
-                              <span className={styles.kpiScoreSectionTeamName}>{selectedTeamName}</span>
-                            </span>
-                            <div
-                              className={styles.kpiScoreSectionScoreBetween}
-                              title={`xG nad bramką (my): ${(teamXG - teamGoals) >= 0 ? '+' : ''}${(teamXG - teamGoals).toFixed(2)} · xG pod bramką (rywal): ${(opponentXG - opponentGoals) >= 0 ? '+' : ''}${(opponentXG - opponentGoals).toFixed(2)}`}
-                            >
-                              <span className={styles.kpiScoreLineGoals}>{teamGoals} : {opponentGoals}</span>
-                              <span className={styles.kpiScoreSectionScoreBetweenSub} aria-hidden>
-                                <span className={(teamXG - teamGoals) >= 0 ? styles.kpiXGDeltaNegative : styles.kpiXGDeltaPositive}>
-                                  {(teamXG - teamGoals) >= 0 ? '+' : ''}{(teamXG - teamGoals).toFixed(2)}
-                                </span>
-                                {' : '}
-                                <span className={(opponentXG - opponentGoals) >= 0 ? styles.kpiXGDeltaNegative : styles.kpiXGDeltaPositive}>
-                                  {(opponentXG - opponentGoals) >= 0 ? '+' : ''}{(opponentXG - opponentGoals).toFixed(2)}
-                                </span>
-                              </span>
                             </div>
-                            <span className={styles.kpiScoreSectionLogoWrap}>
-                              {opponentLogo ? (
-                                <img src={opponentLogo} alt="" className={styles.kpiScoreSectionLogo} />
-                              ) : (
-                                <span className={styles.kpiScoreSectionLogoPlaceholder}>{(opponentName || '').slice(0, 2)}</span>
+                            <div className={styles.kpiScoreHero}>
+                              <span className={styles.kpiScoreHeroVenue} aria-hidden>{selectedMatchInfo.isHome ? 'Dom' : 'Wyjazd'}</span>
+                              {matchDateLabel && (
+                                <span className={styles.kpiScoreHeroDate} aria-hidden>{matchDateLabel}</span>
                               )}
-                              <span className={styles.kpiScoreSectionTeamName}>{opponentName}</span>
-                            </span>
-                          </div>
+                              <div className={styles.kpiScoreHeroMain}>
+                                <span className={styles.kpiScoreSectionLogoWrap}>
+                                  {selectedTeamLogo ? (
+                                    <img src={selectedTeamLogo} alt={`Logo ${selectedTeamName}`} className={styles.kpiScoreSectionLogo} />
+                                  ) : (
+                                    <span className={styles.kpiScoreSectionLogoPlaceholder}>{selectedTeamName.slice(0, 2)}</span>
+                                  )}
+                                  <span className={styles.kpiScoreSectionTeamName}>{selectedTeamName}</span>
+                                </span>
+                                <div className={styles.kpiScoreHeroCenter}>
+                                  <span className={styles.kpiScoreHeroEyebrow}>Wynik</span>
+                                  <span className={styles.kpiScoreHeroScore}>{teamGoals} : {opponentGoals}</span>
+                                  <span className={styles.kpiScoreHeroXg}>xG {teamXG.toFixed(2)} : {opponentXG.toFixed(2)}</span>
+                                  <div className={styles.kpiScoreHeroDeltaRow} aria-label="Różnica xG i gole (my : rywal)">
+                                    <span className={teamXgMinusGoals >= 0 ? styles.kpiXGDeltaNegative : styles.kpiXGDeltaPositive}>{formatSignedStat(teamXgMinusGoals)}</span>
+                                    <span className={styles.kpiScoreHeroDeltaSep}> : </span>
+                                    <span className={opponentXgMinusGoals >= 0 ? styles.kpiXGDeltaNegative : styles.kpiXGDeltaPositive}>{formatSignedStat(opponentXgMinusGoals)}</span>
+                                  </div>
+                                </div>
+                                <span className={styles.kpiScoreSectionLogoWrap}>
+                                  {opponentLogo ? (
+                                    <img src={opponentLogo} alt={`Logo ${opponentName}`} className={styles.kpiScoreSectionLogo} />
+                                  ) : (
+                                    <span className={styles.kpiScoreSectionLogoPlaceholder}>{(opponentName || '').slice(0, 2)}</span>
+                                  )}
+                                  <span className={styles.kpiScoreSectionTeamName}>{opponentName}</span>
+                                </span>
+                              </div>
+                            </div>
                           <div className={styles.kpiScoreMetrics}>
                             <div
                               role="button"
@@ -4326,8 +5002,9 @@ export default function StatystykiZespoluPage() {
                               title={kpiXgRowExpanded ? 'Kliknij, aby zwinąć' : 'Kliknij, aby rozwinąć szczegóły xG'}
                               aria-expanded={kpiXgRowExpanded}
                             >
-                              <div className={styles.kpiScoreRowPossessionLeft}>
-                                <span className={styles.kpiScoreRowLabelWithIcon}>
+                              <span className={styles.kpiScoreRowCenterBlock}>
+                                <span className={styles.kpiScoreRowLabel}>xG</span>
+                                <span className={styles.kpiScoreRowCenterIcons}>
                                   {selectedMatchInfo && (
                                     <button
                                       type="button"
@@ -4343,25 +5020,38 @@ export default function StatystykiZespoluPage() {
                                       </svg>
                                     </button>
                                   )}
-                                  <span className={styles.kpiScoreRowLabel}>xG</span>
-                                </span>
-                                <span
-                                  className={`${styles.kpiScoreRowCombinedDeadTime} ${(teamXG - opponentXG) >= 0 ? styles.kpiXGDeltaPositive : styles.kpiXGDeltaNegative}`}
-                                  aria-hidden
-                                >
-                                  {(teamXG - opponentXG) >= 0 ? '+' : ''}{(teamXG - opponentXG).toFixed(2)}
-                                </span>
-                              </div>
-                              <span className={styles.kpiScoreRowValuesWithIcon}>
-                                <span>{teamXG.toFixed(2)} : {opponentXG.toFixed(2)}</span>
-                                <span className={styles.kpiScoreRowExpandIcon} aria-hidden>
-                                  {kpiXgRowExpanded ? (
-                                    <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                                  ) : (
-                                    <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  {selectedMatchInfo && (
+                                    <button
+                                      type="button"
+                                      className={styles.kpiMapIconButton}
+                                      onClick={(e) => { e.stopPropagation(); setKpiXgPlayersModalOpen(true); }}
+                                      title="Pokaż wkład xG zawodników"
+                                      aria-label="Pokaż wkład xG zawodników"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                        <circle cx="9" cy="7" r="4" />
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                      </svg>
+                                    </button>
                                   )}
+                                  <span className={styles.kpiScoreRowExpandIcon} aria-hidden>
+                                    {kpiXgRowExpanded ? (
+                                      <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                    ) : (
+                                      <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                    )}
+                                  </span>
                                 </span>
                               </span>
+                              <div className={styles.kpiScoreRowValuesWrap}>
+                                <span className={styles.kpiScoreRowLeft}>
+                                  <span className={styles.kpiScoreRowValues}>{teamXG.toFixed(2)}</span>
+                                </span>
+                                <span className={styles.kpiScoreRowCombinedDivider}> : </span>
+                                <span className={styles.kpiScoreRowRight}>{opponentXG.toFixed(2)}</span>
+                              </div>
                             </div>
                             {kpiXgRowExpanded && (
                               <div className={styles.kpiScoreGoalsDetails}>
@@ -4409,45 +5099,614 @@ export default function StatystykiZespoluPage() {
                                 </div>
                               </div>
                             )}
-                            {(() => {
-                              const kpiCount = 8;
-                              let realizedKpiCount = 0;
-                              if (shotAndPK8sPercentage >= target8sAcc) realizedKpiCount++;
-                              if (teamXGPerShot >= kpiXGPerShot) realizedKpiCount++;
-                              if (team1TContact1Percentage >= kpi1TPercentage) realizedKpiCount++;
-                              if (opponentPKEntriesCount <= kpiPKEntries) realizedKpiCount++;
-                              if (reaction5sPercentage >= kpiReaction5s) realizedKpiCount++;
-                              if (losesInPMAreaCount <= kpiLosesPMAreaCount) realizedKpiCount++;
-                              if (teamRegainStats.totalRegainsOpponentHalf >= kpiRegainsOpponentHalf) realizedKpiCount++;
-                              if (regainsPPToPKShot8sPercentage >= kpiRegainsPPToPKShot8s) realizedKpiCount++;
-                              const kpiPercentage = (realizedKpiCount / kpiCount) * 100;
-                              const avgWykonanie = radarData.length > 0
-                                ? radarData.reduce((sum, r) => sum + r.value, 0) / radarData.length
-                                : 0;
-                              const isKpiGood = kpiPercentage >= 50;
-                              return (
-                                <div
-                                  className={`${styles.kpiScoreRowCombined} ${isKpiGood ? styles.kpiScoreRowKpiGood : styles.kpiScoreRowKpiBad}`}
-                                  aria-label="KPI zrealizowane"
-                                >
-                                  <div className={styles.kpiScoreRowCombinedMain}>
-                                    <div className={styles.kpiScoreRowCombinedBlock}>
-                                      <span className={styles.kpiScoreRowLabel}>KPI zrealizowane</span>
-                                      <span className={styles.kpiScoreRowValues}>
-                                        {kpiPercentage.toFixed(1)}%{' '}
-                                        <span className={styles.kpiScoreRowValuesPossessionTime}>
-                                          ({realizedKpiCount}/{kpiCount} KPI)
+                            {kpiXgPlayersModalOpen && (
+                              <div className={styles.modalOverlay} onClick={() => setKpiXgPlayersModalOpen(false)} role="dialog" aria-modal="true" aria-labelledby="kpi-xg-modal-title">
+                                <div className={`${styles.modalContent} ${styles.kpiModalContent}`} onClick={(e) => e.stopPropagation()}>
+                                  <div className={styles.modalHeader}>
+                                    <h3 id="kpi-xg-modal-title">xG</h3>
+                                    <button
+                                      type="button"
+                                      className={styles.modalCloseButton}
+                                      onClick={() => setKpiXgPlayersModalOpen(false)}
+                                      aria-label="Zamknij"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className={styles.modalBody}>
+                                    <div className={`${styles.kpiXgPlayersDetails} ${styles.kpiXgTableWithGoals}`}>
+                                      <div className={styles.kpiXgPlayersHeader}>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiXgSort(prev => ({ column: 'playerName', dir: prev.column === 'playerName' && prev.dir === 'asc' ? 'desc' : 'asc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiXgSort(prev => ({ column: 'playerName', dir: prev.column === 'playerName' && prev.dir === 'asc' ? 'desc' : 'asc' })); } }}
+                                        >
+                                          Zawodnik{kpiXgSort.column === 'playerName' ? (kpiXgSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
                                         </span>
-                                        {' · '}
-                                        <span className={styles.kpiScoreRowValuesPossessionTime}>
-                                          śr. wykonanie: {avgWykonanie.toFixed(0)}%
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiXgSort(prev => ({ column: 'xgSharePct', dir: prev.column === 'xgSharePct' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiXgSort(prev => ({ column: 'xgSharePct', dir: prev.column === 'xgSharePct' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Udział xG{kpiXgSort.column === 'xgSharePct' ? (kpiXgSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
                                         </span>
-                                      </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiXgSort(prev => ({ column: 'xg', dir: prev.column === 'xg' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiXgSort(prev => ({ column: 'xg', dir: prev.column === 'xg' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          xG{kpiXgSort.column === 'xg' ? (kpiXgSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiXgSort(prev => ({ column: 'xgMinusGoals', dir: prev.column === 'xgMinusGoals' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiXgSort(prev => ({ column: 'xgMinusGoals', dir: prev.column === 'xgMinusGoals' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          xG − g{kpiXgSort.column === 'xgMinusGoals' ? (kpiXgSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiXgSort(prev => ({ column: 'xgPerShot', dir: prev.column === 'xgPerShot' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiXgSort(prev => ({ column: 'xgPerShot', dir: prev.column === 'xgPerShot' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          xG/strzał{kpiXgSort.column === 'xgPerShot' ? (kpiXgSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiXgSort(prev => ({ column: 'xgRegain', dir: prev.column === 'xgRegain' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiXgSort(prev => ({ column: 'xgRegain', dir: prev.column === 'xgRegain' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          xG po Regain{kpiXgSort.column === 'xgRegain' ? (kpiXgSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiXgSort(prev => ({ column: 'xgSfg', dir: prev.column === 'xgSfg' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiXgSort(prev => ({ column: 'xgSfg', dir: prev.column === 'xgSfg' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          xG po SFG{kpiXgSort.column === 'xgSfg' ? (kpiXgSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                      </div>
+                                      {sortedXgPlayersList.length > 0 ? (
+                                        <div className={styles.kpiXgPlayersList}>
+                                          {sortedXgPlayersList.map((playerStats) => {
+                                            const xgMinusGoals = playerStats.xg - (playerStats.goals ?? 0);
+                                            const xgToGoalsStr = xgMinusGoals >= 0 ? `+${xgMinusGoals.toFixed(2)}` : xgMinusGoals.toFixed(2);
+                                            const xgToGoalsClass = xgMinusGoals >= 0 ? styles.kpiXGDeltaNegative : styles.kpiXGDeltaPositive;
+                                            return (
+                                            <div key={playerStats.playerId} className={styles.kpiXgPlayersRow}>
+                                              <span className={styles.kpiXgPlayersName}>{playerStats.playerName}</span>
+                                              <span>{playerStats.xgSharePct.toFixed(1)}%</span>
+                                              <span>{playerStats.xg.toFixed(2)} ({playerStats.shots})</span>
+                                              <span className={xgToGoalsClass}>{xgToGoalsStr}</span>
+                                              <span className={playerStats.xgPerShot >= 0.15 ? styles.kpiXGDeltaPositive : styles.kpiXGDeltaNegative}>{playerStats.xgPerShot.toFixed(2)}</span>
+                                              <span>{playerStats.xgRegain.toFixed(2)}</span>
+                                              <span>{playerStats.xgSfg.toFixed(2)}</span>
+                                            </div>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <p className={styles.kpiXgPlayersEmpty}>Brak strzałów z xG dla wybranej drużyny.</p>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
-                              );
-                            })()}
+                              </div>
+                            )}
+                            {kpiShotsPlayersModalOpen && (
+                              <div className={styles.modalOverlay} onClick={() => setKpiShotsPlayersModalOpen(false)} role="dialog" aria-modal="true" aria-labelledby="kpi-shots-modal-title">
+                                <div className={`${styles.modalContent} ${styles.kpiModalContent}`} onClick={(e) => e.stopPropagation()}>
+                                  <div className={styles.modalHeader}>
+                                    <h3 id="kpi-shots-modal-title">Strzały</h3>
+                                    <button
+                                      type="button"
+                                      className={styles.modalCloseButton}
+                                      onClick={() => setKpiShotsPlayersModalOpen(false)}
+                                      aria-label="Zamknij"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className={styles.modalBody}>
+                                    <div className={`${styles.kpiXgPlayersDetails} ${styles.kpiXgPlayersDetailsShots}`}>
+                                      <div className={styles.kpiXgPlayersHeader}>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiShotsSort(prev => ({ column: 'playerName', dir: prev.column === 'playerName' && prev.dir === 'asc' ? 'desc' : 'asc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiShotsSort(prev => ({ column: 'playerName', dir: prev.column === 'playerName' && prev.dir === 'asc' ? 'desc' : 'asc' })); } }}
+                                        >
+                                          Zawodnik{kpiShotsSort.column === 'playerName' ? (kpiShotsSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiShotsSort(prev => ({ column: 'shotsSharePct', dir: prev.column === 'shotsSharePct' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiShotsSort(prev => ({ column: 'shotsSharePct', dir: prev.column === 'shotsSharePct' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Udział strzałów{kpiShotsSort.column === 'shotsSharePct' ? (kpiShotsSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiShotsSort(prev => ({ column: 'shots', dir: prev.column === 'shots' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiShotsSort(prev => ({ column: 'shots', dir: prev.column === 'shots' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Strzały{kpiShotsSort.column === 'shots' ? (kpiShotsSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiShotsSort(prev => ({ column: 'onTargetPct', dir: prev.column === 'onTargetPct' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiShotsSort(prev => ({ column: 'onTargetPct', dir: prev.column === 'onTargetPct' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          % celnych{kpiShotsSort.column === 'onTargetPct' ? (kpiShotsSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiShotsSort(prev => ({ column: 'onTarget', dir: prev.column === 'onTarget' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiShotsSort(prev => ({ column: 'onTarget', dir: prev.column === 'onTarget' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Celne{kpiShotsSort.column === 'onTarget' ? (kpiShotsSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiShotsSort(prev => ({ column: 'goals', dir: prev.column === 'goals' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiShotsSort(prev => ({ column: 'goals', dir: prev.column === 'goals' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Gole{kpiShotsSort.column === 'goals' ? (kpiShotsSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiShotsSort(prev => ({ column: 'blocked', dir: prev.column === 'blocked' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiShotsSort(prev => ({ column: 'blocked', dir: prev.column === 'blocked' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Zablokowane{kpiShotsSort.column === 'blocked' ? (kpiShotsSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                      </div>
+                                      {sortedShotsPlayersList.length > 0 ? (
+                                        <div className={styles.kpiXgPlayersList}>
+                                          {sortedShotsPlayersList.map((playerStats) => (
+                                            <div key={playerStats.playerId} className={styles.kpiXgPlayersRow}>
+                                              <span className={styles.kpiXgPlayersName}>{playerStats.playerName}</span>
+                                              <span>{playerStats.shotsSharePct.toFixed(1)}%</span>
+                                              <span>{playerStats.shots}</span>
+                                              <span>{playerStats.onTargetPct.toFixed(1)}%</span>
+                                              <span>{playerStats.onTarget}</span>
+                                              <span>{playerStats.goals}</span>
+                                              <span>{playerStats.blocked}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className={styles.kpiXgPlayersEmpty}>Brak strzałów dla wybranej drużyny.</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {kpiPkPlayersModalOpen && (
+                              <div className={styles.modalOverlay} onClick={() => setKpiPkPlayersModalOpen(false)} role="dialog" aria-modal="true" aria-labelledby="kpi-pk-modal-title">
+                                <div className={`${styles.modalContent} ${styles.kpiModalContent}`} onClick={(e) => e.stopPropagation()}>
+                                  <div className={styles.modalHeader}>
+                                    <h3 id="kpi-pk-modal-title">Wejścia PK</h3>
+                                    <button
+                                      type="button"
+                                      className={styles.modalCloseButton}
+                                      onClick={() => setKpiPkPlayersModalOpen(false)}
+                                      aria-label="Zamknij"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className={styles.modalBody}>
+                                    <div className={styles.kpiXgPlayersDetails}>
+                                      <div className={styles.metricSelector}>
+                                        <button
+                                          type="button"
+                                          className={`${styles.metricButton} ${kpiPkPlayersRoles.sender ? styles.active : ''}`}
+                                          onClick={() => setKpiPkPlayersRoles(prev => ({ ...prev, sender: !prev.sender }))}
+                                          aria-pressed={kpiPkPlayersRoles.sender}
+                                        >
+                                          Nadawca podania
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={`${styles.metricButton} ${kpiPkPlayersRoles.receiver ? styles.active : ''}`}
+                                          onClick={() => setKpiPkPlayersRoles(prev => ({ ...prev, receiver: !prev.receiver }))}
+                                          aria-pressed={kpiPkPlayersRoles.receiver}
+                                        >
+                                          Adresat podania
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={`${styles.metricButton} ${kpiPkPlayersRoles.dribbler ? styles.active : ''}`}
+                                          onClick={() => setKpiPkPlayersRoles(prev => ({ ...prev, dribbler: !prev.dribbler }))}
+                                          aria-pressed={kpiPkPlayersRoles.dribbler}
+                                        >
+                                          Dryblingiem
+                                        </button>
+                                      </div>
+                                      <div className={styles.kpiXgPlayersHeader}>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiPkSort(prev => ({ column: 'playerName', dir: prev.column === 'playerName' && prev.dir === 'asc' ? 'desc' : 'asc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPkSort(prev => ({ column: 'playerName', dir: prev.column === 'playerName' && prev.dir === 'asc' ? 'desc' : 'asc' })); } }}
+                                        >
+                                          Zawodnik{kpiPkSort.column === 'playerName' ? (kpiPkSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiPkSort(prev => ({ column: 'entriesSharePct', dir: prev.column === 'entriesSharePct' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPkSort(prev => ({ column: 'entriesSharePct', dir: prev.column === 'entriesSharePct' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Udział wejść{kpiPkSort.column === 'entriesSharePct' ? (kpiPkSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiPkSort(prev => ({ column: 'entries', dir: prev.column === 'entries' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPkSort(prev => ({ column: 'entries', dir: prev.column === 'entries' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Wejścia PK{kpiPkSort.column === 'entries' ? (kpiPkSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiPkSort(prev => ({ column: 'entriesRegain', dir: prev.column === 'entriesRegain' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPkSort(prev => ({ column: 'entriesRegain', dir: prev.column === 'entriesRegain' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Po Regain{kpiPkSort.column === 'entriesRegain' ? (kpiPkSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiPkSort(prev => ({ column: 'entriesSfg', dir: prev.column === 'entriesSfg' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPkSort(prev => ({ column: 'entriesSfg', dir: prev.column === 'entriesSfg' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Po SFG{kpiPkSort.column === 'entriesSfg' ? (kpiPkSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiPkSort(prev => ({ column: 'entriesShot', dir: prev.column === 'entriesShot' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPkSort(prev => ({ column: 'entriesShot', dir: prev.column === 'entriesShot' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Zakończone strzałem{kpiPkSort.column === 'entriesShot' ? (kpiPkSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                      </div>
+                                      {sortedPkPlayersList.length > 0 ? (
+                                        <div className={styles.kpiXgPlayersList}>
+                                          {sortedPkPlayersList.map((playerStats) => (
+                                            <div key={playerStats.playerId} className={styles.kpiXgPlayersRow}>
+                                              <span className={styles.kpiXgPlayersName}>{playerStats.playerName}</span>
+                                              <span>{playerStats.entriesSharePct.toFixed(1)}%</span>
+                                              <span>{playerStats.entries}</span>
+                                              <span>{playerStats.entriesRegain}</span>
+                                              <span>{playerStats.entriesSfg}</span>
+                                              <span>{playerStats.entriesShot}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className={styles.kpiXgPlayersEmpty}>Brak wejść w PK dla wybranej drużyny.</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {kpiPxtPlayersModalOpen && (
+                              <div className={styles.modalOverlay} onClick={() => setKpiPxtPlayersModalOpen(false)} role="dialog" aria-modal="true" aria-labelledby="pxt-players-modal-title">
+                                <div className={`${styles.modalContent} ${styles.kpiModalContent}`} onClick={(e) => e.stopPropagation()}>
+                                  <div className={styles.modalHeader}>
+                                    <h3 id="pxt-players-modal-title">PxT</h3>
+                                    <button
+                                      type="button"
+                                      className={styles.modalCloseButton}
+                                      onClick={() => setKpiPxtPlayersModalOpen(false)}
+                                      aria-label="Zamknij"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className={styles.modalBody}>
+                                    <div className={styles.kpiXgPlayersDetails}>
+                                      <div className={styles.metricSelector}>
+                                        <button
+                                          type="button"
+                                          className={`${styles.metricButton} ${kpiPxtPlayersRoles.sender ? styles.active : ''}`}
+                                          onClick={() => setKpiPxtPlayersRoles(prev => ({ ...prev, sender: !prev.sender }))}
+                                          aria-pressed={kpiPxtPlayersRoles.sender}
+                                        >
+                                          Podanie
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={`${styles.metricButton} ${kpiPxtPlayersRoles.receiver ? styles.active : ''}`}
+                                          onClick={() => setKpiPxtPlayersRoles(prev => ({ ...prev, receiver: !prev.receiver }))}
+                                          aria-pressed={kpiPxtPlayersRoles.receiver}
+                                        >
+                                          Przyjęcie
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={`${styles.metricButton} ${kpiPxtPlayersRoles.dribbler ? styles.active : ''}`}
+                                          onClick={() => setKpiPxtPlayersRoles(prev => ({ ...prev, dribbler: !prev.dribbler }))}
+                                          aria-pressed={kpiPxtPlayersRoles.dribbler}
+                                        >
+                                          Drybling
+                                        </button>
+                                      </div>
+                                      <div className={styles.kpiXgPlayersHeader}>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiPxtSort(prev => ({ column: 'playerName', dir: prev.column === 'playerName' && prev.dir === 'asc' ? 'desc' : 'asc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPxtSort(prev => ({ column: 'playerName', dir: prev.column === 'playerName' && prev.dir === 'asc' ? 'desc' : 'asc' })); } }}
+                                        >
+                                          Zawodnik{kpiPxtSort.column === 'playerName' ? (kpiPxtSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiPxtSort(prev => ({ column: 'pxtSharePct', dir: prev.column === 'pxtSharePct' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPxtSort(prev => ({ column: 'pxtSharePct', dir: prev.column === 'pxtSharePct' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Udział %{kpiPxtSort.column === 'pxtSharePct' ? (kpiPxtSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiPxtSort(prev => ({ column: 'pxtTotal', dir: prev.column === 'pxtTotal' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPxtSort(prev => ({ column: 'pxtTotal', dir: prev.column === 'pxtTotal' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          PxT{kpiPxtSort.column === 'pxtTotal' ? (kpiPxtSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiPxtSort(prev => ({ column: 'pxtSender', dir: prev.column === 'pxtSender' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPxtSort(prev => ({ column: 'pxtSender', dir: prev.column === 'pxtSender' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Podanie{kpiPxtSort.column === 'pxtSender' ? (kpiPxtSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiPxtSort(prev => ({ column: 'pxtReceiver', dir: prev.column === 'pxtReceiver' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPxtSort(prev => ({ column: 'pxtReceiver', dir: prev.column === 'pxtReceiver' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Przyjęcie{kpiPxtSort.column === 'pxtReceiver' ? (kpiPxtSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() => setKpiPxtSort(prev => ({ column: 'pxtDribbler', dir: prev.column === 'pxtDribbler' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPxtSort(prev => ({ column: 'pxtDribbler', dir: prev.column === 'pxtDribbler' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          Drybling{kpiPxtSort.column === 'pxtDribbler' ? (kpiPxtSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                      </div>
+                                      {sortedPxtPlayersList.length > 0 ? (
+                                        <div className={styles.kpiXgPlayersList}>
+                                          {sortedPxtPlayersList.map((playerStats) => (
+                                            <div key={playerStats.playerId} className={styles.kpiXgPlayersRow}>
+                                              <span className={styles.kpiXgPlayersName}>{playerStats.playerName}</span>
+                                              <span>{playerStats.pxtSharePct.toFixed(1)}%</span>
+                                              <span>{playerStats.pxtTotal.toFixed(2)}</span>
+                                              <span>{playerStats.pxtSender.toFixed(2)}</span>
+                                              <span>{playerStats.pxtReceiver.toFixed(2)}</span>
+                                              <span>{playerStats.pxtDribbler.toFixed(2)}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className={styles.kpiXgPlayersEmpty}>Brak PxT dla wybranej drużyny lub wybranych ról.</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {kpiP2P3PlayersModalOpen && (
+                              <div className={styles.modalOverlay} onClick={() => setKpiP2P3PlayersModalOpen(false)} role="dialog" aria-modal="true" aria-labelledby="p2p3-players-modal-title">
+                                <div className={`${styles.modalContent} ${styles.kpiModalContent}`} onClick={(e) => e.stopPropagation()}>
+                                  <div className={styles.modalHeader}>
+                                    <h3 id="p2p3-players-modal-title">P2/P3</h3>
+                                    <button
+                                      type="button"
+                                      className={styles.modalCloseButton}
+                                      onClick={() => setKpiP2P3PlayersModalOpen(false)}
+                                      aria-label="Zamknij"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className={styles.modalBody}>
+                                    <div className={`${styles.kpiXgPlayersDetails} ${styles.kpiP2P3Table}`}>
+                                      <div className={styles.kpiP2P3HeaderGrid}>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={`${styles.kpiXgPlayersSortableHeader} ${styles.kpiP2P3HeaderZawodnik}`}
+                                          style={{ gridColumn: 1, gridRow: '1 / 3' }}
+                                          onClick={() => setKpiP2P3Sort(prev => ({ column: 'playerName', dir: prev.column === 'playerName' && prev.dir === 'asc' ? 'desc' : 'asc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiP2P3Sort(prev => ({ column: 'playerName', dir: prev.column === 'playerName' && prev.dir === 'asc' ? 'desc' : 'asc' })); } }}
+                                        >
+                                          Zawodnik{kpiP2P3Sort.column === 'playerName' ? (kpiP2P3Sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span className={`${styles.kpiP2P3HeaderGroup} ${styles.kpiP2P3HeaderGroupA}`} style={{ gridColumn: '2 / 4', gridRow: 1 }}>Regain</span>
+                                        <span className={`${styles.kpiP2P3HeaderGroup} ${styles.kpiP2P3HeaderGroupB}`} style={{ gridColumn: '4 / 6', gridRow: 1 }}>Podający</span>
+                                        <span className={`${styles.kpiP2P3HeaderGroup} ${styles.kpiP2P3HeaderGroupA}`} style={{ gridColumn: '6 / 8', gridRow: 1 }}>Drybling</span>
+                                        <span className={`${styles.kpiP2P3HeaderGroup} ${styles.kpiP2P3HeaderGroupB}`} style={{ gridColumn: '8 / 10', gridRow: 1 }}>Przyjęcie</span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={`${styles.kpiXgPlayersSortableHeader} ${styles.kpiP2P3HeaderColA}`}
+                                          style={{ gridColumn: 2, gridRow: 2 }}
+                                          onClick={() => setKpiP2P3Sort(prev => ({ column: 'p2Regain', dir: prev.column === 'p2Regain' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiP2P3Sort(prev => ({ column: 'p2Regain', dir: prev.column === 'p2Regain' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          P2{kpiP2P3Sort.column === 'p2Regain' ? (kpiP2P3Sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={`${styles.kpiXgPlayersSortableHeader} ${styles.kpiP2P3HeaderColA}`}
+                                          style={{ gridColumn: 3, gridRow: 2 }}
+                                          onClick={() => setKpiP2P3Sort(prev => ({ column: 'p3Regain', dir: prev.column === 'p3Regain' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiP2P3Sort(prev => ({ column: 'p3Regain', dir: prev.column === 'p3Regain' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          P3{kpiP2P3Sort.column === 'p3Regain' ? (kpiP2P3Sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={`${styles.kpiXgPlayersSortableHeader} ${styles.kpiP2P3HeaderColB}`}
+                                          style={{ gridColumn: 4, gridRow: 2 }}
+                                          onClick={() => setKpiP2P3Sort(prev => ({ column: 'p2Sender', dir: prev.column === 'p2Sender' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiP2P3Sort(prev => ({ column: 'p2Sender', dir: prev.column === 'p2Sender' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          P2{kpiP2P3Sort.column === 'p2Sender' ? (kpiP2P3Sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={`${styles.kpiXgPlayersSortableHeader} ${styles.kpiP2P3HeaderColB}`}
+                                          style={{ gridColumn: 5, gridRow: 2 }}
+                                          onClick={() => setKpiP2P3Sort(prev => ({ column: 'p3Sender', dir: prev.column === 'p3Sender' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiP2P3Sort(prev => ({ column: 'p3Sender', dir: prev.column === 'p3Sender' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          P3{kpiP2P3Sort.column === 'p3Sender' ? (kpiP2P3Sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={`${styles.kpiXgPlayersSortableHeader} ${styles.kpiP2P3HeaderColA}`}
+                                          style={{ gridColumn: 6, gridRow: 2 }}
+                                          onClick={() => setKpiP2P3Sort(prev => ({ column: 'p2Dribbler', dir: prev.column === 'p2Dribbler' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiP2P3Sort(prev => ({ column: 'p2Dribbler', dir: prev.column === 'p2Dribbler' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          P2{kpiP2P3Sort.column === 'p2Dribbler' ? (kpiP2P3Sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={`${styles.kpiXgPlayersSortableHeader} ${styles.kpiP2P3HeaderColA}`}
+                                          style={{ gridColumn: 7, gridRow: 2 }}
+                                          onClick={() => setKpiP2P3Sort(prev => ({ column: 'p3Dribbler', dir: prev.column === 'p3Dribbler' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiP2P3Sort(prev => ({ column: 'p3Dribbler', dir: prev.column === 'p3Dribbler' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          P3{kpiP2P3Sort.column === 'p3Dribbler' ? (kpiP2P3Sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={`${styles.kpiXgPlayersSortableHeader} ${styles.kpiP2P3HeaderColB}`}
+                                          style={{ gridColumn: 8, gridRow: 2 }}
+                                          onClick={() => setKpiP2P3Sort(prev => ({ column: 'p2Receiver', dir: prev.column === 'p2Receiver' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiP2P3Sort(prev => ({ column: 'p2Receiver', dir: prev.column === 'p2Receiver' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          P2{kpiP2P3Sort.column === 'p2Receiver' ? (kpiP2P3Sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={`${styles.kpiXgPlayersSortableHeader} ${styles.kpiP2P3HeaderColB}`}
+                                          style={{ gridColumn: 9, gridRow: 2 }}
+                                          onClick={() => setKpiP2P3Sort(prev => ({ column: 'p3Receiver', dir: prev.column === 'p3Receiver' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiP2P3Sort(prev => ({ column: 'p3Receiver', dir: prev.column === 'p3Receiver' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          P3{kpiP2P3Sort.column === 'p3Receiver' ? (kpiP2P3Sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span className={`${styles.kpiP2P3HeaderGroup} ${styles.kpiP2P3HeaderGroupSum}`} style={{ gridColumn: '10 / 12', gridRow: 1 }}>Łącznie</span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={`${styles.kpiXgPlayersSortableHeader} ${styles.kpiP2P3HeaderColSum}`}
+                                          style={{ gridColumn: 10, gridRow: 2 }}
+                                          onClick={() => setKpiP2P3Sort(prev => ({ column: 'p2Sum', dir: prev.column === 'p2Sum' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiP2P3Sort(prev => ({ column: 'p2Sum', dir: prev.column === 'p2Sum' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          P2{kpiP2P3Sort.column === 'p2Sum' ? (kpiP2P3Sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={`${styles.kpiXgPlayersSortableHeader} ${styles.kpiP2P3HeaderColSum}`}
+                                          style={{ gridColumn: 11, gridRow: 2 }}
+                                          onClick={() => setKpiP2P3Sort(prev => ({ column: 'p3Sum', dir: prev.column === 'p3Sum' && prev.dir === 'desc' ? 'asc' : 'desc' }))}
+                                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiP2P3Sort(prev => ({ column: 'p3Sum', dir: prev.column === 'p3Sum' && prev.dir === 'desc' ? 'asc' : 'desc' })); } }}
+                                        >
+                                          P3{kpiP2P3Sort.column === 'p3Sum' ? (kpiP2P3Sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                        </span>
+                                      </div>
+                                      {sortedP2P3PlayersList.length > 0 ? (
+                                        <div className={styles.kpiXgPlayersList}>
+                                          {sortedP2P3PlayersList.map((row) => (
+                                            <div key={row.playerId} className={styles.kpiXgPlayersRow}>
+                                              <span className={styles.kpiXgPlayersName}>{row.playerName}</span>
+                                              <span>{row.p2Regain}</span>
+                                              <span>{row.p3Regain}</span>
+                                              <span>{row.p2Sender}</span>
+                                              <span>{row.p3Sender}</span>
+                                              <span>{row.p2Dribbler}</span>
+                                              <span>{row.p3Dribbler}</span>
+                                              <span>{row.p2Receiver}</span>
+                                              <span>{row.p3Receiver}</span>
+                                              <span className={styles.kpiP2P3CellSum}>{row.p2Sum}</span>
+                                              <span className={styles.kpiP2P3CellSum}>{row.p3Sum}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className={styles.kpiXgPlayersEmpty}>Brak akcji P2/P3 dla wybranej drużyny.</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                             <div
                               role="button"
                               tabIndex={0}
@@ -4457,34 +5716,59 @@ export default function StatystykiZespoluPage() {
                               title={kpiShotsRowExpanded ? 'Kliknij, aby zwinąć' : 'Kliknij, aby rozwinąć szczegóły strzałów'}
                               aria-expanded={kpiShotsRowExpanded}
                             >
-                              <span className={styles.kpiScoreRowLabelWithIcon}>
-                                {selectedMatchInfo && (
-                                  <button
-                                    type="button"
-                                    className={styles.kpiMapIconButton}
-                                    onClick={(e) => { e.stopPropagation(); setXgMapModalOpen(true); }}
-                                    title="Otwórz mapę xG"
-                                    aria-label="Otwórz mapę xG"
-                                  >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                                      <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
-                                      <line x1="8" y1="2" x2="8" y2="18" />
-                                      <line x1="16" y1="6" x2="16" y2="22" />
-                                    </svg>
-                                  </button>
-                                )}
+                              <span className={styles.kpiScoreRowCenterBlock}>
                                 <span className={styles.kpiScoreRowLabel}>Strzały</span>
-                              </span>
-                              <span className={styles.kpiScoreRowValuesWithIcon}>
-                                <span>{teamShotsCount} : {opponentShotsCount}</span>
-                                <span className={styles.kpiScoreRowExpandIcon} aria-hidden>
-                                  {kpiShotsRowExpanded ? (
-                                    <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                                  ) : (
-                                    <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                <span className={styles.kpiScoreRowCenterIcons}>
+                                  {selectedMatchInfo && (
+                                    <button
+                                      type="button"
+                                      className={styles.kpiMapIconButton}
+                                      onClick={(e) => { e.stopPropagation(); setXgMapModalOpen(true); }}
+                                      title="Otwórz mapę xG"
+                                      aria-label="Otwórz mapę xG"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+                                        <line x1="8" y1="2" x2="8" y2="18" />
+                                        <line x1="16" y1="6" x2="16" y2="22" />
+                                      </svg>
+                                    </button>
                                   )}
+                                  {selectedMatchInfo && (
+                                    <button
+                                      type="button"
+                                      className={styles.kpiMapIconButton}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setKpiShotsPlayersModalOpen(true);
+                                      }}
+                                      title="Pokaż wkład zawodników w strzały"
+                                      aria-label="Pokaż wkład zawodników w strzały"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                        <circle cx="9" cy="7" r="4" />
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                  <span className={styles.kpiScoreRowExpandIcon} aria-hidden>
+                                    {kpiShotsRowExpanded ? (
+                                      <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                    ) : (
+                                      <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                    )}
+                                  </span>
                                 </span>
                               </span>
+                              <div className={styles.kpiScoreRowValuesWrap}>
+                                <span className={styles.kpiScoreRowLeft}>
+                                  <span className={styles.kpiScoreRowValues}>{teamShotsCount}</span>
+                                </span>
+                                <span className={styles.kpiScoreRowCombinedDivider}> : </span>
+                                <span className={styles.kpiScoreRowRight}>{opponentShotsCount}</span>
+                              </div>
                             </div>
                             {kpiShotsRowExpanded && (
                               <div className={styles.kpiScoreGoalsDetails}>
@@ -4532,26 +5816,177 @@ export default function StatystykiZespoluPage() {
                                 </div>
                               </div>
                             )}
-                            <div className={styles.kpiScoreRow}>
-                              <span className={styles.kpiScoreRowLabelWithIcon}>
-                                {selectedMatchInfo && (
-                                  <button
-                                    type="button"
-                                    className={styles.kpiMapIconButton}
-                                    onClick={() => setPkMapModalOpen(true)}
-                                    title="Otwórz mapę wejść w PK"
-                                    aria-label="Otwórz mapę wejść w pole karne"
-                                  >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                                      <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
-                                      <line x1="8" y1="2" x2="8" y2="18" />
-                                      <line x1="16" y1="6" x2="16" y2="22" />
-                                    </svg>
-                                  </button>
-                                )}
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              className={`${styles.kpiScoreRowClickable} ${styles.kpiScoreRowThreeCol} ${kpiPkRowExpanded ? styles.kpiScoreRowClickableExpanded : ''}`}
+                              onClick={() => setKpiPkRowExpanded(!kpiPkRowExpanded)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPkRowExpanded(!kpiPkRowExpanded); } }}
+                              title={kpiPkRowExpanded ? 'Kliknij, aby zwinąć' : 'Kliknij, aby rozwinąć szczegóły PK (po regain, drybling, podanie)'}
+                              aria-expanded={kpiPkRowExpanded}
+                            >
+                              <span className={styles.kpiScoreRowCenterBlock}>
                                 <span className={styles.kpiScoreRowLabel}>PK</span>
+                                <span className={styles.kpiScoreRowCenterIcons}>
+                                  {selectedMatchInfo && (
+                                    <button
+                                      type="button"
+                                      className={styles.kpiMapIconButton}
+                                      onClick={(e) => { e.stopPropagation(); setPkMapModalOpen(true); }}
+                                      title="Otwórz mapę wejść w PK"
+                                      aria-label="Otwórz mapę wejść w pole karne"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+                                        <line x1="8" y1="2" x2="8" y2="18" />
+                                        <line x1="16" y1="6" x2="16" y2="22" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                  {selectedMatchInfo && (
+                                    <button
+                                      type="button"
+                                      className={styles.kpiMapIconButton}
+                                      onClick={(e) => { e.stopPropagation(); setKpiPkPlayersModalOpen(true); }}
+                                      title="Pokaż wkład zawodników w wejścia PK"
+                                      aria-label="Pokaż wkład zawodników w wejścia PK"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                        <circle cx="9" cy="7" r="4" />
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                  <span className={styles.kpiScoreRowExpandIcon} aria-hidden>
+                                    {kpiPkRowExpanded ? (
+                                      <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                    ) : (
+                                      <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                    )}
+                                  </span>
+                                </span>
                               </span>
-                              <span className={styles.kpiScoreRowValues}>{teamPKEntriesCount} : {opponentPKEntriesCount}</span>
+                              <div className={styles.kpiScoreRowValuesWrap}>
+                                <span className={styles.kpiScoreRowLeft}>
+                                  <span className={styles.kpiScoreRowValues}>{teamPKEntriesCount}</span>
+                                </span>
+                                <span className={styles.kpiScoreRowCombinedDivider}> : </span>
+                                <span className={styles.kpiScoreRowRight}>{opponentPKEntriesCount}</span>
+                              </div>
+                            </div>
+                            {kpiPkRowExpanded && (
+                              <div className={styles.kpiScoreGoalsDetails}>
+                                <div className={styles.kpiScoreRow}>
+                                  <span className={styles.kpiScoreRowLabel}>Po regain</span>
+                                  <span className={styles.kpiScoreRowValues}>
+                                    {teamPKRegainCount}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({teamPKEntriesCount > 0 ? Math.round(teamPKRegainCount / teamPKEntriesCount * 100) : 0}%)
+                                    </span>
+                                    <span className={styles.kpiScoreRowCombinedDivider}> : </span>
+                                    {opponentPKRegainCount}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({opponentPKEntriesCount > 0 ? Math.round(opponentPKRegainCount / opponentPKEntriesCount * 100) : 0}%)
+                                    </span>
+                                  </span>
+                                </div>
+                                <div className={styles.kpiScoreRow}>
+                                  <span className={styles.kpiScoreRowLabel}>Drybling</span>
+                                  <span className={styles.kpiScoreRowValues}>
+                                    {teamPKDribbleCount}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({teamPKEntriesCount > 0 ? Math.round(teamPKDribbleCount / teamPKEntriesCount * 100) : 0}%)
+                                    </span>
+                                    <span className={styles.kpiScoreRowCombinedDivider}> : </span>
+                                    {opponentPKDribbleCount}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({opponentPKEntriesCount > 0 ? Math.round(opponentPKDribbleCount / opponentPKEntriesCount * 100) : 0}%)
+                                    </span>
+                                  </span>
+                                </div>
+                                <div className={styles.kpiScoreRow}>
+                                  <span className={styles.kpiScoreRowLabel}>Podanie</span>
+                                  <span className={styles.kpiScoreRowValues}>
+                                    {teamPKPassCount}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({teamPKEntriesCount > 0 ? Math.round(teamPKPassCount / teamPKEntriesCount * 100) : 0}%)
+                                    </span>
+                                    <span className={styles.kpiScoreRowCombinedDivider}> : </span>
+                                    {opponentPKPassCount}{' '}
+                                    <span className={styles.kpiScoreRowValuesPct}>
+                                      ({opponentPKEntriesCount > 0 ? Math.round(opponentPKPassCount / opponentPKEntriesCount * 100) : 0}%)
+                                    </span>
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className={`${styles.kpiScoreRowCombined} ${styles.kpiScoreRowP3Clickable}`}
+                              onClick={() => {
+                                setSelectedKpiForVideo(selectedKpiForVideo === 'p2p3-passes' ? null : 'p2p3-passes');
+                                setExpandedKpiForPlayers(null);
+                              }}
+                              title="PxT – nie wlicza się do KPI"
+                              aria-label="PxT, nie wlicza się do KPI"
+                            >
+                              <div className={styles.kpiScoreRowCombinedMain}>
+                                <div className={styles.kpiScoreRowCombinedBlock}>
+                                  <span className={styles.kpiScoreRowLabelWithIcon}>
+                                    <span className={styles.kpiScoreRowLabel}>PxT</span>
+                                    <button
+                                      type="button"
+                                      className={styles.kpiMapIconButton}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setKpiPxtPlayersModalOpen(true);
+                                      }}
+                                      title="Pokaż wkład PxT zawodników (podanie / odbiór / drybling)"
+                                      aria-label="Pokaż wkład PxT zawodników"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                        <circle cx="9" cy="7" r="4" />
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                      </svg>
+                                    </button>
+                                  </span>
+                                  <span className={styles.kpiScoreRowValuesWithIcon}>
+                                    <span className={styles.kpiScoreRowValues}>{totalPxtAll.toFixed(2)} PxT</span>
+                                  </span>
+                                </div>
+                              </div>
+                            </button>
+                            <div className={styles.kpiScoreRowCombined}>
+                              <div className={styles.kpiScoreRowCombinedMain}>
+                                <div className={styles.kpiScoreRowCombinedBlock}>
+                                  <span className={styles.kpiScoreRowLabelWithIcon}>
+                                    <span className={styles.kpiScoreRowLabel}>P2/P3</span>
+                                    <button
+                                      type="button"
+                                      className={styles.kpiMapIconButton}
+                                      onClick={() => setKpiP2P3PlayersModalOpen(true)}
+                                      title="Pokaż statystyki P2/P3 zawodników (regain, podający, drybling, przyjęcie)"
+                                      aria-label="Pokaż statystyki P2/P3 zawodników"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                        <circle cx="9" cy="7" r="4" />
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                      </svg>
+                                    </button>
+                                  </span>
+                                  <span className={styles.kpiScoreRowValuesWithIcon}>
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {totalP2Actions}/{totalP3Actions}
+                                    </span>
+                                  </span>
+                                </div>
+                              </div>
                             </div>
                             <div
                               className={styles.kpiScoreRowCombined}
@@ -4572,7 +6007,7 @@ export default function StatystykiZespoluPage() {
                                         ({formatMinutesToMMSS(teamPossessionMinutes)})
                                       </span>
                                     </span>
-                                    <span className={styles.kpiScoreRowValues}> : </span>
+                                    <span className={styles.kpiScoreRowCombinedDivider}> : </span>
                                     <span className={styles.kpiScoreRowValues}>
                                       {Math.round(opponentPossessionPercent)}%{' '}
                                       <span className={styles.kpiScoreRowValuesPossessionTime}>
@@ -4583,23 +6018,6 @@ export default function StatystykiZespoluPage() {
                                 </div>
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              className={`${styles.kpiScoreRowCombined} ${styles.kpiScoreRowP3Clickable}`}
-                              onClick={() => {
-                                setSelectedKpiForVideo(selectedKpiForVideo === 'p2p3-passes' ? null : 'p2p3-passes');
-                                setExpandedKpiForPlayers(null);
-                              }}
-                              title="Podania P2/P3 – nie wlicza się do KPI"
-                              aria-label="Podania P2/P3, nie wlicza się do KPI"
-                            >
-                              <div className={styles.kpiScoreRowCombinedMain}>
-                                <div className={styles.kpiScoreRowCombinedBlock}>
-                                  <span className={styles.kpiScoreRowLabel}>Podania P2/P3</span>
-                                  <span className={styles.kpiScoreRowValues}>{p2PassesCount}/{p3PassesCount}</span>
-                                </div>
-                              </div>
-                            </button>
                             {(() => {
                               const findKey = (t: Record<string, any>, keys: string[]) => keys.find(k => Object.prototype.hasOwnProperty.call(t, k));
                               const totalDistM = gpsMatchDayData.reduce((sum, e) => {
@@ -4607,16 +6025,29 @@ export default function StatystykiZespoluPage() {
                                 const v = k != null && e.total?.[k] != null ? Number(e.total[k]) : NaN;
                                 return sum + (Number.isFinite(v) ? v : 0);
                               }, 0);
-                              if (totalDistM > 0) {
-                                const km = totalDistM / 1000;
-                                return (
-                                  <div className={styles.kpiScoreRow}>
-                                    <span className={styles.kpiScoreRowLabel}>Łączny dystans</span>
-                                    <span className={styles.kpiScoreRowValues}>{km >= 1 ? km.toFixed(1) : totalDistM.toFixed(0)} {km >= 1 ? 'km' : 'm'}</span>
-                                  </div>
-                                );
-                              }
-                              return null;
+                              const totalSprintDistM = gpsMatchDayData.reduce((sum, e) => {
+                                const k = findKey(e.total ?? {}, ['Sprint Distance', 'Sprint distance']);
+                                const v = k != null && e.total?.[k] != null ? Number(e.total[k]) : NaN;
+                                return sum + (Number.isFinite(v) ? v : 0);
+                              }, 0);
+                              const totalHSRM = gpsMatchDayData.reduce((sum, e) => {
+                                const k = findKey(e.total ?? {}, ['High Speed Running (Relative)', 'High Speed Running (relative)', 'High Speed Running (m)', 'High Speed Running']);
+                                const v = k != null && e.total?.[k] != null ? Number(e.total[k]) : NaN;
+                                return sum + (Number.isFinite(v) ? v : 0);
+                              }, 0);
+                              const hasAny = totalDistM > 0 || totalSprintDistM > 0 || totalHSRM > 0;
+                              if (!hasAny) return null;
+                              const distStr = totalDistM > 0 ? (totalDistM >= 1000 ? `${(totalDistM / 1000).toFixed(1)} km` : `${Math.round(totalDistM)} m`) : '—';
+                              const sprintDistStr = totalSprintDistM > 0 ? (totalSprintDistM >= 1000 ? `${(totalSprintDistM / 1000).toFixed(1)} km` : `${Math.round(totalSprintDistM)} m`) : '—';
+                              const hsrStr = totalHSRM > 0 ? (totalHSRM >= 1000 ? `${(totalHSRM / 1000).toFixed(1)} km` : `${Math.round(totalHSRM)} m`) : '—';
+                              return (
+                                <div className={styles.kpiScoreRow}>
+                                  <span className={styles.kpiScoreRowLabel}>Dystans/Sprint/HSR</span>
+                                  <span className={styles.kpiScoreRowValues}>
+                                    {distStr} / {sprintDistStr} / {hsrStr}
+                                  </span>
+                                </div>
+                              );
                             })()}
                           </div>
                         </div>
@@ -6676,7 +8107,7 @@ export default function StatystykiZespoluPage() {
                       selectedEntryId={selectedPKEntryIdForView}
                       matchInfo={selectedMatchInfo}
                       allTeams={availableTeams}
-                      hideTeamLogos={true}
+                      hideTeamLogos={false}
                       hideFlipButton={false}
                       hideInstructions={true}
                     />
@@ -6877,20 +8308,26 @@ export default function StatystykiZespoluPage() {
                       <span className={styles.valueSecondary}> • ({teamStats.regainsPer90.toFixed(1)} / 90)</span>
                     </span>
                   </div>
-                  {selectedMatchInfo?.matchData?.possession && (() => {
-                    const pos = selectedMatchInfo.matchData!.possession!;
-                    const isOurTeamHome = selectedMatchInfo.team === selectedTeam;
-                    const opponentPossessionMin = (isOurTeamHome ? (pos.opponentFirstHalf ?? 0) + (pos.opponentSecondHalf ?? 0) : (pos.teamFirstHalf ?? 0) + (pos.teamSecondHalf ?? 0));
-                    const regainsPerMinOppPossession = opponentPossessionMin > 0 ? (teamRegainStats.totalRegains / opponentPossessionMin) : null;
-                    return regainsPerMinOppPossession !== null ? (
-                      <div className={styles.detailsRow}>
-                        <span className={styles.detailsLabel}>PRZECHWYTY/MIN POSIADANIA PRZECIWNIKA:</span>
-                        <span className={styles.detailsValue}>
-                          <span className={styles.valueMain}>{regainsPerMinOppPossession.toFixed(2)}</span>
-                        </span>
-                      </div>
-                    ) : null;
-                  })()}
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>PRZECHWYTY/MIN POSIADANIA PRZECIWNIKA:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>
+                        {aggregatedPossession && aggregatedPossession.opponentMin > 0
+                          ? (teamRegainStats.totalRegains / aggregatedPossession.opponentMin).toFixed(2)
+                          : "brak danych"}
+                      </span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}><span className={styles.preserveCase}>xT</span> W OBRONIE/MIN POSIADANIA PRZECIWNIKA:</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>
+                        {aggregatedPossession && aggregatedPossession.opponentMin > 0
+                          ? (teamRegainStats.regainXTInDefense / aggregatedPossession.opponentMin).toFixed(3)
+                          : "brak danych"}
+                      </span>
+                    </span>
+                  </div>
                   <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}>PRZECHWYTY NA POŁOWIE PRZECIWNIKA:</span>
                     <span className={styles.detailsValue}>
@@ -7403,21 +8840,26 @@ export default function StatystykiZespoluPage() {
                       })()}
                     </span>
                   </div>
-                  {selectedMatchInfo?.matchData?.possession && (() => {
-                    const pos = selectedMatchInfo.matchData!.possession!;
-                    const isOurTeamHome = selectedMatchInfo.team === selectedTeam;
-                    const ourPossessionMin = (isOurTeamHome ? (pos.teamFirstHalf ?? 0) + (pos.teamSecondHalf ?? 0) : (pos.opponentFirstHalf ?? 0) + (pos.opponentSecondHalf ?? 0));
-                    const filteredLosesCount = teamLosesStats.totalLosesOwnHalf + teamLosesStats.totalLosesOpponentHalf;
-                    const losesPerMinOurPossession = ourPossessionMin > 0 ? (filteredLosesCount / ourPossessionMin) : null;
-                    return losesPerMinOurPossession !== null ? (
-                      <div className={styles.detailsRow}>
-                        <span className={styles.detailsLabel}>STRATY/MIN POSIADANIA ({teamsObject[selectedTeam]?.name ?? selectedTeam}):</span>
-                        <span className={styles.detailsValue}>
-                          <span className={styles.valueMain}>{losesPerMinOurPossession.toFixed(2)}</span>
-                        </span>
-                      </div>
-                    ) : null;
-                  })()}
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}>STRATY/MIN POSIADANIA ({teamsObject[selectedTeam]?.name ?? selectedTeam}):</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>
+                        {aggregatedPossession && aggregatedPossession.teamMin > 0
+                          ? ((teamLosesStats.totalLosesOwnHalf + teamLosesStats.totalLosesOpponentHalf) / aggregatedPossession.teamMin).toFixed(2)
+                          : "brak danych"}
+                      </span>
+                    </span>
+                  </div>
+                  <div className={styles.detailsRow}>
+                    <span className={styles.detailsLabel}><span className={styles.preserveCase}>xT</span> W OBRONIE/MIN POSIADANIA ({teamsObject[selectedTeam]?.name ?? selectedTeam}):</span>
+                    <span className={styles.detailsValue}>
+                      <span className={styles.valueMain}>
+                        {aggregatedPossession && aggregatedPossession.teamMin > 0
+                          ? (teamLosesStats.losesXTInDefense / aggregatedPossession.teamMin).toFixed(3)
+                          : "brak danych"}
+                      </span>
+                    </span>
+                  </div>
                   <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}><span className={styles.preserveCase}>xT</span> W ATAKU:</span>
                     <span className={styles.detailsValue}>
@@ -11508,6 +12950,33 @@ export default function StatystykiZespoluPage() {
                   <p className={styles.mapsModalEmpty}>Brak strzałów do wyświetlenia.</p>
                 )}
               </div>
+
+              {/* Legenda mapy xG w modalu – taka sama jak na stronie */}
+              <div className={styles.xgMapLegend} role="img" aria-label="Legenda mapy xG">
+                <span className={styles.xgMapLegendItem}>
+                  <span className={styles.xgMapLegendDot} style={{ background: "#10b981" }} />
+                  <span>Niski xG</span>
+                </span>
+                <span className={styles.xgMapLegendItem}>
+                  <span className={styles.xgMapLegendDot} style={{ background: "#fbbf24" }} />
+                  <span>Średni xG</span>
+                </span>
+                <span className={styles.xgMapLegendItem}>
+                  <span className={styles.xgMapLegendDot} style={{ background: "#dc2626" }} />
+                  <span>Wysoki xG</span>
+                </span>
+                <span className={styles.xgMapLegendItem}>
+                  <span className={`${styles.xgMapLegendDot} ${styles.goalRing}`} />
+                  <span>Gol</span>
+                </span>
+                <span className={styles.xgMapLegendItem}>
+                  <span
+                    className={`${styles.xgMapLegendDot} ${styles.hex}`}
+                    style={{ background: "#94a3b8" }}
+                  />
+                  <span>Stały fragment</span>
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -11519,20 +12988,73 @@ export default function StatystykiZespoluPage() {
           <div className={styles.mapsModalContent} onClick={(e) => e.stopPropagation()}>
             <div className={styles.mapsModalBody}>
               <div className={styles.mapsModalPitchWrap}>
-                {pkEntriesFilteredForView.length > 0 ? (
+                {pkEntriesFilteredForMap.length > 0 ? (
                   <PKEntriesPitch
-                    pkEntries={pkEntriesFilteredForView}
+                    pkEntries={pkEntriesFilteredForMap}
                     onEntryClick={() => {}}
                     selectedEntryId={undefined}
                     matchInfo={selectedMatchInfo}
                     allTeams={availableTeams}
-                    hideTeamLogos={true}
+                    hideTeamLogos={false}
                     hideFlipButton={false}
                     hideInstructions={true}
                   />
                 ) : (
                   <p className={styles.mapsModalEmpty}>Brak wejść w PK do wyświetlenia.</p>
                 )}
+              </div>
+
+              {/* Legenda mapy wejść w PK w modalu – taka sama jak na stronie */}
+              <div
+                className={styles.pkMapLegend}
+                role="img"
+                aria-label="Legenda wejść w pole karne"
+              >
+                <span className={styles.pkMapLegendItem}>
+                  <span className={styles.pkMapLegendLine} style={{ background: "#ef4444" }} />
+                  <span>Podanie</span>
+                </span>
+                <span className={styles.pkMapLegendItem}>
+                  <span className={styles.pkMapLegendLine} style={{ background: "#1e40af" }} />
+                  <span>Drybling</span>
+                </span>
+                <span className={styles.pkMapLegendItem}>
+                  <span className={styles.pkMapLegendLine} style={{ background: "#10b981" }} />
+                  <span>SFG</span>
+                </span>
+                <span className={styles.pkMapLegendItem}>
+                  <span
+                    className={styles.pkMapLegendDot}
+                    style={{
+                      background: "#86efac",
+                      border: "1px solid #fff",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <span>Gol</span>
+                </span>
+                <span className={styles.pkMapLegendItem}>
+                  <span
+                    className={styles.pkMapLegendDot}
+                    style={{
+                      background: "#111827",
+                      border: "1px solid #fff",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <span>Strzał</span>
+                </span>
+                <span className={styles.pkMapLegendItem}>
+                  <span
+                    className={styles.pkMapLegendDot}
+                    style={{
+                      background: "white",
+                      border: "1.5px solid #f59e0b",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <span>Regain (kropka)</span>
+                </span>
               </div>
             </div>
           </div>
