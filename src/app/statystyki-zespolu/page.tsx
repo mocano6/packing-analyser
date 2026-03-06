@@ -1855,26 +1855,23 @@ export default function StatystykiZespoluPage() {
     filteredRegainActions.forEach(action => {
       const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
       const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
-      
+
       if (defenseZoneName) {
         const isLateral = isLateralZone(defenseZoneName);
-        
+        // P0-P3 wzajemnie wykluczające – każda akcja w dokładnie jednym buckecie (suma = total)
         if (action.isP0 || action.isP0Start) {
           allRegainP0Count += 1;
           if (isLateral) allRegainP0CountLateral += 1;
           else allRegainP0CountCentral += 1;
-        }
-        if (action.isP1 || action.isP1Start) {
+        } else if (action.isP1 || action.isP1Start) {
           allRegainP1Count += 1;
           if (isLateral) allRegainP1CountLateral += 1;
           else allRegainP1CountCentral += 1;
-        }
-        if (action.isP2 || action.isP2Start) {
+        } else if (action.isP2 || action.isP2Start) {
           allRegainP2Count += 1;
           if (isLateral) allRegainP2CountLateral += 1;
           else allRegainP2CountCentral += 1;
-        }
-        if (action.isP3 || action.isP3Start) {
+        } else if (action.isP3 || action.isP3Start) {
           allRegainP3Count += 1;
           if (isLateral) allRegainP3CountLateral += 1;
           else allRegainP3CountCentral += 1;
@@ -2071,6 +2068,7 @@ export default function StatystykiZespoluPage() {
       allRegainP1CountCentral,
       allRegainP2CountCentral,
       allRegainP3CountCentral,
+      totalRegainsWithP: allRegainP0Count + allRegainP1Count + allRegainP2Count + allRegainP3Count,
     };
     
     return result;
@@ -2473,26 +2471,26 @@ export default function StatystykiZespoluPage() {
       // losesAttackZone = strefa, gdzie straciliśmy piłkę
       const losesZoneRaw = action.losesAttackZone || action.fromZone || action.toZone || action.startZone;
       const losesZoneName = losesZoneRaw ? convertZoneToName(losesZoneRaw) : null;
-      
-      if (losesZoneName) {
+      // Na własnej połowie wykluczamy auty (spójność z totalLosesOwnHalf)
+      const isOwn = losesZoneName ? isOwnHalf(losesZoneName) : false;
+      const excludeAsAut = isOwn && (action.isAut === true || (action as any).aut === true);
+
+      if (losesZoneName && !excludeAsAut) {
         const isLateral = isLateralZone(losesZoneName);
-        
+        // P0-P3 wzajemnie wykluczające – każda akcja w dokładnie jednym buckecie (suma = total)
         if (action.isP0 || action.isP0Start) {
           allLosesP0Count += 1;
           if (isLateral) allLosesP0CountLateral += 1;
           else allLosesP0CountCentral += 1;
-        }
-        if (action.isP1 || action.isP1Start) {
+        } else if (action.isP1 || action.isP1Start) {
           allLosesP1Count += 1;
           if (isLateral) allLosesP1CountLateral += 1;
           else allLosesP1CountCentral += 1;
-        }
-        if (action.isP2 || action.isP2Start) {
+        } else if (action.isP2 || action.isP2Start) {
           allLosesP2Count += 1;
           if (isLateral) allLosesP2CountLateral += 1;
           else allLosesP2CountCentral += 1;
-        }
-        if (action.isP3 || action.isP3Start) {
+        } else if (action.isP3 || action.isP3Start) {
           allLosesP3Count += 1;
           if (isLateral) allLosesP3CountLateral += 1;
           else allLosesP3CountCentral += 1;
@@ -8521,11 +8519,20 @@ export default function StatystykiZespoluPage() {
                   <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}>PRZECHWYTY:</span>
                     <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>{teamRegainStats.totalRegains}</span>
-                      {teamStats.totalRegains > 0 && (
-                        <span className={styles.valueSecondary}>/{teamStats.totalRegains} ({((teamRegainStats.totalRegains / teamStats.totalRegains) * 100).toFixed(1)}%)</span>
-                      )}
-                      <span className={styles.valueSecondary}> • ({teamStats.regainsPer90.toFixed(1)} / 90)</span>
+                      {(() => {
+                        const sumOfP = teamRegainStats.allRegainP0Count + teamRegainStats.allRegainP1Count + teamRegainStats.allRegainP2Count + teamRegainStats.allRegainP3Count;
+                        const totalMinutes = teamStats.totalMinutes || 90;
+                        const regainsPer90 = totalMinutes > 0 ? (sumOfP * 90) / totalMinutes : 0;
+                        return (
+                          <>
+                            <span className={styles.valueMain}>{sumOfP}</span>
+                            {sumOfP > 0 && (
+                              <span className={styles.valueSecondary}>/{sumOfP} (100.0%)</span>
+                            )}
+                            <span className={styles.valueSecondary}> • ({regainsPer90.toFixed(1)} / 90)</span>
+                          </>
+                        );
+                      })()}
                     </span>
                   </div>
                   <div className={styles.detailsRow}>
@@ -8533,7 +8540,7 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.detailsValue}>
                       <span className={styles.valueMain}>
                         {aggregatedPossession && aggregatedPossession.opponentMin > 0
-                          ? (teamRegainStats.totalRegains / aggregatedPossession.opponentMin).toFixed(2)
+                          ? ((teamRegainStats.totalRegainsWithP ?? teamRegainStats.totalRegains) / aggregatedPossession.opponentMin).toFixed(2)
                           : "brak danych"}
                       </span>
                     </span>
@@ -9044,7 +9051,9 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.detailsValue}>
                       {(() => {
                         const filteredLosesCount = teamLosesStats.totalLosesOwnHalf + teamLosesStats.totalLosesOpponentHalf;
-                        const losesWithAutCount = teamStats.totalLoses;
+                        const sumOfP = teamLosesStats.allLosesP0Count + teamLosesStats.allLosesP1Count + teamLosesStats.allLosesP2Count + teamLosesStats.allLosesP3Count;
+                        const totalForSection = Math.max(filteredLosesCount, sumOfP) || filteredLosesCount;
+                        const autysCount = derivedLosesActions.filter(a => a.isAut === true || (a as any).aut === true).length;
                         const totalMinutes = teamStats.totalMinutes || 90;
                         const losesPer90Filtered = totalMinutes > 0
                           ? ((filteredLosesCount * 90) / totalMinutes).toFixed(1)
@@ -9052,12 +9061,12 @@ export default function StatystykiZespoluPage() {
                         return (
                           <>
                             <span className={styles.valueMain}>{filteredLosesCount}</span>
-                      {teamStats.totalLoses > 0 && (
-                              <span className={styles.valueSecondary}>/{teamStats.totalLoses} ({((filteredLosesCount / teamStats.totalLoses) * 100).toFixed(1)}%)</span>
-                      )}
+                            {totalForSection > 0 && (
+                              <span className={styles.valueSecondary}>/{totalForSection} ({((filteredLosesCount / totalForSection) * 100).toFixed(1)}%)</span>
+                            )}
                             <span className={styles.valueSecondary}>
                               {' '}
-                              • ({losesPer90Filtered} / 90) • w tym auty: {losesWithAutCount - filteredLosesCount}
+                              • ({losesPer90Filtered} / 90){autysCount > 0 ? ` • w tym auty: ${autysCount}` : ''}
                             </span>
                           </>
                         );
