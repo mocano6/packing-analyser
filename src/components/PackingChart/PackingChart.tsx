@@ -794,7 +794,7 @@ export default function PackingChart({
       const selectedPlayer = players.find(p => p.id === selectedPlayerId);
       networkNodes.push({
         id: selectedPlayerId,
-        name: selectedPlayer?.name || 'Nieznany',
+        name: selectedPlayer ? getPlayerLabel(selectedPlayer.id, playersIndex) : 'Nieznany',
         x: 300, // Środek
         y: 300,
         totalValue: Array.from(networkConnections.values()).reduce((sum, conn) => sum + conn.senderValue + conn.receiverValue, 0),
@@ -828,7 +828,7 @@ export default function PackingChart({
         
         networkNodes.push({
           id: partnerId,
-          name: player?.name || 'Nieznany',
+          name: player ? getPlayerLabel(player.id, playersIndex) : 'Nieznany',
           x: 300 + radius * Math.cos(angle),
           y: 300 + radius * Math.sin(angle),
           totalValue: currentValue,

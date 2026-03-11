@@ -23,9 +23,14 @@ import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
+import { usePresentationMode } from "@/contexts/PresentationContext";
 import styles from "./statystyki-zespolu.module.css";
 
 const GPS_MATCH_DAY_CACHE_TTL_MS = 10 * 60 * 1000;
+const TRENDY_MATCHES_COUNT_KEY = "teamStats_trendyMatchesCount";
+const TRENDY_MATCH_TYPE_KEY = "teamStats_trendyMatchType";
+const DEFAULT_TRENDY_MATCH_TYPES = { liga: true, puchar: true, towarzyski: true };
+type TrendyMatchTypesEnabled = { liga: boolean; puchar: boolean; towarzyski: boolean };
 
 export default function StatystykiZespoluPage() {
   const { teams, isLoading: isTeamsLoading } = useTeams();
@@ -37,6 +42,7 @@ export default function StatystykiZespoluPage() {
   const [selectedPlayerForVideo, setSelectedPlayerForVideo] = useState<string | null>(null);
   const { players } = usePlayersState();
   const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
+  const { isPresentationMode } = usePresentationMode();
   
   // Resetuj stan zwijania gdy zmienia się wybrane KPI
   useEffect(() => {
@@ -134,11 +140,11 @@ export default function StatystykiZespoluPage() {
   const [allPKEntries, setAllPKEntries] = useState<any[]>([]);
   const [allAcc8sEntries, setAllAcc8sEntries] = useState<any[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
-  const [expandedCategory, setExpandedCategory] = useState<'kpi' | 'pxt' | 'xg' | 'matchData' | 'pkEntries' | 'regains' | 'loses' | 'gps' | null>(() => {
+  const [expandedCategory, setExpandedCategory] = useState<'kpi' | 'trendy' | 'pxt' | 'xg' | 'pkEntries' | 'regains' | 'loses' | 'gps' | null>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('statystykiZespolu_expandedCategory');
-      if (saved && ['kpi', 'pxt', 'xg', 'matchData', 'pkEntries', 'regains', 'loses', 'gps'].includes(saved)) {
-        return saved as 'kpi' | 'pxt' | 'xg' | 'matchData' | 'pkEntries' | 'regains' | 'loses' | 'gps';
+      if (saved && ['kpi', 'trendy', 'pxt', 'xg', 'pkEntries', 'regains', 'loses', 'gps'].includes(saved)) {
+        return saved as 'kpi' | 'trendy' | 'pxt' | 'xg' | 'pkEntries' | 'regains' | 'loses' | 'gps';
       }
       return 'kpi';
     }
@@ -201,6 +207,49 @@ export default function StatystykiZespoluPage() {
   const [pkEntriesExpandedMatchData, setPkEntriesExpandedMatchData] = useState(false);
   const [possessionExpanded, setPossessionExpanded] = useState(false);
   const [shotsExpanded, setShotsExpanded] = useState(false);
+  const [trendyMatchesCount, setTrendyMatchesCount] = useState<5 | 10 | 15 | 20>(() => {
+    if (typeof window === "undefined") return 10;
+    const raw = Number(localStorage.getItem(TRENDY_MATCHES_COUNT_KEY));
+    return raw === 5 || raw === 10 || raw === 15 || raw === 20 ? raw : 10;
+  });
+  const [trendyMatchTypesEnabled, setTrendyMatchTypesEnabled] = useState<TrendyMatchTypesEnabled>(() => {
+    if (typeof window === "undefined") return { ...DEFAULT_TRENDY_MATCH_TYPES };
+    try {
+      const raw = localStorage.getItem(TRENDY_MATCH_TYPE_KEY);
+      if (!raw) return { ...DEFAULT_TRENDY_MATCH_TYPES };
+      const parsed = JSON.parse(raw) as Record<string, boolean>;
+      return {
+        liga: parsed.liga !== false,
+        puchar: parsed.puchar !== false,
+        towarzyski: parsed.towarzyski !== false,
+      };
+    } catch {
+      return { ...DEFAULT_TRENDY_MATCH_TYPES };
+    }
+  });
+  const [trendyVisibleSeries, setTrendyVisibleSeries] = useState<{
+    teamXG: boolean;
+    opponentXG: boolean;
+    teamGoals: boolean;
+    opponentGoals: boolean;
+  }>({
+    teamXG: true,
+    opponentXG: true,
+    teamGoals: true,
+    opponentGoals: true,
+  });
+  const [trendyLoading, setTrendyLoading] = useState(false);
+  const [trendyLoadError, setTrendyLoadError] = useState<string | null>(null);
+  const [trendyMatchesData, setTrendyMatchesData] = useState<Array<{
+    matchId: string;
+    matchLabel: string;
+    date: string;
+    opponent: string;
+    teamXG: number;
+    opponentXG: number;
+    teamGoals: number;
+    opponentGoals: number;
+  }>>([]);
   const [kpiShotsRowExpanded, setKpiShotsRowExpanded] = useState(false);
   const [kpiPkRowExpanded, setKpiPkRowExpanded] = useState(false);
   const [kpiP2P3RowExpanded, setKpiP2P3RowExpanded] = useState(false);
@@ -773,7 +822,164 @@ export default function StatystykiZespoluPage() {
     if (first) return { ...first, _multiLabel: `${selectedMatches.length} meczów` as const };
     return null;
   }, [selectedMatchInfo, teamMatches, selectedMatches]);
-  
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(TRENDY_MATCHES_COUNT_KEY, String(trendyMatchesCount));
+  }, [trendyMatchesCount]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const isDefault =
+      trendyMatchTypesEnabled.liga &&
+      trendyMatchTypesEnabled.puchar &&
+      trendyMatchTypesEnabled.towarzyski;
+    if (isDefault) localStorage.removeItem(TRENDY_MATCH_TYPE_KEY);
+    else localStorage.setItem(TRENDY_MATCH_TYPE_KEY, JSON.stringify(trendyMatchTypesEnabled));
+  }, [trendyMatchTypesEnabled]);
+
+  const selectedTrendyMatches = useMemo(() => {
+    const withId = teamMatches.filter((m) => typeof m.matchId === "string" && m.matchId.length > 0);
+    const byType = withId.filter((m) => {
+      const raw = m.matchType ?? "liga";
+      const t = (typeof raw === "string" ? raw.toLowerCase() : "liga") as "liga" | "puchar" | "towarzyski";
+      const key = t === "puchar" ? "puchar" : t === "towarzyski" ? "towarzyski" : "liga";
+      return trendyMatchTypesEnabled[key];
+    });
+    return byType.slice(0, trendyMatchesCount);
+  }, [teamMatches, trendyMatchesCount, trendyMatchTypesEnabled]);
+
+  useEffect(() => {
+    if (expandedCategory !== "trendy") return;
+
+    if (selectedTrendyMatches.length === 0) {
+      setTrendyMatchesData([]);
+      setTrendyLoadError(null);
+      setTrendyLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setTrendyLoading(true);
+    setTrendyLoadError(null);
+
+    (async () => {
+      try {
+        const resolved = await Promise.all(
+          selectedTrendyMatches.map(async (match, idx) => {
+            const matchId = match.matchId as string;
+            const matchDoc = await getOrLoadMatchDocument(matchId);
+            const shots = (matchDoc?.shots ?? []) as any[];
+
+            const resolveShotTeamId = (shot: any): string | null => {
+              if (shot.teamId) return shot.teamId;
+              if (shot.teamContext === "attack") return match.team ?? null;
+              if (shot.teamContext === "defense") return match.opponent ?? null;
+              return null;
+            };
+
+            const teamShots = shots.filter((shot) => resolveShotTeamId(shot) === match.team);
+            const opponentShots = shots.filter((shot) => resolveShotTeamId(shot) === match.opponent);
+
+            const teamXG = teamShots.reduce((sum: number, shot: any) => sum + (Number(shot.xG) || 0), 0);
+            const opponentXG = opponentShots.reduce((sum: number, shot: any) => sum + (Number(shot.xG) || 0), 0);
+            const teamGoals = teamShots.filter((shot: any) => shot.isGoal || shot.shotType === "goal").length;
+            const opponentGoals = opponentShots.filter((shot: any) => shot.isGoal || shot.shotType === "goal").length;
+            const date = typeof match.date === "string" ? match.date : "";
+            const shortDate = date ? date.slice(5) : `Mecz ${idx + 1}`;
+            const opponent = String(match.opponent ?? "Przeciwnik");
+
+            return {
+              matchId,
+              matchLabel: `${shortDate} vs ${opponent}`,
+              date,
+              opponent,
+              teamXG,
+              opponentXG,
+              teamGoals,
+              opponentGoals,
+            };
+          })
+        );
+
+        if (cancelled) return;
+        setTrendyMatchesData(resolved);
+      } catch {
+        if (cancelled) return;
+        setTrendyMatchesData([]);
+        setTrendyLoadError("Nie udało się załadować danych trendów.");
+      } finally {
+        if (!cancelled) setTrendyLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [expandedCategory, selectedTrendyMatches]);
+
+  const trendyChartData = useMemo(() => {
+    const base = [...trendyMatchesData].reverse();
+    if (base.length === 0) return [];
+
+    const calcTrend = (values: number[]) => {
+      const n = values.length;
+      if (n <= 1) return values;
+
+      let sumX = 0;
+      let sumY = 0;
+      let sumXY = 0;
+      let sumXX = 0;
+
+      values.forEach((value, i) => {
+        sumX += i;
+        sumY += value;
+        sumXY += i * value;
+        sumXX += i * i;
+      });
+
+      const denominator = n * sumXX - sumX * sumX;
+      if (denominator === 0) return values;
+      const slope = (n * sumXY - sumX * sumY) / denominator;
+      const intercept = (sumY - slope * sumX) / n;
+
+      return values.map((_, i) => slope * i + intercept);
+    };
+
+    const teamXGValues = base.map((row) => row.teamXG);
+    const opponentXGValues = base.map((row) => row.opponentXG);
+    const teamGoalsValues = base.map((row) => row.teamGoals);
+    const opponentGoalsValues = base.map((row) => row.opponentGoals);
+
+    const teamXGTrend = calcTrend(teamXGValues);
+    const opponentXGTrend = calcTrend(opponentXGValues);
+    const teamGoalsTrend = calcTrend(teamGoalsValues);
+    const opponentGoalsTrend = calcTrend(opponentGoalsValues);
+
+    return base.map((row, i) => ({
+      ...row,
+      teamXGTrend: teamXGTrend[i],
+      opponentXGTrend: opponentXGTrend[i],
+      teamGoalsTrend: teamGoalsTrend[i],
+      opponentGoalsTrend: opponentGoalsTrend[i],
+    }));
+  }, [trendyMatchesData]);
+
+  const trendyLast5Stats = useMemo(() => {
+    if (trendyChartData.length === 0) return null;
+    const last5 = trendyChartData.slice(-5);
+    const avgTeamXG = last5.reduce((s, r) => s + r.teamXG, 0) / last5.length;
+    const avgOpponentXG = last5.reduce((s, r) => s + r.opponentXG, 0) / last5.length;
+    const avgTeamGoals = last5.reduce((s, r) => s + r.teamGoals, 0) / last5.length;
+    const avgOpponentGoals = last5.reduce((s, r) => s + r.opponentGoals, 0) / last5.length;
+    return {
+      avgTeamXG,
+      avgOpponentXG,
+      avgTeamGoals,
+      avgOpponentGoals,
+      matchCount: last5.length,
+    };
+  }, [trendyChartData]);
+
   // Resetuj wybranego zawodnika gdy zmienia się KPI lub mecz
   useEffect(() => {
     setSelectedPlayerForVideo(null);
@@ -3629,6 +3835,15 @@ export default function StatystykiZespoluPage() {
               >
                 <span className={styles.categoryName}>KPI</span>
               </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  className={`${styles.categoryItem} ${expandedCategory === 'trendy' ? styles.active : ''}`}
+                  onClick={() => setExpandedCategory(expandedCategory === 'trendy' ? null : 'trendy')}
+                >
+                  <span className={styles.categoryName}>Trendy</span>
+                </button>
+              )}
               <button
                 type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'pxt' ? styles.active : ''}`}
@@ -3671,15 +3886,6 @@ export default function StatystykiZespoluPage() {
               >
                 <span className={styles.categoryName}>GPS</span>
               </button>
-              {isAdmin && (
-              <button
-                type="button"
-                  className={`${styles.categoryItem} ${expandedCategory === 'matchData' ? styles.active : ''}`}
-                  onClick={() => setExpandedCategory(expandedCategory === 'matchData' ? null : 'matchData')}
-              >
-                  <span className={styles.categoryName}>Dane meczowe</span>
-              </button>
-              )}
       </div>
 
             {/* Szczegóły poniżej */}
@@ -3737,6 +3943,9 @@ export default function StatystykiZespoluPage() {
                   const opponentShotsSFG = opponentShots.filter(isSfgShot);
                   const teamXGSFG = teamShotsSFG.reduce((sum, s) => sum + (s.xG || 0), 0);
                   const opponentXGSFG = opponentShotsSFG.reduce((sum, s) => sum + (s.xG || 0), 0);
+                  const teamGoalsSFG = teamShotsSFG.filter((shot: any) => shot.isGoal || shot.shotType === 'goal').length;
+                  const opponentGoalsSFG = opponentShotsSFG.filter((shot: any) => shot.isGoal || shot.shotType === 'goal').length;
+
                   const allRegainCombined = [
                     ...allRegainActions,
                     ...allActions.filter((a: any) => a.isRegain === true || isRegainAction(a)),
@@ -3753,6 +3962,8 @@ export default function StatystykiZespoluPage() {
                     .filter(x => x.ts > 0);
                   let teamXGRegain = 0;
                   let opponentXGRegain = 0;
+                  let teamGoalsRegain = 0;
+                  let opponentGoalsRegain = 0;
                   regainWithTs.forEach((item, i) => {
                     const nextTs = i < regainWithTs.length - 1 ? regainWithTs[i + 1].ts : Infinity;
                     const endTs = item.ts + 8;
@@ -3761,11 +3972,19 @@ export default function StatystykiZespoluPage() {
                       x => x.ts > item.ts && x.ts <= endTs && x.ts < nextTs && resolveShotTeamId(x.shot) === regainTeamId
                     );
                     const xg = shotsInWindow.reduce((sum, x) => sum + (x.shot.xG || 0), 0);
-                    if (regainTeamId === teamIdInMatch) teamXGRegain += xg;
-                    else opponentXGRegain += xg;
+                    const goals = shotsInWindow.filter(x => x.shot.isGoal || x.shot.shotType === 'goal').length;
+                    if (regainTeamId === teamIdInMatch) {
+                      teamXGRegain += xg;
+                      teamGoalsRegain += goals;
+                    } else {
+                      opponentXGRegain += xg;
+                      opponentGoalsRegain += goals;
+                    }
                   });
                   const teamXGOpenPlay = teamXG - teamXGSFG - teamXGRegain;
                   const opponentXGOpenPlay = opponentXG - opponentXGSFG - opponentXGRegain;
+                  const teamGoalsOpenPlay = teamGoals - teamGoalsSFG - teamGoalsRegain;
+                  const opponentGoalsOpenPlay = opponentGoals - opponentGoalsSFG - opponentGoalsRegain;
                   const teamShotToRegainWindowMap = new Map<string, boolean>();
                   regainWithTs.forEach((item, i) => {
                     const nextTs = i < regainWithTs.length - 1 ? regainWithTs[i + 1].ts : Infinity;
@@ -4759,7 +4978,7 @@ export default function StatystykiZespoluPage() {
                   const regainsOpponentHalfDelta = teamRegainStats.totalRegainsOpponentHalf - kpiRegainsOpponentHalf;
                   const regainsPPToPKShot8sDelta = regainsPPToPKShot8sPercentage - kpiRegainsPPToPKShot8s;
 
-                  const radarData = [
+                  const baseRadarData = [
                     { metric: 'xG/strzał', 'KPI': 100, 'Wartość': scoreHigherIsBetter(teamXGPerShot, kpiXGPerShot), value: scoreHigherIsBetter(teamXGPerShot, kpiXGPerShot), actualValue: teamXGPerShot, actualLabel: `${teamXGPerShot.toFixed(2)} (${teamShotsCount} strzałów)`, kpiLabel: `KPI > ${kpiXGPerShot.toFixed(2)}`, deltaLabel: formatDelta(xgPerShotDelta, 'higher', 2) },
                     { metric: '1T', 'KPI': 100, 'Wartość': scoreHigherIsBetter(team1TContact1Percentage, kpi1TPercentage), value: scoreHigherIsBetter(team1TContact1Percentage, kpi1TPercentage), actualValue: team1TContact1Percentage, actualLabel: `${team1TContact1Percentage.toFixed(1)}%`, kpiLabel: `KPI ≥ ${kpi1TPercentage}%`, deltaLabel: formatDelta(oneTDelta, 'higher', 1, 'pp') },
                     { metric: '5s', 'KPI': 100, 'Wartość': scoreHigherIsBetter(reaction5sPercentage, kpiReaction5s), value: scoreHigherIsBetter(reaction5sPercentage, kpiReaction5s), actualValue: reaction5sPercentage, actualLabel: `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesWith5sFlags.length})`, kpiLabel: `KPI > ${kpiReaction5s}%`, deltaLabel: formatDelta(reactionDelta, 'higher', 1, 'pp') },
@@ -4769,6 +4988,11 @@ export default function StatystykiZespoluPage() {
                     { metric: '8s CA', 'KPI': 100, 'Wartość': scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s), value: scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s), actualValue: regainsPPToPKShot8sPercentage, actualLabel: `${regainsPPToPKShot8sPercentage.toFixed(1)}% (${regainsPPWithPKOrShot8s}/${regainsOnOpponentHalfWithTimestamp.length})`, kpiLabel: `KPI ≥ ${kpiRegainsPPToPKShot8s}%`, deltaLabel: formatDelta(regainsPPToPKShot8sDelta, 'higher', 1, 'pp') },
                     { metric: '8s ACC', 'KPI': 100, 'Wartość': scoreHigherIsBetter(shotAndPK8sPercentage, target8sAcc), value: scoreHigherIsBetter(shotAndPK8sPercentage, target8sAcc), actualValue: shotAndPK8sPercentage, actualLabel: `${shotAndPK8sPercentage.toFixed(1)}% (${shotAndPK8sCount}/${total8sAcc})`, kpiLabel: `KPI ≥ ${target8sAcc}%`, deltaLabel: formatDelta(accDelta, 'higher', 1, 'pp') },
                   ];
+
+                  const radarData = baseRadarData.map((item, idx) => ({
+                    ...item,
+                    displayMetric: isPresentationMode ? `KPI ${idx + 1}` : item.metric,
+                  }));
 
                   const selectedTeamData = availableTeams.find((team) => team.id === selectedTeam);
                   const opponentTeamData = availableTeams.find((team) => team.id === opponentIdInMatch);
@@ -4838,7 +5062,7 @@ export default function StatystykiZespoluPage() {
 
                   const radarSliceTooltip = ({ index }: { index: string | number; data: readonly { id: string; value: number; formattedValue: string; color: string }[] }) => {
                     const d = typeof index === 'string'
-                      ? radarData.find((r) => r.metric === index)
+                      ? radarData.find((r) => r.displayMetric === index)
                       : radarData[index];
                     if (!d) return null;
                     const actualVal = d.actualValue;
@@ -4883,7 +5107,7 @@ export default function StatystykiZespoluPage() {
                                 <ResponsiveRadar
                                   data={radarData}
                                   keys={['KPI', 'Wartość']}
-                                  indexBy="metric"
+                                  indexBy="displayMetric"
                                   maxValue={200}
                                   margin={{ top: 40, right: 40, bottom: 40, left: 40 }}
                                   curve="linearClosed"
@@ -5069,6 +5293,21 @@ export default function StatystykiZespoluPage() {
                               </span>
                               <div className={styles.kpiScoreRowValuesWrap}>
                                 <span className={styles.kpiScoreRowLeft}>
+                                  {(() => {
+                                    const diff = teamXG - opponentXG;
+                                    return (
+                                      <span 
+                                        className={styles.kpiScoreRowValuesPossessionTime} 
+                                        style={{ 
+                                          marginRight: '6px',
+                                          color: diff > 0 ? '#059669' : diff < 0 ? '#dc2626' : 'inherit',
+                                          fontWeight: 500
+                                        }}
+                                      >
+                                        ({diff > 0 ? '+' : ''}{diff.toFixed(2)})
+                                      </span>
+                                    );
+                                  })()}
                                   <span className={styles.kpiScoreRowValues}>{teamXG.toFixed(2)}</span>
                                 </span>
                                 <span className={styles.kpiScoreRowCombinedDivider}>:</span>
@@ -5083,9 +5322,14 @@ export default function StatystykiZespoluPage() {
                               </span>
                             </div>
                             {kpiXgRowExpanded && (
-                              <div className={styles.kpiScoreGoalsDetails}>
+                              <div className={`${styles.kpiScoreGoalsDetails} ${styles.kpiScoreGoalsDetailsXg}`}>
                                 <div className={styles.kpiScoreRow}>
                                   <span className={styles.kpiScoreRowLabel}>Otwarta gra</span>
+                                  <span className={styles.kpiScoreRowGoals}>
+                                    <span style={{ color: '#059669' }}>{teamGoalsOpenPlay}</span>
+                                    <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
+                                    <span style={{ color: '#dc2626' }}>{opponentGoalsOpenPlay}</span>
+                                  </span>
                                   <span className={styles.kpiScoreRowValues}>
                                     {teamXGOpenPlay.toFixed(2)}{' '}
                                     <span className={styles.kpiScoreRowValuesPct}>
@@ -5100,6 +5344,11 @@ export default function StatystykiZespoluPage() {
                                 </div>
                                 <div className={styles.kpiScoreRow}>
                                   <span className={styles.kpiScoreRowLabel}>SFG</span>
+                                  <span className={styles.kpiScoreRowGoals}>
+                                    <span style={{ color: '#059669' }}>{teamGoalsSFG}</span>
+                                    <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
+                                    <span style={{ color: '#dc2626' }}>{opponentGoalsSFG}</span>
+                                  </span>
                                   <span className={styles.kpiScoreRowValues}>
                                     {teamXGSFG.toFixed(2)}{' '}
                                     <span className={styles.kpiScoreRowValuesPct}>
@@ -5114,6 +5363,11 @@ export default function StatystykiZespoluPage() {
                                 </div>
                                 <div className={styles.kpiScoreRow}>
                                   <span className={styles.kpiScoreRowLabel}>Regain</span>
+                                  <span className={styles.kpiScoreRowGoals}>
+                                    <span style={{ color: '#059669' }}>{teamGoalsRegain}</span>
+                                    <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
+                                    <span style={{ color: '#dc2626' }}>{opponentGoalsRegain}</span>
+                                  </span>
                                   <span className={styles.kpiScoreRowValues}>
                                     {teamXGRegain.toFixed(2)}{' '}
                                     <span className={styles.kpiScoreRowValuesPct}>
@@ -6000,7 +6254,7 @@ export default function StatystykiZespoluPage() {
                               </div>
                             </button>
                             <div
-                              className={styles.kpiScoreRowCombined}
+                              className={`${styles.kpiScoreRowCombined} ${kpiP2P3RowExpanded ? styles.kpiScoreRowCombinedExpanded : ''}`}
                               role="button"
                               tabIndex={0}
                               onClick={() => setKpiP2P3RowExpanded(!kpiP2P3RowExpanded)}
@@ -6116,7 +6370,7 @@ export default function StatystykiZespoluPage() {
                               )}
                             </div>
                             <div
-                              className={styles.kpiScoreRowCombined}
+                              className={`${styles.kpiScoreRowCombined} ${kpiRegainsPPRowExpanded ? styles.kpiScoreRowCombinedExpanded : ''}`}
                               role="button"
                               tabIndex={0}
                               onClick={() => setKpiRegainsPPRowExpanded(!kpiRegainsPPRowExpanded)}
@@ -6305,7 +6559,7 @@ export default function StatystykiZespoluPage() {
                             }}
                             style={{ cursor: 'pointer' }}
                           >
-                            <div className={styles.statTileLabel}>8s ACC</div>
+                            <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : '8s ACC'}</div>
                             <div className={styles.statTileValue}>
                               {shotAndPK8sPercentage.toFixed(1)}%
                               <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
@@ -6325,7 +6579,7 @@ export default function StatystykiZespoluPage() {
                             }}
                             style={{ cursor: 'pointer' }}
                           >
-                            <div className={styles.statTileLabel}>xG/strzał</div>
+                            <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : 'xG/strzał'}</div>
                             <div className={styles.statTileValue}>
                               {teamXGPerShot.toFixed(2)}
                               <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
@@ -6345,7 +6599,7 @@ export default function StatystykiZespoluPage() {
                             }}
                             style={{ cursor: 'pointer' }}
                           >
-                            <div className={styles.statTileLabel}>1T</div>
+                            <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : '1T'}</div>
                             <div className={styles.statTileValue}>
                               {team1TContact1Percentage.toFixed(1)}%
                               <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
@@ -6364,7 +6618,7 @@ export default function StatystykiZespoluPage() {
                             }}
                             style={{ cursor: 'pointer' }}
                           >
-                            <div className={styles.statTileLabel}>PK przeciwnik</div>
+                            <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : 'PK przeciwnik'}</div>
                             <div className={styles.statTileValue}>
                               {opponentPKEntriesCount}
                               <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
@@ -6384,7 +6638,7 @@ export default function StatystykiZespoluPage() {
                             style={{ cursor: 'pointer' }}
                           >
                             <div className={`${styles.statTileLabel} ${styles.tooltipTrigger}`} data-tooltip="KPI 5s (counterpressing) = (Liczba strat z isReaction5s === true) / (Wszystkie straty z zaznaczonym przyciskiem ✓ 5s LUB ✗ 5s, bez isAut) × 100%. KPI > 50%">
-                              5s (counterpressing)
+                              {isPresentationMode ? 'KPI' : '5s (counterpressing)'}
                             </div>
                             <div className={styles.statTileValue}>
                               {reaction5sPercentage.toFixed(1)}%
@@ -6405,7 +6659,7 @@ export default function StatystykiZespoluPage() {
                             }}
                             style={{ cursor: 'pointer' }}
                           >
-                            <div className={styles.statTileLabel}>PM Area straty</div>
+                            <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : 'PM Area straty'}</div>
                             <div className={styles.statTileValue}>
                               {losesInPMAreaCount}
                               <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
@@ -6425,7 +6679,7 @@ export default function StatystykiZespoluPage() {
                             }}
                             style={{ cursor: 'pointer' }}
                           >
-                            <div className={styles.statTileLabel}>Przechwyty PP</div>
+                            <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : 'Przechwyty PP'}</div>
                             <div className={styles.statTileValue}>
                               {teamRegainStats.totalRegainsOpponentHalf}
                               <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
@@ -6436,28 +6690,26 @@ export default function StatystykiZespoluPage() {
                               KPI ≥ {kpiRegainsOpponentHalf}
                             </div>
                           </div>
-                          <div>
-                            <div 
-                              className={`${styles.statTile} ${isRegainsPPToPKShot8sGood ? styles.statTileGood : styles.statTileBad}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedKpiForVideo(selectedKpiForVideo === '8s-ca' ? null : '8s-ca');
-                                setExpandedKpiForPlayers(expandedKpiForPlayers === '8s-ca' ? null : '8s-ca');
-                              }}
-                              style={{ cursor: 'pointer' }}
-                            >
-                              <div className={styles.statTileLabel}>8s CA</div>
-                              <div className={styles.statTileValue}>
-                                {regainsPPToPKShot8sPercentage.toFixed(1)}%
-                                <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
-                                  {regainsPPToPKShot8sDelta > 0 ? `(-${regainsPPToPKShot8sDelta.toFixed(1)}%)` : `(+${Math.abs(regainsPPToPKShot8sDelta).toFixed(1)}%)`}
-                                </span>
-                              </div>
+                          <div 
+                            className={`${styles.statTile} ${isRegainsPPToPKShot8sGood ? styles.statTileGood : styles.statTileBad}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedKpiForVideo(selectedKpiForVideo === '8s-ca' ? null : '8s-ca');
+                              setExpandedKpiForPlayers(expandedKpiForPlayers === '8s-ca' ? null : '8s-ca');
+                            }}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : '8s CA'}</div>
+                            <div className={styles.statTileValue}>
+                              {regainsPPToPKShot8sPercentage.toFixed(1)}%
+                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                                {regainsPPToPKShot8sDelta > 0 ? `(-${regainsPPToPKShot8sDelta.toFixed(1)}%)` : `(+${Math.abs(regainsPPToPKShot8sDelta).toFixed(1)}%)`}
+                              </span>
+                            </div>
                             <div className={styles.statTileSecondary}>
                               {regainsPPWithPKOrShot8s}/{regainsOnOpponentHalfWithTimestamp.length} • KPI ≥ {kpiRegainsPPToPKShot8s}%
                             </div>
                           </div>
-                        </div>
                               </>
                             );
                           })()}
@@ -10622,7 +10874,7 @@ export default function StatystykiZespoluPage() {
 
               </div>
             )}
-            {expandedCategory === 'matchData' && selectedMatchInfo && (
+            {false && selectedMatchInfo && (
               <div className={styles.detailsPanel}>
                 <h3>Dane meczowe</h3>
                 
@@ -12084,6 +12336,165 @@ export default function StatystykiZespoluPage() {
                   </div>
                 ) : (
                   <p className={styles.noDataText}>Brak danych meczu dla wybranego meczu.</p>
+                )}
+              </div>
+            )}
+            {isAdmin && expandedCategory === 'trendy' && (
+              <div className={styles.detailsPanel}>
+                <div className={styles.trendyFiltersRow}>
+                  <div className={styles.trendyFilterGroup}>
+                    <span className={styles.trendyFilterLabel}>Liczba meczów</span>
+                    <div className={styles.trendyCountButtons}>
+                      {[5, 10, 15, 20].map((count) => (
+                        <button
+                          key={count}
+                          type="button"
+                          className={`${styles.trendyCountButton} ${trendyMatchesCount === count ? styles.active : ''}`}
+                          onClick={() => setTrendyMatchesCount(count as 5 | 10 | 15 | 20)}
+                        >
+                          {count}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className={styles.trendyFilterGroup}>
+                    <span className={styles.trendyFilterLabel}>Typ meczu</span>
+                    <div className={styles.trendySeriesToggles}>
+                      {(["liga", "puchar", "towarzyski"] as const).map((key) => (
+                        <button
+                          key={key}
+                          type="button"
+                          data-color="matchType"
+                          className={`${styles.trendyToggle} ${trendyMatchTypesEnabled[key] ? styles.active : ""}`}
+                          onClick={() =>
+                            setTrendyMatchTypesEnabled((prev) => ({ ...prev, [key]: !prev[key] }))
+                          }
+                        >
+                          {key === "liga" ? "Ligowe" : key === "puchar" ? "Pucharowe" : "Towarzyskie"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className={styles.trendyFilterGroup}>
+                    <span className={styles.trendyFilterLabel}>Serie</span>
+                    <div className={styles.trendySeriesToggles}>
+                      <button
+                        type="button"
+                        data-color="teamXG"
+                        className={`${styles.trendyToggle} ${trendyVisibleSeries.teamXG ? styles.active : ''}`}
+                        onClick={() => setTrendyVisibleSeries((prev) => ({ ...prev, teamXG: !prev.teamXG }))}
+                      >
+                        xG nasze
+                      </button>
+                      <button
+                        type="button"
+                        data-color="opponentXG"
+                        className={`${styles.trendyToggle} ${trendyVisibleSeries.opponentXG ? styles.active : ''}`}
+                        onClick={() => setTrendyVisibleSeries((prev) => ({ ...prev, opponentXG: !prev.opponentXG }))}
+                      >
+                        xG przeciwnika
+                      </button>
+                      <button
+                        type="button"
+                        data-color="teamGoals"
+                        className={`${styles.trendyToggle} ${trendyVisibleSeries.teamGoals ? styles.active : ''}`}
+                        onClick={() => setTrendyVisibleSeries((prev) => ({ ...prev, teamGoals: !prev.teamGoals }))}
+                      >
+                        Gole nasze
+                      </button>
+                      <button
+                        type="button"
+                        data-color="opponentGoals"
+                        className={`${styles.trendyToggle} ${trendyVisibleSeries.opponentGoals ? styles.active : ''}`}
+                        onClick={() => setTrendyVisibleSeries((prev) => ({ ...prev, opponentGoals: !prev.opponentGoals }))}
+                      >
+                        Gole przeciwnika
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {trendyLoading ? (
+                  <p className={styles.noDataText}>Ładowanie trendów...</p>
+                ) : trendyLoadError ? (
+                  <p className={styles.noDataText}>{trendyLoadError}</p>
+                ) : trendyChartData.length === 0 ? (
+                  <p className={styles.noDataText}>Brak danych meczowych do wyświetlenia trendów.</p>
+                ) : (
+                  <>
+                    {trendyLast5Stats && (
+                      <div className={styles.trendyLast5Stats}>
+                        <div className={styles.trendyLast5Col}>
+                          <span className={styles.trendyLast5Label}>Średnia xG (ostatnie {trendyLast5Stats.matchCount} meczów)</span>
+                          <span className={styles.trendyLast5ValueTeam}>{trendyLast5Stats.avgTeamXG.toFixed(2)}</span>
+                          <span className={styles.trendyLast5Label}>Średnia gole (ostatnie {trendyLast5Stats.matchCount} meczów)</span>
+                          <span className={styles.trendyLast5ValueTeam}>{trendyLast5Stats.avgTeamGoals.toFixed(2)}</span>
+                        </div>
+                        <div className={styles.trendyLast5Divider} aria-hidden />
+                        <div className={styles.trendyLast5Col}>
+                          <span className={styles.trendyLast5Label}>Średnia xG przeciwnika</span>
+                          <span className={styles.trendyLast5ValueOpp}>{trendyLast5Stats.avgOpponentXG.toFixed(2)}</span>
+                          <span className={styles.trendyLast5Label}>Średnia gole przeciwnika</span>
+                          <span className={styles.trendyLast5ValueOpp}>{trendyLast5Stats.avgOpponentGoals.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )}
+                  <div className={styles.trendyChartWrap}>
+                    <ResponsiveContainer width="100%" height={420}>
+                      <LineChart data={trendyChartData} margin={{ top: 16, right: 20, left: 12, bottom: 130 }}>
+                        <CartesianGrid strokeDasharray="2 4" stroke="#e2e8f0" vertical={true} horizontal={true} />
+                        <XAxis
+                          dataKey="matchLabel"
+                          angle={-28}
+                          textAnchor="end"
+                          interval={0}
+                          height={64}
+                          tick={{ fontSize: 11, fill: "#64748b" }}
+                          axisLine={{ stroke: "#e2e8f0" }}
+                          tickLine={{ stroke: "#e2e8f0" }}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 11, fill: "#64748b" }}
+                          axisLine={{ stroke: "#e2e8f0" }}
+                          tickLine={{ stroke: "#e2e8f0" }}
+                          tickFormatter={(value) => typeof value === "number" ? (Number.isInteger(value) ? String(value) : value.toFixed(2)) : String(value)}
+                        />
+                        <Tooltip
+                          formatter={(value: number) => (typeof value === "number" ? (Number.isInteger(value) ? String(value) : value.toFixed(2)) : value) as string}
+                          contentStyle={{ border: "1px solid #e2e8f0", borderRadius: 10, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                          labelStyle={{ color: "#475569", fontWeight: 600 }}
+                        />
+                        <Legend verticalAlign="bottom" wrapperStyle={{ paddingTop: 24 }} iconType="circle" iconSize={8} />
+
+                        {trendyVisibleSeries.teamXG && (
+                          <Line type="monotone" dataKey="teamXG" name="xG nasze" stroke="#2563eb" strokeWidth={2} dot={{ r: 3, fill: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 4, fill: "#fff", stroke: "#2563eb", strokeWidth: 2 }} />
+                        )}
+                        {trendyVisibleSeries.opponentXG && (
+                          <Line type="monotone" dataKey="opponentXG" name="xG przeciwnika" stroke="#dc2626" strokeWidth={2} dot={{ r: 3, fill: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 4, fill: "#fff", stroke: "#dc2626", strokeWidth: 2 }} />
+                        )}
+                        {trendyVisibleSeries.teamGoals && (
+                          <Line type="monotone" dataKey="teamGoals" name="Gole nasze" stroke="#059669" strokeWidth={2} dot={{ r: 3, fill: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 4, fill: "#fff", stroke: "#059669", strokeWidth: 2 }} />
+                        )}
+                        {trendyVisibleSeries.opponentGoals && (
+                          <Line type="monotone" dataKey="opponentGoals" name="Gole przeciwnika" stroke="#ea580c" strokeWidth={2} dot={{ r: 3, fill: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 4, fill: "#fff", stroke: "#ea580c", strokeWidth: 2 }} />
+                        )}
+
+                        {trendyVisibleSeries.teamXG && (
+                          <Line type="monotone" dataKey="teamXGTrend" name="Trend xG nasze" stroke="#2563eb" strokeWidth={1.5} strokeDasharray="5 4" dot={false} strokeOpacity={0.85} />
+                        )}
+                        {trendyVisibleSeries.opponentXG && (
+                          <Line type="monotone" dataKey="opponentXGTrend" name="Trend xG przeciwnika" stroke="#dc2626" strokeWidth={1.5} strokeDasharray="5 4" dot={false} strokeOpacity={0.85} />
+                        )}
+                        {trendyVisibleSeries.teamGoals && (
+                          <Line type="monotone" dataKey="teamGoalsTrend" name="Trend gole nasze" stroke="#059669" strokeWidth={1.5} strokeDasharray="5 4" dot={false} strokeOpacity={0.85} />
+                        )}
+                        {trendyVisibleSeries.opponentGoals && (
+                          <Line type="monotone" dataKey="opponentGoalsTrend" name="Trend gole przeciwnika" stroke="#ea580c" strokeWidth={1.5} strokeDasharray="5 4" dot={false} strokeOpacity={0.85} />
+                        )}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  </>
                 )}
               </div>
             )}

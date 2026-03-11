@@ -324,7 +324,7 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
           }
 
           return (
-            <g key={entry.id} style={{ pointerEvents: 'none' }}>
+            <g key={entry.id}>
               <line
                 x1={startPx.x}
                 y1={startPx.y}
@@ -336,6 +336,11 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
                 strokeLinecap="butt"
                 strokeLinejoin="round"
                 data-pk-entry-arrow="true"
+                pointerEvents="stroke"
+                style={{ cursor: 'pointer' }}
+                onClick={(e) => handleEntryClick(e, entry)}
+                onMouseEnter={(e) => handleEntryMouseEnter(e, entry)}
+                onMouseLeave={handleEntryMouseLeave}
               />
               {(isShot || isGoal || isRegain) && (
                 <circle
@@ -348,29 +353,6 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
                 />
               )}
             </g>
-          );
-        })}
-        {/* Niewidoczne prostokąty – każdy nad swoją strzałką */}
-        {pkEntries.map((entry) => {
-          const start = convertCoordinates(entry.startX, entry.startY);
-          const end = convertCoordinates(entry.endX, entry.endY);
-          const startPx = { x: (start.x / 100) * pitchSize.width, y: (start.y / 100) * pitchSize.height };
-          const endPx = { x: (end.x / 100) * pitchSize.width, y: (end.y / 100) * pitchSize.height };
-          const pad = 14;
-          return (
-            <rect
-              key={`hit-${entry.id}`}
-              x={Math.min(startPx.x, endPx.x) - pad}
-              y={Math.min(startPx.y, endPx.y) - pad}
-              width={Math.abs(endPx.x - startPx.x) + pad * 2}
-              height={Math.abs(endPx.y - startPx.y) + pad * 2}
-              fill="transparent"
-              pointerEvents="all"
-              style={{ cursor: 'pointer' }}
-              onClick={(e) => handleEntryClick(e, entry)}
-              onMouseEnter={(e) => handleEntryMouseEnter(e, entry)}
-              onMouseLeave={handleEntryMouseLeave}
-            />
           );
         })}
       </svg>

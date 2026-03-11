@@ -2613,6 +2613,14 @@ export default function Page() {
     if (action.isReaction5s !== undefined) {
       return "loses";
     }
+    // Starsze wpisy loses mogą nie mieć isReaction5s, ale mają inne pola loses.
+    if (
+      action.isBadReaction5s !== undefined ||
+      action.isAut !== undefined ||
+      action.isPMArea !== undefined
+    ) {
+      return "loses";
+    }
     // Regain: ma playersBehindBall lub opponentsBehindBall, ale NIE ma isReaction5s
     if (action.playersBehindBall !== undefined || 
         action.opponentsBehindBall !== undefined ||
@@ -2995,7 +3003,6 @@ export default function Page() {
 
       const db = getDB();
 
-      // Zablokuj minuta i połowa podczas edycji, ale pozwól na zmianę timestamp
       let originalAction = actions.find(a => a.id === editedAction.id);
       
       // Jeśli nie znaleziono w actions, spróbuj znaleźć bezpośrednio w bazie danych
@@ -3029,26 +3036,93 @@ export default function Page() {
       const tempVideoTimestamp = localStorage.getItem('tempVideoTimestamp');
       const tempVideoTimestampRaw = localStorage.getItem('tempVideoTimestampRaw');
       const tempControversyNote = localStorage.getItem('tempControversyNote');
+      const tempEditedActionMinute = localStorage.getItem('tempEditedActionMinute');
+      const tempEditedActionIsSecondHalf = localStorage.getItem('tempEditedActionIsSecondHalf');
+      const tempEditedPlayersLeftField = localStorage.getItem('tempEditedPlayersLeftField');
+      const tempEditedOpponentsLeftField = localStorage.getItem('tempEditedOpponentsLeftField');
       const parsedVideoTimestamp = tempVideoTimestamp ? parseInt(tempVideoTimestamp) : undefined;
       const parsedVideoTimestampRaw = tempVideoTimestampRaw ? parseInt(tempVideoTimestampRaw) : undefined;
+      const parsedEditedMinute = tempEditedActionMinute ? parseInt(tempEditedActionMinute, 10) : undefined;
+      const hasEditedMinute = parsedEditedMinute !== undefined && !Number.isNaN(parsedEditedMinute) && parsedEditedMinute > 0;
+      const parsedEditedIsSecondHalf = tempEditedActionIsSecondHalf === 'true';
+      const parsedEditedPlayersLeftField = tempEditedPlayersLeftField ? parseInt(tempEditedPlayersLeftField, 10) : undefined;
+      const parsedEditedOpponentsLeftField = tempEditedOpponentsLeftField ? parseInt(tempEditedOpponentsLeftField, 10) : undefined;
+      const hasEditedPlayersLeftField =
+        parsedEditedPlayersLeftField !== undefined &&
+        !Number.isNaN(parsedEditedPlayersLeftField) &&
+        parsedEditedPlayersLeftField >= 0;
+      const hasEditedOpponentsLeftField =
+        parsedEditedOpponentsLeftField !== undefined &&
+        !Number.isNaN(parsedEditedOpponentsLeftField) &&
+        parsedEditedOpponentsLeftField >= 0;
       const controversyNote = tempControversyNote && tempControversyNote.trim() ? tempControversyNote.trim() : undefined;
       
-      const lockedEditedAction = originalAction ? {
-        ...editedAction,
-        minute: originalAction.minute,
-        isSecondHalf: originalAction.isSecondHalf,
-        // Użyj nowego timestamp z localStorage jeśli jest dostępny, w przeciwnym razie zachowaj oryginalny
-        videoTimestamp: parsedVideoTimestamp !== undefined ? parsedVideoTimestamp : originalAction.videoTimestamp,
-        videoTimestampRaw: parsedVideoTimestampRaw !== undefined ? parsedVideoTimestampRaw : (originalAction as any)?.videoTimestampRaw,
-        // Użyj nowej notatki z localStorage jeśli jest dostępna, w przeciwnym razie zachowaj oryginalną
-        controversyNote: controversyNote !== undefined ? controversyNote : editedAction.controversyNote
-      } : {
-        ...editedAction,
-        ...(controversyNote !== undefined && { controversyNote })
-      };
+      const lockedEditedAction = originalAction
+        ? {
+            ...editedAction,
+            // Użyj nowego timestamp z localStorage jeśli jest dostępny, w przeciwnym razie zachowaj oryginalny
+            videoTimestamp:
+              parsedVideoTimestamp !== undefined
+                ? parsedVideoTimestamp
+                : originalAction.videoTimestamp,
+            videoTimestampRaw:
+              parsedVideoTimestampRaw !== undefined
+                ? parsedVideoTimestampRaw
+                : (originalAction as any)?.videoTimestampRaw,
+            // Użyj nowej notatki z localStorage jeśli jest dostępna, w przeciwnym razie zachowaj oryginalną
+            controversyNote:
+              controversyNote !== undefined ? controversyNote : editedAction.controversyNote,
+            ...(hasEditedMinute
+              ? {
+                  minute: parsedEditedMinute,
+                  isSecondHalf: parsedEditedIsSecondHalf,
+                }
+              : {}),
+            ...(hasEditedPlayersLeftField
+              ? {
+                  playersLeftField: parsedEditedPlayersLeftField,
+                  totalPlayersOnField: 11 - parsedEditedPlayersLeftField,
+                }
+              : {}),
+            ...(hasEditedOpponentsLeftField
+              ? {
+                  opponentsLeftField: parsedEditedOpponentsLeftField,
+                  totalOpponentsOnField: 11 - parsedEditedOpponentsLeftField,
+                }
+              : {}),
+          }
+        : {
+            ...editedAction,
+            ...(controversyNote !== undefined && { controversyNote }),
+            ...(hasEditedMinute
+              ? {
+                  minute: parsedEditedMinute,
+                  isSecondHalf: parsedEditedIsSecondHalf,
+                }
+              : {}),
+            ...(hasEditedPlayersLeftField
+              ? {
+                  playersLeftField: parsedEditedPlayersLeftField,
+                  totalPlayersOnField: 11 - parsedEditedPlayersLeftField,
+                }
+              : {}),
+            ...(hasEditedOpponentsLeftField
+              ? {
+                  opponentsLeftField: parsedEditedOpponentsLeftField,
+                  totalOpponentsOnField: 11 - parsedEditedOpponentsLeftField,
+                }
+              : {}),
+          };
       
-      // Określamy kategorię akcji i odpowiednią kolekcję
-      const actionCategory = getActionCategory(lockedEditedAction);
+      // Określamy kategorię akcji i odpowiednią kolekcję.
+      // Dla istniejących akcji regain/loses trzymamy się kategorii oryginalnej,
+      // żeby stare rekordy (bez isReaction5s) nie trafiały błędnie do innej kolekcji.
+      const derivedActionCategory = getActionCategory(lockedEditedAction);
+      const originalActionCategory = originalAction ? getActionCategory(originalAction) : derivedActionCategory;
+      const actionCategory =
+        originalActionCategory === "regain" || originalActionCategory === "loses"
+          ? originalActionCategory
+          : derivedActionCategory;
       
       // Przy edycji NIE przemapowujemy starych akcji na nowe i nie przeliczamy opposite
       // Zachowujemy dokładnie to, co było zapisane wcześniej.
@@ -3068,7 +3142,6 @@ export default function Page() {
       const originalMatchId = originalAction?.matchId;
       
       // Określamy kategorię oryginalnej akcji
-      const originalActionCategory = originalAction ? getActionCategory(originalAction) : actionCategory;
       let originalCollectionField: string;
       if (originalActionCategory === "regain") {
         originalCollectionField = "actions_regain";
@@ -3128,20 +3201,31 @@ export default function Page() {
           ...cleanedAction,
           // Zachowujemy pola boolean dla regain i loses - używamy wartości z editedAction
           ...(actionCategory === "regain" || actionCategory === "loses" ? {
-            isP0: editedAction.isP0 === true,
-            isP1: editedAction.isP1 === true,
-            isP2: editedAction.isP2 === true,
-            isP3: editedAction.isP3 === true,
-            isContact1: editedAction.isContact1 === true,
-            isContact2: editedAction.isContact2 === true,
-            isContact3Plus: editedAction.isContact3Plus === true,
-            isShot: editedAction.isShot === true,
-            isGoal: editedAction.isGoal === true,
-            isPenaltyAreaEntry: editedAction.isPenaltyAreaEntry === true,
+            isP0: lockedEditedAction.isP0 === true,
+            isP1: lockedEditedAction.isP1 === true,
+            isP2: lockedEditedAction.isP2 === true,
+            isP3: lockedEditedAction.isP3 === true,
+            isContact1: lockedEditedAction.isContact1 === true,
+            isContact2: lockedEditedAction.isContact2 === true,
+            isContact3Plus: lockedEditedAction.isContact3Plus === true,
+            isShot: lockedEditedAction.isShot === true,
+            isGoal: lockedEditedAction.isGoal === true,
+            isPenaltyAreaEntry: lockedEditedAction.isPenaltyAreaEntry === true,
             ...(actionCategory === "loses" && {
-              isPMArea: (editedAction as any).isPMArea === true
+              isPMArea: (lockedEditedAction as any).isPMArea === true,
+              isAut: (lockedEditedAction as any).isAut === true
             })
-          } : {})
+          } : {}),
+          ...(actionCategory === "regain" || actionCategory === "loses"
+            ? {
+                playersBehindBall: lockedEditedAction.playersBehindBall,
+                opponentsBehindBall: lockedEditedAction.opponentsBehindBall,
+                playersLeftField: lockedEditedAction.playersLeftField,
+                opponentsLeftField: lockedEditedAction.opponentsLeftField,
+                totalPlayersOnField: lockedEditedAction.totalPlayersOnField,
+                totalOpponentsOnField: lockedEditedAction.totalOpponentsOnField,
+              }
+            : {}),
         };
         const updatedNewActions = [...newActions, actionWithBooleans];
         
@@ -3212,6 +3296,10 @@ export default function Page() {
               localStorage.removeItem('tempVideoTimestamp');
               localStorage.removeItem('tempVideoTimestampRaw');
               localStorage.removeItem('tempControversyNote');
+              localStorage.removeItem('tempEditedActionMinute');
+              localStorage.removeItem('tempEditedActionIsSecondHalf');
+              localStorage.removeItem('tempEditedPlayersLeftField');
+              localStorage.removeItem('tempEditedOpponentsLeftField');
               
               const refreshEvent = new CustomEvent('matchesListRefresh', {
                 detail: { timestamp: Date.now() }
@@ -3222,6 +3310,36 @@ export default function Page() {
             }
           }
         }
+        // Dla regain/loses (szczególnie starszych rekordów) upewnij się,
+        // że aktualizujemy kolekcję, w której akcja faktycznie istnieje.
+        if (actionIndex === -1 && (collectionField === "actions_regain" || collectionField === "actions_loses")) {
+          const regainActions = (matchData.actions_regain || []) as Action[];
+          const losesActions = (matchData.actions_loses || []) as Action[];
+          const regainIndex = regainActions.findIndex((a) => a.id === editedAction.id);
+          const losesIndex = losesActions.findIndex((a) => a.id === editedAction.id);
+
+          if (regainIndex !== -1) {
+            collectionField = "actions_regain";
+            currentActions = regainActions;
+            actionIndex = regainIndex;
+          } else if (losesIndex !== -1) {
+            collectionField = "actions_loses";
+            currentActions = losesActions;
+            actionIndex = losesIndex;
+          }
+        }
+        
+        console.log("=== DEBUG ZAPISU EDYCJI ===");
+        console.log("ID akcji:", editedAction.id);
+        console.log("Kolekcja docelowa:", collectionField);
+        console.log("Wartości z localStorage:", {
+          tempEditedPlayersLeftField: localStorage.getItem('tempEditedPlayersLeftField'),
+          tempEditedOpponentsLeftField: localStorage.getItem('tempEditedOpponentsLeftField')
+        });
+        console.log("Wartości w lockedEditedAction:", {
+          playersLeftField: lockedEditedAction.playersLeftField,
+          opponentsLeftField: lockedEditedAction.opponentsLeftField
+        });
         
         if (actionIndex === -1) {
           console.error("❌ Nie znaleziono akcji do edycji:", editedAction.id, "w kolekcji:", collectionField);
@@ -3242,21 +3360,36 @@ export default function Page() {
           ...cleanedAction,
           // Zachowujemy pola boolean dla regain i loses - używamy wartości z editedAction
           ...(actionCategory === "regain" || actionCategory === "loses" ? {
-            isP0: editedAction.isP0 === true,
-            isP1: editedAction.isP1 === true,
-            isP2: editedAction.isP2 === true,
-            isP3: editedAction.isP3 === true,
-            isContact1: editedAction.isContact1 === true,
-            isContact2: editedAction.isContact2 === true,
-            isContact3Plus: editedAction.isContact3Plus === true,
-            isShot: editedAction.isShot === true,
-            isGoal: editedAction.isGoal === true,
-            isPenaltyAreaEntry: editedAction.isPenaltyAreaEntry === true,
+            isP0: lockedEditedAction.isP0 === true,
+            isP1: lockedEditedAction.isP1 === true,
+            isP2: lockedEditedAction.isP2 === true,
+            isP3: lockedEditedAction.isP3 === true,
+            isContact1: lockedEditedAction.isContact1 === true,
+            isContact2: lockedEditedAction.isContact2 === true,
+            isContact3Plus: lockedEditedAction.isContact3Plus === true,
+            isShot: lockedEditedAction.isShot === true,
+            isGoal: lockedEditedAction.isGoal === true,
+            isPenaltyAreaEntry: lockedEditedAction.isPenaltyAreaEntry === true,
             ...(actionCategory === "loses" && {
-              isPMArea: (editedAction as any).isPMArea === true
+              isPMArea: (lockedEditedAction as any).isPMArea === true,
+              isAut: (lockedEditedAction as any).isAut === true
             })
-          } : {})
+          } : {}),
+          ...(actionCategory === "regain" || actionCategory === "loses"
+            ? {
+                playersBehindBall: lockedEditedAction.playersBehindBall,
+                opponentsBehindBall: lockedEditedAction.opponentsBehindBall,
+                playersLeftField: lockedEditedAction.playersLeftField,
+                opponentsLeftField: lockedEditedAction.opponentsLeftField,
+                totalPlayersOnField: lockedEditedAction.totalPlayersOnField,
+                totalOpponentsOnField: lockedEditedAction.totalOpponentsOnField,
+              }
+            : {}),
         };
+        console.log("Finalny payload do zapisu (actionWithBooleans):", {
+          playersLeftField: actionWithBooleans.playersLeftField,
+          opponentsLeftField: actionWithBooleans.opponentsLeftField
+        });
         updatedActions[actionIndex] = actionWithBooleans;
 
         await updateDoc(matchRef, {
@@ -3272,6 +3405,10 @@ export default function Page() {
 
       setIsActionEditModalOpen(false);
       setEditingAction(null);
+      localStorage.removeItem('tempEditedActionMinute');
+      localStorage.removeItem('tempEditedActionIsSecondHalf');
+      localStorage.removeItem('tempEditedPlayersLeftField');
+      localStorage.removeItem('tempEditedOpponentsLeftField');
       
       // Wywołaj event odświeżenia dla innych komponentów
       const refreshEvent = new CustomEvent('matchesListRefresh', {
@@ -3289,6 +3426,10 @@ export default function Page() {
   const handleCloseActionEditModal = () => {
     setIsActionEditModalOpen(false);
     setEditingAction(null);
+    localStorage.removeItem('tempEditedActionMinute');
+    localStorage.removeItem('tempEditedActionIsSecondHalf');
+    localStorage.removeItem('tempEditedPlayersLeftField');
+    localStorage.removeItem('tempEditedOpponentsLeftField');
   };
 
   // Najpierw sprawdź czy aplikacja się ładuje

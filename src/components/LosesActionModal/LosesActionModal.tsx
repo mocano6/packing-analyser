@@ -89,6 +89,10 @@ interface LosesActionModalProps {
   onOpponentsLeftFieldChange: (count: number) => void;
   isControversial: boolean;
   onControversialToggle: () => void;
+  allTeams?: Array<{
+    id: string;
+    name: string;
+  }>;
 }
 
 const LosesActionModal: React.FC<LosesActionModalProps> = ({
@@ -172,6 +176,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   onOpponentsLeftFieldChange,
   isControversial,
   onControversialToggle,
+  allTeams = [],
 }) => {
   const clamp0to10 = (value: number) => Math.max(0, Math.min(10, value));
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
@@ -271,7 +276,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       if (secondHalfStart !== undefined && videoSeconds >= secondHalfStart) {
         const secondsIntoSecondHalf = videoSeconds - secondHalfStart;
         const minute = Math.floor(secondsIntoSecondHalf / 60) + 46;
-        return Math.max(46, Math.min(90, minute));
+        return Math.max(46, minute);
       }
 
       if (firstHalfStart !== undefined && videoSeconds >= firstHalfStart) {
@@ -291,7 +296,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       if (videoSeconds >= DEFAULT_SECOND_HALF_START) {
         const secondsIntoSecondHalf = videoSeconds - DEFAULT_SECOND_HALF_START;
         const minute = Math.floor(secondsIntoSecondHalf / 60) + 46;
-        return Math.max(46, Math.min(90, minute));
+        return Math.max(46, minute);
       }
       const minute = Math.floor(videoSeconds / 60) + 1;
       return Math.max(1, Math.min(45, minute));
@@ -443,8 +448,12 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
 
   // Funkcja do pobierania nazwy zespołu
   const getTeamName = (teamId: string) => {
+    const dynamicTeam = allTeams.find((team) => team.id === teamId);
+    if (dynamicTeam?.name) {
+      return dynamicTeam.name;
+    }
     const team = Object.values(TEAMS).find(team => team.id === teamId);
-    return team ? team.name : teamId;
+    return team ? team.name : "Nasz zespół";
   };
 
   // Efekt do aktualizacji wybranego meczu przy edycji
@@ -600,8 +609,8 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
     const value = e.target.value;
     
     // Kompatybilność wsteczna: pozwól na format MM:SS lub tylko liczby (minuty)
-    const partialPattern = /^([0-9]?[0-9]?)?(:([0-5]?[0-9]?)?)?$/;
-    const fullPattern = /^([0-9]{1,2}):([0-5][0-9])$/;
+    const partialPattern = /^([0-9]{0,3})?(:([0-5]?[0-9]?)?)?$/;
+    const fullPattern = /^([0-9]{1,3}):([0-5][0-9])$/;
     const minutesOnlyPattern = /^[0-9]{1,3}$/; // Stary format: tylko minuty (1-999)
     
     if (value === '' || partialPattern.test(value) || fullPattern.test(value) || minutesOnlyPattern.test(value)) {
@@ -611,7 +620,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
 
   const handleVideoTimeBlur = () => {
     // Upewnij się, że format jest poprawny
-    const fullPattern = /^([0-9]{1,2}):([0-5][0-9])$/;
+    const fullPattern = /^([0-9]{1,3}):([0-5][0-9])$/;
     
     if (!fullPattern.test(videoTimeMMSS)) {
       // Kompatybilność wsteczna: jeśli to tylko liczba (stary format - minuty), konwertuj na MM:SS
@@ -619,7 +628,8 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
         const mins = parseInt(videoTimeMMSS, 10);
         if (!isNaN(mins) && mins >= 0) {
           // Konwertuj minuty na format MM:SS (sekundy = 0)
-          const formatted = `${Math.min(99, mins).toString().padStart(2, '0')}:00`;
+          const normalizedMins = Math.min(999, mins);
+          const formatted = `${normalizedMins < 100 ? normalizedMins.toString().padStart(2, '0') : normalizedMins.toString()}:00`;
           setVideoTimeMMSS(formatted);
           return;
         }
@@ -635,12 +645,13 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
         if (isNaN(mins)) mins = 0;
         if (isNaN(secs)) secs = 0;
         
-        // Ograniczenia: minuty 0-99 (dla kompatybilności), sekundy 0-59
-        mins = Math.max(0, Math.min(99, mins));
+        // Ograniczenia: minuty 0-999, sekundy 0-59
+        mins = Math.max(0, Math.min(999, mins));
         secs = Math.max(0, Math.min(59, secs));
         
         // Formatuj z zerami wiodącymi
-        const formatted = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        const formattedMins = mins < 100 ? mins.toString().padStart(2, '0') : mins.toString();
+        const formatted = `${formattedMins}:${secs.toString().padStart(2, '0')}`;
         setVideoTimeMMSS(formatted);
         return;
       }
@@ -715,7 +726,9 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   const handleShotToggle = () => {
     if (isShot) {
       onShotToggle(false);
-      onGoalToggle(false);
+      if (!isEditMode) {
+        onGoalToggle(false);
+      }
       return;
     }
     onShotToggle(true);
@@ -764,6 +777,17 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       }
     }
 
+    // W trybie edycji aktualizujemy minutę i połowę na podstawie bieżącego czasu z wideo
+    if (isEditMode && matchMinuteFromVideoInput > 0) {
+      const nextMinute = matchMinuteFromVideoInput;
+      const nextIsSecondHalf = nextMinute >= 46;
+      onMinuteChange(nextMinute);
+      onSecondHalfToggle(nextIsSecondHalf);
+      localStorage.setItem('tempEditedActionMinute', String(nextMinute));
+      localStorage.setItem('tempEditedActionIsSecondHalf', nextIsSecondHalf ? 'true' : 'false');
+      localStorage.setItem('tempEditedPlayersLeftField', String(playersLeftField));
+      localStorage.setItem('tempEditedOpponentsLeftField', String(opponentsLeftField));
+    }
 
     // Zapisz videoTimestamp z pola MM:SS do localStorage
     const videoTimeSeconds = mmssToSeconds(videoTimeMMSS);
@@ -873,7 +897,11 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    onPlayersLeftFieldChange(Math.min(10, playersLeftField + 1));
+                    const next = Math.min(10, playersLeftField + 1);
+                    onPlayersLeftFieldChange(next);
+                    if (isEditMode) {
+                      localStorage.setItem('tempEditedPlayersLeftField', String(next));
+                    }
                   }}
                   title="Kliknij, aby dodać 1 partnera"
                   style={{ cursor: 'pointer', position: 'relative' }}
@@ -887,7 +915,11 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      onPlayersLeftFieldChange(Math.max(0, playersLeftField - 1));
+                      const next = Math.max(0, playersLeftField - 1);
+                      onPlayersLeftFieldChange(next);
+                      if (isEditMode) {
+                        localStorage.setItem('tempEditedPlayersLeftField', String(next));
+                      }
                     }}
                     title="Odejmij 1 partnera"
                     type="button"
@@ -915,7 +947,11 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    onOpponentsLeftFieldChange(Math.min(10, opponentsLeftField + 1));
+                    const next = Math.min(10, opponentsLeftField + 1);
+                    onOpponentsLeftFieldChange(next);
+                    if (isEditMode) {
+                      localStorage.setItem('tempEditedOpponentsLeftField', String(next));
+                    }
                   }}
                   title="Kliknij, aby dodać 1 przeciwnika"
                   style={{ cursor: 'pointer', position: 'relative' }}
@@ -929,7 +965,11 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      onOpponentsLeftFieldChange(Math.max(0, opponentsLeftField - 1));
+                      const next = Math.max(0, opponentsLeftField - 1);
+                      onOpponentsLeftFieldChange(next);
+                      if (isEditMode) {
+                        localStorage.setItem('tempEditedOpponentsLeftField', String(next));
+                      }
                     }}
                     title="Odejmij 1 przeciwnika"
                     type="button"
@@ -1272,9 +1312,9 @@ className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${styles.tooltip
                   onChange={handleVideoTimeChange}
                   onBlur={handleVideoTimeBlur}
                   placeholder="MM:SS"
-                  pattern="^([0-9]{1,2}):([0-5][0-9])$"
+                  pattern="^([0-9]{1,3}):([0-5][0-9])$"
                   className={styles.videoTimeField}
-                  maxLength={5}
+                  maxLength={6}
                 />
                 <span className={styles.matchMinuteInfo}>
                   {matchMinuteFromVideoInput}'

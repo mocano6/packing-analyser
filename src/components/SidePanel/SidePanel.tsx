@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import styles from './SidePanel.module.css';
 import ExportButton from '../ExportButton/ExportButton';
 import ImportButton from '../ImportButton/ImportButton';
+import { usePresentationMode } from '@/contexts/PresentationContext';
 import { Player, Action, TeamInfo } from '@/types';
 import toast from 'react-hot-toast';
 
@@ -37,6 +38,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
   onLogout
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const { isPresentationMode, togglePresentationMode } = usePresentationMode();
   const pathname = usePathname();
   /* Player widzi tylko Statystyki zespołu i Profil; bez roli traktujemy jak player (restrykcyjnie) */
   const isPlayer = userRole === 'player' || userRole == null;
@@ -142,6 +144,13 @@ const SidePanel: React.FC<SidePanelProps> = ({
                 <span className={styles.icon}>✅</span>
                 <span>Zadania</span>
               </Link>
+              <button 
+                onClick={togglePresentationMode} 
+                className={styles.menuItem}
+              >
+                <span className={styles.icon}>{isPresentationMode ? '👁️' : '🙈'}</span>
+                <span>{isPresentationMode ? 'Wyłącz maskowanie' : 'Maskuj dane (Prezentacja)'}</span>
+              </button>
             </div>
           )}
 

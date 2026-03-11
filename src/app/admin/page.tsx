@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { FIRESTORE_METRICS_HIDDEN_KEY } from "@/components/FirestoreMetricsBadge/FirestoreMetricsBadge";
 import styles from "./page.module.css";
 
 const UserManagement = dynamic(
@@ -20,6 +21,20 @@ const TeamsManagement = dynamic(
 export default function AdminPage() {
   const router = useRouter();
   const { isAuthenticated, isAdmin, isLoading } = useAuth();
+  const [firestoreMetricsHidden, setFirestoreMetricsHidden] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setFirestoreMetricsHidden(localStorage.getItem(FIRESTORE_METRICS_HIDDEN_KEY) === "true");
+  }, []);
+
+  const toggleFirestoreMetricsVisibility = () => {
+    if (typeof window === "undefined") return;
+    const next = !firestoreMetricsHidden;
+    setFirestoreMetricsHidden(next);
+    localStorage.setItem(FIRESTORE_METRICS_HIDDEN_KEY, next ? "true" : "false");
+    window.dispatchEvent(new CustomEvent("firestore-metrics-visibility-change"));
+  };
 
   if (isLoading) {
     return (
@@ -88,6 +103,19 @@ export default function AdminPage() {
         <Link href="/admin/cleanup" className={styles.linkButton}>
           Otwórz czyszczenie PII
         </Link>
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Metryki Firestore</h2>
+        <p className={styles.sectionDesc}>Badge w rogu ekranu pokazuje liczbę odczytów i zapisów do Firestore w sesji. Możesz go ukryć lub pokazać.</p>
+        <button
+          type="button"
+          className={styles.toggleButton}
+          onClick={toggleFirestoreMetricsVisibility}
+          aria-pressed={firestoreMetricsHidden}
+        >
+          {firestoreMetricsHidden ? "Pokaż metryki Firestore" : "Ukryj metryki Firestore"}
+        </button>
       </section>
     </div>
   );

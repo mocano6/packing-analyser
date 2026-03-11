@@ -235,7 +235,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
       if (secondHalfStart !== undefined && videoSeconds >= secondHalfStart) {
         const secondsIntoSecondHalf = videoSeconds - secondHalfStart;
         const minute = Math.floor(secondsIntoSecondHalf / 60) + 46;
-        return Math.max(46, Math.min(90, minute));
+        return Math.max(46, minute);
       }
 
       if (firstHalfStart !== undefined && videoSeconds >= firstHalfStart) {
@@ -254,7 +254,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
       if (videoSeconds >= DEFAULT_SECOND_HALF_START) {
         const secondsIntoSecondHalf = videoSeconds - DEFAULT_SECOND_HALF_START;
         const minute = Math.floor(secondsIntoSecondHalf / 60) + 46;
-        return Math.max(46, Math.min(90, minute));
+        return Math.max(46, minute);
       }
       const minute = Math.floor(videoSeconds / 60) + 1;
       return Math.max(1, Math.min(45, minute));
@@ -563,8 +563,8 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
     const value = e.target.value;
     
     // Kompatybilność wsteczna: pozwól na format MM:SS lub tylko liczby (minuty)
-    const partialPattern = /^([0-9]?[0-9]?)?(:([0-5]?[0-9]?)?)?$/;
-    const fullPattern = /^([0-9]{1,2}):([0-5][0-9])$/;
+    const partialPattern = /^([0-9]{0,3})?(:([0-5]?[0-9]?)?)?$/;
+    const fullPattern = /^([0-9]{1,3}):([0-5][0-9])$/;
     const minutesOnlyPattern = /^[0-9]{1,3}$/; // Stary format: tylko minuty (1-999)
     
     if (value === '' || partialPattern.test(value) || fullPattern.test(value) || minutesOnlyPattern.test(value)) {
@@ -574,7 +574,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
 
   const handleVideoTimeBlur = () => {
     // Upewnij się, że format jest poprawny
-    const fullPattern = /^([0-9]{1,2}):([0-5][0-9])$/;
+    const fullPattern = /^([0-9]{1,3}):([0-5][0-9])$/;
     
     if (!fullPattern.test(videoTimeMMSS)) {
       // Kompatybilność wsteczna: jeśli to tylko liczba (stary format - minuty), konwertuj na MM:SS
@@ -582,7 +582,8 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
         const mins = parseInt(videoTimeMMSS, 10);
         if (!isNaN(mins) && mins >= 0) {
           // Konwertuj minuty na format MM:SS (sekundy = 0)
-          const formatted = `${Math.min(99, mins).toString().padStart(2, '0')}:00`;
+          const normalizedMins = Math.min(999, mins);
+          const formatted = `${normalizedMins < 100 ? normalizedMins.toString().padStart(2, '0') : normalizedMins.toString()}:00`;
           setVideoTimeMMSS(formatted);
           return;
         }
@@ -598,12 +599,13 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
         if (isNaN(mins)) mins = 0;
         if (isNaN(secs)) secs = 0;
         
-        // Ograniczenia: minuty 0-99 (dla kompatybilności), sekundy 0-59
-        mins = Math.max(0, Math.min(99, mins));
+        // Ograniczenia: minuty 0-999, sekundy 0-59
+        mins = Math.max(0, Math.min(999, mins));
         secs = Math.max(0, Math.min(59, secs));
         
         // Formatuj z zerami wiodącymi
-        const formatted = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        const formattedMins = mins < 100 ? mins.toString().padStart(2, '0') : mins.toString();
+        const formatted = `${formattedMins}:${secs.toString().padStart(2, '0')}`;
         setVideoTimeMMSS(formatted);
         return;
       }
@@ -678,7 +680,9 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   const handleShotToggle = () => {
     if (isShot) {
       onShotToggle(false);
-      onGoalToggle(false);
+      if (!isEditMode) {
+        onGoalToggle(false);
+      }
       return;
     }
     onShotToggle(true);
@@ -727,6 +731,15 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
       }
     }
 
+    // W trybie edycji aktualizujemy minutę i połowę na podstawie bieżącego czasu z wideo
+    if (isEditMode && matchMinuteFromVideoInput > 0) {
+      const nextMinute = matchMinuteFromVideoInput;
+      const nextIsSecondHalf = nextMinute >= 46;
+      onMinuteChange(nextMinute);
+      onSecondHalfToggle(nextIsSecondHalf);
+      localStorage.setItem('tempEditedActionMinute', String(nextMinute));
+      localStorage.setItem('tempEditedActionIsSecondHalf', nextIsSecondHalf ? 'true' : 'false');
+    }
 
     // Zapisz videoTimestamp z pola MM:SS do localStorage
     const videoTimeSeconds = mmssToSeconds(videoTimeMMSS);
@@ -1179,9 +1192,9 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                   onChange={handleVideoTimeChange}
                   onBlur={handleVideoTimeBlur}
                   placeholder="MM:SS"
-                  pattern="^([0-9]{1,2}):([0-5][0-9])$"
+                  pattern="^([0-9]{1,3}):([0-5][0-9])$"
                   className={styles.videoTimeField}
-                  maxLength={5}
+                  maxLength={6}
                 />
                 <span className={styles.matchMinuteInfo}>
                   {matchMinuteFromVideoInput}'

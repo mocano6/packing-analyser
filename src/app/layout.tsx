@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 import AuthGuard from '@/components/AuthGuard/AuthGuard';
 import ConsoleSilencer from '@/components/ConsoleSilencer/ConsoleSilencer';
 import FirestoreMetricsBadge from '@/components/FirestoreMetricsBadge/FirestoreMetricsBadge';
+import { PresentationProvider } from '@/contexts/PresentationContext';
 import { Toaster } from 'react-hot-toast';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -75,9 +76,11 @@ export default function RootLayout({
       </head>
       <body className={inter.className} suppressHydrationWarning={true}>
         <ConsoleSilencer />
-        <AuthGuard>
-          {children}
-        </AuthGuard>
+        <PresentationProvider>
+          <AuthGuard>
+            {children}
+          </AuthGuard>
+        </PresentationProvider>
         <FirestoreMetricsBadge />
         <Toaster position="top-right" />
       </body>
