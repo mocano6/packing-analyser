@@ -5,7 +5,7 @@ import React, { memo, useEffect, useCallback, useMemo } from "react";
 import styles from "./SelectionContainer.module.css";
 import ActionTypeToggle from "../ActionTypeToggle/ActionTypeToggle";
 import { Player } from "@/types"; // Zaktualizowana ścieżka dla Next.js
-import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
+import { buildPlayersIndex, getPlayerLabel, getPlayerFullName } from "@/utils/playerUtils";
 
 export interface SelectionContainerProps {
   players: Player[];
@@ -87,7 +87,7 @@ const SelectionContainer = memo(function SelectionContainer({
           role="status"
         >
           {selectedPlayer
-            ? `${selectedPlayer.name} (${selectedPlayer.number})`
+            ? `${getPlayerFullName(selectedPlayer)} (${selectedPlayer.number})`
             : "Wybierz zawodnika"}
         </div>
       </div>

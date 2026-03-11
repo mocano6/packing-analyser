@@ -3,16 +3,49 @@
 import { Player, TeamInfo } from '@/types';
 
 /**
+ * Sprawdza czy aktywny jest tryb prezentacji (maskowania danych)
+ */
+export const isPresentationMode = (): boolean => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('presentationMode') === 'true';
+  }
+  return false;
+};
+
+/**
+ * Maskuje imię/nazwisko dla trybu prezentacji
+ */
+export const maskString = (str: string): string => {
+  if (!str) return str;
+  const parts = str.trim().split(/\s+/);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) {
+    const part = parts[0];
+    return part.charAt(0) + '*'.repeat(Math.max(2, part.length - 1));
+  }
+
+  return parts.map(part => {
+    if (part.length <= 1) return part;
+    return part.charAt(0) + '*'.repeat(part.length - 1);
+  }).join(' ');
+};
+
+/**
  * Pobiera pełne imię i nazwisko zawodnika
  * Obsługuje kompatybilność między starym formatem (name) a nowym (firstName + lastName)
  */
 export const getPlayerFullName = (player: Player): string => {
+  let name = "";
   if (player.firstName && player.lastName) {
-    return `${player.firstName} ${player.lastName}`;
+    name = `${player.firstName} ${player.lastName}`;
   } else if (player.name) {
-    return player.name;
+    name = player.name;
   }
-  return "";
+  
+  if (isPresentationMode() && name) {
+    return maskString(name);
+  }
+  return name;
 };
 
 /**
@@ -20,13 +53,18 @@ export const getPlayerFullName = (player: Player): string => {
  * Obsługuje kompatybilność między starym formatem (name) a nowym (lastName)
  */
 export const getPlayerLastName = (player: Player): string => {
+  let lastName = "";
   if (player.lastName) {
-    return player.lastName;
+    lastName = player.lastName;
   } else if (player.name) {
     const words = player.name.trim().split(/\s+/);
-    return words[words.length - 1];
+    lastName = words[words.length - 1];
   }
-  return "";
+  
+  if (isPresentationMode() && lastName) {
+    return maskString(lastName);
+  }
+  return lastName;
 };
 
 /**
@@ -34,13 +72,18 @@ export const getPlayerLastName = (player: Player): string => {
  * Obsługuje kompatybilność między starym formatem (name) a nowym (firstName)
  */
 export const getPlayerFirstName = (player: Player): string => {
+  let firstName = "";
   if (player.firstName) {
-    return player.firstName;
+    firstName = player.firstName;
   } else if (player.name) {
     const words = player.name.trim().split(/\s+/);
-    return words[0];
+    firstName = words[0];
   }
-  return "";
+  
+  if (isPresentationMode() && firstName) {
+    return maskString(firstName);
+  }
+  return firstName;
 };
 
 /**

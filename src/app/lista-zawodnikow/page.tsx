@@ -601,7 +601,7 @@ export default function ListaZawodnikow() {
                         <span className={styles.playerName}>
                           {player.isDeleted ? (
                             <>
-                              {(getPlayerFullName(player) || player.name || 'Zawodnik').trim() || 'Zawodnik'}
+                              {(getPlayerFullName(player) || 'Zawodnik').trim() || 'Zawodnik'}
                               <span className={styles.playerDeletedLabel}> (usunięty)</span>
                               {player.position && (
                                 <span className={styles.playerPosition}> ({player.position})</span>

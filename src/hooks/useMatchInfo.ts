@@ -136,6 +136,13 @@ export function useMatchInfo() {
   // Sprawdzamy połączenie sieciowe
   useEffect(() => {
     const handleOnline = () => {
+      // Gdy sieć wraca, odblokowujemy wymuszony tryb offline zapisany w localStorage.
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("firestore_offline_mode");
+      }
+      permissionCheckRef.current = null;
+      globalPermissionCheck = null;
+      offlineToastShownRef.current = false;
       setIsOfflineMode(false);
     };
 
@@ -144,8 +151,13 @@ export function useMatchInfo() {
     };
 
     // Inicjalna kontrola stanu połączenia
-    if (typeof navigator !== 'undefined') {
-      setIsOfflineMode(!navigator.onLine);
+    if (typeof window !== "undefined" && typeof navigator !== "undefined") {
+      if (navigator.onLine) {
+        localStorage.removeItem("firestore_offline_mode");
+        setIsOfflineMode(false);
+      } else {
+        setIsOfflineMode(true);
+      }
     }
 
     // Dodajemy nasłuchiwanie zmian stanu połączenia
@@ -498,9 +510,15 @@ export function useMatchInfo() {
         const isOfflineForced = typeof window !== 'undefined' && 
                                localStorage.getItem('firestore_offline_mode') === 'true';
         
-        if (!isOnline || isOfflineForced) {
+        if (!isOnline) {
           setIsOfflineMode(true);
           return filteredMatches;
+        }
+
+        // Jeśli przeglądarka jest online, nie blokuj fetchu starym znacznikiem offline w localStorage.
+        if (isOfflineForced && typeof window !== "undefined") {
+          localStorage.removeItem("firestore_offline_mode");
+          setIsOfflineMode(false);
         }
         
         // Przed próbą pobrania danych, sprawdzamy, czy mamy dostęp do Firebase

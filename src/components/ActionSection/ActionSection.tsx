@@ -1186,6 +1186,7 @@ const ActionSection = memo(function ActionSection({
           matchInfo={matchInfo}
           isControversial={isControversial}
           onControversialToggle={() => setIsControversial(!isControversial)}
+          allTeams={allTeams}
           // Nowe propsy dla trybu unpacking
           mode={mode}
           onModeChange={onModeChange}
@@ -1338,9 +1339,12 @@ const ActionSection = memo(function ActionSection({
           isShot={editingAction?.isShot || false}
           onShotToggle={(checked) => {
             if (editingAction && onEditingActionChange) {
+              // Przy odznaczeniu strzału w edycji zawsze zdejmujemy też gola,
+              // żeby nie zostało niespójne połączenie (gol bez strzału).
               onEditingActionChange({
                 ...editingAction,
-                isShot: checked
+                isShot: checked,
+                ...(checked ? {} : { isGoal: false })
               });
             }
           }}
@@ -1349,7 +1353,10 @@ const ActionSection = memo(function ActionSection({
             if (editingAction && onEditingActionChange) {
               onEditingActionChange({
                 ...editingAction,
-                isGoal: checked
+                isGoal: checked,
+                // Jeśli zaznaczamy gola, wymuszamy też isShot=true,
+                // żeby w danych nie było gola bez strzału.
+                ...(checked ? { isShot: true } : {})
               });
             }
           }}
@@ -1471,7 +1478,7 @@ const ActionSection = memo(function ActionSection({
               });
             }
           }}
-          playersLeftField={editingAction?.playersLeftField || (editingAction?.totalPlayersOnField !== undefined ? 11 - editingAction.totalPlayersOnField : 0)}
+          playersLeftField={editingAction?.playersLeftField ?? (editingAction?.totalPlayersOnField !== undefined ? 11 - editingAction.totalPlayersOnField : 0)}
           onPlayersLeftFieldChange={(count) => {
             if (editingAction && onEditingActionChange) {
               onEditingActionChange({
@@ -1481,7 +1488,7 @@ const ActionSection = memo(function ActionSection({
               });
             }
           }}
-          opponentsLeftField={editingAction?.opponentsLeftField || (editingAction?.totalOpponentsOnField !== undefined ? 11 - editingAction.totalOpponentsOnField : 0)}
+          opponentsLeftField={editingAction?.opponentsLeftField ?? (editingAction?.totalOpponentsOnField !== undefined ? 11 - editingAction.totalOpponentsOnField : 0)}
           onOpponentsLeftFieldChange={(count) => {
             if (editingAction && onEditingActionChange) {
               onEditingActionChange({
@@ -1500,6 +1507,7 @@ const ActionSection = memo(function ActionSection({
               });
             }
           }}
+          allTeams={allTeams}
         />
       ) : isActionEditModalOpen && editingAction && getActionCategory && getActionCategory(editingAction) === "regain" ? (
         <RegainActionModal
@@ -1682,7 +1690,8 @@ const ActionSection = memo(function ActionSection({
             if (editingAction && onEditingActionChange) {
               onEditingActionChange({
                 ...editingAction,
-                isShot: checked
+                isShot: checked,
+                ...(checked ? {} : { isGoal: false }),
               });
             }
           }}
@@ -1691,7 +1700,8 @@ const ActionSection = memo(function ActionSection({
             if (editingAction && onEditingActionChange) {
               onEditingActionChange({
                 ...editingAction,
-                isGoal: checked
+                isGoal: checked,
+                ...(checked ? { isShot: true } : {}),
               });
             }
           }}
@@ -1777,7 +1787,7 @@ const ActionSection = memo(function ActionSection({
               });
             }
           }}
-          playersLeftField={editingAction?.playersLeftField || (editingAction?.totalPlayersOnField !== undefined ? 11 - editingAction.totalPlayersOnField : 0)}
+          playersLeftField={editingAction?.playersLeftField ?? (editingAction?.totalPlayersOnField !== undefined ? 11 - editingAction.totalPlayersOnField : 0)}
           onPlayersLeftFieldChange={(count) => {
             if (editingAction && onEditingActionChange) {
               onEditingActionChange({
@@ -1787,7 +1797,7 @@ const ActionSection = memo(function ActionSection({
               });
             }
           }}
-          opponentsLeftField={editingAction?.opponentsLeftField || (editingAction?.totalOpponentsOnField !== undefined ? 11 - editingAction.totalOpponentsOnField : 0)}
+          opponentsLeftField={editingAction?.opponentsLeftField ?? (editingAction?.totalOpponentsOnField !== undefined ? 11 - editingAction.totalOpponentsOnField : 0)}
           onOpponentsLeftFieldChange={(count) => {
             if (editingAction && onEditingActionChange) {
               onEditingActionChange({
@@ -2004,7 +2014,8 @@ const ActionSection = memo(function ActionSection({
             if (editingAction && onEditingActionChange) {
               onEditingActionChange({
                 ...editingAction,
-                isShot: checked
+                isShot: checked,
+                ...(checked ? {} : { isGoal: false }),
               });
             }
           }}
@@ -2013,7 +2024,8 @@ const ActionSection = memo(function ActionSection({
             if (editingAction && onEditingActionChange) {
               onEditingActionChange({
                 ...editingAction,
-                isGoal: checked
+                isGoal: checked,
+                ...(checked ? { isShot: true } : {}),
               });
             }
           }}

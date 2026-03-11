@@ -494,6 +494,38 @@ export default function PlayerDetailsPage() {
 
     const teamShots = filterByType(filterByHalf(teamShotsAll));
 
+    // Strzały przeciwnika (xG przeciwko) — dla bramkarzy zestawiamy z xG przeciwko
+    const opponentShotsAll: Shot[] = relevantMatches.flatMap(m => {
+      const matchShots = (m.shots || []) as Shot[];
+      const matchId = m.matchId || "";
+      const isSelectedTeamHome = !!selectedTeam && m.team === selectedTeam;
+
+      const inferTeamId = (shot: Shot) => {
+        if (shot.teamId) return shot.teamId;
+        if (!selectedTeam) return undefined;
+        if (!m.team || !m.opponent) return undefined;
+        if (shot.teamContext === "attack") {
+          return isSelectedTeamHome ? m.team : m.opponent;
+        }
+        return isSelectedTeamHome ? m.opponent : m.team;
+      };
+
+      return matchShots
+        .map(s => ({
+          ...s,
+          matchId: s.matchId || matchId,
+          teamId: s.teamId || (inferTeamId(s) as any),
+        }))
+        .filter(s => !!selectedTeam && s.teamId !== selectedTeam);
+    });
+    const opponentShots = filterByType(filterByHalf(opponentShotsAll));
+    const opponentXG = opponentShots.reduce((sum, s) => sum + (s.xG || 0), 0);
+    const opponentCount = opponentShots.length;
+    const opponentOnTarget = opponentShots.filter(s => s.shotType === "on_target" || s.shotType === "goal" || !!s.isGoal);
+    const opponentXGOT = opponentOnTarget.reduce((sum, s) => sum + (s.xG || 0), 0);
+    const opponentGoals = opponentShots.filter(s => !!s.isGoal || s.shotType === "goal").length;
+    const opponentXGOTMinusGoals = opponentXGOT - opponentGoals;
+
     const playerXG = playerShots.reduce((sum, s) => sum + (s.xG || 0), 0);
     const playerCount = playerShots.length;
     const playerXGPerShot = playerCount > 0 ? playerXG / playerCount : 0;
@@ -516,7 +548,9 @@ export default function PlayerDetailsPage() {
     const teamCount = teamShots.length;
 
     const xgSharePct = teamXG > 0 ? (playerXG / teamXG) * 100 : 0;
+    const xgSharePctVsOpponent = opponentXG > 0 ? (playerXG / opponentXG) * 100 : 0;
     const shotSharePct = teamCount > 0 ? (playerCount / teamCount) * 100 : 0;
+    const shotSharePctVsOpponent = opponentCount > 0 ? (playerCount / opponentCount) * 100 : 0;
 
     // Oblicz xG z asyst - znajdź wszystkie strzały, gdzie zawodnik był asystentem
     const assistShotsAll = teamShotsAll.filter(s => {
@@ -530,6 +564,7 @@ export default function PlayerDetailsPage() {
     const assistShots = filterByType(filterByHalf(assistShotsAll));
     const playerAssistXG = assistShots.reduce((sum, s) => sum + (s.xG || 0), 0);
     const assistXgSharePct = teamXG > 0 ? (playerAssistXG / teamXG) * 100 : 0;
+    const assistXgSharePctVsOpponent = opponentXG > 0 ? (playerAssistXG / opponentXG) * 100 : 0;
 
     const headerMatch = relevantMatches.length === 1 ? relevantMatches[0] : null;
 
@@ -547,11 +582,19 @@ export default function PlayerDetailsPage() {
       playerAvgLinePlayers,
       teamXG,
       teamCount,
+      opponentXG,
+      opponentCount,
+      opponentXGOT,
+      opponentGoals,
+      opponentXGOTMinusGoals,
       xgSharePct,
+      xgSharePctVsOpponent,
       shotSharePct,
+      shotSharePctVsOpponent,
       assistShots,
       playerAssistXG,
       assistXgSharePct,
+      assistXgSharePctVsOpponent,
       headerMatch,
     };
   }, [allShots, filteredMatchesBySeason, playerId, selectedMatchIds, selectedPlayerForView, selectedTeam, xgHalf, xgFilter]);
@@ -4295,8 +4338,14 @@ export default function PlayerDetailsPage() {
                           <span className={styles.detailsLabel}><span className={styles.preserveCase}>xG</span>:</span>
                           <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             <span className={styles.valueMain}><strong>{xgStats.playerXG.toFixed(2)}</strong></span>
-                            {xgStats.teamXG > 0 && (
-                              <span className={styles.valueSecondary}>({xgStats.xgSharePct.toFixed(1)}% xG zespołu)</span>
+                            {player?.position === 'GK' ? (
+                              xgStats.opponentXG > 0 && (
+                                <span className={styles.valueSecondary}>({xgStats.xgSharePctVsOpponent.toFixed(1)}% xG przeciwko)</span>
+                              )
+                            ) : (
+                              xgStats.teamXG > 0 && (
+                                <span className={styles.valueSecondary}>({xgStats.xgSharePct.toFixed(1)}% xG zespołu)</span>
+                              )
                             )}
                           </span>
                         </div>
@@ -4305,8 +4354,14 @@ export default function PlayerDetailsPage() {
                           <span className={styles.detailsLabel}><span className={styles.preserveCase}>xG</span> kiedy asystował:</span>
                           <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             <span className={styles.valueMain}><strong>{xgStats.playerAssistXG.toFixed(2)}</strong></span>
-                            {xgStats.teamXG > 0 && (
-                              <span className={styles.valueSecondary}>({xgStats.assistXgSharePct.toFixed(1)}% xG zespołu)</span>
+                            {player?.position === 'GK' ? (
+                              xgStats.opponentXG > 0 && (
+                                <span className={styles.valueSecondary}>({xgStats.assistXgSharePctVsOpponent.toFixed(1)}% xG przeciwko)</span>
+                              )
+                            ) : (
+                              xgStats.teamXG > 0 && (
+                                <span className={styles.valueSecondary}>({xgStats.assistXgSharePct.toFixed(1)}% xG zespołu)</span>
+                              )
                             )}
                           </span>
                         </div>
@@ -4315,8 +4370,14 @@ export default function PlayerDetailsPage() {
                           <span className={styles.detailsLabel}>Strzały:</span>
                           <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             <span className={styles.valueMain}><strong>{xgStats.playerCount}</strong></span>
-                            {xgStats.teamCount > 0 && (
-                              <span className={styles.valueSecondary}>({xgStats.shotSharePct.toFixed(1)}% strzałów zespołu)</span>
+                            {player?.position === 'GK' ? (
+                              xgStats.opponentCount > 0 && (
+                                <span className={styles.valueSecondary}>({xgStats.shotSharePctVsOpponent.toFixed(1)}% strzałów przeciwko)</span>
+                              )
+                            ) : (
+                              xgStats.teamCount > 0 && (
+                                <span className={styles.valueSecondary}>({xgStats.shotSharePct.toFixed(1)}% strzałów zespołu)</span>
+                              )
                             )}
                           </span>
                         </div>
@@ -4337,10 +4398,15 @@ export default function PlayerDetailsPage() {
                         </div>
 
                         <div className={styles.detailsRow}>
-                          <span className={styles.detailsLabel}>Gole:</span>
+                          <span className={styles.detailsLabel}>{player?.position === 'GK' ? 'Gole stracone:' : 'Gole:'}</span>
                           <span className={styles.detailsValue}>
-                            <span className={styles.valueMain}><strong>{xgStats.playerGoals}</strong></span>
-                            <span className={styles.valueSecondary}> • różnica xG–gole: {xgStats.playerXGMinusGoals.toFixed(2)}</span>
+                            <span className={styles.valueMain}><strong>{player?.position === 'GK' ? xgStats.opponentGoals : xgStats.playerGoals}</strong></span>
+                            <span className={styles.valueSecondary}>
+                              {' • '}
+                              {player?.position === 'GK'
+                                ? `różnica xG OT–gole: ${xgStats.opponentXGOTMinusGoals.toFixed(2)}`
+                                : `różnica xG–gole: ${xgStats.playerXGMinusGoals.toFixed(2)}`}
+                            </span>
                           </span>
                         </div>
 

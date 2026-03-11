@@ -11,22 +11,32 @@ import {
 import styles from "./FirestoreMetricsBadge.module.css";
 
 const DEBUG_SHOW_KEY = "firestore_metrics_show";
+/** Admin może ukryć badge metryk; zapis w localStorage. */
+export const FIRESTORE_METRICS_HIDDEN_KEY = "firestore_metrics_hidden";
 
 export default function FirestoreMetricsBadge() {
   const { isAdmin } = useAuth();
   const [state, setState] = useState<FirestoreMetricsState | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [debugShow, setDebugShow] = useState(false);
+  const [hiddenByAdmin, setHiddenByAdmin] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setDebugShow(localStorage.getItem(DEBUG_SHOW_KEY) === "true");
-    const onStorage = () => setDebugShow(localStorage.getItem(DEBUG_SHOW_KEY) === "true");
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    const read = () => {
+      setDebugShow(localStorage.getItem(DEBUG_SHOW_KEY) === "true");
+      setHiddenByAdmin(localStorage.getItem(FIRESTORE_METRICS_HIDDEN_KEY) === "true");
+    };
+    read();
+    window.addEventListener("storage", read);
+    window.addEventListener("firestore-metrics-visibility-change" as any, read);
+    return () => {
+      window.removeEventListener("storage", read);
+      window.removeEventListener("firestore-metrics-visibility-change" as any, read);
+    };
   }, []);
 
-  const showBadge = isAdmin || debugShow;
+  const showBadge = (isAdmin || debugShow) && !hiddenByAdmin;
 
   useEffect(() => {
     if (!showBadge) return;
