@@ -11,8 +11,6 @@ import {
 import { getCachedWithTimestamp, setCached, invalidateCache, CACHE_KEYS } from "@/lib/sessionCache";
 import { NewPlayer, TeamMembership } from "@/types/migration";
 
-const PLAYERS_CACHE_TTL_MS = 3 * 60 * 1000; // 3 min
-
 // Helper do generowania ID
 const generateId = () => {
   return (
