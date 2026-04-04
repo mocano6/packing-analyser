@@ -45,7 +45,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     playerId: "",
     minute: 1,
     xG: 0,
-    bodyPart: "foot" as "foot" | "head" | "other",
+    bodyPart: "foot_left" as "foot_left" | "foot_right" | "head" | "other",
     shotType: "on_target" as "on_target" | "off_target" | "blocked" | "goal",
     teamContext: "attack" as "attack" | "defense",
     teamId: "",
@@ -408,7 +408,13 @@ const ShotModal: React.FC<ShotModalProps> = ({
         isOwnGoal: editingTeamContext === "defense" ? isOwnGoalShot : false,
         minute: editingShot.minute,
         xG: reverseFinalXG(Math.round(editingShot.xG * 100), editingShot),
-        bodyPart: editingShot.bodyPart || "foot",
+        bodyPart: editingShot.bodyPart === "foot_right"
+          ? "foot_right"
+          : editingShot.bodyPart === "foot_left" || editingShot.bodyPart === "foot"
+          ? "foot_left"
+          : editingShot.bodyPart === "head"
+          ? "head"
+          : "other",
         shotType: editingShot.isGoal ? "goal" : (editingShot.shotType || "on_target"),
         teamContext: editingShot.teamContext || "attack",
         teamId: editingShot.teamId || "",
@@ -447,7 +453,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         playerId: "",
         minute: 1,
         xG: Math.round(xG * 100),
-        bodyPart: "foot",
+        bodyPart: "foot_left",
         shotType: "on_target",
         teamContext: autoTeamContext,
         teamId: autoTeamId || "",
@@ -1497,10 +1503,17 @@ const ShotModal: React.FC<ShotModalProps> = ({
             <div className={styles.actionTypeSelector}>
               <button
                 type="button"
-                className={`${styles.actionTypeButton} ${formData.bodyPart === "foot" ? styles.active : ""}`}
-                onClick={() => setFormData({...formData, bodyPart: "foot"})}
+                className={`${styles.actionTypeButton} ${formData.bodyPart === "foot_left" ? styles.active : ""}`}
+                onClick={() => setFormData({...formData, bodyPart: "foot_left"})}
               >
-                Noga
+                Noga lewa
+              </button>
+              <button
+                type="button"
+                className={`${styles.actionTypeButton} ${formData.bodyPart === "foot_right" ? styles.active : ""}`}
+                onClick={() => setFormData({...formData, bodyPart: "foot_right"})}
+              >
+                Noga prawa
               </button>
               <button
                 type="button"

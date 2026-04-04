@@ -5,10 +5,12 @@ import {
   doc, query, orderBy 
 } from "@/lib/firestoreWithMetrics";
 import { getCached, setCached, invalidateCache, CACHE_KEYS } from "@/lib/sessionCache";
+import { isTeamActive } from "@/utils/teamActive";
 
 export interface Team {
   id: string;
   name: string;
+  inactive?: boolean;
 }
 
 let teamsFetchInFlight: Promise<Team[]> | null = null;
@@ -42,10 +44,12 @@ export function useTeams() {
           const q = query(teamsCollection, orderBy("name"));
           const teamsSnapshot = await getDocs(q);
           if (!teamsSnapshot.empty) {
-            const teamsList = teamsSnapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            })) as Team[];
+            const teamsList = teamsSnapshot.docs
+              .map((docSnap) => ({
+                id: docSnap.id,
+                ...docSnap.data(),
+              }))
+              .filter((t) => isTeamActive(t as Team)) as Team[];
             setCached(CACHE_KEYS.TEAMS_LIST, teamsList);
             return teamsList;
           }
@@ -68,6 +72,16 @@ export function useTeams() {
 
   useEffect(() => {
     fetchTeams();
+  }, [fetchTeams]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onTeamsChanged = () => {
+      invalidateCache(CACHE_KEYS.TEAMS_LIST);
+      fetchTeams();
+    };
+    window.addEventListener("teamsChanged", onTeamsChanged);
+    return () => window.removeEventListener("teamsChanged", onTeamsChanged);
   }, [fetchTeams]);
 
   // Funkcje CRUD

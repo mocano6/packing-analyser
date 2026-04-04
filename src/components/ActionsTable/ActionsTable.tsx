@@ -9,37 +9,7 @@ import { Player, Action } from "@/types";
 import { getOppositeXTValueForZone, zoneNameToIndex, getZoneData, getZoneName, zoneNameToString } from "@/constants/xtValues";
 import { useAuth } from "@/hooks/useAuth";
 import { buildPlayersIndex, getPlayerLabel, PlayersIndex } from "@/utils/playerUtils";
-
-// Funkcja do określenia kategorii akcji (spójna z page.tsx)
-const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
-  // Loses: ma isReaction5s, isAut lub isBadReaction5s (którekolwiek z tych pól zdefiniowane)
-  // LUB ma pola specyficzne dla loses (losesAttackZone, losesDefenseZone, losesAttackXT, losesDefenseXT)
-  if (action.isReaction5s !== undefined || 
-      action.isAut !== undefined || 
-      action.isBadReaction5s !== undefined ||
-      action.losesAttackZone !== undefined ||
-      action.losesDefenseZone !== undefined ||
-      action.losesAttackXT !== undefined ||
-      action.losesDefenseXT !== undefined) {
-    return "loses";
-  }
-  // Regain: ma playersBehindBall lub opponentsBehindBall, ale NIE ma isReaction5s
-  // LUB ma pola specyficzne dla regain (regainAttackZone, regainDefenseZone, regainAttackXT, regainDefenseXT)
-  if (action.regainAttackZone !== undefined ||
-      action.regainDefenseZone !== undefined ||
-      action.regainAttackXT !== undefined ||
-      action.regainDefenseXT !== undefined ||
-      (action.playersBehindBall !== undefined || 
-       action.opponentsBehindBall !== undefined ||
-       action.totalPlayersOnField !== undefined ||
-       action.totalOpponentsOnField !== undefined ||
-       action.playersLeftField !== undefined ||
-       action.opponentsLeftField !== undefined)) {
-    return "regain";
-  }
-  // Packing: domyślnie
-  return "packing";
-};
+import { getActionCategory } from "@/utils/actionCategory";
 
 type SortKey =
   | "minute"
@@ -804,7 +774,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
     <div className={sharedStyles.tableContainer}>
       <div className={sharedStyles.headerControls}>
         <div className={sharedStyles.headerTitle}>
-          <h3>Lista akcji ({showOnlyControversial ? controversialCount : actions.length})</h3>
+          <h3>Lista akcji ({sortedActions.length})</h3>
           <button
             type="button"
             className={`${sharedStyles.controversyFilterButton} ${showOnlyControversial ? sharedStyles.controversyFilterActive : ''}`}

@@ -66,6 +66,16 @@ async function migrateActions() {
         actionData.senderId = actionData.playerId;
       }
       delete actionData.playerId; // Usuwamy playerId, bo używamy senderId
+
+      // Przenosimy receiverPlayerId/receiver_id do receiverId, jeśli receiverId nie istnieje
+      if (!actionData.receiverId && actionData.receiverPlayerId) {
+        actionData.receiverId = actionData.receiverPlayerId;
+      }
+      if (!actionData.receiverId && actionData.receiver_id) {
+        actionData.receiverId = actionData.receiver_id;
+      }
+      delete actionData.receiverPlayerId;
+      delete actionData.receiver_id;
       
       // Konwertujemy strefy z liczb na format literowo-liczbowy
       if (typeof actionData.fromZone === 'number') {

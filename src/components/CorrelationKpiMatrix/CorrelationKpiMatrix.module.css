@@ -1,0 +1,271 @@
+.section {
+  margin-bottom: 0;
+}
+
+.sectionCompact .hint {
+  font-size: 11px;
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+
+.sectionCompact .toolbar {
+  margin-bottom: 8px;
+  gap: 6px 10px;
+}
+
+.sectionCompact .sortLabel {
+  font-size: 11px;
+}
+
+.sectionCompact .select {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.sectionCompact .exportButton {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+.sectionCompact .table {
+  font-size: 10px;
+}
+
+.sectionCompact .corner {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.sectionCompact .colHead {
+  padding: 5px 4px;
+  max-width: 58px;
+  font-size: 9px;
+}
+
+.sectionCompact .rowHead {
+  padding: 4px 8px;
+  max-width: 100px;
+  font-size: 9px;
+}
+
+.sectionCompact .cell {
+  padding: 3px 5px;
+  min-width: 38px;
+  font-size: 10px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-bottom: 14px;
+}
+
+.sortLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.select {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: #1f2937;
+  background: #fff;
+  min-width: min(100%, 280px);
+  cursor: pointer;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.exportButton {
+  margin-left: auto;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.exportButton:hover {
+  background: #e2e8f0;
+  border-color: #334155;
+}
+
+.exportButton:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
+  margin: 0 0 12px 0;
+}
+
+.empty {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+}
+
+.scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.scroll:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.corner {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #f1f5f9;
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 700;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.colHead {
+  padding: 10px 8px;
+  text-align: center;
+  font-weight: 600;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* Złożone selektory: .rowHead / .colHead ustawiają tło — sama klasa .headAxis* ma niższą specyficzność. */
+.colHead.headAxisMy,
+.rowHead.headAxisMy {
+  background: #e8f1fc;
+  color: #1e3a5f;
+}
+
+.colHead.headAxisOpp,
+.rowHead.headAxisOpp {
+  background: #fff4e5;
+  color: #7c2d12;
+}
+
+.colHead.headAxisOutcome,
+.rowHead.headAxisOutcome {
+  background: #f3edff;
+  color: #4c1d95;
+}
+
+.colHead.headAxisNeutral,
+.rowHead.headAxisNeutral {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.rowHead {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #f8fafc;
+  border-right: 1px solid #e2e8f0;
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #334155;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell {
+  padding: 8px 10px;
+  text-align: center;
+  border-bottom: 1px solid #f1f5f9;
+  border-right: 1px solid #f1f5f9;
+  font-weight: 600;
+  min-width: 52px;
+}
+
+.cell:last-child {
+  border-right: none;
+}
+
+.corrCellNA {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.corrCellNeutral {
+  color: #475569;
+  background: #fafafa;
+}
+
+.corrCellPos {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.corrCellPosStrong {
+  color: #14532d;
+  background: rgba(34, 197, 94, 0.22);
+}
+
+.corrCellNeg {
+  color: #991b1b;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.corrCellNegStrong {
+  color: #7f1d1d;
+  background: rgba(239, 68, 68, 0.18);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

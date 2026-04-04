@@ -12,11 +12,17 @@ echo -e "${BLUE}== Wdrażanie reguł Firebase - v1.0 ==${NC}"
 echo -e "${BLUE}======================================${NC}"
 echo ""
 
+# Użyj lokalnego firebase-tools (devDependency) przez npx, jeśli globalny `firebase` nie istnieje.
+FIREBASE_CMD="firebase"
+if ! command -v firebase > /dev/null 2>&1; then
+  FIREBASE_CMD="npx --yes firebase-tools"
+fi
+
 # Sprawdź, czy mamy zalogowanie do Firebase
 echo -e "${BLUE}Sprawdzanie statusu logowania Firebase...${NC}"
-if ! firebase projects:list > /dev/null 2>&1; then
+if ! $FIREBASE_CMD projects:list > /dev/null 2>&1; then
   echo -e "${YELLOW}Nie wykryto logowania. Loguję...${NC}"
-  firebase login
+  $FIREBASE_CMD login
 else
   echo -e "${GREEN}Zalogowano pomyślnie.${NC}"
 fi
@@ -56,7 +62,7 @@ esac
 # Wdrożenie reguł Firestore
 echo ""
 echo -e "${BLUE}Wdrażanie reguł Firestore...${NC}"
-firebase deploy --only firestore:rules
+$FIREBASE_CMD deploy --only firestore:rules
 
 # Sprawdź status wdrożenia
 if [ $? -eq 0 ]; then
@@ -68,7 +74,7 @@ fi
 # Wdrożenie reguł Storage
 echo ""
 echo -e "${BLUE}Wdrażanie reguł Storage...${NC}"
-firebase deploy --only storage
+$FIREBASE_CMD deploy --only storage
 
 # Sprawdź status wdrożenia
 if [ $? -eq 0 ]; then

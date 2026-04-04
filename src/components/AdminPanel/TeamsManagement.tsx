@@ -6,6 +6,7 @@ import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc, setDoc } from "
 import { toast } from "react-hot-toast";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 import { Team, clearTeamsCache } from "@/constants/teamsLoader";
+import { invalidateCache, CACHE_KEYS } from "@/lib/sessionCache";
 import OpponentLogoInput from "@/components/OpponentLogoInput/OpponentLogoInput";
 
 interface TeamsManagementProps {
@@ -33,16 +34,21 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
       const teamsSnapshot = await getDocs(teamsCollection);
       
       const teamsData: Team[] = [];
-      teamsSnapshot.forEach(doc => {
-        const teamData = doc.data() as Team;
+      teamsSnapshot.forEach((d) => {
+        const teamData = d.data() as Team;
         teamsData.push({
           ...teamData,
-          id: doc.id
+          id: d.id,
+          inactive: teamData.inactive === true,
         });
       });
 
-      // Sortuj zespoły alfabetycznie po nazwie
-      teamsData.sort((a, b) => a.name.localeCompare(b.name));
+      teamsData.sort((a, b) => {
+        const ai = a.inactive === true ? 1 : 0;
+        const bi = b.inactive === true ? 1 : 0;
+        if (ai !== bi) return ai - bi;
+        return a.name.localeCompare(b.name, "pl", { sensitivity: "base", numeric: true });
+      });
       setTeams(teamsData);
     } catch (error) {
       console.error("Błąd podczas pobierania zespołów:", error);
@@ -69,10 +75,11 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
       const db = getDB();
       const teamsCollection = collection(db, "teams");
       
-      const newTeam: Omit<Team, 'id'> = {
+      const newTeam: Omit<Team, "id"> = {
         name: newTeamName.trim(),
         createdAt: new Date(),
-        isSystem: false
+        isSystem: false,
+        inactive: false,
       };
 
       const docRef = await addDoc(teamsCollection, newTeam);
@@ -94,6 +101,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
 
       // Wyczyść cache zespołów aby zmiany były widoczne w głównej aplikacji
       clearTeamsCache();
+      invalidateCache(CACHE_KEYS.TEAMS_LIST);
 
       // Powiadom główną aplikację o zmianie zespołów
       if (typeof window !== 'undefined') {
@@ -155,6 +163,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
 
       // Wyczyść cache zespołów aby zmiany były widoczne w głównej aplikacji
       clearTeamsCache();
+      invalidateCache(CACHE_KEYS.TEAMS_LIST);
 
       // Powiadom główną aplikację o zmianie zespołów
       if (typeof window !== 'undefined') {
@@ -193,6 +202,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
 
       // Wyczyść cache zespołów aby zmiany były widoczne w głównej aplikacji
       clearTeamsCache();
+      invalidateCache(CACHE_KEYS.TEAMS_LIST);
 
       // Powiadom główną aplikację o zmianie zespołów
       if (typeof window !== 'undefined') {
@@ -203,6 +213,52 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
     } catch (error) {
       console.error("Błąd podczas usuwania zespołu:", error);
       toast.error("Błąd podczas usuwania zespołu");
+    }
+  };
+
+  /** Ukrywa zespół w selektorach (inactive) lub przywraca widoczność — bez usuwania danych. */
+  const setTeamInactiveFlag = async (
+    teamId: string,
+    teamName: string,
+    makeInactive: boolean,
+    isSystem: boolean
+  ) => {
+    if (makeInactive && isSystem) {
+      toast.error("Nie można ukryć zespołu systemowego");
+      return;
+    }
+
+    try {
+      const db = getDB();
+      const teamRef = doc(db, "teams", teamId);
+      await updateDoc(teamRef, { inactive: makeInactive }).catch((error) => {
+        handleFirestoreError(error, db);
+        throw error;
+      });
+
+      setTeams((prev) =>
+        [...prev.map((t) => (t.id === teamId ? { ...t, inactive: makeInactive } : t))].sort((a, b) => {
+          const ai = a.inactive === true ? 1 : 0;
+          const bi = b.inactive === true ? 1 : 0;
+          if (ai !== bi) return ai - bi;
+          return a.name.localeCompare(b.name, "pl", { sensitivity: "base", numeric: true });
+        })
+      );
+
+      clearTeamsCache();
+      invalidateCache(CACHE_KEYS.TEAMS_LIST);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("teamsChanged"));
+      }
+
+      toast.success(
+        makeInactive
+          ? `Zespół „${teamName}” jest ukryty w selektorach (dane zostają w bazie).`
+          : `Zespół „${teamName}” jest znowu widoczny w aplikacji.`
+      );
+    } catch (error) {
+      console.error("Błąd zmiany statusu zespołu:", error);
+      toast.error("Błąd podczas aktualizacji statusu zespołu");
     }
   };
 
@@ -357,13 +413,17 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
                 <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>Logo</th>
                 <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>Nazwa</th>
                 <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>Typ</th>
+                <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>W aplikacji</th>
                 <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "left" }}>Data utworzenia</th>
                 <th style={{ padding: "12px", border: "1px solid #ddd", textAlign: "center" }}>Akcje</th>
               </tr>
             </thead>
             <tbody>
               {teams.map((team) => (
-                <tr key={team.id}>
+                <tr
+                  key={team.id}
+                  style={team.inactive === true ? { backgroundColor: "#f8f9fa" } : undefined}
+                >
                   <td style={{ 
                     padding: "12px", 
                     border: "1px solid #ddd",
@@ -463,11 +523,78 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
                       {team.isSystem ? "Systemowy" : "Niestandardowy"}
                     </span>
                   </td>
+                  <td style={{ padding: "12px", border: "1px solid #ddd" }}>
+                    <span
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: "12px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        backgroundColor: team.inactive === true ? "#e9ecef" : "#d4edda",
+                        color: team.inactive === true ? "#495057" : "#155724",
+                      }}
+                    >
+                      {team.inactive === true ? "Nieaktywny (ukryty)" : "Aktywny"}
+                    </span>
+                  </td>
                   <td style={{ padding: "12px", border: "1px solid #ddd", fontSize: "14px" }}>
-                    {team.createdAt ? new Date(team.createdAt).toLocaleDateString('pl-PL') : "Brak danych"}
+                    {team.createdAt ? new Date(team.createdAt as Date).toLocaleDateString("pl-PL") : "Brak danych"}
                   </td>
                   <td style={{ padding: "12px", border: "1px solid #ddd", textAlign: "center" }}>
-                    <div style={{ display: "flex", gap: "5px", justifyContent: "center" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "5px",
+                        justifyContent: "center",
+                        maxWidth: "220px",
+                        margin: "0 auto",
+                      }}
+                    >
+                      {editingTeam !== team.id && !team.isSystem && team.inactive !== true && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Ukryć zespół „${team.name}” w aplikacji?\n\nZniknie z list wyboru; mecze i zawodnicy zostaną w bazie. Możesz przywrócić widoczność później.`
+                              )
+                            ) {
+                              void setTeamInactiveFlag(team.id, team.name, true, false);
+                            }
+                          }}
+                          style={{
+                            padding: "5px 10px",
+                            backgroundColor: "#6c757d",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "11px",
+                          }}
+                          title="Ukrywa zespół w selektorach bez usuwania danych"
+                        >
+                          Ukryj w aplikacji
+                        </button>
+                      )}
+                      {editingTeam !== team.id && !team.isSystem && team.inactive === true && (
+                        <button
+                          type="button"
+                          onClick={() => setTeamInactiveFlag(team.id, team.name, false, false)}
+                          style={{
+                            padding: "5px 10px",
+                            backgroundColor: "#198754",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "11px",
+                          }}
+                          title="Przywraca zespół na listy wyboru"
+                        >
+                          Przywróć widoczność
+                        </button>
+                      )}
                       {editingTeam !== team.id && (
                         <button
                           onClick={() => startEditingTeam(team.id, team.name)}
@@ -478,7 +605,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
                             border: "none",
                             borderRadius: "4px",
                             cursor: "pointer",
-                            fontSize: "12px"
+                            fontSize: "12px",
                           }}
                         >
                           Edytuj
@@ -494,7 +621,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
                           border: "none",
                           borderRadius: "4px",
                           cursor: team.isSystem ? "not-allowed" : "pointer",
-                          fontSize: "12px"
+                          fontSize: "12px",
                         }}
                         title={team.isSystem ? "Nie można usunąć zespołu systemowego" : "Usuń zespół"}
                       >
@@ -519,7 +646,11 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
         <strong>Informacje:</strong>
         <ul style={{ margin: "5px 0", paddingLeft: "20px" }}>
           <li>Zespoły systemowe nie mogą być usunięte (oznaczone jako "Systemowy")</li>
-          <li>Usunięcie zespołu spowoduje również usunięcie wszystkich powiązanych graczy i meczów</li>
+          <li>
+            „Ukryj w aplikacji” ustawia status nieaktywny — zespół znika z list wyboru, dane (mecze, zawodnicy)
+            zostają; możesz przywrócić widoczność przyciskiem „Przywróć widoczność”
+          </li>
+          <li>Usunięcie zespołu (Usuń) to trwałe usunięcie dokumentu z bazy — rozważ najpierw ukrycie</li>
           <li>Nazwy zespołów muszą być unikalne</li>
         </ul>
       </div>

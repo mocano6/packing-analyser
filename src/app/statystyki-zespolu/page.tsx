@@ -5,6 +5,7 @@ import { LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, CartesianG
 import { ResponsiveRadar } from '@nivo/radar';
 import { Action, TeamInfo, Shot } from "@/types";
 import { getOppositeXTValueForZone, getZoneName, getXTValueForZone, zoneNameToIndex, zoneNameToString } from "@/constants/xtValues";
+import { getXTDifferenceForAction } from "@/utils/pxtFromAction";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,16 +22,27 @@ import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPit
 import XGPitch from "@/components/XGPitch/XGPitch";
 import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
+import {
+  attachXtToPlayerShareRows,
+  countActionsByPlayerId,
+  type KpiRegainsLosesPlayersSortCol,
+  mapToSortedPlayerShareRows,
+  playerStatsSummary,
+  sortKpiRegainsLosesPlayerRows,
+} from "@/utils/kpiDashboardPlayerShares";
+import { filterMatchActionsBySelectedTeam } from "@/utils/filterMatchActionsByTeam";
+import { filterActionsByAnalyzedTeamSquad } from "@/utils/filterActionsByTeamSquad";
+import {
+  count8sCaShotForBreakdown,
+  isPkEntryFromRegainSequence,
+  isShotFromRegainSequence,
+} from "@/utils/kpiRegainSequenceFlags";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import { usePresentationMode } from "@/contexts/PresentationContext";
 import styles from "./statystyki-zespolu.module.css";
 
 const GPS_MATCH_DAY_CACHE_TTL_MS = 10 * 60 * 1000;
-const TRENDY_MATCHES_COUNT_KEY = "teamStats_trendyMatchesCount";
-const TRENDY_MATCH_TYPE_KEY = "teamStats_trendyMatchType";
-const DEFAULT_TRENDY_MATCH_TYPES = { liga: true, puchar: true, towarzyski: true };
-type TrendyMatchTypesEnabled = { liga: boolean; puchar: boolean; towarzyski: boolean };
 
 export default function StatystykiZespoluPage() {
   const { teams, isLoading: isTeamsLoading } = useTeams();
@@ -42,7 +54,7 @@ export default function StatystykiZespoluPage() {
   const [selectedPlayerForVideo, setSelectedPlayerForVideo] = useState<string | null>(null);
   const { players } = usePlayersState();
   const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
-  const { isPresentationMode } = usePresentationMode();
+  const { isPresentationMode, maskName } = usePresentationMode();
   
   // Resetuj stan zwijania gdy zmienia się wybrane KPI
   useEffect(() => {
@@ -140,11 +152,14 @@ export default function StatystykiZespoluPage() {
   const [allPKEntries, setAllPKEntries] = useState<any[]>([]);
   const [allAcc8sEntries, setAllAcc8sEntries] = useState<any[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
-  const [expandedCategory, setExpandedCategory] = useState<'kpi' | 'trendy' | 'pxt' | 'xg' | 'pkEntries' | 'regains' | 'loses' | 'gps' | null>(() => {
+  const [expandedCategory, setExpandedCategory] = useState<
+    'kpi' | 'pxt' | 'xg' | 'pkEntries' | 'regains' | 'loses' | 'gps' | null
+  >(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('statystykiZespolu_expandedCategory');
-      if (saved && ['kpi', 'trendy', 'pxt', 'xg', 'pkEntries', 'regains', 'loses', 'gps'].includes(saved)) {
-        return saved as 'kpi' | 'trendy' | 'pxt' | 'xg' | 'pkEntries' | 'regains' | 'loses' | 'gps';
+      if (saved === 'trendy') return 'kpi';
+      if (saved && ['kpi', 'pxt', 'xg', 'pkEntries', 'regains', 'loses', 'gps'].includes(saved)) {
+        return saved as 'kpi' | 'pxt' | 'xg' | 'pkEntries' | 'regains' | 'loses' | 'gps';
       }
       return 'kpi';
     }
@@ -161,6 +176,19 @@ export default function StatystykiZespoluPage() {
       }
     }
   }, [expandedCategory]);
+
+  // Loguj strukturę akcji po wejściu w zakładkę PxT (do debugowania)
+  useEffect(() => {
+    if (expandedCategory === 'pxt') {
+      console.log('PxT: wszystkie akcje', allActions);
+      if (allActions.length > 0) {
+        console.log('PxT: przykładowa akcja (pierwsza)', allActions[0]);
+      } else {
+        console.log('PxT: brak akcji (allActions puste – dane mogą się jeszcze ładować)');
+      }
+    }
+  }, [expandedCategory, allActions]);
+
   const [selectedSeason, setSelectedSeason] = useState<string>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("teamStats_selectedSeason") || "";
@@ -207,53 +235,11 @@ export default function StatystykiZespoluPage() {
   const [pkEntriesExpandedMatchData, setPkEntriesExpandedMatchData] = useState(false);
   const [possessionExpanded, setPossessionExpanded] = useState(false);
   const [shotsExpanded, setShotsExpanded] = useState(false);
-  const [trendyMatchesCount, setTrendyMatchesCount] = useState<5 | 10 | 15 | 20>(() => {
-    if (typeof window === "undefined") return 10;
-    const raw = Number(localStorage.getItem(TRENDY_MATCHES_COUNT_KEY));
-    return raw === 5 || raw === 10 || raw === 15 || raw === 20 ? raw : 10;
-  });
-  const [trendyMatchTypesEnabled, setTrendyMatchTypesEnabled] = useState<TrendyMatchTypesEnabled>(() => {
-    if (typeof window === "undefined") return { ...DEFAULT_TRENDY_MATCH_TYPES };
-    try {
-      const raw = localStorage.getItem(TRENDY_MATCH_TYPE_KEY);
-      if (!raw) return { ...DEFAULT_TRENDY_MATCH_TYPES };
-      const parsed = JSON.parse(raw) as Record<string, boolean>;
-      return {
-        liga: parsed.liga !== false,
-        puchar: parsed.puchar !== false,
-        towarzyski: parsed.towarzyski !== false,
-      };
-    } catch {
-      return { ...DEFAULT_TRENDY_MATCH_TYPES };
-    }
-  });
-  const [trendyVisibleSeries, setTrendyVisibleSeries] = useState<{
-    teamXG: boolean;
-    opponentXG: boolean;
-    teamGoals: boolean;
-    opponentGoals: boolean;
-  }>({
-    teamXG: true,
-    opponentXG: true,
-    teamGoals: true,
-    opponentGoals: true,
-  });
-  const [trendyLoading, setTrendyLoading] = useState(false);
-  const [trendyLoadError, setTrendyLoadError] = useState<string | null>(null);
-  const [trendyMatchesData, setTrendyMatchesData] = useState<Array<{
-    matchId: string;
-    matchLabel: string;
-    date: string;
-    opponent: string;
-    teamXG: number;
-    opponentXG: number;
-    teamGoals: number;
-    opponentGoals: number;
-  }>>([]);
   const [kpiShotsRowExpanded, setKpiShotsRowExpanded] = useState(false);
   const [kpiPkRowExpanded, setKpiPkRowExpanded] = useState(false);
   const [kpiP2P3RowExpanded, setKpiP2P3RowExpanded] = useState(false);
   const [kpiRegainsPPRowExpanded, setKpiRegainsPPRowExpanded] = useState(false);
+  const [kpiPossessionRowExpanded, setKpiPossessionRowExpanded] = useState(false);
   const [kpiXgRowExpanded, setKpiXgRowExpanded] = useState(false);
   const [kpiXgPlayersModalOpen, setKpiXgPlayersModalOpen] = useState(false);
   const [kpiShotsPlayersModalOpen, setKpiShotsPlayersModalOpen] = useState(false);
@@ -266,6 +252,21 @@ export default function StatystykiZespoluPage() {
   }>({ sender: true, receiver: true, dribbler: true });
   const [kpiPxtSort, setKpiPxtSort] = useState<{ column: string | null; dir: 'asc' | 'desc' }>({ column: null, dir: 'desc' });
   const [kpiP2P3PlayersModalOpen, setKpiP2P3PlayersModalOpen] = useState(false);
+  const [kpiRegainsPpPlayersModalOpen, setKpiRegainsPpPlayersModalOpen] = useState(false);
+  const [kpiRegainsAllPitchPlayersModalOpen, setKpiRegainsAllPitchPlayersModalOpen] = useState(false);
+  const [kpiLosesAllPitchPlayersModalOpen, setKpiLosesAllPitchPlayersModalOpen] = useState(false);
+  const [kpiRegainsPpPlayersSort, setKpiRegainsPpPlayersSort] = useState<{
+    column: KpiRegainsLosesPlayersSortCol;
+    dir: "asc" | "desc";
+  }>({ column: null, dir: "desc" });
+  const [kpiRegainsAllPitchPlayersSort, setKpiRegainsAllPitchPlayersSort] = useState<{
+    column: KpiRegainsLosesPlayersSortCol;
+    dir: "asc" | "desc";
+  }>({ column: null, dir: "desc" });
+  const [kpiLosesAllPitchPlayersSort, setKpiLosesAllPitchPlayersSort] = useState<{
+    column: KpiRegainsLosesPlayersSortCol;
+    dir: "asc" | "desc";
+  }>({ column: null, dir: "desc" });
   const [kpiP2P3Sort, setKpiP2P3Sort] = useState<{ column: string | null; dir: 'asc' | 'desc' }>({ column: null, dir: 'desc' });
   const [kpiShotsSort, setKpiShotsSort] = useState<{ column: string | null; dir: 'asc' | 'desc' }>({ column: null, dir: 'desc' });
   const [kpiXgSort, setKpiXgSort] = useState<{ column: string | null; dir: 'asc' | 'desc' }>({ column: null, dir: 'desc' });
@@ -290,7 +291,7 @@ export default function StatystykiZespoluPage() {
   const [xgFilter, setXgFilter] = useState<'all' | 'sfg' | 'open_play'>('all');
   const [xgHalf, setXgHalf] = useState<'all' | 'first' | 'second'>('all');
   const [xgMapFilters, setXgMapFilters] = useState<{
-    bodyPart: 'all' | 'foot' | 'head' | 'other';
+    bodyPart: 'all' | 'foot' | 'foot_left' | 'foot_right' | 'head' | 'other';
     sfg: boolean;
     regain: boolean;
     goal: boolean;
@@ -586,24 +587,81 @@ export default function StatystykiZespoluPage() {
         const allPkEntriesList: any[] = [];
         const allAcc8sList: any[] = [];
 
-        for (const matchData of results) {
-          if (!matchData) continue;
-          allActionsList.push(...(matchData.actions_packing || []));
-          allRegainList.push(
-            ...(matchData.actions_regain || []).map((action) => ({
-              ...action,
-              _actionSource: "regain",
-            })) as Action[]
-          );
-          allLosesList.push(
-            ...(matchData.actions_loses || []).map((action) => ({
-              ...action,
-              _actionSource: "loses",
-            })) as Action[]
-          );
-          allShotsList.push(...(matchData.shots || []));
-          allPkEntriesList.push(...(matchData.pkEntries || []));
-          allAcc8sList.push(...((matchData as any).acc8sEntries || []));
+        for (let i = 0; i < results.length; i++) {
+          const matchData = results[i];
+          const matchId = selectedMatches[i];
+          if (!matchId) continue;
+
+          let packingActions = matchData?.actions_packing || [];
+          const legacyMatchIds = [matchId];
+          if (matchData?.matchId && matchData.matchId !== matchId) {
+            legacyMatchIds.push(matchData.matchId as string);
+          }
+          if (packingActions.length === 0 && matchId) {
+            for (const legacyId of legacyMatchIds) {
+              const legacyQuery = query(
+                collection(db, "actions_packing"),
+                where("matchId", "==", legacyId)
+              );
+              const legacySnapshot = await getDocs(legacyQuery);
+              if (legacySnapshot.docs.length > 0) {
+                packingActions = legacySnapshot.docs.map((d) => {
+                  const data = d.data();
+                  const normalized: Record<string, unknown> = {
+                    ...data,
+                    id: data.id ?? d.id,
+                    matchId,
+                    minute: data.minute ?? data.min ?? 0,
+                    actionType: data.actionType ?? data.type ?? "pass",
+                    packingPoints: data.packingPoints ?? data.packing ?? 0,
+                    fromZone: data.fromZone ?? data.startZone,
+                    toZone: data.toZone ?? data.endZone,
+                    senderId: data.senderId ?? data.playerId ?? "",
+                    receiverId: data.receiverId ?? data.receiverPlayerId ?? data.receiver_id ?? undefined,
+                  };
+                  return normalized as Action;
+                });
+                break;
+              }
+            }
+          }
+          if (packingActions.length > 0 && matchId) {
+            packingActions = packingActions.map((a) => {
+              const anyA = a as any;
+              return {
+                ...a,
+                matchId,
+                minute: a.minute ?? anyA.min ?? 0,
+                actionType: a.actionType ?? anyA.type ?? "pass",
+                packingPoints: a.packingPoints ?? anyA.packing ?? 0,
+                fromZone: a.fromZone ?? anyA.startZone,
+                toZone: a.toZone ?? anyA.endZone,
+                senderId: a.senderId ?? anyA.playerId ?? "",
+                receiverId: a.receiverId ?? anyA.receiverPlayerId ?? anyA.receiver_id ?? undefined,
+              };
+            });
+          }
+          if (packingActions.length === 0 && process.env.NODE_ENV === "development") {
+            console.warn(`[statystyki-zespolu] Brak akcji dla meczu ${matchId} (doc: ${matchData ? "istnieje" : "null"}, legacy: sprawdzono ${legacyMatchIds.join(", ")})`);
+          }
+          allActionsList.push(...packingActions);
+          if (matchData) {
+            allRegainList.push(
+              ...(matchData.actions_regain || []).map((action) => ({
+                ...action,
+                _actionSource: "regain",
+              })) as Action[]
+            );
+            allLosesList.push(
+              ...(matchData.actions_loses || []).map((action) => ({
+                ...action,
+                _actionSource: "loses",
+              })) as Action[]
+            );
+            allShotsList.push(...(matchData.shots || []));
+            allPkEntriesList.push(...(matchData.pkEntries || []));
+            allAcc8sList.push(...((matchData as any).acc8sEntries || []));
+          }
         }
 
         setAllActions(allActionsList);
@@ -612,7 +670,8 @@ export default function StatystykiZespoluPage() {
         setAllShots(allShotsList);
         setAllPKEntries(allPkEntriesList);
         setAllAcc8sEntries(allAcc8sList);
-      } catch {
+      } catch (err) {
+        console.error("[statystyki-zespolu] Błąd ładowania akcji:", err);
         setAllActions([]);
         setAllRegainActions([]);
         setAllLosesActions([]);
@@ -642,7 +701,7 @@ export default function StatystykiZespoluPage() {
     
     sortedActions.forEach((action, index) => {
       const packingPoints = action.packingPoints || 0;
-      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+      const xTDifference = getXTDifferenceForAction(action);
       const pxtValue = xTDifference * packingPoints;
       
       cumulativePacking += packingPoints;
@@ -676,7 +735,7 @@ export default function StatystykiZespoluPage() {
       }
       
       const packingPoints = action.packingPoints || 0;
-      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+      const xTDifference = getXTDifferenceForAction(action);
       const pxtValue = xTDifference * packingPoints;
       
       intervals[interval].packing += packingPoints;
@@ -730,11 +789,13 @@ export default function StatystykiZespoluPage() {
     let firstHalf = { packing: 0, pxt: 0, xt: 0, passCount: 0, dribbleCount: 0, pxtPerPass: 0, pxtPerDribble: 0, xtPerPass: 0, xtPerDribble: 0, packingPerPass: 0, packingPerDribble: 0 };
     let secondHalf = { packing: 0, pxt: 0, xt: 0, passCount: 0, dribbleCount: 0, pxtPerPass: 0, pxtPerDribble: 0, xtPerPass: 0, xtPerDribble: 0, packingPerPass: 0, packingPerDribble: 0 };
 
-    // Filtruj akcje według wybranego typu
+    // Filtruj akcje według wybranego typu (uwzględnij alternatywne nazwy pól z legacy/importu)
+    const getActionType = (a: Action) => a.actionType ?? (a as any).type ?? "";
     const filteredActions = allActions.filter(action => {
+      const at = getActionType(action);
       if (selectedActionType === 'all') return true;
-      if (selectedActionType === 'pass') return action.actionType === 'pass';
-      if (selectedActionType === 'dribble') return action.actionType === 'dribble';
+      if (selectedActionType === 'pass') return at === 'pass' || at === 'podanie';
+      if (selectedActionType === 'dribble') return at === 'dribble' || at === 'drybling';
       return true;
     }).filter(action => {
       // Filtruj akcje według wybranych filtrów Start/Koniec
@@ -742,13 +803,17 @@ export default function StatystykiZespoluPage() {
     });
 
     filteredActions.forEach(action => {
-      const packingPoints = action.packingPoints || 0;
-      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+      const packingPoints = (action.packingPoints ?? (action as any).packing ?? 0) as number;
+      const xTDifference = getXTDifferenceForAction(action);
       const pxtValue = xTDifference * packingPoints;
-      const isPass = action.actionType === 'pass';
-      const isDribble = action.actionType === 'dribble';
+      const at = getActionType(action);
+      const isPass = at === 'pass' || at === 'podanie';
+      const isDribble = at === 'dribble' || at === 'drybling';
+      const minute = typeof action.minute === 'number' && Number.isFinite(action.minute)
+        ? action.minute
+        : Number((action as any).min ?? action.minute ?? 0);
       
-      if (action.minute <= 45) {
+      if (minute <= 45) {
         firstHalf.packing += packingPoints;
         firstHalf.pxt += pxtValue;
         firstHalf.xt += xTDifference;
@@ -822,163 +887,6 @@ export default function StatystykiZespoluPage() {
     if (first) return { ...first, _multiLabel: `${selectedMatches.length} meczów` as const };
     return null;
   }, [selectedMatchInfo, teamMatches, selectedMatches]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem(TRENDY_MATCHES_COUNT_KEY, String(trendyMatchesCount));
-  }, [trendyMatchesCount]);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const isDefault =
-      trendyMatchTypesEnabled.liga &&
-      trendyMatchTypesEnabled.puchar &&
-      trendyMatchTypesEnabled.towarzyski;
-    if (isDefault) localStorage.removeItem(TRENDY_MATCH_TYPE_KEY);
-    else localStorage.setItem(TRENDY_MATCH_TYPE_KEY, JSON.stringify(trendyMatchTypesEnabled));
-  }, [trendyMatchTypesEnabled]);
-
-  const selectedTrendyMatches = useMemo(() => {
-    const withId = teamMatches.filter((m) => typeof m.matchId === "string" && m.matchId.length > 0);
-    const byType = withId.filter((m) => {
-      const raw = m.matchType ?? "liga";
-      const t = (typeof raw === "string" ? raw.toLowerCase() : "liga") as "liga" | "puchar" | "towarzyski";
-      const key = t === "puchar" ? "puchar" : t === "towarzyski" ? "towarzyski" : "liga";
-      return trendyMatchTypesEnabled[key];
-    });
-    return byType.slice(0, trendyMatchesCount);
-  }, [teamMatches, trendyMatchesCount, trendyMatchTypesEnabled]);
-
-  useEffect(() => {
-    if (expandedCategory !== "trendy") return;
-
-    if (selectedTrendyMatches.length === 0) {
-      setTrendyMatchesData([]);
-      setTrendyLoadError(null);
-      setTrendyLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setTrendyLoading(true);
-    setTrendyLoadError(null);
-
-    (async () => {
-      try {
-        const resolved = await Promise.all(
-          selectedTrendyMatches.map(async (match, idx) => {
-            const matchId = match.matchId as string;
-            const matchDoc = await getOrLoadMatchDocument(matchId);
-            const shots = (matchDoc?.shots ?? []) as any[];
-
-            const resolveShotTeamId = (shot: any): string | null => {
-              if (shot.teamId) return shot.teamId;
-              if (shot.teamContext === "attack") return match.team ?? null;
-              if (shot.teamContext === "defense") return match.opponent ?? null;
-              return null;
-            };
-
-            const teamShots = shots.filter((shot) => resolveShotTeamId(shot) === match.team);
-            const opponentShots = shots.filter((shot) => resolveShotTeamId(shot) === match.opponent);
-
-            const teamXG = teamShots.reduce((sum: number, shot: any) => sum + (Number(shot.xG) || 0), 0);
-            const opponentXG = opponentShots.reduce((sum: number, shot: any) => sum + (Number(shot.xG) || 0), 0);
-            const teamGoals = teamShots.filter((shot: any) => shot.isGoal || shot.shotType === "goal").length;
-            const opponentGoals = opponentShots.filter((shot: any) => shot.isGoal || shot.shotType === "goal").length;
-            const date = typeof match.date === "string" ? match.date : "";
-            const shortDate = date ? date.slice(5) : `Mecz ${idx + 1}`;
-            const opponent = String(match.opponent ?? "Przeciwnik");
-
-            return {
-              matchId,
-              matchLabel: `${shortDate} vs ${opponent}`,
-              date,
-              opponent,
-              teamXG,
-              opponentXG,
-              teamGoals,
-              opponentGoals,
-            };
-          })
-        );
-
-        if (cancelled) return;
-        setTrendyMatchesData(resolved);
-      } catch {
-        if (cancelled) return;
-        setTrendyMatchesData([]);
-        setTrendyLoadError("Nie udało się załadować danych trendów.");
-      } finally {
-        if (!cancelled) setTrendyLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [expandedCategory, selectedTrendyMatches]);
-
-  const trendyChartData = useMemo(() => {
-    const base = [...trendyMatchesData].reverse();
-    if (base.length === 0) return [];
-
-    const calcTrend = (values: number[]) => {
-      const n = values.length;
-      if (n <= 1) return values;
-
-      let sumX = 0;
-      let sumY = 0;
-      let sumXY = 0;
-      let sumXX = 0;
-
-      values.forEach((value, i) => {
-        sumX += i;
-        sumY += value;
-        sumXY += i * value;
-        sumXX += i * i;
-      });
-
-      const denominator = n * sumXX - sumX * sumX;
-      if (denominator === 0) return values;
-      const slope = (n * sumXY - sumX * sumY) / denominator;
-      const intercept = (sumY - slope * sumX) / n;
-
-      return values.map((_, i) => slope * i + intercept);
-    };
-
-    const teamXGValues = base.map((row) => row.teamXG);
-    const opponentXGValues = base.map((row) => row.opponentXG);
-    const teamGoalsValues = base.map((row) => row.teamGoals);
-    const opponentGoalsValues = base.map((row) => row.opponentGoals);
-
-    const teamXGTrend = calcTrend(teamXGValues);
-    const opponentXGTrend = calcTrend(opponentXGValues);
-    const teamGoalsTrend = calcTrend(teamGoalsValues);
-    const opponentGoalsTrend = calcTrend(opponentGoalsValues);
-
-    return base.map((row, i) => ({
-      ...row,
-      teamXGTrend: teamXGTrend[i],
-      opponentXGTrend: opponentXGTrend[i],
-      teamGoalsTrend: teamGoalsTrend[i],
-      opponentGoalsTrend: opponentGoalsTrend[i],
-    }));
-  }, [trendyMatchesData]);
-
-  const trendyLast5Stats = useMemo(() => {
-    if (trendyChartData.length === 0) return null;
-    const last5 = trendyChartData.slice(-5);
-    const avgTeamXG = last5.reduce((s, r) => s + r.teamXG, 0) / last5.length;
-    const avgOpponentXG = last5.reduce((s, r) => s + r.opponentXG, 0) / last5.length;
-    const avgTeamGoals = last5.reduce((s, r) => s + r.teamGoals, 0) / last5.length;
-    const avgOpponentGoals = last5.reduce((s, r) => s + r.opponentGoals, 0) / last5.length;
-    return {
-      avgTeamXG,
-      avgOpponentXG,
-      avgTeamGoals,
-      avgOpponentGoals,
-      matchCount: last5.length,
-    };
-  }, [trendyChartData]);
 
   // Resetuj wybranego zawodnika gdy zmienia się KPI lub mecz
   useEffect(() => {
@@ -1241,6 +1149,15 @@ export default function StatystykiZespoluPage() {
     return normalized;
   };
 
+  // Definicja połowy boiska dla tego widoku: 1-6 własna, 7+ połowa przeciwnika.
+  const isOwnHalfByZoneColumn = (zoneName: string | null | undefined): boolean => {
+    const normalized = convertZoneToName(zoneName);
+    if (!normalized) return false;
+    const col = Number.parseInt(normalized.slice(1), 10);
+    if (!Number.isFinite(col)) return false;
+    return col <= 6;
+  };
+
   const getOppositeZoneName = (zoneName: string): string | null => {
     const zoneIndex = zoneNameToIndex(zoneName);
     if (zoneIndex === null) return null;
@@ -1254,23 +1171,66 @@ export default function StatystykiZespoluPage() {
   };
 
   const isLosesAction = (action: any): boolean => {
+    if (action?.actionType === 'regain' || action?.isRegain === true) return false;
     const actionSource = action?._actionSource;
     if (actionSource) {
       return actionSource === 'lose' || actionSource === 'loses' || actionSource === 'loss';
     }
-    const hasRegainFields = action.playersBehindBall !== undefined || action.opponentsBehindBall !== undefined;
-    return action.isReaction5s !== undefined ||
-      (action.isBelow8s !== undefined && !hasRegainFields);
+    if (action?.actionType === 'lose' || action?.actionType === 'loses' || action?.actionType === 'loss') return true;
+    
+    if (action._collection === 'regains' || action._collectionName === 'regains' || action.collectionName === 'regains') return false;
+    if (action._collection === 'loses' || action._collectionName === 'loses' || action.collectionName === 'loses') return true;
+    
+    // Używamy tej samej logiki co w getActionCategory (src/utils/actionCategory.ts)
+    if (
+      action.isReaction5s !== undefined ||
+      action.isAut !== undefined ||
+      action.isBadReaction5s !== undefined ||
+      action.losesAttackZone !== undefined ||
+      action.losesDefenseZone !== undefined ||
+      action.losesAttackXT !== undefined ||
+      action.losesDefenseXT !== undefined
+    ) {
+      return true;
+    }
+    
+    return false;
   };
 
   const isRegainAction = (action: any): boolean => {
+    if (action?.actionType === 'lose' || action?.actionType === 'loses' || action?.actionType === 'loss') return false;
+    if (action?.actionType === 'regain') return true;
+    if (action?.isRegain === true) return true;
     const actionSource = action?._actionSource;
     if (actionSource) {
       return actionSource === 'regain';
     }
-    const hasRegainFields = action.playersBehindBall !== undefined || action.opponentsBehindBall !== undefined;
-    return hasRegainFields && !isLosesAction(action);
+    
+    if (action._collection === 'loses' || action._collectionName === 'loses' || action.collectionName === 'loses') return false;
+    if (action._collection === 'regains' || action._collectionName === 'regains' || action.collectionName === 'regains') return true;
+    
+    // Używamy tej samej logiki co w getActionCategory (src/utils/actionCategory.ts)
+    if (
+      action.regainAttackZone !== undefined ||
+      action.regainDefenseZone !== undefined ||
+      action.regainAttackXT !== undefined ||
+      action.regainDefenseXT !== undefined ||
+      action.playersBehindBall !== undefined ||
+      action.opponentsBehindBall !== undefined ||
+      action.totalPlayersOnField !== undefined ||
+      action.totalOpponentsOnField !== undefined ||
+      action.playersLeftField !== undefined ||
+      action.opponentsLeftField !== undefined
+    ) {
+      return true;
+    }
+    
+    return false;
   };
+
+  /** Strefa ataku przechwytu do mapy / liczników widocznych — jak przy filtrze PM (fallback toZone/endZone). */
+  const regainAttackZoneRawForMap = (action: Action): string | undefined =>
+    action.regainAttackZone || action.oppositeZone || action.toZone || action.endZone || undefined;
 
   const teamActions = useMemo(() => {
     if (!selectedTeam) return allActions;
@@ -1278,27 +1238,44 @@ export default function StatystykiZespoluPage() {
   }, [allActions, selectedTeam]);
 
   const teamRegainActions = useMemo(() => {
-    if (!selectedTeam) return allRegainActions;
-    const filtered = allRegainActions.filter(action => !action.teamId || action.teamId === selectedTeam);
-    return filtered.length > 0 ? filtered : allRegainActions;
-  }, [allRegainActions, selectedTeam]);
+    const byTeam = filterMatchActionsBySelectedTeam(allRegainActions, selectedTeam);
+    const bySquad = filterActionsByAnalyzedTeamSquad(byTeam, selectedTeam, players);
+    const firstMatchId = selectedMatches[0];
+    const selectedMatch = firstMatchId ? teamMatches.find((m) => m.matchId === firstMatchId) : undefined;
+    const playerMinutesIds = new Set(
+      (selectedMatch?.playerMinutes ?? [])
+        .map((pm) => pm.playerId)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    );
+    if (playerMinutesIds.size === 0) return bySquad;
+    const byPlayerMinutes = bySquad.filter((a) => Boolean(a.senderId) && playerMinutesIds.has(a.senderId));
+    return byPlayerMinutes.length > 0 ? byPlayerMinutes : bySquad;
+  }, [allRegainActions, selectedTeam, players, selectedMatches, teamMatches]);
 
   const teamLosesActions = useMemo(() => {
-    if (!selectedTeam) return allLosesActions;
-    const filtered = allLosesActions.filter(action => !action.teamId || action.teamId === selectedTeam);
-    return filtered.length > 0 ? filtered : allLosesActions;
-  }, [allLosesActions, selectedTeam]);
+    const byTeam = filterMatchActionsBySelectedTeam(allLosesActions, selectedTeam);
+    const bySquad = filterActionsByAnalyzedTeamSquad(byTeam, selectedTeam, players);
+    const firstMatchId = selectedMatches[0];
+    const selectedMatch = firstMatchId ? teamMatches.find((m) => m.matchId === firstMatchId) : undefined;
+    const playerMinutesIds = new Set(
+      (selectedMatch?.playerMinutes ?? [])
+        .map((pm) => pm.playerId)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    );
+    if (playerMinutesIds.size === 0) return bySquad;
+    const byPlayerMinutes = bySquad.filter((a) => Boolean(a.senderId) && playerMinutesIds.has(a.senderId));
+    return byPlayerMinutes.length > 0 ? byPlayerMinutes : bySquad;
+  }, [allLosesActions, selectedTeam, players, selectedMatches, teamMatches]);
 
   const derivedRegainActions = useMemo(() => {
-    if (teamRegainActions.length > 0) return teamRegainActions;
-    const filtered = teamActions.filter(action => isRegainAction(action));
-    return filtered;
-  }, [teamRegainActions, teamActions]);
+    if (allRegainActions.length > 0) return teamRegainActions;
+    return teamActions.filter((action) => isRegainAction(action));
+  }, [allRegainActions, teamRegainActions, teamActions]);
 
   const derivedLosesActions = useMemo(() => {
-    if (teamLosesActions.length > 0) return teamLosesActions;
-    return teamActions.filter(action => isLosesAction(action));
-  }, [teamLosesActions, teamActions]);
+    if (allLosesActions.length > 0) return teamLosesActions;
+    return teamActions.filter((action) => isLosesAction(action));
+  }, [allLosesActions, teamLosesActions, teamActions]);
 
   // Oblicz statystyki zespołu
   const teamStats = useMemo(() => {
@@ -1542,18 +1519,20 @@ export default function StatystykiZespoluPage() {
     // Oblicz PxT z akcji
     // WAŻNE: Liczniki są obliczane tylko dla akcji z wybranej kategorii (selectedPxtCategory),
     // aby zgadzały się z heatmapą
+    const getActionTypeForStats = (a: Action) => a.actionType ?? (a as any).type ?? "";
     allActions.forEach(action => {
-      // Filtruj akcje według kategorii (tak jak w heatmapie)
-      if (selectedPxtCategory === 'dribbler' && action.actionType !== 'dribble') return;
-      if (selectedPxtCategory !== 'dribbler' && action.actionType === 'dribble') return;
+      const at = getActionTypeForStats(action);
+      // Filtruj akcje według kategorii (tak jak w heatmapie) – uwzględnij alternatywne nazwy
+      if (selectedPxtCategory === 'dribbler' && at !== 'dribble' && at !== 'drybling') return;
+      if (selectedPxtCategory !== 'dribbler' && (at === 'dribble' || at === 'drybling')) return;
       if (!matchesSelectedActionFilter(action)) return;
       
-      const packingPoints = action.packingPoints || 0;
-      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+      const packingPoints = (action.packingPoints ?? (action as any).packing ?? 0) as number;
+      const xTDifference = getXTDifferenceForAction(action);
       const pxtValue = xTDifference * packingPoints;
 
-      const isDribble = action.actionType === 'dribble';
-      const isPass = action.actionType === 'pass';
+      const isDribble = at === 'dribble' || at === 'drybling';
+      const isPass = at === 'pass' || at === 'podanie';
 
       // PxT jako podający (sender) - tylko jeśli selectedPxtCategory === 'sender'
       if (selectedPxtCategory === 'sender' && isPass && action.senderId) {
@@ -2006,11 +1985,7 @@ export default function StatystykiZespoluPage() {
       if (!zoneName) return false;
       const normalized = convertZoneToName(zoneName);
       if (!normalized) return false;
-      const zoneIndex = zoneNameToIndex(normalized);
-      if (zoneIndex === null) return false;
-      // Kolumna (0-11): 0-5 to własna połowa, 6-11 to połowa przeciwnika
-      const col = zoneIndex % 12;
-      return col <= 5; // Własna połowa: kolumny 0-5 (strefy 1-6)
+      return isOwnHalfByZoneColumn(normalized);
     };
 
     // Funkcja pomocnicza do określenia czy strefa jest w PM Area (C5-8, D5-8, E5-8, F5-8)
@@ -2028,19 +2003,20 @@ export default function StatystykiZespoluPage() {
       ? derivedRegainActions
       : regainHalfFilter === "pm"
       ? derivedRegainActions.filter(action => {
-          const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-          const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
-          return isPMArea(defenseZoneName);
+          // PM Area jak przy heatmapie / KPI poł. przeciwnika: strefa ataku przechwytu
+          const attackZoneRaw = regainAttackZoneRawForMap(action);
+          const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
+          return isPMArea(attackZoneName);
         })
       : derivedRegainActions.filter(action => {
-          const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-          const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+          const attackZoneRaw = regainAttackZoneRawForMap(action);
+          const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
           
-          if (!defenseZoneName) return false;
+          if (!attackZoneName) return false;
           
-          const isOwn = isOwnHalf(defenseZoneName);
+          const isOwn = isOwnHalf(attackZoneName);
           
-          return regainHalfFilter === "own" ? !isOwn : isOwn;
+          return regainHalfFilter === "own" ? isOwn : !isOwn;
         });
 
     // Oblicz statystyki P0-P3 dla wszystkich przechwytów (bez filtrowania według selectedActionFilter)
@@ -2090,6 +2066,19 @@ export default function StatystykiZespoluPage() {
       filteredRegainActions = filteredRegainActions.filter(action => matchesSelectedActionFilter(action));
     }
 
+    // Ta sama baza co heatmapa przechwytów: tylko akcje z mapowalną strefą ataku.
+    const visibleRegainActions = filteredRegainActions.filter((action) => {
+      const attackZoneRaw = regainAttackZoneRawForMap(action);
+      const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
+      return Boolean(attackZoneName);
+    });
+    const visibleRegainsCount = visibleRegainActions.length;
+    const visibleRegainsOpponentHalf = visibleRegainActions.filter((action) => {
+      const attackZoneRaw = regainAttackZoneRawForMap(action);
+      const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
+      return Boolean(attackZoneName && !isOwnHalf(attackZoneName));
+    }).length;
+
     const attackXTHeatmap = new Map<string, number>();
     const defenseXTHeatmap = new Map<string, number>();
     const attackCountHeatmap = new Map<string, number>();
@@ -2135,8 +2124,8 @@ export default function StatystykiZespoluPage() {
       // Policz przechwyty według połowy boiska
       // regainDefenseZone to strefa, gdzie zespół odzyskał piłkę
       // regainAttackZone to strefa przeciwna (gdzie piłka trafi po odzyskaniu)
-      // Dla "przechwytów na połowie przeciwnika" używamy regainAttackZone (strefa przeciwna)
-      const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+      // Dla "przechwytów na połowie przeciwnika" używamy strefy ataku (z fallbackiem jak na mapie)
+      const attackZoneRaw = regainAttackZoneRawForMap(action);
       const attackZoneName = attackZoneRaw
         ? convertZoneToName(attackZoneRaw)
         : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
@@ -2275,6 +2264,8 @@ export default function StatystykiZespoluPage() {
       allRegainP2CountCentral,
       allRegainP3CountCentral,
       totalRegainsWithP: allRegainP0Count + allRegainP1Count + allRegainP2Count + allRegainP3Count,
+      visibleRegainsCount,
+      visibleRegainsOpponentHalf,
     };
     
     return result;
@@ -2287,11 +2278,7 @@ export default function StatystykiZespoluPage() {
       if (!zoneName) return false;
       const normalized = convertZoneToName(zoneName);
       if (!normalized) return false;
-      const zoneIndex = zoneNameToIndex(normalized);
-      if (zoneIndex === null) return false;
-      // Kolumna (0-11): 0-5 to własna połowa, 6-11 to połowa przeciwnika
-      const col = zoneIndex % 12;
-      return col <= 5; // Własna połowa: kolumny 0-5 (strefy 1-6)
+      return isOwnHalfByZoneColumn(normalized);
     };
 
     // Funkcja pomocnicza do określenia czy strefa jest w PM Area (C5-8, D5-8, E5-8, F5-8)
@@ -2309,19 +2296,19 @@ export default function StatystykiZespoluPage() {
       ? derivedRegainActions
       : regainHalfFilter === "pm"
       ? derivedRegainActions.filter(action => {
-          const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-          const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
-          return isPMArea(defenseZoneName);
+          const attackZoneRaw = regainAttackZoneRawForMap(action);
+          const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
+          return isPMArea(attackZoneName);
         })
       : derivedRegainActions.filter(action => {
-          const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-          const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+          const attackZoneRaw = regainAttackZoneRawForMap(action);
+          const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
           
-          if (!defenseZoneName) return false;
+          if (!attackZoneName) return false;
           
-          const isOwn = isOwnHalf(defenseZoneName);
+          const isOwn = isOwnHalf(attackZoneName);
           
-          return regainHalfFilter === "own" ? !isOwn : isOwn;
+          return regainHalfFilter === "own" ? isOwn : !isOwn;
         });
 
     // Filtruj według selectedActionFilter (P0-P3)
@@ -2393,7 +2380,7 @@ export default function StatystykiZespoluPage() {
     const allLosesWithTimestamp = allLosesActions
       .map(lose => ({
         lose,
-        timestamp: lose.videoTimestampRaw ?? (lose.videoTimestamp !== undefined ? lose.videoTimestamp + 10 : 0),
+        timestamp: lose.videoTimestampRaw ?? lose.videoTimestamp ?? 0,
       }))
       .filter(item => item.timestamp > 0)
       .sort((a, b) => a.timestamp - b.timestamp);
@@ -2472,7 +2459,7 @@ export default function StatystykiZespoluPage() {
 
       // Oblicz PXT z akcji w ciągu 8 sekund
       actionsWithin8s.forEach(item => {
-        const xTDifference = (item.action.xTValueEnd || 0) - (item.action.xTValueStart || 0);
+        const xTDifference = getXTDifferenceForAction(item.action);
         const packingPoints = item.action.packingPoints || 0;
         const pxtValue = xTDifference * packingPoints;
         totalPXT8s += pxtValue;
@@ -2498,7 +2485,7 @@ export default function StatystykiZespoluPage() {
 
       // Oblicz PXT z akcji w ciągu 15 sekund
       actionsWithin15s.forEach(item => {
-        const xTDifference = (item.action.xTValueEnd || 0) - (item.action.xTValueStart || 0);
+        const xTDifference = getXTDifferenceForAction(item.action);
         const packingPoints = item.action.packingPoints || 0;
         const pxtValue = xTDifference * packingPoints;
         totalPXT15s += pxtValue;
@@ -2600,11 +2587,7 @@ export default function StatystykiZespoluPage() {
       if (!zoneName) return false;
       const normalized = convertZoneToName(zoneName);
       if (!normalized) return false;
-      const zoneIndex = zoneNameToIndex(normalized);
-      if (zoneIndex === null) return false;
-      // Kolumna (0-11): 0-5 to własna połowa, 6-11 to połowa przeciwnika
-      const col = zoneIndex % 12;
-      return col <= 5; // Własna połowa: kolumny 0-5 (strefy 1-6)
+      return isOwnHalfByZoneColumn(normalized);
     };
 
     // Funkcja pomocnicza do określenia czy strefa jest w PM Area (C5-8, D5-8, E5-8, F5-8)
@@ -2617,6 +2600,14 @@ export default function StatystykiZespoluPage() {
       return pmZones.includes(normalized);
     };
 
+    // Ta sama kolejność co przy totalLosesOwnHalfFull — inaczej jedna strata bez attack/from/to/start a z losesDefenseZone znika z liczników i heatmapy
+    const losesZoneRawFromAction = (action: (typeof derivedLosesActions)[number]) =>
+      action.losesAttackZone ||
+      action.fromZone ||
+      action.toZone ||
+      action.startZone ||
+      (action as { losesDefenseZone?: string }).losesDefenseZone;
+
     // Pełne sumy strat według połowy (niezależne od filtra) - dla KPI "Przechwyty na połowie przeciwnika"
     // "przeciwnika" = nasze straty na własnej połowie (bez autów)
     // losesAttackZone = strefa wyboru = gdzie straciliśmy piłkę (jak w usePackingActions)
@@ -2624,7 +2615,7 @@ export default function StatystykiZespoluPage() {
     let totalLosesOwnHalfFull = 0;
     let totalLosesOpponentHalfFull = 0;
     derivedLosesActions.forEach(action => {
-      const zoneRaw = action.losesAttackZone || action.fromZone || action.toZone || action.startZone || action.losesDefenseZone;
+      const zoneRaw = losesZoneRawFromAction(action);
       const zoneName = zoneRaw ? convertZoneToName(zoneRaw) : null;
       if (zoneName) {
         const isOwn = isOwnHalf(zoneName);
@@ -2641,14 +2632,12 @@ export default function StatystykiZespoluPage() {
       ? derivedLosesActions
       : losesHalfFilter === "pm"
       ? derivedLosesActions.filter(action => {
-          // losesAttackZone = strefa, gdzie straciliśmy piłkę (nie losesDefenseZone = strefa przeciwna)
-          const losesZoneRaw = action.losesAttackZone || action.fromZone || action.toZone || action.startZone;
+          const losesZoneRaw = losesZoneRawFromAction(action);
           const losesZoneName = losesZoneRaw ? convertZoneToName(losesZoneRaw) : null;
           return isPMArea(losesZoneName);
         })
       : derivedLosesActions.filter(action => {
-          // losesAttackZone = strefa, gdzie straciliśmy piłkę (nie losesDefenseZone = strefa przeciwna)
-          const losesZoneRaw = action.losesAttackZone || action.fromZone || action.toZone || action.startZone;
+          const losesZoneRaw = losesZoneRawFromAction(action);
           const losesZoneName = losesZoneRaw ? convertZoneToName(losesZoneRaw) : null;
           
           if (!losesZoneName) return false;
@@ -2674,8 +2663,7 @@ export default function StatystykiZespoluPage() {
     let allLosesP3CountCentral = 0;
 
     filteredLosesActions.forEach(action => {
-      // losesAttackZone = strefa, gdzie straciliśmy piłkę
-      const losesZoneRaw = action.losesAttackZone || action.fromZone || action.toZone || action.startZone;
+      const losesZoneRaw = losesZoneRawFromAction(action);
       const losesZoneName = losesZoneRaw ? convertZoneToName(losesZoneRaw) : null;
       // Na własnej połowie wykluczamy auty (spójność z totalLosesOwnHalf)
       const isOwn = losesZoneName ? isOwnHalf(losesZoneName) : false;
@@ -2709,6 +2697,17 @@ export default function StatystykiZespoluPage() {
       filteredLosesActions = filteredLosesActions.filter(action => matchesSelectedActionFilter(action));
     }
 
+    // Ta sama baza co heatmapa strat: tylko akcje, które mają strefę możliwą do narysowania na boisku.
+    const visibleLosesActions = filteredLosesActions.filter((action) => {
+      const attackZoneRaw = action.losesAttackZone || action.oppositeZone;
+      const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
+      return Boolean(attackZoneName);
+    });
+    const visibleLosesCount = visibleLosesActions.length;
+    const visibleAutCount = visibleLosesActions.filter(
+      (action) => action.isAut === true || (action as any).aut === true,
+    ).length;
+
     if (filteredLosesActions.length === 0) {
       return {
         losesXTInAttack: 0,
@@ -2719,10 +2718,24 @@ export default function StatystykiZespoluPage() {
         totalLosesOpponentHalf: 0,
         totalLosesOwnHalfFull,
         totalLosesOpponentHalfFull,
+        visibleLosesCount,
+        visibleAutCount,
         attackXTHeatmap: new Map<string, number>(),
         defenseXTHeatmap: new Map<string, number>(),
         attackCountHeatmap: new Map<string, number>(),
         defenseCountHeatmap: new Map<string, number>(),
+        allLosesP0Count,
+        allLosesP1Count,
+        allLosesP2Count,
+        allLosesP3Count,
+        allLosesP0CountLateral,
+        allLosesP1CountLateral,
+        allLosesP2CountLateral,
+        allLosesP3CountLateral,
+        allLosesP0CountCentral,
+        allLosesP1CountCentral,
+        allLosesP2CountCentral,
+        allLosesP3CountCentral,
       };
     }
 
@@ -2739,8 +2752,7 @@ export default function StatystykiZespoluPage() {
     let totalLosesOpponentHalf = 0;
 
     filteredLosesActions.forEach(action => {
-      // losesAttackZone = strefa, gdzie straciliśmy piłkę
-      const losesZoneRaw = action.losesAttackZone || action.fromZone || action.toZone || action.startZone;
+      const losesZoneRaw = losesZoneRawFromAction(action);
       const losesZoneName = losesZoneRaw ? convertZoneToName(losesZoneRaw) : null;
 
       // Policz straty według połowy boiska (losesZoneName = strefa, gdzie straciliśmy piłkę)
@@ -2759,7 +2771,7 @@ export default function StatystykiZespoluPage() {
               return idx !== null ? getOppositeXTValueForZone(idx) : 0;
             })();
         if (isOwnHalf(losesZoneName)) {
-          if (action.isAut !== true) {
+          if (action.isAut !== true && (action as any).aut !== true) {
             totalLosesOwnHalf += 1;
           }
           defenseXTHeatmap.set(losesZoneName, (defenseXTHeatmap.get(losesZoneName) || 0) + zoneXT);
@@ -2785,6 +2797,8 @@ export default function StatystykiZespoluPage() {
       totalLosesOpponentHalf,
       totalLosesOwnHalfFull,
       totalLosesOpponentHalfFull,
+      visibleLosesCount,
+      visibleAutCount,
       attackXTHeatmap,
       defenseXTHeatmap,
       attackCountHeatmap,
@@ -2813,7 +2827,7 @@ export default function StatystykiZespoluPage() {
       if (!normalized) return false;
       const zoneIndex = zoneNameToIndex(normalized);
       if (zoneIndex === null) return false;
-      return (zoneIndex % 12) <= 5;
+      return isOwnHalfByZoneColumn(normalized);
     };
     let totalXTInAttack = 0;
     let totalXTInDefense = 0;
@@ -2866,9 +2880,7 @@ export default function StatystykiZespoluPage() {
           })();
       intervals[interval].loses += 1;
       if (losesZoneName) {
-        const zoneIdx = zoneNameToIndex(losesZoneName);
-        const col = zoneIdx !== null ? zoneIdx % 12 : 12;
-        if (col <= 5) {
+        if (isOwnHalfByZoneColumn(losesZoneName)) {
           intervals[interval].xtDefense += zoneXT;
         } else {
           intervals[interval].xtAttack += zoneXT;
@@ -2894,11 +2906,7 @@ export default function StatystykiZespoluPage() {
       if (!zoneName) return false;
       const normalized = convertZoneToName(zoneName);
       if (!normalized) return false;
-      const zoneIndex = zoneNameToIndex(normalized);
-      if (zoneIndex === null) return false;
-      // Kolumna (0-11): 0-5 to własna połowa, 6-11 to połowa przeciwnika
-      const col = zoneIndex % 12;
-      return col <= 5; // Własna połowa: kolumny 0-5 (strefy 1-6)
+      return isOwnHalfByZoneColumn(normalized);
     };
 
     // Funkcja pomocnicza do określenia czy strefa jest w PM Area (C5-8, D5-8, E5-8, F5-8)
@@ -2916,12 +2924,22 @@ export default function StatystykiZespoluPage() {
       ? derivedLosesActions
       : losesHalfFilter === "pm"
       ? derivedLosesActions.filter(action => {
-          const losesZoneRaw = action.losesAttackZone || action.fromZone || action.toZone || action.startZone;
+          const losesZoneRaw =
+            action.losesAttackZone ||
+            action.fromZone ||
+            action.toZone ||
+            action.startZone ||
+            (action as { losesDefenseZone?: string }).losesDefenseZone;
           const losesZoneName = losesZoneRaw ? convertZoneToName(losesZoneRaw) : null;
           return isPMArea(losesZoneName);
         })
       : derivedLosesActions.filter(action => {
-          const losesZoneRaw = action.losesAttackZone || action.fromZone || action.toZone || action.startZone;
+          const losesZoneRaw =
+            action.losesAttackZone ||
+            action.fromZone ||
+            action.toZone ||
+            action.startZone ||
+            (action as { losesDefenseZone?: string }).losesDefenseZone;
           const losesZoneName = losesZoneRaw ? convertZoneToName(losesZoneRaw) : null;
 
           if (!losesZoneName) return false;
@@ -2984,11 +3002,7 @@ export default function StatystykiZespoluPage() {
       if (!zoneName) return false;
       const normalized = convertZoneToName(zoneName);
       if (!normalized) return false;
-      const zoneIndex = zoneNameToIndex(normalized);
-      if (zoneIndex === null) return false;
-      // Kolumna (0-11): 0-5 to własna połowa, 6-11 to połowa przeciwnika
-      const col = zoneIndex % 12;
-      return col <= 5; // Własna połowa: kolumny 0-5 (strefy 1-6)
+      return isOwnHalfByZoneColumn(normalized);
     };
 
     // Funkcja pomocnicza do określenia czy strefa jest w PM Area (C5-8, D5-8, E5-8, F5-8)
@@ -3252,10 +3266,7 @@ export default function StatystykiZespoluPage() {
       if (!zoneName) return false;
       const normalized = convertZoneToName(zoneName);
       if (!normalized) return false;
-      const zoneIndex = zoneNameToIndex(normalized);
-      if (zoneIndex === null) return false;
-      const col = zoneIndex % 12;
-      return col <= 5; // Własna połowa: kolumny 0-5 (strefy 1-6)
+      return isOwnHalfByZoneColumn(normalized);
     };
 
     const isPMArea = (zoneName: string | null | undefined): boolean => {
@@ -3273,18 +3284,17 @@ export default function StatystykiZespoluPage() {
       ? derivedRegainActions
       : regainHalfFilter === "pm"
       ? derivedRegainActions.filter(action => {
-          const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-          const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
-          return isPMArea(defenseZoneName);
+          const attackZoneRaw = regainAttackZoneRawForMap(action);
+          const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
+          return isPMArea(attackZoneName);
         })
       : derivedRegainActions.filter(action => {
-          const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-          const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
-          if (!defenseZoneName) return false;
-          const isOwn = isOwnHalf(defenseZoneName);
-          // regainHalfFilter === "own" -> regain na naszej połowie,
-          // regainHalfFilter === "opponent" -> regain na połowie przeciwnika
-          return regainHalfFilter === "own" ? !isOwn : isOwn;
+          const attackZoneRaw = regainAttackZoneRawForMap(action);
+          const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
+          if (!attackZoneName) return false;
+          const isOwn = isOwnHalf(attackZoneName);
+          // regainHalfFilter === "own"/"opponent" zgodnie z etykietami przycisków
+          return regainHalfFilter === "own" ? isOwn : !isOwn;
         });
 
     if (selectedActionFilter && selectedActionFilter.length > 0) {
@@ -3294,7 +3304,7 @@ export default function StatystykiZespoluPage() {
     const result = new Map<string, number>();
 
     filteredRegainActions.forEach(action => {
-      const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+      const attackZoneRaw = regainAttackZoneRawForMap(action);
       const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
       if (!attackZoneName) return;
 
@@ -3321,10 +3331,7 @@ export default function StatystykiZespoluPage() {
       if (!zoneName) return false;
       const normalized = convertZoneToName(zoneName);
       if (!normalized) return false;
-      const zoneIndex = zoneNameToIndex(normalized);
-      if (zoneIndex === null) return false;
-      const col = zoneIndex % 12;
-      return col <= 5; // Własna połowa: kolumny 0-5 (strefy 1-6)
+      return isOwnHalfByZoneColumn(normalized);
     };
 
     const isPMArea = (zoneName: string | null | undefined): boolean => {
@@ -3350,8 +3357,7 @@ export default function StatystykiZespoluPage() {
           const losesZoneName = losesZoneRaw ? convertZoneToName(losesZoneRaw) : null;
           if (!losesZoneName) return false;
           const isOwn = isOwnHalf(losesZoneName);
-          // losesHalfFilter === "own" -> strata na naszej połowie,
-          // losesHalfFilter === "opponent" -> strata na połowie przeciwnika
+          // losesHalfFilter === "own" / "opponent" — zgodnie z etykietami przycisków
           return losesHalfFilter === "own" ? isOwn : !isOwn;
         });
 
@@ -3421,7 +3427,7 @@ export default function StatystykiZespoluPage() {
 
       if (heatmapMode === "pxt") {
         const packingPoints = action.packingPoints || 0;
-        const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+        const xTDifference = getXTDifferenceForAction(action);
         const pxtValue = xTDifference * packingPoints;
         
         const currentValue = heatmap.get(normalizedZone) || 0;
@@ -3471,7 +3477,7 @@ export default function StatystykiZespoluPage() {
         playerStats.passes += 1;
 
         const packingPoints = action.packingPoints || 0;
-        const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+        const xTDifference = getXTDifferenceForAction(action);
         const pxtValue = xTDifference * packingPoints;
         playerStats.pxt += pxtValue;
         return;
@@ -3517,7 +3523,7 @@ export default function StatystykiZespoluPage() {
 
       // Zawsze obliczaj PxT, niezależnie od trybu (potrzebne do wyświetlania w panelu)
       const packingPoints = action.packingPoints || 0;
-      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+      const xTDifference = getXTDifferenceForAction(action);
       const pxtValue = xTDifference * packingPoints;
       playerStats.pxt += pxtValue;
     });
@@ -3537,8 +3543,7 @@ export default function StatystykiZespoluPage() {
         if (losesZoneName) {
           const zoneIndex = zoneNameToIndex(losesZoneName);
           if (zoneIndex !== null) {
-            const col = zoneIndex % 12;
-            const isOwn = col <= 5;
+            const isOwn = isOwnHalfByZoneColumn(losesZoneName);
             if (losesHalfFilter === "own" && !isOwn) return;
             if (losesHalfFilter === "opponent" && isOwn) return;
           }
@@ -3701,11 +3706,11 @@ export default function StatystykiZespoluPage() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-          <Link href="/" className={styles.backButton} title="Powrót do głównej">
-            ←
-          </Link>
-          <h1>Statystyki zespołu - Analiza meczu</h1>
-        </div>
+        <Link href="/" className={styles.backButton} title="Powrót do głównej">
+          ←
+        </Link>
+        <h1>Statystyki zespołu - Analiza meczu</h1>
+      </div>
 
       {/* Kompaktowa sekcja wyboru */}
       <div className={styles.compactSelectorsContainer}>
@@ -3716,23 +3721,23 @@ export default function StatystykiZespoluPage() {
           {isTeamsLoading ? (
             <p className={styles.loadingText}>Ładowanie...</p>
           ) : (
-          <select
-            id="team-select"
-            value={selectedTeam}
-            onChange={(e) => setSelectedTeam(e.target.value)}
+            <select
+              id="team-select"
+              value={selectedTeam}
+              onChange={(e) => setSelectedTeam(e.target.value)}
               className={styles.compactSelect}
               disabled={availableTeams.length === 0}
-          >
+            >
               {availableTeams.length === 0 ? (
                 <option value="">Brak dostępnych zespołów</option>
               ) : (
-                Object.values(teamsObject).map(team => (
-              <option key={team.id} value={team.id}>
-                {team.name}
-              </option>
+                Object.values(teamsObject).map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {isPresentationMode ? maskName(team.name) : team.name}
+                  </option>
                 ))
               )}
-          </select>
+            </select>
           )}
         </div>
 
@@ -3747,7 +3752,7 @@ export default function StatystykiZespoluPage() {
             availableSeasons={availableSeasons}
             className={styles.compactSelect}
           />
-      </div>
+        </div>
 
         <div className={styles.compactSelectorGroup} ref={matchSelectRef}>
           <label id="match-select-label" className={styles.compactLabel}>
@@ -3768,9 +3773,17 @@ export default function StatystykiZespoluPage() {
               >
                 <span className={styles.compactSelectButtonText}>
                   {matchSelectDisplayInfo
-                    ? (matchSelectDisplayInfo as { _multiLabel?: string })._multiLabel
-                      ? (matchSelectDisplayInfo as { _multiLabel: string })._multiLabel
-                      : `${matchSelectDisplayInfo.opponent} (${matchSelectDisplayInfo.date}) - ${matchSelectDisplayInfo.competition} - ${matchSelectDisplayInfo.isHome ? "Dom" : "Wyjazd"}`
+                    ? isPresentationMode
+                      ? selectedMatches.length === 0
+                        ? "Wybierz mecz"
+                        : (matchSelectDisplayInfo as { _multiLabel?: string })._multiLabel
+                          ? "Wiele meczów"
+                          : "Wybrany mecz"
+                      : (matchSelectDisplayInfo as { _multiLabel?: string })._multiLabel
+                        ? (matchSelectDisplayInfo as { _multiLabel: string })._multiLabel
+                        : `${matchSelectDisplayInfo.opponent} (${matchSelectDisplayInfo.date}) - ${matchSelectDisplayInfo.competition} - ${
+                            matchSelectDisplayInfo.isHome ? "Dom" : "Wyjazd"
+                          }`
                     : ""}
                 </span>
                 <span className={styles.matchSelectChevron} aria-hidden>
@@ -3784,9 +3797,12 @@ export default function StatystykiZespoluPage() {
                   aria-labelledby="match-select-label"
                   aria-multiselectable="false"
                 >
-                  {teamMatches.map((match) => {
+                  {teamMatches.map((match, matchIdx) => {
                     const matchId = match.matchId || "";
                     const isSelected = matchId ? selectedMatches.includes(matchId) : false;
+                    const optionLabel = isPresentationMode
+                      ? `Mecz ${matchIdx + 1}`
+                      : `${match.opponent} (${match.date}) - ${match.competition} - ${match.isHome ? "Dom" : "Wyjazd"}`;
                     return (
                       <li
                         key={matchId || match.opponent}
@@ -3804,11 +3820,9 @@ export default function StatystykiZespoluPage() {
                               setMatchSelectOpen(false);
                             }}
                             className={styles.matchSelectCheckbox}
-                            aria-label={`${match.opponent} (${match.date}) - ${match.competition} - ${match.isHome ? "Dom" : "Wyjazd"}`}
+                            aria-label={optionLabel}
                           />
-                          <span className={styles.matchSelectOptionText}>
-                            {match.opponent} ({match.date}) - {match.competition} - {match.isHome ? "Dom" : "Wyjazd"}
-                          </span>
+                          <span className={styles.matchSelectOptionText}>{optionLabel}</span>
                         </label>
                       </li>
                     );
@@ -3818,7 +3832,7 @@ export default function StatystykiZespoluPage() {
             </div>
           )}
         </div>
-        </div>
+      </div>
 
       {/* Zakładki z metrykami */}
       {selectedMatches.length > 0 && !isLoadingActions && (
@@ -3829,58 +3843,49 @@ export default function StatystykiZespoluPage() {
               <button
                 type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'kpi' ? styles.active : ''}`}
-                onClick={() => setExpandedCategory(expandedCategory === 'kpi' ? null : 'kpi')}
+                onClick={() => setExpandedCategory('kpi')}
               >
                 <span className={styles.categoryName}>KPI</span>
               </button>
-              {isAdmin && (
-                <button
-                  type="button"
-                  className={`${styles.categoryItem} ${expandedCategory === 'trendy' ? styles.active : ''}`}
-                  onClick={() => setExpandedCategory(expandedCategory === 'trendy' ? null : 'trendy')}
-                >
-                  <span className={styles.categoryName}>Trendy</span>
-                </button>
-              )}
               <button
                 type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'pxt' ? styles.active : ''}`}
-                onClick={() => setExpandedCategory(expandedCategory === 'pxt' ? null : 'pxt')}
+                onClick={() => setExpandedCategory('pxt')}
               >
                 <span className={styles.categoryName}>PxT</span>
               </button>
               <button
                 type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'xg' ? styles.active : ''}`}
-                onClick={() => setExpandedCategory(expandedCategory === 'xg' ? null : 'xg')}
+                onClick={() => setExpandedCategory('xg')}
               >
                 <span className={styles.categoryName}>xG</span>
               </button>
                 <button
                   type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'pkEntries' ? styles.active : ''}`}
-                onClick={() => setExpandedCategory(expandedCategory === 'pkEntries' ? null : 'pkEntries')}
+                onClick={() => setExpandedCategory('pkEntries')}
                 >
                 <span className={styles.categoryName}>Wejścia w PK</span>
                 </button>
               <button
                 type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'regains' ? styles.active : ''}`}
-                onClick={() => setExpandedCategory(expandedCategory === 'regains' ? null : 'regains')}
+                onClick={() => setExpandedCategory('regains')}
               >
                 <span className={styles.categoryName}>Przechwyty</span>
               </button>
               <button
                 type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'loses' ? styles.active : ''}`}
-                onClick={() => setExpandedCategory(expandedCategory === 'loses' ? null : 'loses')}
+                onClick={() => setExpandedCategory('loses')}
               >
                 <span className={styles.categoryName}>Straty</span>
               </button>
               <button
                 type="button"
                 className={`${styles.categoryItem} ${expandedCategory === 'gps' ? styles.active : ''}`}
-                onClick={() => setExpandedCategory(expandedCategory === 'gps' ? null : 'gps')}
+                onClick={() => setExpandedCategory('gps')}
               >
                 <span className={styles.categoryName}>GPS</span>
               </button>
@@ -3944,6 +3949,9 @@ export default function StatystykiZespoluPage() {
                   const teamGoalsSFG = teamShotsSFG.filter((shot: any) => shot.isGoal || shot.shotType === 'goal').length;
                   const opponentGoalsSFG = opponentShotsSFG.filter((shot: any) => shot.isGoal || shot.shotType === 'goal').length;
 
+                  const isRegainShot = (shot: any) => shot.actionType === 'regain';
+                  const REGAIN_XG_FALLBACK_EPS = 1e-9;
+
                   const allRegainCombined = [
                     ...allRegainActions,
                     ...allActions.filter((a: any) => a.isRegain === true || isRegainAction(a)),
@@ -3958,10 +3966,10 @@ export default function StatystykiZespoluPage() {
                   const shotsWithTs = [...teamShots, ...opponentShots]
                     .map(s => ({ shot: s, ts: (s as any).videoTimestampRaw ?? (s as any).videoTimestamp ?? 0 }))
                     .filter(x => x.ts > 0);
-                  let teamXGRegain = 0;
-                  let opponentXGRegain = 0;
-                  let teamGoalsRegain = 0;
-                  let opponentGoalsRegain = 0;
+                  let teamXGRegainWindow = 0;
+                  let opponentXGRegainWindow = 0;
+                  let teamGoalsRegainWindow = 0;
+                  let opponentGoalsRegainWindow = 0;
                   regainWithTs.forEach((item, i) => {
                     const nextTs = i < regainWithTs.length - 1 ? regainWithTs[i + 1].ts : Infinity;
                     const endTs = item.ts + 8;
@@ -3972,32 +3980,54 @@ export default function StatystykiZespoluPage() {
                     const xg = shotsInWindow.reduce((sum, x) => sum + (x.shot.xG || 0), 0);
                     const goals = shotsInWindow.filter(x => x.shot.isGoal || x.shot.shotType === 'goal').length;
                     if (regainTeamId === teamIdInMatch) {
-                      teamXGRegain += xg;
-                      teamGoalsRegain += goals;
+                      teamXGRegainWindow += xg;
+                      teamGoalsRegainWindow += goals;
                     } else {
-                      opponentXGRegain += xg;
-                      opponentGoalsRegain += goals;
+                      opponentXGRegainWindow += xg;
+                      opponentGoalsRegainWindow += goals;
                     }
                   });
+                  let teamXGRegain =
+                    teamXGRegainWindow > REGAIN_XG_FALLBACK_EPS
+                      ? teamXGRegainWindow
+                      : teamShots.filter(isRegainShot).reduce((sum, s) => sum + (s.xG || 0), 0);
+                  let teamGoalsRegain =
+                    teamXGRegainWindow > REGAIN_XG_FALLBACK_EPS
+                      ? teamGoalsRegainWindow
+                      : teamShots.filter((s: any) => isRegainShot(s) && (s.isGoal || s.shotType === 'goal')).length;
+                  let opponentXGRegain =
+                    opponentXGRegainWindow > REGAIN_XG_FALLBACK_EPS
+                      ? opponentXGRegainWindow
+                      : opponentShots.filter(isRegainShot).reduce((sum, s) => sum + (s.xG || 0), 0);
+                  let opponentGoalsRegain =
+                    opponentXGRegainWindow > REGAIN_XG_FALLBACK_EPS
+                      ? opponentGoalsRegainWindow
+                      : opponentShots.filter((s: any) => isRegainShot(s) && (s.isGoal || s.shotType === 'goal')).length;
                   const teamXGOpenPlay = teamXG - teamXGSFG - teamXGRegain;
                   const opponentXGOpenPlay = opponentXG - opponentXGSFG - opponentXGRegain;
                   const teamGoalsOpenPlay = teamGoals - teamGoalsSFG - teamGoalsRegain;
                   const opponentGoalsOpenPlay = opponentGoals - opponentGoalsSFG - opponentGoalsRegain;
                   const teamShotToRegainWindowMap = new Map<string, boolean>();
-                  regainWithTs.forEach((item, i) => {
-                    const nextTs = i < regainWithTs.length - 1 ? regainWithTs[i + 1].ts : Infinity;
-                    const endTs = item.ts + 8;
-                    const regainTeamId = item.action.teamId || (item.action.teamContext === 'attack' ? teamIdInMatch : opponentIdInMatch);
-                    if (regainTeamId !== teamIdInMatch) return;
-                    shotsWithTs.forEach((shotEntry) => {
-                      const shotId = shotEntry.shot?.id;
-                      if (!shotId) return;
-                      const isInWindow = shotEntry.ts > item.ts && shotEntry.ts <= endTs && shotEntry.ts < nextTs && resolveShotTeamId(shotEntry.shot) === regainTeamId;
-                      if (isInWindow) {
-                        teamShotToRegainWindowMap.set(shotId, true);
-                      }
+                  if (teamXGRegainWindow > REGAIN_XG_FALLBACK_EPS) {
+                    regainWithTs.forEach((item, i) => {
+                      const nextTs = i < regainWithTs.length - 1 ? regainWithTs[i + 1].ts : Infinity;
+                      const endTs = item.ts + 8;
+                      const regainTeamId = item.action.teamId || (item.action.teamContext === 'attack' ? teamIdInMatch : opponentIdInMatch);
+                      if (regainTeamId !== teamIdInMatch) return;
+                      shotsWithTs.forEach((shotEntry) => {
+                        const shotId = shotEntry.shot?.id;
+                        if (!shotId) return;
+                        const isInWindow = shotEntry.ts > item.ts && shotEntry.ts <= endTs && shotEntry.ts < nextTs && resolveShotTeamId(shotEntry.shot) === regainTeamId;
+                        if (isInWindow) {
+                          teamShotToRegainWindowMap.set(shotId, true);
+                        }
+                      });
                     });
-                  });
+                  } else {
+                    teamShots.filter(isRegainShot).forEach((shot) => {
+                      if (shot.id) teamShotToRegainWindowMap.set(shot.id, true);
+                    });
+                  }
                   const xgPlayersSummary = teamShots
                     .reduce((acc, shot) => {
                       const xgValue = Number(shot.xG) || 0;
@@ -4268,7 +4298,7 @@ export default function StatystykiZespoluPage() {
                       action: any
                     ) => {
                       const packingPoints = action.packingPoints || 0;
-                      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+                      const xTDifference = getXTDifferenceForAction(action);
                       const pxtValue = xTDifference * packingPoints;
                       const isDribble = (action.actionType || '').toLowerCase() === 'dribble';
                       const isPass = (action.actionType || '').toLowerCase() === 'pass' || !isDribble;
@@ -4372,16 +4402,12 @@ export default function StatystykiZespoluPage() {
                       })
                     : pxtPlayersList;
                   // Per-player P2/P3: podający, przyjęcie, drybling z packing + regain
-                  // Taki sam warunek jak w teamRegainStats: tylko akcje ze strefą obrony (defenseZoneName)
-                  // oraz ten sam filtr połowy co w statystykach regain (regainHalfFilter)
+                  // Jak w teamRegainStats: own/opponent po strefie obrony; PM Area po strefie ataku przechwytu
                   const isOwnHalfRegain = (zoneName: string | null | undefined): boolean => {
                     if (!zoneName) return false;
                     const normalized = convertZoneToName(zoneName);
                     if (!normalized) return false;
-                    const zoneIndex = zoneNameToIndex(normalized);
-                    if (zoneIndex === null) return false;
-                    const col = zoneIndex % 12;
-                    return col <= 5;
+                    return isOwnHalfByZoneColumn(normalized);
                   };
                   const isPMAreaRegain = (zoneName: string | null | undefined): boolean => {
                     if (!zoneName) return false;
@@ -4392,13 +4418,17 @@ export default function StatystykiZespoluPage() {
                   };
                   let filteredRegainsForP2P3 = (derivedRegainActions || []).filter((a: any) => {
                     if (a.teamId !== selectedTeam) return false;
+                    if (regainHalfFilter === 'pm') {
+                      const attackZoneRaw = regainAttackZoneRawForMap(a);
+                      const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
+                      return isPMAreaRegain(attackZoneName);
+                    }
                     const defenseZoneRaw = a.regainDefenseZone || a.fromZone || a.toZone || a.startZone;
                     const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
                     if (!defenseZoneName) return false;
                     if (regainHalfFilter === 'all') return true;
-                    if (regainHalfFilter === 'pm') return isPMAreaRegain(defenseZoneName);
                     const isOwn = isOwnHalfRegain(defenseZoneName);
-                    return regainHalfFilter === 'own' ? !isOwn : isOwn;
+                    return regainHalfFilter === 'own' ? isOwn : !isOwn;
                   });
                   const regainP2P3ByPlayer = filteredRegainsForP2P3
                     .filter((a: any) => a.isP2 || a.isP3 || a.isP2Start === true || a.isP3Start === true)
@@ -4515,11 +4545,7 @@ export default function StatystykiZespoluPage() {
                     if (!zoneName) return false;
                     const normalized = convertZoneToName(zoneName);
                     if (!normalized) return false;
-                    const zoneIndex = zoneNameToIndex(normalized);
-                    if (zoneIndex === null) return false;
-                    // Kolumna (0-11): 0-5 to własna połowa, 6-11 to połowa przeciwnika
-                    const col = zoneIndex % 12;
-                    return col <= 5; // Własna połowa: kolumny 0-5 (strefy 1-6)
+                    return isOwnHalfByZoneColumn(normalized);
                   };
                   
                   // Funkcja pomocnicza do określenia czy strefa jest w PM Area (C5-8, D5-8, E5-8, F5-8)
@@ -4685,17 +4711,10 @@ export default function StatystykiZespoluPage() {
                   // Oblicz przechwyty na połowie przeciwnika z videoTimestampRaw
                   const regainsOnOpponentHalfWithTimestamp = derivedRegainActions
                     .filter(action => {
-                      const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
-                      const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-                      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
-                      const attackZoneName = attackZoneRaw
-                        ? convertZoneToName(attackZoneRaw)
-                        : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
-                      
+                      const attackZoneRaw = regainAttackZoneRawForMap(action);
+                      const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
                       if (!attackZoneName) return false;
-                      const isOwn = isOwnHalf(attackZoneName);
-                      // Z perspektywy ataku: strefy 7-12 to połowa przeciwnika
-                      return !isOwn; // attackZone na połowie przeciwnika (7-12)
+                      return !isOwnHalf(attackZoneName);
                     })
                     .filter(action => {
                       const timestamp = action.videoTimestampRaw ?? action.videoTimestamp ?? 0;
@@ -4733,7 +4752,7 @@ export default function StatystykiZespoluPage() {
                   const losesWithTimestamp = derivedLosesActions
                     .map(lose => ({
                       lose,
-                      timestamp: lose.videoTimestampRaw ?? (lose.videoTimestamp !== undefined ? lose.videoTimestamp + 10 : 0),
+                      timestamp: lose.videoTimestampRaw ?? lose.videoTimestamp ?? 0,
                     }))
                     .filter(item => item.timestamp > 0)
                     .sort((a, b) => a.timestamp - b.timestamp);
@@ -4748,34 +4767,313 @@ export default function StatystykiZespoluPage() {
                     const timeWindowEnd = regainTime + 8;
                     
                     // Znajdź najbliższe PK entry w ataku w oknie 8s
-                    const pkEntryInWindow = pkEntriesAttackWithTimestamp.find(item => 
-                      item.timestamp > regainTime && item.timestamp <= timeWindowEnd
+                    const pkEntryInWindow = pkEntriesAttackWithTimestamp.find(item =>
+                      item.timestamp > regainTime &&
+                      item.timestamp <= timeWindowEnd &&
+                      isPkEntryFromRegainSequence(item.entry)
+                    );
+
+                    // Znajdź najbliższy strzał w ataku w oknie 8s — tylko oznaczony jako po przechwycie
+                    const shotInWindow = shotsAttackWithTimestamp.find(item =>
+                      item.timestamp > regainTime &&
+                      item.timestamp <= timeWindowEnd &&
+                      isShotFromRegainSequence(item.shot)
                     );
                     
-                    // Znajdź najbliższy shot w ataku w oknie 8s
-                    const shotInWindow = shotsAttackWithTimestamp.find(item => 
-                      item.timestamp > regainTime && item.timestamp <= timeWindowEnd
-                    );
-                    
-                    // Sprawdź, czy jest PK entry lub shot
-                    const targetEvent = pkEntryInWindow || shotInWindow;
-                    if (!targetEvent) return;
-                    
-                    // Sprawdź, czy między przechwytem a targetEvent nie ma loses
-                    const hasLoseBetween = losesWithTimestamp.some(loseItem => 
-                      loseItem.timestamp > regainTime && loseItem.timestamp < targetEvent.timestamp
-                    );
-                    
-                    if (!hasLoseBetween) {
-                      if (shotInWindow) regainsPPWithShot8s += 1;
-                      if (pkEntryInWindow) regainsPPWithPK8s += 1;
-                      regainsPPWithPKOrShot8s += 1;
+                    let validShot = false;
+                    if (shotInWindow) {
+                      const hasLoseBeforeShot = losesWithTimestamp.some(loseItem => 
+                        loseItem.timestamp > regainTime && loseItem.timestamp < shotInWindow.timestamp
+                      );
+                      if (!hasLoseBeforeShot) validShot = true;
                     }
+
+                    let validPK = false;
+                    if (pkEntryInWindow) {
+                      const hasLoseBeforePK = losesWithTimestamp.some(loseItem => 
+                        loseItem.timestamp > regainTime && loseItem.timestamp < pkEntryInWindow.timestamp
+                      );
+                      if (!hasLoseBeforePK) validPK = true;
+                    }
+
+                    // Strzał nie dublowany z PK→strzał (PKEntry.isShot + strzał po czasie PK)
+                    if (
+                      count8sCaShotForBreakdown(
+                        validShot,
+                        shotInWindow?.timestamp,
+                        validPK,
+                        pkEntryInWindow?.entry,
+                        pkEntryInWindow?.timestamp
+                      )
+                    ) {
+                      regainsPPWithShot8s += 1;
+                    }
+                    if (validPK) regainsPPWithPK8s += 1;
+                    if (validShot || validPK) regainsPPWithPKOrShot8s += 1;
                   });
+
+                  // Oblicz nasze straty na własnej połowie (bez autów) z videoTimestampRaw
+                  const losesOnOwnHalfWithTimestamp = derivedLosesActions
+                    .filter(action => {
+                      const losesZoneRaw = action.losesAttackZone || action.fromZone || action.toZone || action.startZone || (action as { losesDefenseZone?: string }).losesDefenseZone;
+                      const losesZoneName = losesZoneRaw ? convertZoneToName(losesZoneRaw) : null;
+                      if (!losesZoneName) return false;
+                      const isOwn = isOwnHalf(losesZoneName);
+                      const excludeAsAut = isOwn && (action.isAut === true || (action as any).aut === true);
+                      return isOwn && !excludeAsAut;
+                    })
+                    .filter(action => {
+                      const timestamp = action.videoTimestampRaw ?? action.videoTimestamp ?? 0;
+                      return timestamp > 0;
+                    })
+                    .map(action => ({
+                      action,
+                      timestamp: action.videoTimestampRaw ?? action.videoTimestamp ?? 0,
+                    }))
+                    .sort((a, b) => a.timestamp - b.timestamp);
+
+                  // Przygotuj PK entries i shots przeciwnika z timestampami
+                  const pkEntriesDefenseWithTimestamp = (allPKEntries || [])
+                    .filter((entry: any) => {
+                      if (!entry) return false;
+                      const teamContext = entry.teamContext ?? "attack";
+                      return teamContext === "defense" || (entry.teamId && entry.teamId !== teamIdInMatch);
+                    })
+                    .map((entry: any) => ({
+                      entry,
+                      timestamp: entry.videoTimestampRaw ?? entry.videoTimestamp ?? 0,
+                    }))
+                    .filter(item => item.timestamp > 0)
+                    .sort((a, b) => a.timestamp - b.timestamp);
                   
-                  const regainsPPToPKShot8sPercentage = regainsOnOpponentHalfWithTimestamp.length > 0
-                    ? (regainsPPWithPKOrShot8s / regainsOnOpponentHalfWithTimestamp.length) * 100
+                  const shotsDefenseWithTimestamp = opponentShots
+                    .map(shot => ({
+                      shot,
+                      timestamp: shot.videoTimestampRaw ?? shot.videoTimestamp ?? 0,
+                    }))
+                    .filter(item => item.timestamp > 0)
+                    .sort((a, b) => a.timestamp - b.timestamp);
+
+                  // Przygotuj regains z timestampami (do sprawdzania czy przeciwnik nie stracił piłki)
+                  const regainsWithTimestamp = derivedRegainActions
+                    .map(regain => ({
+                      regain,
+                      timestamp: regain.videoTimestampRaw ?? regain.videoTimestamp ?? 0,
+                    }))
+                    .filter(item => item.timestamp > 0)
+                    .sort((a, b) => a.timestamp - b.timestamp);
+
+                  // Dla każdej naszej straty na własnej połowie sprawdź, czy w ciągu 8s jest PK entry lub shot w obronie, bez naszych regains między nimi
+                  let losesOwnHalfWithPKOrShot8s = 0;
+                  let losesOwnHalfWithShot8s = 0;
+                  let losesOwnHalfWithPK8s = 0;
+                  
+                  losesOnOwnHalfWithTimestamp.forEach(loseItem => {
+                    const loseTime = loseItem.timestamp;
+                    const timeWindowEnd = loseTime + 8;
+                    
+                    // Znajdź najbliższe PK entry w obronie w oknie 8s
+                    const pkEntryInWindow = pkEntriesDefenseWithTimestamp.find(item =>
+                      item.timestamp > loseTime &&
+                      item.timestamp <= timeWindowEnd &&
+                      isPkEntryFromRegainSequence(item.entry)
+                    );
+
+                    const shotInWindow = shotsDefenseWithTimestamp.find(item =>
+                      item.timestamp > loseTime &&
+                      item.timestamp <= timeWindowEnd &&
+                      isShotFromRegainSequence(item.shot)
+                    );
+                    
+                    let validShot = false;
+                    if (shotInWindow) {
+                      const hasRegainBeforeShot = regainsWithTimestamp.some(regainItem => 
+                        regainItem.timestamp > loseTime && regainItem.timestamp < shotInWindow.timestamp
+                      );
+                      if (!hasRegainBeforeShot) validShot = true;
+                    }
+
+                    let validPK = false;
+                    if (pkEntryInWindow) {
+                      const hasRegainBeforePK = regainsWithTimestamp.some(regainItem => 
+                        regainItem.timestamp > loseTime && regainItem.timestamp < pkEntryInWindow.timestamp
+                      );
+                      if (!hasRegainBeforePK) validPK = true;
+                    }
+
+                    if (
+                      count8sCaShotForBreakdown(
+                        validShot,
+                        shotInWindow?.timestamp,
+                        validPK,
+                        pkEntryInWindow?.entry,
+                        pkEntryInWindow?.timestamp
+                      )
+                    ) {
+                      losesOwnHalfWithShot8s += 1;
+                    }
+                    if (validPK) losesOwnHalfWithPK8s += 1;
+                    if (validShot || validPK) losesOwnHalfWithPKOrShot8s += 1;
+                  });
+
+                  const kpiApplySelectedActionFilter = (list: Action[]) =>
+                    selectedActionFilter && selectedActionFilter.length > 0
+                      ? list.filter((action) => matchesSelectedActionFilter(action))
+                      : list;
+
+                  // KPI ma stałe dane względem przełączników połowy (all/own/opponent/pm).
+                  const kpiDashboardFilteredRegains = kpiApplySelectedActionFilter(derivedRegainActions);
+                  const kpiRegainsAllPitchForDashboard = kpiDashboardFilteredRegains;
+
+                  const regainsPpActionsForPlayers = kpiDashboardFilteredRegains.filter((action) => {
+                    const attackZoneRaw = regainAttackZoneRawForMap(action);
+                    const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
+                    return Boolean(attackZoneName && !isOwnHalf(attackZoneName));
+                  });
+                  const ppRegainsTotalForShare = regainsPpActionsForPlayers.length;
+                  const ppRegainsByPlayer = countActionsByPlayerId(regainsPpActionsForPlayers);
+                  const ppRegainsPlayerRows = mapToSortedPlayerShareRows(
+                    ppRegainsByPlayer,
+                    ppRegainsTotalForShare,
+                    (id) => getPlayerLabel(id, playersIndex)
+                  );
+                  const ppRegainsPlayerSummary = playerStatsSummary(ppRegainsByPlayer, ppRegainsTotalForShare);
+
+                  const regainsPPToPKShot8sPercentage = ppRegainsTotalForShare > 0
+                    ? (regainsPPWithPKOrShot8s / ppRegainsTotalForShare) * 100
                     : 0;
+
+                  const kpiDashboardRegainsVisibleOnPitch = kpiDashboardFilteredRegains.filter((action) => {
+                    const attackZoneRaw = regainAttackZoneRawForMap(action);
+                    return Boolean(attackZoneRaw && convertZoneToName(attackZoneRaw));
+                  });
+                  const allPitchRegainsTotal = kpiDashboardRegainsVisibleOnPitch.length;
+                  const allPitchRegainsByPlayer = countActionsByPlayerId(kpiDashboardRegainsVisibleOnPitch);
+                  const allPitchRegainsPlayerRows = mapToSortedPlayerShareRows(
+                    allPitchRegainsByPlayer,
+                    allPitchRegainsTotal,
+                    (id) => getPlayerLabel(id, playersIndex)
+                  );
+                  const allPitchRegainsPlayerSummary = playerStatsSummary(allPitchRegainsByPlayer, allPitchRegainsTotal);
+
+                  // KPI ma stałe dane względem przełączników połowy (all/own/opponent/pm).
+                  const kpiDashboardFilteredLoses = kpiApplySelectedActionFilter(derivedLosesActions);
+                  const kpiLosesAllPitchForDashboard = kpiDashboardFilteredLoses;
+
+                  const kpiDashboardLosesVisibleOnPitch = kpiLosesAllPitchForDashboard.filter((action) => {
+                    const raw = action.losesAttackZone || action.oppositeZone;
+                    return Boolean(raw && convertZoneToName(raw));
+                  });
+                  const allPitchLosesTotal = kpiDashboardLosesVisibleOnPitch.length;
+                  const allPitchLosesByPlayer = countActionsByPlayerId(kpiDashboardLosesVisibleOnPitch);
+                  const allPitchLosesPlayerRows = mapToSortedPlayerShareRows(
+                    allPitchLosesByPlayer,
+                    allPitchLosesTotal,
+                    (id) => getPlayerLabel(id, playersIndex)
+                  );
+                  const allPitchLosesPlayerSummary = playerStatsSummary(allPitchLosesByPlayer, allPitchLosesTotal);
+
+                  const accumulateRegainXtByPlayerForKpi = (acts: Action[]) => {
+                    const byPlayer = new Map<string, { xtAttack: number; xtDefense: number }>();
+                    let teamXtTotal = 0;
+                    let teamXtAttackOnly = 0;
+                    let teamXtDefenseOnly = 0;
+                    for (const action of acts) {
+                      const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
+                      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                      const attackZoneRaw = regainAttackZoneRawForMap(action);
+                      const attackZoneName = attackZoneRaw
+                        ? convertZoneToName(attackZoneRaw)
+                        : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
+                      const defenseXT = action.regainDefenseXT !== undefined
+                        ? action.regainDefenseXT
+                        : (action.xTValueEnd ?? action.xTValueStart ?? 0);
+                      const attackXT = action.regainAttackXT !== undefined
+                        ? action.regainAttackXT
+                        : (action.oppositeXT ?? (defenseZoneName && zoneNameToIndex(defenseZoneName) !== null
+                          ? getOppositeXTValueForZone(zoneNameToIndex(defenseZoneName)!)
+                          : 0));
+                      const isAttack = action.isAttack !== undefined ? action.isAttack : defenseXT < 0.02;
+                      if (isAttack) {
+                        teamXtAttackOnly += attackXT;
+                        teamXtTotal += attackXT;
+                      } else {
+                        teamXtDefenseOnly += defenseXT;
+                        teamXtTotal += defenseXT;
+                      }
+                      const pid = String(action.senderId || action.playerId || "").trim();
+                      if (!pid) continue;
+                      const cur = byPlayer.get(pid) ?? { xtAttack: 0, xtDefense: 0 };
+                      if (isAttack) cur.xtAttack += attackXT;
+                      else cur.xtDefense += defenseXT;
+                      byPlayer.set(pid, cur);
+                    }
+                    return { byPlayer, teamXtTotal, teamXtAttackOnly, teamXtDefenseOnly };
+                  };
+
+                  const accumulateLoseXtByPlayerForKpi = (acts: Action[]) => {
+                    const byPlayer = new Map<string, { xtAttack: number; xtDefense: number }>();
+                    let teamXtTotal = 0;
+                    let teamXtAttackOnly = 0;
+                    let teamXtDefenseOnly = 0;
+                    for (const action of acts) {
+                      const losesZoneRaw = action.losesAttackZone || action.fromZone || action.toZone || action.startZone;
+                      const losesZoneName = losesZoneRaw ? convertZoneToName(losesZoneRaw) : null;
+                      if (!losesZoneName) continue;
+                      const zoneXT = action.losesAttackXT !== undefined
+                        ? action.losesAttackXT
+                        : (() => {
+                            const idx = zoneNameToIndex(losesZoneName);
+                            return idx !== null ? getXTValueForZone(idx) : (action.xTValueStart ?? action.xTValueEnd ?? 0);
+                          })();
+                      teamXtTotal += zoneXT;
+                      if (isOwnHalf(losesZoneName)) teamXtDefenseOnly += zoneXT;
+                      else teamXtAttackOnly += zoneXT;
+                      const pid = String(action.senderId || action.playerId || "").trim();
+                      if (!pid) continue;
+                      const cur = byPlayer.get(pid) ?? { xtAttack: 0, xtDefense: 0 };
+                      if (isOwnHalf(losesZoneName)) cur.xtDefense += zoneXT;
+                      else cur.xtAttack += zoneXT;
+                      byPlayer.set(pid, cur);
+                    }
+                    return { byPlayer, teamXtTotal, teamXtAttackOnly, teamXtDefenseOnly };
+                  };
+
+                  const formatKpiPlayerModalXtCell = (value: number, teamBucketTotal: number): string => {
+                    const v = value.toFixed(3);
+                    if (teamBucketTotal <= 0) return v;
+                    return `${v} (${((value / teamBucketTotal) * 100).toFixed(1)}%)`;
+                  };
+
+                  const ppRegainXtAgg = accumulateRegainXtByPlayerForKpi(regainsPpActionsForPlayers);
+                  const allPitchRegainXtAgg = accumulateRegainXtByPlayerForKpi(kpiRegainsAllPitchForDashboard);
+                  const allPitchLoseXtAgg = accumulateLoseXtByPlayerForKpi(kpiLosesAllPitchForDashboard);
+
+                  const ppRegainsPlayerRowsWithXt = attachXtToPlayerShareRows(
+                    ppRegainsPlayerRows,
+                    ppRegainXtAgg.byPlayer
+                  );
+                  const allPitchRegainsPlayerRowsWithXt = attachXtToPlayerShareRows(
+                    allPitchRegainsPlayerRows,
+                    allPitchRegainXtAgg.byPlayer
+                  );
+                  const allPitchLosesPlayerRowsWithXt = attachXtToPlayerShareRows(
+                    allPitchLosesPlayerRows,
+                    allPitchLoseXtAgg.byPlayer
+                  );
+
+                  const sortedPpRegainsPlayerRowsWithXt = sortKpiRegainsLosesPlayerRows(
+                    ppRegainsPlayerRowsWithXt,
+                    kpiRegainsPpPlayersSort
+                  );
+                  const sortedAllPitchRegainsPlayerRowsWithXt = sortKpiRegainsLosesPlayerRows(
+                    allPitchRegainsPlayerRowsWithXt,
+                    kpiRegainsAllPitchPlayersSort
+                  );
+                  const sortedAllPitchLosesPlayerRowsWithXt = sortKpiRegainsLosesPlayerRows(
+                    allPitchLosesPlayerRowsWithXt,
+                    kpiLosesAllPitchPlayersSort
+                  );
                   
                   // Dla spidermapy: wartości "ujemnie rosnące i dodatnio malejące"
                   // Dla metryk gdzie "mniej = lepiej": odwracamy (100 - normalized) - im mniej, tym większa wartość na wykresie
@@ -4973,7 +5271,7 @@ export default function StatystykiZespoluPage() {
                   const reactionDelta = reaction5sPercentage - kpiReaction5s;
                   const losesPmDelta = losesInPMAreaCount - kpiLosesPMAreaCount;
                   const accDelta = shotAndPK8sPercentage - target8sAcc;
-                  const regainsOpponentHalfDelta = teamRegainStats.totalRegainsOpponentHalf - kpiRegainsOpponentHalf;
+                  const regainsOpponentHalfDelta = ppRegainsTotalForShare - kpiRegainsOpponentHalf;
                   const regainsPPToPKShot8sDelta = regainsPPToPKShot8sPercentage - kpiRegainsPPToPKShot8s;
 
                   const baseRadarData = [
@@ -4982,8 +5280,8 @@ export default function StatystykiZespoluPage() {
                     { metric: '5s', 'KPI': 100, 'Wartość': scoreHigherIsBetter(reaction5sPercentage, kpiReaction5s), value: scoreHigherIsBetter(reaction5sPercentage, kpiReaction5s), actualValue: reaction5sPercentage, actualLabel: `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesWith5sFlags.length})`, kpiLabel: `KPI > ${kpiReaction5s}%`, deltaLabel: formatDelta(reactionDelta, 'higher', 1, 'pp') },
                     { metric: 'PK przeciwnik', 'KPI': 100, 'Wartość': scoreLowerIsBetter(opponentPKEntriesCount, kpiPKEntries), value: scoreLowerIsBetter(opponentPKEntriesCount, kpiPKEntries), actualValue: opponentPKEntriesCount, actualLabel: `${opponentPKEntriesCount}`, kpiLabel: `KPI < ${kpiPKEntries}`, deltaLabel: formatDelta(pkDelta, 'lower', 0) },
                     { metric: 'PM Area straty', 'KPI': 100, 'Wartość': scoreLowerIsBetter(losesInPMAreaCount, kpiLosesPMAreaCount), value: scoreLowerIsBetter(losesInPMAreaCount, kpiLosesPMAreaCount), actualValue: losesInPMAreaCount, actualLabel: `${losesInPMAreaCount} (${losesInPMAreaPercentage.toFixed(1)}% z ${allLoses.length})`, kpiLabel: `KPI ≤ ${kpiLosesPMAreaCount}`, deltaLabel: formatDelta(losesPmDelta, 'lower', 0) },
-                    { metric: 'Przechwyty PP', 'KPI': 100, 'Wartość': scoreHigherIsBetter(teamRegainStats.totalRegainsOpponentHalf, kpiRegainsOpponentHalf), value: scoreHigherIsBetter(teamRegainStats.totalRegainsOpponentHalf, kpiRegainsOpponentHalf), actualValue: teamRegainStats.totalRegainsOpponentHalf, actualLabel: `${teamRegainStats.totalRegainsOpponentHalf}`, kpiLabel: `KPI ≥ ${kpiRegainsOpponentHalf}`, deltaLabel: formatDelta(regainsOpponentHalfDelta, 'higher', 0) },
-                    { metric: '8s CA', 'KPI': 100, 'Wartość': scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s), value: scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s), actualValue: regainsPPToPKShot8sPercentage, actualLabel: `${regainsPPToPKShot8sPercentage.toFixed(1)}% (${regainsPPWithPKOrShot8s}/${regainsOnOpponentHalfWithTimestamp.length})`, kpiLabel: `KPI ≥ ${kpiRegainsPPToPKShot8s}%`, deltaLabel: formatDelta(regainsPPToPKShot8sDelta, 'higher', 1, 'pp') },
+                    { metric: 'Przechwyty PP', 'KPI': 100, 'Wartość': scoreHigherIsBetter(ppRegainsTotalForShare, kpiRegainsOpponentHalf), value: scoreHigherIsBetter(ppRegainsTotalForShare, kpiRegainsOpponentHalf), actualValue: ppRegainsTotalForShare, actualLabel: `${ppRegainsTotalForShare}`, kpiLabel: `KPI ≥ ${kpiRegainsOpponentHalf}`, deltaLabel: formatDelta(regainsOpponentHalfDelta, 'higher', 0) },
+                    { metric: '8s CA', 'KPI': 100, 'Wartość': scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s), value: scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s), actualValue: regainsPPToPKShot8sPercentage, actualLabel: `${regainsPPToPKShot8sPercentage.toFixed(1)}% (${regainsPPWithPKOrShot8s}/${ppRegainsTotalForShare})`, kpiLabel: `KPI ≥ ${kpiRegainsPPToPKShot8s}%`, deltaLabel: formatDelta(regainsPPToPKShot8sDelta, 'higher', 1, 'pp') },
                     { metric: '8s ACC', 'KPI': 100, 'Wartość': scoreHigherIsBetter(shotAndPK8sPercentage, target8sAcc), value: scoreHigherIsBetter(shotAndPK8sPercentage, target8sAcc), actualValue: shotAndPK8sPercentage, actualLabel: `${shotAndPK8sPercentage.toFixed(1)}% (${shotAndPK8sCount}/${total8sAcc})`, kpiLabel: `KPI ≥ ${target8sAcc}%`, deltaLabel: formatDelta(accDelta, 'higher', 1, 'pp') },
                   ];
 
@@ -4992,13 +5290,16 @@ export default function StatystykiZespoluPage() {
                     displayMetric: isPresentationMode ? `KPI ${idx + 1}` : item.metric,
                   }));
 
-                  const selectedTeamData = availableTeams.find((team) => team.id === selectedTeam);
-                  const opponentTeamData = availableTeams.find((team) => team.id === opponentIdInMatch);
-                  const isMultiMatchSelection = selectedMatches.length > 1;
-                  const selectedTeamName = selectedTeamData?.name || "Nasz zespół";
-                  const opponentName = isMultiMatchSelection
-                    ? "Przeciwnicy"
-                    : (opponentTeamData?.name || selectedMatchInfo.opponent || "Przeciwnik");
+          const selectedTeamData = availableTeams.find((team) => team.id === selectedTeam);
+          const opponentTeamData = availableTeams.find((team) => team.id === opponentIdInMatch);
+          const isMultiMatchSelection = selectedMatches.length > 1;
+          const rawSelectedTeamName = selectedTeamData?.name || "Nasz zespół";
+          const rawOpponentName = isMultiMatchSelection
+            ? "Przeciwnicy"
+            : (opponentTeamData?.name || selectedMatchInfo.opponent || "Przeciwnik");
+
+          const selectedTeamName = isPresentationMode ? "Zespół A" : rawSelectedTeamName;
+          const opponentName = isPresentationMode ? "Zespół B" : rawOpponentName;
                   const selectedTeamLogo = (selectedTeamData as any)?.logo || null;
                   const opponentLogo = isMultiMatchSelection
                     ? null
@@ -5029,17 +5330,19 @@ export default function StatystykiZespoluPage() {
                   };
                   const formatSignedStat = (value: number, digits = 2): string =>
                     `${value >= 0 ? "+" : ""}${value.toFixed(digits)}`;
-                  const matchDateLabel = typeof selectedMatchInfo.date === "string" && selectedMatchInfo.date
-                    ? (() => {
-                        const rawDate = selectedMatchInfo.date.includes("T")
-                          ? selectedMatchInfo.date.slice(0, 10)
-                          : selectedMatchInfo.date;
-                        const parsedDate = new Date(rawDate);
-                        return Number.isNaN(parsedDate.getTime())
-                          ? rawDate
-                          : parsedDate.toLocaleDateString("pl-PL");
-                      })()
-                    : "";
+                  const matchDateLabel = isPresentationMode
+                    ? ""
+                    : typeof selectedMatchInfo.date === "string" && selectedMatchInfo.date
+                      ? (() => {
+                          const rawDate = selectedMatchInfo.date.includes("T")
+                            ? selectedMatchInfo.date.slice(0, 10)
+                            : selectedMatchInfo.date;
+                          const parsedDate = new Date(rawDate);
+                          return Number.isNaN(parsedDate.getTime())
+                            ? rawDate
+                            : parsedDate.toLocaleDateString("pl-PL");
+                        })()
+                      : "";
                   const teamXgMinusGoals = teamXG - teamGoals;
                   const opponentXgMinusGoals = opponentXG - opponentGoals;
                   const xgAdvantage = teamXG - opponentXG;
@@ -5161,7 +5464,7 @@ export default function StatystykiZespoluPage() {
                                 if (opponentPKEntriesCount <= kpiPKEntries) realizedKpiCount++;
                                 if (reaction5sPercentage >= kpiReaction5s) realizedKpiCount++;
                                 if (losesInPMAreaCount <= kpiLosesPMAreaCount) realizedKpiCount++;
-                                if (teamRegainStats.totalRegainsOpponentHalf >= kpiRegainsOpponentHalf) realizedKpiCount++;
+                                if (ppRegainsTotalForShare >= kpiRegainsOpponentHalf) realizedKpiCount++;
                                 if (regainsPPToPKShot8sPercentage >= kpiRegainsPPToPKShot8s) realizedKpiCount++;
                                 const kpiPercentage = (realizedKpiCount / kpiCount) * 100;
                                 const avgWykonanie = radarData.length > 0
@@ -5205,18 +5508,20 @@ export default function StatystykiZespoluPage() {
                             <div className={styles.kpiScoreMetaRow}>
                               {isMultiMatchSelection && (
                                 <span className={styles.kpiScoreMetaBadge}>
-                                  {selectedMatches.length} mecze
+                                  {isPresentationMode ? "Wiele meczów" : `${selectedMatches.length} mecze`}
                                 </span>
                               )}
                             </div>
                             <div className={styles.kpiScoreHero}>
-                              <span className={styles.kpiScoreHeroVenue} aria-hidden>{selectedMatchInfo.isHome ? 'Dom' : 'Wyjazd'}</span>
-                              {matchDateLabel && (
+                              {!isPresentationMode && (
+                                <span className={styles.kpiScoreHeroVenue} aria-hidden>{selectedMatchInfo.isHome ? 'Dom' : 'Wyjazd'}</span>
+                              )}
+                              {!isPresentationMode && matchDateLabel && (
                                 <span className={styles.kpiScoreHeroDate} aria-hidden>{matchDateLabel}</span>
                               )}
                               <div className={styles.kpiScoreHeroMain}>
                                 <span className={styles.kpiScoreSectionLogoWrap}>
-                                  {selectedTeamLogo ? (
+                                  {selectedTeamLogo && !isPresentationMode ? (
                                     <img src={selectedTeamLogo} alt={`Logo ${selectedTeamName}`} className={styles.kpiScoreSectionLogo} />
                                   ) : (
                                     <span className={styles.kpiScoreSectionLogoPlaceholder}>{selectedTeamName.slice(0, 2)}</span>
@@ -5234,7 +5539,7 @@ export default function StatystykiZespoluPage() {
                                   </div>
                                 </div>
                                 <span className={styles.kpiScoreSectionLogoWrap}>
-                                  {opponentLogo ? (
+                                  {opponentLogo && !isPresentationMode ? (
                                     <img src={opponentLogo} alt={`Logo ${opponentName}`} className={styles.kpiScoreSectionLogo} />
                                   ) : (
                                     <span className={styles.kpiScoreSectionLogoPlaceholder}>{(opponentName || '').slice(0, 2)}</span>
@@ -5320,63 +5625,65 @@ export default function StatystykiZespoluPage() {
                               </span>
                             </div>
                             {kpiXgRowExpanded && (
-                              <div className={`${styles.kpiScoreGoalsDetails} ${styles.kpiScoreGoalsDetailsXg}`}>
-                                <div className={styles.kpiScoreRow}>
-                                  <span className={styles.kpiScoreRowLabel}>Otwarta gra</span>
-                                  <span className={styles.kpiScoreRowGoals}>
-                                    <span style={{ color: '#059669' }}>{teamGoalsOpenPlay}</span>
-                                    <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
-                                    <span style={{ color: '#dc2626' }}>{opponentGoalsOpenPlay}</span>
-                                  </span>
-                                  <span className={styles.kpiScoreRowValues}>
-                                    {teamXGOpenPlay.toFixed(2)}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({teamXG > 0 ? Math.round(teamXGOpenPlay / teamXG * 100) : 0}%)
+                              <div className={styles.kpiScoreRowExpandedContent}>
+                                <div className={`${styles.kpiScoreGoalsDetails} ${styles.kpiScoreGoalsDetailsXg}`}>
+                                  <div className={styles.kpiScoreRow}>
+                                    <span className={styles.kpiScoreRowLabel}>Otwarta gra</span>
+                                    <span className={styles.kpiScoreRowGoals}>
+                                      <span style={{ color: '#059669' }}>{teamGoalsOpenPlay}</span>
+                                      <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
+                                      <span style={{ color: '#dc2626' }}>{opponentGoalsOpenPlay}</span>
                                     </span>
-                                    {' : '}
-                                    {opponentXGOpenPlay.toFixed(2)}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({opponentXG > 0 ? Math.round(opponentXGOpenPlay / opponentXG * 100) : 0}%)
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {teamXGOpenPlay.toFixed(2)}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({teamXG > 0 ? Math.round(teamXGOpenPlay / teamXG * 100) : 0}%)
+                                      </span>
+                                      {' : '}
+                                      {opponentXGOpenPlay.toFixed(2)}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({opponentXG > 0 ? Math.round(opponentXGOpenPlay / opponentXG * 100) : 0}%)
+                                      </span>
                                     </span>
-                                  </span>
-                                </div>
-                                <div className={styles.kpiScoreRow}>
-                                  <span className={styles.kpiScoreRowLabel}>SFG</span>
-                                  <span className={styles.kpiScoreRowGoals}>
-                                    <span style={{ color: '#059669' }}>{teamGoalsSFG}</span>
-                                    <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
-                                    <span style={{ color: '#dc2626' }}>{opponentGoalsSFG}</span>
-                                  </span>
-                                  <span className={styles.kpiScoreRowValues}>
-                                    {teamXGSFG.toFixed(2)}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({teamXG > 0 ? Math.round(teamXGSFG / teamXG * 100) : 0}%)
+                                  </div>
+                                  <div className={styles.kpiScoreRow}>
+                                    <span className={styles.kpiScoreRowLabel}>SFG</span>
+                                    <span className={styles.kpiScoreRowGoals}>
+                                      <span style={{ color: '#059669' }}>{teamGoalsSFG}</span>
+                                      <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
+                                      <span style={{ color: '#dc2626' }}>{opponentGoalsSFG}</span>
                                     </span>
-                                    {' : '}
-                                    {opponentXGSFG.toFixed(2)}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({opponentXG > 0 ? Math.round(opponentXGSFG / opponentXG * 100) : 0}%)
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {teamXGSFG.toFixed(2)}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({teamXG > 0 ? Math.round(teamXGSFG / teamXG * 100) : 0}%)
+                                      </span>
+                                      {' : '}
+                                      {opponentXGSFG.toFixed(2)}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({opponentXG > 0 ? Math.round(opponentXGSFG / opponentXG * 100) : 0}%)
+                                      </span>
                                     </span>
-                                  </span>
-                                </div>
-                                <div className={styles.kpiScoreRow}>
-                                  <span className={styles.kpiScoreRowLabel}>Regain</span>
-                                  <span className={styles.kpiScoreRowGoals}>
-                                    <span style={{ color: '#059669' }}>{teamGoalsRegain}</span>
-                                    <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
-                                    <span style={{ color: '#dc2626' }}>{opponentGoalsRegain}</span>
-                                  </span>
-                                  <span className={styles.kpiScoreRowValues}>
-                                    {teamXGRegain.toFixed(2)}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({teamXG > 0 ? Math.round(teamXGRegain / teamXG * 100) : 0}%)
+                                  </div>
+                                  <div className={styles.kpiScoreRow}>
+                                    <span className={styles.kpiScoreRowLabel}>Regain</span>
+                                    <span className={styles.kpiScoreRowGoals}>
+                                      <span style={{ color: '#059669' }}>{teamGoalsRegain}</span>
+                                      <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
+                                      <span style={{ color: '#dc2626' }}>{opponentGoalsRegain}</span>
                                     </span>
-                                    {' : '}
-                                    {opponentXGRegain.toFixed(2)}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({opponentXG > 0 ? Math.round(opponentXGRegain / opponentXG * 100) : 0}%)
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {teamXGRegain.toFixed(2)}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({teamXG > 0 ? Math.round(teamXGRegain / teamXG * 100) : 0}%)
+                                      </span>
+                                      {' : '}
+                                      {opponentXGRegain.toFixed(2)}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({opponentXG > 0 ? Math.round(opponentXGRegain / opponentXG * 100) : 0}%)
+                                      </span>
                                     </span>
-                                  </span>
+                                  </div>
                                 </div>
                               </div>
                             )}
@@ -5998,6 +6305,456 @@ export default function StatystykiZespoluPage() {
                                 </div>
                               </div>
                             )}
+                            {kpiRegainsPpPlayersModalOpen && (
+                              <div className={styles.modalOverlay} onClick={() => setKpiRegainsPpPlayersModalOpen(false)} role="dialog" aria-modal="true" aria-labelledby="kpi-regains-pp-players-modal-title">
+                                <div className={`${styles.modalContent} ${styles.kpiModalContent}`} onClick={(e) => e.stopPropagation()}>
+                                  <div className={styles.modalHeader}>
+                                    <h3 id="kpi-regains-pp-players-modal-title">Przechwyty PP – zawodnicy</h3>
+                                    <button
+                                      type="button"
+                                      className={styles.modalCloseButton}
+                                      onClick={() => setKpiRegainsPpPlayersModalOpen(false)}
+                                      aria-label="Zamknij"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className={styles.modalBody}>
+                                    <div className={`${styles.kpiXgPlayersDetails} ${styles.kpiXgPlayersDetailsSimple3}`}>
+                                      <div className={styles.kpiXgPlayersHeader}>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() =>
+                                            setKpiRegainsPpPlayersSort((prev) => ({
+                                              column: "playerName",
+                                              dir: prev.column === "playerName" && prev.dir === "asc" ? "desc" : "asc",
+                                            }))
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setKpiRegainsPpPlayersSort((prev) => ({
+                                                column: "playerName",
+                                                dir: prev.column === "playerName" && prev.dir === "asc" ? "desc" : "asc",
+                                              }));
+                                            }
+                                          }}
+                                        >
+                                          Zawodnik
+                                          {kpiRegainsPpPlayersSort.column === "playerName"
+                                            ? kpiRegainsPpPlayersSort.dir === "asc"
+                                              ? " ↑"
+                                              : " ↓"
+                                            : ""}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          title="Liczba przechwytów i udział w liczbie przechwytów w nawiasie"
+                                          onClick={() =>
+                                            setKpiRegainsPpPlayersSort((prev) => ({
+                                              column: "count",
+                                              dir: prev.column === "count" && prev.dir === "desc" ? "asc" : "desc",
+                                            }))
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setKpiRegainsPpPlayersSort((prev) => ({
+                                                column: "count",
+                                                dir: prev.column === "count" && prev.dir === "desc" ? "asc" : "desc",
+                                              }));
+                                            }
+                                          }}
+                                        >
+                                          Przechwyty
+                                          {kpiRegainsPpPlayersSort.column === "count"
+                                            ? kpiRegainsPpPlayersSort.dir === "asc"
+                                              ? " ↑"
+                                              : " ↓"
+                                            : ""}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          title="Suma xT w ataku; w nawiasie udział w xT ataku całej puli PP"
+                                          onClick={() =>
+                                            setKpiRegainsPpPlayersSort((prev) => ({
+                                              column: "xtAttack",
+                                              dir: prev.column === "xtAttack" && prev.dir === "desc" ? "asc" : "desc",
+                                            }))
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setKpiRegainsPpPlayersSort((prev) => ({
+                                                column: "xtAttack",
+                                                dir: prev.column === "xtAttack" && prev.dir === "desc" ? "asc" : "desc",
+                                              }));
+                                            }
+                                          }}
+                                        >
+                                          xT atak
+                                          {kpiRegainsPpPlayersSort.column === "xtAttack"
+                                            ? kpiRegainsPpPlayersSort.dir === "asc"
+                                              ? " ↑"
+                                              : " ↓"
+                                            : ""}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          title="Suma xT w obronie; w nawiasie udział w xT obrony całej puli PP"
+                                          onClick={() =>
+                                            setKpiRegainsPpPlayersSort((prev) => ({
+                                              column: "xtDefense",
+                                              dir: prev.column === "xtDefense" && prev.dir === "desc" ? "asc" : "desc",
+                                            }))
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setKpiRegainsPpPlayersSort((prev) => ({
+                                                column: "xtDefense",
+                                                dir: prev.column === "xtDefense" && prev.dir === "desc" ? "asc" : "desc",
+                                              }));
+                                            }
+                                          }}
+                                        >
+                                          xT obrona
+                                          {kpiRegainsPpPlayersSort.column === "xtDefense"
+                                            ? kpiRegainsPpPlayersSort.dir === "asc"
+                                              ? " ↑"
+                                              : " ↓"
+                                            : ""}
+                                        </span>
+                                      </div>
+                                      {sortedPpRegainsPlayerRowsWithXt.length > 0 ? (
+                                        <div className={styles.kpiXgPlayersList}>
+                                          {sortedPpRegainsPlayerRowsWithXt.map((row) => (
+                                            <div key={row.playerId} className={styles.kpiXgPlayersRow}>
+                                              <span className={styles.kpiXgPlayersName}>{row.playerName}</span>
+                                              <span>
+                                                {row.count} ({row.sharePct.toFixed(1)}%)
+                                              </span>
+                                              <span>{formatKpiPlayerModalXtCell(row.xtAttack, ppRegainXtAgg.teamXtAttackOnly)}</span>
+                                              <span>{formatKpiPlayerModalXtCell(row.xtDefense, ppRegainXtAgg.teamXtDefenseOnly)}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className={styles.kpiXgPlayersEmpty}>Brak przypisanych zawodników do przechwytów PP.</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {kpiRegainsAllPitchPlayersModalOpen && (
+                              <div className={styles.modalOverlay} onClick={() => setKpiRegainsAllPitchPlayersModalOpen(false)} role="dialog" aria-modal="true" aria-labelledby="kpi-regains-all-pitch-players-modal-title">
+                                <div className={`${styles.modalContent} ${styles.kpiModalContent}`} onClick={(e) => e.stopPropagation()}>
+                                  <div className={styles.modalHeader}>
+                                    <h3 id="kpi-regains-all-pitch-players-modal-title">Przechwyty (całe boisko) – zawodnicy</h3>
+                                    <button
+                                      type="button"
+                                      className={styles.modalCloseButton}
+                                      onClick={() => setKpiRegainsAllPitchPlayersModalOpen(false)}
+                                      aria-label="Zamknij"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className={styles.modalBody}>
+                                    <div className={`${styles.kpiXgPlayersDetails} ${styles.kpiXgPlayersDetailsSimple3}`}>
+                                      <div className={styles.kpiXgPlayersHeader}>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() =>
+                                            setKpiRegainsAllPitchPlayersSort((prev) => ({
+                                              column: "playerName",
+                                              dir: prev.column === "playerName" && prev.dir === "asc" ? "desc" : "asc",
+                                            }))
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setKpiRegainsAllPitchPlayersSort((prev) => ({
+                                                column: "playerName",
+                                                dir: prev.column === "playerName" && prev.dir === "asc" ? "desc" : "asc",
+                                              }));
+                                            }
+                                          }}
+                                        >
+                                          Zawodnik
+                                          {kpiRegainsAllPitchPlayersSort.column === "playerName"
+                                            ? kpiRegainsAllPitchPlayersSort.dir === "asc"
+                                              ? " ↑"
+                                              : " ↓"
+                                            : ""}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          title="Liczba przechwytów i udział w liczbie przechwytów w nawiasie"
+                                          onClick={() =>
+                                            setKpiRegainsAllPitchPlayersSort((prev) => ({
+                                              column: "count",
+                                              dir: prev.column === "count" && prev.dir === "desc" ? "asc" : "desc",
+                                            }))
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setKpiRegainsAllPitchPlayersSort((prev) => ({
+                                                column: "count",
+                                                dir: prev.column === "count" && prev.dir === "desc" ? "asc" : "desc",
+                                              }));
+                                            }
+                                          }}
+                                        >
+                                          Przechwyty
+                                          {kpiRegainsAllPitchPlayersSort.column === "count"
+                                            ? kpiRegainsAllPitchPlayersSort.dir === "asc"
+                                              ? " ↑"
+                                              : " ↓"
+                                            : ""}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          title="Suma xT w ataku; w nawiasie udział w xT ataku całej puli"
+                                          onClick={() =>
+                                            setKpiRegainsAllPitchPlayersSort((prev) => ({
+                                              column: "xtAttack",
+                                              dir: prev.column === "xtAttack" && prev.dir === "desc" ? "asc" : "desc",
+                                            }))
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setKpiRegainsAllPitchPlayersSort((prev) => ({
+                                                column: "xtAttack",
+                                                dir: prev.column === "xtAttack" && prev.dir === "desc" ? "asc" : "desc",
+                                              }));
+                                            }
+                                          }}
+                                        >
+                                          xT atak
+                                          {kpiRegainsAllPitchPlayersSort.column === "xtAttack"
+                                            ? kpiRegainsAllPitchPlayersSort.dir === "asc"
+                                              ? " ↑"
+                                              : " ↓"
+                                            : ""}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          title="Suma xT w obronie; w nawiasie udział w xT obrony całej puli"
+                                          onClick={() =>
+                                            setKpiRegainsAllPitchPlayersSort((prev) => ({
+                                              column: "xtDefense",
+                                              dir: prev.column === "xtDefense" && prev.dir === "desc" ? "asc" : "desc",
+                                            }))
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setKpiRegainsAllPitchPlayersSort((prev) => ({
+                                                column: "xtDefense",
+                                                dir: prev.column === "xtDefense" && prev.dir === "desc" ? "asc" : "desc",
+                                              }));
+                                            }
+                                          }}
+                                        >
+                                          xT obrona
+                                          {kpiRegainsAllPitchPlayersSort.column === "xtDefense"
+                                            ? kpiRegainsAllPitchPlayersSort.dir === "asc"
+                                              ? " ↑"
+                                              : " ↓"
+                                            : ""}
+                                        </span>
+                                      </div>
+                                      {sortedAllPitchRegainsPlayerRowsWithXt.length > 0 ? (
+                                        <div className={styles.kpiXgPlayersList}>
+                                          {sortedAllPitchRegainsPlayerRowsWithXt.map((row) => (
+                                            <div key={row.playerId} className={styles.kpiXgPlayersRow}>
+                                              <span className={styles.kpiXgPlayersName}>{row.playerName}</span>
+                                              <span>
+                                                {row.count} ({row.sharePct.toFixed(1)}%)
+                                              </span>
+                                              <span>{formatKpiPlayerModalXtCell(row.xtAttack, allPitchRegainXtAgg.teamXtAttackOnly)}</span>
+                                              <span>{formatKpiPlayerModalXtCell(row.xtDefense, allPitchRegainXtAgg.teamXtDefenseOnly)}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className={styles.kpiXgPlayersEmpty}>Brak przypisanych zawodników do przechwytów.</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {kpiLosesAllPitchPlayersModalOpen && (
+                              <div className={styles.modalOverlay} onClick={() => setKpiLosesAllPitchPlayersModalOpen(false)} role="dialog" aria-modal="true" aria-labelledby="kpi-loses-all-pitch-players-modal-title">
+                                <div className={`${styles.modalContent} ${styles.kpiModalContent}`} onClick={(e) => e.stopPropagation()}>
+                                  <div className={styles.modalHeader}>
+                                    <h3 id="kpi-loses-all-pitch-players-modal-title">Straty (całe boisko) – zawodnicy</h3>
+                                    <button
+                                      type="button"
+                                      className={styles.modalCloseButton}
+                                      onClick={() => setKpiLosesAllPitchPlayersModalOpen(false)}
+                                      aria-label="Zamknij"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className={styles.modalBody}>
+                                    <div className={`${styles.kpiXgPlayersDetails} ${styles.kpiXgPlayersDetailsSimple3}`}>
+                                      <div className={styles.kpiXgPlayersHeader}>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          onClick={() =>
+                                            setKpiLosesAllPitchPlayersSort((prev) => ({
+                                              column: "playerName",
+                                              dir: prev.column === "playerName" && prev.dir === "asc" ? "desc" : "asc",
+                                            }))
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setKpiLosesAllPitchPlayersSort((prev) => ({
+                                                column: "playerName",
+                                                dir: prev.column === "playerName" && prev.dir === "asc" ? "desc" : "asc",
+                                              }));
+                                            }
+                                          }}
+                                        >
+                                          Zawodnik
+                                          {kpiLosesAllPitchPlayersSort.column === "playerName"
+                                            ? kpiLosesAllPitchPlayersSort.dir === "asc"
+                                              ? " ↑"
+                                              : " ↓"
+                                            : ""}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          title="Liczba strat i udział w liczbie strat w nawiasie"
+                                          onClick={() =>
+                                            setKpiLosesAllPitchPlayersSort((prev) => ({
+                                              column: "count",
+                                              dir: prev.column === "count" && prev.dir === "desc" ? "asc" : "desc",
+                                            }))
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setKpiLosesAllPitchPlayersSort((prev) => ({
+                                                column: "count",
+                                                dir: prev.column === "count" && prev.dir === "desc" ? "asc" : "desc",
+                                              }));
+                                            }
+                                          }}
+                                        >
+                                          Straty
+                                          {kpiLosesAllPitchPlayersSort.column === "count"
+                                            ? kpiLosesAllPitchPlayersSort.dir === "asc"
+                                              ? " ↑"
+                                              : " ↓"
+                                            : ""}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          title="Suma xT strat na połowie przeciwnika; w nawiasie udział w tej sumie zespołu"
+                                          onClick={() =>
+                                            setKpiLosesAllPitchPlayersSort((prev) => ({
+                                              column: "xtAttack",
+                                              dir: prev.column === "xtAttack" && prev.dir === "desc" ? "asc" : "desc",
+                                            }))
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setKpiLosesAllPitchPlayersSort((prev) => ({
+                                                column: "xtAttack",
+                                                dir: prev.column === "xtAttack" && prev.dir === "desc" ? "asc" : "desc",
+                                              }));
+                                            }
+                                          }}
+                                        >
+                                          xT atak
+                                          {kpiLosesAllPitchPlayersSort.column === "xtAttack"
+                                            ? kpiLosesAllPitchPlayersSort.dir === "asc"
+                                              ? " ↑"
+                                              : " ↓"
+                                            : ""}
+                                        </span>
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className={styles.kpiXgPlayersSortableHeader}
+                                          title="Suma xT strat na własnej połowie; w nawiasie udział w tej sumie zespołu"
+                                          onClick={() =>
+                                            setKpiLosesAllPitchPlayersSort((prev) => ({
+                                              column: "xtDefense",
+                                              dir: prev.column === "xtDefense" && prev.dir === "desc" ? "asc" : "desc",
+                                            }))
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              setKpiLosesAllPitchPlayersSort((prev) => ({
+                                                column: "xtDefense",
+                                                dir: prev.column === "xtDefense" && prev.dir === "desc" ? "asc" : "desc",
+                                              }));
+                                            }
+                                          }}
+                                        >
+                                          xT obrona
+                                          {kpiLosesAllPitchPlayersSort.column === "xtDefense"
+                                            ? kpiLosesAllPitchPlayersSort.dir === "asc"
+                                              ? " ↑"
+                                              : " ↓"
+                                            : ""}
+                                        </span>
+                                      </div>
+                                      {sortedAllPitchLosesPlayerRowsWithXt.length > 0 ? (
+                                        <div className={styles.kpiXgPlayersList}>
+                                          {sortedAllPitchLosesPlayerRowsWithXt.map((row) => (
+                                            <div key={row.playerId} className={styles.kpiXgPlayersRow}>
+                                              <span className={styles.kpiXgPlayersName}>{row.playerName}</span>
+                                              <span>
+                                                {row.count} ({row.sharePct.toFixed(1)}%)
+                                              </span>
+                                              <span>{formatKpiPlayerModalXtCell(row.xtAttack, allPitchLoseXtAgg.teamXtAttackOnly)}</span>
+                                              <span>{formatKpiPlayerModalXtCell(row.xtDefense, allPitchLoseXtAgg.teamXtDefenseOnly)}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className={styles.kpiXgPlayersEmpty}>Brak przypisanych zawodników do strat.</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                             <div
                               role="button"
                               tabIndex={0}
@@ -6062,48 +6819,50 @@ export default function StatystykiZespoluPage() {
                               </span>
                             </div>
                             {kpiShotsRowExpanded && (
-                              <div className={styles.kpiScoreGoalsDetails}>
-                                <div className={styles.kpiScoreRow}>
-                                  <span className={styles.kpiScoreRowLabel}>Celne</span>
-                                  <span className={styles.kpiScoreRowValues}>
-                                    {teamOnTarget}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({teamShotsCount > 0 ? Math.round(teamOnTarget / teamShotsCount * 100) : 0}%)
+                              <div className={styles.kpiScoreRowExpandedContent}>
+                                <div className={styles.kpiScoreGoalsDetails}>
+                                  <div className={styles.kpiScoreRow}>
+                                    <span className={styles.kpiScoreRowLabel}>Celne</span>
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {teamOnTarget}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({teamShotsCount > 0 ? Math.round(teamOnTarget / teamShotsCount * 100) : 0}%)
+                                      </span>
+                                      {' : '}
+                                      {opponentOnTarget}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({opponentShotsCount > 0 ? Math.round(opponentOnTarget / opponentShotsCount * 100) : 0}%)
+                                      </span>
                                     </span>
-                                    {' : '}
-                                    {opponentOnTarget}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({opponentShotsCount > 0 ? Math.round(opponentOnTarget / opponentShotsCount * 100) : 0}%)
+                                  </div>
+                                  <div className={styles.kpiScoreRow}>
+                                    <span className={styles.kpiScoreRowLabel}>Niecelne</span>
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {teamOffTarget}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({teamShotsCount > 0 ? Math.round(teamOffTarget / teamShotsCount * 100) : 0}%)
+                                      </span>
+                                      {' : '}
+                                      {opponentOffTarget}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({opponentShotsCount > 0 ? Math.round(opponentOffTarget / opponentShotsCount * 100) : 0}%)
+                                      </span>
                                     </span>
-                                  </span>
-                                </div>
-                                <div className={styles.kpiScoreRow}>
-                                  <span className={styles.kpiScoreRowLabel}>Niecelne</span>
-                                  <span className={styles.kpiScoreRowValues}>
-                                    {teamOffTarget}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({teamShotsCount > 0 ? Math.round(teamOffTarget / teamShotsCount * 100) : 0}%)
+                                  </div>
+                                  <div className={styles.kpiScoreRow}>
+                                    <span className={styles.kpiScoreRowLabel}>Zablokowane</span>
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {teamBlocked}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({teamShotsCount > 0 ? Math.round(teamBlocked / teamShotsCount * 100) : 0}%)
+                                      </span>
+                                      {' : '}
+                                      {opponentBlocked}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({opponentShotsCount > 0 ? Math.round(opponentBlocked / opponentShotsCount * 100) : 0}%)
+                                      </span>
                                     </span>
-                                    {' : '}
-                                    {opponentOffTarget}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({opponentShotsCount > 0 ? Math.round(opponentOffTarget / opponentShotsCount * 100) : 0}%)
-                                    </span>
-                                  </span>
-                                </div>
-                                <div className={styles.kpiScoreRow}>
-                                  <span className={styles.kpiScoreRowLabel}>Zablokowane</span>
-                                  <span className={styles.kpiScoreRowValues}>
-                                    {teamBlocked}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({teamShotsCount > 0 ? Math.round(teamBlocked / teamShotsCount * 100) : 0}%)
-                                    </span>
-                                    {' : '}
-                                    {opponentBlocked}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({opponentShotsCount > 0 ? Math.round(opponentBlocked / opponentShotsCount * 100) : 0}%)
-                                    </span>
-                                  </span>
+                                  </div>
                                 </div>
                               </div>
                             )}
@@ -6168,48 +6927,50 @@ export default function StatystykiZespoluPage() {
                               </span>
                             </div>
                             {kpiPkRowExpanded && (
-                              <div className={styles.kpiScoreGoalsDetails}>
-                                <div className={styles.kpiScoreRow}>
-                                  <span className={styles.kpiScoreRowLabel}>Po regain</span>
-                                  <span className={styles.kpiScoreRowValues}>
-                                    {teamPKRegainCount}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({teamPKEntriesCount > 0 ? Math.round(teamPKRegainCount / teamPKEntriesCount * 100) : 0}%)
+                              <div className={styles.kpiScoreRowExpandedContent}>
+                                <div className={styles.kpiScoreGoalsDetails}>
+                                  <div className={styles.kpiScoreRow}>
+                                    <span className={styles.kpiScoreRowLabel}>Po regain</span>
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {teamPKRegainCount}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({teamPKEntriesCount > 0 ? Math.round(teamPKRegainCount / teamPKEntriesCount * 100) : 0}%)
+                                      </span>
+                                      <span className={styles.kpiScoreRowCombinedDivider}>:</span>
+                                      {opponentPKRegainCount}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({opponentPKEntriesCount > 0 ? Math.round(opponentPKRegainCount / opponentPKEntriesCount * 100) : 0}%)
+                                      </span>
                                     </span>
-                                    <span className={styles.kpiScoreRowCombinedDivider}>:</span>
-                                    {opponentPKRegainCount}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({opponentPKEntriesCount > 0 ? Math.round(opponentPKRegainCount / opponentPKEntriesCount * 100) : 0}%)
+                                  </div>
+                                  <div className={styles.kpiScoreRow}>
+                                    <span className={styles.kpiScoreRowLabel}>Drybling</span>
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {teamPKDribbleCount}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({teamPKEntriesCount > 0 ? Math.round(teamPKDribbleCount / teamPKEntriesCount * 100) : 0}%)
+                                      </span>
+                                      <span className={styles.kpiScoreRowCombinedDivider}>:</span>
+                                      {opponentPKDribbleCount}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({opponentPKEntriesCount > 0 ? Math.round(opponentPKDribbleCount / opponentPKEntriesCount * 100) : 0}%)
+                                      </span>
                                     </span>
-                                  </span>
-                                </div>
-                                <div className={styles.kpiScoreRow}>
-                                  <span className={styles.kpiScoreRowLabel}>Drybling</span>
-                                  <span className={styles.kpiScoreRowValues}>
-                                    {teamPKDribbleCount}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({teamPKEntriesCount > 0 ? Math.round(teamPKDribbleCount / teamPKEntriesCount * 100) : 0}%)
+                                  </div>
+                                  <div className={styles.kpiScoreRow}>
+                                    <span className={styles.kpiScoreRowLabel}>Podanie</span>
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {teamPKPassCount}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({teamPKEntriesCount > 0 ? Math.round(teamPKPassCount / teamPKEntriesCount * 100) : 0}%)
+                                      </span>
+                                      <span className={styles.kpiScoreRowCombinedDivider}>:</span>
+                                      {opponentPKPassCount}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({opponentPKEntriesCount > 0 ? Math.round(opponentPKPassCount / opponentPKEntriesCount * 100) : 0}%)
+                                      </span>
                                     </span>
-                                    <span className={styles.kpiScoreRowCombinedDivider}>:</span>
-                                    {opponentPKDribbleCount}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({opponentPKEntriesCount > 0 ? Math.round(opponentPKDribbleCount / opponentPKEntriesCount * 100) : 0}%)
-                                    </span>
-                                  </span>
-                                </div>
-                                <div className={styles.kpiScoreRow}>
-                                  <span className={styles.kpiScoreRowLabel}>Podanie</span>
-                                  <span className={styles.kpiScoreRowValues}>
-                                    {teamPKPassCount}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({teamPKEntriesCount > 0 ? Math.round(teamPKPassCount / teamPKEntriesCount * 100) : 0}%)
-                                    </span>
-                                    <span className={styles.kpiScoreRowCombinedDivider}>:</span>
-                                    {opponentPKPassCount}{' '}
-                                    <span className={styles.kpiScoreRowValuesPct}>
-                                      ({opponentPKEntriesCount > 0 ? Math.round(opponentPKPassCount / opponentPKEntriesCount * 100) : 0}%)
-                                    </span>
-                                  </span>
+                                  </div>
                                 </div>
                               </div>
                             )}
@@ -6302,7 +7063,8 @@ export default function StatystykiZespoluPage() {
                                   )}
                                 </span>
                               </div>
-                              {kpiP2P3RowExpanded && (
+                            {kpiP2P3RowExpanded && (
+                              <div className={styles.kpiScoreRowExpandedContent}>
                                 <div className={styles.kpiScoreGoalsDetails}>
                                   <div className={styles.kpiScoreRow}>
                                     <span className={styles.kpiScoreRowLabel}>Podania</span>
@@ -6365,7 +7127,8 @@ export default function StatystykiZespoluPage() {
                                     </span>
                                   </div>
                                 </div>
-                              )}
+                              </div>
+                            )}
                             </div>
                             <div
                               className={`${styles.kpiScoreRowCombined} ${kpiRegainsPPRowExpanded ? styles.kpiScoreRowCombinedExpanded : ''}`}
@@ -6383,13 +7146,39 @@ export default function StatystykiZespoluPage() {
                             >
                               <div className={styles.kpiScoreRowCombinedMain}>
                                 <div className={styles.kpiScoreRowCombinedBlock}>
-                                  <span className={styles.kpiScoreRowLabel} title="Przeciwnika = straty na własnej połowie, które nie są autami">
-                                    Przechwyty na połowie przeciwnika
+                                  <span className={styles.kpiScoreRowLabelWithIcon}>
+                                    <span className={styles.kpiScoreRowLabel} title="Przeciwnika = straty na własnej połowie, które nie są autami">
+                                      Przechwyty na połowie przeciwnika
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className={styles.kpiMapIconButton}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setKpiRegainsPpPlayersModalOpen(true);
+                                      }}
+                                      title="Pokaż udział zawodników w przechwytach PP"
+                                      aria-label="Pokaż udział zawodników w przechwytach PP"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                        <circle cx="9" cy="7" r="4" />
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                      </svg>
+                                    </button>
                                   </span>
-                                  <span className={styles.kpiScoreRowValues}>
-                                    {teamRegainStats.totalRegainsOpponentHalf}
+                                  <span className={styles.kpiScoreRowValues} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'flex-end', gap: '4px' }}>
+                                    <span style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
+                                      <span>{ppRegainsTotalForShare}</span>
+                                      {ppRegainsTotalForShare > 0 && ppRegainsPlayerSummary.playersWithActions > 0 ? (
+                                        <span className={styles.kpiScoreRowValuesPossessionTime}>
+                                          · {ppRegainsPlayerSummary.playersWithActions} zaw., max {ppRegainsPlayerSummary.maxSharePct.toFixed(1)}%
+                                        </span>
+                                      ) : null}
+                                    </span>
                                     <span className={styles.kpiScoreRowCombinedDivider}>:</span>
-                                    {teamLosesStats.totalLosesOwnHalfFull}
+                                    <span>{teamLosesStats.totalLosesOwnHalfFull}</span>
                                   </span>
                                 </div>
                                 <span className={styles.kpiScoreRowExpandIcon} aria-hidden>
@@ -6404,64 +7193,151 @@ export default function StatystykiZespoluPage() {
                                   )}
                                 </span>
                               </div>
-                              {kpiRegainsPPRowExpanded && (
+                            {kpiRegainsPPRowExpanded && (
+                              <div className={styles.kpiScoreRowExpandedContent}>
+                                <div className={styles.kpiScoreGoalsDetails}>
+                                  <div className={styles.kpiScoreRow}>
+                                    <span className={styles.kpiScoreRowLabelWithIcon}>
+                                      <span className={styles.kpiScoreRowLabel}>Przechwyty (całe boisko)</span>
+                                      <button
+                                        type="button"
+                                        className={styles.kpiMapIconButton}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setKpiRegainsAllPitchPlayersModalOpen(true);
+                                        }}
+                                        title="Lista zawodników – przechwyty na całym boisku"
+                                        aria-label="Lista zawodników – przechwyty na całym boisku"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                          <circle cx="9" cy="7" r="4" />
+                                          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                        </svg>
+                                      </button>
+                                    </span>
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {allPitchRegainsTotal}
+                                      {allPitchRegainsTotal > 0 && allPitchRegainsPlayerSummary.playersWithActions > 0 ? (
+                                        <span className={styles.kpiScoreRowValuesPossessionTime}>
+                                          {' '}
+                                          · {allPitchRegainsPlayerSummary.playersWithActions} zaw., max {allPitchRegainsPlayerSummary.maxSharePct.toFixed(1)}%
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                  </div>
+                                  <div className={styles.kpiScoreRow}>
+                                    <span className={styles.kpiScoreRowLabelWithIcon}>
+                                      <span className={styles.kpiScoreRowLabel}>Straty (całe boisko)</span>
+                                      <button
+                                        type="button"
+                                        className={styles.kpiMapIconButton}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setKpiLosesAllPitchPlayersModalOpen(true);
+                                        }}
+                                        title="Lista zawodników – straty na całym boisku"
+                                        aria-label="Lista zawodników – straty na całym boisku"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                          <circle cx="9" cy="7" r="4" />
+                                          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                        </svg>
+                                      </button>
+                                    </span>
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {allPitchLosesTotal}
+                                      {allPitchLosesTotal > 0 && allPitchLosesPlayerSummary.playersWithActions > 0 ? (
+                                        <span className={styles.kpiScoreRowValuesPossessionTime}>
+                                          {' '}
+                                          · {allPitchLosesPlayerSummary.playersWithActions} zaw., max {allPitchLosesPlayerSummary.maxSharePct.toFixed(1)}%
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                  </div>
+                                </div>
                                 <div className={styles.kpiScoreGoalsDetails}>
                                   <div className={styles.kpiScoreRow}>
                                     <span className={styles.kpiScoreRowLabel}>8s CA Strzał</span>
                                     <span className={styles.kpiScoreRowValues}>
-                                      {regainsOnOpponentHalfWithTimestamp.length > 0 ? (() => {
-                                        const total = regainsOnOpponentHalfWithTimestamp.length;
-                                        const withShot = regainsPPWithShot8s;
-                                        const withoutShot = Math.max(0, total - withShot);
-                                        const withPct = total > 0 ? (withShot / total) * 100 : 0;
-                                        const withoutPct = total > 0 ? (withoutShot / total) * 100 : 0;
+                                      {(() => {
+                                        const ourTotal = ppRegainsTotalForShare;
+                                        const ourWithShot = regainsPPWithShot8s;
+                                        const ourWithPct = ourTotal > 0 ? (ourWithShot / ourTotal) * 100 : 0;
+
+                                        const oppTotal = teamLosesStats.totalLosesOwnHalfFull;
+                                        const oppWithShot = losesOwnHalfWithShot8s;
+                                        const oppWithPct = oppTotal > 0 ? (oppWithShot / oppTotal) * 100 : 0;
+
+                                        if (ourTotal === 0 && oppTotal === 0) return 'brak danych';
+
                                         return (
                                           <>
-                                            {withShot}{' '}
+                                            {ourWithShot}{' '}
                                             <span className={styles.kpiScoreRowValuesPct}>
-                                              ({withPct.toFixed(1)}%)
+                                              ({ourWithPct.toFixed(1)}%)
                                             </span>
                                             <span className={styles.kpiScoreRowCombinedDivider}> : </span>
-                                            {withoutShot}{' '}
+                                            {oppWithShot}{' '}
                                             <span className={styles.kpiScoreRowValuesPct}>
-                                              ({withoutPct.toFixed(1)}%)
+                                              ({oppWithPct.toFixed(1)}%)
                                             </span>
                                           </>
                                         );
-                                      })() : 'brak danych'}
+                                      })()}
                                     </span>
                                   </div>
                                   <div className={styles.kpiScoreRow}>
                                     <span className={styles.kpiScoreRowLabel}>8s CA PK</span>
                                     <span className={styles.kpiScoreRowValues}>
-                                      {regainsOnOpponentHalfWithTimestamp.length > 0 ? (() => {
-                                        const total = regainsOnOpponentHalfWithTimestamp.length;
-                                        const withPK = regainsPPWithPK8s;
-                                        const withoutPK = Math.max(0, total - withPK);
-                                        const withPct = total > 0 ? (withPK / total) * 100 : 0;
-                                        const withoutPct = total > 0 ? (withoutPK / total) * 100 : 0;
+                                      {(() => {
+                                        const ourTotal = ppRegainsTotalForShare;
+                                        const ourWithPK = regainsPPWithPK8s;
+                                        const ourWithPct = ourTotal > 0 ? (ourWithPK / ourTotal) * 100 : 0;
+
+                                        const oppTotal = teamLosesStats.totalLosesOwnHalfFull;
+                                        const oppWithPK = losesOwnHalfWithPK8s;
+                                        const oppWithPct = oppTotal > 0 ? (oppWithPK / oppTotal) * 100 : 0;
+
+                                        if (ourTotal === 0 && oppTotal === 0) return 'brak danych';
+
                                         return (
                                           <>
-                                            {withPK}{' '}
+                                            {ourWithPK}{' '}
                                             <span className={styles.kpiScoreRowValuesPct}>
-                                              ({withPct.toFixed(1)}%)
+                                              ({ourWithPct.toFixed(1)}%)
                                             </span>
                                             <span className={styles.kpiScoreRowCombinedDivider}> : </span>
-                                            {withoutPK}{' '}
+                                            {oppWithPK}{' '}
                                             <span className={styles.kpiScoreRowValuesPct}>
-                                              ({withoutPct.toFixed(1)}%)
+                                              ({oppWithPct.toFixed(1)}%)
                                             </span>
                                           </>
                                         );
-                                      })() : 'brak danych'}
+                                      })()}
                                     </span>
                                   </div>
                                 </div>
-                              )}
+                              </div>
+                            )}
                             </div>
                             <div
-                              className={styles.kpiScoreRowCombined}
+                              className={`${styles.kpiScoreRowCombined} ${kpiPossessionRowExpanded ? styles.kpiScoreRowCombinedExpanded : ''}`}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setKpiPossessionRowExpanded(!kpiPossessionRowExpanded)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setKpiPossessionRowExpanded(!kpiPossessionRowExpanded);
+                                }
+                              }}
                               aria-label="Posiadanie i czas martwy"
+                              title={kpiPossessionRowExpanded ? 'Kliknij, aby zwinąć' : 'Kliknij, aby rozwinąć szczegóły posiadania'}
+                              style={{ cursor: 'pointer' }}
                             >
                               <div className={styles.kpiScoreRowCombinedMain}>
                                 <div className={styles.kpiScoreRowCombinedBlock}>
@@ -6487,6 +7363,13 @@ export default function StatystykiZespoluPage() {
                                     </span>
                                   </span>
                                 </div>
+                                <span className={styles.kpiScoreRowExpandIcon} aria-hidden>
+                                  {kpiPossessionRowExpanded ? (
+                                    <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  ) : (
+                                    <svg className={styles.kpiScoreRowExpandIconSvg} width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  )}
+                                </span>
                               </div>
                             </div>
                             {(() => {
@@ -6535,7 +7418,7 @@ export default function StatystykiZespoluPage() {
                             const is1TPercentageGood = team1TContact1Percentage >= kpi1TPercentage;
                             const is8sAccGood = shotAndPK8sPercentage >= target8sAcc;
                             const isReaction5sGood = reaction5sPercentage >= kpiReaction5s;
-                            const isRegainsOpponentHalfGood = teamRegainStats.totalRegainsOpponentHalf >= kpiRegainsOpponentHalf;
+                            const isRegainsOpponentHalfGood = ppRegainsTotalForShare >= kpiRegainsOpponentHalf;
                             const isRegainsPPToPKShot8sGood = regainsPPToPKShot8sPercentage >= kpiRegainsPPToPKShot8s;
 
                             const pkDelta = opponentPKEntriesCount - kpiPKEntries;
@@ -6544,7 +7427,7 @@ export default function StatystykiZespoluPage() {
                             const losesPmDelta = losesInPMAreaCount - kpiLosesPMAreaCount;
                             const accDelta = target8sAcc - shotAndPK8sPercentage;
                             const reactionDelta = kpiReaction5s - reaction5sPercentage;
-                            const regainsOpponentHalfDelta = kpiRegainsOpponentHalf - teamRegainStats.totalRegainsOpponentHalf;
+                            const regainsOpponentHalfDelta = kpiRegainsOpponentHalf - ppRegainsTotalForShare;
                             const regainsPPToPKShot8sDelta = kpiRegainsPPToPKShot8s - regainsPPToPKShot8sPercentage;
 
                             return (
@@ -6560,7 +7443,7 @@ export default function StatystykiZespoluPage() {
                             <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : '8s ACC'}</div>
                             <div className={styles.statTileValue}>
                               {shotAndPK8sPercentage.toFixed(1)}%
-                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                              <span className={styles.statTileValueDelta}>
                                 {accDelta > 0 ? `(-${accDelta.toFixed(1)}%)` : `(+${Math.abs(accDelta).toFixed(1)}%)`}
                               </span>
                             </div>
@@ -6580,7 +7463,7 @@ export default function StatystykiZespoluPage() {
                             <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : 'xG/strzał'}</div>
                             <div className={styles.statTileValue}>
                               {teamXGPerShot.toFixed(2)}
-                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                              <span className={styles.statTileValueDelta}>
                                 {xgPerShotDelta > 0 ? `(-${xgPerShotDelta.toFixed(2)})` : `(+${Math.abs(xgPerShotDelta).toFixed(2)})`}
                               </span>
                             </div>
@@ -6600,7 +7483,7 @@ export default function StatystykiZespoluPage() {
                             <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : '1T'}</div>
                             <div className={styles.statTileValue}>
                               {team1TContact1Percentage.toFixed(1)}%
-                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                              <span className={styles.statTileValueDelta}>
                                 {oneTPercentageDelta > 0 ? `(-${oneTPercentageDelta.toFixed(1)}%)` : `(+${Math.abs(oneTPercentageDelta).toFixed(1)}%)`}
                               </span>
                             </div>
@@ -6619,7 +7502,7 @@ export default function StatystykiZespoluPage() {
                             <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : 'PK przeciwnik'}</div>
                             <div className={styles.statTileValue}>
                               {opponentPKEntriesCount}
-                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                              <span className={styles.statTileValueDelta}>
                                 {pkDelta > 0 ? `(+${pkDelta})` : `(-${Math.abs(pkDelta)})`}
                               </span>
                             </div>
@@ -6640,7 +7523,7 @@ export default function StatystykiZespoluPage() {
                             </div>
                             <div className={styles.statTileValue}>
                               {reaction5sPercentage.toFixed(1)}%
-                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                              <span className={styles.statTileValueDelta}>
                                 {reactionDelta > 0 ? `(-${reactionDelta.toFixed(1)}%)` : `(+${Math.abs(reactionDelta).toFixed(1)}%)`}
                               </span>
                             </div>
@@ -6660,7 +7543,7 @@ export default function StatystykiZespoluPage() {
                             <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : 'PM Area straty'}</div>
                             <div className={styles.statTileValue}>
                               {losesInPMAreaCount}
-                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                              <span className={styles.statTileValueDelta}>
                                 {losesPmDelta >= 0 ? `(+${losesPmDelta})` : `(-${Math.abs(losesPmDelta)})`}
                               </span>
                             </div>
@@ -6679,8 +7562,8 @@ export default function StatystykiZespoluPage() {
                           >
                             <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : 'Przechwyty PP'}</div>
                             <div className={styles.statTileValue}>
-                              {teamRegainStats.totalRegainsOpponentHalf}
-                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                              {ppRegainsTotalForShare}
+                              <span className={styles.statTileValueDelta}>
                                 {regainsOpponentHalfDelta > 0 ? `(-${regainsOpponentHalfDelta})` : `(+${Math.abs(regainsOpponentHalfDelta)})`}
                               </span>
                             </div>
@@ -6700,7 +7583,7 @@ export default function StatystykiZespoluPage() {
                             <div className={styles.statTileLabel}>{isPresentationMode ? 'KPI' : '8s CA'}</div>
                             <div className={styles.statTileValue}>
                               {regainsPPToPKShot8sPercentage.toFixed(1)}%
-                              <span style={{ fontSize: '0.6em', fontWeight: 'normal', color: '#6b7280', marginLeft: '4px' }}>
+                              <span className={styles.statTileValueDelta}>
                                 {regainsPPToPKShot8sDelta > 0 ? `(-${regainsPPToPKShot8sDelta.toFixed(1)}%)` : `(+${Math.abs(regainsPPToPKShot8sDelta).toFixed(1)}%)`}
                               </span>
                             </div>
@@ -7340,16 +8223,13 @@ export default function StatystykiZespoluPage() {
                     if (!zoneName) return false;
                     const normalized = convertZoneToName(zoneName);
                     if (!normalized) return false;
-                    const zoneIndex = zoneNameToIndex(normalized);
-                    if (zoneIndex === null) return false;
-                    const col = zoneIndex % 12;
-                    return col <= 5;
+                    return isOwnHalfByZoneColumn(normalized);
                   };
                   
                   // Filtruj przechwyty na połowie przeciwnika
                   const regainsOnOpponentHalfWithTimestamp = (derivedRegainActions || [])
                     .map((action: any) => {
-                      const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+                      const attackZoneRaw = regainAttackZoneRawForMap(action);
                       const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
                       const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
                       const attackZoneName = attackZoneRaw
@@ -7361,7 +8241,7 @@ export default function StatystykiZespoluPage() {
                       
                       if (isOwn) return null;
                       
-                      const timestamp = action.videoTimestampRaw ?? (action.videoTimestamp !== undefined ? action.videoTimestamp + 10 : 0);
+                      const timestamp = action.videoTimestampRaw ?? action.videoTimestamp ?? 0;
                       if (!timestamp || timestamp <= 0) return null;
                       
                       return { action, timestamp };
@@ -7516,16 +8396,13 @@ export default function StatystykiZespoluPage() {
                     if (!zoneName) return false;
                     const normalized = convertZoneToName(zoneName);
                     if (!normalized) return false;
-                    const zoneIndex = zoneNameToIndex(normalized);
-                    if (zoneIndex === null) return false;
-                    const col = zoneIndex % 12;
-                    return col <= 5;
+                    return isOwnHalfByZoneColumn(normalized);
                   };
                   
                   // Filtruj przechwyty na połowie przeciwnika - użyj DOKŁADNIE tej samej logiki co w głównym bloku KPI
                   const regainsOnOpponentHalfWithTimestamp = (derivedRegainActions || [])
                     .filter((action: any) => {
-                      const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+                      const attackZoneRaw = regainAttackZoneRawForMap(action);
                       const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
                       const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
                       const attackZoneName = attackZoneRaw
@@ -7581,7 +8458,7 @@ export default function StatystykiZespoluPage() {
                   const losesWithTimestamp = derivedLosesActions
                     .map((lose: any) => ({
                       lose,
-                      timestamp: lose.videoTimestampRaw ?? (lose.videoTimestamp !== undefined ? lose.videoTimestamp + 10 : 0),
+                      timestamp: lose.videoTimestampRaw ?? lose.videoTimestamp ?? 0,
                     }))
                     .filter((item: any) => item.timestamp > 0)
                     .sort((a: any, b: any) => a.timestamp - b.timestamp);
@@ -7592,22 +8469,35 @@ export default function StatystykiZespoluPage() {
                     const regainTime = regainItem.timestamp;
                     const timeWindowEnd = regainTime + 8;
                     
-                    const pkEntryInWindow = pkEntriesAttackWithTimestamp.find((item: any) => 
-                      item.timestamp > regainTime && item.timestamp <= timeWindowEnd
+                    const pkEntryInWindow = pkEntriesAttackWithTimestamp.find((item: any) =>
+                      item.timestamp > regainTime &&
+                      item.timestamp <= timeWindowEnd &&
+                      isPkEntryFromRegainSequence(item.entry)
                     );
-                    const shotInWindow = shotsAttackWithTimestamp.find((item: any) => 
-                      item.timestamp > regainTime && item.timestamp <= timeWindowEnd
+                    const shotInWindow = shotsAttackWithTimestamp.find((item: any) =>
+                      item.timestamp > regainTime &&
+                      item.timestamp <= timeWindowEnd &&
+                      isShotFromRegainSequence(item.shot)
                     );
                     
-                    if (pkEntryInWindow || shotInWindow) {
-                      const targetEvent = pkEntryInWindow || shotInWindow;
-                      const hasLoseBetween = losesWithTimestamp.some((loseItem: any) => 
-                        loseItem.timestamp > regainTime && loseItem.timestamp < targetEvent.timestamp
+                    let validShot = false;
+                    if (shotInWindow) {
+                      const hasLoseBeforeShot = losesWithTimestamp.some((loseItem: any) => 
+                        loseItem.timestamp > regainTime && loseItem.timestamp < shotInWindow.timestamp
                       );
-                      
-                      if (!hasLoseBetween) {
-                        successfulRegainsIds.add(regainItem.action.id);
-                      }
+                      if (!hasLoseBeforeShot) validShot = true;
+                    }
+
+                    let validPK = false;
+                    if (pkEntryInWindow) {
+                      const hasLoseBeforePK = losesWithTimestamp.some((loseItem: any) => 
+                        loseItem.timestamp > regainTime && loseItem.timestamp < pkEntryInWindow.timestamp
+                      );
+                      if (!hasLoseBeforePK) validPK = true;
+                    }
+
+                    if (validShot || validPK) {
+                      successfulRegainsIds.add(regainItem.action.id);
                     }
                   });
                   
@@ -7958,10 +8848,7 @@ export default function StatystykiZespoluPage() {
                     if (!zoneName) return false;
                     const normalized = convertZoneToName(zoneName);
                     if (!normalized) return false;
-                    const zoneIndex = zoneNameToIndex(normalized);
-                    if (zoneIndex === null) return false;
-                    const col = zoneIndex % 12;
-                    return col <= 5;
+                    return isOwnHalfByZoneColumn(normalized);
                   };
                   
                   const isPMArea = (zoneName: string | null | undefined): boolean => {
@@ -8146,7 +9033,7 @@ export default function StatystykiZespoluPage() {
                     // Przechwyty na połowie przeciwnika - użyj tej samej logiki co w liście zawodników
                     const regainsOnOpponentHalfWithTimestamp = (derivedRegainActions || [])
                       .map((action: any) => {
-                        const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+                        const attackZoneRaw = regainAttackZoneRawForMap(action);
                         const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
                         const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
                         const attackZoneName = attackZoneRaw
@@ -8158,7 +9045,7 @@ export default function StatystykiZespoluPage() {
                         
                         if (isOwn) return null;
                         
-                        const timestamp = action.videoTimestampRaw ?? (action.videoTimestamp !== undefined ? action.videoTimestamp + 10 : 0);
+                        const timestamp = action.videoTimestampRaw ?? action.videoTimestamp ?? 0;
                         if (!timestamp || timestamp <= 0) return null;
                         
                         return { action, timestamp };
@@ -8196,7 +9083,7 @@ export default function StatystykiZespoluPage() {
                   } else if (selectedKpiForVideo === '8s-ca') {
                     // Przechwyty na połowie przeciwnika - użyj tej samej logiki co w liście zawodników
                     const regainsOnOpponentHalf = (derivedRegainActions || []).filter((action: any) => {
-                      const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+                      const attackZoneRaw = regainAttackZoneRawForMap(action);
                       const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
                       const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
                       const attackZoneName = attackZoneRaw
@@ -8261,7 +9148,7 @@ export default function StatystykiZespoluPage() {
                     const losesWithTimestamp = (derivedLosesActions || [])
                       .map((lose: any) => ({
                         lose,
-                        timestamp: lose.videoTimestampRaw ?? (lose.videoTimestamp !== undefined ? lose.videoTimestamp + 10 : 0),
+                        timestamp: lose.videoTimestampRaw ?? lose.videoTimestamp ?? 0,
                       }))
                       .filter(item => item.timestamp > 0)
                       .sort((a, b) => a.timestamp - b.timestamp);
@@ -8273,23 +9160,35 @@ export default function StatystykiZespoluPage() {
                       const timeWindowEnd = regainTime + 8;
                       
                       // Sprawdź czy jest PK entry lub shot w oknie 8s
-                      const pkEntryInWindow = pkEntriesAttackWithTimestamp.find((item: any) => 
-                        item.timestamp > regainTime && item.timestamp <= timeWindowEnd
+                      const pkEntryInWindow = pkEntriesAttackWithTimestamp.find((item: any) =>
+                        item.timestamp > regainTime &&
+                        item.timestamp <= timeWindowEnd &&
+                        isPkEntryFromRegainSequence(item.entry)
                       );
-                      const shotInWindow = shotsAttackWithTimestamp.find((item: any) => 
-                        item.timestamp > regainTime && item.timestamp <= timeWindowEnd
+                      const shotInWindow = shotsAttackWithTimestamp.find((item: any) =>
+                        item.timestamp > regainTime &&
+                        item.timestamp <= timeWindowEnd &&
+                        isShotFromRegainSequence(item.shot)
                       );
                       
-                      if (pkEntryInWindow || shotInWindow) {
-                        // Sprawdź czy nie ma loses między nimi
-                        const targetEvent = pkEntryInWindow || shotInWindow;
-                        const hasLoseBetween = losesWithTimestamp.some((loseItem: any) => 
-                          loseItem.timestamp > regainTime && loseItem.timestamp < targetEvent.timestamp
+                      let validShot = false;
+                      if (shotInWindow) {
+                        const hasLoseBeforeShot = losesWithTimestamp.some((loseItem: any) => 
+                          loseItem.timestamp > regainTime && loseItem.timestamp < shotInWindow.timestamp
                         );
-                        
-                        if (!hasLoseBetween) {
-                          successfulRegainsIds.add(regainItem.action.id);
-                        }
+                        if (!hasLoseBeforeShot) validShot = true;
+                      }
+
+                      let validPK = false;
+                      if (pkEntryInWindow) {
+                        const hasLoseBeforePK = losesWithTimestamp.some((loseItem: any) => 
+                          loseItem.timestamp > regainTime && loseItem.timestamp < pkEntryInWindow.timestamp
+                        );
+                        if (!hasLoseBeforePK) validPK = true;
+                      }
+
+                      if (validShot || validPK) {
+                        successfulRegainsIds.add(regainItem.action.id);
                       }
                     });
                     
@@ -8772,14 +9671,14 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.detailsLabel}>PRZECHWYTY:</span>
                     <span className={styles.detailsValue}>
                       {(() => {
-                        const sumOfP = teamRegainStats.allRegainP0Count + teamRegainStats.allRegainP1Count + teamRegainStats.allRegainP2Count + teamRegainStats.allRegainP3Count;
+                        const regainsCount = teamRegainStats.visibleRegainsCount ?? teamRegainStats.totalRegains;
                         const totalMinutes = teamStats.totalMinutes || 90;
-                        const regainsPer90 = totalMinutes > 0 ? (sumOfP * 90) / totalMinutes : 0;
+                        const regainsPer90 = totalMinutes > 0 ? (regainsCount * 90) / totalMinutes : 0;
                         return (
                           <>
-                            <span className={styles.valueMain}>{sumOfP}</span>
-                            {sumOfP > 0 && (
-                              <span className={styles.valueSecondary}>/{sumOfP} (100.0%)</span>
+                            <span className={styles.valueMain}>{regainsCount}</span>
+                            {regainsCount > 0 && (
+                              <span className={styles.valueSecondary}>/{regainsCount} (100.0%)</span>
                             )}
                             <span className={styles.valueSecondary}> • ({regainsPer90.toFixed(1)} / 90)</span>
                           </>
@@ -8792,7 +9691,7 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.detailsValue}>
                       <span className={styles.valueMain}>
                         {aggregatedPossession && aggregatedPossession.opponentMin > 0
-                          ? ((teamRegainStats.totalRegainsWithP ?? teamRegainStats.totalRegains) / aggregatedPossession.opponentMin).toFixed(2)
+                          ? ((teamRegainStats.visibleRegainsCount ?? teamRegainStats.totalRegains) / aggregatedPossession.opponentMin).toFixed(2)
                           : "brak danych"}
                       </span>
                     </span>
@@ -8810,7 +9709,7 @@ export default function StatystykiZespoluPage() {
                   <div className={styles.detailsRow}>
                     <span className={styles.detailsLabel}>PRZECHWYTY NA POŁOWIE PRZECIWNIKA:</span>
                     <span className={styles.detailsValue}>
-                      <span className={styles.valueMain}>{teamRegainStats.totalRegainsOpponentHalf}</span>
+                      <span className={styles.valueMain}>{teamRegainStats.visibleRegainsOpponentHalf}</span>
                     </span>
                   </div>
                   <div className={styles.detailsRow}>
@@ -8938,24 +9837,21 @@ export default function StatystykiZespoluPage() {
                             ? derivedRegainActions
                             : regainHalfFilter === "pm"
                             ? derivedRegainActions.filter(action => {
-                                const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-                                const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+                                const attackZoneRaw = regainAttackZoneRawForMap(action);
+                                const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
                                 const pmZones = ['C5', 'C6', 'C7', 'C8', 'D5', 'D6', 'D7', 'D8', 'E5', 'E6', 'E7', 'E8', 'F5', 'F6', 'F7', 'F8'];
-                                return defenseZoneName && pmZones.includes(defenseZoneName);
+                                return attackZoneName && pmZones.includes(attackZoneName);
                               })
                             : derivedRegainActions.filter(action => {
-                                const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-                                const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
-                                if (!defenseZoneName) return false;
-                                const zoneIndex = zoneNameToIndex(defenseZoneName);
-                                if (zoneIndex === null) return false;
-                                const col = zoneIndex % 12;
-                                const isOwn = col <= 5;
-                                return regainHalfFilter === "own" ? !isOwn : isOwn;
+                                const attackZoneRaw = regainAttackZoneRawForMap(action);
+                                const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
+                                if (!attackZoneName) return false;
+                                const isOwn = isOwnHalf(attackZoneName);
+                                return regainHalfFilter === "own" ? isOwn : !isOwn;
                               });
                           
                           let zoneActions = filteredRegainActionsForHeatmap.filter(action => {
-                            const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+                            const attackZoneRaw = regainAttackZoneRawForMap(action);
                             const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
                             return attackZoneName?.toUpperCase().replace(/\s+/g, '') === normalizedZone;
                           });
@@ -9180,7 +10076,7 @@ export default function StatystykiZespoluPage() {
                   <div className={styles.chartHeader}>
                     <h3>Przechwyty i straty co 5 minut</h3>
                     <span className={styles.chartInfo}>
-                      {teamStats.totalRegains} przechwytów • {teamStats.totalLoses} strat
+                      {teamStats.totalRegains} przechwytów • {teamLosesStats.totalLosesOwnHalfFull + teamLosesStats.totalLosesOpponentHalfFull} strat
                     </span>
                   </div>
                   <ResponsiveContainer width="100%" height={260}>
@@ -9302,10 +10198,8 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.detailsLabel}>STRATY:</span>
                     <span className={styles.detailsValue}>
                       {(() => {
-                        const filteredLosesCount = teamLosesStats.totalLosesOwnHalf + teamLosesStats.totalLosesOpponentHalf;
-                        const sumOfP = teamLosesStats.allLosesP0Count + teamLosesStats.allLosesP1Count + teamLosesStats.allLosesP2Count + teamLosesStats.allLosesP3Count;
-                        const totalForSection = Math.max(filteredLosesCount, sumOfP) || filteredLosesCount;
-                        const autysCount = derivedLosesActions.filter(a => a.isAut === true || (a as any).aut === true).length;
+                        const filteredLosesCount = teamLosesStats.visibleLosesCount;
+                        const autysCount = teamLosesStats.visibleAutCount;
                         const totalMinutes = teamStats.totalMinutes || 90;
                         const losesPer90Filtered = totalMinutes > 0
                           ? ((filteredLosesCount * 90) / totalMinutes).toFixed(1)
@@ -9313,9 +10207,6 @@ export default function StatystykiZespoluPage() {
                         return (
                           <>
                             <span className={styles.valueMain}>{filteredLosesCount}</span>
-                            {totalForSection > 0 && (
-                              <span className={styles.valueSecondary}>/{totalForSection} ({((filteredLosesCount / totalForSection) * 100).toFixed(1)}%)</span>
-                            )}
                             <span className={styles.valueSecondary}>
                               {' '}
                               • ({losesPer90Filtered} / 90){autysCount > 0 ? ` • w tym auty: ${autysCount}` : ''}
@@ -9330,7 +10221,7 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.detailsValue}>
                       <span className={styles.valueMain}>
                         {aggregatedPossession && aggregatedPossession.teamMin > 0
-                          ? ((teamLosesStats.totalLosesOwnHalf + teamLosesStats.totalLosesOpponentHalf) / aggregatedPossession.teamMin).toFixed(2)
+                          ? (teamLosesStats.visibleLosesCount / aggregatedPossession.teamMin).toFixed(2)
                           : "brak danych"}
                       </span>
                     </span>
@@ -9507,10 +10398,7 @@ export default function StatystykiZespoluPage() {
                                 const losesZoneRaw = action.losesAttackZone || action.fromZone || action.toZone || action.startZone;
                                 const losesZoneName = losesZoneRaw ? convertZoneToName(losesZoneRaw) : null;
                                 if (!losesZoneName) return false;
-                                const zoneIndex = zoneNameToIndex(losesZoneName);
-                                if (zoneIndex === null) return false;
-                                const col = zoneIndex % 12;
-                                const isOwn = col <= 5;
+                                const isOwn = isOwnHalfByZoneColumn(losesZoneName);
                                 return losesHalfFilter === "own" ? isOwn : !isOwn;
                               });
                           
@@ -9704,7 +10592,7 @@ export default function StatystykiZespoluPage() {
                 <div className={styles.chartContainerInPanel}>
                   <div className={styles.chartHeader}>
                     <h3>Straty: liczba i <span className={styles.preserveCase}>xT</span> co 5 minut</h3>
-                    <span className={styles.chartInfo}>{teamStats.totalLoses} strat</span>
+                    <span className={styles.chartInfo}>{teamLosesStats.totalLosesOwnHalfFull + teamLosesStats.totalLosesOpponentHalfFull} strat</span>
                   </div>
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={losesTimelineXT} margin={{ top: 10, right: 20, left: 0, bottom: 0 }} barGap={0} barCategoryGap="20%">
@@ -10510,9 +11398,15 @@ export default function StatystykiZespoluPage() {
                           
                           // Filtruj według filtrów mapy
                           return filteredByCategory.filter(shot => {
-                            // Filtr części ciała
-                            if (xgMapFilters.bodyPart !== 'all' && shot.bodyPart !== xgMapFilters.bodyPart) {
-                              return false;
+                            // Filtr części ciała (foot = wszystkie nogi: foot, foot_left, foot_right)
+                            if (xgMapFilters.bodyPart !== 'all') {
+                              const bp = xgMapFilters.bodyPart;
+                              const shotBp = shot.bodyPart;
+                              if (bp === 'foot') {
+                                if (shotBp !== 'foot' && shotBp !== 'foot_left' && shotBp !== 'foot_right') return false;
+                              } else if (shotBp !== bp) {
+                                return false;
+                              }
                             }
                             
                             // Sprawdź czy wszystkie filtry typu są wyłączone
@@ -10624,7 +11518,19 @@ export default function StatystykiZespoluPage() {
                               className={`${styles.xgMapFilterButton} ${xgMapFilters.bodyPart === 'foot' ? styles.active : ''}`}
                               onClick={() => setXgMapFilters(prev => ({ ...prev, bodyPart: 'foot' }))}
                             >
-                              Stopa
+                              Noga (wszystkie)
+                            </button>
+                            <button
+                              className={`${styles.xgMapFilterButton} ${xgMapFilters.bodyPart === 'foot_left' ? styles.active : ''}`}
+                              onClick={() => setXgMapFilters(prev => ({ ...prev, bodyPart: 'foot_left' }))}
+                            >
+                              Noga lewa
+                            </button>
+                            <button
+                              className={`${styles.xgMapFilterButton} ${xgMapFilters.bodyPart === 'foot_right' ? styles.active : ''}`}
+                              onClick={() => setXgMapFilters(prev => ({ ...prev, bodyPart: 'foot_right' }))}
+                            >
+                              Noga prawa
                             </button>
                             <button
                               className={`${styles.xgMapFilterButton} ${xgMapFilters.bodyPart === 'head' ? styles.active : ''}`}
@@ -10733,7 +11639,9 @@ export default function StatystykiZespoluPage() {
                               <div className={styles.shotInfoRow}>
                                 <span className={styles.shotInfoLabel}>Część ciała:</span>
                                 <span className={styles.shotInfoValue}>
-                                  {selectedShot.bodyPart === 'foot' ? 'Noga' :
+                                  {selectedShot.bodyPart === 'foot_left' ? 'Noga lewa' :
+                                   selectedShot.bodyPart === 'foot_right' ? 'Noga prawa' :
+                                   selectedShot.bodyPart === 'foot' ? 'Noga' :
                                    selectedShot.bodyPart === 'head' ? 'Głowa' : 'Inna'}
                                 </span>
                               </div>
@@ -11725,8 +12633,7 @@ export default function StatystykiZespoluPage() {
                               if (!normalized) return false;
                               const zoneIdx = zoneNameToIndex(normalized);
                               if (zoneIdx === null) return false;
-                              const col = zoneIdx % 12;
-                              return col <= 5;
+                              return isOwnHalfByZoneColumn(zoneName);
                             };
                             
                             // Oblicz przechwyty na połowie przeciwnika dla gospodarza
@@ -11757,8 +12664,8 @@ export default function StatystykiZespoluPage() {
                                 const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
                                 const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
                                 
-                                // Używamy regainAttackZone (strefa przeciwna) do określenia połowy
-                                const attackZoneRaw = action.regainAttackZone || action.oppositeZone;
+                                // Strefa ataku przechwytu (jak na mapie) + fallback z obrony
+                                const attackZoneRaw = regainAttackZoneRawForMap(action);
                                 const attackZoneName = attackZoneRaw
                                   ? convertZoneToName(attackZoneRaw)
                                   : (defenseZoneName ? getOppositeZoneName(defenseZoneName) : null);
@@ -11815,7 +12722,7 @@ export default function StatystykiZespoluPage() {
                               const allLosesWithTimestamp = allLosesActions
                                 .map(lose => ({
                                   lose,
-                                  timestamp: lose.videoTimestampRaw ?? (lose.videoTimestamp !== undefined ? lose.videoTimestamp + 10 : 0),
+                                  timestamp: lose.videoTimestampRaw ?? lose.videoTimestamp ?? 0,
                                 }))
                                 .filter(item => item.timestamp > 0)
                                 .sort((a, b) => a.timestamp - b.timestamp);
@@ -11890,7 +12797,7 @@ export default function StatystykiZespoluPage() {
                               const allLosesWithTimestamp = allLosesActions
                                 .map(lose => ({
                                   lose,
-                                  timestamp: lose.videoTimestampRaw ?? (lose.videoTimestamp !== undefined ? lose.videoTimestamp + 10 : 0),
+                                  timestamp: lose.videoTimestampRaw ?? lose.videoTimestamp ?? 0,
                                 }))
                                 .filter(item => item.timestamp > 0)
                                 .sort((a, b) => a.timestamp - b.timestamp);
@@ -12027,10 +12934,7 @@ export default function StatystykiZespoluPage() {
                                 if (!zoneName) return false;
                                 const normalized = convertZoneToName(zoneName);
                                 if (!normalized) return false;
-                                const zoneIndex = zoneNameToIndex(normalized);
-                                if (zoneIndex === null) return false;
-                                const col = zoneIndex % 12;
-                                return col <= 5; // Własna połowa: kolumny 0-5 (strefy 1-6)
+                                return isOwnHalfByZoneColumn(normalized);
                               };
                               
                               // Filtruj według losesHalfFilter (tak samo jak teamLosesStats)
@@ -12345,165 +13249,6 @@ export default function StatystykiZespoluPage() {
                   </div>
                 ) : (
                   <p className={styles.noDataText}>Brak danych meczu dla wybranego meczu.</p>
-                )}
-              </div>
-            )}
-            {isAdmin && expandedCategory === 'trendy' && (
-              <div className={styles.detailsPanel}>
-                <div className={styles.trendyFiltersRow}>
-                  <div className={styles.trendyFilterGroup}>
-                    <span className={styles.trendyFilterLabel}>Liczba meczów</span>
-                    <div className={styles.trendyCountButtons}>
-                      {[5, 10, 15, 20].map((count) => (
-                        <button
-                          key={count}
-                          type="button"
-                          className={`${styles.trendyCountButton} ${trendyMatchesCount === count ? styles.active : ''}`}
-                          onClick={() => setTrendyMatchesCount(count as 5 | 10 | 15 | 20)}
-                        >
-                          {count}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className={styles.trendyFilterGroup}>
-                    <span className={styles.trendyFilterLabel}>Typ meczu</span>
-                    <div className={styles.trendySeriesToggles}>
-                      {(["liga", "puchar", "towarzyski"] as const).map((key) => (
-                        <button
-                          key={key}
-                          type="button"
-                          data-color="matchType"
-                          className={`${styles.trendyToggle} ${trendyMatchTypesEnabled[key] ? styles.active : ""}`}
-                          onClick={() =>
-                            setTrendyMatchTypesEnabled((prev) => ({ ...prev, [key]: !prev[key] }))
-                          }
-                        >
-                          {key === "liga" ? "Ligowe" : key === "puchar" ? "Pucharowe" : "Towarzyskie"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className={styles.trendyFilterGroup}>
-                    <span className={styles.trendyFilterLabel}>Serie</span>
-                    <div className={styles.trendySeriesToggles}>
-                      <button
-                        type="button"
-                        data-color="teamXG"
-                        className={`${styles.trendyToggle} ${trendyVisibleSeries.teamXG ? styles.active : ''}`}
-                        onClick={() => setTrendyVisibleSeries((prev) => ({ ...prev, teamXG: !prev.teamXG }))}
-                      >
-                        xG nasze
-                      </button>
-                      <button
-                        type="button"
-                        data-color="opponentXG"
-                        className={`${styles.trendyToggle} ${trendyVisibleSeries.opponentXG ? styles.active : ''}`}
-                        onClick={() => setTrendyVisibleSeries((prev) => ({ ...prev, opponentXG: !prev.opponentXG }))}
-                      >
-                        xG przeciwnika
-                      </button>
-                      <button
-                        type="button"
-                        data-color="teamGoals"
-                        className={`${styles.trendyToggle} ${trendyVisibleSeries.teamGoals ? styles.active : ''}`}
-                        onClick={() => setTrendyVisibleSeries((prev) => ({ ...prev, teamGoals: !prev.teamGoals }))}
-                      >
-                        Gole nasze
-                      </button>
-                      <button
-                        type="button"
-                        data-color="opponentGoals"
-                        className={`${styles.trendyToggle} ${trendyVisibleSeries.opponentGoals ? styles.active : ''}`}
-                        onClick={() => setTrendyVisibleSeries((prev) => ({ ...prev, opponentGoals: !prev.opponentGoals }))}
-                      >
-                        Gole przeciwnika
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {trendyLoading ? (
-                  <p className={styles.noDataText}>Ładowanie trendów...</p>
-                ) : trendyLoadError ? (
-                  <p className={styles.noDataText}>{trendyLoadError}</p>
-                ) : trendyChartData.length === 0 ? (
-                  <p className={styles.noDataText}>Brak danych meczowych do wyświetlenia trendów.</p>
-                ) : (
-                  <>
-                    {trendyLast5Stats && (
-                      <div className={styles.trendyLast5Stats}>
-                        <div className={styles.trendyLast5Col}>
-                          <span className={styles.trendyLast5Label}>Średnia xG (ostatnie {trendyLast5Stats.matchCount} meczów)</span>
-                          <span className={styles.trendyLast5ValueTeam}>{trendyLast5Stats.avgTeamXG.toFixed(2)}</span>
-                          <span className={styles.trendyLast5Label}>Średnia gole (ostatnie {trendyLast5Stats.matchCount} meczów)</span>
-                          <span className={styles.trendyLast5ValueTeam}>{trendyLast5Stats.avgTeamGoals.toFixed(2)}</span>
-                        </div>
-                        <div className={styles.trendyLast5Divider} aria-hidden />
-                        <div className={styles.trendyLast5Col}>
-                          <span className={styles.trendyLast5Label}>Średnia xG przeciwnika</span>
-                          <span className={styles.trendyLast5ValueOpp}>{trendyLast5Stats.avgOpponentXG.toFixed(2)}</span>
-                          <span className={styles.trendyLast5Label}>Średnia gole przeciwnika</span>
-                          <span className={styles.trendyLast5ValueOpp}>{trendyLast5Stats.avgOpponentGoals.toFixed(2)}</span>
-                        </div>
-                      </div>
-                    )}
-                  <div className={styles.trendyChartWrap}>
-                    <ResponsiveContainer width="100%" height={420}>
-                      <LineChart data={trendyChartData} margin={{ top: 16, right: 20, left: 12, bottom: 130 }}>
-                        <CartesianGrid strokeDasharray="2 4" stroke="#e2e8f0" vertical={true} horizontal={true} />
-                        <XAxis
-                          dataKey="matchLabel"
-                          angle={-28}
-                          textAnchor="end"
-                          interval={0}
-                          height={64}
-                          tick={{ fontSize: 11, fill: "#64748b" }}
-                          axisLine={{ stroke: "#e2e8f0" }}
-                          tickLine={{ stroke: "#e2e8f0" }}
-                        />
-                        <YAxis
-                          tick={{ fontSize: 11, fill: "#64748b" }}
-                          axisLine={{ stroke: "#e2e8f0" }}
-                          tickLine={{ stroke: "#e2e8f0" }}
-                          tickFormatter={(value) => typeof value === "number" ? (Number.isInteger(value) ? String(value) : value.toFixed(2)) : String(value)}
-                        />
-                        <Tooltip
-                          formatter={(value: number) => (typeof value === "number" ? (Number.isInteger(value) ? String(value) : value.toFixed(2)) : value) as string}
-                          contentStyle={{ border: "1px solid #e2e8f0", borderRadius: 10, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
-                          labelStyle={{ color: "#475569", fontWeight: 600 }}
-                        />
-                        <Legend verticalAlign="bottom" wrapperStyle={{ paddingTop: 24 }} iconType="circle" iconSize={8} />
-
-                        {trendyVisibleSeries.teamXG && (
-                          <Line type="monotone" dataKey="teamXG" name="xG nasze" stroke="#2563eb" strokeWidth={2} dot={{ r: 3, fill: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 4, fill: "#fff", stroke: "#2563eb", strokeWidth: 2 }} />
-                        )}
-                        {trendyVisibleSeries.opponentXG && (
-                          <Line type="monotone" dataKey="opponentXG" name="xG przeciwnika" stroke="#dc2626" strokeWidth={2} dot={{ r: 3, fill: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 4, fill: "#fff", stroke: "#dc2626", strokeWidth: 2 }} />
-                        )}
-                        {trendyVisibleSeries.teamGoals && (
-                          <Line type="monotone" dataKey="teamGoals" name="Gole nasze" stroke="#059669" strokeWidth={2} dot={{ r: 3, fill: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 4, fill: "#fff", stroke: "#059669", strokeWidth: 2 }} />
-                        )}
-                        {trendyVisibleSeries.opponentGoals && (
-                          <Line type="monotone" dataKey="opponentGoals" name="Gole przeciwnika" stroke="#ea580c" strokeWidth={2} dot={{ r: 3, fill: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 4, fill: "#fff", stroke: "#ea580c", strokeWidth: 2 }} />
-                        )}
-
-                        {trendyVisibleSeries.teamXG && (
-                          <Line type="monotone" dataKey="teamXGTrend" name="Trend xG nasze" stroke="#2563eb" strokeWidth={1.5} strokeDasharray="5 4" dot={false} strokeOpacity={0.85} />
-                        )}
-                        {trendyVisibleSeries.opponentXG && (
-                          <Line type="monotone" dataKey="opponentXGTrend" name="Trend xG przeciwnika" stroke="#dc2626" strokeWidth={1.5} strokeDasharray="5 4" dot={false} strokeOpacity={0.85} />
-                        )}
-                        {trendyVisibleSeries.teamGoals && (
-                          <Line type="monotone" dataKey="teamGoalsTrend" name="Trend gole nasze" stroke="#059669" strokeWidth={1.5} strokeDasharray="5 4" dot={false} strokeOpacity={0.85} />
-                        )}
-                        {trendyVisibleSeries.opponentGoals && (
-                          <Line type="monotone" dataKey="opponentGoalsTrend" name="Trend gole przeciwnika" stroke="#ea580c" strokeWidth={1.5} strokeDasharray="5 4" dot={false} strokeOpacity={0.85} />
-                        )}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                  </>
                 )}
               </div>
             )}
@@ -13775,7 +14520,7 @@ export default function StatystykiZespoluPage() {
                         : `Mecz ${action.matchId || 'nieznany'}`;
                       
                       const packingPoints = action.packingPoints || 0;
-                      const xTDifference = (action.xTValueEnd || 0) - (action.xTValueStart || 0);
+                      const xTDifference = getXTDifferenceForAction(action);
                       const pxtValue = xTDifference * packingPoints;
                       
                       return (

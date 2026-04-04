@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { Player, Action, TeamInfo, PKEntry, Shot, PlayerMatchStats } from "@/types";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
+import { useProfileHeatmapVideoPanelLayout } from "@/hooks/useProfileHeatmapVideoPanelLayout";
 import {
   getMatchDocumentFromCache,
   getOrLoadMatchDocument,
@@ -15,6 +17,11 @@ import {
 } from "@/lib/matchDocumentCache";
 import Link from "next/link";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
+import { losesAttackZoneRawForMap, regainAttackZoneRawForMap } from "@/utils/kpiRegainLosesZoneRaw";
+import { getVideoTimestampSeconds } from "@/utils/actionVideoSeekSeconds";
+import { hasExternalVideoSource } from "@/utils/externalVideoMatchInfo";
+import toast from "react-hot-toast";
+import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPitch";
@@ -156,7 +163,9 @@ export default function PlayerDetailsPage() {
   const [selectedActionFilter, setSelectedActionFilter] = useState<Array<'p0' | 'p1' | 'p2' | 'p3' | 'p0start' | 'p1start' | 'p2start' | 'p3start' | 'pk' | 'shot' | 'goal'>>([]);
   const [zoneDetails, setZoneDetails] = useState<{
     zoneName: string;
-    players: Array<{ playerId: string; playerName: string; passes: number; pxt: number; p1Count: number; p2Count: number; p3Count: number; pkCount: number; shotCount: number; goalCount: number }>;
+    subtitle: string;
+    actions: Action[];
+    pxtContext: "sender" | "receiver";
   } | null>(null);
   const [regainHeatmapMode, setRegainHeatmapMode] = useState<"xt" | "count">("xt"); // Tryb heatmapy regainów: xT odbiorców lub liczba akcji
   const [regainAttackDefenseMode, setRegainAttackDefenseMode] = useState<"attack" | "defense" | null>("defense"); // Tryb atak/obrona: null = wyłączony, "attack" = w ataku, "defense" = w obronie (domyślnie obrona)
@@ -198,6 +207,23 @@ export default function PlayerDetailsPage() {
   const [xgHalf, setXgHalf] = useState<"all" | "first" | "second">("all");
   const [xgFilter, setXgFilter] = useState<"all" | "sfg" | "open_play">("all");
   const [isPrintingProfile, setIsPrintingProfile] = useState(false);
+  const youtubeVideoRef = useRef<YouTubeVideoRef>(null);
+  const [profileVideoMatch, setProfileVideoMatch] = useState<TeamInfo | null>(null);
+  const [profileVideoSeekTargetSeconds, setProfileVideoSeekTargetSeconds] = useState<number | null>(null);
+  const [profileVideoPortalReady, setProfileVideoPortalReady] = useState(false);
+  const {
+    panelRef: profileHeatmapVideoPanelRef,
+    panelStyle: profileHeatmapVideoPanelStyle,
+    resetLayout: resetProfileHeatmapVideoPanelLayout,
+    onHeaderPointerDown: onProfileHeatmapVideoHeaderPointerDown,
+    onResizePointerDown: onProfileHeatmapVideoResizePointerDown,
+    onDragPointerMove: onProfileHeatmapVideoDragPointerMove,
+    onDragPointerUp: onProfileHeatmapVideoDragPointerUp,
+    layout: profileHeatmapVideoPanelLayout,
+  } = useProfileHeatmapVideoPanelLayout();
+  useEffect(() => {
+    setProfileVideoPortalReady(true);
+  }, []);
 
   useEffect(() => {
     const handleAfterPrint = () => setIsPrintingProfile(false);
@@ -254,6 +280,57 @@ export default function PlayerDetailsPage() {
     
     return matches;
   }, [allMatches, selectedSeason, selectedTeam]);
+
+  const sortActionsByMatchThenMinute = useCallback(
+    (actions: Action[]) =>
+      [...actions].sort((a, b) => {
+        const ma = filteredMatchesBySeason.find((m) => m.matchId === a.matchId);
+        const mb = filteredMatchesBySeason.find((m) => m.matchId === b.matchId);
+        const da = ma ? new Date(ma.date).getTime() : 0;
+        const db = mb ? new Date(mb.date).getTime() : 0;
+        if (da !== db) return da - db;
+        return (a.minute ?? 0) - (b.minute ?? 0);
+      }),
+    [filteredMatchesBySeason],
+  );
+
+  const seekProfileVideoAtMatchSeconds = useCallback(
+    async (matchId: string | undefined, sec: number | null) => {
+      const match = filteredMatchesBySeason.find((m) => m.matchId === matchId);
+      if (!match) {
+        toast.error("Nie znaleziono meczu.");
+        return;
+      }
+      if (!hasExternalVideoSource(match)) {
+        toast.error("Brak wideo dla tego meczu.");
+        return;
+      }
+      if (sec === null) {
+        toast.error("Brak znacznika czasu wideo.");
+        return;
+      }
+      setProfileVideoMatch(match);
+      setProfileVideoSeekTargetSeconds(sec);
+      window.setTimeout(() => {
+        const external = (window as unknown as { externalVideoWindow?: Window | null }).externalVideoWindow;
+        if (external && !external.closed) {
+          try {
+            external.postMessage({ type: "SEEK_TO_TIME", time: sec }, "*");
+          } catch {
+            /* ignore */
+          }
+        }
+      }, 500);
+    },
+    [filteredMatchesBySeason],
+  );
+
+  const seekProfileActionVideo = useCallback(
+    async (action: Action) => {
+      await seekProfileVideoAtMatchSeconds(action.matchId, getVideoTimestampSeconds(action));
+    },
+    [seekProfileVideoAtMatchSeconds],
+  );
 
   // Mecze, w których zawodnik zagrał co najmniej 1 minutę — tylko te są dostępne do wyboru
   const selectableMatchesBySeason = useMemo(() => {
@@ -1590,7 +1667,16 @@ export default function PlayerDetailsPage() {
     // Dla kierunku "to": zawodnicy, którzy przyjmowali podania DO tej strefy (gdzie wybrany zawodnik podawał)
     const senderZonePlayerStatsFrom = new Map<string, Map<string, { passes: number; pxt: number; p1Count: number; p2Count: number; p3Count: number; pkCount: number; shotCount: number; goalCount: number }>>();
     const senderZonePlayerStatsTo = new Map<string, Map<string, { passes: number; pxt: number; p1Count: number; p2Count: number; p3Count: number; pkCount: number; shotCount: number; goalCount: number }>>();
-    
+    /** Pojedyncze podania w strefie — panel boczny (spójnie z przechwytami / stratami). */
+    const passActionsSenderFrom = new Map<string, Action[]>();
+    const passActionsSenderTo = new Map<string, Action[]>();
+    const passActionsReceiverFrom = new Map<string, Action[]>();
+    const passActionsReceiverTo = new Map<string, Action[]>();
+    const pushPassToZone = (map: Map<string, Action[]>, zoneKey: string, act: Action) => {
+      if (!map.has(zoneKey)) map.set(zoneKey, []);
+      map.get(zoneKey)!.push(act);
+    };
+
     // Statystyki partnerów - top 5 podających/przyjmujących
     // Map<playerId, { passes: number, pxt: number }>
     const partnerStatsAsSender = new Map<string, { passes: number; pxt: number }>(); // Do kogo zawodnik podaje
@@ -2324,6 +2410,7 @@ export default function PlayerDetailsPage() {
               playerStats.p1Count += 1;
             }
           }
+          pushPassToZone(passActionsSenderFrom, fromZoneName, action);
         }
 
         // Strefa docelowa (do której podawał)
@@ -2362,6 +2449,7 @@ export default function PlayerDetailsPage() {
               playerStats.p1Count += 1;
             }
           }
+          pushPassToZone(passActionsSenderTo, toZoneName, action);
         }
 
         // Statystyki według pozycji
@@ -2437,6 +2525,7 @@ export default function PlayerDetailsPage() {
               playerStats.p1Count += 1;
             }
           }
+          pushPassToZone(passActionsReceiverTo, toZoneName, action);
         }
 
         // Strefa źródłowa (z której były podania do niego)
@@ -2483,6 +2572,7 @@ export default function PlayerDetailsPage() {
               playerStats.p1Count += 1;
             }
           }
+          pushPassToZone(passActionsReceiverFrom, fromZoneName, action);
         }
 
         // Statystyki według pozycji
@@ -2622,8 +2712,8 @@ export default function PlayerDetailsPage() {
         }
         
         // Liczniki w kafelkach - zawsze obliczamy dla wszystkich akcji (bez filtrowania)
-        const regainAttackZone = action.regainAttackZone || action.oppositeZone;
-        const regainZoneName = convertZoneToName(regainAttackZone);
+        const regainAttackZoneRaw = regainAttackZoneRawForMap(action);
+        const regainZoneName = convertZoneToName(regainAttackZoneRaw);
         
         if (regainZoneName) {
           // Liczniki według stref (P0, P1, P2, P3) - BEZ filtrowania
@@ -2692,12 +2782,6 @@ export default function PlayerDetailsPage() {
                   const zoneIndex = zoneNameToIndex(regainZoneName);
                   return zoneIndex !== null ? getOppositeXTValueForZone(zoneIndex) : 0;
                 })());
-          
-          // Strefa ataku - używamy nowych pól
-          const regainAttackZone = action.regainAttackZone || action.oppositeZone;
-          const oppositeZoneName = regainAttackZone 
-            ? convertZoneToName(regainAttackZone)
-            : getOppositeZoneName(regainZoneName);
           
           const isAttack = action.isAttack !== undefined 
             ? action.isAttack 
@@ -2849,8 +2933,8 @@ export default function PlayerDetailsPage() {
         }
         
         // Liczniki w kafelkach - zawsze obliczamy dla wszystkich akcji (bez filtrowania)
-        const losesAttackZone = action.losesAttackZone || action.oppositeZone;
-        const losesZoneName = convertZoneToName(losesAttackZone);
+        const losesAttackZoneRaw = losesAttackZoneRawForMap(action);
+        const losesZoneName = convertZoneToName(losesAttackZoneRaw);
         
         if (losesZoneName) {
           // Liczniki według stref (P0, P1, P2, P3) - BEZ filtrowania
@@ -3459,6 +3543,18 @@ export default function PlayerDetailsPage() {
         zone,
         new Map(players)
       ])),
+      passActionsByZoneSenderFrom: new Map(
+        Array.from(passActionsSenderFrom.entries()).map(([z, arr]) => [z, [...arr]]),
+      ),
+      passActionsByZoneSenderTo: new Map(
+        Array.from(passActionsSenderTo.entries()).map(([z, arr]) => [z, [...arr]]),
+      ),
+      passActionsByZoneReceiverFrom: new Map(
+        Array.from(passActionsReceiverFrom.entries()).map(([z, arr]) => [z, [...arr]]),
+      ),
+      passActionsByZoneReceiverTo: new Map(
+        Array.from(passActionsReceiverTo.entries()).map(([z, arr]) => [z, [...arr]]),
+      ),
       // Statystyki partnerów
       partnerStatsAsSender: new Map(partnerStatsAsSender),
       partnerStatsAsReceiver: new Map(partnerStatsAsReceiver),
@@ -3658,12 +3754,6 @@ export default function PlayerDetailsPage() {
       };
     });
     
-    // Sortuj i znajdź ranking dla sender
-    const sortedByPxtSender = [...teamPlayerStats].sort((a, b) => b.pxtAsSender - a.pxtAsSender);
-    const sortedByPxtPer90Sender = [...teamPlayerStats].sort((a, b) => b.pxtSenderPer90 - a.pxtSenderPer90);
-    const sortedByActionsPer90Sender = [...teamPlayerStats].sort((a, b) => b.senderActionsPer90 - a.senderActionsPer90);
-    const sortedByPxtPerActionSender = [...teamPlayerStats].sort((a, b) => b.pxtSenderPerAction - a.pxtSenderPerAction);
-    
     // Sortuj i znajdź ranking dla receiver
     const sortedByPxtReceiver = [...teamPlayerStats].sort((a, b) => b.pxtAsReceiver - a.pxtAsReceiver);
     const sortedByPxtPer90Receiver = [...teamPlayerStats].sort((a, b) => b.pxtReceiverPer90 - a.pxtReceiverPer90);
@@ -3712,11 +3802,6 @@ export default function PlayerDetailsPage() {
     }).length;
     
     return {
-      // Sender rankings
-      pxtRank: sortedByPxtSender.findIndex(p => p.playerId === targetPlayerId) + 1,
-      pxtPer90Rank: sortedByPxtPer90Sender.findIndex(p => p.playerId === targetPlayerId) + 1,
-      actionsPer90Rank: sortedByActionsPer90Sender.findIndex(p => p.playerId === targetPlayerId) + 1,
-      pxtPerActionRank: sortedByPxtPerActionSender.findIndex(p => p.playerId === targetPlayerId) + 1,
       // Receiver rankings
       pxtReceiverRank: sortedByPxtReceiver.findIndex(p => p.playerId === targetPlayerId) + 1,
       pxtReceiverPer90Rank: sortedByPxtPer90Receiver.findIndex(p => p.playerId === targetPlayerId) + 1,
@@ -4274,6 +4359,83 @@ export default function PlayerDetailsPage() {
 
               {/* Szczegóły poniżej */}
               <div className={styles.detailsPanel}>
+                {profileVideoPortalReady &&
+                  typeof document !== "undefined" &&
+                  (expandedCategory === "pxt" ||
+                    expandedCategory === "regains" ||
+                    expandedCategory === "loses" ||
+                    expandedCategory === "xg" ||
+                    expandedCategory === "pk_entries") &&
+                  profileVideoMatch &&
+                  createPortal(
+                    <div
+                      ref={profileHeatmapVideoPanelRef}
+                      className={`${styles.profileHeatmapVideoPanel}${profileHeatmapVideoPanelLayout ? ` ${styles.profileHeatmapVideoPanelCustom}` : ""}`}
+                      style={profileHeatmapVideoPanelStyle}
+                      role="complementary"
+                      aria-label="Odtwarzacz wideo meczu"
+                    >
+                      <div
+                        className={`${styles.profileHeatmapVideoHeader} ${styles.profileHeatmapVideoHeaderDraggable}`}
+                        title="Przeciągnij panel — zachowaj układ w tej przeglądarce"
+                        onPointerDown={onProfileHeatmapVideoHeaderPointerDown}
+                        onPointerMove={onProfileHeatmapVideoDragPointerMove}
+                        onPointerUp={onProfileHeatmapVideoDragPointerUp}
+                        onPointerCancel={onProfileHeatmapVideoDragPointerUp}
+                      >
+                        <span>
+                          Wideo —{" "}
+                          {profileVideoMatch.isHome
+                            ? `${profileVideoMatch.opponent} (D)`
+                            : `${profileVideoMatch.opponent} (W)`}
+                        </span>
+                        <span className={styles.profileHeatmapVideoHeaderActions}>
+                          <button
+                            type="button"
+                            className={styles.profileHeatmapVideoResetLayout}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              resetProfileHeatmapVideoPanelLayout();
+                            }}
+                          >
+                            Układ domyślny
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.profileHeatmapVideoHide}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProfileVideoSeekTargetSeconds(null);
+                              setProfileVideoMatch(null);
+                            }}
+                          >
+                            Ukryj wideo
+                          </button>
+                        </span>
+                      </div>
+                      <div className={styles.profileHeatmapVideoPlayerShell}>
+                        <YouTubeVideo
+                          ref={youtubeVideoRef}
+                          matchInfo={profileVideoMatch}
+                          isVisible
+                          isFullscreen={false}
+                          seekTargetSeconds={profileVideoSeekTargetSeconds}
+                          onSeekTargetConsumed={() => setProfileVideoSeekTargetSeconds(null)}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.profileHeatmapVideoResizeHandle}
+                        title="Przeciągnij lewy górny róg panelu, aby zmienić rozmiar"
+                        aria-label="Zmiana rozmiaru panelu wideo — uchwyt w lewym górnym rogu panelu"
+                        onPointerDown={onProfileHeatmapVideoResizePointerDown}
+                        onPointerMove={onProfileHeatmapVideoDragPointerMove}
+                        onPointerUp={onProfileHeatmapVideoDragPointerUp}
+                        onPointerCancel={onProfileHeatmapVideoDragPointerUp}
+                      />
+                    </div>,
+                    document.body,
+                  )}
                 {expandedCategory === 'xg' && (
                   <div className={styles.xgDetails}>
                     <h3>Szczegóły xG</h3>
@@ -4473,13 +4635,76 @@ export default function PlayerDetailsPage() {
                                   ? selectedXGShotForView
                                   : xgStats.playerShots.find(s => s.id === selectedXGShotIdForView);
                               if (!selectedShot) return null;
+                              const shotHalf = (selectedShot as Shot & { isSecondHalf?: boolean }).isSecondHalf
+                                ? "II"
+                                : "I";
+                              const match = filteredMatchesBySeason.find((m) => m.matchId === selectedShot.matchId);
+                              const matchName = match
+                                ? `${match.isHome ? `${match.opponent} (D)` : `${match.opponent} (W)`}`
+                                : `Mecz ${selectedShot.matchId}`;
+                              const videoSec = getVideoTimestampSeconds(selectedShot);
+                              const matchForVideo = selectedShot.matchId
+                                ? filteredMatchesBySeason.find((m) => m.matchId === selectedShot.matchId)
+                                : undefined;
+                              const canVideo = Boolean(
+                                matchForVideo &&
+                                  hasExternalVideoSource(matchForVideo) &&
+                                  videoSec !== null,
+                              );
+                              const isGoal = !!selectedShot.isGoal || selectedShot.shotType === "goal";
+                              const isBlocked = !!selectedShot.isBlocked || selectedShot.shotType === "blocked";
+                              const isOnTarget = !!selectedShot.isOnTarget || selectedShot.shotType === "on_target";
+                              const isOffTarget = selectedShot.shotType === "off_target";
+                              const status = isGoal
+                                ? "GOL"
+                                : isBlocked
+                                  ? "ZABLOKOWANY"
+                                  : isOnTarget
+                                    ? "CELNY"
+                                    : isOffTarget
+                                      ? "NIECELNY"
+                                      : "-";
+                              const at = selectedShot.actionType;
+                              const sfgTypes = new Set(["corner", "free_kick", "direct_free_kick", "penalty", "throw_in"]);
+                              let typeLabel = "-";
+                              if (at) {
+                                if (sfgTypes.has(at)) {
+                                  if (at === "corner") typeLabel = "Rożny";
+                                  else if (at === "free_kick") typeLabel = "Wolny";
+                                  else if (at === "direct_free_kick") typeLabel = "Bezpośredni wolny";
+                                  else if (at === "penalty") typeLabel = "Karny";
+                                  else if (at === "throw_in") typeLabel = "Rzut za autu";
+                                  else typeLabel = "SFG";
+                                } else if (at === "open_play") typeLabel = "Otwarta gra";
+                                else if (at === "counter") typeLabel = "Kontra";
+                                else if (at === "regain") typeLabel = "Regain";
+                                else typeLabel = String(at);
+                              }
+                              const contacts =
+                                selectedShot.isContact1 ? "1T" : selectedShot.isContact2 ? "2T" : selectedShot.isContact3Plus ? "3T+" : null;
+                              const detailParts = [
+                                `Wynik: ${status}`,
+                                selectedShot.xGOT !== undefined ? `xG OT: ${selectedShot.xGOT.toFixed(2)}` : null,
+                                selectedShot.playerId
+                                  ? `Strzał: ${getPlayerLabel(selectedShot.playerId, playersIndex)}`
+                                  : null,
+                                selectedShot.assistantId
+                                  ? `Asysta: ${getPlayerLabel(selectedShot.assistantId, playersIndex)}`
+                                  : null,
+                                at ? `Typ: ${typeLabel}` : null,
+                                contacts ? `Kontakty: ${contacts}` : null,
+                                selectedShot.playersOnLine !== undefined
+                                  ? `Zawodnicy na linii: ${selectedShot.playersOnLine}`
+                                  : null,
+                                selectedShot.linePlayersCount !== undefined
+                                  ? `Liczba na linii (atak): ${selectedShot.linePlayersCount}`
+                                  : null,
+                              ].filter(Boolean);
+                              const detailLine = detailParts.join(" · ");
                               return (
                                 <div className={styles.zoneDetailsPanel} style={{ marginTop: 12 }}>
                                   <div className={styles.zoneDetailsHeader}>
-                                    <h4>
-                                      Strzał • {selectedShot.xG.toFixed(2)} <span className={styles.preserveCase}>xG</span>
-                                      {selectedShot.minute !== undefined && ` • ${selectedShot.minute}'${selectedShot.isSecondHalf ? ' (II)' : ' (I)'}`}
-                                    </h4>
+                                    <h4>Szczegóły strzału</h4>
                                     <button
                                       type="button"
                                       className={styles.zoneDetailsClose}
@@ -4492,103 +4717,43 @@ export default function PlayerDetailsPage() {
                                     </button>
                                   </div>
                                   <div className={styles.zoneDetailsBody}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
-                                        <div className={styles.detailsRow} style={{ padding: '8px 12px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
-                                          <span className={styles.detailsLabel}><span className={styles.preserveCase}>xG</span>:</span>
-                                          <span className={styles.detailsValue}>
-                                            <span className={styles.valueMain}><strong>{selectedShot.xG.toFixed(2)}</strong></span>
+                                    <p className={styles.zoneDetailsSubtitle}>
+                                      Strzał z mapy <span className={styles.preserveCase}>xG</span>
+                                    </p>
+                                    <div className={styles.zoneHeatmapActionCard}>
+                                      <div className={styles.zoneHeatmapActionMatch}>{matchName}</div>
+                                      <div className={styles.zoneHeatmapActionMeta}>
+                                        {canVideo ? (
+                                          <button
+                                            type="button"
+                                            className={styles.zoneHeatmapMinuteButton}
+                                            onClick={() =>
+                                              void seekProfileVideoAtMatchSeconds(
+                                                selectedShot.matchId,
+                                                getVideoTimestampSeconds(selectedShot),
+                                              )
+                                            }
+                                            title="Odtwórz wideo od tego strzału"
+                                          >
+                                            {shotHalf} {selectedShot.minute}&apos;
+                                          </button>
+                                        ) : (
+                                          <span className={styles.zoneHeatmapActionDetails}>
+                                            {shotHalf} {selectedShot.minute}&apos;
+                                            {matchForVideo && !hasExternalVideoSource(matchForVideo)
+                                              ? " · brak wideo meczu"
+                                              : videoSec === null
+                                                ? " · brak czasu wideo"
+                                                : ""}
                                           </span>
+                                        )}
+                                        <div className={styles.zoneHeatmapActionDetails}>
+                                          <strong>
+                                            <span className={styles.preserveCase}>xG</span> {selectedShot.xG.toFixed(2)}
+                                          </strong>
+                                          {" · "}
+                                          {detailLine}
                                         </div>
-                                        {selectedShot.xGOT !== undefined && (
-                                          <div className={styles.detailsRow} style={{ padding: '8px 12px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
-                                            <span className={styles.detailsLabel}><span className={styles.preserveCase}>xG</span> OT:</span>
-                                            <span className={styles.detailsValue}>
-                                              <span className={styles.valueMain}><strong>{selectedShot.xGOT.toFixed(2)}</strong></span>
-                                            </span>
-                                          </div>
-                                        )}
-                                        {(() => {
-                                          const isGoal = !!selectedShot.isGoal || selectedShot.shotType === "goal";
-                                          const isBlocked = !!selectedShot.isBlocked || selectedShot.shotType === "blocked";
-                                          const isOnTarget = !!selectedShot.isOnTarget || selectedShot.shotType === "on_target";
-                                          const isOffTarget = selectedShot.shotType === "off_target";
-
-                                          const status = isGoal
-                                            ? "GOL"
-                                            : isBlocked
-                                              ? "ZABLOKOWANY"
-                                              : isOnTarget
-                                                ? "CELNY"
-                                                : isOffTarget
-                                                  ? "NIECELNY"
-                                                  : "-";
-
-                                          // Delikatne podświetlenie dla goli
-                                          const statusBg = isGoal ? "#dcfce7" : "#f9fafb";
-                                          const statusBorder = isGoal ? "#86efac" : "#e5e7eb";
-
-                                          return (
-                                            <div className={styles.detailsRow} style={{ padding: "8px 12px", backgroundColor: statusBg, borderRadius: "6px", border: `1px solid ${statusBorder}` }}>
-                                              <span className={styles.detailsLabel}>Wynik strzału:</span>
-                                              <span className={styles.detailsValue} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                                <span className={styles.valueMain}>
-                                                  <strong>{status}</strong>
-                                                </span>
-                                                {(selectedShot.playerId || selectedShot.assistantId) && (
-                                                  <span className={styles.valueSecondary} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "11px" }}>
-                                                    {selectedShot.playerId && <span>Strzał: {getPlayerLabel(selectedShot.playerId, playersIndex)}</span>}
-                                                    {selectedShot.assistantId && <span>Asysta: {getPlayerLabel(selectedShot.assistantId, playersIndex)}</span>}
-                                                  </span>
-                                                )}
-                                              </span>
-                                            </div>
-                                          );
-                                        })()}
-                                        {selectedShot.actionType && (
-                                          <div className={styles.detailsRow} style={{ padding: '8px 12px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
-                                            <span className={styles.detailsLabel}>Typ:</span>
-                                            <span className={styles.detailsValue} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                              <span className={styles.valueMain}>
-                                                <strong>
-                                                  {(() => {
-                                                    const at = selectedShot.actionType;
-                                                    if (!at) return "-";
-                                                    const sfgTypes = new Set(["corner", "free_kick", "direct_free_kick", "penalty", "throw_in"]);
-                                                    if (sfgTypes.has(at)) {
-                                                      if (at === "corner") return "Rożny";
-                                                      if (at === "free_kick") return "Wolny";
-                                                      if (at === "direct_free_kick") return "Bezpośredni wolny";
-                                                      if (at === "penalty") return "Karny";
-                                                      if (at === "throw_in") return "Rzut za autu";
-                                                      return "SFG";
-                                                    }
-                                                    if (at === "open_play") return "Otwarta gra";
-                                                    if (at === "counter") return "Kontra";
-                                                    if (at === "regain") return "Regain";
-                                                    return at;
-                                                  })()}
-                                                </strong>
-                                              </span>
-                                              {(selectedShot.isContact1 || selectedShot.isContact2 || selectedShot.isContact3Plus) && (
-                                                <span className={styles.valueSecondary}>
-                                                  Kontakty:{" "}
-                                                  {selectedShot.isContact1 ? "1T" : selectedShot.isContact2 ? "2T" : selectedShot.isContact3Plus ? "3T+" : "-"}
-                                                </span>
-                                              )}
-                                            </span>
-                                          </div>
-                                        )}
-                                        {selectedShot.playersOnLine !== undefined && (
-                                          <div className={styles.detailsRow} style={{ padding: '8px 12px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
-                                            <span className={styles.detailsLabel}>Zawodnicy na linii:</span>
-                                            <span className={styles.detailsValue}>
-                                              <span className={styles.valueMain}>
-                                                <strong>{selectedShot.playersOnLine}</strong>
-                                              </span>
-                                            </span>
-                                          </div>
-                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -4768,78 +4933,89 @@ export default function PlayerDetailsPage() {
                             </div>
 
                             {/* Szczegóły klikniętego wejścia */}
-                            {selectedPKEntry && (
-                              <div className={styles.zoneDetailsPanel} style={{ marginTop: 12 }}>
-                                <div className={styles.zoneDetailsHeader}>
-                                  <h4>
-                                    {selectedPKEntry.minute}' {selectedPKEntry.isSecondHalf ? "(II)" : "(I)"} • {(selectedPKEntry.entryType || "pass").toUpperCase()}
-                                    {selectedPKEntry.senderId && ` • ${getPlayerLabel(selectedPKEntry.senderId, playersIndex)}`}
-                                  </h4>
-                                  <button
-                                    type="button"
-                                    className={styles.zoneDetailsClose}
-                                    onClick={() => setSelectedPKEntryIdForView(undefined)}
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                                <div className={styles.zoneDetailsBody}>
-                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                      <span className={styles.detailsLabel}>Regain:</span>
-                                      <span className={styles.detailsValue}>
-                                        <span className={styles.valueMain}>
-                                          <strong>{selectedPKEntry.isRegain ? "Tak" : "Nie"}</strong>
-                                        </span>
-                                      </span>
-                                    </div>
-                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                      <span className={styles.detailsLabel}>Strzał:</span>
-                                      <span className={styles.detailsValue}>
-                                        <span className={styles.valueMain}>
-                                          <strong>{selectedPKEntry.isShot ? "Tak" : "Nie"}</strong>
-                                        </span>
-                                      </span>
-                                    </div>
-                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                      <span className={styles.detailsLabel}>Gol:</span>
-                                      <span className={styles.detailsValue}>
-                                        <span className={styles.valueMain}>
-                                          <strong>{selectedPKEntry.isGoal ? "Tak" : "Nie"}</strong>
-                                        </span>
-                                      </span>
-                                    </div>
-                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                      <span className={styles.detailsLabel}>Partnerzy w PK:</span>
-                                      <span className={styles.detailsValue}>
-                                        <span className={styles.valueMain}>
-                                          <strong>{selectedPKEntry.pkPlayersCount ?? 0}</strong>
-                                        </span>
-                                      </span>
-                                    </div>
-                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                      <span className={styles.detailsLabel}>Przeciwnicy w PK:</span>
-                                      <span className={styles.detailsValue}>
-                                        <span className={styles.valueMain}>
-                                          <strong>{selectedPKEntry.opponentsInPKCount ?? 0}</strong>
-                                        </span>
-                                      </span>
-                                    </div>
-                                    <div className={styles.detailsRow} style={{ padding: 0 }}>
-                                      <span className={styles.detailsLabel}>Różnica:</span>
-                                      <span className={styles.detailsValue}>
-                                        <span className={styles.valueMain}>
-                                          <strong>{(selectedPKEntry.opponentsInPKCount ?? 0) - (selectedPKEntry.pkPlayersCount ?? 0)}</strong>
-                                        </span>
-                                        <span className={styles.valueSecondary}>
-                                          {' '}(przeciwnicy−partnerzy)
-                                        </span>
-                                      </span>
+                            {selectedPKEntry && (() => {
+                              const e = selectedPKEntry;
+                              const half = e.isSecondHalf ? "II" : "I";
+                              const match = filteredMatchesBySeason.find((m) => m.matchId === e.matchId);
+                              const matchName = match
+                                ? `${match.isHome ? `${match.opponent} (D)` : `${match.opponent} (W)`}`
+                                : `Mecz ${e.matchId}`;
+                              const videoSec = getVideoTimestampSeconds(e);
+                              const matchForVideo = e.matchId
+                                ? filteredMatchesBySeason.find((m) => m.matchId === e.matchId)
+                                : undefined;
+                              const canVideo = Boolean(
+                                matchForVideo &&
+                                  hasExternalVideoSource(matchForVideo) &&
+                                  videoSec !== null,
+                              );
+                              const entryTypeLabel = (e.entryType || "pass").toUpperCase();
+                              const senderLabel = e.senderId
+                                ? getPlayerLabel(e.senderId, playersIndex)
+                                : null;
+                              const diff = (e.opponentsInPKCount ?? 0) - (e.pkPlayersCount ?? 0);
+                              const pkLine = [
+                                `Typ: ${entryTypeLabel}`,
+                                senderLabel ? `Nadawca: ${senderLabel}` : null,
+                                `Regain: ${e.isRegain ? "tak" : "nie"}`,
+                                `Strzał: ${e.isShot ? "tak" : "nie"}`,
+                                `Gol: ${e.isGoal ? "tak" : "nie"}`,
+                                `Partnerzy w PK: ${e.pkPlayersCount ?? 0}`,
+                                `Przeciwnicy w PK: ${e.opponentsInPKCount ?? 0}`,
+                                `Różnica: ${diff} (przeciwnicy−partnerzy)`,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ");
+                              return (
+                                <div className={styles.zoneDetailsPanel} style={{ marginTop: 12 }}>
+                                  <div className={styles.zoneDetailsHeader}>
+                                    <h4>Wejście w PK</h4>
+                                    <button
+                                      type="button"
+                                      className={styles.zoneDetailsClose}
+                                      onClick={() => setSelectedPKEntryIdForView(undefined)}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className={styles.zoneDetailsBody}>
+                                    <p className={styles.zoneDetailsSubtitle}>
+                                      Szczegóły zaznaczonego wejścia w pole karne
+                                    </p>
+                                    <div className={styles.zoneHeatmapActionCard}>
+                                      <div className={styles.zoneHeatmapActionMatch}>{matchName}</div>
+                                      <div className={styles.zoneHeatmapActionMeta}>
+                                        {canVideo ? (
+                                          <button
+                                            type="button"
+                                            className={styles.zoneHeatmapMinuteButton}
+                                            onClick={() =>
+                                              void seekProfileVideoAtMatchSeconds(
+                                                e.matchId,
+                                                getVideoTimestampSeconds(e),
+                                              )
+                                            }
+                                            title="Odtwórz wideo od tego wejścia"
+                                          >
+                                            {half} {e.minute}&apos;
+                                          </button>
+                                        ) : (
+                                          <span className={styles.zoneHeatmapActionDetails}>
+                                            {half} {e.minute}&apos;
+                                            {matchForVideo && !hasExternalVideoSource(matchForVideo)
+                                              ? " · brak wideo meczu"
+                                              : videoSec === null
+                                                ? " · brak czasu wideo"
+                                                : ""}
+                                          </span>
+                                        )}
+                                        <div className={styles.zoneHeatmapActionDetails}>{pkLine}</div>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
-                              </div>
-                            )}
+                              );
+                            })()}
                           </>
                         )}
                       </div>
@@ -4907,22 +5083,6 @@ export default function PlayerDetailsPage() {
                                 <span className={styles.valueSecondary}>({teamRanking.pxtSenderPercentage.toFixed(1)}% zespołu)</span>
                               )}
                               <span className={styles.valueSecondary}>({playerStats.pxtSenderPer90.toFixed(2)} / 90 min)</span>
-                              {teamRanking && (
-                                <>
-                                  <span 
-                                    className={styles.rankingBadge} 
-                                    data-tooltip="Miejsce w zespole pod względem całkowitego PxT jako podający"
-                                  >
-                                    #{teamRanking.pxtRank}/{teamRanking.totalPlayers}
-                                  </span>
-                                  <span 
-                                    className={styles.rankingBadge} 
-                                    data-tooltip="Miejsce w zespole pod względem PxT/90min jako podający"
-                                  >
-                                    #{teamRanking.pxtPer90Rank}/{teamRanking.totalPlayers} (90min)
-                                  </span>
-                                </>
-                              )}
                             </span>
                           </div>
                           <div className={styles.detailsRow}>
@@ -4934,11 +5094,6 @@ export default function PlayerDetailsPage() {
                                 <span className={styles.valueSecondary}> - {teamRanking.senderPassesPercentage.toFixed(1)}% zespołu</span>
                               )}
                               <span className={styles.valueSecondary}>)</span>
-                              {teamRanking && (
-                                <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem liczby akcji/90min jako podający">
-                                  #{teamRanking.actionsPer90Rank}/{teamRanking.totalPlayers}
-                                </span>
-                              )}
                             </span>
                           </div>
                           {(playerStats.manualPassAccurate !== undefined || playerStats.manualPassInaccurate !== undefined) && (
@@ -4972,11 +5127,6 @@ export default function PlayerDetailsPage() {
                             <span className={styles.detailsLabel}>PxT / podanie:</span>
                             <span className={styles.detailsValue}>
                               {playerStats.pxtSenderPerAction.toFixed(2)}
-                              {teamRanking && (
-                                <span className={styles.rankingBadge} data-tooltip="Miejsce w zespole pod względem PxT/podanie jako podający">
-                                  #{teamRanking.pxtPerActionRank}/{teamRanking.totalPlayers}
-                                </span>
-                              )}
                             </span>
                           </div>
                         </div>
@@ -5974,73 +6124,46 @@ export default function PlayerDetailsPage() {
                             category={selectedPxtCategory}
                             mode={heatmapMode}
                             onZoneClick={(zoneName) => {
-                              // Dla receiver i sender pokazujemy szczegóły dla obu kierunków
-                              if (selectedPxtCategory === 'receiver') {
-                                const zoneStats = heatmapDirection === 'from' 
-                                  ? playerStats.zonePlayerStatsFrom?.get(zoneName)
-                                  : playerStats.zonePlayerStatsTo?.get(zoneName);
-                                
-                                if (zoneStats && zoneStats.size > 0) {
-                                  const playersList = Array.from(zoneStats.entries())
-                                    .map(([playerId, stats]) => {
-                                      const player = players.find(p => p.id === playerId);
-                                      return {
-                                        playerId,
-                                        playerName: getPlayerLabel(playerId, playersIndex),
-                                        passes: stats.passes,
-                                        pxt: stats.pxt,
-                                        p1Count: stats.p1Count,
-                                        p2Count: stats.p2Count,
-                                        p3Count: stats.p3Count,
-                                        pkCount: stats.pkCount,
-                                        shotCount: stats.shotCount,
-                                        goalCount: stats.goalCount,
-                                      };
-                                    })
-                                    .sort((a, b) => b.pxt - a.pxt); // Sortuj według PxT
-                                  
-                                  setZoneDetails({
-                                    zoneName,
-                                    players: playersList,
-                                  });
-                                  setSelectedZone(zoneName);
-                                } else {
-                                  setZoneDetails(null);
-                                  setSelectedZone(null);
-                                }
-                              } else if (selectedPxtCategory === 'sender') {
-                                const zoneStats = heatmapDirection === 'from' 
-                                  ? playerStats.senderZonePlayerStatsFrom?.get(zoneName)
-                                  : playerStats.senderZonePlayerStatsTo?.get(zoneName);
-                                
-                                if (zoneStats && zoneStats.size > 0) {
-                                  const playersList = Array.from(zoneStats.entries())
-                                    .map(([playerId, stats]) => {
-                                      const player = players.find(p => p.id === playerId);
-                                      return {
-                                        playerId,
-                                        playerName: getPlayerLabel(playerId, playersIndex),
-                                        passes: stats.passes,
-                                        pxt: stats.pxt,
-                                        p1Count: stats.p1Count,
-                                        p2Count: stats.p2Count,
-                                        p3Count: stats.p3Count,
-                                        pkCount: stats.pkCount,
-                                        shotCount: stats.shotCount,
-                                        goalCount: stats.goalCount,
-                                      };
-                                    })
-                                    .sort((a, b) => b.pxt - a.pxt); // Sortuj według PxT
-                                  
-                                  setZoneDetails({
-                                    zoneName,
-                                    players: playersList,
-                                  });
-                                  setSelectedZone(zoneName);
-                                } else {
-                                  setZoneDetails(null);
-                                  setSelectedZone(null);
-                                }
+                              if (selectedPxtCategory !== "receiver" && selectedPxtCategory !== "sender") return;
+                              const normalized =
+                                typeof zoneName === "string"
+                                  ? zoneName.toUpperCase().replace(/\s+/g, "")
+                                  : String(zoneName).toUpperCase().replace(/\s+/g, "");
+                              const passMap =
+                                selectedPxtCategory === "receiver"
+                                  ? heatmapDirection === "from"
+                                    ? playerStats.passActionsByZoneReceiverFrom
+                                    : playerStats.passActionsByZoneReceiverTo
+                                  : heatmapDirection === "from"
+                                    ? playerStats.passActionsByZoneSenderFrom
+                                    : playerStats.passActionsByZoneSenderTo;
+                              let raw: Action[] =
+                                passMap?.get(zoneName as string) || passMap?.get(normalized) || [];
+                              if (raw.length === 0 && passMap) {
+                                passMap.forEach((arr, key) => {
+                                  const nk = key.toUpperCase().replace(/\s+/g, "");
+                                  if (nk === normalized) raw = arr;
+                                });
+                              }
+                              if (raw.length > 0) {
+                                const subtitle =
+                                  selectedPxtCategory === "receiver"
+                                    ? heatmapDirection === "from"
+                                      ? `Podania z tej strefy do ${getPlayerLabel(player?.id, playersIndex)} (pojedyncze akcje):`
+                                      : `Podania do strefy ${normalized}, gdzie przyjmował ${getPlayerLabel(player?.id, playersIndex)}:`
+                                    : heatmapDirection === "from"
+                                      ? `Podania zawodnika ze strefy ${normalized} (odbiorcy):`
+                                      : `Podania do strefy ${normalized} od ${getPlayerLabel(player?.id, playersIndex)}:`;
+                                setZoneDetails({
+                                  zoneName: normalized,
+                                  subtitle,
+                                  actions: sortActionsByMatchThenMinute(raw),
+                                  pxtContext: selectedPxtCategory === "receiver" ? "receiver" : "sender",
+                                });
+                                setSelectedZone(normalized);
+                              } else {
+                                setZoneDetails(null);
+                                setSelectedZone(null);
                               }
                             }}
                           />
@@ -6062,70 +6185,102 @@ export default function PlayerDetailsPage() {
                               </button>
                             </div>
                             <div className={styles.zoneDetailsBody}>
-                              <p className={styles.zoneDetailsSubtitle}>
-                                {selectedPxtCategory === 'receiver' ? (
-                                  heatmapDirection === 'from' 
-                                    ? `Zawodnicy, którzy podawali z tej strefy do ${getPlayerLabel(player?.id, playersIndex)}:`
-                                    : `Zawodnicy, którzy podawali do tej strefy (gdzie ${getPlayerLabel(player?.id, playersIndex)} przyjmował):`
-                                ) : (
-                                  heatmapDirection === 'from' 
-                                    ? `Zawodnicy, którzy przyjmowali podania z tej strefy (gdzie ${getPlayerLabel(player?.id, playersIndex)} podawał):`
-                                    : `Zawodnicy, którzy przyjmowali podania do tej strefy (gdzie ${getPlayerLabel(player?.id, playersIndex)} podawał):`
-                                )}
-                              </p>
+                              <p className={styles.zoneDetailsSubtitle}>{zoneDetails.subtitle}</p>
                               <div className={styles.zonePlayersList}>
-                                {zoneDetails.players.map((playerInfo) => (
-                                  <div key={playerInfo.playerId} className={styles.zonePlayerItem}>
-                                  <div className={styles.zonePlayerName}>{getPlayerLabel(playerInfo.playerId, playersIndex)}</div>
-                                    <div className={styles.zonePlayerStats}>
-                                      <span className={styles.zonePlayerStat}>
-                                        <strong>{playerInfo.passes}</strong> {playerInfo.passes === 1 ? 'podań' : 'podań'}
-                                      </span>
-                                      <span className={styles.zonePlayerStat}>
-                                        <strong>{playerInfo.pxt.toFixed(2)}</strong> PxT
-                                      </span>
-                                      <span className={styles.zonePlayerStat}>
-                                        <strong>{(playerInfo.pxt / playerInfo.passes).toFixed(2)}</strong> PxT/podanie
-                                      </span>
-                                    </div>
-                                    <button
-                                      className={styles.viewActionsButton}
-                                      onClick={() => {
-                                        setSelectedPlayerForModal({
-                                          playerId: playerInfo.playerId,
-                                          playerName: getPlayerLabel(playerInfo.playerId, playersIndex),
-                                          zoneName: zoneDetails.zoneName
-                                        });
-                                        setActionsModalOpen(true);
-                                      }}
-                                      title="Zobacz szczegóły akcji"
+                                {zoneDetails.actions.map((action, index) => {
+                                  const match = filteredMatchesBySeason.find((m) => m.matchId === action.matchId);
+                                  const matchName = match
+                                    ? `${match.isHome ? `${match.opponent} (D)` : `${match.opponent} (W)`}`
+                                    : `Mecz ${action.matchId ?? "?"}`;
+                                  const half = action.isSecondHalf ? "II" : "I";
+                                  const pxtPass =
+                                    ((action.xTValueEnd || 0) - (action.xTValueStart || 0)) *
+                                    (action.packingPoints || 0);
+                                  const partnerId =
+                                    zoneDetails.pxtContext === "sender"
+                                      ? action.receiverId
+                                      : action.senderId;
+                                  const partnerName = partnerId
+                                    ? getPlayerLabel(partnerId, playersIndex)
+                                    : "—";
+                                  const videoSec = getVideoTimestampSeconds(action);
+                                  const matchForVideo = action.matchId
+                                    ? filteredMatchesBySeason.find((m) => m.matchId === action.matchId)
+                                    : undefined;
+                                  const canVideo = Boolean(
+                                    matchForVideo &&
+                                      hasExternalVideoSource(matchForVideo) &&
+                                      videoSec !== null,
+                                  );
+                                  const flags = [
+                                    action.isP0 || action.isP0Start ? "P0" : null,
+                                    action.isP1 || action.isP1Start ? "P1" : null,
+                                    action.isP2 || action.isP2Start ? "P2" : null,
+                                    action.isP3 || action.isP3Start ? "P3" : null,
+                                    action.isPenaltyAreaEntry ? "PK" : null,
+                                    action.isShot ? "Strzał" : null,
+                                    action.isGoal ? "Gol" : null,
+                                  ].filter(Boolean);
+                                  return (
+                                    <div
+                                      key={`${action.id ?? action.matchId}-${index}`}
+                                      className={styles.zoneHeatmapActionCard}
                                     >
-                                      Zobacz akcje
-                                    </button>
-                                    {(playerInfo.p1Count > 0 || playerInfo.p2Count > 0 || playerInfo.p3Count > 0 || playerInfo.pkCount > 0 || playerInfo.shotCount > 0 || playerInfo.goalCount > 0) && (
-                                      <div className={styles.zonePlayerActionBreakdown}>
-                                        {playerInfo.p1Count > 0 && (
-                                          <span className={styles.zonePlayerActionItem}>P1: {playerInfo.p1Count}</span>
+                                      <div className={styles.zoneHeatmapActionMatch}>{matchName}</div>
+                                      <div className={styles.zoneHeatmapActionMeta}>
+                                        {canVideo ? (
+                                          <button
+                                            type="button"
+                                            className={styles.zoneHeatmapMinuteButton}
+                                            onClick={() => void seekProfileActionVideo(action)}
+                                            title="Odtwórz wideo od tej akcji"
+                                          >
+                                            {half} {action.minute}&apos;
+                                          </button>
+                                        ) : (
+                                          <span className={styles.zoneHeatmapActionDetails}>
+                                            {half} {action.minute}&apos;
+                                            {matchForVideo && !hasExternalVideoSource(matchForVideo)
+                                              ? " · brak wideo meczu"
+                                              : videoSec === null
+                                                ? " · brak czasu wideo"
+                                                : ""}
+                                          </span>
                                         )}
-                                        {playerInfo.p2Count > 0 && (
-                                          <span className={styles.zonePlayerActionItem}>P2: {playerInfo.p2Count}</span>
-                                        )}
-                                        {playerInfo.p3Count > 0 && (
-                                          <span className={styles.zonePlayerActionItem}>P3: {playerInfo.p3Count}</span>
-                                        )}
-                                        {playerInfo.pkCount > 0 && (
-                                          <span className={styles.zonePlayerActionItem}>PK: {playerInfo.pkCount}</span>
-                                        )}
-                                        {playerInfo.shotCount > 0 && (
-                                          <span className={styles.zonePlayerActionItem}>Strzał: {playerInfo.shotCount}</span>
-                                        )}
-                                        {playerInfo.goalCount > 0 && (
-                                          <span className={styles.zonePlayerActionItem}>Gol: {playerInfo.goalCount}</span>
-                                        )}
+                                        <div className={styles.zoneHeatmapActionDetails}>
+                                          {zoneDetails.pxtContext === "sender" ? (
+                                            <>
+                                              → {partnerName} · <strong>PxT {pxtPass.toFixed(2)}</strong>
+                                            </>
+                                          ) : (
+                                            <>
+                                              ← {partnerName} · <strong>PxT {pxtPass.toFixed(2)}</strong>
+                                            </>
+                                          )}
+                                          {flags.length > 0 ? ` · ${flags.join(", ")}` : ""}
+                                          {partnerId ? (
+                                            <div style={{ marginTop: 8 }}>
+                                              <button
+                                                type="button"
+                                                className={styles.viewActionsButton}
+                                                onClick={() => {
+                                                  setSelectedPlayerForModal({
+                                                    playerId: partnerId,
+                                                    playerName: partnerName,
+                                                    zoneName: zoneDetails.zoneName,
+                                                  });
+                                                  setActionsModalOpen(true);
+                                                }}
+                                              >
+                                                Wszystkie akcje z tym zawodnikiem
+                                              </button>
+                                            </div>
+                                          ) : null}
+                                        </div>
                                       </div>
-                                    )}
-                                  </div>
-                                ))}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           </div>
@@ -6505,22 +6660,6 @@ export default function PlayerDetailsPage() {
                               <span className={styles.detailsValue} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                 <span className={styles.valueMain}><strong>{playerStats.totalRegains}</strong></span>
                                 <span className={styles.valueSecondary}>({playerStats.regainsPer90.toFixed(1)} / 90 min)</span>
-                                {teamRanking && (
-                                  <>
-                                    <span 
-                                      className={styles.rankingBadge} 
-                                      data-tooltip="Miejsce w zespole pod względem całkowitej liczby regainów"
-                                    >
-                                      #{teamRanking.regainsRank}/{teamRanking.totalPlayers}
-                                    </span>
-                                    <span 
-                                      className={styles.rankingBadge} 
-                                      data-tooltip="Miejsce w zespole pod względem regainów/90min"
-                                    >
-                                      #{teamRanking.regainsPer90Rank}/{teamRanking.totalPlayers} (90min)
-                                    </span>
-                                  </>
-                                )}
                               </span>
                             </div>
                             <div className={styles.detailsRow}>
@@ -6579,22 +6718,6 @@ export default function PlayerDetailsPage() {
                                     {playerStats.regainDefenseCount > 0 && (
                                       <>
                                         <span className={styles.valueSecondary}> • {(playerStats.regainXTInDefense / playerStats.regainDefenseCount).toFixed(3)}/akcję</span>
-                                      </>
-                                    )}
-                                    {teamRanking && (
-                                      <>
-                                        <span 
-                                          className={styles.rankingBadge} 
-                                          data-tooltip="Miejsce w zespole pod względem całkowitego xT w obronie"
-                                        >
-                                          #{teamRanking.regainXTInDefenseRank}/{teamRanking.totalPlayers}
-                                        </span>
-                                        <span 
-                                          className={styles.rankingBadge} 
-                                          data-tooltip="Miejsce w zespole pod względem xT w obronie/akcję"
-                                        >
-                                          #{teamRanking.regainXTInDefensePerActionRank}/{teamRanking.totalPlayers}
-                                        </span>
                                       </>
                                     )}
                                   </span>
@@ -6845,9 +6968,9 @@ export default function PlayerDetailsPage() {
                                 
                                 // Zawsze filtrujemy po regainAttackZone (niezależnie od trybu)
                                 const filteredActions = onlyRegainActions.filter((action) => {
-                                  const regainAttackZone = action.regainAttackZone || action.oppositeZone;
-                                  const attackZoneNameStr = regainAttackZone 
-                                    ? convertZoneToNameHelper(regainAttackZone)
+                                  const raw = regainAttackZoneRawForMap(action);
+                                  const attackZoneNameStr = raw
+                                    ? convertZoneToNameHelper(raw)
                                     : null;
                                   return attackZoneNameStr === zoneName;
                                 });
@@ -6914,12 +7037,11 @@ export default function PlayerDetailsPage() {
                             </div>
                             <div className={styles.zoneDetailsBody}>
                               <p className={styles.zoneDetailsSubtitle}>
-                                Przechwyty w strefie {selectedRegainZone}:
+                                Przechwyty w strefie {selectedRegainZone} (pojedyncze akcje):
                               </p>
                               {regainZoneActions && regainZoneActions.length > 0 ? (
                                 <div className={styles.zonePlayersList}>
-                                {regainZoneActions.map((action, index) => {
-                                  // Używamy nowych pól dla regain
+                                {sortActionsByMatchThenMinute(regainZoneActions).map((action, index) => {
                                   const receiverXT = action.regainDefenseXT !== undefined 
                                     ? action.regainDefenseXT 
                                     : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0));
@@ -6930,15 +7052,10 @@ export default function PlayerDetailsPage() {
                                   const matchName = match 
                                     ? `${match.isHome ? match.opponent + ' (D)' : match.opponent + ' (W)'}`
                                     : `Mecz ${action.matchId}`;
-                                  
-                                  // Określ czy to atak czy obrona - używamy wartości z obiektu
                                   const isAttack = action.isAttack !== undefined 
                                     ? action.isAttack 
-                                    : (receiverXT < 0.02); // xT < 0.02 to atak
-                                  const isDefense = !isAttack;
-                                  
-                                  // Używamy regainAttackXT (wartość w ataku) z nowych pól
-                                  let oppositeXT = action.regainAttackXT !== undefined 
+                                    : (receiverXT < 0.02);
+                                  const oppositeXT = action.regainAttackXT !== undefined 
                                     ? action.regainAttackXT 
                                     : (action.oppositeXT !== undefined 
                                     ? action.oppositeXT 
@@ -6953,47 +7070,43 @@ export default function PlayerDetailsPage() {
                                         }
                                         return 0;
                                         })());
-                                  
+                                  const half = action.isSecondHalf ? "II" : "I";
+                                  const videoSec = getVideoTimestampSeconds(action);
+                                  const matchForVideo = action.matchId
+                                    ? filteredMatchesBySeason.find((m) => m.matchId === action.matchId)
+                                    : undefined;
+                                  const canVideo = Boolean(
+                                    matchForVideo &&
+                                      hasExternalVideoSource(matchForVideo) &&
+                                      videoSec !== null,
+                                  );
+                                  const regainLine = isAttack
+                                    ? `Atak · xT atak ${oppositeXT.toFixed(3)} · xT obr. ${receiverXT.toFixed(3)} · przeciwnicy/partnerzy za piłką: ${action.opponentsBehindBall ?? 0}/${action.playersBehindBall ?? 0}${action.isBelow8s ? " · <8s" : ""}`
+                                    : `Obrona · xT obr. ${startXT.toFixed(3)} · przeciwnicy/partnerzy za piłką: ${action.opponentsBehindBall ?? 0}/${action.playersBehindBall ?? 0}${action.isBelow8s ? " · <8s" : ""}`;
                                   return (
-                                    <div key={`${action.id || action.matchId}-${index}`} className={styles.zonePlayerItem}>
-                                      <div className={styles.zonePlayerName}>
-                                        <strong>{matchName}</strong>
-                                      </div>
-                                      <div className={styles.zonePlayerStats}>
-                                        <span className={styles.zonePlayerStat}>
-                                          <strong>Minuta:</strong> {action.minute}
-                                        </span>
-                                        {isAttack && (
-                                          <>
-                                            <span className={styles.zonePlayerStat} style={{ color: '#10b981' }}>
-                                              <strong>Atak</strong>
-                                            </span>
-                                            <span className={styles.zonePlayerStat} style={{ color: '#10b981' }}>
-                                              <strong>xT atak:</strong> {oppositeXT.toFixed(3)}
-                                            </span>
-                                            <span className={styles.zonePlayerStat}>
-                                              <strong>xT obrona:</strong> {receiverXT.toFixed(3)}
-                                            </span>
-                                          </>
-                                        )}
-                                        {isDefense && (
-                                          <>
-                                            <span className={styles.zonePlayerStat} style={{ color: '#ef4444' }}>
-                                              <strong>Obrona</strong>
-                                            </span>
-                                            <span className={styles.zonePlayerStat} style={{ color: '#ef4444' }}>
-                                              <strong>xT obrona:</strong> {startXT.toFixed(3)}
-                                            </span>
-                                          </>
-                                        )}
-                                        <span className={styles.zonePlayerStat}>
-                                          <strong>Przeciwnicy za piłką / Partnerzy za piłką:</strong> {action.opponentsBehindBall || 0} / {action.playersBehindBall || 0}
-                                        </span>
-                                        {action.isBelow8s && (
-                                          <span className={styles.zonePlayerStat} style={{ color: '#f59e0b' }}>
-                                            <strong>Poniżej 8s</strong>
+                                    <div key={`${action.id || action.matchId}-${index}`} className={styles.zoneHeatmapActionCard}>
+                                      <div className={styles.zoneHeatmapActionMatch}>{matchName}</div>
+                                      <div className={styles.zoneHeatmapActionMeta}>
+                                        {canVideo ? (
+                                          <button
+                                            type="button"
+                                            className={styles.zoneHeatmapMinuteButton}
+                                            onClick={() => void seekProfileActionVideo(action)}
+                                            title="Odtwórz wideo od tej akcji"
+                                          >
+                                            {half} {action.minute}&apos;
+                                          </button>
+                                        ) : (
+                                          <span className={styles.zoneHeatmapActionDetails}>
+                                            {half} {action.minute}&apos;
+                                            {matchForVideo && !hasExternalVideoSource(matchForVideo)
+                                              ? " · brak wideo meczu"
+                                              : videoSec === null
+                                                ? " · brak czasu wideo"
+                                                : ""}
                                           </span>
                                         )}
+                                        <div className={styles.zoneHeatmapActionDetails}>{regainLine}</div>
                                       </div>
                                     </div>
                                   );
@@ -7768,46 +7881,60 @@ export default function PlayerDetailsPage() {
                               <div className={styles.zoneDetailsBody}>
                                 <p className={styles.zoneDetailsSubtitle}>
                                   {losesAttackDefenseMode === 'defense' 
-                                    ? 'Straty w tej strefie (w obronie):'
-                                    : 'Straty w tej strefie (w ataku):'}
+                                    ? 'Straty w tej strefie (w obronie) — pojedyncze akcje:'
+                                    : 'Straty w tej strefie (w ataku) — pojedyncze akcje:'}
                                 </p>
                                 <div className={styles.zonePlayersList}>
                                   {losesZoneDetails.actions && losesZoneDetails.actions.length > 0 ? (
-                                    losesZoneDetails.actions.map((action, index) => {
+                                    sortActionsByMatchThenMinute(losesZoneDetails.actions).map((action, index) => {
                                       const actionXT = losesAttackDefenseMode === 'defense'
                                         ? (action.losesDefenseXT !== undefined ? action.losesDefenseXT : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0)))
                                         : (action.losesAttackXT !== undefined ? action.losesAttackXT : (action.xTValueStart !== undefined ? action.xTValueStart : (action.xTValueEnd !== undefined ? action.xTValueEnd : 0)));
-                                      
+                                      const match = filteredMatchesBySeason.find((m) => m.matchId === action.matchId);
+                                      const matchName = match
+                                        ? `${match.isHome ? `${match.opponent} (D)` : `${match.opponent} (W)`}`
+                                        : `Mecz ${action.matchId ?? "?"}`;
+                                      const half = action.isSecondHalf ? "II" : "I";
+                                      const videoSec = getVideoTimestampSeconds(action);
+                                      const matchForVideo = action.matchId
+                                        ? filteredMatchesBySeason.find((m) => m.matchId === action.matchId)
+                                        : undefined;
+                                      const canVideo = Boolean(
+                                        matchForVideo &&
+                                          hasExternalVideoSource(matchForVideo) &&
+                                          videoSec !== null,
+                                      );
+                                      const pack = [
+                                        action.isP0 || action.isP0Start ? "P0" : null,
+                                        action.isP1 || action.isP1Start ? "P1" : null,
+                                        action.isP2 || action.isP2Start ? "P2" : null,
+                                        action.isP3 || action.isP3Start ? "P3" : null,
+                                      ].filter(Boolean);
+                                      const losesLine = `${losesAttackDefenseMode === "defense" ? "xT obr." : "xT atak"} ${actionXT.toFixed(2)}${pack.length ? ` · ${pack.join(", ")}` : ""}`;
                                       return (
-                                        <div key={`action-${index}-${action.id || action.minute || index}`} className={styles.zonePlayerItem}>
-                                          <div className={styles.zonePlayerName}>
-                                            {action.minute !== undefined ? `Minuta ${action.minute}` : `Akcja ${index + 1}`}
-                                          </div>
-                                          <div className={styles.zonePlayerStats}>
-                                            <div className={styles.zonePlayerStat}>
-                                              <span className={styles.zoneLabel}>xT:</span>
-                                              <span className={styles.zoneValue}>{actionXT.toFixed(2)}</span>
-                                            </div>
-                                            {action.isP0 || action.isP0Start ? (
-                                              <div className={styles.zonePlayerStat}>
-                                                <span className={styles.zoneLabel}>P0</span>
-                                              </div>
-                                            ) : null}
-                                            {action.isP1 || action.isP1Start ? (
-                                              <div className={styles.zonePlayerStat}>
-                                                <span className={styles.zoneLabel}>P1</span>
-                                              </div>
-                                            ) : null}
-                                            {action.isP2 || action.isP2Start ? (
-                                              <div className={styles.zonePlayerStat}>
-                                                <span className={styles.zoneLabel}>P2</span>
-                                              </div>
-                                            ) : null}
-                                            {action.isP3 || action.isP3Start ? (
-                                              <div className={styles.zonePlayerStat}>
-                                                <span className={styles.zoneLabel}>P3</span>
-                                              </div>
-                                            ) : null}
+                                        <div key={`action-${index}-${action.id || action.minute || index}`} className={styles.zoneHeatmapActionCard}>
+                                          <div className={styles.zoneHeatmapActionMatch}>{matchName}</div>
+                                          <div className={styles.zoneHeatmapActionMeta}>
+                                            {canVideo ? (
+                                              <button
+                                                type="button"
+                                                className={styles.zoneHeatmapMinuteButton}
+                                                onClick={() => void seekProfileActionVideo(action)}
+                                                title="Odtwórz wideo od tej akcji"
+                                              >
+                                                {half} {action.minute}&apos;
+                                              </button>
+                                            ) : (
+                                              <span className={styles.zoneHeatmapActionDetails}>
+                                                {half} {action.minute}&apos;
+                                                {matchForVideo && !hasExternalVideoSource(matchForVideo)
+                                                  ? " · brak wideo meczu"
+                                                  : videoSec === null
+                                                    ? " · brak czasu wideo"
+                                                    : ""}
+                                              </span>
+                                            )}
+                                            <div className={styles.zoneHeatmapActionDetails}>{losesLine}</div>
                                           </div>
                                         </div>
                                       );

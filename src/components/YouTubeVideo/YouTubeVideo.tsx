@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useRef, useImperativeHandle, forwardRef, useState } from "react";
+import React, { useRef, useImperativeHandle, forwardRef, useState, useEffect, useCallback } from "react";
 import YouTube, { YouTubeProps } from "react-youtube";
 import { TeamInfo } from "@/types";
+import toast from "react-hot-toast";
+import { hasExternalVideoSource, saveExternalVideoMatchInfo } from "@/utils/externalVideoMatchInfo";
 import styles from "./YouTubeVideo.module.css";
 
 interface YouTubeVideoProps {
@@ -11,6 +13,9 @@ interface YouTubeVideoProps {
   onToggleVisibility?: () => void;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
+  /** Po załadowaniu iframe lub przy zmianie — przewiń do tej sekundy (np. pierwsze otwarcie panelu z profilu). */
+  seekTargetSeconds?: number | null;
+  onSeekTargetConsumed?: () => void;
 }
 
 export interface YouTubeVideoRef {
@@ -24,8 +29,12 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
   onToggleVisibility,
   isFullscreen: isFullscreenProp,
   onToggleFullscreen,
+  seekTargetSeconds = null,
+  onSeekTargetConsumed,
 }, ref) => {
   const playerRef = useRef<any>(null);
+  const onSeekTargetConsumedRef = useRef(onSeekTargetConsumed);
+  onSeekTargetConsumedRef.current = onSeekTargetConsumed;
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [isExternalWindowOpen, setIsExternalWindowOpen] = useState<boolean>(false);
   const [isFullscreenInternal, setIsFullscreenInternal] = useState<boolean>(false);
@@ -87,13 +96,36 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
   const videoUrl = matchInfo?.videoUrl || "";
   const videoId = extractYouTubeId(videoUrl);
 
-  const onReady: YouTubeProps['onReady'] = (event) => {
+  useEffect(() => {
+    playerRef.current = null;
+  }, [videoId]);
+
+  const applySeekTargetToPlayer = useCallback((target: number, player: { seekTo: (s: number, a: boolean) => void }) => {
+    try {
+      player.seekTo(target, true);
+      onSeekTargetConsumedRef.current?.();
+    } catch (error) {
+      console.warn("YouTubeVideo: seekTargetSeconds", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (seekTargetSeconds === null || !Number.isFinite(seekTargetSeconds)) return;
+    const p = playerRef.current;
+    if (!p || typeof p.seekTo !== "function") return;
+    applySeekTargetToPlayer(seekTargetSeconds, p);
+  }, [seekTargetSeconds, videoId, applySeekTargetToPlayer]);
+
+  const onReady: YouTubeProps["onReady"] = (event) => {
     try {
       playerRef.current = event.target;
       setPlayerError(null);
+      if (seekTargetSeconds !== null && Number.isFinite(seekTargetSeconds)) {
+        applySeekTargetToPlayer(seekTargetSeconds, event.target);
+      }
     } catch (error) {
-      console.error('Błąd podczas inicjalizacji playera:', error);
-      setPlayerError('Błąd inicjalizacji playera');
+      console.error("Błąd podczas inicjalizacji playera:", error);
+      setPlayerError("Błąd inicjalizacji playera");
     }
   };
 
@@ -108,9 +140,16 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
   // Funkcja do otwierania wideo w zewnętrznym oknie
   const openExternalVideo = () => {
     if (matchInfo) {
-      // Zapisz dane meczu do localStorage
-      localStorage.setItem('externalVideoMatchInfo', JSON.stringify(matchInfo));
-      // Otwórz nowe okno i zapisz referencję
+      if (!hasExternalVideoSource(matchInfo)) {
+        toast.error("Brak adresu wideo dla tego meczu.");
+        return;
+      }
+      if (!saveExternalVideoMatchInfo(matchInfo)) {
+        toast.error(
+          "Nie udało się zapisać danych wideo (limit pamięci przeglądarki). Spróbuj wyczyścić dane witryny lub zwolnić miejsce w localStorage."
+        );
+        return;
+      }
       const externalWindow = window.open(
         '/video-external',
         'youtube-video',

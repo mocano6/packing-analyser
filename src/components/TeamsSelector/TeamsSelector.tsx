@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { fetchTeams, Team } from "@/constants/teamsLoader";
 import styles from "./TeamsSelector.module.css";
+import { usePresentationMode } from "@/contexts/PresentationContext";
 
 interface TeamsSelectorProps {
   selectedTeam: string;
@@ -25,6 +26,7 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
 }) => {
   const [teams, setTeams] = useState<Record<string, Team>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const { isPresentationMode } = usePresentationMode();
 
   const getTeamInitials = (name: string): string => {
     const trimmed = String(name || "").trim();
@@ -71,7 +73,8 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
         String(a?.name || "").localeCompare(String(b?.name || ""), "pl", { sensitivity: "base", numeric: true })
       );
   }, [teams]);
-  const selectedTeamName = teams[selectedTeam]?.name || "Wybierz zespół";
+  const rawSelectedTeamName = teams[selectedTeam]?.name || "Wybierz zespół";
+  const selectedTeamName = isPresentationMode && teams[selectedTeam] ? "Zespół" : rawSelectedTeamName;
 
   const handleToggle = () => {
     if (onToggle) {
@@ -133,11 +136,11 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
                       }`}
                       onClick={() => handleTeamSelect(team.id)}
                       type="button"
-                      title={team.name}
+                      title={isPresentationMode ? "Zespół" : team.name}
                     >
                       <div className={styles.teamTile}>
                         <div className={styles.teamLogoWrapper} aria-hidden="true">
-                          {team.logo ? (
+                          {team.logo && !isPresentationMode ? (
                             <img
                               src={team.logo}
                               alt=""
@@ -146,10 +149,10 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
                               decoding="async"
                             />
                           ) : (
-                            <div className={styles.teamInitials}>{getTeamInitials(team.name)}</div>
+                            <div className={styles.teamInitials}>{isPresentationMode ? "Z" : getTeamInitials(team.name)}</div>
                           )}
                         </div>
-                        <div className={styles.teamName}>{team.name}</div>
+                        <div className={styles.teamName}>{isPresentationMode ? "Zespół" : team.name}</div>
                       </div>
                     </button>
                   ))}

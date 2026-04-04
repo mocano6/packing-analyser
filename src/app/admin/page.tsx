@@ -2,21 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { FIRESTORE_METRICS_HIDDEN_KEY } from "@/components/FirestoreMetricsBadge/FirestoreMetricsBadge";
+import UserManagement from "@/components/AdminPanel/UserManagement";
+import TeamsManagement from "@/components/AdminPanel/TeamsManagement";
 import styles from "./page.module.css";
-
-const UserManagement = dynamic(
-  () => import("@/components/AdminPanel/UserManagement"),
-  { ssr: false }
-);
-
-const TeamsManagement = dynamic(
-  () => import("@/components/AdminPanel/TeamsManagement"),
-  { ssr: false }
-);
 
 export default function AdminPage() {
   const router = useRouter();
@@ -98,10 +89,10 @@ export default function AdminPage() {
       </section>
 
       <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Czyszczenie PII</h2>
-        <p className={styles.sectionDesc}>Skanuj matches, gps i archiwa, usuń pola PII z wybranych dokumentów (przed usunięciem tworzona jest kopia).</p>
-        <Link href="/admin/cleanup" className={styles.linkButton}>
-          Otwórz czyszczenie PII
+        <h2 className={styles.sectionTitle}>KPI trendów</h2>
+        <p className={styles.sectionDesc}>Definicje i cele KPI wykorzystywane na stronie Trendy.</p>
+        <Link href="/admin/kpi" className={styles.linkButton}>
+          Otwórz konfigurację KPI
         </Link>
       </section>
 

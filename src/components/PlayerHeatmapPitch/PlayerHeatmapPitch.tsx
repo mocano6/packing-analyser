@@ -12,7 +12,19 @@ export interface PlayerHeatmapPitchProps {
   mode?: "pxt" | "count"; // Tryb wyświetlania: PxT lub liczba akcji
   onZoneClick?: (zoneName: string) => void; // Callback przy kliknięciu na strefę
   mirrored?: boolean; // Czy mapa ma być odwrócona (lustrzane odbicie)
-  selectedZone?: string | null; // Nazwa wybranej strefy do podświetlenia
+  selectedZone?: string | null; // Nazwa wybranej strefy do podświetlenia (pojedyncza)
+  /** Wiele stref do obramowania (np. zaznaczenie z tabeli). Klucze jak nazwy stref (D6). */
+  highlightedZones?: Set<string> | null;
+  /** Gdy są highlightedZones — przygas komórki poza zbiorem (wartości nadal widoczne). */
+  dimUnhighlighted?: boolean;
+  /** Nadpisanie liczby miejsc po przecinku w komórce i legendzie; null = domyślnie z trybu (count: 0, pxt: 2). */
+  valueFractionDigits?: number | null;
+  /** Krótki opis metryki w tooltipie (np. „PK po 20 s”). */
+  valueLabel?: string;
+}
+
+function normalizeZoneKey(s: string): string {
+  return s.toUpperCase().replace(/\s+/g, "");
 }
 
 const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
@@ -22,6 +34,10 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
   onZoneClick,
   mirrored = false,
   selectedZone = null,
+  highlightedZones = null,
+  dimUnhighlighted = false,
+  valueFractionDigits = null,
+  valueLabel,
 }: PlayerHeatmapPitchProps) {
   // Funkcja do pobierania wartości xT dla pozycji z uwzględnieniem odwrócenia
   const getXTValueForPosition = useCallback((visualRow: number, visualCol: number): number => {
@@ -103,12 +119,27 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
     }
   }, []);
 
+  const formatCellValue = useCallback(
+    (v: number): string => {
+      const d =
+        valueFractionDigits !== null && valueFractionDigits !== undefined
+          ? valueFractionDigits
+          : mode === "pxt"
+            ? 2
+            : 0;
+      if (d <= 0) return Math.round(v).toString();
+      return v.toFixed(d);
+    },
+    [mode, valueFractionDigits],
+  );
+
   // Memoizujemy tablicę komórek z heatmapą
   const cells = useMemo(
     () => {
       // Oblicz maksymalną wartość dla normalizacji
       const heatmapValues = Array.from(heatmapData.values());
       const maxValue = heatmapValues.length > 0 ? Math.max(...heatmapValues, 0.001) : 0.001;
+      const hasMultiHighlight = highlightedZones != null && highlightedZones.size > 0;
       
       return Array.from({ length: 96 }, (_, visualIndex) => {
         const row = Math.floor(visualIndex / 12);
@@ -140,35 +171,45 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
           }
         };
 
-        // Sprawdź, czy strefa jest wybrana
-        const normalizedZoneName = zoneNameStr ? zoneNameStr.toUpperCase().replace(/\s+/g, '') : '';
-        const normalizedSelectedZone = selectedZone ? selectedZone.toUpperCase().replace(/\s+/g, '') : '';
-        const isSelected = normalizedZoneName === normalizedSelectedZone;
+        // Sprawdź, czy strefa jest wybrana (pojedynczo lub w zbiorze)
+        const normalizedZoneName = zoneNameStr ? normalizeZoneKey(zoneNameStr) : '';
+        const normalizedSelectedZone = selectedZone ? normalizeZoneKey(selectedZone) : '';
+        const isSingleSelected = normalizedZoneName !== '' && normalizedZoneName === normalizedSelectedZone;
+        const isMultiHighlighted =
+          hasMultiHighlight &&
+          normalizedZoneName !== '' &&
+          [...highlightedZones!].some((z) => normalizeZoneKey(z) === normalizedZoneName);
+        const isHighlighted = isSingleSelected || isMultiHighlighted;
+        const dimThis =
+          Boolean(dimUnhighlighted && hasMultiHighlight && normalizedZoneName !== '' && !isMultiHighlighted);
+
+        const metricHint = valueLabel ? `${valueLabel}: ` : mode === "pxt" ? "PxT = " : "";
+        const titleVal = formatCellValue(heatmapXTValue);
+        const titleText =
+          heatmapXTValue > 0
+            ? `${zoneNameStr}: ${metricHint}${titleVal}`
+            : valueLabel
+              ? `${zoneNameStr}: Brak danych`
+              : mode === "count"
+                ? `${zoneNameStr}: Brak akcji`
+                : `${zoneNameStr}: Brak danych`;
 
         return (
           <div
             key={visualIndex}
-            className={`${styles.zoneCell} ${heatmapXTValue > 0 ? styles.hasData : ''} ${isSelected ? styles.selected : ''}`}
+            className={`${styles.zoneCell} ${heatmapXTValue > 0 ? styles.hasData : ''} ${isHighlighted ? styles.selected : ''} ${dimThis ? styles.dimmed : ''}`}
             style={{
               backgroundColor: heatmapXTValue > 0 
                 ? getHeatmapColor(heatmapXTValue, maxValue)
                 : getXTColor(baseXTValue),
             }}
-            title={heatmapXTValue > 0 
-              ? mode === "pxt"
-                ? `${zoneNameStr}: PxT = ${heatmapXTValue.toFixed(2)}`
-                : `${zoneNameStr}: ${Math.round(heatmapXTValue)} ${Math.round(heatmapXTValue) === 1 ? 'akcja' : 'akcji'}`
-              : `${zoneNameStr}: Brak akcji`
-            }
+            title={titleText}
             onClick={handleZoneClick}
           >
             {heatmapXTValue > 0 && (
               <div className={styles.cellContent}>
                 <span className={styles.heatmapValue}>
-                  {mode === "pxt" 
-                    ? heatmapXTValue.toFixed(2)
-                    : Math.round(heatmapXTValue).toString()
-                  }
+                  {formatCellValue(heatmapXTValue)}
                 </span>
               </div>
             )}
@@ -176,7 +217,20 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
         );
       });
     },
-    [heatmapData, getXTValueForPosition, getZoneNameForPosition, getHeatmapColor, category, mode, onZoneClick, selectedZone]
+    [
+      heatmapData,
+      getXTValueForPosition,
+      getZoneNameForPosition,
+      getHeatmapColor,
+      category,
+      mode,
+      onZoneClick,
+      selectedZone,
+      highlightedZones,
+      dimUnhighlighted,
+      formatCellValue,
+      valueLabel,
+    ]
   );
 
   // Oblicz statystyki dla legendy
@@ -192,9 +246,12 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
   }, [heatmapData]);
 
   // Formatuj wartość dla legendy w zależności od trybu
-  const formatLegendValue = useCallback((value: number) => {
-    return mode === "pxt" ? value.toFixed(2) : Math.round(value).toString();
-  }, [mode]);
+  const formatLegendValue = useCallback(
+    (value: number) => {
+      return formatCellValue(value);
+    },
+    [formatCellValue],
+  );
 
   return (
     <div className={styles.pitchContainer}>

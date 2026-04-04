@@ -2,15 +2,18 @@
 
 /**
  * Zwraca kolor tła komórki w zależności od wartości expected threat (xT)
+ * (dla najniższego bucketa — undefined = bez nadpisywania tła w CSS, jak wcześniej)
  */
-export const getXTColor = (xTValue: number): string => {
+export const getXTColor = (xTValue: number): string | undefined => {
   // Normalizacja do zakresu 0-1 używając faktycznych min/max z danych
   const MIN_XT = 0.00638303;
   const MAX_XT = 0.25745362;
   const normalizedValue = (xTValue - MIN_XT) / (MAX_XT - MIN_XT);
 
   if (normalizedValue < 0.2) {
-  } else if (normalizedValue < 0.4) {
+    return undefined;
+  }
+  if (normalizedValue < 0.4) {
     return `rgba(239, 140, 11, 0.63)`; // jasnoniebieski dla niskich wartości
   } else if (normalizedValue < 0.6) {
     return `rgb(127, 90, 213, 0.6)`; // jaśniejszy żółty dla średnich wartości

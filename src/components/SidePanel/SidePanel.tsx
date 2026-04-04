@@ -40,8 +40,8 @@ const SidePanel: React.FC<SidePanelProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const { isPresentationMode, togglePresentationMode } = usePresentationMode();
   const pathname = usePathname();
-  /* Player widzi tylko Statystyki zespołu i Profil; bez roli traktujemy jak player (restrykcyjnie) */
-  const isPlayer = userRole === 'player' || userRole == null;
+  /** Tylko jawna rola `player` — bez `userRole` (undefined) nie zawężamy menu (undefined == null psuło strony bez propsa). */
+  const isPlayer = userRole === 'player';
 
   const handleRefreshClick = async () => {
     try {
@@ -110,6 +110,10 @@ const SidePanel: React.FC<SidePanelProps> = ({
                   <span className={styles.icon}>📊</span>
                   <span>Statystyki zespołu</span>
                 </Link>
+                <Link href="/trendy" className={styles.menuItem}>
+                  <span className={styles.icon}>📈</span>
+                  <span>Trendy</span>
+                </Link>
                 <Link href={players.length > 0 ? "/profile" : "/zawodnicy"} className={styles.menuItem}>
                   <span className={styles.icon}>👤</span>
                   <span>Profil zawodnika</span>
@@ -135,6 +139,14 @@ const SidePanel: React.FC<SidePanelProps> = ({
               <Link href="/weryfikacja-meczow" className={styles.menuItem}>
                 <span className={styles.icon}>🔍</span>
                 <span>Weryfikacja meczów</span>
+              </Link>
+              <Link href="/admin/wiedza" className={styles.menuItem}>
+                <span className={styles.icon}>🧠</span>
+                <span>Baza Wiedzy</span>
+              </Link>
+              <Link href="/admin/kpi" className={styles.menuItem}>
+                <span className={styles.icon}>🎯</span>
+                <span>KPI trendów</span>
               </Link>
               <Link href="/admin" className={styles.menuItem}>
                 <span className={styles.icon}>⚙️</span>

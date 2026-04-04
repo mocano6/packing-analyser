@@ -2,16 +2,18 @@
 "use client";
 
 import React, { useState, KeyboardEvent, useEffect, useMemo } from "react";
-import { TeamInfo, Player } from "@/types";
+import { TeamInfo, Player, Action } from "@/types";
 import { TEAMS } from "@/constants/teams";
 import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import MatchDataModal from "@/components/MatchDataModal/MatchDataModal";
 import { getDB } from "@/lib/firebase";
-import { doc, updateDoc } from "@/lib/firestoreWithMetrics";
+import { doc, getDoc, updateDoc } from "@/lib/firestoreWithMetrics";
 import styles from "./MatchInfoHeader.module.css";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
+import { usePresentationMode } from "@/contexts/PresentationContext";
+import { getActionCategory } from "@/utils/actionCategory";
 
 // Nowy komponent do wyświetlania informacji o bieżącym meczu
 interface CurrentMatchInfoProps {
@@ -22,6 +24,7 @@ interface CurrentMatchInfoProps {
 
 const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players, allAvailableTeams = [] }) => {
   const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
+  const { isPresentationMode } = usePresentationMode();
   if (!matchInfo || !matchInfo.matchId) {
     return null;
   }
@@ -150,6 +153,9 @@ const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players,
 
   // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
   const getTeamName = (teamId: string) => {
+    if (isPresentationMode) {
+      return "Zespół";
+    }
     
     // Najpierw sprawdź w zespołach z Firebase
     const team = allAvailableTeams.find(team => team.id === teamId);
@@ -171,8 +177,8 @@ const CurrentMatchInfo: React.FC<CurrentMatchInfoProps> = ({ matchInfo, players,
       <div className={styles.matchTitle}>
         <h3>
           {matchInfo.isHome 
-            ? `${getTeamName(matchInfo.team)} vs ${matchInfo.opponent}` 
-            : `${matchInfo.opponent} vs ${getTeamName(matchInfo.team)}`}
+            ? `${getTeamName(matchInfo.team)} vs ${isPresentationMode ? "Zespół" : matchInfo.opponent}` 
+            : `${isPresentationMode ? "Zespół" : matchInfo.opponent} vs ${getTeamName(matchInfo.team)}`}
         </h3>
         <div className={styles.matchMeta}>
           <span className={styles.matchDate}>{matchInfo.date}</span>
@@ -233,6 +239,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   const [isMatchDataModalOpen, setIsMatchDataModalOpen] = useState(false);
   const [selectedMatchForData, setSelectedMatchForData] = useState<TeamInfo | null>(null);
   const [isCurrentMatchInfoModalOpen, setIsCurrentMatchInfoModalOpen] = useState(false);
+  const { isPresentationMode } = usePresentationMode();
 
   // Automatycznie aktywuj tryb deweloperski (obejście uwierzytelniania)
   React.useEffect(() => {
@@ -241,6 +248,9 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   
   // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
   const getTeamName = (teamId: string) => {
+    if (isPresentationMode) {
+      return "Zespół";
+    }
     
     // Najpierw sprawdź w zespołach z Firebase
     if (allAvailableTeams && allAvailableTeams.length > 0) {
@@ -348,6 +358,67 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
     e.stopPropagation();
     setSelectedMatchForData(match);
     setIsMatchDataModalOpen(true);
+  };
+
+  /** Po kliknięciu w komórkę „Przeciwnik”: lista akcji + rozkład kształtu (packing/regain/loses) vs tablica w Firestore. */
+  const logMatchActionsWithCategories = async (match: TeamInfo) => {
+    try {
+      const db = getDB();
+      if (!db) {
+        console.warn("[MatchInfoHeader] Brak połączenia z bazą – nie można wczytać akcji.");
+        return;
+      }
+      const matchRef = doc(db, "matches", match.matchId);
+      const snap = await getDoc(matchRef);
+      if (!snap.exists()) {
+        console.warn(`[MatchInfoHeader] Brak dokumentu meczu: ${match.matchId}`);
+        return;
+      }
+      const data = snap.data() as TeamInfo;
+      const sources = [
+        { key: "actions_packing" as const, list: data.actions_packing ?? [] },
+        { key: "actions_unpacking" as const, list: data.actions_unpacking ?? [] },
+        { key: "actions_regain" as const, list: data.actions_regain ?? [] },
+        { key: "actions_loses" as const, list: data.actions_loses ?? [] },
+      ];
+      const podsumowanieTablic = sources.map(({ key, list }) => ({
+        tablica: key,
+        liczba: list.length,
+      }));
+      const wszystkieAkcje = sources.flatMap(({ key, list }) =>
+        (list as Action[]).map((a) => ({
+          zrodloTablicy: key,
+          kategoriaKsztaltu: getActionCategory(a),
+          id: a.id,
+          minute: a.minute,
+          actionType: a.actionType,
+          packingPoints: a.packingPoints,
+        }))
+      );
+      const rozkladKsztaltuWTablicach = sources.map(({ key, list }) => {
+        const counts = { packing: 0, regain: 0, loses: 0 };
+        for (const a of list as Action[]) {
+          counts[getActionCategory(a)] += 1;
+        }
+        return { tablica: key, ...counts, razem: list.length };
+      });
+      const regainWPacking = rozkladKsztaltuWTablicach.find((r) => r.tablica === "actions_packing")?.regain ?? 0;
+      const uwaga =
+        regainWPacking > 0
+          ? `UWAGA: W actions_packing jest ${regainWPacking} rekordów z polami typu regain — statystyki PxT liczą tylko pola packing (fromZone/toZone, xT start/koniec, packingPoints). Stąd zerowe/niskie PxT mimo wpisów w tej tablicy.`
+          : "Rozkład kształtu rekordu vs nazwa tablicy — patrz rozkladKsztaltuWTablicach.";
+
+      console.warn(
+        `[MatchInfoHeader] ${uwaga}\nMecz ${match.matchId} | ${match.date} | ${getTeamName(match.team)} vs ${match.opponent}`,
+        {
+          rozkladKsztaltuWTablicach,
+          podsumowanieTablic,
+          wszystkieAkcje,
+        }
+      );
+    } catch (err) {
+      console.error("[MatchInfoHeader] Błąd przy odczycie akcji meczu:", err);
+    }
   };
 
   // Funkcja do usuwania wartości undefined z obiektu (Firestore nie akceptuje undefined)
@@ -496,16 +567,22 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                       <span>{getTeamName(match.team)}</span>
                     </div>
                   </div>
-                  <div className={styles.cell}>
+                  <div
+                    className={styles.cell}
+                    onClick={() => {
+                      void logMatchActionsWithCategories(match);
+                    }}
+                    title="Kliknij: w konsoli (DevTools) lista akcji z tablicy Firestore i kategoria z kształtu rekordu"
+                  >
                     <div className={styles.opponentCell}>
-                      {match.opponentLogo && (
+                      {match.opponentLogo && !isPresentationMode && (
                         <img 
                           src={match.opponentLogo} 
                           alt={`Logo ${match.opponent}`}
                           className={styles.opponentLogo}
                         />
                       )}
-                      <span>{match.opponent}</span>
+                      <span>{isPresentationMode ? "Zespół" : match.opponent}</span>
                     </div>
                   </div>
                   <div className={styles.cell}>

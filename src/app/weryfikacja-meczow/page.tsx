@@ -9,6 +9,7 @@ import { fetchTeams, Team } from '@/constants/teamsLoader';
 import { useAuth } from "@/hooks/useAuth";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { usePresentationMode } from '@/contexts/PresentationContext';
 import styles from './weryfikacja-meczow.module.css';
 
 interface CategoryStatus {
@@ -49,6 +50,7 @@ export default function WeryfikacjaMeczow() {
   const [isLoadingChart, setIsLoadingChart] = useState(false);
 
   const { isAuthenticated, isAdmin, isLoading: authLoading, userRole, linkedPlayerId } = useAuth();
+  const { isPresentationMode } = usePresentationMode();
 
   // Zamknij dropdown przy kliknięciu poza nim
   useEffect(() => {
@@ -70,7 +72,7 @@ export default function WeryfikacjaMeczow() {
   useEffect(() => {
     const loadTeams = async () => {
       try {
-        const teamsData = await fetchTeams();
+        const teamsData = await fetchTeams({ includeInactive: true });
         setTeams(teamsData);
       } catch (error) {
         console.error('Błąd podczas pobierania zespołów:', error);
@@ -287,7 +289,9 @@ export default function WeryfikacjaMeczow() {
   const getSelectedTeamName = () => {
     if (selectedTeam === 'all') return 'Wszystkie zespoły';
     const team = Object.values(teams).find(t => t.id === selectedTeam);
-    return team ? team.name : 'Nieznany zespół';
+    const rawName = team ? team.name : 'Nieznany zespół';
+    if (!isPresentationMode) return rawName;
+    return 'Zespół';
   };
 
   // Funkcja do generowania danych wykresu (liczba akcji co 5 minut)
@@ -396,9 +400,11 @@ export default function WeryfikacjaMeczow() {
   const memoizedGetTeamName = useMemo(() => {
     return (teamId: string) => {
       const team = Object.values(teams).find(t => t.id === teamId);
-      return team ? team.name : teamId;
+      const rawName = team ? team.name : teamId;
+      if (!isPresentationMode) return rawName;
+      return rawName === 'Wszystkie zespoły' ? rawName : 'Zespół';
     };
-  }, [teams]);
+  }, [teams, isPresentationMode]);
 
   // Sprawdź uprawnienia administratora
   if (authLoading) {
@@ -487,7 +493,7 @@ export default function WeryfikacjaMeczow() {
       </div>
 
       {/* Filtry */}
-      <div className={styles.filters}>
+          <div className={styles.filters}>
         <div className={styles.filterGroup}>
           <label>Wybierz zespół:</label>
           <div className={`${styles.dropdownContainer} dropdownContainer`}>
@@ -518,7 +524,7 @@ export default function WeryfikacjaMeczow() {
                       setShowTeamsDropdown(false);
                     }}
                   >
-                    <span>{team.name}</span>
+                    <span>{memoizedGetTeamName(team.id)}</span>
                   </div>
                 ))}
               </div>

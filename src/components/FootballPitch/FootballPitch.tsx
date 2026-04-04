@@ -1,7 +1,7 @@
 // components/FootballPitch/FootballPitch.tsx
 "use client";
 
-import React, { useCallback, memo, useEffect, useState } from "react";
+import React, { useCallback, memo, useEffect, useRef, useState } from "react";
 import styles from "./FootballPitch.module.css";
 import { getXTValueFromMatrix, getZoneName, zoneNameToString, zoneNameToIndex } from "@/constants/xtValues";
 import ZoneCell from "./ZoneCell";
@@ -38,6 +38,9 @@ export interface FootballPitchProps {
   isAdmin?: boolean;
   /** Zawodnik może wpisywać tylko swoje statystyki – pokazuje przycisk "Moje statystyki" */
   isPlayer?: boolean;
+  /** Komunikat informacyjny pod nagłówkiem boiska (np. blokada formularza przy ujemnej ΔxT) */
+  pitchNotice?: string | null;
+  onDismissPitchNotice?: () => void;
 }
 
 const FootballPitch = memo(function FootballPitch({
@@ -53,7 +56,22 @@ const FootballPitch = memo(function FootballPitch({
   onOpenPlayerStatsModal,
   isAdmin = false,
   isPlayer = false,
+  pitchNotice = null,
+  onDismissPitchNotice,
 }: FootballPitchProps) {
+  const dismissNoticeRef = useRef(onDismissPitchNotice);
+  dismissNoticeRef.current = onDismissPitchNotice;
+
+  const PITCH_NOTICE_MS = 3000;
+
+  useEffect(() => {
+    if (!pitchNotice || pitchNotice.trim() === "") return;
+    const id = window.setTimeout(() => {
+      dismissNoticeRef.current?.();
+    }, PITCH_NOTICE_MS);
+    return () => window.clearTimeout(id);
+  }, [pitchNotice]);
+
   // Stan przełącznika orientacji boiska - przywróć z localStorage (wspólny dla wszystkich zakładek)
   const [isFlipped, setIsFlipped] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -270,6 +288,15 @@ const FootballPitch = memo(function FootballPitch({
           role="grid"
           aria-label="Boisko piłkarskie podzielone na strefy"
         >
+        {pitchNotice && pitchNotice.trim() !== "" && (
+          <div
+            className={styles.pitchNoticeOverlay}
+            role="status"
+            aria-live="polite"
+          >
+            <p className={styles.pitchNoticeOverlayText}>{pitchNotice}</p>
+          </div>
+        )}
         <div className={styles.grid}>{cells}</div>
         <div className={styles.pitchLines} aria-hidden="true">
           <div className={styles.centerLine} />

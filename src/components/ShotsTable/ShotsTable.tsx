@@ -165,7 +165,7 @@ const ShotRow = ({
         </span>
       </div>
       <div className={sharedStyles.cell}>
-        {shot.bodyPart === 'foot' ? 'Noga' : shot.bodyPart === 'head' ? 'Głowa' : 'Inne'}
+        {shot.bodyPart === 'foot_left' ? 'Noga lewa' : shot.bodyPart === 'foot_right' ? 'Noga prawa' : shot.bodyPart === 'foot' ? 'Noga' : shot.bodyPart === 'head' ? 'Głowa' : 'Inne'}
       </div>
       <div className={sharedStyles.cell}>
         {shot.blockingPlayers && shot.blockingPlayers.length > 0 

@@ -176,7 +176,7 @@ export interface Shot {
   minute: number;
   xG: number; // Wartość expected goals
   isGoal: boolean;
-  bodyPart?: 'foot' | 'head' | 'other';
+  bodyPart?: 'foot' | 'foot_left' | 'foot_right' | 'head' | 'other';
   matchId: string;
   timestamp: number;
   videoTimestamp?: number; // Czas wideo w sekundach (po korekcie -10s)

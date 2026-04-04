@@ -66,6 +66,10 @@ firebase-debug.*.log*
 .firebase/
 firebaserc
 
+# Klucz service account Firebase Admin (lokalnie — nie commitować)
+firebase-admin-service-account.json
+*-firebase-adminsdk-*.json
+
 # Cache
 .eslintcache
 .cache/

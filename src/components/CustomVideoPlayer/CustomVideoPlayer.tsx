@@ -2,6 +2,8 @@
 
 import React, { useRef, useImperativeHandle, forwardRef, useState, useEffect } from "react";
 import { TeamInfo } from "@/types";
+import toast from "react-hot-toast";
+import { hasExternalVideoSource, saveExternalVideoMatchInfo } from "@/utils/externalVideoMatchInfo";
 import styles from "./CustomVideoPlayer.module.css";
 
 interface CustomVideoPlayerProps {
@@ -117,7 +119,16 @@ const CustomVideoPlayer = forwardRef<CustomVideoPlayerRef, CustomVideoPlayerProp
 
   const openExternalVideo = () => {
     if (matchInfo) {
-      localStorage.setItem('externalVideoMatchInfo', JSON.stringify(matchInfo));
+      if (!hasExternalVideoSource(matchInfo)) {
+        toast.error("Brak adresu wideo dla tego meczu.");
+        return;
+      }
+      if (!saveExternalVideoMatchInfo(matchInfo)) {
+        toast.error(
+          "Nie udało się zapisać danych wideo (limit pamięci przeglądarki). Spróbuj wyczyścić dane witryny lub zwolnić miejsce w localStorage."
+        );
+        return;
+      }
       localStorage.setItem('externalVideoType', 'custom');
       const externalWindow = window.open(
         '/video-external',

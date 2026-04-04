@@ -379,20 +379,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     }
 
     // Dodatkowa walidacja biznesowa dla akcji packing w ataku:
-    // - xT nie może być ujemne ani równe 0
+    // - podanie z ujemną ΔxT jest blokowane na boisku; tu tylko zabezpieczenie przy zapisie
+    // - drybling / podanie z ΔxT = 0 dozwolone
     // - liczba miniętych przeciwników (packingValue / currentPoints) musi być >= 1
     // - musi być zaznaczona co najmniej jedna z opcji P0–P3 (Start lub koniec) LUB liczba kontaktów (1T/2T/3T+)
     if (actionCategory === "packing" && actionMode === "attack") {
-      // Oblicz różnicę xT (jak w PxT: xTEnd - xTStart)
-      const xTStart = typeof startZoneXT === "number" ? startZoneXT : undefined;
-      const xTEnd = typeof endZoneXT === "number" ? endZoneXT : undefined;
-      const xTDifference =
-        xTStart !== undefined && xTEnd !== undefined
-          ? xTEnd - xTStart
-          : xTEnd !== undefined
-            ? xTEnd
-            : undefined;
-
       const packingPoints = typeof packingValue === "number" ? packingValue : currentPoints;
 
       const hasPStart =
@@ -420,18 +411,27 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         return false;
       }
 
-      // Sprawdzenie wartości xT oraz liczby miniętych przeciwników
-      const isXTInvalid = xTDifference !== undefined && xTDifference <= 0;
       const hasTooFewBypassedOpponents = packingPoints < 1;
 
-      if (isXTInvalid || hasTooFewBypassedOpponents) {
+      if (hasTooFewBypassedOpponents) {
         if (typeof window !== "undefined") {
-          alert("Akcja o ujemnej wartości, lub brak miniętych przeciwników. Sprawdź poprawność wartości, lub pomiń akcję");
+          alert("Zaznacz co najmniej jednego miniętego przeciwnika (punkty packing ≥ 1).");
         }
         return false;
       }
+
+      if (actionType === "pass") {
+        const xs = typeof startZoneXT === "number" ? startZoneXT : undefined;
+        const xe = typeof endZoneXT === "number" ? endZoneXT : undefined;
+        if (xs !== undefined && xe !== undefined && xe - xs < 0) {
+          toast.error(
+            "Zapis zablokowany: ujemna różnica xT podania (jak przy odrzuconym drugim kliknięciu na boisku). Popraw strefy."
+          );
+          return false;
+        }
+      }
     }
-    
+
     try {
       // Konwertujemy strefy na format literowo-liczbowy, jeśli podano liczby
       // Najpierw upewniamy się, że startZone i endZone nie są null

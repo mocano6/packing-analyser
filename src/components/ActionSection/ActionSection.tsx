@@ -128,6 +128,9 @@ export interface ActionSectionProps {
   isPlayer?: boolean;
   /** ID zawodnika powiązanego z kontem (dla trybu "Moje statystyki") */
   linkedPlayerId?: string | null;
+  /** Komunikat nad siatką boiska (np. PxT / wybór stref) */
+  pitchNotice?: string | null;
+  onDismissPitchNotice?: () => void;
 }
 
 const ActionSection = memo(function ActionSection({
@@ -231,6 +234,8 @@ const ActionSection = memo(function ActionSection({
   isAdmin = false,
   isPlayer = false,
   linkedPlayerId = null,
+  pitchNotice = null,
+  onDismissPitchNotice,
 }: ActionSectionProps) {
   const [isPlayerMatchStatsModalOpen, setIsPlayerMatchStatsModalOpen] = useState(false);
 
@@ -556,6 +561,8 @@ const ActionSection = memo(function ActionSection({
         onOpenPlayerStatsModal={() => setIsPlayerMatchStatsModalOpen(true)}
         isAdmin={isAdmin}
         isPlayer={isPlayer}
+        pitchNotice={pitchNotice}
+        onDismissPitchNotice={onDismissPitchNotice}
       />
 
       <PlayerMatchStatsModal

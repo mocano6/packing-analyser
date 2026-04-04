@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { getDB } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc } from "@/lib/firestoreWithMetrics";
+import { collection, getDocs, doc, updateDoc, setDoc } from "@/lib/firestoreWithMetrics";
 import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from "firebase/auth";
 import { Team, getTeamsArray } from "@/constants/teamsLoader";
 import { UserData } from "@/hooks/useAuth";
@@ -11,6 +11,8 @@ import { getPlayerFullName } from "@/utils/playerUtils";
 import { getPlayerMatchSuggestions } from "@/utils/playerMatching";
 import { toast } from "react-hot-toast";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
+import { normalizeAllowedTeams } from "@/utils/userAllowedTeams";
+import { formatLastLoginPl } from "@/utils/firestoreTimestamps";
 
 interface UserManagementProps {
   currentUserIsAdmin: boolean;
@@ -59,7 +61,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
 
         usersData.push({
           id: doc.id,
-          ...userData
+          ...userData,
+          allowedTeams: normalizeAllowedTeams(userData.allowedTeams),
         });
       });
 
@@ -78,7 +81,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
     if (!currentUserIsAdmin) return;
 
     try {
-      const teamsData = await getTeamsArray();
+      const teamsData = await getTeamsArray({ includeInactive: true });
       setTeams(teamsData);
       
     } catch (error) {
@@ -117,9 +120,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
       const userRef = doc(db, "users", userId);
       
       await updateDoc(userRef, {
-        allowedTeams: newTeams
-      }).catch(error => {
-        handleFirestoreError(error, db);
+        allowedTeams: newTeams,
+      }).catch(async (error) => {
+        await handleFirestoreError(error, db);
         throw error;
       });
 
@@ -131,9 +134,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
       ));
 
       toast.success("Zaktualizowano uprawnienia użytkownika");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Błąd podczas aktualizacji uprawnień:", error);
-      toast.error("Błąd podczas aktualizacji uprawnień");
+      const code = error && typeof error === "object" && "code" in error ? String((error as { code: string }).code) : "";
+      const message =
+        code === "permission-denied"
+          ? "Brak uprawnień Firebase (permission-denied). Sprawdź, czy konto ma rolę admin w dokumentie users, i wdróż zaktualizowane firestore.rules."
+          : "Błąd podczas aktualizacji uprawnień";
+      toast.error(message);
     }
   };
 
@@ -164,54 +172,59 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
     }
   };
 
-  // Usuń użytkownika
-  const deleteUser = async (userId: string, userEmail: string) => {
-    if (!window.confirm(`Czy na pewno chcesz usunąć użytkownika ${userEmail}? To usunie również jego konto w Firebase Authentication.`)) {
+  // Usuń użytkownika (Auth + Firestore przez Admin SDK — bez deleteDoc z klienta, omija permission-denied)
+  const deleteUser = async (userId: string, userEmail: string, confirmMessage?: string) => {
+    const defaultMsg = `Czy na pewno chcesz usunąć użytkownika ${userEmail}? To usunie konto w Firebase Authentication oraz dokument w Firestore.`;
+    if (!window.confirm(confirmMessage ?? defaultMsg)) {
       return;
     }
 
     try {
-      const db = getDB();
-      const userRef = doc(db, "users", userId);
-      
-      // Usuń z Firestore
-      await deleteDoc(userRef).catch(error => {
-        handleFirestoreError(error, db);
-        throw error;
-      });
-
-      // Usuń z Firebase Authentication (przez API route)
-      // userId w Firestore to uid w Firebase Auth
-      try {
-        const response = await fetch('/api/delete-user-auth', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ uid: userId })
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          // Jeśli błąd, ale dokument Firestore został usunięty, kontynuuj
-          console.warn('Nie udało się usunąć użytkownika z Auth:', errorData);
-          if (errorData.code === 'auth/user-not-found') {
-            // Użytkownik już nie istnieje w Auth - to OK
-            console.log('Użytkownik już nie istnieje w Authentication');
-          } else {
-            toast.warning("Użytkownik został usunięty z Firestore, ale wystąpił problem z usunięciem z Authentication. Możesz spróbować usunąć ręcznie w Firebase Console.");
-          }
-        }
-      } catch (authError) {
-        console.error("Błąd podczas usuwania z Authentication:", authError);
-        // Kontynuuj - dokument Firestore został już usunięty
-        toast.warning("Użytkownik został usunięty z Firestore, ale wystąpił problem z usunięciem z Authentication.");
+      const auth = getAuth();
+      const current = auth.currentUser;
+      if (!current) {
+        toast.error("Brak aktywnej sesji — zaloguj się ponownie.");
+        return;
+      }
+      if (current.uid === userId) {
+        toast.error("Nie możesz usunąć własnego konta z tego panelu.");
+        return;
       }
 
-      // Usuń z lokalnego stanu
-      setUsers(prev => prev.filter(user => user.id !== userId));
+      let idToken: string;
+      try {
+        idToken = await current.getIdToken();
+      } catch (e) {
+        console.error("getIdToken:", e);
+        toast.error("Nie udało się pobrać tokenu sesji.");
+        return;
+      }
 
-      toast.success("Użytkownik został usunięty");
+      const response = await fetch("/api/delete-user-auth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ uid: userId }),
+      });
+
+      let payload: { error?: string; message?: string; hint?: string } = {};
+      try {
+        payload = await response.json();
+      } catch {
+        /* body nie-JSON */
+      }
+
+      if (!response.ok) {
+        console.error("delete-user-auth:", response.status, payload);
+        const main = payload.error || `Błąd usuwania (${response.status})`;
+        toast.error(payload.hint ? `${main}\n\n${payload.hint}` : main, { duration: 20_000 });
+        return;
+      }
+
+      setUsers((prev) => prev.filter((user) => user.id !== userId));
+      toast.success(payload.message || "Użytkownik został usunięty");
     } catch (error) {
       console.error("Błąd podczas usuwania użytkownika:", error);
       toast.error("Błąd podczas usuwania użytkownika");
@@ -250,7 +263,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
     setEditingUserId(user.id);
     setEditUserEmail(user.email);
     setEditUserRole(user.role);
-    setEditUserTeams([...user.allowedTeams]);
+    setEditUserTeams([...normalizeAllowedTeams(user.allowedTeams)]);
     setNewPassword("");
     setShowEditUserModal(true);
   };
@@ -684,23 +697,49 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                   </select>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleApprovePlayerAccount(user, selectedPlayerId)}
-                  disabled={!selectedPlayerId || isLoadingPlayers}
-                  style={{
-                    padding: "10px 18px",
-                    backgroundColor: (!selectedPlayerId || isLoadingPlayers) ? "#d1d5db" : "#16a34a",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: (!selectedPlayerId || isLoadingPlayers) ? "not-allowed" : "pointer",
-                    fontWeight: 600,
-                    fontSize: "0.9rem"
-                  }}
-                >
-                  Przypisz i zatwierdź
-                </button>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    onClick={() => handleApprovePlayerAccount(user, selectedPlayerId)}
+                    disabled={!selectedPlayerId || isLoadingPlayers}
+                    style={{
+                      padding: "10px 18px",
+                      backgroundColor: (!selectedPlayerId || isLoadingPlayers) ? "#d1d5db" : "#16a34a",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "8px",
+                      cursor: (!selectedPlayerId || isLoadingPlayers) ? "not-allowed" : "pointer",
+                      fontWeight: 600,
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    Przypisz i zatwierdź
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      deleteUser(
+                        user.id,
+                        user.email,
+                        `Odrzucić rejestrację i trwale usunąć konto ${user.email}? Operacja jest nieodwracalna (Firestore + Authentication).`
+                      )
+                    }
+                    disabled={isLoadingPlayers}
+                    style={{
+                      padding: "10px 18px",
+                      backgroundColor: isLoadingPlayers ? "#d1d5db" : "#b91c1c",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "8px",
+                      cursor: isLoadingPlayers ? "not-allowed" : "pointer",
+                      fontWeight: 600,
+                      fontSize: "0.9rem",
+                    }}
+                    title="Odrzuca rejestrację i usuwa konto z Firestore oraz Firebase Authentication"
+                  >
+                    Odrzuć i usuń konto
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -764,7 +803,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                     </div>
                   </td>
                   <td style={{ padding: "12px", border: "1px solid #ddd" }}>
-                    {user.lastLogin ? new Date(user.lastLogin).toLocaleString('pl-PL') : 'Nigdy'}
+                    {formatLastLoginPl(user.lastLogin)}
                   </td>
                   <td style={{ padding: "12px", border: "1px solid #ddd" }}>
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -1139,7 +1178,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
           <li>Zaznacz/odznacz zespoły dla każdego użytkownika, aby nadać mu odpowiednie uprawnienia</li>
           <li>Zmień rolę na "Admin" aby użytkownik mógł zarządzać innymi użytkownikami</li>
           <li>Użytkownicy bez żadnych zespołów nie będą mogli korzystać z aplikacji</li>
-          <li>Usunięcie użytkownika jest nieodwracalne</li>
+          <li>Usunięcie użytkownika jest nieodwracalne (Authentication + Firestore przez API serwera — wymaga FIREBASE_SERVICE_ACCOUNT_KEY lub GOOGLE_APPLICATION_CREDENTIALS w środowisku Next.js)</li>
+          <li>Oczekujące konta zawodników: „Odrzuć i usuń konto” działa tak samo jak „Usuń” w tabeli</li>
         </ul>
       </div>
     </div>

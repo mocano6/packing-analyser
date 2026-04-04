@@ -21,11 +21,8 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['@firebase/firestore', '@firebase/auth', '@firebase/storage'],
   },
-  webpack: (config, { isServer, dev }) => {
-    // Wyłączenie cache w dev redukuje ostrzeżenia PackFileCacheStrategy i ENOENT vendor-chunks
-    if (dev) {
-      config.cache = false;
-    }
+  webpack: (config, { isServer }) => {
+    // Nie wyłączaj cache w dev — powoduje ChunkLoadError (_next/undefined) przy dynamic importach / HMR.
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,

@@ -3,11 +3,27 @@
  * Mecze starsze niż 7 dni są ładowane z cache; tylko najnowszy jest pobierany z Firestore.
  * Persystencja: pamięć + sessionStorage (przetrwa odświeżenie strony).
  * getOrLoadMatchDocument – jeden odczyt na matchId przy równoległych wywołaniach (usePackingActions, useShots, usePKEntries, useAcc8sEntries).
+ * Gdy match.actions_packing jest puste, fallback do kolekcji actions_packing (legacy).
  */
 
-import type { TeamInfo } from "@/types";
+import type { Action, TeamInfo } from "@/types";
 import { getDB } from "@/lib/firebase";
-import { doc, getDoc } from "@/lib/firestoreWithMetrics";
+import { doc, getDoc, collection, query, where, getDocs } from "@/lib/firestoreWithMetrics";
+
+function normalizeLegacyAction(data: Record<string, unknown>, docId: string, matchId: string): Action {
+  return {
+    ...data,
+    id: (data.id as string) ?? docId,
+    matchId,
+    minute: (data.minute ?? data.min ?? 0) as number,
+    actionType: (data.actionType ?? data.type ?? "pass") as string,
+    packingPoints: (data.packingPoints ?? data.packing ?? 0) as number,
+    fromZone: (data.fromZone ?? data.startZone) as string | undefined,
+    toZone: (data.toZone ?? data.endZone) as string | undefined,
+    senderId: (data.senderId ?? data.playerId ?? "") as string,
+    receiverId: (data.receiverId ?? data.receiverPlayerId ?? data.receiver_id) as string | undefined,
+  } as Action;
+}
 
 const STORAGE_PREFIX = "packing_match_doc_";
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -66,8 +82,44 @@ export async function getOrLoadMatchDocument(matchId: string): Promise<TeamInfo 
       const matchDoc = await getDoc(matchRef);
       if (matchDoc.exists()) {
         const data = matchDoc.data() as TeamInfo;
-        setMatchDocumentInCache(matchId, data);
-        return data;
+        let packingActions = data.actions_packing || [];
+        const legacyMatchIds = [matchId];
+        if (data.matchId && data.matchId !== matchId) {
+          legacyMatchIds.push(data.matchId);
+        }
+        if (packingActions.length === 0) {
+          for (const legacyId of legacyMatchIds) {
+            const legacyQuery = query(
+              collection(db, "actions_packing"),
+              where("matchId", "==", legacyId)
+            );
+            const legacySnapshot = await getDocs(legacyQuery);
+            if (legacySnapshot.docs.length > 0) {
+              packingActions = legacySnapshot.docs.map((d) =>
+                normalizeLegacyAction(d.data() as Record<string, unknown>, d.id, matchId)
+              );
+              break;
+            }
+          }
+        } else {
+          packingActions = packingActions.map((a) => {
+            const anyA = a as Record<string, unknown>;
+            return {
+              ...a,
+              matchId,
+              minute: a.minute ?? anyA.min ?? 0,
+              actionType: a.actionType ?? anyA.type ?? "pass",
+              packingPoints: a.packingPoints ?? anyA.packing ?? 0,
+              fromZone: a.fromZone ?? anyA.startZone,
+              toZone: a.toZone ?? anyA.endZone,
+              senderId: a.senderId ?? anyA.playerId ?? "",
+              receiverId: a.receiverId ?? anyA.receiverPlayerId ?? anyA.receiver_id ?? undefined,
+            } as Action;
+          });
+        }
+        const result: TeamInfo = { ...data, actions_packing: packingActions };
+        setMatchDocumentInCache(matchId, result);
+        return result;
       }
       return null;
     } catch (error) {

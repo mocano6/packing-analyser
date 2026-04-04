@@ -40,6 +40,7 @@ import ActionModal from "@/components/ActionModal/ActionModal";
 import RegainActionModal from "@/components/RegainActionModal/RegainActionModal";
 import LosesActionModal from "@/components/LosesActionModal/LosesActionModal";
 import MatchInfoHeader from "@/components/MatchInfoHeader/MatchInfoHeader";
+import { usePresentationMode } from "@/contexts/PresentationContext";
 import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
@@ -52,6 +53,7 @@ import ShotModal from "@/components/ShotModal/ShotModal";
 import ShotsTable from "@/components/ShotsTable/ShotsTable";
 import { useShots } from "@/hooks/useShots";
 import { getCurrentSeason } from "@/utils/seasonUtils";
+import { hasExternalVideoSource, saveExternalVideoMatchInfo } from "@/utils/externalVideoMatchInfo";
 import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
 import { usePKEntries } from "@/hooks/usePKEntries";
 import { PKEntry } from "@/types";
@@ -99,6 +101,7 @@ function removeUndefinedFields<T extends object>(obj: T): T {
 }
 
 export default function Page() {
+  const { isPresentationMode } = usePresentationMode();
   const [activeTab, setActiveTab] = React.useState<Tab>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('activeTab');
@@ -169,6 +172,15 @@ export default function Page() {
   const [isSecondHalf, setIsSecondHalf] = React.useState(false);
   const [matchesListRefreshCounter, setMatchesListRefreshCounter] = useState(0);
   const [selectedZone, setSelectedZone] = React.useState<string | number | null>(null);
+  /** Komunikat nad boiskiem (PxT): np. dlaczego nie otwarto formularza akcji */
+  const [packingPitchNotice, setPackingPitchNotice] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (activeTab !== "packing") {
+      setPackingPitchNotice(null);
+    }
+  }, [activeTab]);
+
   const [isActionEditModalOpen, setIsActionEditModalOpen] = React.useState(false);
   const [editingAction, setEditingAction] = React.useState<Action | null>(null);
   const [allTeams, setAllTeams] = React.useState<Team[]>([]);
@@ -456,53 +468,58 @@ export default function Page() {
 
   // Funkcja do otwierania ActionModal z zapisaniem czasu YouTube
   const openActionModalWithVideoTime = async () => {
-    const externalWindow = (window as any).externalVideoWindow;
-    const isExternalWindowOpen = externalWindow && !externalWindow.closed;
-    if (isExternalWindowOpen) {
-      try {
-        externalWindow.postMessage({ type: 'GET_CURRENT_TIME' }, '*');
-      } catch {
-        // okno zamknięte lub cross-origin
-      }
-      const waitForTime = new Promise<number | null>((resolve) => {
-        const handleTimeResponse = (event: MessageEvent) => {
-          if (event.data?.type === 'CURRENT_TIME_RESPONSE') {
+    try {
+      const externalWindow = (window as any).externalVideoWindow;
+      const isExternalWindowOpen = externalWindow && !externalWindow.closed;
+      if (isExternalWindowOpen) {
+        try {
+          externalWindow.postMessage({ type: 'GET_CURRENT_TIME' }, '*');
+        } catch {
+          // okno zamknięte lub cross-origin
+        }
+        const waitForTime = new Promise<number | null>((resolve) => {
+          const handleTimeResponse = (event: MessageEvent) => {
+            if (event.data?.type === 'CURRENT_TIME_RESPONSE') {
+              window.removeEventListener('message', handleTimeResponse);
+              resolve(event.data.time);
+            }
+          };
+          window.addEventListener('message', handleTimeResponse);
+          setTimeout(() => {
             window.removeEventListener('message', handleTimeResponse);
-            resolve(event.data.time);
-          }
-        };
-        window.addEventListener('message', handleTimeResponse);
-        setTimeout(() => {
-          window.removeEventListener('message', handleTimeResponse);
-          resolve(null);
-        }, 1000);
-      });
-      const time = await waitForTime;
-      if (time !== null && time >= 0) {
-        const rawTime = Math.max(0, time);
-        const adjustedTime = Math.max(0, rawTime - 10);
-        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
-        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
+            resolve(null);
+          }, 1000);
+        });
+        const time = await waitForTime;
+        if (time !== null && time >= 0) {
+          const rawTime = Math.max(0, time);
+          const adjustedTime = Math.max(0, rawTime - 10);
+          localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+          localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
+        } else {
+          localStorage.setItem('tempVideoTimestamp', '0');
+          localStorage.setItem('tempVideoTimestampRaw', '0');
+        }
       } else {
-        localStorage.setItem('tempVideoTimestamp', '0');
-        localStorage.setItem('tempVideoTimestampRaw', '0');
+        let currentTime = 0;
+        const maxAttempts = 5;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          currentTime = await getActiveVideoTime();
+          if (currentTime > 0) break;
+          if (attempt < maxAttempts - 1) await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        if (currentTime > 0) {
+          const rawTime = Math.max(0, currentTime);
+          const adjustedTime = Math.max(0, rawTime - 10);
+          localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
+          localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
+        }
       }
-    } else {
-      let currentTime = 0;
-      const maxAttempts = 5;
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        currentTime = await getActiveVideoTime();
-        if (currentTime > 0) break;
-        if (attempt < maxAttempts - 1) await new Promise(resolve => setTimeout(resolve, 200));
-      }
-      if (currentTime > 0) {
-        const rawTime = Math.max(0, currentTime);
-        const adjustedTime = Math.max(0, rawTime - 10);
-        localStorage.setItem('tempVideoTimestamp', String(Math.floor(adjustedTime)));
-        localStorage.setItem('tempVideoTimestampRaw', String(Math.floor(rawTime)));
-      }
+    } catch (e) {
+      console.warn("openActionModalWithVideoTime:", e);
+    } finally {
+      setIsActionModalOpen(true);
     }
-    setIsActionModalOpen(true);
   };
 
   const openAcc8sModalWithVideoTime = async () => {
@@ -1616,8 +1633,10 @@ export default function Page() {
 
   const selectedTeamLabel = useMemo(() => {
     const found = availableTeams.find(team => team.id === selectedTeam);
-    return found?.name || selectedTeam || "Brak zespołu";
-  }, [availableTeams, selectedTeam]);
+    const rawName = found?.name || selectedTeam || "Brak zespołu";
+    if (!isPresentationMode) return rawName;
+    return rawName === "Brak zespołu" ? rawName : "Zespół";
+  }, [availableTeams, selectedTeam, isPresentationMode]);
 
   // Użyj tylko stanu ładowania z useAuth - nie dodawaj własnej logiki
   // Hook useAuth już obsługuje kombinację ładowania uwierzytelniania i danych użytkownika
@@ -1970,7 +1989,7 @@ export default function Page() {
       
       // Jeśli mamy obie strefy, otwieramy ActionModal
       if (savedStartZone && !isActionModalOpen) {
-        setTimeout(() => openActionModalWithVideoTime(), 100);
+        setTimeout(() => void openActionModalWithVideoTime(), 100);
       }
     }
   }, []);  // Wykonaj tylko raz przy montowaniu komponentu
@@ -2455,7 +2474,7 @@ export default function Page() {
     
     // Odczekaj chwilę przed otwarciem modalu, aby stan się zaktualizował
     setTimeout(() => {
-      openActionModalWithVideoTime();
+      void openActionModalWithVideoTime();
     }, 100);
   };
 
@@ -2474,8 +2493,17 @@ export default function Page() {
     
     // Odczekaj chwilę przed otwarciem modalu, aby stan się zaktualizował
     setTimeout(() => {
-      openActionModalWithVideoTime();
+      void openActionModalWithVideoTime();
     }, 100);
+  };
+
+  /** ΔxT podania: strefa odbioru − strefa podania (macierz jak na boisku). */
+  const getPassXtDelta = (fromZone: number, toZone: number): number => {
+    const r1 = Math.floor(fromZone / 12);
+    const c1 = fromZone % 12;
+    const r2 = Math.floor(toZone / 12);
+    const c2 = toZone % 12;
+    return getXTValueFromMatrix(r2, c2) - getXTValueFromMatrix(r1, c1);
   };
 
   // Funkcja do obsługi wyboru strefy dla zakładki packing (podwójny klik)
@@ -2486,6 +2514,7 @@ export default function Page() {
     
     // Jeśli nie mamy startZone, to ustawiamy ją
     if (startZone === null) {
+      setPackingPitchNotice(null);
       setStartZone(zoneId);
       localStorage.setItem('tempStartZone', String(zoneId));
       return;
@@ -2494,13 +2523,14 @@ export default function Page() {
     // Jeśli mamy startZone, sprawdzamy czy to ta sama strefa (drybling)
     if (startZone === zoneId) {
       // To jest drybling - ustawiamy endZone na tę samą wartość
+      setPackingPitchNotice(null);
       setEndZone(zoneId);
       localStorage.setItem('tempEndZone', String(zoneId));
       setActionType("dribble");
       
       // Odczekaj chwilę przed otwarciem modalu, aby stan się zaktualizował
       setTimeout(() => {
-        openActionModalWithVideoTime();
+        void openActionModalWithVideoTime();
       }, 100);
       
       return;
@@ -2508,19 +2538,28 @@ export default function Page() {
     
     // Jeśli mamy startZone, ale nie mamy endZone i to inna strefa - to podanie
     if (endZone === null) {
+      const deltaXt = getPassXtDelta(startZone, zoneId);
+      if (deltaXt < 0) {
+        setPackingPitchNotice(
+          "Ujemną wartość akcji (xT) — nieważna w PxT. Kontynuuj analizę."
+        );
+        return;
+      }
+
+      setPackingPitchNotice(null);
       setEndZone(zoneId);
-      localStorage.setItem('tempEndZone', String(zoneId));
+      localStorage.setItem("tempEndZone", String(zoneId));
       setActionType("pass");
-      
-      // Odczekaj chwilę przed otwarciem modalu, aby stan się zaktualizował
+
       setTimeout(() => {
-        openActionModalWithVideoTime();
+        void openActionModalWithVideoTime();
       }, 100);
-      
+
       return;
     }
     
     // Jeśli mamy obie strefy, resetujemy je i zaczynamy od nowa
+    setPackingPitchNotice(null);
     // Najpierw resetujemy strefy
     setEndZone(null);
     localStorage.removeItem('tempEndZone');
@@ -2577,6 +2616,7 @@ export default function Page() {
     // Czyścimy również localStorage ze stref
     localStorage.removeItem('tempStartZone');
     localStorage.removeItem('tempEndZone');
+    setPackingPitchNotice(null);
   };
 
   // Modyfikacja funkcji usuwania meczu
@@ -3731,17 +3771,25 @@ export default function Page() {
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (matchInfo) {
-                        localStorage.setItem('externalVideoMatchInfo', JSON.stringify(matchInfo));
-                        const externalWindow = window.open(
-                          '/video-external',
-                          'youtube-video',
-                          'width=1200,height=800,scrollbars=yes,resizable=yes'
+                      if (!matchInfo) return;
+                      if (!hasExternalVideoSource(matchInfo)) {
+                        toast.error("Brak adresu wideo dla tego meczu.");
+                        return;
+                      }
+                      if (!saveExternalVideoMatchInfo(matchInfo)) {
+                        toast.error(
+                          "Nie udało się zapisać danych wideo (limit pamięci przeglądarki). Spróbuj wyczyścić dane witryny lub zwolnić miejsce w localStorage."
                         );
-                        if (externalWindow) {
-                          (window as any).externalVideoWindow = externalWindow;
-                          localStorage.setItem('externalVideoWindowOpen', 'true');
-                        }
+                        return;
+                      }
+                      const externalWindow = window.open(
+                        '/video-external',
+                        'youtube-video',
+                        'width=1200,height=800,scrollbars=yes,resizable=yes'
+                      );
+                      if (externalWindow) {
+                        (window as any).externalVideoWindow = externalWindow;
+                        localStorage.setItem('externalVideoWindowOpen', 'true');
                       }
                     }}
                     className={styles.externalButtonHeader}
@@ -3999,6 +4047,8 @@ export default function Page() {
             isAdmin={isAdmin}
             isPlayer={isPlayer}
             linkedPlayerId={linkedPlayerId}
+            pitchNotice={packingPitchNotice}
+            onDismissPitchNotice={() => setPackingPitchNotice(null)}
           />
         )}
 

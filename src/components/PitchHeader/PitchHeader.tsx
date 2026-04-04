@@ -2,6 +2,7 @@
 
 import React from "react";
 import styles from "./PitchHeader.module.css";
+import { usePresentationMode } from "@/contexts/PresentationContext";
 
 export interface PitchHeaderProps {
   leftContent?: React.ReactNode;
@@ -34,9 +35,18 @@ const PitchHeader: React.FC<PitchHeaderProps> = ({
   isFlipped = false,
   hideTeamLogos = false,
 }) => {
+  const { isPresentationMode } = usePresentationMode();
   // Renderowanie logów zespołów
+  const maskName = (name?: string | null) => {
+    if (!name) return "";
+    if (!isPresentationMode) return name;
+    return "Zespół";
+  };
+
   const renderTeamLogos = () => {
     if (hideTeamLogos) return null;
+
+    const showLogos = !isPresentationMode;
 
     return (
       <div className={styles.teamLogos}>
@@ -46,7 +56,7 @@ const PitchHeader: React.FC<PitchHeaderProps> = ({
               <span className={styles.attackDirection} title="Kierunek ataku">
                 ←
               </span>
-              {(() => {
+              {showLogos && (() => {
                 const teamData = allTeams.find(team => team.id === matchInfo?.team);
                 return teamData?.logo ? (
                   <img
@@ -56,41 +66,41 @@ const PitchHeader: React.FC<PitchHeaderProps> = ({
                   />
                 ) : null;
               })()}
-              <span className={styles.teamName}>{(() => {
+              <span className={styles.teamName}>{maskName((() => {
                 const teamData = allTeams.find(team => team.id === matchInfo?.team);
                 return teamData?.name || matchInfo?.teamName || matchInfo?.team || 'Nasz zespół';
-              })()}</span>
+              })())}</span>
             </div>
             <div className={styles.vs}>VS</div>
             <div className={styles.teamLogo}>
-              {matchInfo?.opponentLogo && (
+              {showLogos && matchInfo?.opponentLogo && (
                 <img
                   src={matchInfo.opponentLogo}
                   alt="Logo przeciwnika"
                   className={styles.teamLogoImage}
                 />
               )}
-              <span className={styles.teamName}>{matchInfo?.opponentName || matchInfo?.opponent || 'Przeciwnik'}</span>
+              <span className={styles.teamName}>{maskName(matchInfo?.opponentName || matchInfo?.opponent || 'Przeciwnik')}</span>
             </div>
           </>
         ) : (
           <>
             <div className={styles.teamLogo}>
-              {matchInfo?.opponentLogo && (
+              {showLogos && matchInfo?.opponentLogo && (
                 <img
                   src={matchInfo.opponentLogo}
                   alt="Logo przeciwnika"
                   className={styles.teamLogoImage}
                 />
               )}
-              <span className={styles.teamName}>{matchInfo?.opponentName || matchInfo?.opponent || 'Przeciwnik'}</span>
+              <span className={styles.teamName}>{maskName(matchInfo?.opponentName || matchInfo?.opponent || 'Przeciwnik')}</span>
             </div>
             <div className={styles.vs}>VS</div>
             <div className={styles.teamLogo}>
               <span className={styles.attackDirection} title="Kierunek ataku">
                 →
               </span>
-              {(() => {
+              {showLogos && (() => {
                 const teamData = allTeams.find(team => team.id === matchInfo?.team);
                 return teamData?.logo ? (
                   <img
@@ -100,10 +110,10 @@ const PitchHeader: React.FC<PitchHeaderProps> = ({
                   />
                 ) : null;
               })()}
-              <span className={styles.teamName}>{(() => {
+              <span className={styles.teamName}>{maskName((() => {
                 const teamData = allTeams.find(team => team.id === matchInfo?.team);
                 return teamData?.name || matchInfo?.teamName || matchInfo?.team || 'Nasz zespół';
-              })()}</span>
+              })())}</span>
             </div>
           </>
         )}
