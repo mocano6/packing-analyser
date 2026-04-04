@@ -149,6 +149,18 @@ export default function PlayerDetailsPage() {
     }
   }, [selectedSeason]);
 
+  const handleRefreshData = async () => {
+    if (isRefreshingData) return;
+    try {
+      setIsRefreshingData(true);
+      invalidateMatchCache();
+      await forceRefreshFromFirebase(selectedTeam || undefined);
+      setRefreshKey((prev) => prev + 1);
+    } finally {
+      setIsRefreshingData(false);
+    }
+  };
+
   const [selectedPxtCategory, setSelectedPxtCategory] = useState<"sender" | "receiver" | "dribbler">("sender");
   const [heatmapMode, setHeatmapMode] = useState<"pxt" | "count">("pxt");
   const [heatmapDirection, setHeatmapDirection] = useState<"from" | "to">("from"); // Domyślnie "from" dla sender
@@ -4154,6 +4166,15 @@ export default function PlayerDetailsPage() {
           </Link>
           <div className={styles.headerTitleRow}>
             <h1>Profil zawodnika</h1>
+            <button
+              type="button"
+              className={styles.refreshButton}
+              onClick={handleRefreshData}
+              disabled={isRefreshingData}
+              title="Odśwież dane z Firebase"
+            >
+              {isRefreshingData ? "Odświeżanie..." : "Odśwież dane"}
+            </button>
             {isAdmin && (
               <button
                 type="button"

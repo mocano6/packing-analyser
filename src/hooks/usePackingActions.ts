@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Player, Action, TeamInfo } from "@/types";
 import { v4 as uuidv4 } from 'uuid';
 import { getDB } from "@/lib/firebase";
@@ -947,14 +947,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       return false;
     }
     
-    try {
-      // Sprawdzamy dostępność bazy danych przez próbę dostępu
-      getDB();
-    } catch (dbError) {
-      console.error("Brak połączenia z bazą danych");
-      return false;
-    }
-    
     // Dodaj potwierdzenie przed usunięciem
     if (!window.confirm("Czy na pewno chcesz usunąć tę akcję?")) {
       return false;
@@ -1055,7 +1047,34 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         }
         return false;
       }
-      
+
+      const category = getActionCategory(actionToDelete);
+      let collectionField = "actions_packing";
+      if (category === "regain") {
+        collectionField = "actions_regain";
+      } else if (category === "loses") {
+        collectionField = "actions_loses";
+      } else {
+        const isDefense = actionToDelete.mode === "defense";
+        collectionField = isDefense ? "actions_unpacking" : "actions_packing";
+      }
+
+      // Aktualizacja lokalna (optimistic)
+      setActions((prevActions) => prevActions.filter((action) => action.id !== actionId));
+
+      // Batch/Offline sync
+      enqueue({
+        type: "delete",
+        matchId: matchInfo.matchId,
+        collectionField,
+        actionId,
+      });
+      if (isOnline()) {
+        markDirty(matchInfo.matchId, collectionField);
+      } else {
+        toast("Usunięto lokalnie. Synchronizacja po powrocie internetu.");
+      }
+
       return true;
     } catch (error: unknown) {
       console.error("Błąd podczas usuwania akcji:", error);
@@ -1100,6 +1119,19 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           setCachedMatchData((prev) => (prev ? { ...prev, actions_packing: [] } : null));
         }
         setActions([]);
+        
+        const collectionField = "actions_packing";
+        enqueue({
+          type: "delete",
+          matchId: matchInfo.matchId,
+          collectionField,
+          actionId: "__all__",
+        });
+        if (isOnline()) {
+          markDirty(matchInfo.matchId, collectionField);
+        } else {
+          toast("Wyczyszczono lokalnie. Synchronizacja po powrocie internetu.");
+        }
         return true;
       } catch (error) {
         console.error("Błąd podczas usuwania wszystkich akcji:", error);

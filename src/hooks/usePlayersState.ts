@@ -23,6 +23,7 @@ const generateId = () => {
 
 const NEW_STRUCTURE_CHECK_KEY = "players_new_structure_check";
 const NEW_STRUCTURE_CHECK_TTL_MS = 6 * 60 * 60 * 1000;
+const PLAYERS_CACHE_TTL_MS = 10 * 60 * 1000;
 
 const readNewStructureCheck = (): { checkedAt: number; hasNewStructure: boolean } | null => {
   if (typeof window === "undefined") return null;
@@ -66,6 +67,7 @@ export function usePlayersState() {
   
   const playersRef = useRef<Player[]>([]);
   const newStructureCheckRef = useRef<{ checkedAt: number; hasNewStructure: boolean } | null>(null);
+  const cachedPlayersRef = useRef<{ data: Player[]; ts: number } | null>(null);
 
   // Funkcja migracji zawodników z teams/members do players
   const migratePlayersFromTeamsToPlayers = async (): Promise<boolean> => {
@@ -358,6 +360,7 @@ export function usePlayersState() {
     
     try {
       setIsRefetching(true);
+      cachedPlayersRef.current = null;
       await fetchAllPlayers();
     } finally {
       setIsRefetching(false);
@@ -380,6 +383,10 @@ export function usePlayersState() {
       invalidateCache(CACHE_KEYS.PLAYERS_LIST);
       // Aktualizuj lokalny stan
       setPlayers((prev) => prev.filter((p) => p.id !== playerId));
+      cachedPlayersRef.current = {
+        data: playersRef.current.filter((p) => p.id !== playerId),
+        ts: Date.now(),
+      };
       return true;
       
     } catch (error) {
@@ -508,6 +515,14 @@ export function usePlayersState() {
                   : p
               )
             );
+            cachedPlayersRef.current = {
+              data: playersRef.current.map((p) =>
+                p.id === editingPlayerId
+                  ? { ...p, ...playerDataWithoutId, id: editingPlayerId }
+                  : p
+              ),
+              ts: Date.now(),
+            };
             
           } else {
             // DODAWANIE w nowej strukturze
@@ -554,6 +569,10 @@ export function usePlayersState() {
             };
             
             setPlayers((prev) => [...prev, newPlayer]);
+            cachedPlayersRef.current = {
+              data: [...playersRef.current, newPlayer],
+              ts: Date.now(),
+            };
           }
           
         } else {
@@ -575,6 +594,14 @@ export function usePlayersState() {
                   : p
               )
             );
+            cachedPlayersRef.current = {
+              data: playersRef.current.map((p) =>
+                p.id === editingPlayerId
+                  ? { ...p, ...playerDataWithoutId, id: editingPlayerId }
+                  : p
+              ),
+              ts: Date.now(),
+            };
           } else {
             const playerRef = await addDoc(collection(getDB(), "players"), {
               ...playerData,
@@ -588,6 +615,10 @@ export function usePlayersState() {
              };
             
             setPlayers((prev) => [...prev, newPlayer]);
+            cachedPlayersRef.current = {
+              data: [...playersRef.current, newPlayer],
+              ts: Date.now(),
+            };
           }
         }
         

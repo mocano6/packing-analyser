@@ -92,7 +92,11 @@ export default function WeryfikacjaMeczow() {
 
       setIsLoading(true);
       try {
-        const matchesSnapshot = await getDocs(collection(db, 'matches'));
+        const matchesRef = collection(db, 'matches');
+        const matchesQuery = selectedTeam !== 'all'
+          ? query(matchesRef, where('team', '==', selectedTeam))
+          : matchesRef;
+        const matchesSnapshot = await getDocs(matchesQuery);
         const allMatches: MatchWithActions[] = [];
 
         matchesSnapshot.docs.forEach(doc => {
@@ -144,7 +148,7 @@ export default function WeryfikacjaMeczow() {
     if (isAuthenticated && isAdmin) {
       fetchMatches();
     }
-  }, [isAuthenticated, isAdmin]);
+  }, [isAuthenticated, isAdmin, selectedTeam]);
 
   // Filtrowanie i sortowanie
   const filteredAndSortedMatches = useMemo(() => {

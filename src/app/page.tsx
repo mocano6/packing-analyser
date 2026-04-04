@@ -31,6 +31,8 @@ import { useAuth } from "@/hooks/useAuth";
 import toast from 'react-hot-toast';
 import { doc, updateDoc, getDoc } from "@/lib/firestoreWithMetrics";
 import { getDB } from "@/lib/firebase";
+import { enqueue, isOnline, markDirty } from "@/utils/actionsSyncQueue";
+import { invalidateMatchCache } from "@/utils/matchDocCache";
 import pitchHeaderStyles from "@/components/PitchHeader/PitchHeader.module.css";
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesModal";
@@ -186,6 +188,7 @@ export default function Page() {
   const [allTeams, setAllTeams] = React.useState<Team[]>([]);
   const [isTeamsLoading, setIsTeamsLoading] = React.useState<boolean>(true);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
+  const [isRefreshingData, setIsRefreshingData] = useState(false);
 
   // Ref do YouTube Video
   const youtubeVideoRef = useRef<YouTubeVideoRef>(null);
@@ -1284,7 +1287,7 @@ export default function Page() {
   const { shots, addShot, updateShot, deleteShot, refetch: refetchShots } = useShots(matchInfo?.matchId || "");
   
   // Hook do zarządzania wejściami PK
-  const { pkEntries, addPKEntry, updatePKEntry, deletePKEntry } = usePKEntries(matchInfo?.matchId || "");
+  const { pkEntries, addPKEntry, updatePKEntry, deletePKEntry, refetch: refetchPKEntries } = usePKEntries(matchInfo?.matchId || "");
 
   // Hook do zarządzania akcjami 8s ACC
   const { acc8sEntries, addAcc8sEntry, updateAcc8sEntry, deleteAcc8sEntry, bulkUpdateAcc8sEntries } = useAcc8sEntries(matchInfo?.matchId || "");
@@ -2641,9 +2644,7 @@ export default function Page() {
   };
 
   // Funkcja do odświeżania danych z Firebase
-  const handleRefreshData = async () => {
-    await forceRefreshFromFirebase(selectedTeam);
-  };
+  // (zdefiniowana wcześniej jako useCallback)
 
 
   // Obsługa edycji akcji
@@ -3202,23 +3203,31 @@ export default function Page() {
         actionCategory === "packing" && 
         originalCollectionField !== collectionField;
 
+      // Zachowujemy wszystkie pola, w tym te z wartością false
+      const cleanedAction = removeUndefinedFields(actionWithOppositeValues);
+      const actionWithBooleans = {
+        ...cleanedAction,
+        ...(actionCategory === "regain" || actionCategory === "loses"
+          ? {
+              isP0: editedAction.isP0 === true,
+              isP1: editedAction.isP1 === true,
+              isP2: editedAction.isP2 === true,
+              isP3: editedAction.isP3 === true,
+              isContact1: editedAction.isContact1 === true,
+              isContact2: editedAction.isContact2 === true,
+              isContact3Plus: editedAction.isContact3Plus === true,
+              isShot: editedAction.isShot === true,
+              isGoal: editedAction.isGoal === true,
+              isPenaltyAreaEntry: editedAction.isPenaltyAreaEntry === true,
+              ...(actionCategory === "loses" && {
+                isPMArea: (editedAction as any).isPMArea === true,
+              }),
+            }
+          : {}),
+      };
+
       if (isMovedToNewMatch || isMovedBetweenPackingUnpacking) {
-        // 1. Usuń akcję ze starego meczu/kolekcji (tylko jeśli istnieje originalAction)
-        if (originalAction) {
-          const oldMatchId = originalMatchId || editedAction.matchId;
-          const oldMatchRef = doc(db, "matches", oldMatchId);
-          const oldMatchDoc = await getDoc(oldMatchRef);
-          
-          if (oldMatchDoc.exists()) {
-            const oldMatchData = oldMatchDoc.data() as TeamInfo;
-            const oldActions = (oldMatchData[originalCollectionField as keyof TeamInfo] as Action[] | undefined) || [];
-            const filteredOldActions = oldActions.filter(a => a.id !== editedAction.id);
-            
-            await updateDoc(oldMatchRef, {
-              [originalCollectionField]: filteredOldActions
-            });
-          }
-        }
+        const oldMatchId = originalMatchId || editedAction.matchId;
 
         // 2. Dodaj akcję do nowego meczu/kolekcji
         const newMatchRef = doc(db, "matches", editedAction.matchId);
@@ -3275,12 +3284,28 @@ export default function Page() {
 
         // Aktualizuj lokalny stan jeśli dotknięty jest aktualny mecz
         if (matchInfo?.matchId === originalMatchId) {
-          // Usuń akcję z lokalnego stanu (stary mecz)
-          const filteredActions = actions.filter(a => a.id !== editedAction.id);
-          setActions(filteredActions);
+          setActions(actions.filter((a) => a.id !== editedAction.id));
         } else if (matchInfo?.matchId === editedAction.matchId) {
-          // Dodaj akcję do lokalnego stanu (nowy mecz)
-          setActions([...actions, actionWithOppositeValues]);
+          setActions([...actions, actionWithBooleans]);
+        }
+
+        enqueue({
+          type: "delete",
+          matchId: oldMatchId,
+          collectionField: originalCollectionField,
+          actionId: editedAction.id,
+        });
+        enqueue({
+          type: "add",
+          matchId: editedAction.matchId,
+          collectionField,
+          action: actionWithBooleans,
+        });
+        if (isOnline()) {
+          markDirty(oldMatchId, originalCollectionField);
+          markDirty(editedAction.matchId, collectionField);
+        } else {
+          toast("Zapisano lokalnie. Synchronizacja po powrocie internetu.");
         }
       } else {
         // Aktualizacja akcji w tym samym meczu
@@ -3382,11 +3407,7 @@ export default function Page() {
         });
         
         if (actionIndex === -1) {
-          console.error("❌ Nie znaleziono akcji do edycji:", editedAction.id, "w kolekcji:", collectionField);
-          console.error("OriginalAction:", originalAction);
-          console.error("OriginalCollectionField:", originalCollectionField);
-          console.error("CollectionField:", collectionField);
-          console.error("EditedAction:", editedAction);
+          console.error("❌ Nie znaleziono akcji do edycji:", editedAction.id);
           alert("Nie znaleziono akcji do edycji. Sprawdź konsolę dla szczegółów.");
           return;
         }
@@ -3801,6 +3822,17 @@ export default function Page() {
 
               </div>
             </div>
+          </div>
+          <div className={styles.controlsContainer}>
+            <button
+              className={styles.refreshButton}
+              onClick={handleRefreshData}
+              disabled={isRefreshingData}
+              aria-disabled={isRefreshingData}
+              title="Odśwież dane z Firebase"
+            >
+              {isRefreshingData ? "Odświeżanie..." : "Odśwież dane"}
+            </button>
           </div>
           {!isPlayer && (
             <div className={styles.controlsContainer}>

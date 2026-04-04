@@ -56,6 +56,10 @@ export default function ListaZawodnikow() {
 
         setMatchNamesById(namesById);
         setAllActions(allMatchActions);
+        localStorage.setItem(
+          ACTIONS_CACHE_KEY,
+          JSON.stringify({ ts: Date.now(), data: allMatchActions })
+        );
       } catch (error) {
         console.error('Błąd podczas pobierania akcji:', error);
         setAllActions([]);

@@ -166,6 +166,18 @@ export default function StatystykiZespoluPage() {
     return 'kpi';
   });
 
+  const handleRefreshData = async () => {
+    if (isRefreshingData) return;
+    try {
+      setIsRefreshingData(true);
+      invalidateMatchCache(selectedMatch);
+      await forceRefreshFromFirebase(selectedTeam || undefined);
+      setRefreshKey((prev) => prev + 1);
+    } finally {
+      setIsRefreshingData(false);
+    }
+  };
+
   // Zapisuj wybraną kategorię w localStorage przy każdej zmianie
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -3709,7 +3721,19 @@ export default function StatystykiZespoluPage() {
         <Link href="/" className={styles.backButton} title="Powrót do głównej">
           ←
         </Link>
-        <h1>Statystyki zespołu - Analiza meczu</h1>
+        <div className={styles.headerTitleRow}>
+          <h1>Statystyki zespołu - Analiza meczu</h1>
+          <button
+            type="button"
+            className={styles.refreshButton}
+            onClick={handleRefreshData}
+            disabled={isRefreshingData}
+            aria-disabled={isRefreshingData}
+            title="Odśwież dane z Firebase"
+          >
+            {isRefreshingData ? "Odświeżanie..." : "Odśwież dane"}
+          </button>
+        </div>
       </div>
 
       {/* Kompaktowa sekcja wyboru */}
