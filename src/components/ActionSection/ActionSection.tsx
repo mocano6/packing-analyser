@@ -81,7 +81,7 @@ export interface ActionSectionProps {
   setPlayersLeftField: React.Dispatch<React.SetStateAction<number>>;
   opponentsLeftField: number;
   setOpponentsLeftField: React.Dispatch<React.SetStateAction<number>>;
-  handleSaveAction: () => void;
+  handleSaveAction: (patch?: Partial<Action>) => void | Promise<void>;
   resetActionState: () => void;
   resetActionPoints: () => void;
   startZone: number | null;
@@ -1730,15 +1730,16 @@ const ActionSection = memo(function ActionSection({
               });
             }
           }}
-          onSaveAction={() => {
+          onSaveAction={(patch) => {
             if (editingAction && onSaveEditedAction) {
               // Pobierz notatkę kontrowersyjną z localStorage
               const tempControversyNote = typeof window !== 'undefined' ? localStorage.getItem('tempControversyNote') : null;
               const controversyNote = tempControversyNote && tempControversyNote.trim() ? tempControversyNote.trim() : undefined;
               
-              // Zaktualizuj editingAction z controversyNote
+              // Zaktualizuj editingAction z controversyNote; patch z modala (liczniki) ma pierwszeństwo
               const updatedAction = {
                 ...editingAction,
+                ...patch,
                 ...(editingAction.isControversial && controversyNote && { controversyNote }),
                 ...(!editingAction.isControversial && { controversyNote: undefined })
               };

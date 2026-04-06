@@ -11,6 +11,10 @@ import toast from "react-hot-toast";
 import { getOppositeXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString, getZoneData } from '@/constants/xtValues';
 import { getMatchDocumentFromCache, setMatchDocumentInCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import { clearPendingMatchUpdate, getPendingField, setPendingMatchUpdate } from "@/lib/offlineMatchPending";
+import { commitMatchArrayFieldUpdate, type MatchArrayFieldKey } from "@/lib/matchArrayFieldWrite";
+import { findActionCollectionFieldInMatchData } from "@/lib/findActionCollectionField";
+import { mergeByIdPreferPending } from "@/lib/mergeMatchArrayById";
+import { runTransaction } from "@/lib/firestoreWithMetrics";
 
 // Funkcja do konwersji numeru strefy na format literowo-liczbowy
 function convertZoneNumberToString(zoneNumber: number | string): string {
@@ -275,24 +279,55 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     const pendingUnpacking = getPendingField<Action[]>(matchId, "actions_unpacking");
     const pendingRegain = getPendingField<Action[]>(matchId, "actions_regain");
     const pendingLoses = getPendingField<Action[]>(matchId, "actions_loses");
-    const updateData: Partial<TeamInfo> = {};
-    if (pendingPacking) updateData.actions_packing = pendingPacking;
-    if (pendingUnpacking) updateData.actions_unpacking = pendingUnpacking;
-    if (pendingRegain) updateData.actions_regain = pendingRegain;
-    if (pendingLoses) updateData.actions_loses = pendingLoses;
-    if (Object.keys(updateData).length === 0) return;
+    if (!pendingPacking && !pendingUnpacking && !pendingRegain && !pendingLoses) return;
+
+    const cleanList = (arr: Action[]) =>
+      arr.map((a) => removeUndefinedFields(stripPIIFromAction(a)));
+
     try {
-      const matchRef = doc(getDB(), "matches", matchId);
-      await updateDoc(matchRef, updateData);
+      const db = getDB();
+      const matchRef = doc(db, "matches", matchId);
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(matchRef);
+        if (!snap.exists()) {
+          throw new Error("MATCH_NOT_FOUND");
+        }
+        const data = snap.data() as TeamInfo;
+        const patch: Record<string, unknown> = {};
+        if (pendingPacking) {
+          patch.actions_packing = cleanList(
+            mergeByIdPreferPending(data.actions_packing || [], pendingPacking)
+          );
+        }
+        if (pendingUnpacking) {
+          patch.actions_unpacking = cleanList(
+            mergeByIdPreferPending(data.actions_unpacking || [], pendingUnpacking)
+          );
+        }
+        if (pendingRegain) {
+          patch.actions_regain = cleanList(
+            mergeByIdPreferPending(data.actions_regain || [], pendingRegain)
+          );
+        }
+        if (pendingLoses) {
+          patch.actions_loses = cleanList(
+            mergeByIdPreferPending(data.actions_loses || [], pendingLoses)
+          );
+        }
+        if (Object.keys(patch).length === 0) {
+          return;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic keys actions_*
+        transaction.update(matchRef, patch as any);
+      });
       if (pendingPacking) clearPendingMatchUpdate(matchId, "actions_packing");
       if (pendingUnpacking) clearPendingMatchUpdate(matchId, "actions_unpacking");
       if (pendingRegain) clearPendingMatchUpdate(matchId, "actions_regain");
       if (pendingLoses) clearPendingMatchUpdate(matchId, "actions_loses");
       const cached = getMatchDocumentFromCache(matchId);
       if (cached) {
-        setMatchDocumentInCache(matchId, { ...cached, ...updateData } as TeamInfo);
+        await loadActionsForMatch(matchId);
       }
-      await loadActionsForMatch(matchId);
     } catch {
       // nadal offline lub błąd — zostawiamy pending
     }
@@ -787,86 +822,20 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       if (actionCategory === "loses") {
       }
       
-      // Zapisujemy do Firebase — używamy stanu actions zamiast getDoc (1 odczyt mniej)
-      try {
-        const matchRef = doc(getDB(), "matches", matchInfoArg.matchId);
+      // Transakcja: świeża tablica z serwera + nowa akcja (retry przy konfliktach, bez gubienia pracy innych)
+      let collectionField: string;
+      if (actionCategory === "regain") {
+        collectionField = "actions_regain";
+      } else if (actionCategory === "loses") {
+        collectionField = "actions_loses";
+      } else {
+        collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
+      }
 
-        // Wybieramy kolekcję w zależności od kategorii i trybu
-        let collectionField: string;
-        if (actionCategory === "regain") {
-          collectionField = "actions_regain";
-        } else if (actionCategory === "loses") {
-          collectionField = "actions_loses";
-        } else {
-          collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
-        }
-
-        // Bierzemy aktualną listę ze stanu (już załadowaną przy wejściu na mecz)
-        const cleanedActions = actions.map((action: Action) =>
-          removeUndefinedFields(stripPIIFromAction(action))
-        );
-
-        // Dodaj nową (oczyszczoną) akcję i aktualizuj dokument
-        const actionToSave = {
-          ...stripPIIFromAction(cleanedAction),
-          ...(actionCategory === "regain" || actionCategory === "loses" ? {
-            isP0: cleanedAction.isP0 ?? false,
-            isP1: cleanedAction.isP1 ?? false,
-            isP2: cleanedAction.isP2 ?? false,
-            isP3: cleanedAction.isP3 ?? false,
-            isContact1: cleanedAction.isContact1 ?? false,
-            isContact2: cleanedAction.isContact2 ?? false,
-            isContact3Plus: cleanedAction.isContact3Plus ?? false,
-            isShot: cleanedAction.isShot ?? false,
-            isGoal: cleanedAction.isGoal ?? false,
-            isPenaltyAreaEntry: cleanedAction.isPenaltyAreaEntry ?? false,
-            ...(actionCategory === "loses" && {
-              isPMArea: (cleanedAction as any).isPMArea ?? false,
-              isAut: (cleanedAction as any).isAut ?? false
-            })
-          } : {})
-        };
-
-        const updatedActions = [...cleanedActions, actionToSave];
-        await updateDoc(matchRef, {
-          [collectionField]: updatedActions
-        });
-        clearPendingMatchUpdate(matchInfoArg.matchId, collectionField);
-
-        // Aktualizacja optymistyczna — od razu pokazujemy nową akcję w tabeli
-        const sanitizedNew = {
-          ...removeUndefinedFields(stripPIIFromAction(actionToSave)),
-          isSecondHalf: (actionToSave as Action).isSecondHalf === true
-        } as Action;
-        setActions((prev) => [...prev, sanitizedNew]);
-        const cached = getMatchDocumentFromCache(matchInfoArg.matchId);
-        if (cached) {
-          const updated = { ...cached, [collectionField]: updatedActions } as TeamInfo;
-          setMatchDocumentInCache(matchInfoArg.matchId, updated);
-          if (cachedMatchId === matchInfoArg.matchId) {
-            setCachedMatchData(updated);
-          }
-        }
-      } catch (firebaseError) {
-        console.error("Błąd podczas zapisywania akcji w Firebase:", firebaseError);
-        const errorHandled = await handleFirestoreError(firebaseError, getDB());
-        if (isOfflineError(firebaseError)) {
-          // Zapis offline: używamy stanu actions + kolejka pending (bez getDoc)
-          const matchRef = doc(getDB(), "matches", matchInfoArg.matchId);
-          let collectionField: string;
-          if (actionCategory === "regain") {
-            collectionField = "actions_regain";
-          } else if (actionCategory === "loses") {
-            collectionField = "actions_loses";
-          } else {
-            collectionField = actionMode === "defense" ? "actions_unpacking" : "actions_packing";
-          }
-          const cleanedActions = actions.map((action: Action) =>
-            removeUndefinedFields(stripPIIFromAction(action))
-          );
-          const actionToSave = {
-            ...stripPIIFromAction(cleanedAction),
-            ...(actionCategory === "regain" || actionCategory === "loses" ? {
+      const actionToSave = {
+        ...stripPIIFromAction(cleanedAction),
+        ...(actionCategory === "regain" || actionCategory === "loses"
+          ? {
               isP0: cleanedAction.isP0 ?? false,
               isP1: cleanedAction.isP1 ?? false,
               isP2: cleanedAction.isP2 ?? false,
@@ -879,27 +848,44 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
               isPenaltyAreaEntry: cleanedAction.isPenaltyAreaEntry ?? false,
               ...(actionCategory === "loses" && {
                 isPMArea: (cleanedAction as any).isPMArea ?? false,
-                isAut: (cleanedAction as any).isAut ?? false
-              })
-            } : {})
-          };
-          const updatedActions = [...cleanedActions, actionToSave];
-          setPendingMatchUpdate(matchInfoArg.matchId, collectionField, updatedActions);
-          setActions((prev) => {
-            const filtered = prev.filter((a) => a.id !== actionToSave.id);
-            return [...filtered, actionToSave];
-          });
-          const cached = getMatchDocumentFromCache(matchInfoArg.matchId);
-          if (cached) {
-            const updated = { ...cached, [collectionField]: updatedActions } as TeamInfo;
-            setMatchDocumentInCache(matchInfoArg.matchId, updated);
-            if (cachedMatchId === matchInfoArg.matchId) setCachedMatchData(updated);
-          }
-          toast("Brak połączenia. Zmiany zapisane lokalnie i zostaną wysłane po powrocie internetu.");
-          return true;
-        }
-        if (!errorHandled) {
-          // Akcja została dodana tylko lokalnie - synchronizacja z Firebase nieudana
+                isAut: (cleanedAction as any).isAut ?? false,
+              }),
+            }
+          : {}),
+      };
+
+      const commitResult = await commitMatchArrayFieldUpdate<Action>({
+        db: getDB(),
+        matchId: matchInfoArg.matchId,
+        field: collectionField as MatchArrayFieldKey,
+        updater: (current) => {
+          const cleanedCurrent = current.map((a) => removeUndefinedFields(stripPIIFromAction(a)));
+          return [...cleanedCurrent, actionToSave as Action];
+        },
+        cleanForFirestore: (arr) => arr.map((a) => removeUndefinedFields(stripPIIFromAction(a))),
+        isOfflineError,
+      });
+
+      if (!commitResult.ok) {
+        console.error("Błąd podczas zapisywania akcji w Firebase");
+        await handleFirestoreError(new Error("save failed"), getDB());
+        return false;
+      }
+      if (commitResult.usedOffline) {
+        toast("Brak połączenia. Zmiany zapisane lokalnie i zostaną wysłane po powrocie internetu.");
+      }
+
+      const afterDoc = getMatchDocumentFromCache(matchInfoArg.matchId);
+      if (afterDoc) {
+        const derived = deriveActionsFromMatchData(
+          matchInfoArg.matchId,
+          afterDoc,
+          actionCategory ?? "packing",
+          loadBothRegainLoses ?? false
+        );
+        setActions(derived);
+        if (cachedMatchId === matchInfoArg.matchId) {
+          setCachedMatchData(afterDoc);
         }
       }
       
@@ -915,7 +901,42 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       
       return false;
     }
-  }, [actions, cachedMatchId, selectedPlayerId, selectedReceiverId, actionType, actionMinute, currentPoints, isP0StartActive, isP1StartActive, isP2StartActive, isP3StartActive, isP0Active, isP1Active, isP2Active, isP3Active, isContact1Active, isContact2Active, isContact3PlusActive, isShot, isGoal, isPenaltyAreaEntry, isSecondHalf, isBelow8sActive, isReaction5sActive, isBadReaction5sActive, isAutActive, isPMAreaActive, playersBehindBall, opponentsBehindBall, playersLeftField, opponentsLeftField, actionCategory, actionMode, selectedDefensePlayers]);
+  }, [
+    cachedMatchId,
+    selectedPlayerId,
+    selectedReceiverId,
+    actionType,
+    actionMinute,
+    currentPoints,
+    isP0StartActive,
+    isP1StartActive,
+    isP2StartActive,
+    isP3StartActive,
+    isP0Active,
+    isP1Active,
+    isP2Active,
+    isP3Active,
+    isContact1Active,
+    isContact2Active,
+    isContact3PlusActive,
+    isShot,
+    isGoal,
+    isPenaltyAreaEntry,
+    isSecondHalf,
+    isBelow8sActive,
+    isReaction5sActive,
+    isBadReaction5sActive,
+    isAutActive,
+    isPMAreaActive,
+    playersBehindBall,
+    opponentsBehindBall,
+    playersLeftField,
+    opponentsLeftField,
+    actionCategory,
+    actionMode,
+    selectedDefensePlayers,
+    loadBothRegainLoses,
+  ]);
 
   // Funkcja pomocnicza do określenia kategorii akcji
   const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
@@ -936,7 +957,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     return "packing";
   };
 
-  // Usuwanie akcji
+  // Usuwanie akcji (transakcja w commitMatchArrayFieldUpdate — spójnie z zapisem, bez gubienia pracy innych)
   const handleDeleteAction = useCallback(async (actionId: string) => {
     if (!actionId) {
       console.error("Brak ID akcji do usunięcia");
@@ -946,133 +967,87 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       console.error("Brak ID meczu, nie można usunąć akcji");
       return false;
     }
-    
-    // Dodaj potwierdzenie przed usunięciem
+
     if (!window.confirm("Czy na pewno chcesz usunąć tę akcję?")) {
       return false;
     }
-    
+
     const removedAction = actions.find((a) => a.id === actionId);
-    // Optymistyczne usunięcie z UI — od razu zniknie z listy
     setActions((prev) => prev.filter((a) => a.id !== actionId));
-    
+
+    const matchId = matchInfo.matchId;
+
+    const inferFieldFromRemoved = (a: Action): MatchArrayFieldKey => {
+      const cat = getActionCategory(a);
+      if (cat === "regain") return "actions_regain";
+      if (cat === "loses") return "actions_loses";
+      return a.mode === "defense" ? "actions_unpacking" : "actions_packing";
+    };
+
+    let field: MatchArrayFieldKey | null = null;
+    const cached = getMatchDocumentFromCache(matchId);
+    if (cached) {
+      field = findActionCollectionFieldInMatchData(cached, actionId);
+    }
+    if (!field && removedAction) {
+      field = inferFieldFromRemoved(removedAction);
+    }
+    if (!field) {
+      const fresh = await getOrLoadMatchDocument(matchId);
+      if (fresh) {
+        field = findActionCollectionFieldInMatchData(fresh, actionId);
+      }
+    }
+
+    if (!field) {
+      console.error("Nie znaleziono akcji o ID:", actionId);
+      if (removedAction) {
+        setActions((prev) => [...prev, removedAction]);
+      }
+      return false;
+    }
+
     try {
-      // Usuwamy z Firebase
-      const matchRef = doc(getDB(), "matches", matchInfo.matchId);
-      const matchDoc = await getDoc(matchRef);
-      
-      if (matchDoc.exists()) {
-        const matchData = matchDoc.data() as TeamInfo;
-        
-        // Znajdź akcję (z zapisanego stanu lub Firebase), aby określić kolekcję
-        const actionToDelete = removedAction ?? (() => {
-          const packingActions = matchData.actions_packing || [];
-          const unpackingActions = matchData.actions_unpacking || [];
-          const regainActions = matchData.actions_regain || [];
-          const losesActions = matchData.actions_loses || [];
-          return [...packingActions, ...unpackingActions, ...regainActions, ...losesActions]
-            .find((a: Action) => a.id === actionId);
-        })();
-        
-        // Jeśli nie ma w lokalnym stanie, sprawdź wszystkie kolekcje w Firebase
-        let foundAction: Action | undefined = actionToDelete;
-        let collectionField: string = "actions_packing";
-        
-        if (!foundAction) {
-          // Sprawdź wszystkie kolekcje
-          const packingActions = matchData.actions_packing || [];
-          const unpackingActions = matchData.actions_unpacking || [];
-          const regainActions = matchData.actions_regain || [];
-          const losesActions = matchData.actions_loses || [];
-          
-          foundAction = [...packingActions, ...unpackingActions, ...regainActions, ...losesActions]
-            .find((action: Action) => action.id === actionId);
-          
-          if (foundAction) {
-            const actionCategory = getActionCategory(foundAction);
-            if (actionCategory === "regain") {
-              collectionField = "actions_regain";
-            } else if (actionCategory === "loses") {
-              collectionField = "actions_loses";
-            } else {
-              // Dla packing sprawdzamy tryb (attack/defense)
-              const isDefense = foundAction.mode === "defense";
-              collectionField = isDefense ? "actions_unpacking" : "actions_packing";
-            }
-          }
-        } else {
-          // Określ kategorię na podstawie akcji z lokalnego stanu
-          const actionCategory = getActionCategory(foundAction);
-          if (actionCategory === "regain") {
-            collectionField = "actions_regain";
-          } else if (actionCategory === "loses") {
-            collectionField = "actions_loses";
-          } else {
-            // Dla packing sprawdzamy tryb (attack/defense)
-            const isDefense = foundAction.mode === "defense";
-            collectionField = isDefense ? "actions_unpacking" : "actions_packing";
-          }
-        }
-        
-        if (!foundAction) {
-          console.error("Nie znaleziono akcji o ID:", actionId);
-          return false;
-        }
-        
-        // Pobierz akcje z odpowiedniej kolekcji
-        const currentActions = (matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
-        
-        // Filtrujemy akcje, aby usunąć tę o podanym ID
-        const updatedActions = currentActions.filter((action: Action) => action.id !== actionId);
-        
-        // Oczyszczamy wszystkie akcje z wartości undefined
-        const cleanedActions = updatedActions.map((action: Action) => removeUndefinedFields(action));
-        
-        // Aktualizujemy dokument z oczyszczonymi akcjami
-        await updateDoc(matchRef, {
-          [collectionField]: cleanedActions
-        });
-        if (cachedMatchId === matchInfo.matchId) {
-          setCachedMatchData((prev) => {
-            if (!prev) return prev;
-            const key = collectionField as keyof TeamInfo;
-            const arr = ((prev[key] as Action[] | undefined) || []).filter((a: Action) => a.id !== actionId);
-            return { ...prev, [key]: arr } as TeamInfo;
-          });
-        }
-      } else {
-        console.error("Nie znaleziono meczu o ID:", matchInfo.matchId);
+      const result = await commitMatchArrayFieldUpdate<Action>({
+        db: getDB(),
+        matchId,
+        field,
+        updater: (cur) => cur.filter((a) => a.id !== actionId),
+        cleanForFirestore: (arr) =>
+          arr.map((a) => removeUndefinedFields(stripPIIFromAction(a))),
+        isOfflineError,
+      });
+
+      if (!result.ok) {
         if (removedAction) {
           setActions((prev) => [...prev, removedAction]);
         }
         return false;
       }
 
-      const category = getActionCategory(actionToDelete);
-      let collectionField = "actions_packing";
-      if (category === "regain") {
-        collectionField = "actions_regain";
-      } else if (category === "loses") {
-        collectionField = "actions_loses";
-      } else {
-        const isDefense = actionToDelete.mode === "defense";
-        collectionField = isDefense ? "actions_unpacking" : "actions_packing";
+      if (result.usedOffline) {
+        toast(
+          "Brak połączenia. Zmiany zapisane lokalnie i zostaną wysłane po powrocie internetu."
+        );
       }
 
-      // Aktualizacja lokalna (optimistic)
-      setActions((prevActions) => prevActions.filter((action) => action.id !== actionId));
-
-      // Batch/Offline sync
-      enqueue({
-        type: "delete",
-        matchId: matchInfo.matchId,
-        collectionField,
-        actionId,
-      });
-      if (isOnline()) {
-        markDirty(matchInfo.matchId, collectionField);
-      } else {
-        toast("Usunięto lokalnie. Synchronizacja po powrocie internetu.");
+      let afterDoc = getMatchDocumentFromCache(matchId);
+      if (!afterDoc) {
+        await loadActionsForMatch(matchId);
+        afterDoc = getMatchDocumentFromCache(matchId);
+      }
+      if (afterDoc) {
+        if (cachedMatchId === matchId) {
+          setCachedMatchData(afterDoc);
+        }
+        setActions(
+          deriveActionsFromMatchData(
+            matchId,
+            afterDoc,
+            actionCategory ?? "packing",
+            loadBothRegainLoses ?? false
+          )
+        );
       }
 
       return true;
@@ -1082,68 +1057,30 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         setActions((prev) => [...prev, removedAction]);
       }
       await handleFirestoreError(error as Error, getDB());
-      const msg = error && typeof error === 'object' && 'code' in error ? String((error as { code?: string }).code) : '';
+      const msg =
+        error && typeof error === "object" && "code" in error
+          ? String((error as { code?: string }).code)
+          : "";
       const errMsg = error instanceof Error ? error.message : String(error);
-      if (msg === 'permission-denied' || errMsg.includes('permission') || errMsg.includes('uprawnień')) {
+      if (
+        msg === "permission-denied" ||
+        errMsg.includes("permission") ||
+        errMsg.includes("uprawnień")
+      ) {
         toast.error("Brak uprawnień do usunięcia akcji. Sprawdź dostęp do zespołu tego meczu.");
       } else {
         toast.error("Wystąpił błąd podczas usuwania akcji. Spróbuj ponownie.");
       }
       return false;
     }
-  }, [matchInfo?.matchId, actions, cachedMatchId]);
-
-  // Usuwanie wszystkich akcji
-  const handleDeleteAllActions = useCallback(async () => {
-    if (!matchInfo?.matchId) {
-      console.error("Brak ID meczu, nie można usunąć akcji");
-      return false;
-    }
-    
-    if (window.confirm("Czy na pewno chcesz usunąć wszystkie akcje?")) {
-      try {
-        // Pobierz aktualny dokument meczu, aby uzyskać listę akcji do usunięcia z danych zawodników
-        const matchRef = doc(getDB(), "matches", matchInfo.matchId);
-        const matchDoc = await getDoc(matchRef);
-        
-        let actionsToRemove: Action[] = [];
-        if (matchDoc.exists()) {
-          const matchData = matchDoc.data() as TeamInfo;
-          actionsToRemove = matchData.actions_packing || [];
-        }
-        
-        await updateDoc(matchRef, {
-          actions_packing: []
-        });
-        if (cachedMatchId === matchInfo.matchId) {
-          setCachedMatchData((prev) => (prev ? { ...prev, actions_packing: [] } : null));
-        }
-        setActions([]);
-        
-        const collectionField = "actions_packing";
-        enqueue({
-          type: "delete",
-          matchId: matchInfo.matchId,
-          collectionField,
-          actionId: "__all__",
-        });
-        if (isOnline()) {
-          markDirty(matchInfo.matchId, collectionField);
-        } else {
-          toast("Wyczyszczono lokalnie. Synchronizacja po powrocie internetu.");
-        }
-        return true;
-      } catch (error) {
-        console.error("Błąd podczas usuwania wszystkich akcji:", error);
-        
-        // Obsługa błędu wewnętrznego stanu Firestore
-        await handleFirestoreError(error, getDB());
-        
-        return false;
-      }
-    }
-    return false;
-  }, [matchInfo?.matchId, cachedMatchId]);
+  }, [
+    matchInfo?.matchId,
+    actions,
+    cachedMatchId,
+    actionCategory,
+    loadBothRegainLoses,
+    loadActionsForMatch,
+  ]);
 
   // Dodaj nową funkcję do ustawiania połowy meczu
   const setCurrentHalf = useCallback((value: boolean) => {
@@ -1284,7 +1221,6 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     handleZoneSelect,
     handleSaveAction,
     handleDeleteAction,
-    handleDeleteAllActions,
     resetActionState,
     resetActionPoints,
     loadActionsForMatch,

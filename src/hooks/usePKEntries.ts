@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { PKEntry } from "@/types";
 import { getDB } from "@/lib/firebase";
-import { doc, updateDoc } from "@/lib/firestoreWithMetrics";
+import { commitMatchArrayFieldUpdate, syncPendingMatchArrayField } from "@/lib/matchArrayFieldWrite";
 import { getMatchDocumentFromCache, setMatchDocumentInCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
-import { clearPendingMatchUpdate, getPendingField, setPendingMatchUpdate } from "@/lib/offlineMatchPending";
+import { getPendingField } from "@/lib/offlineMatchPending";
 
 export const usePKEntries = (matchId: string) => {
   const [pkEntries, setPkEntries] = useState<PKEntry[]>([]);
@@ -21,13 +21,12 @@ export const usePKEntries = (matchId: string) => {
     );
   };
 
-  // Pobierz wejścia PK z Firebase
   const fetchPKEntries = useCallback(async () => {
     if (!matchId) return;
-    
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const matchData = await getOrLoadMatchDocument(matchId);
       if (matchData) {
@@ -55,20 +54,19 @@ export const usePKEntries = (matchId: string) => {
     }
   }, [matchId]);
 
-  // Funkcja pomocnicza do usuwania pól undefined z obiektu
   const removeUndefinedFields = (obj: any): any => {
     if (obj === null || obj === undefined) {
       return obj;
     }
-    
+
     if (Array.isArray(obj)) {
-      return obj.map(item => removeUndefinedFields(item));
+      return obj.map((item) => removeUndefinedFields(item));
     }
-    
-    if (typeof obj === 'object') {
+
+    if (typeof obj === "object") {
       const cleaned: any = {};
       for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
           const value = obj[key];
           if (value !== undefined) {
             cleaned[key] = removeUndefinedFields(value);
@@ -77,64 +75,57 @@ export const usePKEntries = (matchId: string) => {
       }
       return cleaned;
     }
-    
+
     return obj;
   };
 
-  // Zapisz wejścia PK do Firebase
-  const savePKEntries = useCallback(async (updatedEntries: PKEntry[]) => {
-    if (!matchId) {
-      return false;
-    }
-    
-    // Usuń wszystkie pola undefined przed zapisaniem
-    const cleanedEntries = removeUndefinedFields(updatedEntries);
-    
-    try {
-      const db = getDB();
-      const matchRef = doc(db, "matches", matchId);
-      await updateDoc(matchRef, {
-        pkEntries: cleanedEntries
-      });
-      clearPendingMatchUpdate(matchId, "pkEntries");
-      setPkEntries(updatedEntries);
-      const cached = getMatchDocumentFromCache(matchId);
-      if (cached) {
-        setMatchDocumentInCache(matchId, { ...cached, pkEntries: cleanedEntries });
+  const persistPkEntries = useCallback(
+    async (updater: (prev: PKEntry[]) => PKEntry[]) => {
+      if (!matchId) {
+        return false;
       }
-      return true;
-    } catch (err) {
-      console.error("Błąd podczas zapisywania wejść PK:", err);
-      if (isOfflineError(err)) {
-        setPendingMatchUpdate(matchId, "pkEntries", cleanedEntries);
-        setPkEntries(updatedEntries);
-        const cached = getMatchDocumentFromCache(matchId);
-        if (cached) {
-          setMatchDocumentInCache(matchId, { ...cached, pkEntries: cleanedEntries });
-        }
+      let db;
+      try {
+        db = getDB();
+      } catch {
+        return false;
+      }
+
+      const result = await commitMatchArrayFieldUpdate<PKEntry>({
+        db,
+        matchId,
+        field: "pkEntries",
+        updater,
+        cleanForFirestore: (arr) => removeUndefinedFields(arr),
+        isOfflineError,
+      });
+
+      if (result.ok) {
+        setPkEntries(result.next);
         return true;
       }
       setError("Nie udało się zapisać wejść PK");
       return false;
-    }
-  }, [matchId]);
+    },
+    [matchId]
+  );
 
   const syncPendingPkEntries = useCallback(async () => {
     if (!matchId) return;
-    const pending = getPendingField<PKEntry[]>(matchId, "pkEntries");
-    if (!pending) return;
+    let db;
     try {
-      const db = getDB();
-      const matchRef = doc(db, "matches", matchId);
-      await updateDoc(matchRef, { pkEntries: pending });
-      clearPendingMatchUpdate(matchId, "pkEntries");
-      const cached = getMatchDocumentFromCache(matchId);
-      if (cached) {
-        setMatchDocumentInCache(matchId, { ...cached, pkEntries: pending });
-      }
-      setPkEntries(pending);
+      db = getDB();
     } catch {
-      // nadal offline lub błąd — zostawiamy pending
+      return;
+    }
+    const merged = await syncPendingMatchArrayField<PKEntry>({
+      db,
+      matchId,
+      field: "pkEntries",
+      cleanForFirestore: (arr) => removeUndefinedFields(arr),
+    });
+    if (merged) {
+      setPkEntries(merged);
     }
   }, [matchId]);
 
@@ -145,36 +136,36 @@ export const usePKEntries = (matchId: string) => {
     return () => window.removeEventListener("online", handleOnline);
   }, [syncPendingPkEntries]);
 
-  // Dodaj nowe wejście PK
-  const addPKEntry = useCallback(async (entryData: Omit<PKEntry, "id" | "timestamp">) => {
-    const newEntry: PKEntry = {
-      ...entryData,
-      id: `pk_entry_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: Date.now(),
-    };
+  const addPKEntry = useCallback(
+    async (entryData: Omit<PKEntry, "id" | "timestamp">) => {
+      const newEntry: PKEntry = {
+        ...entryData,
+        id: `pk_entry_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: Date.now(),
+      };
 
-    const updatedEntries = [...pkEntries, newEntry];
-    const success = await savePKEntries(updatedEntries);
-    return success ? newEntry : null;
-  }, [pkEntries, savePKEntries]);
+      const ok = await persistPkEntries((prev) => [...prev, newEntry]);
+      return ok ? newEntry : null;
+    },
+    [persistPkEntries]
+  );
 
-  // Zaktualizuj wejście PK
-  const updatePKEntry = useCallback(async (entryId: string, entryData: Partial<PKEntry>) => {
-    const updatedEntries = pkEntries.map(entry => 
-      entry.id === entryId ? { ...entry, ...entryData } : entry
-    );
-    const success = await savePKEntries(updatedEntries);
-    return success;
-  }, [pkEntries, savePKEntries]);
+  const updatePKEntry = useCallback(
+    async (entryId: string, entryData: Partial<PKEntry>) => {
+      return await persistPkEntries((prev) =>
+        prev.map((entry) => (entry.id === entryId ? { ...entry, ...entryData } : entry))
+      );
+    },
+    [persistPkEntries]
+  );
 
-  // Usuń wejście PK
-  const deletePKEntry = useCallback(async (entryId: string) => {
-    const updatedEntries = pkEntries.filter(entry => entry.id !== entryId);
-    const success = await savePKEntries(updatedEntries);
-    return success;
-  }, [pkEntries, savePKEntries]);
+  const deletePKEntry = useCallback(
+    async (entryId: string) => {
+      return await persistPkEntries((prev) => prev.filter((entry) => entry.id !== entryId));
+    },
+    [persistPkEntries]
+  );
 
-  // Pobierz wejścia PK przy załadowaniu lub zmianie matchId
   useEffect(() => {
     fetchPKEntries();
   }, [fetchPKEntries]);
@@ -189,4 +180,3 @@ export const usePKEntries = (matchId: string) => {
     refetch: fetchPKEntries,
   };
 };
-

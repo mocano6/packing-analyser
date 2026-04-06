@@ -39,6 +39,20 @@ import type { Action } from "@/types";
 
 {
   const a = {
+    id: "3b",
+    matchId: "m",
+    teamId: "t",
+    minute: 1,
+    actionType: "pass" as const,
+    senderId: "s",
+    isSecondHalf: false,
+    isPMArea: true,
+  } as Action;
+  assert.equal(getActionCategory(a), "loses");
+}
+
+{
+  const a = {
     id: "4",
     minute: 1,
     actionType: "pass" as const,

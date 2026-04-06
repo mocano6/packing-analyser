@@ -1,6 +1,9 @@
 // Minimalny runner testów bez frameworka.
 // Testy są oparte o `assert` i uruchamiane przez ts-node.
 
+import "../utils/matchDayLabels.test";
+import "../types/staffPlanner.test";
+import "../lib/staffPlannerFirestore.test";
 import "../utils/pitchZones.test";
 import "../components/Tabs/tabShortcuts.test";
 import "../utils/timeFormat.test";
@@ -19,6 +22,7 @@ import "../utils/wiedzaZoneHeatmaps.test";
 import "../utils/wiedzaRegainPostWindowByZone.test";
 import "../utils/wiedzaRegainMapOverlay.test";
 import "../utils/wiedzaShapeBuckets.test";
+import "../utils/wiedzaPackingZoneFlow.test";
 import "../utils/actionCategory.test";
 import "../utils/externalVideoMatchInfo.test";
 import "../utils/kpiDashboardPlayerShares.test";
@@ -32,4 +36,8 @@ import "../utils/kpiRegainLosesZoneRaw.test";
 import "../utils/actionVideoSeekSeconds.test";
 import "../utils/profileHeatmapVideoPanelLayout.test";
 import "../components/FootballPitch/utils.test";
+import "../lib/mergeMatchArrayById.test";
+import "../lib/matchArrayFieldWrite.test";
+import "../lib/findActionCollectionField.test";
+import "../lib/normalizeActionFieldCountsForSave.test";
 

@@ -65,6 +65,10 @@ import { useAcc8sEntries } from "@/hooks/useAcc8sEntries";
 import { Acc8sEntry } from "@/types";
 import Acc8sModal from "@/components/Acc8sModal/Acc8sModal";
 import Acc8sTable from "@/components/Acc8sTable/Acc8sTable";
+import { normalizeActionFieldCountsForSave } from "@/lib/normalizeActionFieldCountsForSave";
+import { getActionCategory } from "@/utils/actionCategory";
+import { findActionCollectionFieldInMatchData } from "@/lib/findActionCollectionField";
+import { clearMatchDocumentCache } from "@/lib/matchDocumentCache";
 
 
 // Rozszerzenie interfejsu Window
@@ -1290,7 +1294,14 @@ export default function Page() {
   const { pkEntries, addPKEntry, updatePKEntry, deletePKEntry, refetch: refetchPKEntries } = usePKEntries(matchInfo?.matchId || "");
 
   // Hook do zarządzania akcjami 8s ACC
-  const { acc8sEntries, addAcc8sEntry, updateAcc8sEntry, deleteAcc8sEntry, bulkUpdateAcc8sEntries } = useAcc8sEntries(matchInfo?.matchId || "");
+  const {
+    acc8sEntries,
+    addAcc8sEntry,
+    updateAcc8sEntry,
+    deleteAcc8sEntry,
+    bulkUpdateAcc8sEntries,
+    refetch: refetchAcc8sEntries,
+  } = useAcc8sEntries(matchInfo?.matchId || "");
 
   // Stan dla filtrowania strzałów
 
@@ -1577,10 +1588,37 @@ export default function Page() {
     handleZoneSelect,
     handleSaveAction,
     handleDeleteAction,
-    handleDeleteAllActions,
     resetActionState,
     setActions,
+    loadActionsForMatch,
   } = packingActions;
+
+  const handleRefreshData = useCallback(async () => {
+    setIsRefreshingData(true);
+    try {
+      const tasks: Promise<unknown>[] = [
+        refetchShots(),
+        refetchPKEntries(),
+        refetchAcc8sEntries(),
+      ];
+      if (matchInfo?.matchId) {
+        tasks.push(loadActionsForMatch(matchInfo.matchId));
+      }
+      await Promise.all(tasks);
+      toast.success("Dane odświeżone.");
+    } catch (e) {
+      console.error("handleRefreshData:", e);
+      toast.error("Nie udało się odświeżyć danych.");
+    } finally {
+      setIsRefreshingData(false);
+    }
+  }, [
+    matchInfo?.matchId,
+    refetchShots,
+    refetchPKEntries,
+    refetchAcc8sEntries,
+    loadActionsForMatch,
+  ]);
 
   // Akcje filtrujemy tylko w ActionsTable, żeby uniknąć podwójnego filtrowania i duplikacji logiki
 
@@ -2647,33 +2685,7 @@ export default function Page() {
   // (zdefiniowana wcześniej jako useCallback)
 
 
-  // Obsługa edycji akcji
-  // Funkcja do określenia kategorii akcji
-  const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
-    // Loses: ma isReaction5s (to jest główny wskaźnik dla loses)
-    if (action.isReaction5s !== undefined) {
-      return "loses";
-    }
-    // Starsze wpisy loses mogą nie mieć isReaction5s, ale mają inne pola loses.
-    if (
-      action.isBadReaction5s !== undefined ||
-      action.isAut !== undefined ||
-      action.isPMArea !== undefined
-    ) {
-      return "loses";
-    }
-    // Regain: ma playersBehindBall lub opponentsBehindBall, ale NIE ma isReaction5s
-    if (action.playersBehindBall !== undefined || 
-        action.opponentsBehindBall !== undefined ||
-        action.totalPlayersOnField !== undefined ||
-        action.totalOpponentsOnField !== undefined ||
-        action.playersLeftField !== undefined ||
-        action.opponentsLeftField !== undefined) {
-      return "regain";
-    }
-    // Packing: domyślnie
-    return "packing";
-  };
+  // Obsługa edycji akcji — getActionCategory z @/utils/actionCategory (spójnie z ActionsTable)
 
   const handleEditAction = (action: Action) => {
     setEditingAction(action);
@@ -3034,7 +3046,8 @@ export default function Page() {
   };
 
   // Obsługa zapisania edytowanej akcji
-  const handleSaveEditedAction = async (editedAction: Action) => {
+  const handleSaveEditedAction = async (editedActionInput: Action) => {
+    const editedAction = normalizeActionFieldCountsForSave(editedActionInput);
     try {
       if (!editedAction.matchId) {
         console.error("Brak matchId w edytowanej akcji");
@@ -3079,23 +3092,11 @@ export default function Page() {
       const tempControversyNote = localStorage.getItem('tempControversyNote');
       const tempEditedActionMinute = localStorage.getItem('tempEditedActionMinute');
       const tempEditedActionIsSecondHalf = localStorage.getItem('tempEditedActionIsSecondHalf');
-      const tempEditedPlayersLeftField = localStorage.getItem('tempEditedPlayersLeftField');
-      const tempEditedOpponentsLeftField = localStorage.getItem('tempEditedOpponentsLeftField');
       const parsedVideoTimestamp = tempVideoTimestamp ? parseInt(tempVideoTimestamp) : undefined;
       const parsedVideoTimestampRaw = tempVideoTimestampRaw ? parseInt(tempVideoTimestampRaw) : undefined;
       const parsedEditedMinute = tempEditedActionMinute ? parseInt(tempEditedActionMinute, 10) : undefined;
       const hasEditedMinute = parsedEditedMinute !== undefined && !Number.isNaN(parsedEditedMinute) && parsedEditedMinute > 0;
       const parsedEditedIsSecondHalf = tempEditedActionIsSecondHalf === 'true';
-      const parsedEditedPlayersLeftField = tempEditedPlayersLeftField ? parseInt(tempEditedPlayersLeftField, 10) : undefined;
-      const parsedEditedOpponentsLeftField = tempEditedOpponentsLeftField ? parseInt(tempEditedOpponentsLeftField, 10) : undefined;
-      const hasEditedPlayersLeftField =
-        parsedEditedPlayersLeftField !== undefined &&
-        !Number.isNaN(parsedEditedPlayersLeftField) &&
-        parsedEditedPlayersLeftField >= 0;
-      const hasEditedOpponentsLeftField =
-        parsedEditedOpponentsLeftField !== undefined &&
-        !Number.isNaN(parsedEditedOpponentsLeftField) &&
-        parsedEditedOpponentsLeftField >= 0;
       const controversyNote = tempControversyNote && tempControversyNote.trim() ? tempControversyNote.trim() : undefined;
       
       const lockedEditedAction = originalAction
@@ -3119,18 +3120,6 @@ export default function Page() {
                   isSecondHalf: parsedEditedIsSecondHalf,
                 }
               : {}),
-            ...(hasEditedPlayersLeftField
-              ? {
-                  playersLeftField: parsedEditedPlayersLeftField,
-                  totalPlayersOnField: 11 - parsedEditedPlayersLeftField,
-                }
-              : {}),
-            ...(hasEditedOpponentsLeftField
-              ? {
-                  opponentsLeftField: parsedEditedOpponentsLeftField,
-                  totalOpponentsOnField: 11 - parsedEditedOpponentsLeftField,
-                }
-              : {}),
           }
         : {
             ...editedAction,
@@ -3139,18 +3128,6 @@ export default function Page() {
               ? {
                   minute: parsedEditedMinute,
                   isSecondHalf: parsedEditedIsSecondHalf,
-                }
-              : {}),
-            ...(hasEditedPlayersLeftField
-              ? {
-                  playersLeftField: parsedEditedPlayersLeftField,
-                  totalPlayersOnField: 11 - parsedEditedPlayersLeftField,
-                }
-              : {}),
-            ...(hasEditedOpponentsLeftField
-              ? {
-                  opponentsLeftField: parsedEditedOpponentsLeftField,
-                  totalOpponentsOnField: 11 - parsedEditedOpponentsLeftField,
                 }
               : {}),
           };
@@ -3282,13 +3259,6 @@ export default function Page() {
           [collectionField]: updatedNewActions
         });
 
-        // Aktualizuj lokalny stan jeśli dotknięty jest aktualny mecz
-        if (matchInfo?.matchId === originalMatchId) {
-          setActions(actions.filter((a) => a.id !== editedAction.id));
-        } else if (matchInfo?.matchId === editedAction.matchId) {
-          setActions([...actions, actionWithBooleans]);
-        }
-
         enqueue({
           type: "delete",
           matchId: oldMatchId,
@@ -3307,6 +3277,13 @@ export default function Page() {
         } else {
           toast("Zapisano lokalnie. Synchronizacja po powrocie internetu.");
         }
+        clearMatchDocumentCache(oldMatchId);
+        clearMatchDocumentCache(editedAction.matchId);
+        invalidateMatchCache(oldMatchId);
+        invalidateMatchCache(editedAction.matchId);
+        if (matchInfo && (matchInfo.matchId === editedAction.matchId || matchInfo.matchId === oldMatchId)) {
+          await loadActionsForMatch(matchInfo.matchId);
+        }
       } else {
         // Aktualizacja akcji w tym samym meczu
         const matchRef = doc(db, "matches", editedAction.matchId);
@@ -3319,6 +3296,22 @@ export default function Page() {
         }
 
         const matchData = matchDoc.data() as TeamInfo;
+        // Źródło prawdy: w której tablicy w dokumencie meczu faktycznie leży akcja (unika błędnej heurystyki regain vs loses).
+        const fieldFromDb = findActionCollectionFieldInMatchData(matchData, editedAction.id);
+        if (fieldFromDb === null) {
+          console.error("Akcja nie występuje w żadnej tablicy dokumentu meczu:", editedAction.id);
+          alert("Nie znaleziono akcji w dokumencie meczu. Odśwież stronę i spróbuj ponownie.");
+          return;
+        }
+        let categoryForBooleanMerge: "packing" | "regain" | "loses" = actionCategory;
+        if (fieldFromDb === "actions_loses") {
+          collectionField = "actions_loses";
+          categoryForBooleanMerge = "loses";
+        } else if (fieldFromDb === "actions_regain") {
+          collectionField = "actions_regain";
+          categoryForBooleanMerge = "regain";
+        }
+
         let currentActions = (matchData[collectionField as keyof TeamInfo] as Action[] | undefined) || [];
         
         // Jeśli nie znaleziono akcji w nowej kolekcji, sprawdź w oryginalnej
@@ -3351,9 +3344,10 @@ export default function Page() {
                 [collectionField]: [...newActions, actionWithBooleans]
               });
               
-              // Aktualizuj lokalny stan bez dodatkowego odczytu z Firestore
-              if (matchInfo && editedAction.matchId === matchInfo.matchId) {
-                setActions([...newActions, actionWithBooleans]);
+              clearMatchDocumentCache(editedAction.matchId);
+              invalidateMatchCache(editedAction.matchId);
+              if (matchInfo?.matchId === editedAction.matchId) {
+                await loadActionsForMatch(editedAction.matchId);
               }
               
               setIsActionEditModalOpen(false);
@@ -3394,18 +3388,6 @@ export default function Page() {
           }
         }
         
-        console.log("=== DEBUG ZAPISU EDYCJI ===");
-        console.log("ID akcji:", editedAction.id);
-        console.log("Kolekcja docelowa:", collectionField);
-        console.log("Wartości z localStorage:", {
-          tempEditedPlayersLeftField: localStorage.getItem('tempEditedPlayersLeftField'),
-          tempEditedOpponentsLeftField: localStorage.getItem('tempEditedOpponentsLeftField')
-        });
-        console.log("Wartości w lockedEditedAction:", {
-          playersLeftField: lockedEditedAction.playersLeftField,
-          opponentsLeftField: lockedEditedAction.opponentsLeftField
-        });
-        
         if (actionIndex === -1) {
           console.error("❌ Nie znaleziono akcji do edycji:", editedAction.id);
           alert("Nie znaleziono akcji do edycji. Sprawdź konsolę dla szczegółów.");
@@ -3420,7 +3402,7 @@ export default function Page() {
         const actionWithBooleans = {
           ...cleanedAction,
           // Zachowujemy pola boolean dla regain i loses - używamy wartości z editedAction
-          ...(actionCategory === "regain" || actionCategory === "loses" ? {
+          ...(categoryForBooleanMerge === "regain" || categoryForBooleanMerge === "loses" ? {
             isP0: lockedEditedAction.isP0 === true,
             isP1: lockedEditedAction.isP1 === true,
             isP2: lockedEditedAction.isP2 === true,
@@ -3431,12 +3413,12 @@ export default function Page() {
             isShot: lockedEditedAction.isShot === true,
             isGoal: lockedEditedAction.isGoal === true,
             isPenaltyAreaEntry: lockedEditedAction.isPenaltyAreaEntry === true,
-            ...(actionCategory === "loses" && {
+            ...(categoryForBooleanMerge === "loses" && {
               isPMArea: (lockedEditedAction as any).isPMArea === true,
               isAut: (lockedEditedAction as any).isAut === true
             })
           } : {}),
-          ...(actionCategory === "regain" || actionCategory === "loses"
+          ...(categoryForBooleanMerge === "regain" || categoryForBooleanMerge === "loses"
             ? {
                 playersBehindBall: lockedEditedAction.playersBehindBall,
                 opponentsBehindBall: lockedEditedAction.opponentsBehindBall,
@@ -3447,19 +3429,16 @@ export default function Page() {
               }
             : {}),
         };
-        console.log("Finalny payload do zapisu (actionWithBooleans):", {
-          playersLeftField: actionWithBooleans.playersLeftField,
-          opponentsLeftField: actionWithBooleans.opponentsLeftField
-        });
         updatedActions[actionIndex] = actionWithBooleans;
 
         await updateDoc(matchRef, {
           [collectionField]: updatedActions
         });
 
-        // Aktualizuj lokalny stan jeśli to aktualny mecz (bez read-after-write)
-        if (matchInfo && editedAction.matchId === matchInfo.matchId) {
-          setActions(updatedActions);
+        clearMatchDocumentCache(editedAction.matchId);
+        invalidateMatchCache(editedAction.matchId);
+        if (matchInfo?.matchId === editedAction.matchId) {
+          await loadActionsForMatch(editedAction.matchId);
         }
       }
 

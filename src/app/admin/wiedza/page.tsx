@@ -28,7 +28,9 @@ import {
   sanitizeWiedzaCache,
   type WiedzaAnalyzeCacheV2,
   type WiedzaAnalyzeCacheV3,
+  type WiedzaTabId,
 } from '@/lib/wiedzaAnalyzeCache';
+import WiedzaPackingFlowTab from '@/components/WiedzaPackingFlowTab/WiedzaPackingFlowTab';
 import { compactWiedzaMatchForStorage } from '@/lib/wiedzaMatchCompact';
 import {
   buildBirthYearMinutePercentagesByTeam,
@@ -107,7 +109,7 @@ export default function WiedzaPage() {
   const [activeWindow, setActiveWindow] = useState<WindowType>(8);
   const [activeMetric, setActiveMetric] = useState<MetricType>('pxt');
   const [activeGrouping, setActiveGrouping] = useState<GroupingType>('diff');
-  const [activeTab, setActiveTab] = useState<'regains' | 'loses' | 'correlations' | 'youth'>('regains');
+  const [activeTab, setActiveTab] = useState<WiedzaTabId>('regains');
 
   const [wiedzaMapHalf, setWiedzaMapHalf] = useState<WiedzaHeatmapHalfFilter>('all');
   const [wiedzaMapMode, setWiedzaMapMode] = useState<'count' | 'xt'>('count');
@@ -989,6 +991,13 @@ export default function WiedzaPage() {
         </button>
         <button
           type="button"
+          className={`${styles.tabButton} ${activeTab === 'packingZones' ? styles.active : ''}`}
+          onClick={() => setActiveTab('packingZones')}
+        >
+          Strefy PxT / kontakty
+        </button>
+        <button
+          type="button"
           className={`${styles.tabButton} ${activeTab === 'youth' ? styles.active : ''}`}
           onClick={() => setActiveTab('youth')}
         >
@@ -1024,6 +1033,8 @@ export default function WiedzaPage() {
               <WiedzaGoalsXgWeights matches={matchesForCorrelation} compact hideHint />
             </div>
           )
+        ) : activeTab === 'packingZones' ? (
+          <WiedzaPackingFlowTab matches={matchesForCorrelation} />
         ) : activeTab === 'youth' ? (
           fetchedMatches.length === 0 ? (
             <div className={styles.correlationMergedPanel}>

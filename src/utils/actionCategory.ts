@@ -8,6 +8,7 @@ export function getActionCategory(action: Action): "packing" | "regain" | "loses
     action.isReaction5s !== undefined ||
     action.isAut !== undefined ||
     action.isBadReaction5s !== undefined ||
+    (action as Action & { isPMArea?: boolean }).isPMArea !== undefined ||
     action.losesAttackZone !== undefined ||
     action.losesDefenseZone !== undefined ||
     action.losesAttackXT !== undefined ||

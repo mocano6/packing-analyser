@@ -55,7 +55,8 @@ interface LosesActionModalProps {
   onPenaltyAreaEntryToggle: (checked: boolean) => void;
   isSecondHalf: boolean;
   onSecondHalfToggle: (checked: boolean) => void;
-  onSaveAction: () => void;
+  /** W trybie edycji przekazywany jest patch z bieżącymi licznikami z props (źródło prawdy przy zapisie). */
+  onSaveAction: (patch?: Partial<Action>) => void;
   onReset: () => void;
   onResetPoints: () => void;
   editingAction?: Action | null;
@@ -785,8 +786,6 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       onSecondHalfToggle(nextIsSecondHalf);
       localStorage.setItem('tempEditedActionMinute', String(nextMinute));
       localStorage.setItem('tempEditedActionIsSecondHalf', nextIsSecondHalf ? 'true' : 'false');
-      localStorage.setItem('tempEditedPlayersLeftField', String(playersLeftField));
-      localStorage.setItem('tempEditedOpponentsLeftField', String(opponentsLeftField));
     }
 
     // Zapisz videoTimestamp z pola MM:SS do localStorage
@@ -814,7 +813,18 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
 
     // Wywołaj funkcję zapisującą akcję, ale nie zamykaj modalu od razu
     // Komponent nadrzędny sam zadecyduje czy i kiedy zamknąć modal
-    onSaveAction();
+    if (isEditMode) {
+      onSaveAction({
+        playersLeftField,
+        opponentsLeftField,
+        playersBehindBall,
+        opponentsBehindBall,
+        totalPlayersOnField: 11 - playersLeftField,
+        totalOpponentsOnField: 11 - opponentsLeftField,
+      });
+    } else {
+      onSaveAction();
+    }
   };
 
   const handleCancel = () => {
@@ -899,9 +909,6 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                     e.stopPropagation();
                     const next = Math.min(10, playersLeftField + 1);
                     onPlayersLeftFieldChange(next);
-                    if (isEditMode) {
-                      localStorage.setItem('tempEditedPlayersLeftField', String(next));
-                    }
                   }}
                   title="Kliknij, aby dodać 1 partnera"
                   style={{ cursor: 'pointer', position: 'relative' }}
@@ -917,9 +924,6 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                       e.stopPropagation();
                       const next = Math.max(0, playersLeftField - 1);
                       onPlayersLeftFieldChange(next);
-                      if (isEditMode) {
-                        localStorage.setItem('tempEditedPlayersLeftField', String(next));
-                      }
                     }}
                     title="Odejmij 1 partnera"
                     type="button"
@@ -949,9 +953,6 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                     e.stopPropagation();
                     const next = Math.min(10, opponentsLeftField + 1);
                     onOpponentsLeftFieldChange(next);
-                    if (isEditMode) {
-                      localStorage.setItem('tempEditedOpponentsLeftField', String(next));
-                    }
                   }}
                   title="Kliknij, aby dodać 1 przeciwnika"
                   style={{ cursor: 'pointer', position: 'relative' }}
@@ -967,9 +968,6 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                       e.stopPropagation();
                       const next = Math.max(0, opponentsLeftField - 1);
                       onOpponentsLeftFieldChange(next);
-                      if (isEditMode) {
-                        localStorage.setItem('tempEditedOpponentsLeftField', String(next));
-                      }
                     }}
                     title="Odejmij 1 przeciwnika"
                     type="button"

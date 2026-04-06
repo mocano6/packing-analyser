@@ -60,6 +60,17 @@ export function setMatchDocumentInCache(matchId: string, data: TeamInfo): void {
   }
 }
 
+/** Po zapisie do Firestore — wymusza świeży getDoc przy następnym getOrLoadMatchDocument. */
+export function clearMatchDocumentCache(matchId: string): void {
+  memory.delete(matchId);
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(storageKey(matchId));
+  } catch {
+    // ignore
+  }
+}
+
 /** Obecnie trwające ładowanie dokumentu meczu – deduplikacja równoległych getDoc. */
 const loadInFlight = new Map<string, Promise<TeamInfo | null>>();
 

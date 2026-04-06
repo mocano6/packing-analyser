@@ -9,7 +9,9 @@ import {
   updateDoc as firestoreUpdateDoc,
   addDoc as firestoreAddDoc,
   deleteDoc as firestoreDeleteDoc,
+  runTransaction as firestoreRunTransaction,
 } from "firebase/firestore";
+import type { Firestore, Transaction } from "firebase/firestore";
 import { recordFirestoreRead, recordFirestoreWrite } from "./firestoreMetricsStore";
 
 // Re-eksport wszystkiego z firebase/firestore
@@ -90,4 +92,17 @@ export async function addDoc<T = DocumentData>(
 export async function deleteDoc(reference: DocumentReference<unknown>) {
   await firestoreDeleteDoc(reference);
   recordFirestoreWrite("deleteDoc", reference.path);
+}
+
+/**
+ * Transakcja Firestore — odczyt + zapis w jednym kroku z retry przy konfliktach (wielu analityków na meczu).
+ * Jeden zapis liczony w metrykach.
+ */
+export async function runTransaction<T>(
+  db: Firestore,
+  updateFunction: (transaction: Transaction) => Promise<T>
+): Promise<T> {
+  const result = await firestoreRunTransaction(db, updateFunction);
+  recordFirestoreWrite("runTransaction", "transaction");
+  return result;
 }
