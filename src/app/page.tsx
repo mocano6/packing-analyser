@@ -69,6 +69,7 @@ import { normalizeActionFieldCountsForSave } from "@/lib/normalizeActionFieldCou
 import { getActionCategory } from "@/utils/actionCategory";
 import { findActionCollectionFieldInMatchData } from "@/lib/findActionCollectionField";
 import { clearMatchDocumentCache } from "@/lib/matchDocumentCache";
+import { XG_MODEL_STORAGE_KEY, type XgModelVersion } from "@/lib/xg";
 
 
 // Rozszerzenie interfejsu Window
@@ -131,6 +132,20 @@ export default function Page() {
       localStorage.setItem('activeTab', activeTab);
     }
   }, [activeTab]);
+
+  // Model xG (klasyczny vs Torvaney Simple) — zakładka xG; zapis w localStorage dla spójności z mapami tylko do odczytu
+  const [xgModelVersion, setXgModelVersion] = React.useState<XgModelVersion>(() => {
+    if (typeof window === "undefined") return "classic";
+    const s = localStorage.getItem(XG_MODEL_STORAGE_KEY);
+    return s === "torvaney" ? "torvaney" : "classic";
+  });
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(XG_MODEL_STORAGE_KEY, xgModelVersion);
+    window.dispatchEvent(
+      new CustomEvent("xgModelVersionChanged", { detail: { xgModelVersion } })
+    );
+  }, [xgModelVersion]);
 
   // Globalne skróty zakładek (Q/W/E/R/T) — działa w całej aplikacji, ale nie przechwytuje wpisywania w polach tekstowych.
   React.useEffect(() => {
@@ -4292,6 +4307,8 @@ export default function Page() {
               selectedShotId={selectedShotId}
               matchInfo={matchInfo || undefined}
               allTeams={allTeams}
+              xgModelVersion={xgModelVersion}
+              onXgModelVersionChange={setXgModelVersion}
               rightExtraContent={
                 shots.length > 0 ? (
                   <button
@@ -4690,6 +4707,7 @@ export default function Page() {
                   // Fallback do getActiveVideoTime
                   return await getActiveVideoTime();
                 }}
+                xgModelVersion={xgModelVersion}
               />
             )}
           </div>

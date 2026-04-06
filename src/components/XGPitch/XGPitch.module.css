@@ -390,6 +390,46 @@
   margin-top: 2px;
 }
 
+/* Wariant jak Torvaney (zielone boisko, jaśniejsze linie) — tylko wygląd, proporcje bez zmian */
+.pitchTorvaney {
+  background: linear-gradient(180deg, #1a4d1a 0%, #2d6b2d 45%, #256325 100%);
+  box-shadow: 0 4px 18px rgba(0, 40, 0, 0.35);
+}
+
+.pitchTorvaney .centerLine,
+.pitchTorvaney .penaltyAreaLeft,
+.pitchTorvaney .penaltyAreaRight,
+.pitchTorvaney .goalAreaLeft,
+.pitchTorvaney .goalAreaRight,
+.pitchTorvaney .centerCircle {
+  border-color: rgba(255, 255, 255, 0.92);
+  background: transparent;
+  box-shadow: none;
+}
+
+.pitchTorvaney .centerSpot,
+.pitchTorvaney .penaltySpotLeft,
+.pitchTorvaney .penaltySpotRight {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: none;
+}
+
+.pitchTorvaney .penaltyArcLeft,
+.pitchTorvaney .penaltyArcRight {
+  border-color: rgba(255, 255, 255, 0.92);
+  box-shadow: none;
+}
+
+.pitchTorvaney .goalLeft,
+.pitchTorvaney .goalRight {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.85);
+}
+
+.pitchTorvaney .attackRectangle {
+  opacity: 0.35;
+}
+
 /* Responsywność dla markerów */
 @media (max-width: 600px) {
   .shotMarker {

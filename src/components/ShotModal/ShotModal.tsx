@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Shot, Player, TeamInfo } from "@/types";
 import { buildPlayersIndex, getPlayerLabel, OWN_GOAL_PLAYER_ID } from "@/utils/playerUtils";
 import { isInPenaltyAreaCanonical, isInOpponentPenaltyAreaCanonical } from "@/utils/pitchZones";
+import { getTorvaneySimpleXGPercentRounded, type XgModelVersion } from "@/lib/xg";
 import styles from "./ShotModal.module.css";
 
 export interface ShotModalProps {
@@ -22,6 +23,8 @@ export interface ShotModalProps {
   onCalculateMinuteFromVideo?: () => Promise<{ minute: number; isSecondHalf: boolean } | null>;
   onGetVideoTime?: () => Promise<number>; // Funkcja do pobierania surowego czasu z wideo w sekundach
   shots?: Shot[]; // Tablica wszystkich strzałów w meczu (dla dobitki)
+  /** Model xG (strona główna); klasyczny = zachowanie jak wcześniej, Torvaney = Simple xG + reakcja na głowę */
+  xgModelVersion?: XgModelVersion;
 }
 
 const ShotModal: React.FC<ShotModalProps> = ({
@@ -40,6 +43,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
   onCalculateMinuteFromVideo,
   onGetVideoTime,
   shots = [],
+  xgModelVersion = "classic",
 }) => {
   const [formData, setFormData] = useState({
     playerId: "",
@@ -392,9 +396,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
     if (editingShot) {
       const isOwnGoalShot = (editingShot as any).isOwnGoal || editingShot.playerId === OWN_GOAL_PLAYER_ID;
       const editingTeamContext = editingShot.teamContext || "attack";
-      const defenseOwnGoalPlayerId =
+      const defenseOwnGoalPlayerId: string =
         editingTeamContext === "defense" && isOwnGoalShot && editingShot.playerId !== OWN_GOAL_PLAYER_ID
-          ? editingShot.playerId
+          ? (editingShot.playerId ?? "")
           : editingTeamContext === "defense" && isOwnGoalShot
           ? "" // stary zapis: OG bez konkretnego bramkarza
           : editingShot.playerId || "";
@@ -519,17 +523,54 @@ const ShotModal: React.FC<ShotModalProps> = ({
   };
 
   const handleTeamContextChange = (teamContext: "attack" | "defense") => {
-    setFormData({
-      ...formData,
-      teamContext,
-      playerId: "", // Reset wyboru zawodnika przy zmianie kontekstu
-      blockingPlayers: [], // Reset zawodników blokujących
-      linePlayers: [], // Reset zawodników na linii
-      linePlayersCount: 0, // Reset liczby zawodników na linii
-      pkPlayersCount: 1, // Reset liczby zawodników w PK
-      isP1Active: true,
-      isP2Active: false,
-      isOwnGoal: false, // Reset przy przełączaniu na atak/obronę
+    setFormData((prev) => {
+      let nextXG = prev.xG;
+      if (xgModelVersion === "torvaney" && prev.actionType !== "penalty") {
+        nextXG = getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
+          isHeader: prev.bodyPart === "head",
+          teamContext,
+        });
+      }
+      return {
+        ...prev,
+        teamContext,
+        playerId: "",
+        blockingPlayers: [],
+        linePlayers: [],
+        linePlayersCount: 0,
+        pkPlayersCount: 1,
+        isP1Active: true,
+        isP2Active: false,
+        isOwnGoal: false,
+        xG: nextXG,
+      };
+    });
+  };
+
+  const handleSfgActionTypeSelect = (value: typeof formData.actionType) => {
+    setFormData((prev) => {
+      const actionType = value;
+      let nextXG = prev.xG;
+      if (xgModelVersion === "torvaney" && actionType !== "penalty") {
+        nextXG = getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
+          isHeader: prev.bodyPart === "head",
+          teamContext: prev.teamContext,
+        });
+      }
+      return { ...prev, actionType, xG: nextXG };
+    });
+  };
+
+  const handleBodyPartSelect = (bodyPart: "foot_left" | "foot_right" | "head" | "other") => {
+    setFormData((prev) => {
+      let nextXG = prev.xG;
+      if (xgModelVersion === "torvaney" && prev.actionType !== "penalty") {
+        nextXG = getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
+          isHeader: bodyPart === "head",
+          teamContext: prev.teamContext,
+        });
+      }
+      return { ...prev, bodyPart, xG: nextXG };
     });
   };
 
@@ -734,12 +775,23 @@ const ShotModal: React.FC<ShotModalProps> = ({
   };
 
   const handleActionCategoryChange = (category: "open_play" | "sfg") => {
-    setFormData(prev => ({
-      ...prev,
-      actionCategory: category,
-      actionType: category === "open_play" ? "open_play" : "corner", // Reset to default for category
-      actionPhase: category === "sfg" ? "phase1" : prev.actionPhase, // Reset phase for SFG
-    }));
+    setFormData((prev) => {
+      const actionType = category === "open_play" ? "open_play" : "corner";
+      let nextXG = prev.xG;
+      if (xgModelVersion === "torvaney") {
+        nextXG = getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
+          isHeader: prev.bodyPart === "head",
+          teamContext: prev.teamContext,
+        });
+      }
+      return {
+        ...prev,
+        actionCategory: category,
+        actionType,
+        actionPhase: category === "sfg" ? "phase1" : prev.actionPhase,
+        xG: nextXG,
+      };
+    });
   };
 
   const getAvailableActionTypes = (): Array<{value: string, label: string}> => {
@@ -949,6 +1001,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       x: editingShot ? editingShot.x : x,
       y: editingShot ? editingShot.y : y,
       xG: finalXG / 100, // Konwersja z procentów na ułamek
+      xgModelVersion,
       playerId: formData.playerId,
       isOwnGoal:
         formData.teamContext === "defense"
@@ -1262,7 +1315,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     key={opt.value}
                     type="button"
                     className={`${styles.actionTypeButton} ${formData.actionType === opt.value ? styles.active : ""}`}
-                    onClick={() => setFormData((prev) => ({ ...prev, actionType: opt.value as typeof prev.actionType }))}
+                    onClick={() =>
+                      handleSfgActionTypeSelect(opt.value as typeof formData.actionType)
+                    }
                   >
                     {opt.label}
                   </button>
@@ -1504,28 +1559,28 @@ const ShotModal: React.FC<ShotModalProps> = ({
               <button
                 type="button"
                 className={`${styles.actionTypeButton} ${formData.bodyPart === "foot_left" ? styles.active : ""}`}
-                onClick={() => setFormData({...formData, bodyPart: "foot_left"})}
+                onClick={() => handleBodyPartSelect("foot_left")}
               >
                 Noga lewa
               </button>
               <button
                 type="button"
                 className={`${styles.actionTypeButton} ${formData.bodyPart === "foot_right" ? styles.active : ""}`}
-                onClick={() => setFormData({...formData, bodyPart: "foot_right"})}
+                onClick={() => handleBodyPartSelect("foot_right")}
               >
                 Noga prawa
               </button>
               <button
                 type="button"
                 className={`${styles.actionTypeButton} ${formData.bodyPart === "head" ? styles.active : ""}`}
-                onClick={() => setFormData({...formData, bodyPart: "head"})}
+                onClick={() => handleBodyPartSelect("head")}
               >
                 Głowa
               </button>
               <button
                 type="button"
                 className={`${styles.actionTypeButton} ${formData.bodyPart === "other" ? styles.active : ""}`}
-                onClick={() => setFormData({...formData, bodyPart: "other"})}
+                onClick={() => handleBodyPartSelect("other")}
               >
                 Inne
               </button>

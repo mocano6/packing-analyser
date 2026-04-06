@@ -7,8 +7,19 @@ import styles from "./XGPitch.module.css";
 import PitchHeader from "../PitchHeader/PitchHeader";
 import pitchHeaderStyles from "../PitchHeader/PitchHeader.module.css";
 import { buildPlayersIndex, getPlayerLabel, PlayersIndex } from "@/utils/playerUtils";
+import {
+  computePitchClickXG,
+  XG_MODEL_STORAGE_KEY,
+  type XgModelVersion,
+} from "@/lib/xg";
 
 const HOVER_TOOLTIP_DELAY_MS = 1500;
+
+function readXgModelFromStorage(): XgModelVersion {
+  if (typeof window === "undefined") return "classic";
+  const s = localStorage.getItem(XG_MODEL_STORAGE_KEY);
+  return s === "torvaney" ? "torvaney" : "classic";
+}
 
 export interface XGPitchProps {
   shots?: Shot[];
@@ -32,42 +43,10 @@ export interface XGPitchProps {
   hideToggleButton?: boolean; // Ukryj przycisk przełączania widoczności tagów
   hideTeamLogos?: boolean; // Ukryj loga zespołów
   rightExtraContent?: React.ReactNode; // Dodatkowa zawartość po prawej stronie nagłówka
+  /** Kontrolowany wybór modelu (np. strona główna); bez propsów — localStorage + klasyczny domyślnie. */
+  xgModelVersion?: XgModelVersion;
+  onXgModelVersionChange?: (v: XgModelVersion) => void;
 }
-
-// Funkcja obliczania xG na podstawie pozycji
-const calculateXG = (x: number, y: number): number => {
-  // Przekształć pozycję na metryczną względem bramki (zakładamy bramkę po prawej stronie)
-  const goalX = 100; // Prawa strona boiska (bramka)
-  const goalY = 50;  // Środek bramki
-  
-  // Dystans od bramki (im bliżej, tym wyższa wartość xG)
-  const distanceFromGoal = Math.sqrt(Math.pow(goalX - x, 2) + Math.pow((goalY - y) * 1.544, 2)); // 1.544 to współczynnik proporcji boiska
-  
-  // Kąt względem bramki (im bardziej centralnie, tym lepiej)
-  const angleFromGoal = Math.abs(y - goalY);
-  
-  // Bazowa wartość xG oparta na dystansie (im bliżej, tym wyżej)
-  let xG = Math.max(0.01, Math.min(0.95, 1 - (distanceFromGoal / 100)));
-  
-  // Redukcja za kąt (strzały z boku są trudniejsze)
-  if (angleFromGoal > 20) {
-    xG *= 0.6;
-  } else if (angleFromGoal > 10) {
-    xG *= 0.8;
-  }
-  
-  // Zwiększenie dla strzałów z pola karnego (x > 84.3% to pole karne)
-  if (x > 84.3) {
-    xG *= 1.3;
-  }
-  
-  // Znaczne zwiększenie dla strzałów z pola bramkowego (x > 94.8%)
-  if (x > 94.8) {
-    xG *= 1.8;
-  }
-  
-  return Math.max(0.01, Math.min(0.95, xG));
-};
 
 const XGPitch = memo(function XGPitch({
   shots = [],
@@ -81,7 +60,46 @@ const XGPitch = memo(function XGPitch({
   hideTeamLogos = false,
   hideToggleButton = false,
   rightExtraContent,
+  xgModelVersion: xgModelVersionProp,
+  onXgModelVersionChange,
 }: XGPitchProps) {
+  const [internalXgModel, setInternalXgModel] = useState<XgModelVersion>(readXgModelFromStorage);
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === XG_MODEL_STORAGE_KEY || e.key === null) {
+        setInternalXgModel(readXgModelFromStorage());
+      }
+    };
+    const onCustom = (e: Event) => {
+      const d = (e as CustomEvent<{ xgModelVersion?: XgModelVersion }>).detail?.xgModelVersion;
+      if (d === "torvaney" || d === "classic") setInternalXgModel(d);
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("xgModelVersionChanged", onCustom as EventListener);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("xgModelVersionChanged", onCustom as EventListener);
+    };
+  }, []);
+
+  const xgModel: XgModelVersion =
+    xgModelVersionProp !== undefined ? xgModelVersionProp : internalXgModel;
+
+  const setXgModel = (v: XgModelVersion) => {
+    if (onXgModelVersionChange) {
+      onXgModelVersionChange(v);
+    } else {
+      setInternalXgModel(v);
+      if (typeof window !== "undefined") {
+        localStorage.setItem(XG_MODEL_STORAGE_KEY, v);
+        window.dispatchEvent(
+          new CustomEvent("xgModelVersionChanged", { detail: { xgModelVersion: v } })
+        );
+      }
+    }
+  };
+
   const localPlayersIndex = useMemo(
     () => playersIndex ?? buildPlayersIndex(players),
     [playersIndex, players]
@@ -153,7 +171,7 @@ const XGPitch = memo(function XGPitch({
       y = 100 - y;
     }
     
-    const xG = calculateXG(x, y);
+    const xG = computePitchClickXG(x, y, xgModel);
     onShotAdd(x, y, xG);
   };
 
@@ -212,13 +230,22 @@ const XGPitch = memo(function XGPitch({
             >
               Obróć
             </button>
+            <button
+              type="button"
+              className={`${pitchHeaderStyles.headerButton} ${xgModel === "torvaney" ? pitchHeaderStyles.headerButtonActive : ""}`}
+              onClick={() => setXgModel(xgModel === "torvaney" ? "classic" : "torvaney")}
+              title="Klasyczny model xG z aplikacji lub Simple xG (Torvaney). Wpływa na wartości po kliknięciu i wygląd boiska."
+              aria-pressed={xgModel === "torvaney"}
+            >
+              xG: {xgModel === "torvaney" ? "Torvaney" : "Klasyczny"}
+            </button>
           </>
         }
       />
 
       <div className={styles.pitchWrapper}>
         <div
-          className={`${styles.pitch} ${isFlipped ? styles.flipped : ''}`}
+          className={`${styles.pitch} ${isFlipped ? styles.flipped : ""} ${xgModel === "torvaney" ? styles.pitchTorvaney : ""}`}
           role="grid"
           aria-label="Boisko piłkarskie do analizy xG"
           onClick={handlePitchClick}

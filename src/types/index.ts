@@ -203,6 +203,8 @@ export interface Shot {
   previousShotId?: string; // ID poprzedniego strzału (dla dobitki) - xG jest obliczane jako xG * (1 - xG_previous/100)
   isFromPK?: boolean; // Czy strzał był z pola karnego
   isOwnGoal?: boolean; // Bramka samobójcza (w ataku lub obronie)
+  /** Model użyty przy zapisie (brak = traktuj jak classic przy migracji). */
+  xgModelVersion?: "classic" | "torvaney";
 }
 
 export interface PKEntry {

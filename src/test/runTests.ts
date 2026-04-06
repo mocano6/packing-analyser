@@ -40,4 +40,5 @@ import "../lib/mergeMatchArrayById.test";
 import "../lib/matchArrayFieldWrite.test";
 import "../lib/findActionCollectionField.test";
 import "../lib/normalizeActionFieldCountsForSave.test";
+import "../lib/xg/torvaneySimple.test";
 
