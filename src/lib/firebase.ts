@@ -15,6 +15,27 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
+const REQUIRED_PUBLIC_KEYS = [
+  'NEXT_PUBLIC_FIREBASE_API_KEY',
+  'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
+  'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
+  'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
+  'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+  'NEXT_PUBLIC_FIREBASE_APP_ID',
+] as const;
+
+function getMissingFirebaseEnvKeys(): string[] {
+  const map: Record<(typeof REQUIRED_PUBLIC_KEYS)[number], string | undefined> = {
+    NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  };
+  return REQUIRED_PUBLIC_KEYS.filter((k) => !map[k]?.trim());
+}
+
 let app: FirebaseApp | undefined;
 let db: Firestore | undefined;
 let auth: Auth | undefined;
@@ -23,6 +44,14 @@ let storage: FirebaseStorage | undefined;
 /** Inicjalizacja Firebase po stronie klienta (lazy) — przy pierwszym wywołaniu getDB/isFirebaseReady. Unika 5s blokady gdy moduł załadował się na SSR. */
 function ensureFirebaseInitialized(): void {
   if (typeof window === 'undefined' || db) return;
+  const missing = getMissingFirebaseEnvKeys();
+  if (missing.length > 0) {
+    const msg = `Brak zmiennych środowiskowych Firebase: ${missing.join(', ')}. Uzupełnij .env.production / hosting.`;
+    console.error(msg);
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(msg);
+    }
+  }
   app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
   db = getFirestore(app);
   auth = getAuth(app);
@@ -76,6 +105,15 @@ export const getDB = (): Firestore => {
 export const isFirebaseReady = (): boolean => {
   ensureFirebaseInitialized();
   return typeof window !== 'undefined' && !!db;
+};
+
+/** Auth po stronie klienta (lazy init jak getDB). */
+export const getAuthClient = (): Auth => {
+  ensureFirebaseInitialized();
+  if (!auth) {
+    throw new Error('Firebase Auth nie jest zainicjalizowane. Upewnij się, że kod działa po stronie klienta.');
+  }
+  return auth;
 };
 
 export default app; 

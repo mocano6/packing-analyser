@@ -1,7 +1,7 @@
 /**
- * UWAGA: Ten plik to tylko wskazówka, jak wdrożyć reguły Firestore.
- * W rzeczywistości wdrożenie reguł wymaga użycia Firebase CLI z linii poleceń
- * lub ręcznego ustawienia reguł w konsoli Firebase.
+ * UWAGA: Ten plik to tylko wskazówka historyczna — NIE kopiuj poniższego stringa do produkcji
+ * (reguły typu allow read, write: if true są niebezpieczne). Źródłem prawdy jest `firestore.rules` w root repozytorium.
+ * W rzeczywistości wdrożenie reguł: `firebase deploy --only firestore:rules`.
  */
 
 // Reguły do wdrożenia w konsoli Firebase

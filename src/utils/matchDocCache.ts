@@ -18,7 +18,13 @@ export async function getMatchDocCached(matchId: string): Promise<{
     return { exists: cached.exists, data: cached.data };
   }
 
-  const snap = await getDoc(doc(getDB(), "matches", matchId));
+  let snap;
+  try {
+    snap = await getDoc(doc(getDB(), "matches", matchId));
+  } catch (e) {
+    console.error("getMatchDocCached: błąd odczytu meczu", matchId, e);
+    throw e;
+  }
   if (!snap.exists()) {
     cache.set(matchId, { ts: now, exists: false, data: null });
     return { exists: false, data: null };

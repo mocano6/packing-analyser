@@ -1,9 +1,4 @@
 export {
-  XG_MODEL_STORAGE_KEY,
-  type XgModelVersion,
-} from "./constants";
-export { getClassicXGFromPercent } from "./classicXG";
-export {
   percentToTorvaneyPixels,
   getTorvaneySimpleXGProbability,
   getTorvaneySimpleXGProbabilityFromPercent,
@@ -11,3 +6,6 @@ export {
   computePitchClickXG,
   type TeamContextForXG,
 } from "./torvaneySimple";
+
+/** Tylko dokumentacja legacy w typach Shot; aplikacja zapisuje wyłącznie Torvaney. */
+export type { XgModelVersion } from "./constants";

@@ -1,27 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, updateDoc, Firestore } from 'firebase/firestore';
-import { 
-  getOppositeXTValueForZone, 
-  zoneNameToIndex, 
-  getZoneName, 
-  zoneNameToString 
+import { requireAdminApi } from '@/lib/apiRequireAdmin';
+import {
+  getOppositeXTValueForZone,
+  zoneNameToIndex,
+  getZoneName,
+  zoneNameToString
 } from '@/constants/xtValues';
-
-// Inicjalizacja Firebase dla serwera (API routes)
-function getServerFirestore(): Firestore {
-  const firebaseConfig = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
-  };
-
-  const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-  return getFirestore(app);
-}
 
 // Funkcja pomocnicza do konwersji strefy
 function convertZoneToName(zone: string | number | undefined): string | null {
@@ -35,22 +19,23 @@ function convertZoneToName(zone: string | number | undefined): string | null {
   return null;
 }
 
+/**
+ * Migracja pól oppositeXT / oppositeZone / isAttack dla actions_regain i actions_loses.
+ * Wymaga Authorization: Bearer (idToken admina). Używa Admin SDK — działa z produkcyjnymi regułami Firestore.
+ */
 export async function POST(request: NextRequest) {
+  const adminResult = await requireAdminApi(request);
+  if (!adminResult.ok) {
+    return adminResult.response;
+  }
+  const { db } = adminResult;
+
   try {
-    // Inicjalizuj Firestore dla serwera
-    const db = getServerFirestore();
+    const matchesSnapshot = await db.collection('matches').get();
 
-    // 1. Pobierz wszystkie mecze
-    const matchesCollection = collection(db, 'matches');
-    const matchesSnapshot = await getDocs(matchesCollection);
-    const matches = matchesSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-
-    if (matches.length === 0) {
-      return NextResponse.json({ 
-        success: true, 
+    if (matchesSnapshot.empty) {
+      return NextResponse.json({
+        success: true,
         message: 'Brak meczów do przetworzenia',
         stats: {
           regainUpdated: 0,
@@ -65,26 +50,23 @@ export async function POST(request: NextRequest) {
     let totalMatchesUpdated = 0;
     const errors: string[] = [];
 
-    // 2. Dla każdego meczu sprawdź akcje regain i loses
-    for (const match of matches) {
+    for (const docSnap of matchesSnapshot.docs) {
+      const match = { id: docSnap.id, ...docSnap.data() };
       let matchUpdated = false;
-      const regainActions = (match.actions_regain as any[]) || [];
-      const losesActions = (match.actions_loses as any[]) || [];
+      const regainActions = (match.actions_regain as unknown[]) || [];
+      const losesActions = (match.actions_loses as unknown[]) || [];
 
-      // Przetwórz akcje regain
-      const updatedRegainActions = regainActions.map((action: any) => {
-        // Sprawdź czy akcja już ma wszystkie potrzebne wartości
+      const updatedRegainActions = regainActions.map((action: Record<string, unknown>) => {
         if (action.oppositeXT !== undefined && action.oppositeZone && action.isAttack !== undefined) {
-          return action; // Nie wymaga aktualizacji
+          return action;
         }
 
-        // Oblicz brakujące wartości
         const startZone = action.fromZone || action.startZone;
         if (!startZone) {
           return action;
         }
 
-        const startZoneName = convertZoneToName(startZone);
+        const startZoneName = convertZoneToName(startZone as string | number | undefined);
         if (!startZoneName) {
           return action;
         }
@@ -94,7 +76,6 @@ export async function POST(request: NextRequest) {
           return action;
         }
 
-        // Oblicz opposite strefę
         const row = Math.floor(zoneIndex / 12);
         const col = zoneIndex % 12;
         const oppositeRow = 7 - row;
@@ -103,12 +84,10 @@ export async function POST(request: NextRequest) {
         const oppositeZoneData = getZoneName(oppositeIndex);
         const oppositeZone = oppositeZoneData ? zoneNameToString(oppositeZoneData) : null;
 
-        // Oblicz opposite xT
         const oppositeXT = getOppositeXTValueForZone(zoneIndex);
 
-        // Określ czy to atak czy obrona
-        const receiverXT = action.xTValueEnd || 0;
-        const isAttack = receiverXT < 0.02; // xT < 0.02 to atak
+        const receiverXT = (action.xTValueEnd as number) || 0;
+        const isAttack = receiverXT < 0.02;
 
         matchUpdated = true;
         totalRegainUpdated++;
@@ -121,20 +100,17 @@ export async function POST(request: NextRequest) {
         };
       });
 
-      // Przetwórz akcje loses
-      const updatedLosesActions = losesActions.map((action: any) => {
-        // Sprawdź czy akcja już ma wszystkie potrzebne wartości
+      const updatedLosesActions = losesActions.map((action: Record<string, unknown>) => {
         if (action.oppositeXT !== undefined && action.oppositeZone && action.isAttack !== undefined) {
-          return action; // Nie wymaga aktualizacji
+          return action;
         }
 
-        // Oblicz brakujące wartości (podobnie jak dla regain)
         const startZone = action.fromZone || action.startZone;
         if (!startZone) {
           return action;
         }
 
-        const startZoneName = convertZoneToName(startZone);
+        const startZoneName = convertZoneToName(startZone as string | number | undefined);
         if (!startZoneName) {
           return action;
         }
@@ -144,7 +120,6 @@ export async function POST(request: NextRequest) {
           return action;
         }
 
-        // Oblicz opposite strefę
         const row = Math.floor(zoneIndex / 12);
         const col = zoneIndex % 12;
         const oppositeRow = 7 - row;
@@ -153,12 +128,10 @@ export async function POST(request: NextRequest) {
         const oppositeZoneData = getZoneName(oppositeIndex);
         const oppositeZone = oppositeZoneData ? zoneNameToString(oppositeZoneData) : null;
 
-        // Oblicz opposite xT
         const oppositeXT = getOppositeXTValueForZone(zoneIndex);
 
-        // Określ czy to atak czy obrona
-        const receiverXT = action.xTValueEnd || 0;
-        const isAttack = receiverXT < 0.02; // xT < 0.02 to atak
+        const receiverXT = (action.xTValueEnd as number) || 0;
+        const isAttack = receiverXT < 0.02;
 
         matchUpdated = true;
         totalLosesUpdated++;
@@ -171,17 +144,16 @@ export async function POST(request: NextRequest) {
         };
       });
 
-      // 3. Zaktualizuj mecz jeśli były zmiany
       if (matchUpdated) {
-        const matchRef = doc(db, 'matches', match.id);
         try {
-          await updateDoc(matchRef, {
+          await docSnap.ref.update({
             actions_regain: updatedRegainActions,
             actions_loses: updatedLosesActions
           });
           totalMatchesUpdated++;
-        } catch (error: any) {
-          const errorMsg = `Błąd podczas aktualizacji meczu ${match.id}: ${error.message}`;
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : String(error);
+          const errorMsg = `Błąd podczas aktualizacji meczu ${docSnap.id}: ${msg}`;
           console.error(`❌ ${errorMsg}`);
           errors.push(errorMsg);
         }
@@ -199,14 +171,14 @@ export async function POST(request: NextRequest) {
       },
       errors: errors.length > 0 ? errors : undefined
     });
-
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Błąd podczas migracji:', error);
+    const message = error instanceof Error ? error.message : 'Błąd podczas migracji';
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         message: 'Błąd podczas migracji',
-        error: error.message 
+        error: message
       },
       { status: 500 }
     );

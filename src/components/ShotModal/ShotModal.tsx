@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Shot, Player, TeamInfo } from "@/types";
 import { buildPlayersIndex, getPlayerLabel, OWN_GOAL_PLAYER_ID } from "@/utils/playerUtils";
 import { isInPenaltyAreaCanonical, isInOpponentPenaltyAreaCanonical } from "@/utils/pitchZones";
-import { getTorvaneySimpleXGPercentRounded, type XgModelVersion } from "@/lib/xg";
+import { getTorvaneySimpleXGPercentRounded } from "@/lib/xg";
 import styles from "./ShotModal.module.css";
 
 export interface ShotModalProps {
@@ -23,8 +23,6 @@ export interface ShotModalProps {
   onCalculateMinuteFromVideo?: () => Promise<{ minute: number; isSecondHalf: boolean } | null>;
   onGetVideoTime?: () => Promise<number>; // Funkcja do pobierania surowego czasu z wideo w sekundach
   shots?: Shot[]; // Tablica wszystkich strzałów w meczu (dla dobitki)
-  /** Model xG (strona główna); klasyczny = zachowanie jak wcześniej, Torvaney = Simple xG + reakcja na głowę */
-  xgModelVersion?: XgModelVersion;
 }
 
 const ShotModal: React.FC<ShotModalProps> = ({
@@ -43,7 +41,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
   onCalculateMinuteFromVideo,
   onGetVideoTime,
   shots = [],
-  xgModelVersion = "classic",
 }) => {
   const [formData, setFormData] = useState({
     playerId: "",
@@ -525,7 +522,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
   const handleTeamContextChange = (teamContext: "attack" | "defense") => {
     setFormData((prev) => {
       let nextXG = prev.xG;
-      if (xgModelVersion === "torvaney" && prev.actionType !== "penalty") {
+      if (prev.actionType !== "penalty") {
         nextXG = getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
           isHeader: prev.bodyPart === "head",
           teamContext,
@@ -551,7 +548,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     setFormData((prev) => {
       const actionType = value;
       let nextXG = prev.xG;
-      if (xgModelVersion === "torvaney" && actionType !== "penalty") {
+      if (actionType !== "penalty") {
         nextXG = getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
           isHeader: prev.bodyPart === "head",
           teamContext: prev.teamContext,
@@ -564,7 +561,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
   const handleBodyPartSelect = (bodyPart: "foot_left" | "foot_right" | "head" | "other") => {
     setFormData((prev) => {
       let nextXG = prev.xG;
-      if (xgModelVersion === "torvaney" && prev.actionType !== "penalty") {
+      if (prev.actionType !== "penalty") {
         nextXG = getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
           isHeader: bodyPart === "head",
           teamContext: prev.teamContext,
@@ -777,13 +774,10 @@ const ShotModal: React.FC<ShotModalProps> = ({
   const handleActionCategoryChange = (category: "open_play" | "sfg") => {
     setFormData((prev) => {
       const actionType = category === "open_play" ? "open_play" : "corner";
-      let nextXG = prev.xG;
-      if (xgModelVersion === "torvaney") {
-        nextXG = getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
-          isHeader: prev.bodyPart === "head",
-          teamContext: prev.teamContext,
-        });
-      }
+      const nextXG = getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
+        isHeader: prev.bodyPart === "head",
+        teamContext: prev.teamContext,
+      });
       return {
         ...prev,
         actionCategory: category,
@@ -1001,7 +995,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       x: editingShot ? editingShot.x : x,
       y: editingShot ? editingShot.y : y,
       xG: finalXG / 100, // Konwersja z procentów na ułamek
-      xgModelVersion,
+      xgModelVersion: "torvaney",
       playerId: formData.playerId,
       isOwnGoal:
         formData.teamContext === "defense"

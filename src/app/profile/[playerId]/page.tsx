@@ -10,6 +10,7 @@ import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfileHeatmapVideoPanelLayout } from "@/hooks/useProfileHeatmapVideoPanelLayout";
 import {
+  clearMatchDocumentCache,
   getMatchDocumentFromCache,
   getOrLoadMatchDocument,
   setMatchDocumentInCache,
@@ -49,6 +50,8 @@ export default function PlayerDetailsPage() {
   const [allActions, setAllActions] = useState<Action[]>([]);
   const [allShots, setAllShots] = useState<any[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(true);
+  const [isRefreshingData, setIsRefreshingData] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [allTeamActions, setAllTeamActions] = useState<Action[]>([]); // Wszystkie akcje zespołu dla rankingu
   const [playerMatchStatsByMatchId, setPlayerMatchStatsByMatchId] = useState<Record<string, PlayerMatchStats>>({});
   const [selectedMatchIds, setSelectedMatchIds] = useState<string[]>(() => {
@@ -149,17 +152,19 @@ export default function PlayerDetailsPage() {
     }
   }, [selectedSeason]);
 
-  const handleRefreshData = async () => {
+  const handleRefreshData = useCallback(async () => {
     if (isRefreshingData) return;
     try {
       setIsRefreshingData(true);
-      invalidateMatchCache();
+      allMatches
+        .filter((m) => m.team === selectedTeam && m.matchId)
+        .forEach((m) => clearMatchDocumentCache(m.matchId as string));
       await forceRefreshFromFirebase(selectedTeam || undefined);
-      setRefreshKey((prev) => prev + 1);
+      setRefreshKey((prev: number) => prev + 1);
     } finally {
       setIsRefreshingData(false);
     }
-  };
+  }, [isRefreshingData, allMatches, selectedTeam, forceRefreshFromFirebase]);
 
   const [selectedPxtCategory, setSelectedPxtCategory] = useState<"sender" | "receiver" | "dribbler">("sender");
   const [heatmapMode, setHeatmapMode] = useState<"pxt" | "count">("pxt");
@@ -793,7 +798,11 @@ export default function PlayerDetailsPage() {
           : (sortedByDate.map((m) => m.matchId).filter(Boolean) as string[]);
     const matchIdsKey = idsToLoad.slice().sort().join(",");
     const loadSignature =
-      ready && idsToLoad.length > 0 ? `${selectedTeam}|${targetPlayerId}|${matchIdsKey}` : ready && idsToLoad.length === 0 && selectableIds.size === 0 ? `${selectedTeam}|${targetPlayerId}|` : null;
+      ready && idsToLoad.length > 0
+        ? `${selectedTeam}|${targetPlayerId}|${matchIdsKey}|${refreshKey}`
+        : ready && idsToLoad.length === 0 && selectableIds.size === 0
+          ? `${selectedTeam}|${targetPlayerId}|${refreshKey}|`
+          : null;
 
     // Nie gotowe: pokazuj ładowanie do momentu, aż dane będą gotowe i load się wykona. Nie ustawiaj false z opóźnieniem — to powodowało: widok → ładowanie → dane (2 przeładowania).
     // Wyjątek: mamy zespół i zawodnika, 0 meczów po filtracji A lista meczów jest już wczytana (allMatches.length > 0) — wtedy pokaż pusty stan.
@@ -896,7 +905,7 @@ export default function PlayerDetailsPage() {
     };
 
     loadActionsAndTeamActions();
-  }, [playerId, selectedPlayerForView, filteredMatchesBySeason, selectableMatchesBySeason, selectedMatchIds, filteredPlayers, selectedTeam, playersForRanking, allMatches]);
+  }, [playerId, selectedPlayerForView, filteredMatchesBySeason, selectableMatchesBySeason, selectedMatchIds, filteredPlayers, selectedTeam, playersForRanking, allMatches, refreshKey]);
 
   // Oblicz dostępne sezony
   const availableSeasons = useMemo(() => {

@@ -41,4 +41,5 @@ import "../lib/matchArrayFieldWrite.test";
 import "../lib/findActionCollectionField.test";
 import "../lib/normalizeActionFieldCountsForSave.test";
 import "../lib/xg/torvaneySimple.test";
+import "../lib/authorizationBearer.test";
 

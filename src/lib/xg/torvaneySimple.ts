@@ -3,9 +3,6 @@
  * Współrzędne pikseli jak w oryginale: pole klikalne x ∈ [5,385], y ∈ [5,285].
  */
 
-import type { XgModelVersion } from "./constants";
-import { getClassicXGFromPercent } from "./classicXG";
-
 export type TeamContextForXG = "attack" | "defense";
 
 /** Mapowanie współrzędnych aplikacji (%, bramka ataku po prawej dla ataku) → piksele Torvaney. */
@@ -114,16 +111,9 @@ export function getTorvaneySimpleXGPercentRounded(
   return Math.round(p * 100);
 }
 
-/** xG po kliknięciu: domyślnie noga (modal może zmienić na głowę). */
-export function computePitchClickXG(
-  xPercent: number,
-  yPercent: number,
-  model: XgModelVersion
-): number {
+/** xG po kliknięciu (Simple xG / Torvaney); domyślnie noga (modal może zmienić na głowę). */
+export function computePitchClickXG(xPercent: number, yPercent: number): number {
   const teamContext: TeamContextForXG = xPercent < 50 ? "defense" : "attack";
-  if (model === "classic") {
-    return getClassicXGFromPercent(xPercent, yPercent);
-  }
   return getTorvaneySimpleXGProbabilityFromPercent(xPercent, yPercent, {
     isHeader: false,
     teamContext,

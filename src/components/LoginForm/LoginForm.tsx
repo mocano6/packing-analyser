@@ -9,6 +9,9 @@ import { handleFirestoreError } from '@/utils/firestoreErrorHandler';
 import { useAuth } from '@/hooks/useAuth';
 import styles from './LoginForm.module.css';
 
+/** Tymczasowo wyłączone — / to logowanie; pełny marketingowy landing włączysz tu później. */
+const LANDING_VISIBLE = false;
+
 export default function LoginForm() {
   const { isAuthenticated, isLoading: authLoading, userRole, userStatus, refreshUserData } = useAuth();
   const [email, setEmail] = useState('');
@@ -23,6 +26,7 @@ export default function LoginForm() {
   const searchParams = useSearchParams();
   const authService = AuthService.getInstance();
   const isClassicLoginView = searchParams.get('view') === 'login';
+  const showClassicLogin = LANDING_VISIBLE ? isClassicLoginView : true;
 
   useEffect(() => {
     if (!isAuthenticated || authLoading) {
@@ -110,7 +114,7 @@ export default function LoginForm() {
 
   return (
     <div id="top" className={styles.page}>
-      {!isClassicLoginView && (
+      {LANDING_VISIBLE && !isClassicLoginView && (
         <aside className={styles.loginCorner} aria-label="Przejście do logowania">
           <p className={styles.cornerTitle}>Masz konto?</p>
           <button
@@ -123,7 +127,7 @@ export default function LoginForm() {
         </aside>
       )}
 
-      {isClassicLoginView ? (
+      {showClassicLogin ? (
         <main className={styles.classicLoginMain}>
           <div className={styles.classicLoginContainer}>
             <div className={styles.classicLoginCard}>
@@ -239,14 +243,16 @@ export default function LoginForm() {
                   {isRegistering ? 'Masz już konto? Zaloguj się' : 'Nie masz konta? Zarejestruj się'}
                 </button>
 
-                <button
-                  type="button"
-                  className={styles.backToLandingButton}
-                  onClick={() => router.push('/login')}
-                  disabled={isLoading}
-                >
-                  Powrót do landing page
-                </button>
+                {LANDING_VISIBLE && (
+                  <button
+                    type="button"
+                    className={styles.backToLandingButton}
+                    onClick={() => router.push('/login')}
+                    disabled={isLoading}
+                  >
+                    Powrót do strony głównej
+                  </button>
+                )}
               </form>
             </div>
           </div>

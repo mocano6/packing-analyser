@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, Fragment } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback, Fragment } from "react";
 import { LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ResponsiveRadar } from '@nivo/radar';
 import { Action, TeamInfo, Shot } from "@/types";
@@ -13,7 +13,7 @@ import { usePlayersState } from "@/hooks/usePlayersState";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs } from "@/lib/firestoreWithMetrics";
 import { getCached, setCached } from "@/lib/sessionCache";
-import { getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
+import { clearMatchDocumentCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
@@ -152,6 +152,8 @@ export default function StatystykiZespoluPage() {
   const [allPKEntries, setAllPKEntries] = useState<any[]>([]);
   const [allAcc8sEntries, setAllAcc8sEntries] = useState<any[]>([]);
   const [isLoadingActions, setIsLoadingActions] = useState(false);
+  const [isRefreshingData, setIsRefreshingData] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [expandedCategory, setExpandedCategory] = useState<
     'kpi' | 'pxt' | 'xg' | 'pkEntries' | 'regains' | 'loses' | 'gps' | null
   >(() => {
@@ -165,18 +167,6 @@ export default function StatystykiZespoluPage() {
     }
     return 'kpi';
   });
-
-  const handleRefreshData = async () => {
-    if (isRefreshingData) return;
-    try {
-      setIsRefreshingData(true);
-      invalidateMatchCache(selectedMatch);
-      await forceRefreshFromFirebase(selectedTeam || undefined);
-      setRefreshKey((prev) => prev + 1);
-    } finally {
-      setIsRefreshingData(false);
-    }
-  };
 
   // Zapisuj wybraną kategorię w localStorage przy każdej zmianie
   useEffect(() => {
@@ -438,6 +428,18 @@ export default function StatystykiZespoluPage() {
 
   const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
 
+  const handleRefreshData = useCallback(async () => {
+    if (isRefreshingData) return;
+    try {
+      setIsRefreshingData(true);
+      selectedMatches.forEach((id) => clearMatchDocumentCache(id));
+      await forceRefreshFromFirebase(selectedTeam || undefined);
+      setRefreshKey((prev) => prev + 1);
+    } finally {
+      setIsRefreshingData(false);
+    }
+  }, [isRefreshingData, selectedMatches, selectedTeam, forceRefreshFromFirebase]);
+
   // Inicjalizuj selectedSeason na najnowszy sezon na podstawie meczów
   useEffect(() => {
     if (allMatches.length === 0) return;
@@ -696,7 +698,7 @@ export default function StatystykiZespoluPage() {
     };
 
     loadActionsForMatches();
-  }, [selectedMatches, selectedTeam]);
+  }, [selectedMatches, selectedTeam, refreshKey]);
 
   // Przygotuj dane dla wykresów zespołowych
   const teamChartData = useMemo(() => {

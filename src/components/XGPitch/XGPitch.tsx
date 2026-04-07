@@ -7,19 +7,9 @@ import styles from "./XGPitch.module.css";
 import PitchHeader from "../PitchHeader/PitchHeader";
 import pitchHeaderStyles from "../PitchHeader/PitchHeader.module.css";
 import { buildPlayersIndex, getPlayerLabel, PlayersIndex } from "@/utils/playerUtils";
-import {
-  computePitchClickXG,
-  XG_MODEL_STORAGE_KEY,
-  type XgModelVersion,
-} from "@/lib/xg";
+import { computePitchClickXG } from "@/lib/xg";
 
 const HOVER_TOOLTIP_DELAY_MS = 1500;
-
-function readXgModelFromStorage(): XgModelVersion {
-  if (typeof window === "undefined") return "classic";
-  const s = localStorage.getItem(XG_MODEL_STORAGE_KEY);
-  return s === "torvaney" ? "torvaney" : "classic";
-}
 
 export interface XGPitchProps {
   shots?: Shot[];
@@ -43,9 +33,6 @@ export interface XGPitchProps {
   hideToggleButton?: boolean; // Ukryj przycisk przełączania widoczności tagów
   hideTeamLogos?: boolean; // Ukryj loga zespołów
   rightExtraContent?: React.ReactNode; // Dodatkowa zawartość po prawej stronie nagłówka
-  /** Kontrolowany wybór modelu (np. strona główna); bez propsów — localStorage + klasyczny domyślnie. */
-  xgModelVersion?: XgModelVersion;
-  onXgModelVersionChange?: (v: XgModelVersion) => void;
 }
 
 const XGPitch = memo(function XGPitch({
@@ -60,46 +47,7 @@ const XGPitch = memo(function XGPitch({
   hideTeamLogos = false,
   hideToggleButton = false,
   rightExtraContent,
-  xgModelVersion: xgModelVersionProp,
-  onXgModelVersionChange,
 }: XGPitchProps) {
-  const [internalXgModel, setInternalXgModel] = useState<XgModelVersion>(readXgModelFromStorage);
-
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === XG_MODEL_STORAGE_KEY || e.key === null) {
-        setInternalXgModel(readXgModelFromStorage());
-      }
-    };
-    const onCustom = (e: Event) => {
-      const d = (e as CustomEvent<{ xgModelVersion?: XgModelVersion }>).detail?.xgModelVersion;
-      if (d === "torvaney" || d === "classic") setInternalXgModel(d);
-    };
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("xgModelVersionChanged", onCustom as EventListener);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("xgModelVersionChanged", onCustom as EventListener);
-    };
-  }, []);
-
-  const xgModel: XgModelVersion =
-    xgModelVersionProp !== undefined ? xgModelVersionProp : internalXgModel;
-
-  const setXgModel = (v: XgModelVersion) => {
-    if (onXgModelVersionChange) {
-      onXgModelVersionChange(v);
-    } else {
-      setInternalXgModel(v);
-      if (typeof window !== "undefined") {
-        localStorage.setItem(XG_MODEL_STORAGE_KEY, v);
-        window.dispatchEvent(
-          new CustomEvent("xgModelVersionChanged", { detail: { xgModelVersion: v } })
-        );
-      }
-    }
-  };
-
   const localPlayersIndex = useMemo(
     () => playersIndex ?? buildPlayersIndex(players),
     [playersIndex, players]
@@ -171,7 +119,7 @@ const XGPitch = memo(function XGPitch({
       y = 100 - y;
     }
     
-    const xG = computePitchClickXG(x, y, xgModel);
+    const xG = computePitchClickXG(x, y);
     onShotAdd(x, y, xG);
   };
 
@@ -230,22 +178,13 @@ const XGPitch = memo(function XGPitch({
             >
               Obróć
             </button>
-            <button
-              type="button"
-              className={`${pitchHeaderStyles.headerButton} ${xgModel === "torvaney" ? pitchHeaderStyles.headerButtonActive : ""}`}
-              onClick={() => setXgModel(xgModel === "torvaney" ? "classic" : "torvaney")}
-              title="Klasyczny model xG z aplikacji lub Simple xG (Torvaney). Wpływa na wartości po kliknięciu i wygląd boiska."
-              aria-pressed={xgModel === "torvaney"}
-            >
-              xG: {xgModel === "torvaney" ? "Torvaney" : "Klasyczny"}
-            </button>
           </>
         }
       />
 
       <div className={styles.pitchWrapper}>
         <div
-          className={`${styles.pitch} ${isFlipped ? styles.flipped : ""} ${xgModel === "torvaney" ? styles.pitchTorvaney : ""}`}
+          className={`${styles.pitch} ${isFlipped ? styles.flipped : ""}`}
           role="grid"
           aria-label="Boisko piłkarskie do analizy xG"
           onClick={handlePitchClick}
@@ -279,8 +218,6 @@ const XGPitch = memo(function XGPitch({
             displayY = 100 - shot.y;
           }
           
-          // Sprawdź, czy to strzał z asystą
-          const isAssist = !!shot.assistantId;
           // Klasy dla gola i stałego fragmentu (głowa bez zmiany kształtu – kółko)
           const isGoalClass = shot.isGoal ? styles.isGoal : '';
           const setPieceTypes = ['corner', 'free_kick', 'direct_free_kick', 'penalty', 'throw_in'];
@@ -432,4 +369,4 @@ const XGPitch = memo(function XGPitch({
 // Dla łatwiejszego debugowania w React DevTools
 XGPitch.displayName = "XGPitch";
 
-export default XGPitch; 
+export default XGPitch;

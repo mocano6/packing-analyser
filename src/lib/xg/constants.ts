@@ -1,4 +1,2 @@
-/** Klucz localStorage dla wyboru modelu xG na boisku (zakładka xG). */
-export const XG_MODEL_STORAGE_KEY = "xgModelVersion";
-
+/** Legacy przy odczycie starych strzałów w Firestore; nowe zapisy używają wyłącznie torvaney. */
 export type XgModelVersion = "classic" | "torvaney";

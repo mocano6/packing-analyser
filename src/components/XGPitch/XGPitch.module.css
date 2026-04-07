@@ -14,8 +14,8 @@
 }
 
 .pitch {
-  /* Zgodna z torvaneySimpleXG.ts GOAL_GRAPHIC_INSET_PCT — grafika bramki .goalLeft/Right; linie 105 m między liniami bramkowymi */
-  --goal-inset: 0.8%;
+  /* 0%: linie bramkowe i pola karne dokładnie na krawędziach — współrzędne % (0–100) i Torvaney (torvaneySimple.ts) liczą pełne 105×68 m */
+  --goal-inset: 0%;
   width: 100%;
   height: 100%;
   background: #bcbcbc;
@@ -39,6 +39,20 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
+  z-index: 1;
+  border-radius: 12px;
+}
+
+/* Pełna obwódka boiska (linie końcowe + boczne) — jak prostokąt klikalnego pola na torvaney.github.io */
+.pitchLines::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: 2px solid rgba(255, 255, 255, 1);
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 2px rgba(255, 255, 255, 0.4);
 }
 
 /* LINIA ŚRODKOWA */
@@ -186,17 +200,18 @@
   z-index: 10;
 }
 
-/* BRAMKA LEWA */
+/* BRAMKA LEWA — wąski prostokąt od linii końcowej (głębokość ~2 m / 105 m); wysokość = odległość słupków 7.32 m / 68 m */
 .goalLeft {
   position: absolute;
   left: 0;
   top: 50%;
-  width: 0.8%;           /* Lekko wystaje do wewnątrz */
-  height: 10.8%;         /* 7.32m / 68m = 10.8% */
+  width: calc(100% * 2 / 105);
+  height: calc(100% * 7.32 / 68);
   background: rgba(255, 255, 255, 1);
   transform: translateY(-50%);
   box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(255, 255, 255, 1);
+  z-index: 3;
 }
 
 /* BRAMKA PRAWA */
@@ -204,12 +219,13 @@
   position: absolute;
   right: 0;
   top: 50%;
-  width: 0.8%;           /* Lekko wystaje do wewnątrz */
-  height: 10.8%;         /* 7.32m / 68m = 10.8% */
+  width: calc(100% * 2 / 105);
+  height: calc(100% * 7.32 / 68);
   background: rgba(255, 255, 255, 1);
   transform: translateY(-50%);
   box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(255, 255, 255, 1);
+  z-index: 3;
 }
 
 /* PROSTOKĄT W LINII ATAKU - PRAWA STRONA (domyślnie) */
@@ -388,46 +404,6 @@
   font-size: 11px;
   color: #94a3b8;
   margin-top: 2px;
-}
-
-/* Wariant jak Torvaney (zielone boisko, jaśniejsze linie) — tylko wygląd, proporcje bez zmian */
-.pitchTorvaney {
-  background: linear-gradient(180deg, #1a4d1a 0%, #2d6b2d 45%, #256325 100%);
-  box-shadow: 0 4px 18px rgba(0, 40, 0, 0.35);
-}
-
-.pitchTorvaney .centerLine,
-.pitchTorvaney .penaltyAreaLeft,
-.pitchTorvaney .penaltyAreaRight,
-.pitchTorvaney .goalAreaLeft,
-.pitchTorvaney .goalAreaRight,
-.pitchTorvaney .centerCircle {
-  border-color: rgba(255, 255, 255, 0.92);
-  background: transparent;
-  box-shadow: none;
-}
-
-.pitchTorvaney .centerSpot,
-.pitchTorvaney .penaltySpotLeft,
-.pitchTorvaney .penaltySpotRight {
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: none;
-}
-
-.pitchTorvaney .penaltyArcLeft,
-.pitchTorvaney .penaltyArcRight {
-  border-color: rgba(255, 255, 255, 0.92);
-  box-shadow: none;
-}
-
-.pitchTorvaney .goalLeft,
-.pitchTorvaney .goalRight {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.85);
-}
-
-.pitchTorvaney .attackRectangle {
-  opacity: 0.35;
 }
 
 /* Responsywność dla markerów */

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { getAuthClient } from "@/lib/firebase";
 
 export default function RegainLosesMigration() {
   const [isRunning, setIsRunning] = useState(false);
@@ -23,10 +24,32 @@ export default function RegainLosesMigration() {
     setResult(null);
 
     try {
+      const current = getAuthClient().currentUser;
+      if (!current) {
+        setResult({
+          success: false,
+          message: 'Brak sesji — zaloguj się jako administrator.',
+          stats: { regainUpdated: 0, losesUpdated: 0, matchesUpdated: 0, errors: 1 },
+        });
+        return;
+      }
+      let idToken: string;
+      try {
+        idToken = await current.getIdToken();
+      } catch {
+        setResult({
+          success: false,
+          message: 'Nie udało się pobrać tokenu sesji.',
+          stats: { regainUpdated: 0, losesUpdated: 0, matchesUpdated: 0, errors: 1 },
+        });
+        return;
+      }
+
       const response = await fetch('/api/migrate-regain-loses', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
         },
       });
 
