@@ -253,7 +253,7 @@ export default function ListaZawodnikow() {
         <div className={styles.accessDenied}>
           <h2>🔒 Brak uprawnień</h2>
           <p>Tylko administratorzy mają dostęp do listy wszystkich zawodników.</p>
-          <Link href="/" className={styles.backButton}>
+          <Link href="/analyzer" className={styles.backButton}>
             Powrót do aplikacji
           </Link>
         </div>
@@ -528,7 +528,7 @@ export default function ListaZawodnikow() {
         <p style={{ margin: "5px 0", fontSize: "14px", color: "#6c757d" }}>
           Wyszukuj po imieniu, nazwisku, numerze, zespole lub ID zawodnika. Najedź na skrócone ID aby zobaczyć pełne.
         </p>
-        <Link href="/" className={styles.backButton}>
+        <Link href="/analyzer" className={styles.backButton}>
           ← Powrót do głównej
         </Link>
       </div>

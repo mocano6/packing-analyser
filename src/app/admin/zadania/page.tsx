@@ -57,7 +57,7 @@ export default function AdminZadaniaPage() {
         <button
           type="button"
           className={styles.primaryButton}
-          onClick={() => router.push("/")}
+          onClick={() => router.push("/analyzer")}
         >
           Powrót
         </button>

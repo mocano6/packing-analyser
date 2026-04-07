@@ -52,7 +52,7 @@ export default function AdminPage() {
       <div className={styles.deniedWrap}>
         <h1 className={styles.deniedTitle}>Brak uprawnień</h1>
         <p className={styles.deniedText}>Dostęp mają tylko administratorzy.</p>
-        <button type="button" className={styles.primaryButton} onClick={() => router.push("/")}>
+        <button type="button" className={styles.primaryButton} onClick={() => router.push("/analyzer")}>
           Powrót
         </button>
       </div>
@@ -63,7 +63,7 @@ export default function AdminPage() {
     <div className={styles.container}>
       <header className={styles.header}>
         <h1 className={styles.title}>Panel administracyjny</h1>
-        <button type="button" className={styles.backButton} onClick={() => router.push("/")}>
+        <button type="button" className={styles.backButton} onClick={() => router.push("/analyzer")}>
           Powrót do aplikacji
         </button>
       </header>

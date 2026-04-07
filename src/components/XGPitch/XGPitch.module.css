@@ -14,6 +14,8 @@
 }
 
 .pitch {
+  /* Zgodna z torvaneySimpleXG.ts GOAL_GRAPHIC_INSET_PCT — grafika bramki .goalLeft/Right; linie 105 m między liniami bramkowymi */
+  --goal-inset: 0.8%;
   width: 100%;
   height: 100%;
   background: #bcbcbc;
@@ -78,13 +80,13 @@
   z-index: 10;           /* Na wierzchu */
 }
 
-/* POLE KARNE LEWE */
+/* POLE KARNE LEWE — dokładne proporcje FIFA (105 m × 68 m), jak w modelu Torvaney */
 .penaltyAreaLeft {
   position: absolute;
-  left: 0;
-  top: 20.3%;            /* (68m - 40.32m) / 2 / 68m = 20.3% */
-  width: 15.7%;          /* 16.5m / 105m = 15.7% */
-  height: 59.4%;         /* 40.32m / 68m = 59.4% */
+  left: var(--goal-inset);
+  top: calc(100% * (68 - 40.32) / 2 / 68);
+  width: calc((100% - 2 * var(--goal-inset)) * 16.5 / 105);
+  height: calc(100% * 40.32 / 68);
   border: 2px solid rgba(255, 255, 255, 1);
   border-left: none;
   box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
@@ -93,10 +95,10 @@
 /* POLE KARNE PRAWE */
 .penaltyAreaRight {
   position: absolute;
-  right: 0;
-  top: 20.3%;            /* Symetrycznie */
-  width: 15.7%;          /* 16.5m / 105m = 15.7% */
-  height: 59.4%;         /* 40.32m / 68m = 59.4% */
+  right: var(--goal-inset);
+  top: calc(100% * (68 - 40.32) / 2 / 68);
+  width: calc((100% - 2 * var(--goal-inset)) * 16.5 / 105);
+  height: calc(100% * 40.32 / 68);
   border: 2px solid rgba(255, 255, 255, 1);
   border-right: none;
   box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
@@ -105,10 +107,10 @@
 /* POLE BRAMKOWE LEWE */
 .goalAreaLeft {
   position: absolute;
-  left: 0;
-  top: 36.5%;            /* (68m - 18.32m) / 2 / 68m = 36.5% */
-  width: 5.2%;           /* 5.5m / 105m = 5.2% */
-  height: 26.9%;         /* 18.32m / 68m = 26.9% */
+  left: var(--goal-inset);
+  top: calc(100% * (68 - 18.32) / 2 / 68);
+  width: calc((100% - 2 * var(--goal-inset)) * 5.5 / 105);
+  height: calc(100% * 18.32 / 68);
   border: 2px solid rgba(255, 255, 255, 1);
   border-left: none;
   box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
@@ -117,73 +119,71 @@
 /* POLE BRAMKOWE PRAWE */
 .goalAreaRight {
   position: absolute;
-  right: 0;
-  top: 36.5%;            /* Symetrycznie */
-  width: 5.2%;           /* 5.5m / 105m = 5.2% */
-  height: 26.9%;         /* 18.32m / 68m = 26.9% */
+  right: var(--goal-inset);
+  top: calc(100% * (68 - 18.32) / 2 / 68);
+  width: calc((100% - 2 * var(--goal-inset)) * 5.5 / 105);
+  height: calc(100% * 18.32 / 68);
   border: 2px solid rgba(255, 255, 255, 1);
   border-right: none;
   box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
 }
 
-/* ŁUK KARNY LEWY - większy fragment łuku z punktu karnego */
+/* ŁUK KARNY LEWY - środek łuku = punkt karny 11 m od linii bramkowej */
 .penaltyArcLeft {
   position: absolute;
-  left: 10.5%;           /* 11m / 105m = 10.5% (punkt karny) */
+  left: calc(var(--goal-inset) + (100% - 2 * var(--goal-inset)) * 11 / 105);
   top: 50%;
-  width: 17.4%;          /* 2 × 9.15m / 105m = 17.4% (średnica) */
-  height: 26.9%;         /* 2 × 9.15m / 68m = 26.9% (średnica) */
+  width: calc((100% - 2 * var(--goal-inset)) * (2 * 9.15) / 105);
+  height: calc(100% * (2 * 9.15) / 68);
   border: 2px solid rgba(255, 255, 255, 1);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
-  z-index: 15;           /* Wyższy z-index - na samym wierzchu */
-  /* Odwrócona część - pokazuje fragment który powinien być widoczny */
+  z-index: 15;
   clip-path: polygon(45% 10%, 100% 10%, 100% 90%, 45% 90%);
 }
 
-/* ŁUK KARNY PRAWY - większy fragment łuku z punktu karnego */
+/* ŁUK KARNY PRAWY */
 .penaltyArcRight {
   position: absolute;
-  right: 10.5%;          /* 11m / 105m = 10.5% (punkt karny) */
+  left: calc(var(--goal-inset) + (100% - 2 * var(--goal-inset)) * 94 / 105);
   top: 50%;
-  width: 17.4%;          /* 2 × 9.15m / 105m = 17.4% (średnica) */
-  height: 26.9%;         /* 2 × 9.15m / 68m = 26.9% (średnica) */
+  width: calc((100% - 2 * var(--goal-inset)) * (2 * 9.15) / 105);
+  height: calc(100% * (2 * 9.15) / 68);
   border: 2px solid rgba(255, 255, 255, 1);
   border-radius: 50%;
-  transform: translate(50%, -50%);
+  transform: translate(-50%, -50%);
   box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
-  z-index: 15;           /* Wyższy z-index - na samym wierzchu */
-  /* Odwrócona część - pokazuje fragment który powinien być widoczny */
+  z-index: 15;
   clip-path: polygon(0% 10%, 55% 10%, 55% 90%, 0% 90%);
 }
 
-/* PUNKT KARNY LEWY */
+/* PUNKT KARNY LEWY — środek kropki dokładnie 11 m od linii bramkowej (nie od zewnętrznej krawędzi diva) */
 .penaltySpotLeft {
   position: absolute;
-  left: 10.5%;           /* 11m / 105m = 10.5% */
+  left: calc(var(--goal-inset) + (100% - 2 * var(--goal-inset)) * 11 / 105);
   top: 50%;
-  width: 8px;            /* Zwiększony rozmiar */
-  height: 8px;           /* Zwiększony rozmiar */
+  width: 8px;
+  height: 8px;
   background: rgba(255, 255, 255, 1);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
-  z-index: 10;           /* Na wierzchu */
+  z-index: 10;
 }
 
-/* PUNKT KARNY PRAWY */
+/* PUNKT KARNY PRAWY — 11 m od prawej linii bramkowej */
 .penaltySpotRight {
   position: absolute;
-  right: 10.5%;          /* 11m / 105m = 10.5% */
+  left: calc(var(--goal-inset) + (100% - 2 * var(--goal-inset)) * 94 / 105);
   top: 50%;
-  width: 8px;            /* Zwiększony rozmiar */
-  height: 8px;           /* Zwiększony rozmiar */
+  width: 8px;
+  height: 8px;
   background: rgba(255, 255, 255, 1);
   border-radius: 50%;
-  transform: translate(50%, -50%);
+  transform: translate(-50%, -50%);
   box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
-  z-index: 10;           /* Na wierzchu */
+  z-index: 10;
 }
 
 /* BRAMKA LEWA */
@@ -446,4 +446,4 @@
     padding: 8px 10px;
     max-width: 200px;
   }
-} 
+}

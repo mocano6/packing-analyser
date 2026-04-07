@@ -442,7 +442,7 @@ export default function WeryfikacjaMeczow() {
         <div className={styles.accessDenied}>
           <h2>🔒 Brak uprawnień</h2>
           <p>Tylko administratorzy mają dostęp do weryfikacji meczów.</p>
-          <Link href="/" className={styles.backButton}>
+          <Link href="/analyzer" className={styles.backButton}>
             Powrót do aplikacji
           </Link>
         </div>
@@ -466,7 +466,7 @@ export default function WeryfikacjaMeczow() {
       <div className={styles.header}>
         <div className={styles.titleRow}>
           <h1>🔍 Weryfikacja Meczów</h1>
-          <Link href="/" className={styles.backButton}>
+          <Link href="/analyzer" className={styles.backButton}>
             ← Powrót do głównej
           </Link>
         </div>

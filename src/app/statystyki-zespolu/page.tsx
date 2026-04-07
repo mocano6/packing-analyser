@@ -3707,7 +3707,7 @@ export default function StatystykiZespoluPage() {
         <div className={styles.noTeamsAccess}>
           <h2>⚠️ Brak dostępnych zespołów</h2>
           <p>Nie znaleziono żadnych zespołów dostępnych dla Twojego konta.</p>
-          <Link href="/" className={styles.backButton}>
+          <Link href="/analyzer" className={styles.backButton}>
             Powrót do aplikacji
           </Link>
         </div>
@@ -3718,7 +3718,7 @@ export default function StatystykiZespoluPage() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <Link href="/" className={styles.backButton} title="Powrót do głównej">
+        <Link href="/analyzer" className={styles.backButton} title="Powrót do głównej">
           ←
         </Link>
         <div className={styles.headerTitleRow}>

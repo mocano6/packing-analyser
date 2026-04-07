@@ -32,7 +32,7 @@ export default function LoginForm() {
       router.push('/oczekuje');
       return;
     }
-    router.push('/');
+    router.push("/analyzer");
   }, [isAuthenticated, authLoading, userRole, userStatus, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {

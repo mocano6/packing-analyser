@@ -4161,7 +4161,7 @@ export default function PlayerDetailsPage() {
 
       <div className={styles.noPrint}>
         <div className={styles.header}>
-          <Link href="/" className={styles.backButton} title="Powrót do głównej">
+          <Link href="/analyzer" className={styles.backButton} title="Powrót do głównej">
             ←
           </Link>
           <div className={styles.headerTitleRow}>

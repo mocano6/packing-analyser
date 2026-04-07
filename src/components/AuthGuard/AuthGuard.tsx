@@ -23,8 +23,8 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated && pathname !== '/login') {
-      router.push('/login');
+    if (!isLoading && !isAuthenticated && pathname !== "/login" && pathname !== "/") {
+      router.push("/");
     }
   }, [isLoading, isAuthenticated, router, pathname]);
 
@@ -38,11 +38,11 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     }
   }, [isLoading, isAuthenticated, isPlayer, userStatus, pathname, router, linkedPlayerId]);
 
-  /* Player zalogowany wchodzi na "/" → przekieruj na profil */
+  /* Player zalogowany wchodzi na "/" lub /analyzer → przekieruj na profil */
   useEffect(() => {
     if (isLoading || !isAuthenticated || !isPlayer) return;
     if (userStatus !== 'approved') return;
-    if (pathname === '/') {
+    if (pathname === "/" || pathname === "/analyzer") {
       const profilePath = linkedPlayerId ? `/profile/${linkedPlayerId}` : '/profile';
       router.replace(profilePath);
     }
@@ -56,7 +56,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     );
   }
 
-  if (pathname === '/login' || pathname === '/oczekuje') {
+  if (pathname === "/login" || pathname === "/oczekuje" || pathname === "/") {
     return <>{children}</>;
   }
 

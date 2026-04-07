@@ -67,7 +67,7 @@ export default function AdminSidebar() {
             ))}
             <div className={styles.homeItem}>
               <Link
-                href="/"
+                href="/analyzer"
                 className={styles.menuItem}
                 onClick={() => setIsOpen(false)}
               >

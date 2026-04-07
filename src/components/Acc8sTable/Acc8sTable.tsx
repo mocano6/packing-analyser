@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react";
 import styles from "./Acc8sTable.module.css";
 import sharedStyles from "@/styles/sharedTableStyles.module.css";
 import pitchHeaderStyles from "@/components/PitchHeader/PitchHeader.module.css";
-import pageStyles from "@/app/page.module.css";
+import pageStyles from "@/app/analyzer/page.module.css";
 import { Acc8sEntry } from "@/types";
 import { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import { CustomVideoPlayerRef } from "@/components/CustomVideoPlayer/CustomVideoPlayer";
