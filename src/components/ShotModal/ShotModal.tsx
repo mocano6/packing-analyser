@@ -559,16 +559,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
   };
 
   const handleBodyPartSelect = (bodyPart: "foot_left" | "foot_right" | "head" | "other") => {
-    setFormData((prev) => {
-      let nextXG = prev.xG;
-      if (prev.actionType !== "penalty") {
-        nextXG = getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
-          isHeader: bodyPart === "head",
-          teamContext: prev.teamContext,
-        });
-      }
-      return { ...prev, bodyPart, xG: nextXG };
-    });
+    // Część ciała jest tylko metadanym — nie przeliczamy xG przy zmianie (użytkownik ustawia xG ręcznie / z pozycji).
+    setFormData((prev) => ({ ...prev, bodyPart }));
   };
 
   const handleBlockingPlayerToggle = (playerId: string) => {
