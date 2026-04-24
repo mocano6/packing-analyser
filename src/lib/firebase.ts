@@ -1,9 +1,10 @@
-'use client';
+"use client";
 
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getFirestore, enableNetwork, disableNetwork, Firestore } from 'firebase/firestore';
-import { getAuth, Auth } from 'firebase/auth';
-import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+import { getFirestore, enableNetwork, disableNetwork, Firestore } from "firebase/firestore";
+import { getAuth, Auth } from "firebase/auth";
+import { getStorage, FirebaseStorage } from "firebase/storage";
+import { assertFirebasePublicEnvForClient } from "@/lib/firebasePublicEnvGuard";
 
 // Konfiguracja Firebase
 const firebaseConfig = {
@@ -12,29 +13,8 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
-
-const REQUIRED_PUBLIC_KEYS = [
-  'NEXT_PUBLIC_FIREBASE_API_KEY',
-  'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
-  'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
-  'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
-  'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
-  'NEXT_PUBLIC_FIREBASE_APP_ID',
-] as const;
-
-function getMissingFirebaseEnvKeys(): string[] {
-  const map: Record<(typeof REQUIRED_PUBLIC_KEYS)[number], string | undefined> = {
-    NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  };
-  return REQUIRED_PUBLIC_KEYS.filter((k) => !map[k]?.trim());
-}
 
 let app: FirebaseApp | undefined;
 let db: Firestore | undefined;
@@ -43,15 +23,8 @@ let storage: FirebaseStorage | undefined;
 
 /** Inicjalizacja Firebase po stronie klienta (lazy) — przy pierwszym wywołaniu getDB/isFirebaseReady. Unika 5s blokady gdy moduł załadował się na SSR. */
 function ensureFirebaseInitialized(): void {
-  if (typeof window === 'undefined' || db) return;
-  const missing = getMissingFirebaseEnvKeys();
-  if (missing.length > 0) {
-    const msg = `Brak zmiennych środowiskowych Firebase: ${missing.join(', ')}. Uzupełnij .env.production / hosting.`;
-    console.error(msg);
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error(msg);
-    }
-  }
+  if (typeof window === "undefined" || db) return;
+  assertFirebasePublicEnvForClient();
   app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
   db = getFirestore(app);
   auth = getAuth(app);

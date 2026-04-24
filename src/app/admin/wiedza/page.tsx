@@ -32,6 +32,7 @@ import {
 } from '@/lib/wiedzaAnalyzeCache';
 import WiedzaPackingFlowTab from '@/components/WiedzaPackingFlowTab/WiedzaPackingFlowTab';
 import { compactWiedzaMatchForStorage } from '@/lib/wiedzaMatchCompact';
+import { getLosesBackAllyCountForDisplay } from '@/lib/losesBackAllyDisplay';
 import {
   buildBirthYearMinutePercentagesByTeam,
   weightedMeanBirthYearForTeam,
@@ -425,9 +426,7 @@ export default function WiedzaPage() {
         const t0 = lose.videoTimestampRaw ?? (lose.videoTimestamp !== undefined ? lose.videoTimestamp + 10 : 0);
         if (t0 <= 0) return;
 
-        const playersBehind = lose.playersBehindBall ?? 0;
-        const totalPlayers = lose.totalPlayersOnField ?? 11;
-        const playersAhead = totalPlayers - playersBehind;
+        const playersAhead = getLosesBackAllyCountForDisplay(lose);
 
         const opponentsBehind = lose.opponentsBehindBall ?? 0;
         const totalOpponents = lose.totalOpponentsOnField ?? 11;

@@ -254,6 +254,19 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
     return "";
   });
 
+  // Po zawężeniu listy zespołów do uprawnień: nie trzymaj w pamięci niedozwolonego teamId
+  useEffect(() => {
+    if (allAvailableTeams.length === 0) return;
+    const allowed = allAvailableTeams.some((t) => t.id === selectedTeam);
+    if (selectedTeam && !allowed) {
+      const next = allAvailableTeams[0].id;
+      setSelectedTeam(next);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("selectedTeam", next);
+      }
+    }
+  }, [allAvailableTeams, selectedTeam]);
+
   // Zapamiętaj / przywróć ostatnio wybranego dostawcę per zespół
   useEffect(() => {
     if (typeof window === "undefined") return;

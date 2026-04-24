@@ -11,6 +11,8 @@ import styles from "./ActionSection.module.css";
 import { Player, TeamInfo, Action, PlayerMatchStats } from "@/types";
 import { getDB } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "@/lib/firestoreWithMetrics";
+import { getReceptionBackAllyCountForDisplay } from "@/lib/regainReceptionDisplay";
+import { getLosesBackAllyCountForDisplay } from "@/lib/losesBackAllyDisplay";
 
 export interface ActionSectionProps {
   selectedZone: string | number | null;
@@ -73,10 +75,12 @@ export interface ActionSectionProps {
   setIsAutActive: React.Dispatch<React.SetStateAction<boolean>>;
   isPMAreaActive: boolean;
   setIsPMAreaActive: React.Dispatch<React.SetStateAction<boolean>>;
-  playersBehindBall: number;
-  setPlayersBehindBall: React.Dispatch<React.SetStateAction<number>>;
-  opponentsBehindBall: number;
-  setOpponentsBehindBall: React.Dispatch<React.SetStateAction<number>>;
+  /** Straty: liczba przeciwników za piłką (lokalny stan; zapis Firestore: losesOppRosterSquadTallyF1) */
+  losesBackAllyCount: number;
+  setLosesBackAllyCount: React.Dispatch<React.SetStateAction<number>>;
+  /** Regain: liczba przeciwników za piłką (lokalny stan; zapis: regainOppRosterSquadTallyF1) */
+  receptionBackAllyCount: number;
+  setReceptionBackAllyCount: React.Dispatch<React.SetStateAction<number>>;
   playersLeftField: number;
   setPlayersLeftField: React.Dispatch<React.SetStateAction<number>>;
   opponentsLeftField: number;
@@ -131,6 +135,10 @@ export interface ActionSectionProps {
   /** Komunikat nad siatką boiska (np. PxT / wybór stref) */
   pitchNotice?: string | null;
   onDismissPitchNotice?: () => void;
+  /** Podpis drużyny pod licznikiem straty (Loses) — np. nazwa z wyboru w analizatorze. */
+  packingLosesSquadDisplayName?: string | null;
+  /** Pasek zakładek trybów (PxT / Regain…) — renderowany pod PitchHeader, nad siatką */
+  tabBar?: React.ReactNode;
 }
 
 const ActionSection = memo(function ActionSection({
@@ -189,10 +197,10 @@ const ActionSection = memo(function ActionSection({
   setIsAutActive,
   isPMAreaActive,
   setIsPMAreaActive,
-  playersBehindBall,
-  setPlayersBehindBall,
-  opponentsBehindBall,
-  setOpponentsBehindBall,
+  losesBackAllyCount,
+  setLosesBackAllyCount,
+  receptionBackAllyCount,
+  setReceptionBackAllyCount,
   playersLeftField,
   setPlayersLeftField,
   opponentsLeftField,
@@ -236,6 +244,8 @@ const ActionSection = memo(function ActionSection({
   linkedPlayerId = null,
   pitchNotice = null,
   onDismissPitchNotice,
+  packingLosesSquadDisplayName = null,
+  tabBar,
 }: ActionSectionProps) {
   const [isPlayerMatchStatsModalOpen, setIsPlayerMatchStatsModalOpen] = useState(false);
 
@@ -248,17 +258,13 @@ const ActionSection = memo(function ActionSection({
     try {
       const db = getDB();
       const matchRef = doc(db, "matches", matchId);
-      let existingStats = matchInfo?.matchData?.playerStats || [];
-      let existingMatchData = matchInfo?.matchData || {};
-
-      if (targetMatchId && targetMatchId !== matchInfo?.matchId) {
-        const matchSnap = await getDoc(matchRef);
-        if (matchSnap.exists()) {
-          const data = matchSnap.data() as TeamInfo;
-          existingMatchData = data.matchData || {};
-          existingStats = existingMatchData.playerStats || [];
-        }
+      const matchSnap = await getDoc(matchRef);
+      if (!matchSnap.exists()) {
+        throw new Error("Mecz nie istnieje.");
       }
+      const data = matchSnap.data() as TeamInfo;
+      const existingMatchData = data.matchData || {};
+      const existingStats = existingMatchData.playerStats || [];
 
       const updatedStats = [
         ...existingStats.filter((item) => item.playerId !== stats.playerId),
@@ -563,6 +569,7 @@ const ActionSection = memo(function ActionSection({
         isPlayer={isPlayer}
         pitchNotice={pitchNotice}
         onDismissPitchNotice={onDismissPitchNotice}
+        tabBar={tabBar}
       />
 
       <PlayerMatchStatsModal
@@ -855,13 +862,8 @@ const ActionSection = memo(function ActionSection({
           // Nowy prop dla przycisku "Poniżej 8s"
           isBelow8sActive={isBelow8sActive}
           onBelow8sToggle={() => setIsBelow8sActive(!isBelow8sActive)}
-          // Nowy prop dla liczby partnerów przed piłką
-          playersBehindBall={playersBehindBall}
-          onPlayersBehindBallChange={setPlayersBehindBall}
-          // Nowy prop dla liczby przeciwników przed piłką
-            opponentsBehindBall={opponentsBehindBall}
-          onOpponentsBehindBallChange={setOpponentsBehindBall}
-          // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
+          receptionBackAllyCount={receptionBackAllyCount}
+          onReceptionBackAllyCountChange={setReceptionBackAllyCount}
           playersLeftField={playersLeftField}
           onPlayersLeftFieldChange={setPlayersLeftField}
           // Nowy prop dla liczby zawodników przeciwnika, którzy opuścili boisko
@@ -1042,12 +1044,8 @@ const ActionSection = memo(function ActionSection({
               setIsBadReaction5sActive(false);
             }
           }}
-          // Nowy prop dla liczby partnerów przed piłką
-          playersBehindBall={playersBehindBall}
-          onPlayersBehindBallChange={setPlayersBehindBall}
-          // Nowy prop dla liczby przeciwników przed piłką
-            opponentsBehindBall={opponentsBehindBall}
-          onOpponentsBehindBallChange={setOpponentsBehindBall}
+          losesBackAllyCount={losesBackAllyCount}
+          onLosesBackAllyCountChange={setLosesBackAllyCount}
           // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
           playersLeftField={playersLeftField}
           onPlayersLeftFieldChange={setPlayersLeftField}
@@ -1056,6 +1054,8 @@ const ActionSection = memo(function ActionSection({
           onOpponentsLeftFieldChange={setOpponentsLeftField}
           isControversial={isControversial}
           onControversialToggle={() => setIsControversial(!isControversial)}
+          allTeams={allTeams}
+          packingSquadDisplayName={packingLosesSquadDisplayName}
         />
       ) : (
         <ActionModal
@@ -1237,6 +1237,7 @@ const ActionSection = memo(function ActionSection({
             }
           }}
           onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+          onGetVideoTime={onGetVideoTime}
           actionType={editingAction?.actionType as "pass" | "dribble" || 'pass'}
           onActionTypeChange={(type) => {
             if (editingAction && onEditingActionChange) {
@@ -1252,6 +1253,42 @@ const ActionSection = memo(function ActionSection({
               onEditingActionChange({
                 ...editingAction,
                 packingPoints: (editingAction.packingPoints || 0) + points
+              });
+            }
+          }}
+          isP0StartActive={editingAction?.isP0Start || false}
+          onP0StartToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isP0Start: !editingAction.isP0Start
+              });
+            }
+          }}
+          isP1StartActive={editingAction?.isP1Start || false}
+          onP1StartToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isP1Start: !editingAction.isP1Start
+              });
+            }
+          }}
+          isP2StartActive={editingAction?.isP2Start || false}
+          onP2StartToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isP2Start: !editingAction.isP2Start
+              });
+            }
+          }}
+          isP3StartActive={editingAction?.isP3Start || false}
+          onP3StartToggle={() => {
+            if (editingAction && onEditingActionChange) {
+              onEditingActionChange({
+                ...editingAction,
+                isP3Start: !editingAction.isP3Start
               });
             }
           }}
@@ -1385,19 +1422,18 @@ const ActionSection = memo(function ActionSection({
               });
             }
           }}
-          onSaveAction={() => {
+          onSaveAction={(patch) => {
             if (editingAction && onSaveEditedAction) {
-              // Pobierz notatkę kontrowersyjną z localStorage
-              const tempControversyNote = typeof window !== 'undefined' ? localStorage.getItem('tempControversyNote') : null;
+              const tempControversyNote = typeof window !== "undefined" ? localStorage.getItem("tempControversyNote") : null;
               const controversyNote = tempControversyNote && tempControversyNote.trim() ? tempControversyNote.trim() : undefined;
-              
-              // Zaktualizuj editingAction z controversyNote
+
               const updatedAction = {
                 ...editingAction,
+                ...patch,
                 ...(editingAction.isControversial && controversyNote && { controversyNote }),
-                ...(!editingAction.isControversial && { controversyNote: undefined })
+                ...(!editingAction.isControversial && { controversyNote: undefined }),
               };
-              
+
               onSaveEditedAction(updatedAction);
             }
           }}
@@ -1467,21 +1503,23 @@ const ActionSection = memo(function ActionSection({
               });
             }
           }}
-          playersBehindBall={editingAction?.playersBehindBall || 0}
-          onPlayersBehindBallChange={(count) => {
+          losesBackAllyCount={
+            editingAction
+              ? editingAction.losesOppRosterSquadTallyF1 != null
+                ? editingAction.losesOppRosterSquadTallyF1
+                : editingAction.losesBackAllyCount != null
+                  ? editingAction.losesBackAllyCount
+                  : getLosesBackAllyCountForDisplay(editingAction)
+              : 0
+          }
+          onLosesBackAllyCountChange={(count) => {
             if (editingAction && onEditingActionChange) {
               onEditingActionChange({
                 ...editingAction,
-                playersBehindBall: count
-              });
-            }
-          }}
-          opponentsBehindBall={editingAction?.opponentsBehindBall || 0}
-          onOpponentsBehindBallChange={(count) => {
-            if (editingAction && onEditingActionChange) {
-              onEditingActionChange({
-                ...editingAction,
-                opponentsBehindBall: count
+                losesOppRosterSquadTallyF1: count,
+                losesBackAllyCount: undefined,
+                playersBehindBall: undefined,
+                opponentsBehindBall: undefined,
               });
             }
           }}
@@ -1515,6 +1553,7 @@ const ActionSection = memo(function ActionSection({
             }
           }}
           allTeams={allTeams}
+          packingSquadDisplayName={packingLosesSquadDisplayName}
         />
       ) : isActionEditModalOpen && editingAction && getActionCategory && getActionCategory(editingAction) === "regain" ? (
         <RegainActionModal
@@ -1550,6 +1589,7 @@ const ActionSection = memo(function ActionSection({
             }
           }}
           onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
+          onGetVideoTime={onGetVideoTime}
           actionType={editingAction?.actionType as "pass" | "dribble" || 'pass'}
           onActionTypeChange={(type) => {
             if (editingAction && onEditingActionChange) {
@@ -1777,21 +1817,24 @@ const ActionSection = memo(function ActionSection({
               });
             }
           }}
-          playersBehindBall={editingAction?.playersBehindBall || 0}
-          onPlayersBehindBallChange={(count) => {
+          receptionBackAllyCount={
+            editingAction
+              ? editingAction.regainOppRosterSquadTallyF1 != null
+                ? editingAction.regainOppRosterSquadTallyF1
+                : editingAction.receptionBackAllyCount != null
+                  ? editingAction.receptionBackAllyCount
+                  : getReceptionBackAllyCountForDisplay(editingAction)
+              : 0
+          }
+          onReceptionBackAllyCountChange={(count) => {
             if (editingAction && onEditingActionChange) {
               onEditingActionChange({
                 ...editingAction,
-                playersBehindBall: count
-              });
-            }
-          }}
-          opponentsBehindBall={editingAction?.opponentsBehindBall || 0}
-          onOpponentsBehindBallChange={(count) => {
-            if (editingAction && onEditingActionChange) {
-              onEditingActionChange({
-                ...editingAction,
-                opponentsBehindBall: count
+                regainOppRosterSquadTallyF1: count,
+                receptionBackAllyCount: undefined,
+                playersBehindBall: undefined,
+                opponentsBehindBall: undefined,
+                receptionAllyCountBehindBall: undefined,
               });
             }
           }}

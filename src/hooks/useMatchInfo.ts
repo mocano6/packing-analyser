@@ -3,11 +3,15 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { PlayerMinutes, TeamInfo } from "@/types";
-import { getDB } from "@/lib/firebase";
+import { getAuthClient, getDB } from "@/lib/firebase";
+import { isFirebasePermissionDenied } from "@/utils/isFirebasePermissionDenied";
 import { 
   collection, getDocs, addDoc, updateDoc, deleteDoc, 
   doc, query, where, orderBy, writeBatch, getDoc, setDoc
 } from "@/lib/firestoreWithMetrics";
+import { prepareMatchDocumentForFirestore } from "@/lib/prepareMatchDocumentForFirestore";
+import { stripEmptyHeavyArraysThatWouldWipeServer } from "@/lib/matchDocumentMergeForSave";
+import { compactTeamInfoForLocalStorage } from "@/lib/compactTeamInfoForLocalStorage";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
@@ -37,7 +41,8 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
-const MATCHES_CACHE_VERSION = 2; // 2 = zapisujemy 100 najnowszych (slice(0,100)); wersja 1 miała błąd (slice(-100))
+/** 3 = zapis do localStorage bez ciężkich tablic (akcje itd.) — mieści się w limicie quota; 2 = pełne docs (przestarzałe) */
+const MATCHES_CACHE_VERSION = 3;
 
 // Typ dla lokalnego cache'u meczów
 interface MatchesCache {
@@ -125,7 +130,9 @@ export function useMatchInfo() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const offlineToastShownRef = useRef(false);
-  
+  /** Jednorazowy odczyt packing_matches_cache — unika nadpisania pełnych danych w RAM przy zmianie isOfflineMode */
+  const didHydrateMatchesFromDiskRef = useRef(false);
+
   // Referencja do lokalnego cache'u
   const localCacheRef = useRef<MatchesCache>({
     data: [],
@@ -170,48 +177,60 @@ export function useMatchInfo() {
     };
   }, []);
 
+  /** Zapisuje tylko „lekką” kopię (compact); localCacheRef w RAM nadal trzyma pełne dane po fetchu. */
+  const persistMatchesCacheToDisk = (source: MatchesCache, maxMatches: number) => {
+    const capped = source.data.slice(0, maxMatches).map(compactTeamInfoForLocalStorage);
+    const payload: MatchesCache = {
+      data: capped,
+      timestamp: source.timestamp,
+      lastTeamId: source.lastTeamId,
+      cacheVersion: MATCHES_CACHE_VERSION,
+    };
+    localStorage.setItem(LOCAL_MATCHES_CACHE_KEY, JSON.stringify(payload));
+  };
+
   // Funkcja do zapisywania cache'u do localStorage z obsługą QuotaExceededError
   const saveLocalCache = () => {
-    if (typeof window !== "undefined") {
-      try {
-        const cacheString = JSON.stringify(localCacheRef.current);
-        localStorage.setItem(LOCAL_MATCHES_CACHE_KEY, cacheString);
-      } catch (err: any) {
-        if (err?.name === 'QuotaExceededError' || err?.message?.includes('quota')) {
-          console.warn('localStorage quota przekroczony, próba zmniejszenia cache...');
+    if (typeof window === "undefined") return;
+
+    const source = localCacheRef.current;
+    const limits = [100, 50, 25, 10];
+    const tryPersist = (max: number) => {
+      persistMatchesCacheToDisk(source, max);
+    };
+
+    try {
+      tryPersist(source.data.length <= 100 ? source.data.length : 100);
+    } catch (err: unknown) {
+      const e = err as { name?: string; message?: string };
+      const quota =
+        e?.name === "QuotaExceededError" ||
+        (typeof e?.message === "string" && e.message.toLowerCase().includes("quota"));
+      if (quota) {
+        console.warn("localStorage quota — zmniejszam listę meczów w zapisie (dane w RAM bez zmian)...");
+        let saved = false;
+        for (const max of limits) {
           try {
-            const reducedData = localCacheRef.current.data.slice(0, 50);
-            const reducedCache = {
-              data: reducedData,
-              timestamp: localCacheRef.current.timestamp,
-              lastTeamId: localCacheRef.current.lastTeamId,
-              cacheVersion: MATCHES_CACHE_VERSION
-            };
-            localStorage.setItem(LOCAL_MATCHES_CACHE_KEY, JSON.stringify(reducedCache));
-            localCacheRef.current = reducedCache;
-            console.info('Cache zmniejszony do 50 ostatnich meczów');
-          } catch (reduceErr) {
-            // Jeśli nadal nie działa, wyczyść cache całkowicie
-            console.warn('Nie można zapisać cache, czyszczenie localStorage...');
-            try {
-              localStorage.removeItem(LOCAL_MATCHES_CACHE_KEY);
-              // Wyczyść też inne potencjalnie duże klucze
-              const keysToCheck = ['packing_matches_cache', 'firestore_offline_mode'];
-              keysToCheck.forEach(key => {
-                try {
-                  const item = localStorage.getItem(key);
-                  if (item && item.length > 100000) { // Jeśli większe niż 100KB
-                    localStorage.removeItem(key);
-                  }
-                } catch {}
-              });
-            } catch (clearErr) {
-              console.error('Nie można wyczyścić localStorage:', clearErr);
+            tryPersist(max);
+            saved = true;
+            if (max < source.data.length) {
+              console.info(`Zapisano skrócony cache (${max} meczów, bez akcji w localStorage).`);
             }
+            break;
+          } catch {
+            /* następny limit */
           }
-        } else {
-          console.error('Błąd podczas zapisywania cache do localStorage:', err);
         }
+        if (!saved) {
+          console.warn("Nie można zapisać cache meczów — usuwam klucz packing_matches_cache (pełne dane nadal z Firebase).");
+          try {
+            localStorage.removeItem(LOCAL_MATCHES_CACHE_KEY);
+          } catch (clearErr) {
+            console.error("Nie można wyczyścić localStorage:", clearErr);
+          }
+        }
+      } else {
+        console.error("Błąd podczas zapisywania cache do localStorage:", err);
       }
     }
   };
@@ -223,11 +242,18 @@ export function useMatchInfo() {
         const cachedData = localStorage.getItem(LOCAL_MATCHES_CACHE_KEY);
         if (cachedData) {
           const parsedCache = JSON.parse(cachedData) as MatchesCache;
-          if ((parsedCache.cacheVersion ?? 1) < MATCHES_CACHE_VERSION) return null;
+          if ((parsedCache.cacheVersion ?? 1) < MATCHES_CACHE_VERSION) {
+            try {
+              localStorage.removeItem(LOCAL_MATCHES_CACHE_KEY);
+            } catch {
+              /* ignore */
+            }
+            return null;
+          }
           return parsedCache;
         }
       } catch (err) {
-        console.error('Błąd podczas wczytywania cache z localStorage:', err);
+        console.error("Błąd podczas wczytywania cache z localStorage:", err);
       }
     }
     return null;
@@ -251,6 +277,9 @@ export function useMatchInfo() {
 
   // Ładowanie cache'u przy inicjalizacji
   useEffect(() => {
+    if (didHydrateMatchesFromDiskRef.current) return;
+    didHydrateMatchesFromDiskRef.current = true;
+
     const cachedData = loadLocalCache();
     if (cachedData) {
       localCacheRef.current = cachedData;
@@ -273,16 +302,20 @@ export function useMatchInfo() {
       }
       
       const isStale = Date.now() - cachedData.timestamp > MATCHES_CACHE_STALE_MS;
-      if (!isOfflineMode && isStale) {
-        // Usunięto console.log - cache odświeża się często, więc niepotrzebny
-        fetchFromFirebase(cachedData.lastTeamId).catch(err => {
-          // Nie udało się odświeżyć danych z Firebase
+      const diskIsCompactOnly = (cachedData.cacheVersion ?? 0) >= 3;
+      const online =
+        typeof navigator !== "undefined" &&
+        navigator.onLine &&
+        typeof window !== "undefined" &&
+        !localStorage.getItem("firestore_offline_mode");
+
+      if (online && (isStale || diskIsCompactOnly)) {
+        fetchFromFirebase(cachedData.lastTeamId).catch(() => {
+          /* offline / blad */
         });
       }
-    } else {
-      // Nie udało się pobrać danych z Firebase
     }
-  }, [isOfflineMode]);
+  }, []);
 
   // Rozszerzona funkcja otwierania/zamykania modalu
   const toggleMatchModal = (isOpen: boolean, isNewMatch: boolean = false) => {
@@ -874,8 +907,17 @@ export function useMatchInfo() {
       if (!isOfflineMode) {
         try {
           const docRef = doc(getDB(), "matches", matchId);
-          await setDoc(docRef, matchData);
-  
+          const firestorePayload = prepareMatchDocumentForFirestore(matchData);
+          let serverData: Record<string, unknown> | undefined;
+          try {
+            const serverSnap = await getDoc(docRef);
+            serverData = serverSnap.exists() ? (serverSnap.data() as Record<string, unknown>) : undefined;
+          } catch {
+            serverData = undefined;
+          }
+          const safePayload = stripEmptyHeavyArraysThatWouldWipeServer(firestorePayload, serverData);
+          await setDoc(docRef, safePayload, { merge: true });
+
           notifyUser("Mecz został zapisany", "success");
         } catch (firebaseError) {
           console.error('❌ Błąd zapisu do Firebase:', firebaseError);
@@ -896,6 +938,39 @@ export function useMatchInfo() {
             
             // Dane są zapisane lokalnie, więc zwracamy matchId
             return matchId;
+          }
+
+          const permDenied = isFirebasePermissionDenied(firebaseError);
+          if (permDenied && typeof window !== "undefined") {
+            try {
+              const user = getAuthClient().currentUser;
+              const token = user ? await user.getIdToken() : null;
+              if (token) {
+                const res = await fetch("/api/matches/save", {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ match: matchData }),
+                });
+                if (res.ok) {
+                  notifyUser("Mecz został zapisany", "success");
+                  return matchId;
+                }
+                const errBody = (await res.json().catch(() => ({}))) as { error?: string; hint?: string };
+                const apiMsg = errBody.error ?? res.statusText;
+                if (res.status === 503 && errBody.hint) {
+                  console.warn("[matches/save] Admin SDK:", errBody.hint);
+                }
+                const errorMessage = `Zmiany zapisane lokalnie, ale synchronizacja przez serwer nie powiodła się: ${apiMsg}`;
+                setError(errorMessage);
+                notifyUser(errorMessage, "error");
+                return matchId;
+              }
+            } catch (serverSaveErr) {
+              console.error("Błąd zapisu meczu przez API:", serverSaveErr);
+            }
           }
           
           // Obsługa błędu Firebase

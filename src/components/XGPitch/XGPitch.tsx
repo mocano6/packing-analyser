@@ -33,6 +33,8 @@ export interface XGPitchProps {
   hideToggleButton?: boolean; // Ukryj przycisk przełączania widoczności tagów
   hideTeamLogos?: boolean; // Ukryj loga zespołów
   rightExtraContent?: React.ReactNode; // Dodatkowa zawartość po prawej stronie nagłówka
+  /** Pasek trybów analitycznych — pod nagłówkiem meczu, przed boiskiem */
+  tabBar?: React.ReactNode;
 }
 
 const XGPitch = memo(function XGPitch({
@@ -47,6 +49,7 @@ const XGPitch = memo(function XGPitch({
   hideTeamLogos = false,
   hideToggleButton = false,
   rightExtraContent,
+  tabBar,
 }: XGPitchProps) {
   const localPlayersIndex = useMemo(
     () => playersIndex ?? buildPlayersIndex(players),
@@ -181,6 +184,7 @@ const XGPitch = memo(function XGPitch({
           </>
         }
       />
+      {tabBar}
 
       <div className={styles.pitchWrapper}>
         <div

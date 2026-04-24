@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Player } from "../types";
-import { getDB } from "../lib/firebase";
+import { getAuthClient, getDB } from "../lib/firebase";
 import { getPlayerFullName } from '@/utils/playerUtils';
 import { 
   collection, getDocs, addDoc, updateDoc,
@@ -266,7 +266,8 @@ export function usePlayersState() {
     }
 
     const cached = getCachedWithTimestamp<Player[]>(CACHE_KEYS.PLAYERS_LIST, PLAYERS_CACHE_TTL_MS);
-    if (cached?.data) {
+    // Pusta tablica jest truthy — bez tego warunku nigdy nie odczytamy zawodników z Firestore.
+    if (Array.isArray(cached?.data) && cached.data.length > 0) {
       setPlayers(cached.data);
       playersRef.current = cached.data;
       setIsLoading(false);
@@ -365,46 +366,85 @@ export function usePlayersState() {
     }
   }, [isRefetching]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Usuwanie zawodnika (obsługuje obie struktury)
+  // Usuwanie zawodnika — najpierw API (Admin SDK), przy braku klucza serwera fallback na zapis klienta
   const handleDeletePlayer = useCallback(async (playerId: string) => {
-    const playerToDelete = players.find(p => p.id === playerId);
-    
-    try {
-      setIsLoading(true);
-      
-      if (!getDB()) {
-        throw new Error("Firebase nie jest zainicjalizowane");
-      }
-      
-      // Soft delete w players - zachowujemy PII
-      await updateDoc(doc(getDB(), "players", playerId), { isDeleted: true });
+    const applyLocalRemoval = () => {
       invalidateCache(CACHE_KEYS.PLAYERS_LIST);
-      // Aktualizuj lokalny stan
       setPlayers((prev) => prev.filter((p) => p.id !== playerId));
       cachedPlayersRef.current = {
         data: playersRef.current.filter((p) => p.id !== playerId),
         ts: Date.now(),
       };
-      return true;
-      
-    } catch (error) {
-      console.error('❌ Błąd usuwania zawodnika:', error);
-      
-      let errorMessage = 'Wystąpił błąd podczas usuwania zawodnika.';
-      if (error instanceof Error) {
-        if (error.message.includes('offline') || error.message.includes('network')) {
-          errorMessage = 'Brak połączenia z internetem. Spróbuj ponownie później.';
-        } else if (error.message.includes('permission') || error.message.includes('Missing or insufficient permissions')) {
-          errorMessage = 'Brak uprawnień do usuwania zawodników. Sprawdź konfigurację Firebase.';
+    };
+
+    try {
+      if (!getDB()) {
+        throw new Error("Firebase nie jest zainicjalizowane");
+      }
+
+      const authUser = getAuthClient().currentUser;
+      if (authUser) {
+        try {
+          const token = await authUser.getIdToken();
+          const res = await fetch("/api/players-soft-delete", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ playerId }),
+          });
+          const payload = (await res.json().catch(() => ({}))) as {
+            error?: string;
+            code?: string;
+            success?: boolean;
+          };
+
+          if (res.ok && payload.success) {
+            applyLocalRemoval();
+            return true;
+          }
+
+          if (res.status === 503 && payload.code === "admin-config-missing") {
+            // lokalnie bez service account — próba bezpośrednio z klienta
+          } else {
+            const msg =
+              typeof payload.error === "string" && payload.error
+                ? payload.error
+                : `Nie udało się usunąć (${res.status}).`;
+            alert(`${msg} Spróbuj ponownie.`);
+            return false;
+          }
+        } catch (fetchErr) {
+          console.warn("[handleDeletePlayer] API:", fetchErr);
         }
       }
-      
-      alert(errorMessage + ' Spróbuj ponownie.');
+
+      await updateDoc(doc(getDB(), "players", playerId), { isDeleted: true });
+      applyLocalRemoval();
+      return true;
+    } catch (error) {
+      console.error("❌ Błąd usuwania zawodnika:", error);
+
+      let errorMessage = "Wystąpił błąd podczas usuwania zawodnika.";
+      if (error instanceof Error) {
+        if (error.message.includes("offline") || error.message.includes("network")) {
+          errorMessage = "Brak połączenia z internetem. Spróbuj ponownie później.";
+        } else if (
+          error.message.includes("permission") ||
+          error.message.includes("insufficient permissions") ||
+          (typeof (error as { code?: string }).code === "string" &&
+            (error as { code: string }).code === "permission-denied")
+        ) {
+          errorMessage =
+            "Brak uprawnień do usuwania zawodników (sprawdź reguły Firestore lub ustaw FIREBASE_SERVICE_ACCOUNT_KEY na serwerze).";
+        }
+      }
+
+      alert(errorMessage + " Spróbuj ponownie.");
       return false;
-    } finally {
-      setIsLoading(false);
     }
-  }, [players]);
+  }, []);
 
   // Przywracanie zawodnika (soft delete → aktywny)
   const handleRestorePlayer = useCallback(async (playerId: string) => {
@@ -414,7 +454,7 @@ export function usePlayersState() {
       }
       await updateDoc(doc(getDB(), "players", playerId), { isDeleted: false });
       invalidateCache(CACHE_KEYS.PLAYERS_LIST);
-      await fetchAllPlayers();
+      void fetchAllPlayers();
       return true;
     } catch (error) {
       console.error('❌ Błąd przywracania zawodnika:', error);
@@ -574,15 +614,55 @@ export function usePlayersState() {
           }
           
         } else {
-          // Zapisuj do starej struktury
-          
-          // STARA STRUKTURA - zapisz bezpośrednio do players
+          // Zapisuj do starej struktury — najpierw API (Admin SDK), przy braku klucza serwera fallback na klienta
           if (isEditing) {
             const updateData = Object.fromEntries(
               Object.entries(playerData).filter(([_, value]) => value !== undefined)
             );
-            
-            await updateDoc(doc(getDB(), "players", editingPlayerId), updateData);
+
+            let savedViaApi = false;
+            let saveApiFatal: Error | null = null;
+            const authUserSave = getAuthClient().currentUser;
+            if (authUserSave) {
+              try {
+                const res = await fetch("/api/players-save", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${await authUserSave.getIdToken()}`,
+                  },
+                  body: JSON.stringify({
+                    action: "update",
+                    playerId: editingPlayerId,
+                    data: updateData,
+                  }),
+                });
+                const payload = (await res.json().catch(() => ({}))) as {
+                  error?: string;
+                  code?: string;
+                  success?: boolean;
+                };
+                if (res.ok && payload.success) {
+                  savedViaApi = true;
+                } else if (!(res.status === 503 && payload.code === "admin-config-missing")) {
+                  saveApiFatal = new Error(
+                    typeof payload.error === "string" && payload.error
+                      ? payload.error
+                      : `Zapis nie powiódł się (${res.status}).`,
+                  );
+                }
+              } catch (e) {
+                console.warn("[handleSavePlayer] API update (np. sieć):", e);
+              }
+            }
+
+            if (saveApiFatal) {
+              throw saveApiFatal;
+            }
+            if (!savedViaApi) {
+              await updateDoc(doc(getDB(), "players", editingPlayerId), updateData);
+            }
+
             invalidateCache(CACHE_KEYS.PLAYERS_LIST);
             const { id: _, ...playerDataWithoutId } = playerData as any;
             setPlayers((prev) =>
@@ -601,17 +681,64 @@ export function usePlayersState() {
               ts: Date.now(),
             };
           } else {
-            const playerRef = await addDoc(collection(getDB(), "players"), {
+            const createPayload = {
               ...playerData,
-              teams: Array.isArray(playerData.teams) ? playerData.teams : [playerData.teams].filter(Boolean),
-            });
+              teams: Array.isArray(playerData.teams)
+                ? playerData.teams
+                : [playerData.teams].filter(Boolean),
+            };
+
+            let newPlayerId: string | null = null;
+            let createApiFatal: Error | null = null;
+            const authUserCreate = getAuthClient().currentUser;
+            if (authUserCreate) {
+              try {
+                const res = await fetch("/api/players-save", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${await authUserCreate.getIdToken()}`,
+                  },
+                  body: JSON.stringify({
+                    action: "create",
+                    data: createPayload,
+                  }),
+                });
+                const payload = (await res.json().catch(() => ({}))) as {
+                  error?: string;
+                  code?: string;
+                  success?: boolean;
+                  playerId?: string;
+                };
+                if (res.ok && payload.success && typeof payload.playerId === "string") {
+                  newPlayerId = payload.playerId;
+                } else if (!(res.status === 503 && payload.code === "admin-config-missing")) {
+                  createApiFatal = new Error(
+                    typeof payload.error === "string" && payload.error
+                      ? payload.error
+                      : `Zapis nie powiódł się (${res.status}).`,
+                  );
+                }
+              } catch (e) {
+                console.warn("[handleSavePlayer] API create (np. sieć):", e);
+              }
+            }
+
+            if (createApiFatal) {
+              throw createApiFatal;
+            }
+            if (newPlayerId === null) {
+              const playerRef = await addDoc(collection(getDB(), "players"), createPayload);
+              newPlayerId = playerRef.id;
+            }
+
             invalidateCache(CACHE_KEYS.PLAYERS_LIST);
             const { id, ...playerDataWithoutId } = playerData as any;
-             const newPlayer: Player = {
-               id: playerRef.id,
-               ...playerDataWithoutId,
-             };
-            
+            const newPlayer: Player = {
+              id: newPlayerId,
+              ...playerDataWithoutId,
+            };
+
             setPlayers((prev) => [...prev, newPlayer]);
             cachedPlayersRef.current = {
               data: [...playersRef.current, newPlayer],
@@ -636,8 +763,15 @@ export function usePlayersState() {
             errorMessage = error.message;
           } else if (error.message.includes('offline') || error.message.includes('network')) {
             errorMessage = 'Brak połączenia z internetem. Spróbuj ponownie później.';
-          } else if (error.message.includes('permission')) {
+          } else if (
+            error.message.includes('permission') ||
+            error.message.includes('insufficient permissions') ||
+            (typeof (error as { code?: string }).code === 'string' &&
+              (error as { code: string }).code === 'permission-denied')
+          ) {
             errorMessage = 'Brak uprawnień do zapisywania zawodników. Sprawdź konfigurację Firebase.';
+          } else {
+            errorMessage = error.message;
           }
         }
         

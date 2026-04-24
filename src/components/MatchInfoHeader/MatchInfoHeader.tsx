@@ -4,12 +4,12 @@
 import React, { useState, KeyboardEvent, useEffect, useMemo } from "react";
 import { TeamInfo, Player, Action } from "@/types";
 import { TEAMS } from "@/constants/teams";
-import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import MatchDataModal from "@/components/MatchDataModal/MatchDataModal";
 import { getDB } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "@/lib/firestoreWithMetrics";
+import { mergeMatchDataForFirestoreWrite } from "@/lib/matchDocumentMergeForSave";
 import styles from "./MatchInfoHeader.module.css";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
 import { usePresentationMode } from "@/contexts/PresentationContext";
@@ -463,14 +463,20 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
       const cleanedMatchData = removeUndefinedValues(matchData);
       
       const matchRef = doc(db, "matches", selectedMatchForData.matchId);
+      const snap = await getDoc(matchRef);
+      const existingRoot = snap.exists() ? (snap.data() as TeamInfo) : null;
+      const mergedMatchData = mergeMatchDataForFirestoreWrite(
+        existingRoot?.matchData,
+        cleanedMatchData as TeamInfo["matchData"]
+      );
       await updateDoc(matchRef, {
-        matchData: cleanedMatchData
+        matchData: mergedMatchData,
       });
       
       // Aktualizuj lokalny stan (używamy wyczyszczonych danych)
       const updatedMatch = {
         ...selectedMatchForData,
-        matchData: cleanedMatchData
+        matchData: mergedMatchData,
       };
       
       // Aktualizuj matchInfo jeśli to jest aktualnie wybrany mecz

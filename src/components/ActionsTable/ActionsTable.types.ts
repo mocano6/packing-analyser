@@ -20,4 +20,7 @@ export interface ActionsTableProps {
   youtubeVideoRef?: React.RefObject<YouTubeVideoRef>;
   customVideoRef?: React.RefObject<CustomVideoPlayerRef>;
   actionCategory?: "packing" | "regain" | "loses"; // Kategoria akcji
+  /** Spójnie z trybem atak/obrona na boisku (analyzer) — unika „znikania” PxT po F5 przy rozjechanym filtrze tabeli. */
+  packingListMode?: "attack" | "defense";
+  onPackingListModeChange?: (mode: "attack" | "defense") => void;
 }

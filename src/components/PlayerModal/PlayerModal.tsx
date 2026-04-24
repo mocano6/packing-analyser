@@ -6,7 +6,6 @@ import React, { useState, useEffect } from "react";
 import { Player } from "@/types";
 import { TEAMS } from "@/constants/teams";
 import { Team } from "@/constants/teamsLoader";
-import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import styles from "./PlayerModal.module.css";
 
 interface PlayerModalProps {

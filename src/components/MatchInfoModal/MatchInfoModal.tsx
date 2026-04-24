@@ -9,24 +9,64 @@ import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import OpponentLogoInput from "@/components/OpponentLogoInput/OpponentLogoInput";
 import VideoUploadInput from "@/components/VideoUploadInput/VideoUploadInput";
 import styles from "./MatchInfoModal.module.css";
+import { filterTeamsByUserAccess, type UserTeamAccess } from "@/lib/teamsForUserAccess";
 
 interface MatchInfoModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (matchInfo: TeamInfo) => void;
   currentInfo: TeamInfo | null;
-  availableTeams?: Team[];
-  selectedTeam?: string; // Dodany prop
+  /** Pełny katalog zespołów; dostęp ogranicza userTeamAccess. */
+  teamsCatalog: Team[];
+  userTeamAccess: UserTeamAccess;
+  selectedTeam?: string;
 }
 
-const getDefaultMatchInfo = (availableTeams?: Team[], selectedTeam?: string): TeamInfo => ({
-  team: selectedTeam || (availableTeams && availableTeams.length > 0 ? availableTeams[0].id : TEAMS.REZERWY.id),
-  opponent: "",
-  competition: "",
-  date: new Date().toISOString().split("T")[0],
-  isHome: true,
-  videoUrl: "",
-});
+const getDefaultMatchInfo = (teamsCatalog: Team[], userTeamAccess: UserTeamAccess, selectedTeam?: string): TeamInfo => {
+  const allowed = filterTeamsByUserAccess(teamsCatalog, userTeamAccess);
+  const st = typeof selectedTeam === "string" ? selectedTeam.trim() : "";
+  if (st && allowed.some((t) => t.id === st)) {
+    return {
+      team: st,
+      opponent: "",
+      competition: "",
+      date: new Date().toISOString().split("T")[0],
+      isHome: true,
+      videoUrl: "",
+    };
+  }
+  if (typeof window !== "undefined") {
+    const ls = localStorage.getItem("selectedTeam")?.trim();
+    if (ls && allowed.some((t) => t.id === ls)) {
+      return {
+        team: ls,
+        opponent: "",
+        competition: "",
+        date: new Date().toISOString().split("T")[0],
+        isHome: true,
+        videoUrl: "",
+      };
+    }
+  }
+  if (allowed.length > 0) {
+    return {
+      team: allowed[0].id,
+      opponent: "",
+      competition: "",
+      date: new Date().toISOString().split("T")[0],
+      isHome: true,
+      videoUrl: "",
+    };
+  }
+  return {
+    team: TEAMS.REZERWY.id,
+    opponent: "",
+    competition: "",
+    date: new Date().toISOString().split("T")[0],
+    isHome: true,
+    videoUrl: "",
+  };
+};
 
 // Funkcje pomocnicze do konwersji sekund na minuty i sekundy (poza komponentem, żeby były dostępne w useState)
 const secondsToMinutesAndSeconds = (seconds?: number): { minutes: number; seconds: number } => {
@@ -46,11 +86,12 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   onClose,
   onSave,
   currentInfo,
-  availableTeams,
+  teamsCatalog,
+  userTeamAccess,
   selectedTeam,
 }) => {
   const [formData, setFormData] = useState<TeamInfo>(
-    currentInfo || getDefaultMatchInfo(availableTeams, selectedTeam)
+    currentInfo || getDefaultMatchInfo(teamsCatalog, userTeamAccess, selectedTeam)
   );
 
   // Stany dla czasu startu połów (w formacie minuty:sekundy)
@@ -66,7 +107,7 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
 
   // Reset formularza przy otwarciu modalu
   useEffect(() => {
-    const newFormData = currentInfo || getDefaultMatchInfo(availableTeams, selectedTeam);
+    const newFormData = currentInfo || getDefaultMatchInfo(teamsCatalog, userTeamAccess, selectedTeam);
     setFormData(newFormData);
     
     // Resetuj również czasy połów
@@ -74,7 +115,7 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
     const secondHalf = secondsToMinutesAndSeconds(newFormData.secondHalfStartTime);
     setFirstHalfTime(firstHalf);
     setSecondHalfTime(secondHalf);
-  }, [currentInfo, isOpen, availableTeams, selectedTeam, secondsToMinutesAndSeconds]);
+  }, [currentInfo, isOpen, teamsCatalog, userTeamAccess, selectedTeam, secondsToMinutesAndSeconds]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -184,10 +225,11 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
               <label htmlFor="team">Zespół:</label>
               <TeamsSelector
                 selectedTeam={formData.team}
-                onChange={(teamId) => 
-                  setFormData(prev => ({ ...prev, team: teamId }))
+                onChange={(teamId) =>
+                  setFormData((prev) => ({ ...prev, team: teamId }))
                 }
-                availableTeams={availableTeams}
+                teamsCatalog={teamsCatalog}
+                userTeamAccess={userTeamAccess}
               />
             </div>
 

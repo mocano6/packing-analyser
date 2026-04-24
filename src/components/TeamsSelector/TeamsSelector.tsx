@@ -1,31 +1,37 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { fetchTeams, Team } from "@/constants/teamsLoader";
+import React, { useMemo } from "react";
+import { Team } from "@/constants/teamsLoader";
 import styles from "./TeamsSelector.module.css";
 import { usePresentationMode } from "@/contexts/PresentationContext";
+import {
+  filterTeamsByUserAccess,
+  isTeamIdAccessibleForUser,
+  type UserTeamAccess,
+} from "@/lib/teamsForUserAccess";
 
-interface TeamsSelectorProps {
+export interface TeamsSelectorProps {
   selectedTeam: string;
   onChange: (teamId: string) => void;
+  /** Pełny katalog zespołów (np. z Firebase); podlega filtrowi wg uprawnień. */
+  teamsCatalog: Team[];
+  userTeamAccess: UserTeamAccess;
   className?: string;
-  availableTeams?: Team[];
   showLabel?: boolean;
   isExpanded?: boolean;
   onToggle?: () => void;
 }
 
-const TeamsSelector: React.FC<TeamsSelectorProps> = ({ 
-  selectedTeam, 
+const TeamsSelector: React.FC<TeamsSelectorProps> = ({
+  selectedTeam,
   onChange,
+  teamsCatalog,
+  userTeamAccess,
   className = "",
-  availableTeams,
   showLabel = false,
   isExpanded = false,
-  onToggle
+  onToggle,
 }) => {
-  const [teams, setTeams] = useState<Record<string, Team>>({});
-  const [isLoading, setIsLoading] = useState(false);
   const { isPresentationMode } = usePresentationMode();
 
   const getTeamInitials = (name: string): string => {
@@ -37,44 +43,23 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
     return (parts[0][0] + parts[1][0]).toUpperCase();
   };
 
-  // Pobieranie zespołów z Firebase (tylko jeśli availableTeams nie jest przekazane)
-  useEffect(() => {
-    
-    if (availableTeams !== undefined) {
-      // Jeśli dostępne zespoły są przekazane jako props, użyj ich
-      const teamsRecord: Record<string, Team> = {};
-      availableTeams.forEach(team => {
-        teamsRecord[team.id] = team;
-      });
-      setTeams(teamsRecord);
-      return;
-    }
-
-    // W przeciwnym razie pobierz wszystkie zespoły z Firebase
-    const loadTeams = async () => {
-      setIsLoading(true);
-      try {
-        const fetchedTeams = await fetchTeams();
-        setTeams(fetchedTeams);
-      } catch (error) {
-        console.error("Błąd podczas ładowania zespołów:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadTeams();
-  }, [availableTeams]);
-
   const teamsList = useMemo(() => {
-    return Object.values(teams)
-      .slice()
-      .sort((a, b) =>
-        String(a?.name || "").localeCompare(String(b?.name || ""), "pl", { sensitivity: "base", numeric: true })
-      );
-  }, [teams]);
-  const rawSelectedTeamName = teams[selectedTeam]?.name || "Wybierz zespół";
-  const selectedTeamName = isPresentationMode && teams[selectedTeam] ? "Zespół" : rawSelectedTeamName;
+    const visible = filterTeamsByUserAccess(teamsCatalog, userTeamAccess);
+    return visible.sort((a, b) =>
+      String(a?.name || "").localeCompare(String(b?.name || ""), "pl", { sensitivity: "base", numeric: true })
+    );
+  }, [teamsCatalog, userTeamAccess]);
+
+  const byId = useMemo(() => {
+    const m: Record<string, Team> = {};
+    teamsList.forEach((t) => {
+      m[t.id] = t;
+    });
+    return m;
+  }, [teamsList]);
+
+  const rawSelectedTeamName = byId[selectedTeam]?.name || "Wybierz zespół";
+  const selectedTeamName = isPresentationMode && byId[selectedTeam] ? "Zespół" : rawSelectedTeamName;
 
   const handleToggle = () => {
     if (onToggle) {
@@ -83,6 +68,9 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
   };
 
   const handleTeamSelect = (teamId: string) => {
+    if (!isTeamIdAccessibleForUser(teamId, userTeamAccess)) {
+      return;
+    }
     onChange(teamId);
     if (onToggle) {
       onToggle();
@@ -97,14 +85,16 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
             Wybierz zespół:
           </label>
         )}
-        <button 
-          className={`${styles.teamsSelectorHeader} ${isExpanded ? styles.teamsSelectorHeaderActive : ''} ${className}`}
+        <button
+          className={`${styles.teamsSelectorHeader} ${isExpanded ? styles.teamsSelectorHeaderActive : ""} ${className}`}
           onClick={handleToggle}
           aria-label={isExpanded ? "Zwiń listę zespołów" : "Rozwiń listę zespołów"}
           type="button"
-          disabled={isLoading || teamsList.length === 0}
+          disabled={teamsList.length === 0}
         >
-          <span>{selectedTeamName} ({teamsList.length})</span>
+          <span>
+            {selectedTeamName} ({teamsList.length})
+          </span>
         </button>
       </div>
       {isExpanded && (
@@ -122,13 +112,11 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
               </button>
             </div>
             <div className={styles.teamsSelectorModalContent}>
-              {isLoading ? (
-                <div className={styles.loadingMessage}>Ładowanie zespołów...</div>
-              ) : teamsList.length === 0 ? (
+              {teamsList.length === 0 ? (
                 <div className={styles.noTeamsMessage}>Brak dostępnych zespołów</div>
               ) : (
                 <div className={styles.teamsList}>
-                  {teamsList.map(team => (
+                  {teamsList.map((team) => (
                     <button
                       key={team.id}
                       className={`${styles.teamItem} ${
@@ -149,7 +137,9 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
                               decoding="async"
                             />
                           ) : (
-                            <div className={styles.teamInitials}>{isPresentationMode ? "Z" : getTeamInitials(team.name)}</div>
+                            <div className={styles.teamInitials}>
+                              {isPresentationMode ? "Z" : getTeamInitials(team.name)}
+                            </div>
                           )}
                         </div>
                         <div className={styles.teamName}>{isPresentationMode ? "Zespół" : team.name}</div>
@@ -166,4 +156,4 @@ const TeamsSelector: React.FC<TeamsSelectorProps> = ({
   );
 };
 
-export default TeamsSelector; 
+export default TeamsSelector;

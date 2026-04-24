@@ -12,6 +12,7 @@ import KpiTrendChart from "@/components/KpiTrendChart/KpiTrendChart";
 import PossessionTrendChart, { PossessionTrendPoint } from "@/components/PossessionTrendChart/PossessionTrendChart";
 import P2P3TrendChart, { P2P3TrendPoint } from "@/components/P2P3TrendChart/P2P3TrendChart";
 import { loadTrendyKpiDefinitions } from "@/lib/trendyKpiStore";
+import { filterTeamsByUserAccess } from "@/lib/teamsForUserAccess";
 import {
   calculateTrendyKpiValue,
   DEFAULT_TRENDY_KPI_DEFINITIONS,
@@ -141,11 +142,14 @@ export default function TrendyPage() {
     }
   }, [selectedTeam, dateFrom, matchTypesEnabled]);
 
-  const availableTeams = useMemo(() => {
-    if (isAdmin) return teams;
-    if (!userTeams?.length) return [];
-    return teams.filter((team) => userTeams.includes(team.id));
-  }, [teams, isAdmin, userTeams]);
+  const availableTeams = useMemo(
+    () =>
+      filterTeamsByUserAccess(teams, {
+        isAdmin,
+        allowedTeamIds: userTeams ?? [],
+      }),
+    [teams, isAdmin, userTeams]
+  );
 
   useEffect(() => {
     if (!selectedTeam && availableTeams.length > 0) {

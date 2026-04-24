@@ -10,10 +10,17 @@ import toast from "react-hot-toast";
 // Usunięto import funkcji synchronizacji - akcje są teraz tylko w matches
 import { getOppositeXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString, getZoneData } from '@/constants/xtValues';
 import { getMatchDocumentFromCache, setMatchDocumentInCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
-import { clearPendingMatchUpdate, getPendingField, setPendingMatchUpdate } from "@/lib/offlineMatchPending";
+import {
+  clearEmptyArrayPendingFields,
+  clearPendingMatchUpdate,
+  getPendingField,
+} from "@/lib/offlineMatchPending";
 import { commitMatchArrayFieldUpdate, type MatchArrayFieldKey } from "@/lib/matchArrayFieldWrite";
+import { appendActionToArray, removeActionById } from "@/lib/matchDocumentArrayUpdaters";
 import { findActionCollectionFieldInMatchData } from "@/lib/findActionCollectionField";
 import { mergeByIdPreferPending } from "@/lib/mergeMatchArrayById";
+import { ensureEachEntryHasId } from "@/lib/ensureMatchArrayIds";
+import { mergeTeamInfoMetaWithSessionCache } from "@/lib/teamInfoHeavyArraysPreferSession";
 import { runTransaction } from "@/lib/firestoreWithMetrics";
 
 // Funkcja do konwersji numeru strefy na format literowo-liczbowy
@@ -78,6 +85,18 @@ function stripPIIFromAction(action: Action): Action {
   return rest as Action;
 }
 
+/** Dokument meczu + merge z pending (po id). */
+function mergeMatchFieldWithPending<T extends { id?: string }>(
+  serverList: T[] | undefined,
+  pending: T[] | null
+): T[] {
+  const server = serverList ?? [];
+  if (pending === null) {
+    return server;
+  }
+  return mergeByIdPreferPending(server, pending);
+}
+
 /** Wyprowadza listę akcji z danych meczu + pending, bez getDoc */
 function deriveActionsFromMatchData(
   matchId: string,
@@ -91,16 +110,19 @@ function deriveActionsFromMatchData(
   const pendingLoses = getPendingField<Action[]>(matchId, "actions_loses");
   let loadedActions: Action[];
   if (loadBothRegainLoses) {
-    const regainActions = pendingRegain ?? (matchData.actions_regain || []);
-    const losesActions = pendingLoses ?? (matchData.actions_loses || []);
+    const regainActions = mergeMatchFieldWithPending(matchData.actions_regain, pendingRegain);
+    const losesActions = mergeMatchFieldWithPending(matchData.actions_loses, pendingLoses);
     loadedActions = [...regainActions, ...losesActions];
   } else if (actionCategory === "regain") {
-    loadedActions = pendingRegain ?? (matchData.actions_regain || []);
+    loadedActions = mergeMatchFieldWithPending(matchData.actions_regain, pendingRegain);
   } else if (actionCategory === "loses") {
-    loadedActions = pendingLoses ?? (matchData.actions_loses || []);
+    loadedActions = mergeMatchFieldWithPending(matchData.actions_loses, pendingLoses);
   } else {
-    const packingActions = pendingPacking ?? (matchData.actions_packing || []);
-    const unpackingActions = pendingUnpacking ?? (matchData.actions_unpacking || []);
+    const packingActions = mergeMatchFieldWithPending(matchData.actions_packing, pendingPacking);
+    const unpackingActions = mergeMatchFieldWithPending(
+      matchData.actions_unpacking,
+      pendingUnpacking
+    );
     loadedActions = [...packingActions, ...unpackingActions];
   }
   const sanitized = loadedActions.map((action: Action) => {
@@ -111,6 +133,23 @@ function deriveActionsFromMatchData(
 }
 
 export function usePackingActions(players: Player[], matchInfo: TeamInfo | null, actionMode?: "attack" | "defense", selectedDefensePlayers?: string[], actionCategory?: "packing" | "regain" | "loses", loadBothRegainLoses?: boolean) {
+  const parseCachedCount = (key: string): number => {
+    if (typeof window === "undefined") return 0;
+    const raw = localStorage.getItem(key);
+    if (raw === null || raw === "") return 0;
+    const n = parseInt(raw, 10);
+    return Number.isNaN(n) || n < 0 || n > 10 ? 0 : n;
+  };
+
+  const parseCachedTallyF1 = (keyNew: string, keyLegacy: string): number => {
+    if (typeof window === "undefined") return 0;
+    const rawNew = localStorage.getItem(keyNew);
+    if (rawNew !== null && rawNew !== "") {
+      return parseCachedCount(keyNew);
+    }
+    return parseCachedCount(keyLegacy);
+  };
+
   // Stany dla wybranego zawodnika
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedReceiverId, setSelectedReceiverId] = useState<string | null>(null);
@@ -156,19 +195,39 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   // Dodaj stan isPMAreaActive dla loses
   const [isPMAreaActive, setIsPMAreaActive] = useState<boolean>(false);
   
-  // Dodaj stan playersBehindBall dla regain (liczba partnerów przed piłką)
-  const [playersBehindBall, setPlayersBehindBall] = useState<number>(0);
-  
-  // Dodaj stan opponentsBehindBall dla regain/loses (liczba przeciwników za piłką)
-  const [opponentsBehindBall, setOpponentsBehindBall] = useState<number>(0);
-  
-  const parseCachedCount = (key: string): number => {
-    if (typeof window === "undefined") return 0;
-    const raw = localStorage.getItem(key);
-    if (raw === null || raw === "") return 0;
-    const n = parseInt(raw, 10);
-    return Number.isNaN(n) || n < 0 || n > 10 ? 0 : n;
-  };
+  // Straty: klucz Firestore `losesOppRosterSquadTallyF1` (cache: loses_opp_roster_tally_f1; migracja z loses_back_ally_v1)
+  const [losesBackAllyCount, setLosesBackAllyCountState] = useState<number>(() =>
+    parseCachedTallyF1("loses_opp_roster_tally_f1", "loses_back_ally_v1")
+  );
+
+  const setLosesBackAllyCount = useCallback((value: React.SetStateAction<number>) => {
+    setLosesBackAllyCountState((prev) => {
+      const next = typeof value === "function" ? (value as (p: number) => number)(prev) : value;
+      const clamped = Math.max(0, Math.min(10, next));
+      if (typeof window !== "undefined") {
+        localStorage.setItem("loses_opp_roster_tally_f1", String(clamped));
+        localStorage.removeItem("loses_back_ally_v1");
+      }
+      return clamped;
+    });
+  }, []);
+
+  // Regain: klucz Firestore `regainOppRosterSquadTallyF1` (cache: regain_opp_roster_tally_f1; migracja z reception_back_ally_v1)
+  const [receptionBackAllyCount, setReceptionBackAllyCountState] = useState<number>(() =>
+    parseCachedTallyF1("regain_opp_roster_tally_f1", "reception_back_ally_v1")
+  );
+
+  const setReceptionBackAllyCount = useCallback((value: React.SetStateAction<number>) => {
+    setReceptionBackAllyCountState((prev) => {
+      const next = typeof value === "function" ? (value as (p: number) => number)(prev) : value;
+      const clamped = Math.max(0, Math.min(10, next));
+      if (typeof window !== "undefined") {
+        localStorage.setItem("regain_opp_roster_tally_f1", String(clamped));
+        localStorage.removeItem("reception_back_ally_v1");
+      }
+      return clamped;
+    });
+  }, []);
 
   // Stan playersLeftField/opponentsLeftField z inicjalizacją z cache (ostatni wybór w Regain/Loses)
   const [playersLeftField, setPlayersLeftFieldState] = useState<number>(() =>
@@ -205,36 +264,47 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   // Cache pełnego dokumentu meczu — przy zmianie zakładki używamy go zamiast getDoc
   const [cachedMatchData, setCachedMatchData] = useState<TeamInfo | null>(null);
   const [cachedMatchId, setCachedMatchId] = useState<string | null>(null);
-  const isOfflineError = (err: unknown) => {
-    const msg = String(err);
-    return (
-      msg.includes("offline") ||
-      msg.includes("Failed to fetch") ||
-      msg.includes("NetworkError") ||
-      msg.includes("unavailable")
-    );
-  };
-
   // Ładuje dokument meczu (współdzielone z useShots/usePKEntries/useAcc8sEntries – 1 getDoc na zmianę meczu).
-  const loadMatchIntoCache = useCallback(async (matchId: string) => {
+  /** meta: bieżący mecz z listy (np. z useMatchInfo) — gdy getDoc/cache puste, podstawa pod pending + derive po F5. */
+  const loadMatchIntoCache = useCallback(async (matchId: string, meta?: TeamInfo | null) => {
+    const applyMetaFallback = () => {
+      if (!meta || meta.matchId !== matchId) {
+        return false;
+      }
+      const existing = getMatchDocumentFromCache(matchId);
+      const fallback = mergeTeamInfoMetaWithSessionCache(meta, existing);
+      setCachedMatchData(fallback);
+      setCachedMatchId(matchId);
+      setMatchDocumentInCache(matchId, fallback);
+      return true;
+    };
+
     try {
       setIsLoading(true);
       const matchData = await getOrLoadMatchDocument(matchId);
       if (matchData) {
         setCachedMatchData(matchData);
         setCachedMatchId(matchId);
-      } else {
+        return;
+      }
+      const sessionCached = getMatchDocumentFromCache(matchId);
+      if (sessionCached) {
+        setCachedMatchData(sessionCached);
+        setCachedMatchId(matchId);
+        return;
+      }
+      if (!applyMetaFallback()) {
         setCachedMatchData(null);
-        setCachedMatchId(null);
+        setCachedMatchId(matchId);
       }
     } catch (error) {
-      const cachedMatch = getMatchDocumentFromCache(matchId);
-      if (cachedMatch) {
-        setCachedMatchData(cachedMatch);
+      const sessionCached = getMatchDocumentFromCache(matchId);
+      if (sessionCached) {
+        setCachedMatchData(sessionCached);
         setCachedMatchId(matchId);
-      } else {
+      } else if (!applyMetaFallback()) {
         setCachedMatchData(null);
-        setCachedMatchId(null);
+        setCachedMatchId(matchId);
       }
       console.error("Błąd podczas ładowania akcji:", error);
     } finally {
@@ -245,7 +315,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   // Pobieranie akcji tylko przy zmianie meczu (1 odczyt). Przy zmianie zakładki używamy cache.
   useEffect(() => {
     if (matchInfo?.matchId) {
-      loadMatchIntoCache(matchInfo.matchId);
+      void loadMatchIntoCache(matchInfo.matchId, matchInfo);
       const savedHalf = localStorage.getItem("currentHalf");
       if (savedHalf) setIsSecondHalf(savedHalf === "P2");
     } else {
@@ -253,33 +323,57 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       setCachedMatchData(null);
       setCachedMatchId(null);
     }
-  }, [matchInfo?.matchId, loadMatchIntoCache]);
+  }, [matchInfo, loadMatchIntoCache]);
 
-  // Wyprowadź actions z cache przy załadowaniu meczu lub zmianie zakładki (bez getDoc)
+  // Wyprowadź actions z cache przy załadowaniu meczu lub zmianie zakładki (bez getDoc).
+  // Gdy brak pełnego dokumentu w stanie, użyj matchInfo + merge pending w derive (np. offline / pierwsze wejście).
   useEffect(() => {
-    if (!matchInfo?.matchId || !cachedMatchData || cachedMatchId !== matchInfo.matchId) return;
+    if (!matchInfo?.matchId || cachedMatchId !== matchInfo.matchId) return;
+    const base: TeamInfo =
+      cachedMatchData ??
+      mergeTeamInfoMetaWithSessionCache(
+        matchInfo,
+        getMatchDocumentFromCache(matchInfo.matchId),
+      );
     const derived = deriveActionsFromMatchData(
       matchInfo.matchId,
-      cachedMatchData,
+      base,
       actionCategory ?? "packing",
       loadBothRegainLoses ?? false
     );
     setActions(derived);
-  }, [cachedMatchData, cachedMatchId, matchInfo?.matchId, actionCategory, loadBothRegainLoses]);
+  }, [
+    cachedMatchData,
+    cachedMatchId,
+    matchInfo,
+    actionCategory,
+    loadBothRegainLoses,
+  ]);
 
   const loadActionsForMatch = useCallback(
-    (matchId: string) => loadMatchIntoCache(matchId),
-    [loadMatchIntoCache]
+    (matchId: string) => loadMatchIntoCache(matchId, matchInfo),
+    [loadMatchIntoCache, matchInfo]
   );
 
   const syncPendingActions = useCallback(async () => {
     if (!matchInfo?.matchId) return;
     const matchId = matchInfo.matchId;
+    clearEmptyArrayPendingFields(matchId, [
+      "actions_packing",
+      "actions_unpacking",
+      "actions_regain",
+      "actions_loses",
+    ]);
     const pendingPacking = getPendingField<Action[]>(matchId, "actions_packing");
     const pendingUnpacking = getPendingField<Action[]>(matchId, "actions_unpacking");
     const pendingRegain = getPendingField<Action[]>(matchId, "actions_regain");
     const pendingLoses = getPendingField<Action[]>(matchId, "actions_loses");
-    if (!pendingPacking && !pendingUnpacking && !pendingRegain && !pendingLoses) return;
+    const hasPendingToSync =
+      (pendingPacking?.length ?? 0) > 0 ||
+      (pendingUnpacking?.length ?? 0) > 0 ||
+      (pendingRegain?.length ?? 0) > 0 ||
+      (pendingLoses?.length ?? 0) > 0;
+    if (!hasPendingToSync) return;
 
     const cleanList = (arr: Action[]) =>
       arr.map((a) => removeUndefinedFields(stripPIIFromAction(a)));
@@ -294,24 +388,26 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         }
         const data = snap.data() as TeamInfo;
         const patch: Record<string, unknown> = {};
-        if (pendingPacking) {
+        if (pendingPacking && pendingPacking.length > 0) {
           patch.actions_packing = cleanList(
-            mergeByIdPreferPending(data.actions_packing || [], pendingPacking)
+            ensureEachEntryHasId(mergeByIdPreferPending(data.actions_packing || [], pendingPacking))
           );
         }
-        if (pendingUnpacking) {
+        if (pendingUnpacking && pendingUnpacking.length > 0) {
           patch.actions_unpacking = cleanList(
-            mergeByIdPreferPending(data.actions_unpacking || [], pendingUnpacking)
+            ensureEachEntryHasId(
+              mergeByIdPreferPending(data.actions_unpacking || [], pendingUnpacking)
+            )
           );
         }
-        if (pendingRegain) {
+        if (pendingRegain && pendingRegain.length > 0) {
           patch.actions_regain = cleanList(
-            mergeByIdPreferPending(data.actions_regain || [], pendingRegain)
+            ensureEachEntryHasId(mergeByIdPreferPending(data.actions_regain || [], pendingRegain))
           );
         }
-        if (pendingLoses) {
+        if (pendingLoses && pendingLoses.length > 0) {
           patch.actions_loses = cleanList(
-            mergeByIdPreferPending(data.actions_loses || [], pendingLoses)
+            ensureEachEntryHasId(mergeByIdPreferPending(data.actions_loses || [], pendingLoses))
           );
         }
         if (Object.keys(patch).length === 0) {
@@ -320,10 +416,18 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic keys actions_*
         transaction.update(matchRef, patch as any);
       });
-      if (pendingPacking) clearPendingMatchUpdate(matchId, "actions_packing");
-      if (pendingUnpacking) clearPendingMatchUpdate(matchId, "actions_unpacking");
-      if (pendingRegain) clearPendingMatchUpdate(matchId, "actions_regain");
-      if (pendingLoses) clearPendingMatchUpdate(matchId, "actions_loses");
+      if (pendingPacking && pendingPacking.length > 0) {
+        clearPendingMatchUpdate(matchId, "actions_packing");
+      }
+      if (pendingUnpacking && pendingUnpacking.length > 0) {
+        clearPendingMatchUpdate(matchId, "actions_unpacking");
+      }
+      if (pendingRegain && pendingRegain.length > 0) {
+        clearPendingMatchUpdate(matchId, "actions_regain");
+      }
+      if (pendingLoses && pendingLoses.length > 0) {
+        clearPendingMatchUpdate(matchId, "actions_loses");
+      }
       const cached = getMatchDocumentFromCache(matchId);
       if (cached) {
         await loadActionsForMatch(matchId);
@@ -639,9 +743,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
             // Zamieniamy zapis atak/obrona: wybrana strefa = atak, opposite = obrona
             regainAttackZone: formattedStartZone, // Strefa ataku (wybrana strefa)
             regainDefenseZone: regainOppositeZone || formattedStartZone, // Strefa obrony (opposite zone)
-            isBelow8s: isBelow8sActive, 
-            playersBehindBall: playersBehindBall, 
-            opponentsBehindBall: opponentsBehindBall,
+            isBelow8s: isBelow8sActive,
+            regainOppRosterSquadTallyF1: receptionBackAllyCount,
+            receptionBackAllyCount: undefined,
+            receptionAllyCountBehindBall: undefined,
             playersLeftField: playersLeftField,
             opponentsLeftField: opponentsLeftField,
             totalPlayersOnField: 11 - playersLeftField,
@@ -698,8 +803,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
           isReaction5s: isReaction5sActive, 
           isBadReaction5s: isBadReaction5sActive,
           isAut: isAutActive,
-          playersBehindBall: playersBehindBall, 
-            opponentsBehindBall: opponentsBehindBall,
+          losesOppRosterSquadTallyF1: losesBackAllyCount,
+            losesBackAllyCount: undefined,
+            playersBehindBall: undefined,
+            opponentsBehindBall: undefined,
             playersLeftField: playersLeftField,
             opponentsLeftField: opponentsLeftField,
             totalPlayersOnField: 11 - playersLeftField,
@@ -860,10 +967,9 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         field: collectionField as MatchArrayFieldKey,
         updater: (current) => {
           const cleanedCurrent = current.map((a) => removeUndefinedFields(stripPIIFromAction(a)));
-          return [...cleanedCurrent, actionToSave as Action];
+          return appendActionToArray(cleanedCurrent, actionToSave as Action);
         },
         cleanForFirestore: (arr) => arr.map((a) => removeUndefinedFields(stripPIIFromAction(a))),
-        isOfflineError,
       });
 
       if (!commitResult.ok) {
@@ -872,21 +978,30 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         return false;
       }
       if (commitResult.usedOffline) {
-        toast("Brak połączenia. Zmiany zapisane lokalnie i zostaną wysłane po powrocie internetu.");
+        toast(
+          "Zapis na serwerze opóźniony. Zmiany są w kolejce lokalnej i zostaną wysłane po ustabilizowaniu połączenia."
+        );
       }
 
-      const afterDoc = getMatchDocumentFromCache(matchInfoArg.matchId);
-      if (afterDoc) {
-        const derived = deriveActionsFromMatchData(
-          matchInfoArg.matchId,
-          afterDoc,
-          actionCategory ?? "packing",
-          loadBothRegainLoses ?? false
-        );
-        setActions(derived);
-        if (cachedMatchId === matchInfoArg.matchId) {
-          setCachedMatchData(afterDoc);
-        }
+      let afterDoc = getMatchDocumentFromCache(matchInfoArg.matchId);
+      if (!afterDoc) {
+        afterDoc = {
+          ...matchInfoArg,
+          actions_packing: matchInfoArg.actions_packing ?? [],
+          actions_unpacking: matchInfoArg.actions_unpacking ?? [],
+          actions_regain: matchInfoArg.actions_regain ?? [],
+          actions_loses: matchInfoArg.actions_loses ?? [],
+        } as TeamInfo;
+      }
+      const derived = deriveActionsFromMatchData(
+        matchInfoArg.matchId,
+        afterDoc,
+        actionCategory ?? "packing",
+        loadBothRegainLoses ?? false
+      );
+      setActions(derived);
+      if (cachedMatchId === matchInfoArg.matchId) {
+        setCachedMatchData(afterDoc);
       }
       
       // Po zapisaniu resetujemy stan
@@ -928,8 +1043,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     isBadReaction5sActive,
     isAutActive,
     isPMAreaActive,
-    playersBehindBall,
-    opponentsBehindBall,
+    losesBackAllyCount,
+    receptionBackAllyCount,
     playersLeftField,
     opponentsLeftField,
     actionCategory,
@@ -940,12 +1055,20 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
 
   // Funkcja pomocnicza do określenia kategorii akcji
   const getActionCategory = (action: Action): "packing" | "regain" | "loses" => {
-    // Loses: ma isReaction5s (to jest główny wskaźnik dla loses)
-    if (action.isReaction5s !== undefined) {
+    // Loses: isReaction5s i/lub licznik (F1 lub legacy)
+    if (
+      action.isReaction5s !== undefined ||
+      action.losesOppRosterSquadTallyF1 !== undefined ||
+      action.losesBackAllyCount !== undefined
+    ) {
       return "loses";
     }
-    // Regain: ma playersBehindBall lub opponentsBehindBall, ale NIE ma isReaction5s
-    if (action.playersBehindBall !== undefined || 
+    // Regain: snapshot licznika / stary model liczników / linie
+    if (
+        action.regainOppRosterSquadTallyF1 !== undefined ||
+        action.receptionBackAllyCount !== undefined ||
+        action.receptionAllyCountBehindBall !== undefined ||
+        action.playersBehindBall !== undefined ||
         action.opponentsBehindBall !== undefined ||
         action.totalPlayersOnField !== undefined ||
         action.totalOpponentsOnField !== undefined ||
@@ -1012,10 +1135,9 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
         db: getDB(),
         matchId,
         field,
-        updater: (cur) => cur.filter((a) => a.id !== actionId),
+        updater: (cur) => removeActionById(cur, actionId),
         cleanForFirestore: (arr) =>
           arr.map((a) => removeUndefinedFields(stripPIIFromAction(a))),
-        isOfflineError,
       });
 
       if (!result.ok) {
@@ -1027,7 +1149,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
 
       if (result.usedOffline) {
         toast(
-          "Brak połączenia. Zmiany zapisane lokalnie i zostaną wysłane po powrocie internetu."
+          "Zapis na serwerze opóźniony. Zmiany są w kolejce lokalnej i zostaną wysłane po ustabilizowaniu połączenia."
         );
       }
 
@@ -1035,6 +1157,15 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
       if (!afterDoc) {
         await loadActionsForMatch(matchId);
         afterDoc = getMatchDocumentFromCache(matchId);
+      }
+      if (!afterDoc && matchInfo?.matchId === matchId) {
+        afterDoc = {
+          ...matchInfo,
+          actions_packing: matchInfo.actions_packing ?? [],
+          actions_unpacking: matchInfo.actions_unpacking ?? [],
+          actions_regain: matchInfo.actions_regain ?? [],
+          actions_loses: matchInfo.actions_loses ?? [],
+        } as TeamInfo;
       }
       if (afterDoc) {
         if (cachedMatchId === matchId) {
@@ -1080,6 +1211,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     actionCategory,
     loadBothRegainLoses,
     loadActionsForMatch,
+    matchInfo,
   ]);
 
   // Dodaj nową funkcję do ustawiania połowy meczu
@@ -1143,12 +1275,14 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsBadReaction5sActive(false);
     setIsAutActive(false);
     setIsPMAreaActive(false);
-    setPlayersBehindBall(0);
-    setOpponentsBehindBall(0);
+    setLosesBackAllyCount(0);
+    setReceptionBackAllyCount(0);
     // NIE resetujemy: selectedPlayerId, selectedReceiverId, actionMinute, isSecondHalf, selectedZone
   }, []);
 
   return {
+    /** Pełny dokument meczu z cache (tablice akcji) — m.in. do eksportu JSON */
+    cachedMatchData,
     // Stany
     actions,
     selectedPlayerId,
@@ -1207,10 +1341,10 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
     setIsAutActive,
     isPMAreaActive,
     setIsPMAreaActive,
-    playersBehindBall,
-    setPlayersBehindBall,
-    opponentsBehindBall,
-    setOpponentsBehindBall,
+    losesBackAllyCount,
+    setLosesBackAllyCount,
+    receptionBackAllyCount,
+    setReceptionBackAllyCount,
     playersLeftField,
     setPlayersLeftField,
     opponentsLeftField,

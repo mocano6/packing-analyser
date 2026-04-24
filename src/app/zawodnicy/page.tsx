@@ -10,12 +10,15 @@ import PackingChart from '@/components/PackingChart/PackingChart';
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import ActionSection from "@/components/ActionSection/ActionSection";
 import { db } from "@/lib/firebase";
-import { doc, collection, getDocs, updateDoc } from "@/lib/firestoreWithMetrics";
+import { doc, collection, getDocs, updateDoc, query, where } from "@/lib/firestoreWithMetrics";
+import { enrichMatchDataWithLegacyPackingIfNeeded } from "@/lib/matchDocumentCache";
+import { buildMatchDocumentUpdatesForDuplicateMerge, collectAllActionsFromMatchDoc } from "@/lib/duplicatePlayerMergeRewrite";
 import { buildPlayersIndex, getPlayerLabel, sortPlayersByLastName } from "@/utils/playerUtils";
 import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import SidePanel from "@/components/SidePanel/SidePanel";
+import { filterTeamsByUserAccess } from "@/lib/teamsForUserAccess";
 import styles from "./zawodnicy.module.css";
 
 export default function ZawodnicyPage() {
@@ -143,20 +146,14 @@ export default function ZawodnicyPage() {
 
   // Usunięto stabilne funkcje - nie są już potrzebne
 
-  // Filtruj dostępne zespoły na podstawie uprawnień użytkownika (tak jak w głównej aplikacji)
-  const availableTeams = useMemo(() => {
-    if (isAdmin) {
-      // Administratorzy mają dostęp do wszystkich zespołów
-      return teams;
-    }
-    
-    if (!userTeams || userTeams.length === 0) {
-      return [];
-    }
-    
-    // Filtruj zespoły na podstawie uprawnień użytkownika
-    return teams.filter(team => userTeams.includes(team.id));
-  }, [userTeams, isAdmin, teams]);
+  const availableTeams = useMemo(
+    () =>
+      filterTeamsByUserAccess(teams, {
+        isAdmin,
+        allowedTeamIds: userTeams ?? [],
+      }),
+    [userTeams, isAdmin, teams]
+  );
 
   // Konwertuj availableTeams array na format używany w komponencie
   const teamsObject = useMemo(() => {
@@ -330,12 +327,9 @@ export default function ZawodnicyPage() {
         // Używamy danych meczów już załadowanych przez useMatchInfo (bez N+1 getDoc per mecz).
         for (const match of teamMatches) {
           if (!match.matchId) continue;
-          const packingActions = Array.isArray(match.actions_packing) ? match.actions_packing : [];
-          packingActions.forEach((actionData: Action) => {
-            allActionsData.push({
-              ...actionData,
-              matchId: match.matchId
-            });
+          const asRecord = match as unknown as Record<string, unknown>;
+          collectAllActionsFromMatchDoc(asRecord, match.matchId).forEach((actionData) => {
+            allActionsData.push(actionData);
           });
         }
 
@@ -503,7 +497,7 @@ export default function ZawodnicyPage() {
     const confirmMerge = window.confirm(
       `Czy na pewno chcesz sparować ${duplicates.length} grup duplikatów?\n\n` +
       'Operacja ta:\n' +
-      '• Przeniesie wszystkie akcje z duplikatów do głównego zawodnika\n' +
+      '• Przeniesie powiązania w meczu (akcje, strzały, PK, 8s, minuty, GPS w meczu, statystyki w matchData) oraz gps.playerId\n' +
       '• Usunie duplikaty z bazy danych\n' +
       '• Nie może być cofnięta\n\n' +
       'Czy kontynuować?'
@@ -538,59 +532,35 @@ export default function ZawodnicyPage() {
         const duplicatesToMerge = sortedPlayers.slice(1); // Duplikaty (zostaną usunięte)
 
         try {
-          // Krok 1: Znajdź wszystkie akcje duplikatów i przenieś je do głównego zawodnika
+          const dupIds = duplicatesToMerge.map((d) => d.id);
           const matchesSnapshot = await getDocs(collection(db, 'matches'));
-          
+
           for (const matchDoc of matchesSnapshot.docs) {
-            const matchData = matchDoc.data();
-            const actionFields = ["actions_packing", "actions_unpacking", "actions_regain", "actions_loses"] as const;
-            const updates: Record<string, Action[]> = {};
-            let actionsChanged = false;
-
-            actionFields.forEach((field) => {
-              const actions = matchData[field];
-              if (!Array.isArray(actions)) return;
-
-              const updatedActions = actions.map((action: Action) => {
-                const {
-                  senderName,
-                  senderNumber,
-                  receiverName,
-                  receiverNumber,
-                  ...rest
-                } = action as Action & {
-                  senderName?: string;
-                  senderNumber?: number;
-                  receiverName?: string;
-                  receiverNumber?: number;
-                };
-                const updatedAction: Action = { ...rest };
-
-                if (senderName || senderNumber || receiverName || receiverNumber) {
-                  actionsChanged = true;
-                }
-
-                // Sprawdź czy akcja ma senderId lub receiverId duplikatu
-                duplicatesToMerge.forEach(duplicate => {
-                  if (action.senderId === duplicate.id) {
-                    updatedAction.senderId = mainPlayer.id;
-                    actionsChanged = true;
-                  }
-                  if (action.receiverId === duplicate.id) {
-                    updatedAction.receiverId = mainPlayer.id;
-                    actionsChanged = true;
-                  }
-                });
-
-                return updatedAction;
-              });
-
-              updates[field] = updatedActions;
-            });
-
-            if (actionsChanged) {
-              await updateDoc(doc(db, 'matches', matchDoc.id), updates);
+            const matchId = matchDoc.id;
+            const raw = matchDoc.data() as Record<string, unknown>;
+            let matchData: Record<string, unknown>;
+            try {
+              matchData = await enrichMatchDataWithLegacyPackingIfNeeded(db, matchId, raw);
+            } catch (e) {
+              console.warn("[zawodnicy merge] enrichMatchData", matchId, e);
+              matchData = raw;
             }
+            const { updates: matchUpdates, changed } = buildMatchDocumentUpdatesForDuplicateMerge(
+              matchData,
+              dupIds,
+              mainPlayer.id,
+            );
+            if (changed) {
+              await updateDoc(doc(db, 'matches', matchDoc.id), matchUpdates);
+            }
+          }
+
+          for (let gi = 0; gi < dupIds.length; gi += 10) {
+            const chunk = dupIds.slice(gi, gi + 10);
+            const gpsSnap = await getDocs(query(collection(db, 'gps'), where('playerId', 'in', chunk)));
+            await Promise.all(
+              gpsSnap.docs.map((d) => updateDoc(d.ref, { playerId: mainPlayer.id })),
+            );
           }
 
           // Krok 2: Soft delete duplikatów w kolekcji players
@@ -940,6 +910,14 @@ export default function ZawodnicyPage() {
                 onModeChange={setActionMode}
                 selectedDefensePlayers={selectedDefensePlayers}
                 onDefensePlayersChange={setSelectedDefensePlayers}
+                losesBackAllyCount={0}
+                setLosesBackAllyCount={() => {}}
+                receptionBackAllyCount={0}
+                setReceptionBackAllyCount={() => {}}
+                playersLeftField={0}
+                setPlayersLeftField={() => {}}
+                opponentsLeftField={0}
+                setOpponentsLeftField={() => {}}
               />
             )}
           </div>

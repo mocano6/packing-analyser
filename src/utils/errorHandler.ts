@@ -115,6 +115,41 @@ export const handleFirebaseError = (
         response.message = opts.customMessage || 
           "Zbyt wiele prób logowania. Spróbuj ponownie później";
         break;
+
+      case 'auth/operation-not-allowed':
+        response.message =
+          opts.customMessage ||
+          "Logowanie e-mailem i hasłem jest wyłączone w projekcie Firebase. Włącz: Authentication → Sign-in method → Email/Password.";
+        break;
+
+      case "auth/invalid-api-key":
+      case "auth/api-key-not-valid.-please-pass-a-valid-api-key.":
+        response.message =
+          opts.customMessage ||
+          "Nieprawidłowy klucz API Firebase (NEXT_PUBLIC_FIREBASE_API_KEY). Sprawdź .env.local i dopasowanie do projektu w konsoli.";
+        break;
+
+      case 'auth/app-not-authorized':
+        response.message =
+          opts.customMessage ||
+          "Ta domena nie jest autoryzowana dla tego klucza OAuth. Dodaj domenę w Firebase Console → Authentication → Settings → Authorized domains.";
+        break;
+
+      case 'auth/configuration-not-found':
+        response.message =
+          opts.customMessage ||
+          "Brak konfiguracji Auth dla tego projektu (sprawdź NEXT_PUBLIC_* i czy Authentication jest włączone w Firebase).";
+        break;
+
+      case 'auth/user-disabled':
+        response.message = opts.customMessage || "To konto zostało wyłączone. Skontaktuj się z administratorem.";
+        break;
+
+      case 'auth/internal-error':
+        response.message =
+          opts.customMessage ||
+          "Błąd wewnętrzny Firebase Auth. Często to zła konfiguracja projektu lub sieć — sprawdź konsolę przeglądarki.";
+        break;
         
       // Błędy transakcji
       case 'failed-precondition':
@@ -124,8 +159,11 @@ export const handleFirebaseError = (
         
       // Błędy ogólne
       default:
-        response.message = opts.customMessage || 
-          `Wystąpił błąd podczas: ${context}`;
+        response.message =
+          opts.customMessage ||
+          (error.code
+            ? `Wystąpił błąd (${error.code}) podczas: ${context}. Szczegóły w konsoli przeglądarki.`
+            : `Wystąpił błąd podczas: ${context}`);
         break;
     }
     

@@ -51,6 +51,13 @@ export interface PlayerConnection {
   totalXT: number;
 }
 
+/** Z której tablicy dokumentu meczu pochodzi wpis — ustawiane przy odczycie (np. collectAllActionsFromMatchDoc). Nie zapisujemy do Firestore. */
+export type MatchActionSourceField =
+  | "actions_packing"
+  | "actions_unpacking"
+  | "actions_regain"
+  | "actions_loses";
+
 // Aktualizacja interfejsu Action dla Firebase
 export interface Action {
   id: string;
@@ -102,8 +109,23 @@ export interface Action {
   mode?: "attack" | "defense"; // Tryb akcji: Atak lub Obrona
   defensePlayers?: string[]; // Lista zawodników obrony (tylko dla trybu obrona)
   isBelow8s?: boolean; // Poniżej 8 sekund (dla regain i loses)
-  playersBehindBall?: number; // Liczba partnerów przed piłką (dla regain i loses)
-  opponentsBehindBall?: number; // Liczba przeciwników za piłką (dla regain i loses)
+  playersBehindBall?: number; // Straty / stary model regain: partnerzy przed piłką
+  opponentsBehindBall?: number; // Straty: przeciwnik przed piłką
+  /**
+   * Regain (0–10): unikalne pole wersji F1 — liczba „przeciwników za piłką” w odbiorze.
+   * Zastępuje `receptionBackAllyCount` w nowych zapisach; stare dokumenty czytaj z tamtego klucza.
+   */
+  regainOppRosterSquadTallyF1?: number;
+  /**
+   * Straty (0–10): unikalne pole wersji F1 — licznik z modelu straty; nie używaj `losesBackAllyCount` w nowych zapisach.
+   */
+  losesOppRosterSquadTallyF1?: number;
+  /** @deprecated odczyt starych zapisów — preferuj `regainOppRosterSquadTallyF1` */
+  receptionBackAllyCount?: number;
+  /** @deprecated odczyt starych zapisów — preferuj `losesOppRosterSquadTallyF1` */
+  losesBackAllyCount?: number;
+  /** @deprecated Tylko odczyt starych zapisów — preferuj `regainOppRosterSquadTallyF1` / `receptionBackAllyCount` w migracji */
+  receptionAllyCountBehindBall?: number;
   totalPlayersOnField?: number; // Całkowita liczba zawodników naszego zespołu na boisku (dla regain i loses) - obliczane jako 11 - playersLeftField
   totalOpponentsOnField?: number; // Całkowita liczba zawodników przeciwnika na boisku (dla regain i loses) - obliczane jako 11 - opponentsLeftField
   playersLeftField?: number; // Liczba zawodników naszego zespołu, którzy opuścili boisko (dla regain i loses)
@@ -124,6 +146,9 @@ export interface Action {
   isReaction5s?: boolean; // Reakcja 5s (dla loses) - dobre 5s (✓)
   isAut?: boolean; // Aut (dla loses)
   isBadReaction5s?: boolean; // Złe 5s (dla loses) - nieudane 5s (✗)
+
+  /** Ustawiane przy zbieraniu akcji z dokumentu meczu — do statystyk (lista duplikatów itd.) */
+  sourceMatchArray?: MatchActionSourceField;
 }
 
 // Dla zachowania kompatybilności
@@ -190,6 +215,8 @@ export interface Shot {
   actionPhase?: 'phase1' | 'phase2' | 'under8s' | 'over8s'; // Faza akcji: I faza, II faza (SFG) lub Do 8s, Powyżej 8s (Otwarta gra)
   blockingPlayers?: string[]; // ID zawodników blokujących strzał
   linePlayers?: string[]; // ID zawodników na linii strzału (obrona)
+  /** W obronie przy SFG=karny: ID zawodnika naszego zespołu, który spowodował przyznanie karnego (nie mylić z linePlayers). */
+  penaltyCausePlayerId?: string;
   linePlayersCount?: number; // Liczba zawodników na linii strzału (atak)
   pkPlayersCount?: number; // Liczba zawodników w polu karnym (nie wpływa na xG)
   isContact1?: boolean; // Liczba kontaktów: 1T

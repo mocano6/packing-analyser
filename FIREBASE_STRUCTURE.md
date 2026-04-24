@@ -108,9 +108,13 @@ Wszystkie obiekty są zapisywane w kolekcji `matches/{matchId}` jako tablice:
   regainDefenseXT?: number;      // xT w obronie (z regain zone)
   regainAttackXT?: number;       // xT w ataku (z opposite zone)
   
-  // Zawodnicy na boisku
-  playersBehindBall?: number;   // Liczba partnerów przed piłką (do bramki przeciwnika)
-  opponentsBehindBall?: number;  // Liczba przeciwników za piłką (do bramki przeciwnika)
+  // Licznik „przeciwnicy za piłką” (0–10) z modala Regain — **aktualne pole zapisu**
+  regainOppRosterSquadTallyF1?: number;
+  // Stary, dwupolowy model rozkładu (tylko odczyt starych dokumentów; nowe UI zapisują F1 powyżej)
+  playersBehindBall?: number;   // (legacy) partnerzy przed piłką
+  opponentsBehindBall?: number;  // (legacy) przeciwnicy za piłką
+  receptionBackAllyCount?: number;   // (deprecated) odczyt starych zapisów — preferuj regainOppRosterSquadTallyF1
+  receptionAllyCountBehindBall?: number; // (deprecated) stary wariant — preferuj F1
   totalPlayersOnField?: number; // Całkowita liczba naszych zawodników na boisku
   totalOpponentsOnField?: number; // Całkowita liczba przeciwników na boisku
   playersLeftField?: number;    // Liczba naszych zawodników, którzy opuścili boisko
@@ -177,9 +181,12 @@ Wszystkie obiekty są zapisywane w kolekcji `matches/{matchId}` jako tablice:
   losesDefenseXT?: number;      // xT w obronie (z lose zone)
   losesAttackXT?: number;      // xT w ataku (z opposite zone)
   
-  // Zawodnicy na boisku
-  playersBehindBall?: number;  // Liczba partnerów przed piłką (do swojej bramki)
-  opponentsBehindBall?: number; // Liczba przeciwników za piłką (do swojej bramki)
+  // Licznik „przeciwnicy za piłką” (0–10) w momencie straty z modala Loses — **aktualne pole zapisu**
+  losesOppRosterSquadTallyF1?: number;
+  // Stary, dwupolowy model (tylko odczyt starych dokumentów; nowe UI zapisują F1 powyżej)
+  playersBehindBall?: number;  // (legacy) partnerzy przed piłką
+  opponentsBehindBall?: number; // (legacy) przeciwnicy za piłką (stary model dwóch pól)
+  losesBackAllyCount?: number;    // (deprecated) odczyt starych zapisów — preferuj losesOppRosterSquadTallyF1
   totalPlayersOnField?: number; // Całkowita liczba naszych zawodników na boisku
   totalOpponentsOnField?: number; // Całkowita liczba przeciwników na boisku
   playersLeftField?: number;   // Liczba naszych zawodników, którzy opuścili boisko

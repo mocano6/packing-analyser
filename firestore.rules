@@ -2,6 +2,124 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    /** Spójny odczyt roli (unika błędów gdy pole role nie istnieje). */
+    function requestUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function requestUserRole() {
+      return requestUserData().get('role', '');
+    }
+    /**
+     * Zgodnie z useAuth (trim + case): sama funkcja .lower() w regułach nie usuwa spacji —
+     * pole role == "admin " lub " admin" przechodziło w UI, a blokowało zapisy (permission-denied).
+     */
+    function isAdminRoleString(r) {
+      return r is string && r.size() > 0 && r.lower().matches('^\\s*admin\\s*$');
+    }
+    /** Admin z JWT (Admin SDK) lub rola w users — bez rozróżniania wielkości liter (np. „Admin”). */
+    function isRequestAdmin() {
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          isAdminRoleString(requestUserData().get('role', ''))
+        )
+      );
+    }
+    /** Legacy: allowedTeams czasem zapisane jako jeden string zamiast listy — hasAny / in muszą to obsłużyć. */
+    function teamIdInAllowedTeams(teamId, userData) {
+      let a = userData.get('allowedTeams', []);
+      return teamId.size() > 0 &&
+        ((a is list && teamId in a) || (a is string && a.size() > 0 && teamId == a));
+    }
+
+    function isPlayerRoleField(r) {
+      return r is string && r.size() > 0 && r.lower().matches('^\\s*player\\s*$');
+    }
+
+    /** Brak przypisanych zespołów: pusta lista, null, pusty string lub pole nieustawione (get zwraca []). */
+    function allowedTeamsEffectivelyEmpty() {
+      let a = requestUserData().get('allowedTeams', []);
+      return a == null ||
+        (a is list && a.size() == 0) ||
+        (a is string && a.size() == 0);
+    }
+
+    /**
+     * Sztab (wszystko poza player): brak skonfigurowanej allowedTeams — może dodać mecz z dowolnym niepustym team.
+     * Gdy allowedTeams ma wpisy (lista lub niepusty string), obowiązuje teamIdInAllowedTeams.
+     */
+    function staffWithNoTeamListCanCreateMatch() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        request.resource.data.get('team', '').size() > 0 &&
+        allowedTeamsEffectivelyEmpty() &&
+        !isPlayerRoleField(requestUserData().get('role', ''));
+    }
+
+    /** Zalogowany bez dokumentu users/{uid} (np. pierwszy login przed udanym zapisem profilu). */
+    function authenticatedWithoutUserDocCanWriteMatch() {
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        request.resource.data.get('team', '').size() > 0;
+    }
+
+    /** Czy pole teams zawodnika (lista lub string) przecina się z allowedTeams użytkownika (lista lub string). */
+    function teamsTouchAllowed(t, allowed) {
+      return (t is list && allowed is list && t.hasAny(allowed)) ||
+        (t is list && allowed is string && allowed.size() > 0 && allowed in t) ||
+        (t is string && allowed is list && t.size() > 0 && t in allowed) ||
+        (t is string && allowed is string && t.size() > 0 && allowed.size() > 0 && t == allowed);
+    }
+
+    /** Legacy: teams (lista|string), team oraz teamId (część dokumentów ma tylko teamId — UI to scala, reguły muszą też). */
+    function teamsDataTouchesAllowed(data) {
+      let allowed = requestUserData().get('allowedTeams', []);
+      let t = data.get('teams', null);
+      let leg = data.get('team', null);
+      let tid = data.get('teamId', null);
+      return teamsTouchAllowed(t, allowed) ||
+        (leg is string && leg.size() > 0 && teamsTouchAllowed(leg, allowed)) ||
+        (tid is string && tid.size() > 0 && teamsTouchAllowed(tid, allowed));
+    }
+
+    /** Nowa wartość teams ⊆ stara (usuwanie zespołów / migracja listy); list|string + legacy team + legacy teamId. */
+    function normalizedTeamsHasOnlySubset(oldData, newData) {
+      let o = oldData.get('teams', null);
+      let oLeg = oldData.get('team', null);
+      let oTid = oldData.get('teamId', null);
+      let n = newData.get('teams', null);
+      return (o is list && n is list && n.hasOnly(o)) ||
+        (o is list && n is string && n.size() > 0 && n in o) ||
+        (o is string && o.size() > 0 && n is list && (n.size() == 0 || (n.size() == 1 && n[0] == o))) ||
+        (o is string && o.size() > 0 && n is string && n == o) ||
+        (
+          o == null &&
+          oLeg is string && oLeg.size() > 0 &&
+          n is list &&
+          (n.size() == 0 || (n.size() == 1 && n[0] == oLeg))
+        ) ||
+        (
+          o is list && o.size() == 0 &&
+          oLeg is string && oLeg.size() > 0 &&
+          n is list &&
+          (n.size() == 0 || (n.size() == 1 && n[0] == oLeg))
+        ) ||
+        (
+          o == null &&
+          oLeg == null &&
+          oTid is string && oTid.size() > 0 &&
+          n is list &&
+          (n.size() == 0 || (n.size() == 1 && n[0] == oTid))
+        ) ||
+        (
+          o is list && o.size() == 0 &&
+          oLeg == null &&
+          oTid is string && oTid.size() > 0 &&
+          n is list &&
+          (n.size() == 0 || (n.size() == 1 && n[0] == oTid))
+        );
+    }
+
     function hasForbiddenPIIKeys(data) {
       return data.keys().hasAny([
         "firstName",
@@ -23,64 +141,74 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if false;
     }
-    
+
     // Kolekcja użytkowników - tylko właściciel i admini
-    // exists + get('role','') — unika błędów reguł gdy pole role nie istnieje (admin musi móc edytować innych użytkowników)
     match /users/{userId} {
-      allow read, write: if request.auth != null && 
-        (request.auth.uid == userId || 
-         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin'));
+      allow read, write: if request.auth != null &&
+        (request.auth.uid == userId || isRequestAdmin());
     }
 
-    // Subkolekcja zadań użytkownika (Eisenhower) — tylko właściciel (osobna reguła, bo path to users/uid/tasks/taskId)
     match /users/{userId}/tasks/{taskId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Plan tygodnia sztabu (trenerzy, szablony, przypisania) — tylko właściciel
     match /users/{userId}/staffPlanner/{docId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Kolekcja zespołów - wszyscy zalogowani użytkownicy mogą czytać, tylko admini mogą pisać
     match /teams/{teamId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow write: if request.auth != null && isRequestAdmin();
     }
 
     match /teams/{teamId}/members/{memberId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow write: if request.auth != null && isRequestAdmin();
     }
 
-    // Definicje KPI trendów - odczyt dla zalogowanych, zapis tylko dla adminów
     match /kpiDefinitions/{kpiId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin';
-    }
-    
-    // Mecze - użytkownicy z dostępem do zespołu; admin może zapisywać
-    // Dokument meczu ma pole "team" (ID zespołu), ewentualnie "teamId"; sprawdzamy oba.
-    // exists() i .get() zapobiegają błędom gdy dokument users nie istnieje lub brakuje allowedTeams
-    match /matches/{matchId} {
-      allow read: if request.auth != null &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        (resource.data.get('teamId', '') in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('allowedTeams', []) ||
-         resource.data.get('team', '') in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('allowedTeams', []));
-      allow write: if request.auth != null &&
-        !hasForbiddenPIIKeys(request.resource.data) &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        (request.resource.data.get('teamId', '') in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('allowedTeams', []) ||
-         request.resource.data.get('team', '') in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('allowedTeams', []) ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin');
+      allow write: if request.auth != null && isRequestAdmin();
     }
 
-    // Kolekcje archiwalne (nazwa musi być podana wprost – Firestore nie obsługuje {x}_archive)
+    match /matches/{matchId} {
+      /**
+       * Import / transakcje: get na nieistniejącym dokumencie musi przejść, inaczej permission-denied
+       * zanim klient wykona set z team z pliku (merge zawodników — to samo dla players/{id}).
+       */
+      allow read: if request.auth != null && (
+        isRequestAdmin() ||
+        (
+          !exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          !exists(/databases/$(database)/documents/matches/$(matchId))
+        ) ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          (
+            (
+              !isPlayerRoleField(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '')) &&
+              !exists(/databases/$(database)/documents/matches/$(matchId))
+            ) ||
+            teamIdInAllowedTeams(resource.data.get('teamId', ''), get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
+            teamIdInAllowedTeams(resource.data.get('team', ''), get(/databases/$(database)/documents/users/$(request.auth.uid)).data)
+          )
+        )
+      );
+      allow write: if request.auth != null &&
+        (
+          isRequestAdmin() ||
+          authenticatedWithoutUserDocCanWriteMatch() ||
+          (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+            (
+              teamIdInAllowedTeams(request.resource.data.get('teamId', ''), get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
+              teamIdInAllowedTeams(request.resource.data.get('team', ''), get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
+              staffWithNoTeamListCanCreateMatch()
+            )
+          )
+        );
+    }
+
     match /players_archive/{docId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && !hasForbiddenPIIKeys(request.resource.data);
@@ -101,26 +229,59 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if request.auth != null && !hasForbiddenPIIKeys(request.resource.data);
     }
-    
-    // Gracze - tylko użytkownicy z dostępem do co najmniej jednego z zespołów gracza
+
     match /players/{playerId} {
-      allow read: if request.auth != null && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+      allow read: if request.auth != null && (
+        isRequestAdmin() ||
         (
-          (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'player' &&
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.linkedPlayerId == playerId) ||
-          (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role != 'player' &&
-           resource.data.teams != null &&
-           resource.data.teams.hasAny(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.allowedTeams))
-        );
-      allow write: if request.auth != null && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role != 'player' &&
-        request.resource.data.teams != null &&
-        request.resource.data.teams.hasAny(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.allowedTeams);
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          (
+            (
+              isPlayerRoleField(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '')) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('linkedPlayerId', '') == playerId
+            ) ||
+            (
+              !isPlayerRoleField(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '')) &&
+              (
+                !exists(/databases/$(database)/documents/players/$(playerId)) ||
+                teamsDataTouchesAllowed(resource.data)
+              )
+            )
+          )
+        )
+      );
+      allow create: if request.auth != null && (
+        isRequestAdmin() ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          !isPlayerRoleField(requestUserRole()) &&
+          teamsDataTouchesAllowed(request.resource.data)
+        )
+      );
+      allow update: if request.auth != null && (
+        isRequestAdmin() ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          !isPlayerRoleField(requestUserRole()) &&
+          (
+            teamsDataTouchesAllowed(request.resource.data) ||
+            (
+              teamsDataTouchesAllowed(resource.data) &&
+              normalizedTeamsHasOnlySubset(resource.data, request.resource.data)
+            )
+          )
+        )
+      );
+      allow delete: if request.auth != null && (
+        isRequestAdmin() ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          !isPlayerRoleField(requestUserRole()) &&
+          teamsDataTouchesAllowed(resource.data)
+        )
+      );
     }
 
-    // GPS: przy delete request.resource.data jest null – nie wywoływać hasForbiddenPIIKeys
     match /gps/{gpsId} {
       allow read: if request.auth != null;
       allow create, update: if request.auth != null && !hasForbiddenPIIKeys(request.resource.data);
@@ -131,34 +292,27 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
     }
-    
-    // Akcje - dla uproszczenia, wszyscy zalogowani użytkownicy
+
     match /actions/{actionId} {
       allow read, write: if request.auth != null;
     }
 
-    // Legacy: akcje packing (fallback gdy match.actions_packing puste)
     match /actions_packing/{actionId} {
       allow read: if request.auth != null;
       allow write: if false;
     }
-    
-    // Kolekcja testowa do sprawdzania uprawnień
+
     match /permission_tests/{document} {
       allow read, write: if request.auth != null;
     }
 
-    // Legacy: kopie z usuniętego panelu czyszczenia PII — brak dostępu z aplikacji (tylko Console / Admin SDK)
     match /pii_cleanup_backups/{document=**} {
       allow read, write: if false;
     }
 
-    // Ustawienia (np. skrypty) — tylko zalogowani; zapis tylko admin (unauthenticated miał pełny dostęp — ryzyko dla prod)
     match /settings/{document} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin';
+      allow write: if request.auth != null && isRequestAdmin();
     }
   }
-} 
+}

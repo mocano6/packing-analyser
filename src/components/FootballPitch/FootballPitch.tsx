@@ -41,6 +41,8 @@ export interface FootballPitchProps {
   /** Komunikat informacyjny pod nagłówkiem boiska (np. blokada formularza przy ujemnej ΔxT) */
   pitchNotice?: string | null;
   onDismissPitchNotice?: () => void;
+  /** Pasek trybów analitycznych (np. zakładki) — pod nagłówkiem meczu, przed boiskiem */
+  tabBar?: React.ReactNode;
 }
 
 const FootballPitch = memo(function FootballPitch({
@@ -58,6 +60,7 @@ const FootballPitch = memo(function FootballPitch({
   isPlayer = false,
   pitchNotice = null,
   onDismissPitchNotice,
+  tabBar,
 }: FootballPitchProps) {
   const dismissNoticeRef = useRef(onDismissPitchNotice);
   dismissNoticeRef.current = onDismissPitchNotice;
@@ -281,6 +284,7 @@ const FootballPitch = memo(function FootballPitch({
           </div>
         }
       />
+      {tabBar}
 
       <div className={styles.pitchWrapper}>
         <div

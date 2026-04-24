@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Acc8sEntry, TeamInfo, Player } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
+import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
+import { isFormEnterToSubmit } from "@/utils/formEnterSubmitKeydown";
 import styles from "./Acc8sModal.module.css";
 
 export interface Acc8sModalProps {
@@ -124,7 +126,8 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
   // Użyj ref do śledzenia poprzednich wartości, aby uniknąć nadpisywania podczas edycji
   const prevVideoTimestampRawRef = useRef<number | undefined>(undefined);
   const prevVideoTimestampRef = useRef<number | undefined>(undefined);
-  
+  const formRef = useRef<HTMLFormElement | null>(null);
+
   useEffect(() => {
     if (isOpen && isEditMode && editingEntry) {
       const currentVideoTimestampRaw = editingEntry.videoTimestampRaw;
@@ -177,29 +180,10 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     }
   }, [isOpen, isEditMode, editingEntry?.id, editingEntry?.minute, onCalculateMinuteFromVideo]);
 
-  const filteredPlayers = useMemo(() => {
-    if (!matchInfo) return players;
-
-    const teamPlayers = players.filter(player => 
-      player.teams?.includes(matchInfo.team)
-    );
-
-    const playersWithMinutes = teamPlayers.filter(player => {
-      const playerMinutes = matchInfo.playerMinutes?.find(pm => pm.playerId === player.id);
-      
-      if (!playerMinutes) {
-        return false;
-      }
-
-      const playTime = playerMinutes.startMinute === 0 && playerMinutes.endMinute === 0
-        ? 0
-        : Math.max(0, playerMinutes.endMinute - playerMinutes.startMinute + 1);
-
-      return playTime >= 1;
-    });
-
-    return playersWithMinutes;
-  }, [players, matchInfo]);
+  const filteredPlayers = useMemo(
+    () => getModalPlayersForMatch(players, matchInfo),
+    [players, matchInfo]
+  );
 
   // Automatycznie ustaw sugerowaną wartość minuty i połowy na podstawie czasu wideo przy otwarciu modalu
   useEffect(() => {
@@ -481,6 +465,22 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     }
   };
 
+  // Enter wysyła formularz jak „Zapisz”, także gdy fokus jest na body/przycisku, nie tylko w polu MM:SS
+  useEffect(() => {
+    if (!isOpen) return;
+    const onDocKey = (e: KeyboardEvent) => {
+      const form = formRef.current;
+      if (!form) return;
+      if (!isFormEnterToSubmit(e, form, () => document.activeElement)) {
+        return;
+      }
+      e.preventDefault();
+      form.requestSubmit();
+    };
+    document.addEventListener("keydown", onDocKey, true);
+    return () => document.removeEventListener("keydown", onDocKey, true);
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -491,7 +491,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
           <button className={styles.closeButton} onClick={onClose}>×</button>
         </div>
 
-        <form onSubmit={handleSubmit} className={styles.form}>
+        <form ref={formRef} onSubmit={handleSubmit} className={styles.form}>
           {/* Przełącznik połowy */}
           <div className={styles.toggleGroup}>
             <label>Połowa:</label>

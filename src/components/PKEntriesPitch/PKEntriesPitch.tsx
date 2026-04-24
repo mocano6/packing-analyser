@@ -34,6 +34,8 @@ export interface PKEntriesPitchProps {
     name: string;
     logo?: string;
   }>;
+  /** Pasek trybów analitycznych — pod nagłówkiem meczu, przed boiskiem */
+  tabBar?: React.ReactNode;
 }
 
 const PKEntriesPitch = memo(function PKEntriesPitch({
@@ -49,6 +51,7 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
   hideInstructions = false,
   matchInfo,
   allTeams = [],
+  tabBar,
 }: PKEntriesPitchProps) {
   const localPlayersIndex = useMemo(
     () => playersIndex ?? buildPlayersIndex(players),
@@ -475,6 +478,7 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
           </>
         }
       />
+      {tabBar}
 
       {/* Instrukcja */}
       {!hideInstructions && !!onEntryAdd && (

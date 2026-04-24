@@ -18,7 +18,8 @@
     "backup": "node src/scripts/backupData.js",
     "restore": "node src/scripts/restoreData.js",
     "reset-password": "node src/scripts/resetPassword.js",
-    "check:firebase-admin": "node scripts/checkFirebaseAdminKey.js"
+    "check:firebase-admin": "node scripts/checkFirebaseAdminKey.js",
+    "setup:local": "node scripts/bootstrapEnvLocal.js"
   },
   "dependencies": {
     "@mdx-js/loader": "^3.1.1",

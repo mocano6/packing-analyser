@@ -970,7 +970,10 @@ export default function PlayerDetailsPage() {
       const db = getDB();
       const matchRef = doc(db, "matches", matchId);
       const matchSnap = await getDoc(matchRef);
-      const existingMatchData = matchSnap.exists() ? (matchSnap.data() as TeamInfo).matchData || {} : {};
+      if (!matchSnap.exists()) {
+        throw new Error("Mecz nie istnieje.");
+      }
+      const existingMatchData = (matchSnap.data() as TeamInfo).matchData || {};
       const existingStats = existingMatchData.playerStats || [];
       const updatedStats = [
         ...existingStats.filter((item: PlayerMatchStats) => item.playerId !== stats.playerId),

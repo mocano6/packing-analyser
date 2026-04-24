@@ -93,19 +93,37 @@ export default function LoginForm() {
         await authService.signInWithEmail(email, password);
       }
     } catch (err: any) {
-      console.error('Błąd logowania:', err);
-      if (err.code === 'auth/user-not-found') {
-        setError('Nie znaleziono użytkownika o tym adresie email');
-      } else if (err.code === 'auth/wrong-password') {
-        setError('Nieprawidłowe hasło');
-      } else if (err.code === 'auth/invalid-email') {
-        setError('Nieprawidłowy format adresu email');
-      } else if (err.code === 'auth/email-already-in-use') {
-        setError('Konto z tym adresem email już istnieje');
-      } else if (err.code === 'auth/weak-password') {
-        setError('Hasło jest zbyt słabe. Użyj co najmniej 6 znaków');
+      console.error("Błąd logowania:", err);
+      if (err.code === "auth/user-not-found") {
+        setError("Nie znaleziono użytkownika o tym adresie email");
+      } else if (err.code === "auth/wrong-password") {
+        setError("Nieprawidłowe hasło");
+      } else if (err.code === "auth/invalid-email") {
+        setError("Nieprawidłowy format adresu email");
+      } else if (err.code === "auth/email-already-in-use") {
+        setError("Konto z tym adresem email już istnieje");
+      } else if (err.code === "auth/weak-password") {
+        setError("Hasło jest zbyt słabe. Użyj co najmniej 6 znaków");
+      } else if (err.code === "auth/invalid-credential") {
+        setError("Nieprawidłowe dane logowania");
+      } else if (err.code === "auth/too-many-requests") {
+        setError("Zbyt wiele prób logowania. Spróbuj ponownie później");
+      } else if (err.code === "auth/operation-not-allowed") {
+        setError(
+          "Logowanie e-mailem jest wyłączone w Firebase (Authentication → Sign-in method → Email/Password).",
+        );
+      } else if (err.code === "auth/invalid-api-key" || err.code === "auth/api-key-not-valid.-please-pass-a-valid-api-key.") {
+        setError("Nieprawidłowy klucz API Firebase — sprawdź .env.local (NEXT_PUBLIC_FIREBASE_*).");
+      } else if (err.code === "auth/app-not-authorized") {
+        setError("Domena nieautoryzowana — dodaj ją w Firebase → Authentication → Settings → Authorized domains.");
+      } else if (err.code === "auth/configuration-not-found") {
+        setError("Błąd konfiguracji Auth — sprawdź zmienne NEXT_PUBLIC_FIREBASE_* i projekt w konsoli Firebase.");
+      } else if (err.code === "auth/user-disabled") {
+        setError("To konto zostało wyłączone. Skontaktuj się z administratorem.");
+      } else if (typeof err.code === "string" && err.code.startsWith("auth/")) {
+        setError(`Błąd logowania (${err.code}). Szczegóły w konsoli przeglądarki.`);
       } else {
-        setError(err.message || 'Wystąpił błąd podczas logowania');
+        setError(err.message || "Wystąpił błąd podczas logowania");
       }
     } finally {
       setIsLoading(false);

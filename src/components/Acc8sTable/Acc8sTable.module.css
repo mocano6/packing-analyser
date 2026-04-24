@@ -1,6 +1,12 @@
 /* src/components/Acc8sTable/Acc8sTable.module.css */
 /* Specyficzne style dla Acc8sTable - wspólne style w sharedTableStyles.module.css */
 
+.acc8sTableWithTabBar {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
 /* Pasek nad tabelą - specyficzny dla Acc8sTable */
 .pitchHeader {
   display: grid;

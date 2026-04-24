@@ -6,20 +6,12 @@ import { getDB } from "@/lib/firebase";
 import { commitMatchArrayFieldUpdate, syncPendingMatchArrayField } from "@/lib/matchArrayFieldWrite";
 import { getMatchDocumentFromCache, setMatchDocumentInCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import { getPendingField } from "@/lib/offlineMatchPending";
+import { mergeByIdPreferPending } from "@/lib/mergeMatchArrayById";
 
 export const usePKEntries = (matchId: string) => {
   const [pkEntries, setPkEntries] = useState<PKEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const isOfflineError = (err: unknown) => {
-    const msg = String(err);
-    return (
-      msg.includes("offline") ||
-      msg.includes("Failed to fetch") ||
-      msg.includes("NetworkError") ||
-      msg.includes("unavailable")
-    );
-  };
 
   const fetchPKEntries = useCallback(async () => {
     if (!matchId) return;
@@ -31,7 +23,11 @@ export const usePKEntries = (matchId: string) => {
       const matchData = await getOrLoadMatchDocument(matchId);
       if (matchData) {
         const pendingEntries = getPendingField<PKEntry[]>(matchId, "pkEntries");
-        const rawEntries = pendingEntries ?? (matchData.pkEntries || []);
+        const serverEntries = matchData.pkEntries || [];
+        const rawEntries =
+          pendingEntries === null
+            ? serverEntries
+            : mergeByIdPreferPending(serverEntries, pendingEntries);
         setPkEntries(rawEntries);
       } else {
         setPkEntries([]);
@@ -40,8 +36,8 @@ export const usePKEntries = (matchId: string) => {
       const pendingEntries = getPendingField<PKEntry[]>(matchId, "pkEntries");
       const cachedMatch = getMatchDocumentFromCache(matchId);
       const cachedEntries = cachedMatch?.pkEntries || [];
-      if (pendingEntries) {
-        setPkEntries(pendingEntries);
+      if (pendingEntries !== null) {
+        setPkEntries(mergeByIdPreferPending(cachedEntries as PKEntry[], pendingEntries));
       } else if (cachedEntries.length > 0) {
         setPkEntries(cachedEntries as PKEntry[]);
       } else {
@@ -97,7 +93,6 @@ export const usePKEntries = (matchId: string) => {
         field: "pkEntries",
         updater,
         cleanForFirestore: (arr) => removeUndefinedFields(arr),
-        isOfflineError,
       });
 
       if (result.ok) {

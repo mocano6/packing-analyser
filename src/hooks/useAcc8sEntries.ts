@@ -6,20 +6,13 @@ import { getDB } from "@/lib/firebase";
 import { commitMatchArrayFieldUpdate, syncPendingMatchArrayField } from "@/lib/matchArrayFieldWrite";
 import { getMatchDocumentFromCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import { getPendingField } from "@/lib/offlineMatchPending";
+import { mergeByIdPreferPending } from "@/lib/mergeMatchArrayById";
+import { applyAcc8sBulkFlagsUpdate } from "@/lib/matchDocumentArrayUpdaters";
 
 export const useAcc8sEntries = (matchId: string) => {
   const [acc8sEntries, setAcc8sEntries] = useState<Acc8sEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const isOfflineError = (err: unknown) => {
-    const msg = String(err);
-    return (
-      msg.includes("offline") ||
-      msg.includes("Failed to fetch") ||
-      msg.includes("NetworkError") ||
-      msg.includes("unavailable")
-    );
-  };
 
   const fetchAcc8sEntries = useCallback(async () => {
     if (!matchId) return;
@@ -31,7 +24,11 @@ export const useAcc8sEntries = (matchId: string) => {
       const matchData = await getOrLoadMatchDocument(matchId);
       if (matchData) {
         const pendingEntries = getPendingField<Acc8sEntry[]>(matchId, "acc8sEntries");
-        const rawEntries = pendingEntries ?? (matchData.acc8sEntries || []);
+        const serverEntries = matchData.acc8sEntries || [];
+        const rawEntries =
+          pendingEntries === null
+            ? serverEntries
+            : mergeByIdPreferPending(serverEntries, pendingEntries);
         setAcc8sEntries(rawEntries);
       } else {
         setAcc8sEntries([]);
@@ -40,8 +37,8 @@ export const useAcc8sEntries = (matchId: string) => {
       const pendingEntries = getPendingField<Acc8sEntry[]>(matchId, "acc8sEntries");
       const cachedMatch = getMatchDocumentFromCache(matchId);
       const cachedEntries = cachedMatch?.acc8sEntries || [];
-      if (pendingEntries) {
-        setAcc8sEntries(pendingEntries);
+      if (pendingEntries !== null) {
+        setAcc8sEntries(mergeByIdPreferPending(cachedEntries as Acc8sEntry[], pendingEntries));
       } else if (cachedEntries.length > 0) {
         setAcc8sEntries(cachedEntries as Acc8sEntry[]);
       } else {
@@ -85,7 +82,6 @@ export const useAcc8sEntries = (matchId: string) => {
         field: "acc8sEntries",
         updater,
         cleanForFirestore: (arr) => cleanEntries(arr),
-        isOfflineError,
       });
 
       if (result.ok) {
@@ -191,14 +187,7 @@ export const useAcc8sEntries = (matchId: string) => {
     async (updates: Array<{ id: string; isShotUnder8s: boolean; isPKEntryUnder8s: boolean }>) => {
       if (!matchId || updates.length === 0) return false;
       try {
-        return await saveAcc8sEntries((prevEntries) => {
-          const byId = new Map(updates.map((u) => [u.id, u]));
-          return prevEntries.map((entry) => {
-            const u = byId.get(entry.id);
-            if (!u) return entry;
-            return { ...entry, isShotUnder8s: u.isShotUnder8s, isPKEntryUnder8s: u.isPKEntryUnder8s };
-          });
-        });
+               return await saveAcc8sEntries((prevEntries) => applyAcc8sBulkFlagsUpdate(prevEntries, updates));
       } catch (err) {
         console.error("Błąd podczas zbiorczej aktualizacji akcji 8s ACC:", err);
         setError("Nie udało się zaktualizować akcji 8s ACC");

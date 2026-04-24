@@ -78,13 +78,16 @@ const PlayerDetailsPanel: React.FC<PlayerDetailsPanelProps> = ({
         totalRegains += 1;
       }
 
-      // Straty - sprawdzamy czy akcja ma pola charakterystyczne dla loses
-      // (np. isReaction5s, isBelow8s bez playersBehindBall)
+      // Straty (isReaction5s, losesOppRosterSquadTallyF1 / losesBackAllyCount, ewent. stary wzorzec isBelow8s)
       if (
         (action.isReaction5s !== undefined ||
-         (action.isBelow8s !== undefined && 
-          action.playersBehindBall === undefined && 
-          action.opponentsBehindBall === undefined)) &&
+         action.losesOppRosterSquadTallyF1 !== undefined ||
+         action.losesBackAllyCount !== undefined ||
+         (action.isBelow8s !== undefined &&
+          action.playersBehindBall === undefined &&
+          action.opponentsBehindBall === undefined &&
+          action.losesOppRosterSquadTallyF1 === undefined &&
+          action.losesBackAllyCount === undefined)) &&
         action.senderId === player.id
       ) {
         totalLoses += 1;

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 /** Rzucane gdy brak żadnej z konfiguracji Admin SDK (łapane w API route). */
@@ -19,7 +19,8 @@ function parseJsonKey(raw: string, label: string): Record<string, unknown> {
 
 /**
  * Ładuje obiekt service account z env / pliku (tylko Node — API routes).
- * Kolejność: FIREBASE_SERVICE_ACCOUNT_KEY → _BASE64 → FIREBASE_SERVICE_ACCOUNT_PATH → null
+ * Kolejność: FIREBASE_SERVICE_ACCOUNT_KEY → _BASE64 → FIREBASE_SERVICE_ACCOUNT_PATH →
+ * plik ./firebase-admin-service-account.json w katalogu projektu (wygodnie lokalnie) → null
  */
 export function loadServiceAccountFromEnv(): Record<string, unknown> | null {
   const inline = process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.trim();
@@ -46,6 +47,17 @@ export function loadServiceAccountFromEnv(): Record<string, unknown> | null {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       throw new Error(`Nie można odczytać FIREBASE_SERVICE_ACCOUNT_PATH (${resolved}): ${msg}`);
+    }
+  }
+
+  const defaultLocal = path.join(process.cwd(), "firebase-admin-service-account.json");
+  if (existsSync(defaultLocal)) {
+    try {
+      const fileContent = readFileSync(defaultLocal, "utf8");
+      return parseJsonKey(fileContent, `domyślny plik ${defaultLocal}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`Nie można odczytać domyślnego klucza Admin (${defaultLocal}): ${msg}`);
     }
   }
 

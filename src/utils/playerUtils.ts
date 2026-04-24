@@ -99,6 +99,60 @@ export const sortPlayersByLastName = (players: Player[]): Player[] => {
 
 export type PlayersIndex = Map<string, Player>;
 
+/** Jedno przypisanie zespołu z dokumentu players — canonical do logiki UI, storage jak w Firestore (ważne dla reguł subset). */
+export type PlayerTeamIdEntry = {
+  canonical: string;
+  storage: string;
+};
+
+/**
+ * Wpisy zespołów w kolejności z dokumentu: deduplikacja po canonical (trim),
+ * zachowanie pierwszej postaci stringu zapisanej w Firestore.
+ */
+export function playerTeamIdEntriesFromFirestoreDoc(data: {
+  teams?: unknown;
+  team?: unknown;
+  teamId?: unknown;
+}): PlayerTeamIdEntry[] {
+  const byCanonical = new Map<string, string>();
+  const order: string[] = [];
+
+  const consider = (raw: unknown) => {
+    if (typeof raw !== "string") return;
+    const canonical = raw.trim();
+    if (!canonical) return;
+    if (!byCanonical.has(canonical)) {
+      byCanonical.set(canonical, raw);
+      order.push(canonical);
+    }
+  };
+
+  const t = data.teams;
+  if (Array.isArray(t)) {
+    for (const x of t) consider(x);
+  } else {
+    consider(t);
+  }
+  consider(data.team);
+  consider(data.teamId);
+
+  return order.map((canonical) => ({
+    canonical,
+    storage: byCanonical.get(canonical)!,
+  }));
+}
+
+/**
+ * Jedna lista ID zespołów (canonical) — chipy, filtry, porównania.
+ */
+export function normalizePlayerTeamIdsFromFirestoreDoc(data: {
+  teams?: unknown;
+  team?: unknown;
+  teamId?: unknown;
+}): string[] {
+  return playerTeamIdEntriesFromFirestoreDoc(data).map((e) => e.canonical);
+}
+
 export const buildPlayersIndex = (players: Player[]): PlayersIndex => {
   return new Map(players.map(player => [player.id, player]));
 };
@@ -114,7 +168,8 @@ export const getPlayerLabel = (
   if (!playerId) return "Zawodnik usunięty";
   if (playerId === OWN_GOAL_PLAYER_ID) return "Bramka samobójcza";
   const player = playersIndex.get(playerId);
-  if (!player || player.isDeleted) return "Zawodnik usunięty";
+  if (!player) return "Zawodnik usunięty";
+  // Soft delete: dane w dokumencie zostają — pokazujemy nazwisko; status „usunięty” osobno w UI.
   const name = getPlayerFullName(player).trim();
   const number = options?.includeNumber && player.number ? ` #${player.number}` : "";
   return `${name || "Zawodnik"}${number}`.trim();

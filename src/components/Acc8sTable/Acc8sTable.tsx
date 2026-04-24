@@ -34,6 +34,8 @@ export interface Acc8sTableProps {
   onBulkUpdateEntries?: (updates: Array<{ id: string; isShotUnder8s: boolean; isPKEntryUnder8s: boolean }>) => Promise<void>;
   allPKEntries?: any[];
   allShots?: any[];
+  /** Pasek zakładek trybów (jak pod PitchHeader) — pod nagłówkiem tabeli, nad siatką wpisów */
+  tabBar?: React.ReactNode;
 }
 
 const Acc8sTable: React.FC<Acc8sTableProps> = ({
@@ -50,6 +52,7 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
   onBulkUpdateEntries,
   allPKEntries = [],
   allShots = [],
+  tabBar,
 }) => {
   // State dla filtra kontrowersyjnego
   const [showOnlyControversial, setShowOnlyControversial] = useState(false);
@@ -161,17 +164,20 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
 
   if (entries.length === 0) {
     return (
-      <div className={sharedStyles.emptyMessage}>
-        <p>Brak akcji 8s ACC. Kliknij "+", aby dodać pierwszą akcję.</p>
-        {onAddEntry && (
-          <button
-            onClick={onAddEntry}
-            className={styles.addButton}
-            title="Dodaj akcję 8s ACC"
-          >
-            +
-          </button>
-        )}
+      <div className={styles.acc8sTableWithTabBar}>
+        {tabBar}
+        <div className={sharedStyles.emptyMessage}>
+          <p>Brak akcji 8s ACC. Kliknij "+", aby dodać pierwszą akcję.</p>
+          {onAddEntry && (
+            <button
+              onClick={onAddEntry}
+              className={styles.addButton}
+              title="Dodaj akcję 8s ACC"
+            >
+              +
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -348,6 +354,7 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
           )}
         </div>
       </div>
+      {tabBar}
       <div className={sharedStyles.matchesTable}>
         <div className={`${sharedStyles.tableHeader} ${styles.tableHeader}`}>
           <div className={sharedStyles.headerCell}>Połowa</div>

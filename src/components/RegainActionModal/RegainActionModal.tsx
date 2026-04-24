@@ -6,7 +6,10 @@ import { Player, Action, TeamInfo } from "@/types";
 import { ACTION_BUTTONS } from "../PointsButtons/constants";
 import PlayerCard from "../ActionModal/PlayerCard";
 import { TEAMS } from "@/constants/teams";
+import { getOpponentLabelForPackingModal } from "@/lib/matchInfoPackingLabels";
 import { sortPlayersByLastName } from '@/utils/playerUtils';
+import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
+import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
 
 interface RegainActionModalProps {
   isOpen: boolean;
@@ -55,7 +58,7 @@ interface RegainActionModalProps {
   onPenaltyAreaEntryToggle: (checked: boolean) => void;
   isSecondHalf: boolean;
   onSecondHalfToggle: (checked: boolean) => void;
-  onSaveAction: () => void;
+  onSaveAction: (patch?: Partial<Action>) => void;
   onReset: () => void;
   onResetPoints: () => void;
   editingAction?: Action | null;
@@ -66,12 +69,9 @@ interface RegainActionModalProps {
   // Nowy prop dla przycisku "Poniżej 8s"
   isBelow8sActive: boolean;
   onBelow8sToggle: () => void;
-  // Nowy prop dla liczby partnerów przed piłką
-  playersBehindBall: number;
-  onPlayersBehindBallChange: (count: number) => void;
-  // Nowy prop dla liczby przeciwników za piłką
-  opponentsBehindBall: number;
-  onOpponentsBehindBallChange: (count: number) => void;
+  /** Liczba „miniętych” z perspektywy meczu (0–10). Firestore: regainOppRosterSquadTallyF1. */
+  receptionBackAllyCount: number;
+  onReceptionBackAllyCountChange: (count: number) => void;
   // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
   playersLeftField: number;
   onPlayersLeftFieldChange: (count: number) => void;
@@ -140,12 +140,8 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   // Nowy prop dla przycisku "Poniżej 8s"
   isBelow8sActive,
   onBelow8sToggle,
-  // Nowy prop dla liczby partnerów przed piłką
-  playersBehindBall,
-  onPlayersBehindBallChange,
-  // Nowy prop dla liczby przeciwników przed piłką
-  opponentsBehindBall,
-  onOpponentsBehindBallChange,
+  receptionBackAllyCount,
+  onReceptionBackAllyCountChange,
   // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
   playersLeftField,
   onPlayersLeftFieldChange,
@@ -157,16 +153,42 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
 }) => {
   const clamp0to10 = (value: number) => Math.max(0, Math.min(10, value));
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
+
+  const opponentLineLabel = useMemo(
+    () => getOpponentLabelForPackingModal(matchInfo),
+    [matchInfo],
+  );
+  const backAllyTooltip = opponentLineLabel
+    ? `Ilu zawodników przeciwnika (${opponentLineLabel}) zostało miniętych w tej sytuacji (0–10).`
+    : "Ilu zawodników przeciwnika zostało miniętych w tej sytuacji (0–10).";
   const [controversyNote, setControversyNote] = useState<string>(""); // Notatka dotycząca kontrowersyjnej akcji
 
   const renderCountRow = useCallback(
-    (label: string, value: number, onChange: (next: number) => void, ariaLabelPrefix: string) => {
+    (
+      title: string,
+      subtitle: string | null,
+      value: number,
+      onChange: (next: number) => void,
+      ariaLabelPrefix: string,
+      groupDomId: string,
+    ) => {
       const values = Array.from({ length: 11 }, (_, i) => i); // 0..10
+      const ariaLabel = subtitle
+        ? `${ariaLabelPrefix}. Przeciwnik: ${subtitle}.`
+        : ariaLabelPrefix;
 
       return (
         <div className={styles.countRow}>
-          <div className={styles.countRowLabel}>{label}</div>
-          <div className={styles.countButtons} role="group" aria-label={ariaLabelPrefix}>
+          <div className={styles.countRowLabelBlock}>
+            <div className={styles.countRowTitle}>{title}</div>
+            {subtitle ? <div className={styles.countRowSub}>{subtitle}</div> : null}
+          </div>
+          <div
+            id={groupDomId}
+            className={styles.countButtons}
+            role="group"
+            aria-label={ariaLabel}
+          >
             {values.map((n) => (
               <button
                 key={n}
@@ -187,7 +209,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
         </div>
       );
     },
-    []
+    [],
   );
 
 
@@ -444,28 +466,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
     }
 
     if (selectedMatch) {
-      // Filtruj zawodników należących do zespołu
-      const teamPlayers = players.filter(player => 
-        player.teams?.includes(selectedMatch!.team)
-      );
-
-      // Filtruj tylko zawodników z co najmniej 1 minutą rozegranych w tym meczu
-      playersToFilter = teamPlayers.filter(player => {
-        const playerMinutes = selectedMatch!.playerMinutes?.find(pm => pm.playerId === player.id);
-        
-        if (!playerMinutes) {
-          return false; // Jeśli brak danych o minutach, nie pokazuj zawodnika
-        }
-
-        // Oblicz czas gry
-        const playTime = playerMinutes.startMinute === 0 && playerMinutes.endMinute === 0
-          ? 0
-          : Math.max(0, playerMinutes.endMinute - playerMinutes.startMinute + 1);
-
-        return playTime >= 1; // Pokazuj tylko zawodników z co najmniej 1 minutą
-      });
-
-
+      playersToFilter = getModalPlayersForMatch(players, selectedMatch);
     } else {
       // Jeśli nie ma wybranego meczu, pokazuj wszystkich zawodników z zespołu
       playersToFilter = players;
@@ -543,8 +544,8 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
           const words = name.trim().split(/\s+/);
           return words[words.length - 1].toLowerCase();
         };
-        const lastNameA = getLastName(a.name);
-        const lastNameB = getLastName(b.name);
+        const lastNameA = getLastName(a.name ?? "");
+        const lastNameB = getLastName(b.name ?? "");
         return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
       });
     });
@@ -766,7 +767,22 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
 
     // Wywołaj funkcję zapisującą akcję, ale nie zamykaj modalu od razu
     // Komponent nadrzędny sam zadecyduje czy i kiedy zamknąć modal
-    onSaveAction();
+    if (isEditMode) {
+      onSaveAction({
+        regainOppRosterSquadTallyF1: receptionBackAllyCount,
+        receptionBackAllyCount: undefined,
+        receptionAllyCountBehindBall: undefined,
+        playersBehindBall: undefined,
+        opponentsBehindBall: undefined,
+      });
+    } else {
+      onSaveAction();
+    }
+  };
+
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    void handleSave();
   };
 
   const handleCancel = () => {
@@ -790,10 +806,12 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{isEditMode ? "Edytuj akcję Regain" : "Dodaj akcję Regain"}</h3>
-          <button className={styles.closeButton} onClick={handleCancel}>×</button>
+          <button type="button" className={styles.closeButton} onClick={handleCancel}>
+            ×
+          </button>
         </div>
         
-        <div className={styles.form}>
+        <form className={styles.form} onSubmit={handleFormSubmit}>
           {/* Wybór meczu - tylko w trybie edycji */}
           {isEditMode && allMatches && allMatches.length > 0 && (
             <div className={styles.formGroup}>
@@ -1086,22 +1104,17 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
               </div>
             </div>
             
-            {/* Środek: Sekcja z przyciskami "przed piłką" */}
             <div
               className={`${styles.countSelectorContainer} ${styles.tooltipTrigger}`}
-              data-tooltip="Liczymy zawodników wyraźnie do bramki przeciwnika."
+              data-tooltip={backAllyTooltip}
             >
               {renderCountRow(
-                matchInfo?.team ? getTeamName(matchInfo.team) : "Partner",
-                clamp0to10(playersBehindBall),
-                (n) => onPlayersBehindBallChange(clamp0to10(n)),
-                "Partnerzy przed piłką (0-10)"
-              )}
-              {renderCountRow(
-                "Przeciwnik (bez bramkarza)",
-                clamp0to10(opponentsBehindBall),
-                (n) => onOpponentsBehindBallChange(clamp0to10(n)),
-                "Przeciwnicy przed piłką (0-10)"
+                "Zawodnicy minięci",
+                opponentLineLabel,
+                clamp0to10(receptionBackAllyCount),
+                (n) => onReceptionBackAllyCountChange(clamp0to10(n)),
+                "Liczba zawodników miniętych (0-10)",
+                "packingRegain",
               )}
             </div>
             
@@ -1153,6 +1166,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                 className={styles.controversyNoteInput}
                 value={controversyNote}
                 onChange={(e) => setControversyNote(e.target.value)}
+                onKeyDown={submitParentFormOnEnter}
                 placeholder="Opisz problem z interpretacją akcji regain..."
                 rows={3}
                 maxLength={500}
@@ -1202,15 +1216,11 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
               </div>
             </div>
             
-            <button
-              className={styles.saveButton}
-              onClick={handleSave}
-              type="submit"
-            >
+            <button className={styles.saveButton} type="submit">
               Zapisz akcję
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

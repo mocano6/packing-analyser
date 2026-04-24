@@ -1287,7 +1287,7 @@
   z-index: 2;
 }
 
-/* Szybki wybór liczby zawodników "pod piłką" */
+/* Szybki wybór liczby przeciwników za piłką */
 .countSelectorContainer {
   display: flex;
   flex-direction: column;
@@ -1305,8 +1305,32 @@
 
 .countRow {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
+}
+
+.countRowLabelBlock {
+  width: 150px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.countRowTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  line-height: 1.25;
+}
+
+.countRowSub {
+  font-size: 10px;
+  font-weight: 500;
+  color: #6b7280;
+  line-height: 1.25;
+  word-wrap: break-word;
+  white-space: normal;
 }
 
 .countRowLabel {

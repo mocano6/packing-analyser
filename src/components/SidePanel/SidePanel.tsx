@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import styles from './SidePanel.module.css';
 import ExportButton from '../ExportButton/ExportButton';
 import ImportButton from '../ImportButton/ImportButton';
@@ -18,8 +17,10 @@ interface SidePanelProps {
   userRole?: 'user' | 'admin' | 'coach' | 'player' | null;
   linkedPlayerId?: string | null;
   selectedTeam: string;
+  /** Opcjonalnie: pełny dokument meczu (matches/{id}) do eksportu wszystkich tablic akcji */
+  matchDocumentForExport?: TeamInfo | null;
   onRefreshData: () => Promise<void>;
-  onImportSuccess: (data: { players: Player[], actions: Action[], matchInfo: any }) => void;
+  onImportSuccess: (data: { players: Player[]; actions: Action[]; matchInfo: TeamInfo }) => void | Promise<void>;
   onImportError: (error: string) => void;
   onLogout: () => void;
 }
@@ -32,6 +33,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
   userRole,
   linkedPlayerId,
   selectedTeam,
+  matchDocumentForExport = null,
   onRefreshData,
   onImportSuccess,
   onImportError,
@@ -39,7 +41,6 @@ const SidePanel: React.FC<SidePanelProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const { isPresentationMode, togglePresentationMode } = usePresentationMode();
-  const pathname = usePathname();
   /** Tylko jawna rola `player` — bez `userRole` (undefined) nie zawężamy menu (undefined == null psuło strony bez propsa). */
   const isPlayer = userRole === 'player';
 
@@ -180,9 +181,9 @@ const SidePanel: React.FC<SidePanelProps> = ({
               
               <div className={styles.exportImportWrapper}>
                 <ExportButton
-                  players={players}
                   actions={actions}
                   matchInfo={matchInfo}
+                  matchDocumentForExport={matchDocumentForExport}
                 />
               </div>
               

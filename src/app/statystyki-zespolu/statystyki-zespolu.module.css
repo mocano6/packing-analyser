@@ -3725,6 +3725,13 @@
   border-top: none;
 }
 
+.kpiScoreRowValuesRegainPart {
+  font-size: 0.8em;
+  font-weight: 500;
+  color: #475569;
+  white-space: nowrap;
+}
+
 .kpiScoreGoalsDetails .kpiScoreRow {
   padding: 3px 8px 4px;
   background: transparent;

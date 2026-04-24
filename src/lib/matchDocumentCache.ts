@@ -7,10 +7,20 @@
  */
 
 import type { Action, TeamInfo } from "@/types";
+import type { Firestore } from "firebase/firestore";
 import { getDB } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, getDocs } from "@/lib/firestoreWithMetrics";
+import { doc, getDoc, collection, query, where, getDocs, getDocsFromServer } from "@/lib/firestoreWithMetrics";
+import { normalizePackingActionsInMatchDoc } from "@/lib/matchDocumentPackingNormalize";
+import { getActionReceiverIdFromRaw, getActionSenderIdFromRaw } from "./matchActionPlayerIds";
 
-function normalizeLegacyAction(data: Record<string, unknown>, docId: string, matchId: string): Action {
+/** Eksportowane dla agregacji listy zawodników (skan kolekcji `actions_packing`). */
+export function normalizeLegacyPackingDocToAction(
+  data: Record<string, unknown>,
+  docId: string,
+  matchId: string,
+): Action {
+  const sid = getActionSenderIdFromRaw(data) ?? "";
+  const rid = getActionReceiverIdFromRaw(data);
   return {
     ...data,
     id: (data.id as string) ?? docId,
@@ -20,9 +30,52 @@ function normalizeLegacyAction(data: Record<string, unknown>, docId: string, mat
     packingPoints: (data.packingPoints ?? data.packing ?? 0) as number,
     fromZone: (data.fromZone ?? data.startZone) as string | undefined,
     toZone: (data.toZone ?? data.endZone) as string | undefined,
-    senderId: (data.senderId ?? data.playerId ?? "") as string,
-    receiverId: (data.receiverId ?? data.receiverPlayerId ?? data.receiver_id) as string | undefined,
+    senderId: sid,
+    receiverId: rid,
   } as Action;
+}
+
+function normalizeLegacyAction(data: Record<string, unknown>, docId: string, matchId: string): Action {
+  return normalizeLegacyPackingDocToAction(data, docId, matchId);
+}
+
+/**
+ * Gdy `actions_packing` w dokumencie meczu jest puste, dołącza akcje z kolekcji `actions_packing` (legacy).
+ * Normalizuje senderId/receiverId/minute jak przy ładowaniu meczu w analyzerze — spójne liczniki (np. lista zawodników).
+ */
+export async function enrichMatchDataWithLegacyPackingIfNeeded(
+  db: Firestore,
+  matchId: string,
+  matchData: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  let packingActions: Action[] = Array.isArray(matchData.actions_packing)
+    ? [...(matchData.actions_packing as Action[])]
+    : [];
+  const docMatchId = matchData.matchId as string | undefined;
+  const legacyMatchIds = [matchId];
+  if (docMatchId && docMatchId !== matchId) {
+    legacyMatchIds.push(docMatchId);
+  }
+  if (packingActions.length === 0) {
+    for (const legacyId of legacyMatchIds) {
+      const legacyQuery = query(collection(db, "actions_packing"), where("matchId", "==", legacyId));
+      let legacySnapshot;
+      try {
+        legacySnapshot = await getDocsFromServer(legacyQuery);
+      } catch {
+        legacySnapshot = await getDocs(legacyQuery);
+      }
+      if (legacySnapshot.docs.length > 0) {
+        packingActions = legacySnapshot.docs.map((d) =>
+          normalizeLegacyAction(d.data() as Record<string, unknown>, d.id, matchId),
+        );
+        break;
+      }
+    }
+  } else {
+    packingActions = normalizePackingActionsInMatchDoc(matchId, packingActions);
+  }
+  return { ...matchData, actions_packing: packingActions };
 }
 
 const STORAGE_PREFIX = "packing_match_doc_";
@@ -93,42 +146,12 @@ export async function getOrLoadMatchDocument(matchId: string): Promise<TeamInfo 
       const matchDoc = await getDoc(matchRef);
       if (matchDoc.exists()) {
         const data = matchDoc.data() as TeamInfo;
-        let packingActions = data.actions_packing || [];
-        const legacyMatchIds = [matchId];
-        if (data.matchId && data.matchId !== matchId) {
-          legacyMatchIds.push(data.matchId);
-        }
-        if (packingActions.length === 0) {
-          for (const legacyId of legacyMatchIds) {
-            const legacyQuery = query(
-              collection(db, "actions_packing"),
-              where("matchId", "==", legacyId)
-            );
-            const legacySnapshot = await getDocs(legacyQuery);
-            if (legacySnapshot.docs.length > 0) {
-              packingActions = legacySnapshot.docs.map((d) =>
-                normalizeLegacyAction(d.data() as Record<string, unknown>, d.id, matchId)
-              );
-              break;
-            }
-          }
-        } else {
-          packingActions = packingActions.map((a) => {
-            const anyA = a as Record<string, unknown>;
-            return {
-              ...a,
-              matchId,
-              minute: a.minute ?? anyA.min ?? 0,
-              actionType: a.actionType ?? anyA.type ?? "pass",
-              packingPoints: a.packingPoints ?? anyA.packing ?? 0,
-              fromZone: a.fromZone ?? anyA.startZone,
-              toZone: a.toZone ?? anyA.endZone,
-              senderId: a.senderId ?? anyA.playerId ?? "",
-              receiverId: a.receiverId ?? anyA.receiverPlayerId ?? anyA.receiver_id ?? undefined,
-            } as Action;
-          });
-        }
-        const result: TeamInfo = { ...data, actions_packing: packingActions };
+        const enriched = await enrichMatchDataWithLegacyPackingIfNeeded(
+          db,
+          matchId,
+          data as unknown as Record<string, unknown>,
+        );
+        const result = enriched as unknown as TeamInfo;
         setMatchDocumentInCache(matchId, result);
         return result;
       }

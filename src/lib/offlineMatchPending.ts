@@ -21,14 +21,31 @@ export function getPendingMatchUpdates(matchId: string): PendingMatchUpdates | n
   }
 }
 
-export function setPendingMatchUpdate(matchId: string, field: string, value: unknown): void {
-  if (typeof window === "undefined") return;
+/** Zapis kolejki offline; false = localStorage niedostępny / quota / wyjątek. */
+export function setPendingMatchUpdate(matchId: string, field: string, value: unknown): boolean {
+  if (typeof window === "undefined") return false;
   try {
     const existing = getPendingMatchUpdates(matchId) || {};
     const next = { ...existing, [field]: value };
     localStorage.setItem(getStorageKey(matchId), JSON.stringify(next));
+    return true;
   } catch {
-    // Brak miejsca lub brak dostepu — pomijamy bez wyjatku
+    return false;
+  }
+}
+
+/**
+ * Usuwa z kolejki wpisy z pustą tablicą (np. uszkodzone pending) — bez synchronizacji z serwerem.
+ */
+export function clearEmptyArrayPendingFields(
+  matchId: string,
+  fields: readonly string[],
+): void {
+  for (const field of fields) {
+    const pending = getPendingField<unknown[]>(matchId, field);
+    if (pending !== null && Array.isArray(pending) && pending.length === 0) {
+      clearPendingMatchUpdate(matchId, field);
+    }
   }
 }
 

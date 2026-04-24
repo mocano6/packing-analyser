@@ -4,8 +4,7 @@
  * Zarządza uwierzytelnianiem użytkowników, stanem sesji i powiązanymi funkcjami.
  */
 
-import { 
-  getAuth, 
+import {
   signInAnonymously,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -13,11 +12,11 @@ import {
   onAuthStateChanged,
   User,
   setPersistence,
-  browserLocalPersistence
-} from 'firebase/auth';
+  browserLocalPersistence,
+} from "firebase/auth";
 
-import { handleFirebaseError } from './errorHandler';
-import { isFirebaseReady } from '@/lib/firebase';
+import { handleFirebaseError } from "./errorHandler";
+import { getAuthClient, isFirebaseReady } from "@/lib/firebase";
 
 // Typy uwierzytelniania
 export type AuthMode = 'anonymous' | 'email';
@@ -69,8 +68,8 @@ export class AuthService {
     }
 
     try {
-      const auth = getAuth();
-      
+      const auth = getAuthClient();
+
       onAuthStateChanged(auth, (user) => {
         this.updateAuthState({
           user,
@@ -184,13 +183,13 @@ export class AuthService {
     try {
       this.updateAuthState({ isLoading: true, error: null });
       
-      const auth = getAuth();
+      const auth = getAuthClient();
       await signInAnonymously(auth);
       
       this.savePreferredAuthMode('anonymous');
 
     } catch (error) {
-      const response = handleFirebaseError(error, 'anonimowe logowanie');
+      const response = handleFirebaseError(error, "anonimowe logowanie", { showNotification: false });
       
       this.updateAuthState({
         isLoading: false,
@@ -208,13 +207,13 @@ export class AuthService {
     try {
       this.updateAuthState({ isLoading: true, error: null });
       
-      const auth = getAuth();
+      const auth = getAuthClient();
       await signInWithEmailAndPassword(auth, email, password);
       
       this.savePreferredAuthMode('email');
 
     } catch (error) {
-      const response = handleFirebaseError(error, 'logowanie przez email');
+      const response = handleFirebaseError(error, "logowanie przez email", { showNotification: false });
       
       this.updateAuthState({
         isLoading: false,
@@ -232,13 +231,13 @@ export class AuthService {
     try {
       this.updateAuthState({ isLoading: true, error: null });
       
-      const auth = getAuth();
+      const auth = getAuthClient();
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
       this.savePreferredAuthMode('email');
       return userCredential.user;
     } catch (error) {
-      const response = handleFirebaseError(error, 'rejestracja');
+      const response = handleFirebaseError(error, "rejestracja", { showNotification: false });
       
       this.updateAuthState({
         isLoading: false,
@@ -256,12 +255,12 @@ export class AuthService {
     try {
       this.updateAuthState({ isLoading: true, error: null });
       
-      const auth = getAuth();
+      const auth = getAuthClient();
       await firebaseSignOut(auth);
       
 
     } catch (error) {
-      const response = handleFirebaseError(error, 'wylogowanie');
+      const response = handleFirebaseError(error, "wylogowanie", { showNotification: false });
       
       this.updateAuthState({
         isLoading: false,

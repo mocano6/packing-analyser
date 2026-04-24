@@ -5,6 +5,8 @@ import { Shot, Player, TeamInfo } from "@/types";
 import { buildPlayersIndex, getPlayerLabel, OWN_GOAL_PLAYER_ID } from "@/utils/playerUtils";
 import { isInPenaltyAreaCanonical, isInOpponentPenaltyAreaCanonical } from "@/utils/pitchZones";
 import { getTorvaneySimpleXGPercentRounded } from "@/lib/xg";
+import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
+import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
 import styles from "./ShotModal.module.css";
 
 export interface ShotModalProps {
@@ -68,6 +70,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     previousShotId: "",
     isFromPK: false,
     isOwnGoal: false, // Tylko w obronie: bramka samobójcza (bramkarz wybrany osobno)
+    penaltyCausePlayerId: "", // Obrona + karny: nasz zawodnik, który spowodował karnego
   });
   const isEditMode = Boolean(editingShot);
   const shotCoords = useMemo(
@@ -229,33 +232,10 @@ const ShotModal: React.FC<ShotModalProps> = ({
     }
   }, [isOpen, isEditMode, editingShot, onCalculateMinuteFromVideo]);
 
-  // Filtrowanie zawodników grających w danym meczu (podobnie jak w ActionModal)
-  const filteredPlayers = useMemo(() => {
-    if (!matchInfo) return players;
-
-    // Filtruj zawodników należących do zespołu
-    const teamPlayers = players.filter(player => 
-      player.teams?.includes(matchInfo.team)
-    );
-
-    // Filtruj tylko zawodników z co najmniej 1 minutą rozegranych w tym meczu
-    const playersWithMinutes = teamPlayers.filter(player => {
-      const playerMinutes = matchInfo.playerMinutes?.find(pm => pm.playerId === player.id);
-      
-      if (!playerMinutes) {
-        return false; // Jeśli brak danych o minutach, nie pokazuj zawodnika
-      }
-
-      // Oblicz czas gry
-      const playTime = playerMinutes.startMinute === 0 && playerMinutes.endMinute === 0
-        ? 0
-        : Math.max(0, playerMinutes.endMinute - playerMinutes.startMinute + 1);
-
-      return playTime >= 1; // Pokazuj tylko zawodników z co najmniej 1 minutą
-    });
-
-    return playersWithMinutes;
-  }, [players, matchInfo]);
+  const filteredPlayers = useMemo(
+    () => getModalPlayersForMatch(players, matchInfo),
+    [players, matchInfo]
+  );
 
   // Filtrowanie bramkarzy dla obrony
   const filteredGoalkeepers = useMemo(() => {
@@ -441,6 +421,10 @@ const ShotModal: React.FC<ShotModalProps> = ({
             : isInPenaltyAreaCanonical(editingShot)) ||
           (editingShot as any)?.isFromPK ||
           false,
+        penaltyCausePlayerId:
+          (editingShot as any)?.penaltyCausePlayerId ||
+          (editingShot as any)?.penaltyTakerPlayerId ||
+          "",
       });
       setControversyNote(editingShot.controversyNote || "");
     } else {
@@ -476,6 +460,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         previousShotId: "",
         isFromPK: isFromPKByPosition,
         isOwnGoal: false,
+        penaltyCausePlayerId: "",
       });
     }
   }, [isOpen, editingShot, editingShot?.id, x, y, xG, matchInfo]);
@@ -540,6 +525,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         isP2Active: false,
         isOwnGoal: false,
         xG: nextXG,
+        penaltyCausePlayerId: "",
       };
     });
   };
@@ -554,7 +540,12 @@ const ShotModal: React.FC<ShotModalProps> = ({
           teamContext: prev.teamContext,
         });
       }
-      return { ...prev, actionType, xG: nextXG };
+      return {
+        ...prev,
+        actionType,
+        xG: nextXG,
+        penaltyCausePlayerId: actionType === "penalty" ? prev.penaltyCausePlayerId : "",
+      };
     });
   };
 
@@ -578,6 +569,14 @@ const ShotModal: React.FC<ShotModalProps> = ({
       linePlayers: prev.linePlayers.includes(playerId)
         ? prev.linePlayers.filter(id => id !== playerId) // Usuń z listy
         : [...prev.linePlayers, playerId] // Dodaj do listy
+    }));
+  };
+
+  /** Jednokrotny wybór zawodnika naszej drużyny, który spowodował karnego (obrona + SFG karny). */
+  const handlePenaltyCausePlayerSelect = (playerId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      penaltyCausePlayerId: prev.penaltyCausePlayerId === playerId ? "" : playerId,
     }));
   };
 
@@ -776,6 +775,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         actionType,
         actionPhase: category === "sfg" ? "phase1" : prev.actionPhase,
         xG: nextXG,
+        penaltyCausePlayerId: "",
       };
     });
   };
@@ -1015,6 +1015,11 @@ const ShotModal: React.FC<ShotModalProps> = ({
       previousShotId: formData.previousShotId || undefined,
       isFromPK: formData.isFromPK || undefined,
       matchId,
+      ...(formData.teamContext === "defense" &&
+        formData.actionType === "penalty" &&
+        formData.penaltyCausePlayerId
+        ? { penaltyCausePlayerId: formData.penaltyCausePlayerId }
+        : {}),
       ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
       ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
     });
@@ -1311,6 +1316,67 @@ const ShotModal: React.FC<ShotModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* Kto z naszego zespołu spowodował karnego — tylko obrona + SFG karny (linia = linePlayers powyżej) */}
+          {formData.actionCategory === "sfg" &&
+            formData.actionType === "penalty" &&
+            formData.teamContext === "defense" && (
+              <div className={`${styles.fieldGroup} ${styles.verticalLabel}`}>
+                <label>Prowodyr karnego (nasz zespół):</label>
+                <div className={styles.playersGridContainer}>
+                  {filteredPlayers.length === 0 ? (
+                    <p className={styles.helperText}>Brak zawodników w składzie meczu.</p>
+                  ) : (
+                    (() => {
+                      const withoutGk = filteredPlayers.filter(
+                        (p) => p.position !== "GK" && p.position !== "Bramkarz"
+                      );
+                      const list = withoutGk.length > 0 ? withoutGk : filteredPlayers;
+                      const byPos = getPlayersByPosition(list);
+                      return byPos.sortedPositions.map((position) => (
+                        <div key={position} className={styles.positionGroup}>
+                          <div className={styles.playersGrid}>
+                            <div className={styles.positionLabel}>
+                              {position === "Skrzydłowi" ? "W" : position}
+                            </div>
+                            <div className={styles.playersGridItems}>
+                              {byPos.byPosition[position].map((player) => (
+                                <div
+                                  key={player.id}
+                                  className={`${styles.playerTile} ${
+                                    formData.penaltyCausePlayerId === player.id
+                                      ? styles.playerLineTile
+                                      : ""
+                                  }`}
+                                  onClick={() => handlePenaltyCausePlayerSelect(player.id)}
+                                  role="button"
+                                  tabIndex={0}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      handlePenaltyCausePlayerSelect(player.id);
+                                    }
+                                  }}
+                                >
+                                  <div className={styles.playerContent}>
+                                    <div className={styles.number}>{player.number}</div>
+                                    <div className={styles.playerInfo}>
+                                      <div className={styles.name}>
+                                        {getPlayerLabel(player.id, playersIndex)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ));
+                    })()
+                  )}
+                </div>
+              </div>
+            )}
 
           {/* Podrodzaj SFG */}
           {formData.actionCategory === "sfg" && formData.actionType !== "penalty" && (
@@ -1708,6 +1774,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                 className={styles.controversyNoteInput}
                 value={controversyNote}
                 onChange={(e) => setControversyNote(e.target.value)}
+                onKeyDown={submitParentFormOnEnter}
                 placeholder="Opisz problem z interpretacją strzału..."
                 rows={3}
                 maxLength={500}

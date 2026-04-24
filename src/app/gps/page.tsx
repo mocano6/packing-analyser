@@ -1,10 +1,11 @@
 // src/app/gps/page.tsx
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
+import { filterTeamsByUserAccess } from "@/lib/teamsForUserAccess";
 import GPSDataSection from "@/components/GPSDataSection/GPSDataSection";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import styles from "./page.module.css";
@@ -19,6 +20,15 @@ export default function GPSPage() {
   const { players } = usePlayersState(selectedTeam);
   const { teams: allAvailableTeams } = useTeams();
   const { isAdmin, userRole, userTeams, linkedPlayerId, logout } = useAuth();
+
+  const teamsForUser = useMemo(
+    () =>
+      filterTeamsByUserAccess(allAvailableTeams, {
+        isAdmin,
+        allowedTeamIds: userTeams ?? [],
+      }),
+    [allAvailableTeams, isAdmin, userTeams]
+  );
 
   // Automatycznie aktywuj tryb deweloperski (obejście uwierzytelniania)
   React.useEffect(() => {
@@ -47,7 +57,7 @@ export default function GPSPage() {
 
       <GPSDataSection
         players={players}
-        allAvailableTeams={allAvailableTeams}
+        allAvailableTeams={teamsForUser}
       />
 
       <SidePanel

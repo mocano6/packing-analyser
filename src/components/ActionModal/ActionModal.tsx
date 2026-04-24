@@ -7,6 +7,8 @@ import { ACTION_BUTTONS } from "../PointsButtons/constants";
 import PlayerCard from "./PlayerCard";
 import { TEAMS } from "@/constants/teams";
 import { sortPlayersByLastName } from '@/utils/playerUtils';
+import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
+import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
 
 interface ActionModalProps {
   isOpen: boolean;
@@ -427,28 +429,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
     }
 
     if (selectedMatch) {
-      // Filtruj zawodników należących do zespołu
-      const teamPlayers = players.filter(player => 
-        player.teams?.includes(selectedMatch!.team)
-      );
-
-      // Filtruj tylko zawodników z co najmniej 1 minutą rozegranych w tym meczu
-      playersToFilter = teamPlayers.filter(player => {
-        const playerMinutes = selectedMatch!.playerMinutes?.find(pm => pm.playerId === player.id);
-        
-        if (!playerMinutes) {
-          return false; // Jeśli brak danych o minutach, nie pokazuj zawodnika
-        }
-
-        // Oblicz czas gry
-        const playTime = playerMinutes.startMinute === 0 && playerMinutes.endMinute === 0
-          ? 0
-          : Math.max(0, playerMinutes.endMinute - playerMinutes.startMinute + 1);
-
-        return playTime >= 1; // Pokazuj tylko zawodników z co najmniej 1 minutą
-      });
-
-
+      playersToFilter = getModalPlayersForMatch(players, selectedMatch);
     } else {
       // Jeśli nie ma wybranego meczu, pokazuj wszystkich zawodników z zespołu
       playersToFilter = players;
@@ -1270,6 +1251,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 className={styles.controversyNoteInput}
                 value={controversyNote}
                 onChange={(e) => setControversyNote(e.target.value)}
+                onKeyDown={submitParentFormOnEnter}
                 placeholder="Opisz problem z interpretacją akcji..."
                 rows={3}
                 maxLength={500}

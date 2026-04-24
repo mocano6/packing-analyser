@@ -321,6 +321,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
       return;
     }
 
+    const trimmedPassword = newPassword.trim();
+    if (trimmedPassword.length > 0 && trimmedPassword.length < 6) {
+      toast.error("Hasło musi mieć co najmniej 6 znaków albo pozostaw pole puste");
+      return;
+    }
+
     setIsUpdatingUser(true);
     try {
       const db = getDB();
@@ -337,28 +343,60 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
         throw error;
       });
 
-      // Jeśli podano nowe hasło, wyślij email resetujący hasło
-      if (newPassword && newPassword.length >= 6) {
-        try {
-          const auth = getAuth();
-          // Pobierz użytkownika z Firebase Auth po emailu
-          // Uwaga: W Firebase Auth nie ma bezpośredniej metody getByEmail w client SDK
-          // Użyjemy sendPasswordResetEmail jako alternatywę
-          await sendPasswordResetEmail(auth, editUserEmail);
-          toast.success("Email z linkiem resetującym hasło został wysłany do użytkownika");
-        } catch (error: any) {
-          console.error("Błąd podczas wysyłania emaila resetującego hasło:", error);
-          // Nie przerywamy aktualizacji - dane użytkownika zostały zaktualizowane
-          toast.error("Nie udało się wysłać emaila resetującego hasło, ale dane użytkownika zostały zaktualizowane");
+      let passwordFailed = false;
+      if (trimmedPassword.length >= 6) {
+        const auth = getAuth();
+        const current = auth.currentUser;
+        if (!current) {
+          toast.error("Brak aktywnej sesji — zaloguj się ponownie.");
+          passwordFailed = true;
+        } else {
+          let idToken: string;
+          try {
+            idToken = await current.getIdToken();
+          } catch (e) {
+            console.error("getIdToken:", e);
+            toast.error("Nie udało się pobrać tokenu sesji.");
+            passwordFailed = true;
+          }
+          if (!passwordFailed) {
+            const response = await fetch("/api/admin-set-user-password", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${idToken!}`,
+              },
+              body: JSON.stringify({ uid: editingUserId, newPassword: trimmedPassword }),
+            });
+            let payload: { error?: string; hint?: string; message?: string } = {};
+            try {
+              payload = await response.json();
+            } catch {
+              /* body nie-JSON */
+            }
+            if (!response.ok) {
+              console.error("admin-set-user-password:", response.status, payload);
+              const main = payload.error || `Błąd ustawiania hasła (${response.status})`;
+              toast.error(
+                payload.hint ? `${main}\n\n${payload.hint}` : `${main}\n\nProfil w Firestore został zapisany — możesz spróbować ponownie lub użyć „Reset hasła”.`,
+                { duration: 12_000 }
+              );
+              passwordFailed = true;
+            }
+          }
         }
       }
 
-      // Aktualizuj lokalny stan
+      // Aktualizuj lokalny stan (Firestore już zapisany)
       setUsers(prev => prev.map(user => 
         user.id === editingUserId 
           ? { ...user, email: editUserEmail, role: editUserRole, allowedTeams: editUserTeams }
           : user
       ));
+
+      if (passwordFailed) {
+        return;
+      }
 
       // Zamknij modal i resetuj stan
       setShowEditUserModal(false);
@@ -368,7 +406,11 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
       setEditUserTeams([]);
       setNewPassword("");
 
-      toast.success("Użytkownik został zaktualizowany");
+      toast.success(
+        trimmedPassword.length >= 6
+          ? "Użytkownik został zaktualizowany. Nowe hasło działa przy logowaniu."
+          : "Użytkownik został zaktualizowany"
+      );
     } catch (error) {
       console.error("Błąd podczas aktualizacji użytkownika:", error);
       toast.error("Błąd podczas aktualizacji użytkownika");
@@ -1224,7 +1266,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                 disabled={isUpdatingUser}
               />
               <p style={{ fontSize: "0.8rem", color: "#666", marginTop: "4px" }}>
-                Jeśli podasz hasło, użytkownik otrzyma email z linkiem resetującym hasło.
+                Hasło ustawia serwer (Firebase Admin SDK — jak przy usuwaniu konta). Przy błędzie konfiguracji użyj „Reset hasła”.
               </p>
             </div>
 
@@ -1323,7 +1365,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
           <li>Kliknij "Dodaj użytkownika" aby utworzyć nowe konto</li>
           <li>Kliknij "Edytuj" aby zmienić email, rolę lub zespoły użytkownika</li>
           <li>Kliknij "Reset hasła" aby wysłać użytkownikowi email z linkiem resetującym hasło</li>
-          <li>W modalu edycji możesz podać nowe hasło - użytkownik otrzyma email resetujący</li>
+          <li>W modalu edycji możesz ustawić nowe hasło (Auth przez API serwera) — albo użyj „Reset hasła”, aby wysłać link e‑mailem</li>
           <li>Zaznacz/odznacz zespoły dla każdego użytkownika, aby nadać mu odpowiednie uprawnienia</li>
           <li>Zmień rolę na "Admin" aby użytkownik mógł zarządzać innymi użytkownikami</li>
           <li>Użytkownicy bez żadnych zespołów nie będą mogli korzystać z aplikacji</li>

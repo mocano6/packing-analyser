@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { PKEntry, Player, TeamInfo } from "@/types";
 import styles from "./PKEntryModal.module.css";
 import PlayerCard from "../ActionModal/PlayerCard";
-import { TEAMS } from "@/constants/teams";
+import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
+import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
 
 export interface PKEntryModalProps {
   isOpen: boolean;
@@ -208,78 +209,10 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     }
   }, [isOpen, isEditMode, editingEntry?.id, editingEntry?.minute, onCalculateMinuteFromVideo]);
 
-  // Filtrowanie zawodników grających w danym meczu (podobnie jak w ShotModal)
-  const filteredPlayers = useMemo(() => {
-    if (!matchInfo) return players;
-
-    // Filtruj zawodników należących do zespołu
-    const teamPlayers = players.filter(player => 
-      player.teams?.includes(matchInfo.team)
-    );
-
-    // Filtruj tylko zawodników z co najmniej 1 minutą rozegranych w tym meczu
-    const playersWithMinutes = teamPlayers.filter(player => {
-      const playerMinutes = matchInfo.playerMinutes?.find(pm => pm.playerId === player.id);
-      
-      if (!playerMinutes) {
-        return false; // Jeśli brak danych o minutach, nie pokazuj zawodnika
-      }
-
-      // Oblicz czas gry
-      const playTime = playerMinutes.startMinute === 0 && playerMinutes.endMinute === 0
-        ? 0
-        : Math.max(0, playerMinutes.endMinute - playerMinutes.startMinute + 1);
-
-      return playTime >= 1; // Pokazuj tylko zawodników z co najmniej 1 minutą
-    });
-
-    return playersWithMinutes;
-  }, [players, matchInfo]);
-
-  // Funkcja do pobierania nazwy zespołu (dla etykiet)
-  const getTeamName = useCallback((teamId: string) => {
-    const team = Object.values(TEAMS).find(team => team.id === teamId);
-    return team ? team.name : teamId;
-  }, []);
-
-  // Funkcja pomocnicza do ograniczania wartości do zakresu 0-10
-  const clamp0to10 = (value: number) => Math.max(0, Math.min(10, value));
-
-  // Funkcja renderująca rząd przycisków numerycznych (0-10)
-  const renderCountRow = useCallback(
-    (
-      label: string,
-      value: number,
-      onChange: (next: number) => void,
-      ariaLabelPrefix: string
-    ) => {
-      const values = Array.from({ length: 11 }, (_, i) => i); // 0..10
-
-      return (
-        <div className={styles.countRow}>
-          <div className={styles.countRowLabel}>{label}</div>
-          <div className={styles.countButtons} role="group" aria-label={ariaLabelPrefix}>
-            {values.map((n) => (
-              <button
-                key={n}
-                type="button"
-                className={`${styles.countButton} ${value === n ? styles.countButtonActive : ""}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onChange(n);
-                }}
-                aria-pressed={value === n}
-                title={`Ustaw ${n}`}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        </div>
-      );
-    },
-    []
+  // Filtrowanie zawodników (minuty meczu; gdy brak minut w cache — skład zespołu)
+  const filteredPlayers = useMemo(
+    () => getModalPlayersForMatch(players, matchInfo),
+    [players, matchInfo]
   );
 
   // Funkcja do grupowania zawodników według pozycji
@@ -960,74 +893,53 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
             </div>
           )}
 
-          {/* 1T bez strzału, Partnerzy w PK, Przeciwnicy w PK, Strzał, Gol, Regain */}
+          {/* 1T bez strzału, Strzał, Gol (liczniki zawodników w PK — ukryte, wartości 0 w zapisie) */}
           <div className={styles.fieldGroup}>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-              {/* Przyciski 1T bez strzału, Strzał, Gol, Regain */}
-              <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Opcje akcji">
-                {formData.teamContext === "attack" && (
-                  <button
-                    type="button"
-                    className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${formData.isPossible1T ? styles.active : ""}`}
-                    onClick={() => setFormData({...formData, isPossible1T: !formData.isPossible1T})}
-                    data-tooltip="Był kontakt w 1T, ale strzału nie było"
-                    aria-pressed={formData.isPossible1T}
-                  >
-                    1T bez strzału
-                  </button>
-                )}
+            <div
+              className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`}
+              data-tooltip="Opcje akcji"
+            >
+              {formData.teamContext === "attack" && (
                 <button
                   type="button"
-                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${formData.isShot ? styles.active : ""}`}
-                  onClick={() => {
-                    // Jeśli odznaczamy strzał, odznaczamy też gol
-                    if (formData.isShot) {
-                      setFormData({...formData, isShot: false, isGoal: false});
-                    } else {
-                      setFormData({...formData, isShot: true});
-                    }
-                  }}
-                  data-tooltip="Po wejściu w PK był strzał"
-                  aria-pressed={formData.isShot}
+                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${formData.isPossible1T ? styles.active : ""}`}
+                  onClick={() => setFormData({...formData, isPossible1T: !formData.isPossible1T})}
+                  data-tooltip="Był kontakt w 1T, ale strzału nie było"
+                  aria-pressed={formData.isPossible1T}
                 >
-                  Strzał
+                  1T bez strzału
                 </button>
-                <button
-                  type="button"
-                  className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${formData.isGoal ? styles.active : ""}`}
-                  onClick={() => {
-                    // Jeśli zaznaczamy gol, automatycznie zaznaczamy strzał
-                    if (!formData.isGoal) {
-                      setFormData({...formData, isGoal: true, isShot: true});
-                    } else {
-                      setFormData({...formData, isGoal: false});
-                    }
-                  }}
-                  data-tooltip="Po wejściu w PK był gol"
-                  aria-pressed={formData.isGoal}
-                >
-                  Gol
-                </button>
-              </div>
-              
-              {/* Sekcja z przyciskami numerycznymi dla Partnerzy w PK i Przeciwnicy w PK */}
-              <div
-                className={`${styles.countSelectorContainer} ${styles.tooltipTrigger}`}
-                data-tooltip="Liczba zawodników w polu karnym"
+              )}
+              <button
+                type="button"
+                className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${formData.isShot ? styles.active : ""}`}
+                onClick={() => {
+                  if (formData.isShot) {
+                    setFormData({...formData, isShot: false, isGoal: false});
+                  } else {
+                    setFormData({...formData, isShot: true});
+                  }
+                }}
+                data-tooltip="Po wejściu w PK był strzał"
+                aria-pressed={formData.isShot}
               >
-                {renderCountRow(
-                  matchInfo?.team ? `${getTeamName(matchInfo.team)} w PK` : "Partnerzy w PK",
-                  clamp0to10(formData.pkPlayersCount),
-                  (n) => setFormData({...formData, pkPlayersCount: clamp0to10(n)}),
-                  matchInfo?.team ? `${getTeamName(matchInfo.team)} w PK (0-10)` : "Partnerzy w PK (0-10)"
-                )}
-                {renderCountRow(
-                  "Przeciwnicy w PK",
-                  clamp0to10(formData.opponentsInPKCount),
-                  (n) => setFormData({...formData, opponentsInPKCount: clamp0to10(n)}),
-                  "Przeciwnicy w PK (0-10)"
-                )}
-              </div>
+                Strzał
+              </button>
+              <button
+                type="button"
+                className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${formData.isGoal ? styles.active : ""}`}
+                onClick={() => {
+                  if (!formData.isGoal) {
+                    setFormData({...formData, isGoal: true, isShot: true});
+                  } else {
+                    setFormData({...formData, isGoal: false});
+                  }
+                }}
+                data-tooltip="Po wejściu w PK był gol"
+                aria-pressed={formData.isGoal}
+              >
+                Gol
+              </button>
             </div>
           </div>
 
@@ -1054,6 +966,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
                 className={styles.controversyNoteInput}
                 value={controversyNote}
                 onChange={(e) => setControversyNote(e.target.value)}
+                onKeyDown={submitParentFormOnEnter}
                 placeholder="Opisz problem z interpretacją wejścia PK..."
                 rows={3}
                 maxLength={500}

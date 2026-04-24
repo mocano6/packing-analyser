@@ -40,6 +40,8 @@ import {
 import SidePanel from "@/components/SidePanel/SidePanel";
 import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import { usePresentationMode } from "@/contexts/PresentationContext";
+import { getPkEntryKpiBreakdownCounts, isPkSfgEntry } from "@/lib/pkEntryKpiBreakdown";
+import { filterTeamsByUserAccess } from "@/lib/teamsForUserAccess";
 import styles from "./statystyki-zespolu.module.css";
 
 const GPS_MATCH_DAY_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -63,20 +65,15 @@ export default function StatystykiZespoluPage() {
   
   const youtubeVideoRef = useRef<YouTubeVideoRef>(null);
 
-  // Filtruj dostępne zespoły na podstawie uprawnień użytkownika (tak jak w głównej aplikacji)
-  const availableTeams = useMemo(() => {
-    if (isAdmin) {
-      // Administratorzy mają dostęp do wszystkich zespołów
-      return teams;
-    }
-    
-    if (!userTeams || userTeams.length === 0) {
-      return [];
-    }
-    
-    // Filtruj zespoły na podstawie uprawnień użytkownika
-    return teams.filter(team => userTeams.includes(team.id));
-  }, [userTeams, isAdmin, teams]);
+  // Filtruj dostępne zespoły — ta sama logika co w TeamsSelector / analyzer
+  const availableTeams = useMemo(
+    () =>
+      filterTeamsByUserAccess(teams, {
+        isAdmin,
+        allowedTeamIds: userTeams ?? [],
+      }),
+    [userTeams, isAdmin, teams]
+  );
   
   // Konwertuj availableTeams array na format używany w komponencie
   const teamsObject = useMemo(() => {
@@ -1198,6 +1195,8 @@ export default function StatystykiZespoluPage() {
     // Używamy tej samej logiki co w getActionCategory (src/utils/actionCategory.ts)
     if (
       action.isReaction5s !== undefined ||
+      action.losesOppRosterSquadTallyF1 !== undefined ||
+      action.losesBackAllyCount !== undefined ||
       action.isAut !== undefined ||
       action.isBadReaction5s !== undefined ||
       action.losesAttackZone !== undefined ||
@@ -1212,6 +1211,13 @@ export default function StatystykiZespoluPage() {
   };
 
   const isRegainAction = (action: any): boolean => {
+    if (
+      action.isReaction5s !== undefined ||
+      action.losesOppRosterSquadTallyF1 !== undefined ||
+      action.losesBackAllyCount !== undefined
+    ) {
+      return false;
+    }
     if (action?.actionType === 'lose' || action?.actionType === 'loses' || action?.actionType === 'loss') return false;
     if (action?.actionType === 'regain') return true;
     if (action?.isRegain === true) return true;
@@ -1229,6 +1235,8 @@ export default function StatystykiZespoluPage() {
       action.regainDefenseZone !== undefined ||
       action.regainAttackXT !== undefined ||
       action.regainDefenseXT !== undefined ||
+      action.regainOppRosterSquadTallyF1 !== undefined ||
+      action.receptionBackAllyCount !== undefined ||
       action.playersBehindBall !== undefined ||
       action.opponentsBehindBall !== undefined ||
       action.totalPlayersOnField !== undefined ||
@@ -2047,31 +2055,34 @@ export default function StatystykiZespoluPage() {
     let allRegainP1CountCentral = 0;
     let allRegainP2CountCentral = 0;
     let allRegainP3CountCentral = 0;
+    /** Przechwyty z możliwą strefą na mapie (jak widoczne / heatmapa), bez żadnej flagi P0–P3 */
+    let allRegainNoPCount = 0;
 
     filteredRegainActions.forEach(action => {
-      const defenseZoneRaw = action.regainDefenseZone || action.fromZone || action.toZone || action.startZone;
-      const defenseZoneName = defenseZoneRaw ? convertZoneToName(defenseZoneRaw) : null;
+      const attackZoneRaw = regainAttackZoneRawForMap(action);
+      const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
+      if (!attackZoneName) return;
 
-      if (defenseZoneName) {
-        const isLateral = isLateralZone(defenseZoneName);
-        // P0-P3 wzajemnie wykluczające – każda akcja w dokładnie jednym buckecie (suma = total)
-        if (action.isP0 || action.isP0Start) {
-          allRegainP0Count += 1;
-          if (isLateral) allRegainP0CountLateral += 1;
-          else allRegainP0CountCentral += 1;
-        } else if (action.isP1 || action.isP1Start) {
-          allRegainP1Count += 1;
-          if (isLateral) allRegainP1CountLateral += 1;
-          else allRegainP1CountCentral += 1;
-        } else if (action.isP2 || action.isP2Start) {
-          allRegainP2Count += 1;
-          if (isLateral) allRegainP2CountLateral += 1;
-          else allRegainP2CountCentral += 1;
-        } else if (action.isP3 || action.isP3Start) {
-          allRegainP3Count += 1;
-          if (isLateral) allRegainP3CountLateral += 1;
-          else allRegainP3CountCentral += 1;
-        }
+      const isLateral = isLateralZone(attackZoneName);
+      // Ta sama baza co visibleRegainsCount (bez filtra P): strefa ataku na mapie; boczna/środkowa jak w profilu zawodnika
+      if (action.isP0 || action.isP0Start) {
+        allRegainP0Count += 1;
+        if (isLateral) allRegainP0CountLateral += 1;
+        else allRegainP0CountCentral += 1;
+      } else if (action.isP1 || action.isP1Start) {
+        allRegainP1Count += 1;
+        if (isLateral) allRegainP1CountLateral += 1;
+        else allRegainP1CountCentral += 1;
+      } else if (action.isP2 || action.isP2Start) {
+        allRegainP2Count += 1;
+        if (isLateral) allRegainP2CountLateral += 1;
+        else allRegainP2CountCentral += 1;
+      } else if (action.isP3 || action.isP3Start) {
+        allRegainP3Count += 1;
+        if (isLateral) allRegainP3CountLateral += 1;
+        else allRegainP3CountCentral += 1;
+      } else {
+        allRegainNoPCount += 1;
       }
     });
 
@@ -2278,6 +2289,7 @@ export default function StatystykiZespoluPage() {
       allRegainP2CountCentral,
       allRegainP3CountCentral,
       totalRegainsWithP: allRegainP0Count + allRegainP1Count + allRegainP2Count + allRegainP3Count,
+      allRegainNoPCount,
       visibleRegainsCount,
       visibleRegainsOpponentHalf,
     };
@@ -2675,34 +2687,45 @@ export default function StatystykiZespoluPage() {
     let allLosesP1CountCentral = 0;
     let allLosesP2CountCentral = 0;
     let allLosesP3CountCentral = 0;
+    /** Strata z mapą, bez P0–P3 (nie aut na własnej połowie) */
+    let allLosesNoPCount = 0;
+    /** Aut na własnej połowie ze strefą na mapie — wyłączone z kafelków P (jak wcześniej), wliczone w STRATY */
+    let allLosesOwnHalfAutOnMapCount = 0;
 
     filteredLosesActions.forEach(action => {
+      const attackZoneRaw = action.losesAttackZone || action.oppositeZone;
+      const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
+      if (!attackZoneName) return;
+
       const losesZoneRaw = losesZoneRawFromAction(action);
       const losesZoneName = losesZoneRaw ? convertZoneToName(losesZoneRaw) : null;
-      // Na własnej połowie wykluczamy auty (spójność z totalLosesOwnHalf)
-      const isOwn = losesZoneName ? isOwnHalf(losesZoneName) : false;
+      const zoneForHalf = losesZoneName ?? attackZoneName;
+      const isOwn = isOwnHalf(zoneForHalf);
       const excludeAsAut = isOwn && (action.isAut === true || (action as any).aut === true);
+      if (excludeAsAut) {
+        allLosesOwnHalfAutOnMapCount += 1;
+        return;
+      }
 
-      if (losesZoneName && !excludeAsAut) {
-        const isLateral = isLateralZone(losesZoneName);
-        // P0-P3 wzajemnie wykluczające – każda akcja w dokładnie jednym buckecie (suma = total)
-        if (action.isP0 || action.isP0Start) {
-          allLosesP0Count += 1;
-          if (isLateral) allLosesP0CountLateral += 1;
-          else allLosesP0CountCentral += 1;
-        } else if (action.isP1 || action.isP1Start) {
-          allLosesP1Count += 1;
-          if (isLateral) allLosesP1CountLateral += 1;
-          else allLosesP1CountCentral += 1;
-        } else if (action.isP2 || action.isP2Start) {
-          allLosesP2Count += 1;
-          if (isLateral) allLosesP2CountLateral += 1;
-          else allLosesP2CountCentral += 1;
-        } else if (action.isP3 || action.isP3Start) {
-          allLosesP3Count += 1;
-          if (isLateral) allLosesP3CountLateral += 1;
-          else allLosesP3CountCentral += 1;
-        }
+      const isLateral = isLateralZone(attackZoneName);
+      if (action.isP0 || action.isP0Start) {
+        allLosesP0Count += 1;
+        if (isLateral) allLosesP0CountLateral += 1;
+        else allLosesP0CountCentral += 1;
+      } else if (action.isP1 || action.isP1Start) {
+        allLosesP1Count += 1;
+        if (isLateral) allLosesP1CountLateral += 1;
+        else allLosesP1CountCentral += 1;
+      } else if (action.isP2 || action.isP2Start) {
+        allLosesP2Count += 1;
+        if (isLateral) allLosesP2CountLateral += 1;
+        else allLosesP2CountCentral += 1;
+      } else if (action.isP3 || action.isP3Start) {
+        allLosesP3Count += 1;
+        if (isLateral) allLosesP3CountLateral += 1;
+        else allLosesP3CountCentral += 1;
+      } else {
+        allLosesNoPCount += 1;
       }
     });
 
@@ -2750,6 +2773,8 @@ export default function StatystykiZespoluPage() {
         allLosesP1CountCentral,
         allLosesP2CountCentral,
         allLosesP3CountCentral,
+        allLosesNoPCount,
+        allLosesOwnHalfAutOnMapCount,
       };
     }
 
@@ -2830,6 +2855,8 @@ export default function StatystykiZespoluPage() {
         allLosesP1CountCentral,
         allLosesP2CountCentral,
         allLosesP3CountCentral,
+        allLosesNoPCount,
+        allLosesOwnHalfAutOnMapCount,
       };
     }, [derivedLosesActions, losesHalfFilter, selectedActionFilter]);
 
@@ -4197,18 +4224,24 @@ export default function StatystykiZespoluPage() {
                     e && e.teamId === selectedTeam && (e.teamContext ?? "attack") !== "defense"
                   );
                   const teamPKEntriesCount = teamPKEntries.length;
-                  const teamPKRegainCount = teamPKEntries.filter((e: any) => !!e.isRegain).length;
-                  const teamPKDribbleCount = teamPKEntries.filter((e: any) => (e.entryType || 'pass') === 'dribble').length;
-                  const teamPKPassCount = teamPKEntries.filter((e: any) => (e.entryType || 'pass') === 'pass').length;
-                  const opponentPKRegainCount = opponentPKEntries.filter((e: any) => !!e.isRegain).length;
-                  const opponentPKDribbleCount = opponentPKEntries.filter((e: any) => (e.entryType || 'pass') === 'dribble').length;
-                  const opponentPKPassCount = opponentPKEntries.filter((e: any) => (e.entryType || 'pass') === 'pass').length;
+                  const teamPkBr = getPkEntryKpiBreakdownCounts(teamPKEntries);
+                  const opponentPkBr = getPkEntryKpiBreakdownCounts(opponentPKEntries);
+                  const teamPKSfgCount = teamPkBr.sfgCount;
+                  const teamPKDribbleCount = teamPkBr.dribbleCount;
+                  const teamPKPassCount = teamPkBr.passCount;
+                  const teamPKDribbleRegainCount = teamPkBr.dribbleRegainCount;
+                  const teamPKPassRegainCount = teamPkBr.passRegainCount;
+                  const opponentPKSfgCount = opponentPkBr.sfgCount;
+                  const opponentPKDribbleCount = opponentPkBr.dribbleCount;
+                  const opponentPKPassCount = opponentPkBr.passCount;
+                  const opponentPKDribbleRegainCount = opponentPkBr.dribbleRegainCount;
+                  const opponentPKPassRegainCount = opponentPkBr.passRegainCount;
                   const pkPlayersSummary = teamPKEntries.reduce((acc, entry: any) => {
                     const enabledRoles = kpiPkPlayersRoles;
                     const perEntryPlayers = new Map<string, { playerIdRaw: string; fallbackName: string }>();
 
                     const rawType = String(entry.entryType || entry.actionType || '').toLowerCase();
-                    const isDribbleEntry = rawType === 'dribble';
+                    const isDribbleEntry = rawType === "dribble" && !isPkSfgEntry(entry);
 
                     const addRolePlayer = (roleKey: 'sender' | 'receiver' | 'dribbler', idRaw?: string | null, nameRaw?: string | null) => {
                       if (!enabledRoles[roleKey]) return;
@@ -4247,7 +4280,7 @@ export default function StatystykiZespoluPage() {
                     }
 
                     const isRegainEntry = !!entry.isRegain;
-                    const isSfgEntry = (entry.entryType || entry.actionCategory) === 'sfg';
+                    const isSfgEntry = isPkSfgEntry(entry);
                     const isShotEntry = !!entry.isShot;
 
                     perEntryPlayers.forEach(({ playerIdRaw, fallbackName }, key) => {
@@ -6898,7 +6931,7 @@ export default function StatystykiZespoluPage() {
                               className={`${styles.kpiScoreRowClickable} ${styles.kpiScoreRowThreeCol} ${kpiPkRowExpanded ? styles.kpiScoreRowClickableExpanded : ''}`}
                               onClick={() => setKpiPkRowExpanded(!kpiPkRowExpanded)}
                               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiPkRowExpanded(!kpiPkRowExpanded); } }}
-                              title={kpiPkRowExpanded ? 'Kliknij, aby zwinąć' : 'Kliknij, aby rozwinąć szczegóły PK (po regain, drybling, podanie)'}
+                              title={kpiPkRowExpanded ? 'Kliknij, aby zwinąć' : 'Kliknij, aby rozwinąć szczegóły PK (po regain, SFG, drybling, podanie)'}
                               aria-expanded={kpiPkRowExpanded}
                             >
                               <span className={styles.kpiScoreRowCenterBlock}>
@@ -6956,16 +6989,16 @@ export default function StatystykiZespoluPage() {
                               <div className={styles.kpiScoreRowExpandedContent}>
                                 <div className={styles.kpiScoreGoalsDetails}>
                                   <div className={styles.kpiScoreRow}>
-                                    <span className={styles.kpiScoreRowLabel}>Po regain</span>
+                                    <span className={styles.kpiScoreRowLabel}>SFG</span>
                                     <span className={styles.kpiScoreRowValues}>
-                                      {teamPKRegainCount}{' '}
+                                      {teamPKSfgCount}{' '}
                                       <span className={styles.kpiScoreRowValuesPct}>
-                                        ({teamPKEntriesCount > 0 ? Math.round(teamPKRegainCount / teamPKEntriesCount * 100) : 0}%)
+                                        ({teamPKEntriesCount > 0 ? Math.round(teamPKSfgCount / teamPKEntriesCount * 100) : 0}%)
                                       </span>
                                       <span className={styles.kpiScoreRowCombinedDivider}>:</span>
-                                      {opponentPKRegainCount}{' '}
+                                      {opponentPKSfgCount}{' '}
                                       <span className={styles.kpiScoreRowValuesPct}>
-                                        ({opponentPKEntriesCount > 0 ? Math.round(opponentPKRegainCount / opponentPKEntriesCount * 100) : 0}%)
+                                        ({opponentPKEntriesCount > 0 ? Math.round(opponentPKSfgCount / opponentPKEntriesCount * 100) : 0}%)
                                       </span>
                                     </span>
                                   </div>
@@ -6976,10 +7009,18 @@ export default function StatystykiZespoluPage() {
                                       <span className={styles.kpiScoreRowValuesPct}>
                                         ({teamPKEntriesCount > 0 ? Math.round(teamPKDribbleCount / teamPKEntriesCount * 100) : 0}%)
                                       </span>
+                                      <span className={styles.kpiScoreRowValuesRegainPart}>
+                                        {' '}
+                                        · {teamPKDribbleRegainCount} po regain
+                                      </span>
                                       <span className={styles.kpiScoreRowCombinedDivider}>:</span>
                                       {opponentPKDribbleCount}{' '}
                                       <span className={styles.kpiScoreRowValuesPct}>
                                         ({opponentPKEntriesCount > 0 ? Math.round(opponentPKDribbleCount / opponentPKEntriesCount * 100) : 0}%)
+                                      </span>
+                                      <span className={styles.kpiScoreRowValuesRegainPart}>
+                                        {' '}
+                                        · {opponentPKDribbleRegainCount} po regain
                                       </span>
                                     </span>
                                   </div>
@@ -6990,10 +7031,18 @@ export default function StatystykiZespoluPage() {
                                       <span className={styles.kpiScoreRowValuesPct}>
                                         ({teamPKEntriesCount > 0 ? Math.round(teamPKPassCount / teamPKEntriesCount * 100) : 0}%)
                                       </span>
+                                      <span className={styles.kpiScoreRowValuesRegainPart}>
+                                        {' '}
+                                        · {teamPKPassRegainCount} po regain
+                                      </span>
                                       <span className={styles.kpiScoreRowCombinedDivider}>:</span>
                                       {opponentPKPassCount}{' '}
                                       <span className={styles.kpiScoreRowValuesPct}>
                                         ({opponentPKEntriesCount > 0 ? Math.round(opponentPKPassCount / opponentPKEntriesCount * 100) : 0}%)
+                                      </span>
+                                      <span className={styles.kpiScoreRowValuesRegainPart}>
+                                        {' '}
+                                        · {opponentPKPassRegainCount} po regain
                                       </span>
                                     </span>
                                   </div>
@@ -9698,6 +9747,7 @@ export default function StatystykiZespoluPage() {
                     <span className={styles.detailsValue}>
                       {(() => {
                         const regainsCount = teamRegainStats.visibleRegainsCount ?? teamRegainStats.totalRegains;
+                        const noP = teamRegainStats.allRegainNoPCount ?? 0;
                         const totalMinutes = teamStats.totalMinutes || 90;
                         const regainsPer90 = totalMinutes > 0 ? (regainsCount * 90) / totalMinutes : 0;
                         return (
@@ -9707,6 +9757,9 @@ export default function StatystykiZespoluPage() {
                               <span className={styles.valueSecondary}>/{regainsCount} (100.0%)</span>
                             )}
                             <span className={styles.valueSecondary}> • ({regainsPer90.toFixed(1)} / 90)</span>
+                            {noP > 0 && (
+                              <span className={styles.valueSecondary}> • bez P0–P3: {noP}</span>
+                            )}
                           </>
                         );
                       })()}
@@ -10226,6 +10279,8 @@ export default function StatystykiZespoluPage() {
                       {(() => {
                         const filteredLosesCount = teamLosesStats.visibleLosesCount;
                         const autysCount = teamLosesStats.visibleAutCount;
+                        const noPLoses = teamLosesStats.allLosesNoPCount ?? 0;
+                        const autOnMapOwnHalf = teamLosesStats.allLosesOwnHalfAutOnMapCount ?? 0;
                         const totalMinutes = teamStats.totalMinutes || 90;
                         const losesPer90Filtered = totalMinutes > 0
                           ? ((filteredLosesCount * 90) / totalMinutes).toFixed(1)
@@ -10236,6 +10291,8 @@ export default function StatystykiZespoluPage() {
                             <span className={styles.valueSecondary}>
                               {' '}
                               • ({losesPer90Filtered} / 90){autysCount > 0 ? ` • w tym auty: ${autysCount}` : ''}
+                              {noPLoses > 0 ? ` • bez P0–P3: ${noPLoses}` : ''}
+                              {autOnMapOwnHalf > 0 ? ` • aut (wł. poł., mapa): ${autOnMapOwnHalf}` : ''}
                             </span>
                           </>
                         );

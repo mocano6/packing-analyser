@@ -10,6 +10,11 @@ import { getOppositeXTValueForZone, zoneNameToIndex, getZoneData, getZoneName, z
 import { useAuth } from "@/hooks/useAuth";
 import { buildPlayersIndex, getPlayerLabel, PlayersIndex } from "@/utils/playerUtils";
 import { getActionCategory } from "@/utils/actionCategory";
+import {
+  getReceptionBackAllyCountForDisplay,
+  isRegainReceptionBackCountModel,
+} from "@/lib/regainReceptionDisplay";
+import { getLosesBackAllyCountForDisplay, isLosesBackAllyCountModel } from "@/lib/losesBackAllyDisplay";
 
 type SortKey =
   | "minute"
@@ -434,12 +439,17 @@ const ActionRow = ({
       <div className={sharedStyles.cell}>
         {/* Dla regain i loses wyświetlamy "przed/za piłką" zamiast packingPoints */}
         {actionCategory === "regain" || actionCategory === "loses" ? (
-          (() => {
-            const opponentsBefore = action.opponentsBehindBall ?? 0;
-            const totalOpponents = action.totalOpponentsOnField ?? 11;
-            const opponentsBehind = totalOpponents - opponentsBefore;
-            return `${opponentsBefore}/${opponentsBehind}`;
-          })()
+          (actionCategory === "regain" && isRegainReceptionBackCountModel(action)) ||
+          (actionCategory === "loses" && isLosesBackAllyCountModel(action)) ? (
+            "—"
+          ) : (
+            (() => {
+              const opponentsBefore = action.opponentsBehindBall ?? 0;
+              const totalOpponents = action.totalOpponentsOnField ?? 11;
+              const opponentsBehind = totalOpponents - opponentsBefore;
+              return `${opponentsBefore}/${opponentsBehind}`;
+            })()
+          )
         ) : (
           action.packingPoints || 0
         )}
@@ -447,12 +457,18 @@ const ActionRow = ({
       {/* Dla regain i loses dodajemy kolumnę "Partnerzy przed piłką" */}
       {(actionCategory === "regain" || actionCategory === "loses") && (
         <div className={sharedStyles.cell}>
-          {(() => {
-            const playersBefore = action.playersBehindBall ?? 0;
-            const totalPlayers = action.totalPlayersOnField ?? 11;
-            const playersBehind = totalPlayers - playersBefore;
-            return `${playersBefore}/${playersBehind}`;
-          })()}
+          {actionCategory === "regain" && isRegainReceptionBackCountModel(action) ? (
+            <span>{getReceptionBackAllyCountForDisplay(action)}</span>
+          ) : actionCategory === "loses" && isLosesBackAllyCountModel(action) ? (
+            <span>{getLosesBackAllyCountForDisplay(action)}</span>
+          ) : (
+            (() => {
+              const playersBefore = action.playersBehindBall ?? 0;
+              const totalPlayers = action.totalPlayersOnField ?? 11;
+              const playersBehind = totalPlayers - playersBefore;
+              return `${playersBefore}/${playersBehind}`;
+            })()
+          )}
         </div>
       )}
       {/* Ukryj kolumnę PxT dla regain i loses */}
@@ -514,7 +530,9 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
   onEditAction,
   youtubeVideoRef,
   customVideoRef,
-  actionCategory = "packing"
+  actionCategory = "packing",
+  packingListMode,
+  onPackingListModeChange,
 }) => {
   const [sortConfig, setSortConfig] = useState<{
     key: SortKey;
@@ -553,6 +571,15 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
     return true;
   });
 
+  const packingModeControlled =
+    actionCategory === "packing" &&
+    packingListMode !== undefined &&
+    onPackingListModeChange !== undefined;
+
+  const packingFilter: "attack" | "defense" = packingModeControlled
+    ? packingListMode!
+    : actionModeFilter;
+
   // Synchronizuj actionModeFilter (packing) i zapisuj showRegain/showLoses w localStorage
   useEffect(() => {
     if (actionCategory === "regain" || actionCategory === "loses") {
@@ -560,7 +587,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         localStorage.setItem('actionModeFilter_regain_loses_showRegain', String(showRegain));
         localStorage.setItem('actionModeFilter_regain_loses_showLoses', String(showLoses));
       }
-    } else {
+    } else if (!packingModeControlled) {
       if (actionModeFilter !== 'attack' && actionModeFilter !== 'defense') {
         if (typeof window !== 'undefined') {
           const saved = localStorage.getItem('actionModeFilter_packing');
@@ -574,10 +601,11 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
         localStorage.setItem('actionModeFilter_packing', actionModeFilter);
       }
     }
-  }, [actionCategory, actionModeFilter, showRegain, showLoses]);
+  }, [actionCategory, actionModeFilter, showRegain, showLoses, packingModeControlled]);
 
   // Dla nagłówków i wierszy: w zakładce regain/loses używamy layoutu jak "attack" (Zawodnik start)
-  const displayMode: 'attack' | 'defense' = (actionCategory === "regain" || actionCategory === "loses") ? 'attack' : actionModeFilter;
+  const displayMode: 'attack' | 'defense' =
+    actionCategory === "regain" || actionCategory === "loses" ? "attack" : packingFilter;
 
   // State dla filtra kontrowersyjnego
   const [showOnlyControversial, setShowOnlyControversial] = useState(false);
@@ -652,7 +680,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
       } else {
         // Dla packing filtrujemy po trybie (attack/defense)
         const actionMode = action.mode || 'attack';
-        return actionMode === actionModeFilter;
+        return actionMode === packingFilter;
       }
     });
 
@@ -727,8 +755,15 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           comparison = (a.packingPoints || 0) - (b.packingPoints || 0);
           break;
         case "playersBehindBall": {
-          // Sortowanie po liczbie partnerów przed piłką (np. "3/2" -> 3 i 2)
-          const getVal = (action: any) => (action.playersBehindBall ?? 0) * 100 + (action.opponentsBehindBall ?? 0);
+          const getVal = (act: Action) => {
+            if (isRegainReceptionBackCountModel(act)) {
+              return getReceptionBackAllyCountForDisplay(act);
+            }
+            if (isLosesBackAllyCountModel(act)) {
+              return getLosesBackAllyCountForDisplay(act);
+            }
+            return (act.playersBehindBall ?? 0) * 100 + (act.opponentsBehindBall ?? 0);
+          };
           comparison = getVal(a) - getVal(b);
           break;
         }
@@ -768,7 +803,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
       if (ma !== mb) return ma - mb;
       return (a.id || "").localeCompare(b.id || "");
     });
-  }, [actions, sortConfig, actionModeFilter, actionCategory, showRegain, showLoses, showOnlyControversial, playersIndex]);
+  }, [actions, sortConfig, packingFilter, actionCategory, showRegain, showLoses, showOnlyControversial, playersIndex]);
 
   return (
     <div className={sharedStyles.tableContainer}>
@@ -813,14 +848,24 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           ) : (
             <div className={styles.modeToggle}>
               <button
-                className={`${styles.modeButton} ${actionModeFilter === 'attack' ? styles.active : ''}`}
-                onClick={() => setActionModeFilter('attack')}
+                type="button"
+                className={`${styles.modeButton} ${packingFilter === 'attack' ? styles.active : ''}`}
+                onClick={() =>
+                  packingModeControlled
+                    ? onPackingListModeChange!("attack")
+                    : setActionModeFilter("attack")
+                }
               >
                 Packing
               </button>
               <button
-                className={`${styles.modeButton} ${actionModeFilter === 'defense' ? styles.active : ''}`}
-                onClick={() => setActionModeFilter('defense')}
+                type="button"
+                className={`${styles.modeButton} ${packingFilter === 'defense' ? styles.active : ''}`}
+                onClick={() =>
+                  packingModeControlled
+                    ? onPackingListModeChange!("defense")
+                    : setActionModeFilter("defense")
+                }
               >
                 Unpacking
               </button>
@@ -904,7 +949,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
             />
           )}
           <HeaderCell
-            label={actionCategory === "regain" || actionCategory === "loses" ? "Liczba zawodników (przed/za) piłką" : "Packing"}
+            label={actionCategory === "regain" || actionCategory === "loses" ? "Liczba przeciwników (przed/za) piłką" : "Packing"}
             sortKey="packing"
             currentSortKey={sortConfig.key}
             sortDirection={sortConfig.direction}
@@ -913,7 +958,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
           {/* Dla regain i loses dodajemy kolumnę "Partnerzy przed piłką" */}
           {(actionCategory === "regain" || actionCategory === "loses") && (
             <HeaderCell
-              label="Partnerzy (przed/za) piłką"
+              label="Przeciwnicy (przed/za) piłką"
               sortKey="playersBehindBall"
               currentSortKey={sortConfig.key}
               sortDirection={sortConfig.direction}

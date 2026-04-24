@@ -6,6 +6,39 @@
   min-height: 100vh;
 }
 
+.aggDiagnosticBanner {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  color: #664d03;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.aggDiagnosticBanner code {
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.aggDiagnosticInfo {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: #d1e7dd;
+  border: 1px solid #badbcc;
+  border-radius: 8px;
+  color: #0f5132;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.aggDiagnosticInfo code {
+  font-size: 12px;
+}
+
 .header {
   display: flex;
   justify-content: space-between;
@@ -46,6 +79,48 @@
   background-color: white;
   border-radius: 10px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.controlsTopRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.controlsTopRow .searchBox {
+  flex: 1;
+  min-width: min(100%, 280px);
+}
+
+.teamFilter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+}
+
+.teamFilterLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.teamSelect {
+  width: 100%;
+  max-width: 320px;
+  padding: 10px 12px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  font-size: 15px;
+  background-color: #fff;
+  cursor: pointer;
+}
+
+.teamSelect:focus {
+  outline: none;
+  border-color: #007bff;
 }
 
 .searchBox {
@@ -103,12 +178,15 @@
   background-color: #fff3cd;
   border: 2px solid #ffeaa7;
   border-radius: 10px;
+  scroll-margin-top: 1rem;
 }
 
 .duplicatesHeader {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
@@ -173,10 +251,529 @@
   border: 1px solid #ffeaa7;
 }
 
-.duplicateGroup h4 {
-  margin: 0 0 15px 0;
+.duplicateGroupTitleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.duplicateGroupTitleRow h4 {
+  margin: 0;
   color: #856404;
   font-size: 16px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.duplicateGroupBulkBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  justify-content: flex-end;
+}
+
+.duplicateGroupBulkBtn {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid #e0c96a;
+  border-radius: 6px;
+  background: #fffef5;
+  cursor: pointer;
+  color: #5c4a00;
+}
+
+.duplicateGroupBulkBtn:hover:not(:disabled) {
+  background: #fff8dc;
+}
+
+.duplicateGroupBulkBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.duplicateGroupBulkBtnDanger {
+  border-color: #f5c2c7;
+  background: #fff5f5;
+  color: #842029;
+  font-weight: 600;
+}
+
+.duplicateGroupBulkBtnDanger:hover:not(:disabled) {
+  background: #ffe3e3;
+}
+
+.duplicateCardMergeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #ffeaa7;
+}
+
+.duplicateCardMergeLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5c4a00;
+  flex-shrink: 0;
+}
+
+.duplicateCardMergeSelect {
+  flex: 1 1 140px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid #e0c96a;
+  border-radius: 6px;
+  background: #fffef5;
+}
+
+.duplicateCardMergeButton {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  color: #fff;
+  background: #0d6efd;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.duplicateCardMergeButton:hover:not(:disabled) {
+  background: #0b5ed7;
+}
+
+.duplicateCardMergeButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.duplicateGroupHint {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  color: #6c5d2e;
+  line-height: 1.35;
+}
+
+.duplicateGroupHint code {
+  font-size: 12px;
+  background: #fff8e1;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.duplicateListRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.duplicateItemWrapperFlex {
+  flex: 1 1 220px;
+  max-width: 100%;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.duplicateItemStack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+.duplicateCardTop {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.duplicateCardToolbar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.duplicateToolbarBulkCheckbox {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.35rem;
+  cursor: pointer;
+  accent-color: #856404;
+  flex-shrink: 0;
+}
+
+.duplicateToolbarBulkCheckbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.duplicateToolbarBtn {
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0 6px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.duplicateToolbarBtn:hover {
+  background: #f1f3f5;
+}
+
+.duplicateToolbarBtnDanger {
+  border-color: #f5c2c7;
+  background: #fff5f5;
+}
+
+.duplicateToolbarBtnDanger:hover {
+  background: #ffe3e3;
+}
+
+.duplicateCardMetaLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.duplicateCardName {
+  font-weight: 600;
+  color: #333;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.duplicateCardNum {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: #007bff;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.duplicateCardYear {
+  font-size: 11px;
+  color: #6c757d;
+  white-space: nowrap;
+}
+
+.duplicateCardTeamsLine {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.2;
+  color: #28a745;
+  font-weight: 500;
+}
+
+.duplicateCardTeamsText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.duplicateTeamChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.duplicateTeamChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 1px 2px 1px 6px;
+  background: #e8f5e9;
+  border: 1px solid #c3e6cb;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #155724;
+}
+
+.duplicateTeamChipName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+.duplicateTeamRemoveBtn {
+  flex-shrink: 0;
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: #721c24;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.duplicateTeamRemoveBtn:hover:not(:disabled) {
+  background: rgba(114, 28, 36, 0.12);
+}
+
+.duplicateTeamRemoveBtn:focus-visible {
+  outline: 2px solid #667eea;
+  outline-offset: 1px;
+}
+
+.duplicateTeamRemoveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.duplicatePlayerInfo {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.teamsLabel {
+  font-weight: 600;
+  color: #495057;
+  margin-right: 4px;
+}
+
+.duplicateGlobalStatsCompact {
+  font-size: 10px;
+  line-height: 1.2;
+  color: #495057;
+  padding: 4px 6px;
+  background: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.duplicateGlobalStatsCompactLoading {
+  color: #6c757d;
+  font-style: italic;
+}
+
+.duplicatePerMatchWrap {
+  margin-top: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.duplicatePerMatchHint {
+  margin: 0;
+  font-size: 11px;
+  color: #6c757d;
+  line-height: 1.3;
+}
+
+.duplicatePerMatchDetails {
+  margin-top: 6px;
+  width: 100%;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  background: #fafafa;
+  box-sizing: border-box;
+}
+
+.duplicatePerMatchSummary {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: #495057;
+  padding: 6px 8px;
+  list-style: none;
+}
+
+.duplicatePerMatchSummary::-webkit-details-marker {
+  display: none;
+}
+
+.duplicatePerMatchScroll {
+  overflow-x: auto;
+  max-height: 240px;
+  overflow-y: auto;
+  border-top: 1px solid #e9ecef;
+}
+
+.duplicatePerMatchTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.duplicatePerMatchTable th,
+.duplicatePerMatchTable td {
+  padding: 4px 6px;
+  text-align: right;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+
+.duplicatePerMatchTable th:first-child,
+.duplicatePerMatchTable td:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: #fafafa;
+  z-index: 1;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.duplicatePerMatchTable th {
+  font-weight: 600;
+  color: #868e96;
+  background: #f1f3f5;
+}
+
+.duplicatePerMatchNameCell {
+  font-weight: 500;
+  color: #212529;
+}
+
+.duplicateAggregatesLoadingInner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.duplicateAggregatesLoadingSpinner {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border: 2px solid #dee2e6;
+  border-top-color: #3498db;
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+}
+
+.duplicateStatCompactLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  align-items: baseline;
+}
+
+.duplicateStatCompactLine + .duplicateStatCompactLine {
+  margin-top: 2px;
+}
+
+.duplicateStatPair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  white-space: nowrap;
+}
+
+.duplicateStatKey {
+  font-weight: 600;
+  color: #868e96;
+  font-size: 9px;
+  letter-spacing: -0.02em;
+}
+
+.duplicateStatVal {
+  font-weight: 700;
+  color: #212529;
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+}
+
+.duplicateActionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  width: 100%;
+}
+
+.duplicateActionsBtn {
+  background-color: #6f42c1;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 11px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.duplicateActionsBtn:hover:not(:disabled) {
+  background-color: #5a32a3;
+}
+
+.duplicateActionsBtn:disabled {
+  background-color: #adb5bd;
+  color: #495057;
+  cursor: default;
+}
+
+.globalTotalBadge {
+  font-size: 11px;
+  color: #495057;
+  white-space: nowrap;
+}
+
+.duplicateCardId {
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  color: #495057;
+  background: #e9ecef;
+  padding: 1px 5px;
+  border-radius: 3px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .duplicateList {
@@ -195,7 +792,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px;
+  padding: 6px 8px;
   background-color: #f8f9fa;
   border-radius: 6px;
   border: 1px solid #dee2e6;
@@ -244,6 +841,12 @@
   color: #28a745;
   font-size: 14px;
   font-weight: 500;
+  vertical-align: top;
+  max-width: 380px;
+}
+
+.playerTeams .duplicateTeamChips {
+  justify-content: flex-start;
 }
 
 .playerActions {
@@ -339,6 +942,30 @@
 .actionsCount {
   text-align: center;
   font-weight: 600;
+}
+
+.principalAssociationsCell {
+  vertical-align: top;
+  max-width: 240px;
+}
+
+.principalCellStack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.principalCellStack .duplicateGlobalStatsCompact {
+  text-align: left;
+}
+
+.fullContactHint {
+  font-size: 10px;
+  color: #6c757d;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .noActions {

@@ -6,6 +6,8 @@ import type { Action } from "@/types";
 export function getActionCategory(action: Action): "packing" | "regain" | "loses" {
   if (
     action.isReaction5s !== undefined ||
+    action.losesOppRosterSquadTallyF1 !== undefined ||
+    action.losesBackAllyCount !== undefined ||
     action.isAut !== undefined ||
     action.isBadReaction5s !== undefined ||
     (action as Action & { isPMArea?: boolean }).isPMArea !== undefined ||
@@ -21,6 +23,9 @@ export function getActionCategory(action: Action): "packing" | "regain" | "loses
     action.regainDefenseZone !== undefined ||
     action.regainAttackXT !== undefined ||
     action.regainDefenseXT !== undefined ||
+    action.regainOppRosterSquadTallyF1 !== undefined ||
+    action.receptionBackAllyCount !== undefined ||
+    action.receptionAllyCountBehindBall !== undefined ||
     action.playersBehindBall !== undefined ||
     action.opponentsBehindBall !== undefined ||
     action.totalPlayersOnField !== undefined ||

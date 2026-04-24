@@ -6,7 +6,10 @@ import { Player, Action, TeamInfo } from "@/types";
 import { ACTION_BUTTONS } from "../PointsButtons/constants";
 import PlayerCard from "../ActionModal/PlayerCard";
 import { TEAMS } from "@/constants/teams";
+import { getOurSquadLabelForPackingModal } from "@/lib/matchInfoPackingLabels";
 import { sortPlayersByLastName } from '@/utils/playerUtils';
+import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
+import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
 
 interface LosesActionModalProps {
   isOpen: boolean;
@@ -76,12 +79,9 @@ interface LosesActionModalProps {
   // Nowy prop dla przycisku "Aut"
   isAutActive: boolean;
   onAutToggle: () => void;
-  // Nowy prop dla liczby partnerów przed piłką
-  playersBehindBall: number;
-  onPlayersBehindBallChange: (count: number) => void;
-  // Nowy prop dla liczby przeciwników za piłką
-  opponentsBehindBall: number;
-  onOpponentsBehindBallChange: (count: number) => void;
+  /** Liczba „miniętych” w momencie straty (0–10). Firestore: losesOppRosterSquadTallyF1. */
+  losesBackAllyCount: number;
+  onLosesBackAllyCountChange: (count: number) => void;
   // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
   playersLeftField: number;
   onPlayersLeftFieldChange: (count: number) => void;
@@ -94,6 +94,8 @@ interface LosesActionModalProps {
     id: string;
     name: string;
   }>;
+  /** Etykieta aktualnie wybranej drużyny w analizatorze (np. z selektora) — ma pierwszeństwo nad samego matchInfo.team. */
+  packingSquadDisplayName?: string | null;
 }
 
 const LosesActionModal: React.FC<LosesActionModalProps> = ({
@@ -163,12 +165,8 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   // Nowy prop dla przycisku "Aut"
   isAutActive,
   onAutToggle,
-  // Nowy prop dla liczby partnerów przed piłką
-  playersBehindBall,
-  onPlayersBehindBallChange,
-  // Nowy prop dla liczby przeciwników przed piłką
-  opponentsBehindBall,
-  onOpponentsBehindBallChange,
+  losesBackAllyCount,
+  onLosesBackAllyCountChange,
   // Nowy prop dla liczby zawodników naszego zespołu, którzy opuścili boisko
   playersLeftField,
   onPlayersLeftFieldChange,
@@ -178,23 +176,53 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   isControversial,
   onControversialToggle,
   allTeams = [],
+  packingSquadDisplayName,
 }) => {
   const clamp0to10 = (value: number) => Math.max(0, Math.min(10, value));
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
 
+  const ourSquadLabel = useMemo(() => {
+    const fromSelector = packingSquadDisplayName?.trim();
+    if (fromSelector) return fromSelector;
+    const fromLib = getOurSquadLabelForPackingModal(matchInfo, allTeams);
+    if (fromLib) return fromLib;
+    const tid = matchInfo?.team?.trim();
+    if (!tid) return null;
+    for (const t of Object.values(TEAMS)) {
+      if (t.id === tid) return t.name;
+    }
+    return null;
+  }, [packingSquadDisplayName, matchInfo, allTeams]);
+  const backAllyTooltip = ourSquadLabel
+    ? `Ilu zawodników przeciwnika zostało miniętych w momencie straty (0–10). Perspektywa zespołu: ${ourSquadLabel}.`
+    : "Ilu zawodników przeciwnika zostało miniętych w momencie straty (0–10).";
+
   const renderCountRow = useCallback(
     (
-      label: string,
+      title: string,
+      subtitle: string | null,
       value: number,
       onChange: (next: number) => void,
-      ariaLabelPrefix: string
+      ariaLabelPrefix: string,
+      groupDomId: string,
     ) => {
       const values = Array.from({ length: 11 }, (_, i) => i); // 0..10
+      const ariaLabel = subtitle
+        ? `${ariaLabelPrefix}. Zespół: ${subtitle}.`
+        : ariaLabelPrefix;
 
       return (
         <div className={styles.countRow}>
-          <div className={styles.countRowLabel}>{label}</div>
-          <div className={styles.countButtons} role="group" aria-label={ariaLabelPrefix}>
+          <div className={styles.countRowLabelBlock}>
+            <div className={styles.countRowTitle}>{title}</div>
+            {subtitle ? <div className={styles.countRowSub}>{subtitle}</div> : null}
+          </div>
+          <div
+            id={groupDomId}
+            className={styles.countButtons}
+            role="group"
+            aria-label={ariaLabel}
+          >
             {values.map((n) => (
               <button
                 key={n}
@@ -215,7 +243,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
         </div>
       );
     },
-    []
+    [],
   );
 
 
@@ -491,28 +519,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
     }
 
     if (selectedMatch) {
-      // Filtruj zawodników należących do zespołu
-      const teamPlayers = players.filter(player => 
-        player.teams?.includes(selectedMatch!.team)
-      );
-
-      // Filtruj tylko zawodników z co najmniej 1 minutą rozegranych w tym meczu
-      playersToFilter = teamPlayers.filter(player => {
-        const playerMinutes = selectedMatch!.playerMinutes?.find(pm => pm.playerId === player.id);
-        
-        if (!playerMinutes) {
-          return false; // Jeśli brak danych o minutach, nie pokazuj zawodnika
-        }
-
-        // Oblicz czas gry
-        const playTime = playerMinutes.startMinute === 0 && playerMinutes.endMinute === 0
-          ? 0
-          : Math.max(0, playerMinutes.endMinute - playerMinutes.startMinute + 1);
-
-        return playTime >= 1; // Pokazuj tylko zawodników z co najmniej 1 minutą
-      });
-
-
+      playersToFilter = getModalPlayersForMatch(players, selectedMatch);
     } else {
       // Jeśli nie ma wybranego meczu, pokazuj wszystkich zawodników z zespołu
       playersToFilter = players;
@@ -590,8 +597,8 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
           const words = name.trim().split(/\s+/);
           return words[words.length - 1].toLowerCase();
         };
-        const lastNameA = getLastName(a.name);
-        const lastNameB = getLastName(b.name);
+        const lastNameA = getLastName(a.name ?? "");
+        const lastNameB = getLastName(b.name ?? "");
         return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
       });
     });
@@ -817,14 +824,21 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       onSaveAction({
         playersLeftField,
         opponentsLeftField,
-        playersBehindBall,
-        opponentsBehindBall,
+        losesOppRosterSquadTallyF1: losesBackAllyCount,
+        losesBackAllyCount: undefined,
         totalPlayersOnField: 11 - playersLeftField,
         totalOpponentsOnField: 11 - opponentsLeftField,
+        playersBehindBall: undefined,
+        opponentsBehindBall: undefined,
       });
     } else {
       onSaveAction();
     }
+  };
+
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    void handleSave();
   };
 
   const handleCancel = () => {
@@ -848,10 +862,12 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{isEditMode ? "Edytuj akcję Loses" : "Dodaj akcję Loses"}</h3>
-          <button className={styles.closeButton} onClick={handleCancel}>×</button>
+          <button type="button" className={styles.closeButton} onClick={handleCancel}>
+            ×
+          </button>
         </div>
         
-        <div className={styles.form}>
+        <form className={styles.form} onSubmit={handleFormSubmit}>
           {/* Wybór meczu - tylko w trybie edycji */}
           {isEditMode && allMatches && allMatches.length > 0 && (
             <div className={styles.formGroup}>
@@ -1203,22 +1219,18 @@ className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${styles.tooltip
               </div>
             </div>
             
-            {/* Środek: Sekcja z szybkimi wyborami liczby zawodników "pod piłką" */}
+            {/* Liczba zawodników miniętych w momencie straty (jak Regain) */}
             <div
-              className={`${styles.countSelectorContainer} ${styles.tooltipTrigger} ${styles.tooltipRight}`}
-              data-tooltip="Liczymy zawodników do swojej bramki."
+              className={`${styles.countSelectorContainer} ${styles.tooltipTrigger}`}
+              data-tooltip={backAllyTooltip}
             >
               {renderCountRow(
-                matchInfo?.team ? `${getTeamName(matchInfo.team)} (bez bramkarza)` : "Partner (bez bramkarza)",
-                clamp0to10(playersBehindBall),
-                (n) => onPlayersBehindBallChange(clamp0to10(n)),
-                "Partnerzy pod piłką (0-10)"
-              )}
-              {renderCountRow(
-                "Przeciwnik",
-                clamp0to10(opponentsBehindBall),
-                (n) => onOpponentsBehindBallChange(clamp0to10(n)),
-                "Przeciwnicy pod piłką (0-10)"
+                "Zawodnicy minięci",
+                ourSquadLabel,
+                clamp0to10(losesBackAllyCount),
+                (n) => onLosesBackAllyCountChange(clamp0to10(n)),
+                "Liczba zawodników miniętych w momencie straty (0-10)",
+                "packingLoses",
               )}
             </div>
             
@@ -1271,6 +1283,7 @@ className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${styles.tooltip
                 className={styles.controversyNoteInput}
                 value={controversyNote}
                 onChange={(e) => setControversyNote(e.target.value)}
+                onKeyDown={submitParentFormOnEnter}
                 placeholder="Opisz problem z interpretacją akcji loses..."
                 rows={3}
                 maxLength={500}
@@ -1320,15 +1333,11 @@ className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${styles.tooltip
               </div>
             </div>
             
-            <button
-              className={styles.saveButton}
-              onClick={handleSave}
-              type="submit"
-            >
+            <button className={styles.saveButton} type="submit">
               Zapisz akcję
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

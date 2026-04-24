@@ -39,4 +39,26 @@ const out3 = normalizeActionFieldCountsForSave(a3);
 assert.equal(out3.opponentsLeftField, 3);
 assert.equal(out3.totalOpponentsOnField, 8);
 
+{
+  const r: Action = {
+    ...base,
+    regainDefenseZone: "G1",
+    receptionBackAllyCount: 4,
+  } as Action;
+  const o = normalizeActionFieldCountsForSave(r);
+  assert.equal(o.regainOppRosterSquadTallyF1, 4);
+  assert.equal(o.receptionBackAllyCount, undefined);
+}
+
+{
+  const l: Action = {
+    ...base,
+    isReaction5s: false,
+    losesBackAllyCount: 2,
+  } as Action;
+  const o = normalizeActionFieldCountsForSave(l);
+  assert.equal(o.losesOppRosterSquadTallyF1, 2);
+  assert.equal(o.losesBackAllyCount, undefined);
+}
+
 console.log("normalizeActionFieldCountsForSave tests: OK");

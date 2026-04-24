@@ -33,6 +33,8 @@ export {
   enableIndexedDbPersistence,
   enableMultiTabIndexedDbPersistence,
   clearIndexedDbPersistence,
+  deleteField,
+  serverTimestamp,
   type Firestore,
   type DocumentReference,
   type CollectionReference,

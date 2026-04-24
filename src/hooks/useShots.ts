@@ -6,20 +6,12 @@ import { getDB } from "@/lib/firebase";
 import { commitMatchArrayFieldUpdate, syncPendingMatchArrayField } from "@/lib/matchArrayFieldWrite";
 import { getMatchDocumentFromCache, setMatchDocumentInCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import { getPendingField } from "@/lib/offlineMatchPending";
+import { mergeByIdPreferPending } from "@/lib/mergeMatchArrayById";
 
 export const useShots = (matchId: string) => {
   const [shots, setShots] = useState<Shot[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const isOfflineError = (err: unknown) => {
-    const msg = String(err);
-    return (
-      msg.includes("offline") ||
-      msg.includes("Failed to fetch") ||
-      msg.includes("NetworkError") ||
-      msg.includes("unavailable")
-    );
-  };
 
   // Pobierz strzały z Firebase
   const fetchShots = useCallback(async () => {
@@ -32,7 +24,9 @@ export const useShots = (matchId: string) => {
       const matchData = await getOrLoadMatchDocument(matchId);
       if (matchData) {
         const pendingShots = getPendingField<Shot[]>(matchId, "shots");
-        const rawShots = pendingShots ?? (matchData.shots || []);
+        const serverShots = matchData.shots || [];
+        const rawShots =
+          pendingShots === null ? serverShots : mergeByIdPreferPending(serverShots, pendingShots);
 
         const shotsWithDefaults = rawShots.map((shot: any) => ({
           ...shot,
@@ -51,8 +45,17 @@ export const useShots = (matchId: string) => {
       const pendingShots = getPendingField<Shot[]>(matchId, "shots");
       const cachedMatch = getMatchDocumentFromCache(matchId);
       const cachedShots = cachedMatch?.shots || [];
-      if (pendingShots) {
-        setShots(pendingShots);
+      if (pendingShots !== null) {
+        const merged = mergeByIdPreferPending(cachedShots as Shot[], pendingShots);
+        const withDefaults = merged.map((shot: any) => ({
+          ...shot,
+          shotType: shot.shotType || "on_target",
+          teamContext: shot.teamContext || "attack",
+          teamId: shot.teamId || cachedMatch?.team || "",
+          pkPlayersCount: shot.pkPlayersCount || 0,
+          videoTimestamp: shot.videoTimestamp !== undefined ? shot.videoTimestamp : undefined,
+        }));
+        setShots(withDefaults);
       } else if (cachedShots.length > 0) {
         setShots(cachedShots as Shot[]);
       } else {
@@ -110,7 +113,6 @@ export const useShots = (matchId: string) => {
         field: "shots",
         updater,
         cleanForFirestore: (arr) => removeUndefinedValues(arr),
-        isOfflineError,
       });
 
       if (result.ok) {

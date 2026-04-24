@@ -1,9 +1,37 @@
 import { useState, useEffect } from "react";
+import type { User as FirebaseUser } from "firebase/auth";
+import { FirebaseError } from "firebase/app";
 import { getDB } from "@/lib/firebase";
-import { doc, getDoc, setDoc } from "@/lib/firestoreWithMetrics";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "@/lib/firestoreWithMetrics";
 import { AuthService, AuthState } from "@/utils/authService";
 import { toast } from "react-hot-toast";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
+
+/** Firestore bywa zapisywane jako jeden string zamiast string[] — UI i logika opierają się na tablicy. */
+function normalizeAllowedTeams(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((x): x is string => typeof x === "string");
+  }
+  if (typeof raw === "string" && raw.length > 0) {
+    return [raw];
+  }
+  return [];
+}
+
+async function resolveClaimsAdmin(firebaseUser: FirebaseUser | null | undefined): Promise<boolean> {
+  if (!firebaseUser) return false;
+  try {
+    const tr = await firebaseUser.getIdTokenResult();
+    return tr.claims.admin === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Zgodnie z firestore.rules (role bez rozróżniania wielkości liter + opcjonalnie JWT admin). */
+function isAdminRoleFromFirestore(role: unknown): boolean {
+  return typeof role === "string" && role.trim().toLowerCase() === "admin";
+}
 
 const USER_DATA_CACHE_TTL_MS = 2 * 60 * 1000; // 2 min — pomijamy getDoc gdy świeży
 const LAST_LOGIN_WRITE_INTERVAL_MS = 5 * 60 * 1000; // zapis lastLogin co najwyżej co 5 min
@@ -84,9 +112,16 @@ export function useAuth(): UseAuthReturnType {
           lastLoginWriteAt.set(uid, now);
           const db = getDB();
           const userRef = doc(db, "users", uid);
-          setDoc(userRef, { lastLogin: new Date() }, { merge: true }).catch(err => {
-            handleFirestoreError(err, db);
-            console.error("Błąd zapisu lastLogin:", err);
+          updateDoc(userRef, { lastLogin: serverTimestamp() }).catch((err: unknown) => {
+            const code = err instanceof FirebaseError ? err.code : "";
+            if (code === "permission-denied") {
+              if (process.env.NODE_ENV === "development") {
+                console.warn("[useAuth] Pominięto zapis lastLogin (cache, permission-denied).");
+              }
+            } else {
+              void handleFirestoreError(err, db);
+              console.error("Błąd zapisu lastLogin:", err);
+            }
           });
         }
         return { ...cached.data, lastLogin: cached.data.lastLogin ?? new Date() };
@@ -125,17 +160,30 @@ export function useAuth(): UseAuthReturnType {
 
       if (shouldWrite) {
         lastLoginWriteAt.set(uid, now);
-        const updateData: Record<string, unknown> = { lastLogin: new Date() };
-        if (needsEmailUpdate) updateData.email = userEmail;
-        await setDoc(userRef, updateData as UserData, { merge: true }).catch(error => {
-          handleFirestoreError(error, db);
-          console.error('Błąd aktualizacji danych użytkownika:', error);
-        });
+        try {
+          const patch: Record<string, unknown> = { lastLogin: serverTimestamp() };
+          if (needsEmailUpdate && userEmail) patch.email = userEmail;
+          await updateDoc(userRef, patch);
+        } catch (error: unknown) {
+          const code = error instanceof FirebaseError ? error.code : "";
+          /** Odczyt users/{uid} działa, a zapis lastLogin bywa odrzucany (reguły / emulator) — nie blokuj sesji ani nie zalewaj konsoli. */
+          if (code === "permission-denied") {
+            if (process.env.NODE_ENV === "development") {
+              console.warn(
+                "[useAuth] Brak zapisu lastLogin/email (permission-denied). Sprawdź reguły users/{uid} w Firestore.",
+              );
+            }
+          } else {
+            void handleFirestoreError(error, db);
+            console.error("Błąd aktualizacji danych użytkownika:", error);
+          }
+        }
       }
 
       const result: UserData = {
         ...userData,
         email: userData.email || userEmail || '',
+        allowedTeams: normalizeAllowedTeams(userData.allowedTeams),
         lastLogin: new Date()
       };
       userDataCache.set(uid, { data: result, timestamp: now });
@@ -168,7 +216,8 @@ export function useAuth(): UseAuthReturnType {
     const userData = await fetchUserData(authState.user.uid, authState.user.email || undefined, authState.isAuthenticated, () => true);
     if (userData) {
       setUserTeams(userData.allowedTeams);
-      setIsAdmin(userData.role === 'admin');
+      const claimsAdmin = await resolveClaimsAdmin(authState.user);
+      setIsAdmin(claimsAdmin || isAdminRoleFromFirestore(userData.role));
       setUserRole(userData.role);
       setUserStatus(userData.status ?? null);
       setLinkedPlayerId(userData.linkedPlayerId ?? null);
@@ -199,7 +248,8 @@ export function useAuth(): UseAuthReturnType {
           if (isMounted) {
             if (userData) {
               setUserTeams(userData.allowedTeams);
-              setIsAdmin(userData.role === 'admin');
+              const claimsAdmin = await resolveClaimsAdmin(newAuthState.user);
+              setIsAdmin(claimsAdmin || isAdminRoleFromFirestore(userData.role));
               setUserRole(userData.role);
               setUserStatus(userData.status ?? null);
               setLinkedPlayerId(userData.linkedPlayerId ?? null);

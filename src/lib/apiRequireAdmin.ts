@@ -3,10 +3,11 @@ import type { Auth } from "firebase-admin/auth";
 import type { Firestore } from "firebase-admin/firestore";
 import { FirebaseAdminConfigError, getFirebaseAdminApp } from "@/lib/firebaseAdminServer";
 import { parseAuthorizationBearer } from "@/lib/authorizationBearer";
+import { isAdminRoleFromFirestore } from "@/lib/firestoreAdminRole";
 
 /** Komunikat do .env / Vercel — wspólny dla API wymagających Admin SDK. */
 export const FIREBASE_ADMIN_CONFIG_HINT =
-  "Lokalnie: w .env.local ustaw FIREBASE_SERVICE_ACCOUNT_PATH=./firebase-admin-service-account.json (plik z Firebase Console → Project settings → Service accounts → Generate new private key) albo wklej cały JSON w FIREBASE_SERVICE_ACCOUNT_KEY (jedna linia). Na Vercel: dodaj tę samą zmienną w Settings → Environment Variables (albo FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 = base64 całego pliku JSON).";
+  "Lokalnie: umieść firebase-admin-service-account.json w katalogu głównym projektu (auto-wykrywane) albo ustaw FIREBASE_SERVICE_ACCOUNT_PATH / FIREBASE_SERVICE_ACCOUNT_KEY / GOOGLE_APPLICATION_CREDENTIALS — patrz .env.example i npm run check:firebase-admin. Na Vercel: FIREBASE_SERVICE_ACCOUNT_KEY lub FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 w Environment Variables.";
 
 export { parseAuthorizationBearer } from "@/lib/authorizationBearer";
 
@@ -41,8 +42,9 @@ export async function requireAdminApi(request: NextRequest): Promise<AdminApiOk 
     }
 
     const callerSnap = await db.collection("users").doc(decoded.uid).get();
-    const callerRole = callerSnap.exists ? (callerSnap.data()?.role as string | undefined) : undefined;
-    if (callerRole !== "admin") {
+    const callerRole = callerSnap.exists ? callerSnap.data()?.role : undefined;
+    const tokenAdmin = decoded.admin === true;
+    if (!tokenAdmin && !isAdminRoleFromFirestore(callerRole)) {
       return {
         ok: false,
         response: NextResponse.json({ error: "Tylko administrator może wykonać tę operację." }, { status: 403 }),
