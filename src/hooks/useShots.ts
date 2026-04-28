@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Shot } from "@/types";
 import { getDB } from "@/lib/firebase";
 import { commitMatchArrayFieldUpdate, syncPendingMatchArrayField } from "@/lib/matchArrayFieldWrite";
-import { getMatchDocumentFromCache, setMatchDocumentInCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
+import { getMatchDocumentFromCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import { getPendingField } from "@/lib/offlineMatchPending";
 import { mergeByIdPreferPending } from "@/lib/mergeMatchArrayById";
 
@@ -14,14 +14,14 @@ export const useShots = (matchId: string) => {
   const [error, setError] = useState<string | null>(null);
 
   // Pobierz strzały z Firebase
-  const fetchShots = useCallback(async () => {
+  const fetchShots = useCallback(async (options: { forceFresh?: boolean } = {}) => {
     if (!matchId) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const matchData = await getOrLoadMatchDocument(matchId);
+      const matchData = await getOrLoadMatchDocument(matchId, options);
       if (matchData) {
         const pendingShots = getPendingField<Shot[]>(matchId, "shots");
         const serverShots = matchData.shots || [];
@@ -181,9 +181,18 @@ export const useShots = (matchId: string) => {
     [persistShots]
   );
 
+  const bulkUpdateShots = useCallback(
+    async (updater: (prev: Shot[]) => Shot[]) => {
+      return await persistShots(updater);
+    },
+    [persistShots]
+  );
+
   useEffect(() => {
     fetchShots();
   }, [fetchShots]);
+
+  const refetchShots = useCallback(() => fetchShots({ forceFresh: true }), [fetchShots]);
 
   return {
     shots,
@@ -192,6 +201,7 @@ export const useShots = (matchId: string) => {
     addShot,
     updateShot,
     deleteShot,
-    refetch: fetchShots,
+    bulkUpdateShots,
+    refetch: refetchShots,
   };
 };

@@ -2,7 +2,8 @@
  * Cache dokumentów meczów (matches/{matchId}).
  * Mecze starsze niż 7 dni są ładowane z cache; tylko najnowszy jest pobierany z Firestore.
  * Persystencja: pamięć + sessionStorage (przetrwa odświeżenie strony).
- * getOrLoadMatchDocument – jeden odczyt na matchId przy równoległych wywołaniach (usePackingActions, useShots, usePKEntries, useAcc8sEntries).
+ * getOrLoadMatchDocument – cache-first; przy wymuszonym odświeżeniu jeden odczyt na matchId
+ * przy równoległych wywołaniach (usePackingActions, useShots, usePKEntries, useAcc8sEntries).
  * Gdy match.actions_packing jest puste, fallback do kolekcji actions_packing (legacy).
  */
 
@@ -113,7 +114,7 @@ export function setMatchDocumentInCache(matchId: string, data: TeamInfo): void {
   }
 }
 
-/** Po zapisie do Firestore — wymusza świeży getDoc przy następnym getOrLoadMatchDocument. */
+/** Po zapisie do Firestore — usuwa lokalną kopię dokumentu meczu. */
 export function clearMatchDocumentCache(matchId: string): void {
   memory.delete(matchId);
   if (typeof window === "undefined") return;
@@ -128,11 +129,19 @@ export function clearMatchDocumentCache(matchId: string): void {
 const loadInFlight = new Map<string, Promise<TeamInfo | null>>();
 
 /**
- * Pobiera dokument meczu z Firestore. Równoległe wywołania dla tego samego matchId
- * współdzielą jedno getDoc (1 odczyt zamiast 4 przy zmianie meczu).
+ * Zwraca dokument meczu z cache, a przy forceFresh pobiera go z Firestore.
+ * Równoległe świeże wywołania dla tego samego matchId współdzielą jedno getDoc.
  */
-export async function getOrLoadMatchDocument(matchId: string): Promise<TeamInfo | null> {
+export async function getOrLoadMatchDocument(
+  matchId: string,
+  options: { forceFresh?: boolean } = {}
+): Promise<TeamInfo | null> {
   if (!matchId) return null;
+
+  if (!options.forceFresh) {
+    const cached = getMatchDocumentFromCache(matchId);
+    if (cached) return cached;
+  }
 
   const existing = loadInFlight.get(matchId);
   if (existing) return existing;

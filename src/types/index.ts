@@ -297,6 +297,7 @@ export interface TeamInfo {
   firstHalfStartTime?: number; // Czas startu 1. połowy w sekundach na nagraniu
   secondHalfStartTime?: number; // Czas startu 2. połowy w sekundach na nagraniu
   playerMinutes?: PlayerMinutes[];
+  startingLineup?: StartingLineup;
   actions_packing?: Action[]; // Tablica akcji packing związanych z tym meczem
   actions_unpacking?: Action[]; // Tablica akcji unpacking związanych z tym meczem
   actions_regain?: Action[]; // Tablica akcji regain związanych z tym meczem
@@ -379,6 +380,21 @@ export interface PlayerMinutes {
   endMinute: number;
   position?: string;
   status?: 'dostepny' | 'kontuzja' | 'brak_powolania' | 'inny_zespol'; // Status zawodnika
+}
+
+export interface StartingLineupSlot {
+  slotId: string;
+  label: string;
+  role: string;
+  x: number;
+  y: number;
+  playerId?: string;
+}
+
+export interface StartingLineup {
+  formationId: string;
+  slots: StartingLineupSlot[];
+  updatedAt?: string;
 }
 
 export interface PlayerMinutesModalProps {

@@ -98,13 +98,22 @@ export async function deleteDoc(reference: DocumentReference<unknown>) {
 
 /**
  * Transakcja Firestore — odczyt + zapis w jednym kroku z retry przy konfliktach (wielu analityków na meczu).
- * Jeden zapis liczony w metrykach.
+ * Metryki liczą zapis transakcji oraz odczyty dokumentów wykonane przez transaction.get.
  */
 export async function runTransaction<T>(
   db: Firestore,
   updateFunction: (transaction: Transaction) => Promise<T>
 ): Promise<T> {
-  const result = await firestoreRunTransaction(db, updateFunction);
+  const result = await firestoreRunTransaction(db, (transaction) => {
+    const measuredTransaction = Object.create(transaction) as Transaction;
+    measuredTransaction.get = (async (reference: Parameters<Transaction["get"]>[0]) => {
+      const snapshot = await transaction.get(reference);
+      recordFirestoreRead("transaction.get", reference.path);
+      return snapshot;
+    }) as Transaction["get"];
+
+    return updateFunction(measuredTransaction);
+  });
   recordFirestoreWrite("runTransaction", "transaction");
   return result;
 }

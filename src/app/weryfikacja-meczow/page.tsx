@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from "next/link";
-import { collection, getDocs, doc, getDoc } from '@/lib/firestoreWithMetrics';
+import { collection, getDocs, doc, getDoc, query, where } from '@/lib/firestoreWithMetrics';
 import { db } from '@/lib/firebase';
 import { TeamInfo, Action } from '@/types';
 import { fetchTeams, Team } from '@/constants/teamsLoader';

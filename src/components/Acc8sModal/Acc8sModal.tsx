@@ -11,8 +11,8 @@ export interface Acc8sModalProps {
   isOpen: boolean;
   isVideoInternal?: boolean;
   onClose: () => void;
-  onSave: (entry: Omit<Acc8sEntry, "id" | "timestamp">) => void;
-  onDelete?: (entryId: string) => void;
+  onSave: (entry: Omit<Acc8sEntry, "id" | "timestamp">) => boolean | void | Promise<boolean | void>;
+  onDelete?: (entryId: string) => boolean | void | Promise<boolean | void>;
   editingEntry?: Acc8sEntry;
   matchId: string;
   matchInfo?: TeamInfo | null;
@@ -202,25 +202,6 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     }
   }, [isOpen, editingEntry, onCalculateMinuteFromVideo]);
 
-  // Aktualizacja aktualnej minuty meczu na podstawie czasu wideo (dodatkowy useEffect dla currentMatchMinute)
-  useEffect(() => {
-    if (isOpen && onCalculateMinuteFromVideo && !isEditMode) {
-      const updateMatchMinute = async () => {
-        const result = await onCalculateMinuteFromVideo();
-        if (result !== null && result.minute > 0) {
-          setCurrentMatchMinute(result.minute);
-        }
-      };
-      updateMatchMinute();
-      // Aktualizuj co sekundę
-      const interval = setInterval(updateMatchMinute, 1000);
-      return () => clearInterval(interval);
-    } else if (isEditMode && editingEntry) {
-      // W trybie edycji - używamy minuty z akcji
-      setCurrentMatchMinute(editingEntry.minute);
-    }
-  }, [isOpen, isEditMode, editingEntry, onCalculateMinuteFromVideo]);
-
   useEffect(() => {
     if (editingEntry) {
       setFormData({
@@ -243,6 +224,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
         isShotUnder8s: false,
         isPKEntryUnder8s: false,
         passingPlayerIds: [],
+        isControversial: false,
       });
     }
   }, [editingEntry, isOpen]);
@@ -370,7 +352,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const lockedMinute = isEditMode ? (editingEntry?.minute ?? formData.minute) : formData.minute;
@@ -434,7 +416,10 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
       ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
     };
 
-    onSave(entryData);
+    const saveResult = await onSave(entryData);
+    if (saveResult === false) {
+      return;
+    }
 
     // Wyczyść tempVideoTimestamp po zapisaniu
     if (typeof window !== 'undefined') {
@@ -456,10 +441,13 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     onClose();
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (editingEntry && onDelete) {
       if (confirm("Czy na pewno chcesz usunąć tę akcję 8s ACC?")) {
-        onDelete(editingEntry.id);
+        const deleteResult = await onDelete(editingEntry.id);
+        if (deleteResult === false) {
+          return;
+        }
         onClose();
       }
     }

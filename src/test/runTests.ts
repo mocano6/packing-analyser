@@ -79,4 +79,7 @@ import "../lib/teamsForUserAccess.test";
 import "../lib/regainReceptionDisplay.test";
 import "../lib/losesBackAllyDisplay.test";
 import "../lib/matchInfoPackingLabels.test";
+import "../lib/xgNonPenalty.test";
+import "../lib/startingLineup.test";
+import "../lib/teamFormationBoard.test";
 

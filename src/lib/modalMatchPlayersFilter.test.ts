@@ -28,9 +28,17 @@ const emptyMinutes: TeamInfo = {
   playerMinutes: [],
 };
 assert.deepEqual(getModalPlayersForMatch([p1, p2], emptyMinutes), [p1, p2]);
+assert.deepEqual(
+  getModalPlayersForMatch([p1, p2], emptyMinutes, { requirePlayerMinutes: true }),
+  []
+);
 
 const noMinutesField = { matchId: "m1", team: teamId } as TeamInfo;
 assert.deepEqual(getModalPlayersForMatch([p1, p2], noMinutesField), [p1, p2]);
+assert.deepEqual(
+  getModalPlayersForMatch([p1, p2], noMinutesField, { requirePlayerMinutes: true }),
+  []
+);
 
 const withMinutes: TeamInfo = {
   ...emptyMinutes,

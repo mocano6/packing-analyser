@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { PlayerMinutes, TeamInfo } from "@/types";
+import { PlayerMinutes, StartingLineup, TeamInfo } from "@/types";
 import { getAuthClient, getDB } from "@/lib/firebase";
 import { isFirebasePermissionDenied } from "@/utils/isFirebasePermissionDenied";
 import { 
@@ -1189,6 +1189,85 @@ export function useMatchInfo() {
     }
   }, [isOfflineMode, matchInfo, notifyUser]);
 
+  // Funkcja do zapisywania pierwszego składu w meczu
+  const handleSaveStartingLineup = useCallback(
+    async (match: TeamInfo, startingLineup: StartingLineup, playerMinutes: PlayerMinutes[]) => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        if (!match.matchId) {
+          throw new Error("Brak ID meczu");
+        }
+
+        if (isOfflineMode) {
+          notifyUser(
+            "Skład zostanie zapisany lokalnie. Synchronizacja z bazą danych nastąpi po przywróceniu połączenia.",
+            "info"
+          );
+        }
+
+        const updatedMatch = {
+          ...match,
+          startingLineup,
+          playerMinutes,
+          lastUpdated: new Date().toISOString(),
+        };
+
+        const updatedCacheData = localCacheRef.current.data.map((m) =>
+          m.matchId === match.matchId ? updatedMatch : m
+        );
+        localCacheRef.current = {
+          ...localCacheRef.current,
+          data: updatedCacheData,
+          timestamp: new Date().getTime(),
+        };
+        saveLocalCache();
+
+        setAllMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? updatedMatch : m)));
+
+        if (matchInfo?.matchId === match.matchId) {
+          setMatchInfo(updatedMatch);
+        }
+
+        if (!isOfflineMode) {
+          try {
+            const matchRef = doc(getDB(), "matches", match.matchId);
+            await updateDoc(matchRef, {
+              startingLineup,
+              playerMinutes,
+              lastUpdated: new Date().toISOString(),
+            });
+            notifyUser("Pierwszy skład został zapisany", "success");
+          } catch (firebaseError) {
+            console.error("❌ Błąd podczas synchronizacji pierwszego składu z Firebase:", firebaseError);
+            await handleFirestoreError(firebaseError, getDB());
+            const errorMessage = `Skład zapisany lokalnie, ale wystąpił błąd synchronizacji z bazą danych: ${
+              firebaseError instanceof Error ? firebaseError.message : String(firebaseError)
+            }`;
+            setError(errorMessage);
+            notifyUser(errorMessage, "error");
+          }
+        } else {
+          notifyUser("Pierwszy skład zapisany lokalnie", "success");
+        }
+
+        return true;
+      } catch (error) {
+        console.error("Błąd podczas zapisywania pierwszego składu:", error);
+        const errorMessage = `Nie udało się zapisać pierwszego składu: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
+        setError(errorMessage);
+        notifyUser(errorMessage, "error");
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [isOfflineMode, matchInfo, notifyUser]
+  );
+
   // Helper: usuwa undefined rekurencyjnie (żeby updateDoc nie wprowadzał "pustych" pól)
   const removeUndefinedValues = (obj: any): any => {
     if (obj === null || obj === undefined) return obj;
@@ -1300,6 +1379,7 @@ export function useMatchInfo() {
     handleSelectMatch,
     handleDeleteMatch,
     handleSavePlayerMinutes,
+    handleSaveStartingLineup,
     handleUpdateMatchData,
     fetchMatches,
     forceRefreshFromFirebase

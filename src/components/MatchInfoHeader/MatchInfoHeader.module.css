@@ -182,7 +182,7 @@
 
 .tableHeader {
   display: grid;
-  grid-template-columns: 1fr 0.8fr 1fr 1fr 0.8fr 120px;
+  grid-template-columns: 1fr 0.8fr 1fr 1fr 0.8fr 190px;
   background-color: #fafafa;
   font-weight: 600;
   border-bottom: 1px solid #eaeaea;
@@ -275,7 +275,7 @@
 
 .matchRow {
   display: grid;
-  grid-template-columns: 1fr 0.8fr 1fr 1fr 0.5fr 160px;
+  grid-template-columns: 1fr 0.8fr 1fr 1fr 0.5fr 190px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
@@ -465,6 +465,18 @@
 
 .dataBtn:hover {
   background-color: #f3e5f5;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.lineupBtn {
+  color: #0f766e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.lineupBtn:hover {
+  background-color: #ccfbf1;
   transform: translateY(-1px);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }

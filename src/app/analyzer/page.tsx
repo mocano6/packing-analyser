@@ -3,7 +3,7 @@
 
 import React, { useMemo, useEffect, useState, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { Player, TeamInfo, PlayerMinutes, Action, Shot } from "@/types";
+import { Player, TeamInfo, PlayerMinutes, Action, Shot, StartingLineup } from "@/types";
 import Instructions from "@/components/Instructions/Instructions";
 import PlayersGrid from "@/components/PlayersGrid/PlayersGrid";
 import PlayerTile from "@/components/PlayersGrid/PlayerTile";
@@ -49,6 +49,8 @@ import { invalidateMatchCache } from "@/utils/matchDocCache";
 import pitchHeaderStyles from "@/components/PitchHeader/PitchHeader.module.css";
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesModal";
+import StartingLineupModal from "@/components/StartingLineupModal/StartingLineupModal";
+import TeamFormationBoard from "@/components/TeamFormationBoard/TeamFormationBoard";
 import MatchInfoModal from "@/components/MatchInfoModal/MatchInfoModal";
 import Link from "next/link";
 import ActionModal from "@/components/ActionModal/ActionModal";
@@ -120,27 +122,6 @@ function removeUndefinedFields<T extends object>(obj: T): T {
   return result;
 }
 
-/** Usuwa undefined rekurencyjnie przed zapisem tablic (PK, strzały) do Firestore. */
-function deepStripUndefined<T>(obj: T): T {
-  if (obj === null || obj === undefined) {
-    return obj;
-  }
-  if (Array.isArray(obj)) {
-    return obj.map((item) => deepStripUndefined(item)) as unknown as T;
-  }
-  if (typeof obj === "object") {
-    const cleaned: Record<string, unknown> = {};
-    for (const key of Object.keys(obj as object)) {
-      const value = (obj as Record<string, unknown>)[key];
-      if (value !== undefined) {
-        cleaned[key] = deepStripUndefined(value);
-      }
-    }
-    return cleaned as T;
-  }
-  return obj;
-}
-
 export default function Page() {
   const { isPresentationMode } = usePresentationMode();
   const [activeTab, setActiveTab] = React.useState<Tab>(() => {
@@ -210,6 +191,7 @@ export default function Page() {
   });
   
   const [isPlayerMinutesModalOpen, setIsPlayerMinutesModalOpen] = React.useState(false);
+  const [isStartingLineupModalOpen, setIsStartingLineupModalOpen] = React.useState(false);
   const [editingMatch, setEditingMatch] = React.useState<TeamInfo | null>(null);
   const [isActionModalOpen, setIsActionModalOpen] = React.useState(false);
   const [startZone, setStartZone] = React.useState<number | null>(null);
@@ -434,6 +416,7 @@ export default function Page() {
   };
 
   const [isPlayersGridExpanded, setIsPlayersGridExpanded] = useState<boolean>(false);
+  const [playersGridView, setPlayersGridView] = useState<"list" | "systems">("list");
   const [showRegainLosesPopup, setShowRegainLosesPopup] = useState<boolean>(false);
   const [pendingZoneSelection, setPendingZoneSelection] = useState<{zoneId: number, xT?: number} | null>(null);
   const [isTeamsSelectorExpanded, setIsTeamsSelectorExpanded] = useState<boolean>(false);
@@ -672,6 +655,7 @@ export default function Page() {
     handleSelectMatch,
     handleDeleteMatch,
     handleSavePlayerMinutes,
+    handleSaveStartingLineup,
     handleUpdateMatchData,
     fetchMatches,
     forceRefreshFromFirebase,
@@ -1356,10 +1340,10 @@ export default function Page() {
   const { resetActionPoints } = packingActions;
 
   // Hook do zarządzania strzałami
-  const { shots, addShot, updateShot, deleteShot, refetch: refetchShots } = useShots(matchInfo?.matchId || "");
+  const { shots, addShot, updateShot, deleteShot, bulkUpdateShots, refetch: refetchShots } = useShots(matchInfo?.matchId || "");
   
   // Hook do zarządzania wejściami PK
-  const { pkEntries, addPKEntry, updatePKEntry, deletePKEntry, refetch: refetchPKEntries } = usePKEntries(matchInfo?.matchId || "");
+  const { pkEntries, addPKEntry, updatePKEntry, deletePKEntry, bulkUpdatePKEntries, refetch: refetchPKEntries } = usePKEntries(matchInfo?.matchId || "");
 
   // Hook do zarządzania akcjami 8s ACC
   const {
@@ -1493,7 +1477,7 @@ export default function Page() {
   const handleShotSave = async (shotData: Omit<Shot, "id" | "timestamp">) => {
     if (!matchInfo?.matchId) {
       alert("Brak ID meczu. Nie można zapisać strzału.");
-      return;
+      return false;
     }
 
     try {
@@ -1538,51 +1522,49 @@ export default function Page() {
         const success = await updateShot(shotModalData.editingShot.id, shotDataWithTimestamp);
         if (!success) {
           toast.error("Nie udało się zaktualizować strzału. Sprawdź uprawnienia do zespołu tego meczu.");
-          return;
+          return false;
         }
       } else {
         const newShot = await addShot(shotDataWithTimestamp);
         if (!newShot) {
           toast.error("Nie udało się dodać strzału. Sprawdź uprawnienia do zespołu tego meczu.");
-          return;
+          return false;
         }
       }
-      
-      // Odśwież listę strzałów
-      await refetchShots();
-      
+
       setIsShotModalOpen(false);
       setShotModalData(null);
       setSelectedShotId(undefined);
+      return true;
     } catch (error) {
       console.error("Błąd podczas zapisywania strzału:", error);
       const msg = error instanceof Error ? error.message : String(error);
       toast.error(msg.includes("permission") || msg.includes("uprawnień") ? "Brak uprawnień do zapisu. Sprawdź dostęp do zespołu tego meczu." : "Wystąpił błąd podczas zapisywania strzału. Spróbuj ponownie.");
+      return false;
     }
   };
 
   const handleShotDelete = async (shotId: string) => {
     if (!matchInfo?.matchId) {
       alert("Brak ID meczu. Nie można usunąć strzału.");
-      return;
+      return false;
     }
 
     try {
       const success = await deleteShot(shotId);
       if (!success) {
         alert("Nie udało się usunąć strzału. Spróbuj ponownie.");
-        return;
+        return false;
       }
-      
-      // Odśwież listę strzałów
-      await refetchShots();
-      
+
       setIsShotModalOpen(false);
       setShotModalData(null);
       setSelectedShotId(undefined);
+      return true;
     } catch (error) {
       console.error("Błąd podczas usuwania strzału:", error);
       alert("Wystąpił błąd podczas usuwania strzału. Spróbuj ponownie.");
+      return false;
     }
   };
 
@@ -1662,6 +1644,19 @@ export default function Page() {
     cachedMatchData,
   } = packingActions;
 
+  const matchInfoForActionSection = useMemo(() => {
+    if (!matchInfo) return null;
+    if (!cachedMatchData || cachedMatchData.matchId !== matchInfo.matchId) return matchInfo;
+
+    return {
+      ...matchInfo,
+      ...cachedMatchData,
+      playerMinutes: cachedMatchData.playerMinutes?.length
+        ? cachedMatchData.playerMinutes
+        : matchInfo.playerMinutes,
+    };
+  }, [matchInfo, cachedMatchData]);
+
   const handleRefreshData = useCallback(async () => {
     setIsRefreshingData(true);
     try {
@@ -1671,7 +1666,7 @@ export default function Page() {
         refetchAcc8sEntries(),
       ];
       if (matchInfo?.matchId) {
-        tasks.push(loadActionsForMatch(matchInfo.matchId));
+        tasks.push(loadActionsForMatch(matchInfo.matchId, { forceFresh: true }));
       }
       await Promise.all(tasks);
       toast.success("Dane odświeżone.");
@@ -2477,12 +2472,27 @@ export default function Page() {
     setIsPlayerMinutesModalOpen(true);
   };
 
+  // Obsługa otwarcia modalu pierwszego składu
+  const handleOpenStartingLineupModal = (match: TeamInfo) => {
+    setEditingMatch(match);
+    setIsStartingLineupModalOpen(true);
+  };
+
   // Obsługa zapisywania minut zawodników
   const handleSaveMinutes = (playerMinutes: PlayerMinutes[]) => {
     if (editingMatch) {
       handleSavePlayerMinutes(editingMatch, playerMinutes);
     }
     setIsPlayerMinutesModalOpen(false);
+    setEditingMatch(null);
+  };
+
+  // Obsługa zapisywania pierwszego składu i minut startowych
+  const handleSaveStartingLineupSubmit = (startingLineup: StartingLineup, playerMinutes: PlayerMinutes[]) => {
+    if (editingMatch) {
+      handleSaveStartingLineup(editingMatch, startingLineup, playerMinutes);
+    }
+    setIsStartingLineupModalOpen(false);
     setEditingMatch(null);
   };
 
@@ -3990,9 +4000,30 @@ export default function Page() {
       </div>
       {isPlayersGridExpanded && (
         <div className={styles.playersGridOverlay} onClick={() => setIsPlayersGridExpanded(false)}>
-          <div className={styles.playersGridModal} onClick={(e) => e.stopPropagation()}>
+          <div
+            className={`${styles.playersGridModal} ${playersGridView === "systems" ? styles.playersGridModalWide : ""}`}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className={styles.playersGridHeader}>
-              <h3 className={styles.playersGridTitle}>Zawodnicy</h3>
+              <div>
+                <h3 className={styles.playersGridTitle}>Zawodnicy</h3>
+                <div className={styles.playersGridViewTabs} aria-label="Widok zawodników">
+                  <button
+                    type="button"
+                    className={`${styles.playersGridViewTab} ${playersGridView === "list" ? styles.playersGridViewTabActive : ""}`}
+                    onClick={() => setPlayersGridView("list")}
+                  >
+                    Lista
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.playersGridViewTab} ${playersGridView === "systems" ? styles.playersGridViewTabActive : ""}`}
+                    onClick={() => setPlayersGridView("systems")}
+                  >
+                    Baza systemów
+                  </button>
+                </div>
+              </div>
               <div className={styles.playersGridHeaderActions}>
                 {!isPlayer && (
                   <button
@@ -4014,29 +4045,33 @@ export default function Page() {
                 </button>
               </div>
             </div>
-            <div className={styles.playersGridContentWrapper}>
-              {playersByPosition.sortedPositions.map((position) => (
-                <div key={position} className={styles.positionGroup}>
-                  <div className={styles.playersGridContent}>
-                    <div className={styles.positionLabel}>
-                      {position === 'Skrzydłowi' ? 'W' : position}
-                    </div>
-                    <div className={styles.playersGridContainer}>
-                      {playersByPosition.byPosition[position].map((player) => (
-                        <PlayerTile
-                          key={player.id}
-                          player={player}
-                          isSelected={player.id === selectedPlayerId}
-                          onSelect={setSelectedPlayerId}
-                          onEdit={isPlayer ? undefined : handleEditPlayer}
-                          onDelete={isPlayer ? undefined : onDeletePlayer}
-                        />
-                      ))}
+            {playersGridView === "list" ? (
+              <div className={styles.playersGridContentWrapper}>
+                {playersByPosition.sortedPositions.map((position) => (
+                  <div key={position} className={styles.positionGroup}>
+                    <div className={styles.playersGridContent}>
+                      <div className={styles.positionLabel}>
+                        {position === 'Skrzydłowi' ? 'W' : position}
+                      </div>
+                      <div className={styles.playersGridContainer}>
+                        {playersByPosition.byPosition[position].map((player) => (
+                          <PlayerTile
+                            key={player.id}
+                            player={player}
+                            isSelected={player.id === selectedPlayerId}
+                            onSelect={setSelectedPlayerId}
+                            onEdit={isPlayer ? undefined : handleEditPlayer}
+                            onDelete={isPlayer ? undefined : onDeletePlayer}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <TeamFormationBoard teamId={selectedTeam} players={filteredPlayers} />
+            )}
           </div>
         </div>
       )}
@@ -4049,6 +4084,7 @@ export default function Page() {
         selectedTeam={selectedTeam}
         onChangeTeam={setSelectedTeam}
         onManagePlayerMinutes={handleOpenPlayerMinutesModal}
+        onManageStartingLineup={handleOpenStartingLineupModal}
         onAddNewMatch={openNewMatchModal}
         refreshCounter={matchesListRefreshCounter}
         isOfflineMode={isOfflineMode}
@@ -4189,7 +4225,7 @@ export default function Page() {
             endZone={endZone}
             isActionModalOpen={isActionModalOpen}
             setIsActionModalOpen={setIsActionModalOpen}
-            matchInfo={matchInfo}
+            matchInfo={matchInfoForActionSection}
             // Nowe propsy dla trybu unpacking
             mode={actionMode}
             onModeChange={setActionMode}
@@ -4297,7 +4333,7 @@ export default function Page() {
             endZone={endZone}
             isActionModalOpen={isActionModalOpen}
             setIsActionModalOpen={setIsActionModalOpen}
-            matchInfo={matchInfo}
+            matchInfo={matchInfoForActionSection}
             // Nowe propsy dla trybu regain
             mode={actionMode}
             onModeChange={setActionMode}
@@ -4406,20 +4442,27 @@ export default function Page() {
                     }
                     if (!ok) {
                       toast.error("Nie udało się zapisać. Sprawdź uprawnienia do zespołu tego meczu.");
-                      return;
+                      return false;
                     }
                     setIsAcc8sModalOpen(false);
                     setAcc8sModalData(null);
+                    return true;
                   } catch (error) {
                     console.error("Błąd podczas zapisywania akcji 8s ACC:", error);
                     const msg = error instanceof Error ? error.message : String(error);
                     toast.error(msg.includes("permission") || msg.includes("uprawnień") ? "Brak uprawnień do zapisu. Sprawdź dostęp do zespołu tego meczu." : "Wystąpił błąd podczas zapisywania. Spróbuj ponownie.");
+                    return false;
                   }
                 }}
                 onDelete={async (entryId) => {
-                  await deleteAcc8sEntry(entryId);
+                  const ok = await deleteAcc8sEntry(entryId);
+                  if (!ok) {
+                    toast.error("Nie udało się usunąć akcji 8s ACC.");
+                    return false;
+                  }
                   setIsAcc8sModalOpen(false);
                   setAcc8sModalData(null);
+                  return true;
                 }}
                 editingEntry={acc8sModalData.editingEntry}
                 matchId={matchInfo?.matchId || ""}
@@ -5747,30 +5790,18 @@ export default function Page() {
                         }
 
                         try {
-                          const db = getDB();
-                          const pkRes = await commitMatchArrayFieldUpdate<PKEntry>({
-                            db,
-                            matchId: matchInfo.matchId,
-                            field: "pkEntries",
-                            updater: (current) =>
-                              applyPkRegainBulkUpdate(
-                                current,
-                                pendingPKRegainUpdates,
-                                selectedPKUpdates,
-                                getStablePKEntryKey
-                              ),
-                            cleanForFirestore: (arr) => deepStripUndefined(arr) as unknown,
-                          });
-                          if (!pkRes.ok) {
+                          const ok = await bulkUpdatePKEntries((current) =>
+                            applyPkRegainBulkUpdate(
+                              current,
+                              pendingPKRegainUpdates,
+                              selectedPKUpdates,
+                              getStablePKEntryKey
+                            )
+                          );
+                          if (!ok) {
                             alert("Nie udało się zaktualizować wejść w PK.");
                             return;
                           }
-                          if (pkRes.usedOffline) {
-                            toast(
-                              "Zapis na serwerze opóźniony. Zmiany są w kolejce lokalnej i zostaną wysłane po ustabilizowaniu połączenia."
-                            );
-                          }
-                          await refetchPKEntries();
                           setShowPKRegainVerifyModal(false);
                           setPendingPKRegainUpdates([]);
                           setSelectedPKUpdates(new Set());
@@ -5802,29 +5833,36 @@ export default function Page() {
                   const ok = await updatePKEntry(pkEntryModalData.editingEntry.id, entryData);
                   if (!ok) {
                     toast.error("Nie udało się zaktualizować wpisu PK. Sprawdź uprawnienia do zespołu tego meczu.");
-                    return;
+                    return false;
                   }
                 } else {
                   const result = await addPKEntry(entryData);
                   if (result == null) {
                     toast.error("Nie udało się dodać wpisu PK. Sprawdź uprawnienia do zespołu tego meczu.");
-                    return;
+                    return false;
                   }
                 }
                 setIsPKEntryModalOpen(false);
                 setPkEntryModalData(null);
                 setSelectedPKEntryId(undefined);
+                return true;
               } catch (error) {
                 console.error("Błąd podczas zapisywania wpisu PK:", error);
                 const msg = error instanceof Error ? error.message : String(error);
                 toast.error(msg.includes("permission") || msg.includes("uprawnień") ? "Brak uprawnień do zapisu. Sprawdź dostęp do zespołu tego meczu." : "Wystąpił błąd podczas zapisywania. Spróbuj ponownie.");
+                return false;
               }
             }}
             onDelete={async (entryId) => {
-              await deletePKEntry(entryId);
+              const ok = await deletePKEntry(entryId);
+              if (!ok) {
+                toast.error("Nie udało się usunąć wpisu PK.");
+                return false;
+              }
               setIsPKEntryModalOpen(false);
               setPkEntryModalData(null);
               setSelectedPKEntryId(undefined);
+              return true;
             }}
             editingEntry={pkEntryModalData.editingEntry}
             startX={pkEntryModalData.startX}
@@ -6035,30 +6073,18 @@ export default function Page() {
                       }
 
                       try {
-                        const db = getDB();
-                        const shotsRes = await commitMatchArrayFieldUpdate<Shot>({
-                          db,
-                          matchId: matchInfo.matchId,
-                          field: "shots",
-                          updater: (current) =>
-                            applyShotsActionTypeBulkUpdate(
-                              current,
-                              pendingShotsUpdates,
-                              selectedShotsUpdates,
-                              getStableShotKey
-                            ),
-                          cleanForFirestore: (arr) => deepStripUndefined(arr) as unknown,
-                        });
-                        if (!shotsRes.ok) {
+                        const ok = await bulkUpdateShots((current) =>
+                          applyShotsActionTypeBulkUpdate(
+                            current,
+                            pendingShotsUpdates,
+                            selectedShotsUpdates,
+                            getStableShotKey
+                          )
+                        );
+                        if (!ok) {
                           alert("Nie udało się zaktualizować strzałów.");
                           return;
                         }
-                        if (shotsRes.usedOffline) {
-                          toast(
-                            "Zapis na serwerze opóźniony. Zmiany są w kolejce lokalnej i zostaną wysłane po ustabilizowaniu połączenia."
-                          );
-                        }
-                        await refetchShots();
                         setShowShotsVerifyModal(false);
                         setPendingShotsUpdates([]);
                         setSelectedShotsUpdates(new Set());
@@ -6199,6 +6225,24 @@ export default function Page() {
               (player) => player.teams && player.teams.includes(editingMatch.team)
             )}
             currentPlayerMinutes={editingMatch.playerMinutes || []}
+          />
+        )}
+
+        {/* Modal pierwszego składu */}
+        {editingMatch && (
+          <StartingLineupModal
+            isOpen={isStartingLineupModalOpen}
+            onClose={() => {
+              setIsStartingLineupModalOpen(false);
+              setEditingMatch(null);
+            }}
+            onSave={handleSaveStartingLineupSubmit}
+            match={editingMatch}
+            players={players.filter(
+              (player) => player.teams && player.teams.includes(editingMatch.team)
+            )}
+            currentPlayerMinutes={editingMatch.playerMinutes || []}
+            currentStartingLineup={editingMatch.startingLineup}
           />
         )}
 

@@ -11,8 +11,8 @@ export interface PKEntryModalProps {
   isOpen: boolean;
   isVideoInternal?: boolean;
   onClose: () => void;
-  onSave: (entry: Omit<PKEntry, "id" | "timestamp">) => void;
-  onDelete?: (entryId: string) => void;
+  onSave: (entry: Omit<PKEntry, "id" | "timestamp">) => boolean | void | Promise<boolean | void>;
+  onDelete?: (entryId: string) => boolean | void | Promise<boolean | void>;
   editingEntry?: PKEntry;
   startX: number;
   startY: number;
@@ -47,7 +47,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     receiverId: "",
     minute: 1,
     isSecondHalf: false,
-    entryType: "pass" as "pass" | "dribble" | "sfg",
+    entryType: "pass" as "pass" | "dribble" | "sfg" | "regain",
     teamContext: "attack" as "attack" | "defense",
     isPossible1T: false,
     pkPlayersCount: 0,
@@ -258,8 +258,8 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
           const words = name.trim().split(/\s+/);
           return words[words.length - 1].toLowerCase();
         };
-        const lastNameA = getLastName(a.name);
-        const lastNameB = getLastName(b.name);
+        const lastNameA = getLastName(a.name || '');
+        const lastNameB = getLastName(b.name || '');
         return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
       });
     });
@@ -324,6 +324,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         isShot: false,
         isGoal: false,
         isRegain: false,
+        isControversial: false,
       });
       setControversyNote("");
     }
@@ -553,7 +554,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const lockedMinute = isEditMode ? (editingEntry?.minute ?? formData.minute) : formData.minute;
@@ -628,11 +629,15 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
         ? (isValidTimestampRaw ? parsedVideoTimestampRaw : (editingEntry as any)?.videoTimestampRaw)
         : (isValidTimestampRaw ? parsedVideoTimestampRaw : undefined);
       
-      onSave({
+      const saveResult = await onSave({
         ...entryDataToSave,
         ...(finalVideoTimestamp !== undefined && finalVideoTimestamp !== null && { videoTimestamp: finalVideoTimestamp }),
         ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
       });
+
+      if (saveResult === false) {
+        return;
+      }
       
       // Wyczyść tempVideoTimestamp po zapisaniu
       if (typeof window !== 'undefined') {
@@ -718,16 +723,22 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
 
     // Dla dryblingu - upewniamy się, że nie ma odbiorcy
     if (formData.entryType === "dribble") {
-      onSave({
+      const saveResult = await onSave({
         ...entryDataToSave,
         receiverId: undefined,
       });
+      if (saveResult === false) {
+        return;
+      }
     } else {
       // Dla pozostałych typów (pass, sfg, regain)
-      onSave({
+      const saveResult = await onSave({
         ...entryDataToSave,
         receiverId: receiverId,
       });
+      if (saveResult === false) {
+        return;
+      }
     }
 
     // Wyczyść tempVideoTimestamp po zapisaniu
@@ -739,10 +750,13 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     onClose();
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (editingEntry && onDelete) {
       if (confirm("Czy na pewno chcesz usunąć to wejście PK?")) {
-        onDelete(editingEntry.id);
+        const deleteResult = await onDelete(editingEntry.id);
+        if (deleteResult === false) {
+          return;
+        }
         onClose();
       }
     }

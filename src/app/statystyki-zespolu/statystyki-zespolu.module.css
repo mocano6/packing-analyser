@@ -191,6 +191,28 @@
   color: #9ca3af;
 }
 
+/* Jak analyzer: TeamsSelector.module.css — typografia jak compactSelect / SeasonSelector (#1f2937, 400) */
+.compactTeamSelectorHeader {
+  width: 100%;
+  min-width: 0;
+  justify-content: space-between;
+  text-align: left;
+  box-sizing: border-box;
+  background-image: none !important;
+  padding-right: 12px !important;
+  font-size: 14px;
+  font-weight: 400;
+  color: #1f2937;
+}
+
+.compactTeamSelectorHeader span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 400;
+  color: #1f2937;
+}
+
 /* Custom dropdown meczu – scrollowalna lista (Chrome pokazuje wszystkie opcje) */
 .matchSelectWrapper {
   position: relative;
@@ -2735,11 +2757,11 @@
 }
 
 .xgTableValueMain.positive {
-  color: #10b981;
+  color: #059669;
 }
 
 .xgTableValueMain.negative {
-  color: #ef4444;
+  color: #dc2626;
 }
 
 .heatmapContainerInPanel {
@@ -2799,6 +2821,67 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* Zakres czasu KPI – dyskretny segment „w tle”, jedna linia z nagłówkiem */
+.kpiPeriodSelector {
+  display: inline-flex;
+  align-items: stretch;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.kpiPeriodSelectorInline {
+  max-width: 100%;
+  gap: 2px;
+  padding: 2px;
+  background-color: rgba(249, 250, 251, 0.85);
+  border: 1px solid rgba(226, 232, 240, 0.55);
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.kpiPeriodSelectorInline .kpiPeriodButton {
+  min-height: 24px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.kpiPeriodSelectorInline .kpiPeriodButton:hover {
+  background-color: rgba(255, 255, 255, 0.7);
+  color: #64748b;
+  border-color: transparent;
+}
+
+.kpiPeriodSelectorInline .kpiPeriodButton.active {
+  background-color: rgba(255, 255, 255, 0.95);
+  color: #475569;
+  border-color: rgba(203, 213, 225, 0.65);
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.kpiPeriodButton {
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.kpiPeriodButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.35);
 }
 
 .kpiTopRow {
@@ -2996,11 +3079,28 @@
   letter-spacing: -1px;
 }
 
-.kpiScoreHeroXg {
+.kpiScoreHeroXgStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.kpiScoreHeroXgPrimary {
   font-size: 16px;
   font-weight: 500;
   color: #1e293b;
   font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.kpiScoreHeroXgSecondary {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 
 .kpiScoreHeroDeltaRow {
@@ -3104,9 +3204,11 @@
 
 .kpiAnalysisHeader {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .kpiAnalysisEyebrow {
@@ -3123,6 +3225,12 @@
   font-size: 18px;
   font-weight: 700;
   color: #0f172a;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kpiAnalysisDescription {
@@ -3347,7 +3455,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #3b82f6 0%, #22c55e 100%);
+  background: linear-gradient(90deg, #3b82f6 0%, #059669 100%);
 }
 
 .kpiChecklistFooter {
@@ -4652,7 +4760,7 @@
 }
 
 .halfTimeCard:nth-child(2) .statValue {
-  color: #10b981; /* Zielony dla 2. połowy */
+  color: #059669; /* Drugi zielony — spójny z paletą KPI */
 }
 
 .halfTimeCard:nth-child(3) .statValue {
@@ -4795,8 +4903,12 @@
     font-size: 34px;
   }
 
-  .kpiScoreHeroXg {
+  .kpiScoreHeroXgPrimary {
     font-size: 15px;
+  }
+
+  .kpiScoreHeroXgSecondary {
+    font-size: 11px;
   }
 
   .kpiScoreLineGoals {
@@ -4811,10 +4923,28 @@
     grid-template-columns: 1fr;
   }
 
-  .kpiAnalysisHeader,
   .kpiChecklistMainRow {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .kpiAnalysisHeader {
+    align-items: center;
+    gap: 6px 10px;
+  }
+
+  .kpiPeriodSelectorInline {
+    flex-shrink: 0;
+    max-width: min(100%, 52vw);
+    justify-content: flex-end;
+  }
+
+  .kpiPeriodSelectorInline .kpiPeriodButton {
+    flex: 0 1 auto;
+    min-width: 0;
+    padding-left: 5px;
+    padding-right: 5px;
+    font-size: 10px;
   }
 
   .kpiAnalysisBadge,

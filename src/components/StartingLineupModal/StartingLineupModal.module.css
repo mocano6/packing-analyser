@@ -1,0 +1,369 @@
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.modalContent {
+  width: min(1120px, 96vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+}
+
+.modalTitle {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.modalSubtitle {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.closeButton {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.closeButton:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.modalForm {
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.formationLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.formationSelect {
+  min-width: 150px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.counter {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workspace {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) 1fr;
+  gap: 16px;
+  padding: 16px 18px;
+  overflow: auto;
+}
+
+.playersPanel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f9fafb;
+  overflow: hidden;
+}
+
+.sectionTitle {
+  margin: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e5e7eb;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.playersList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+.playerChip {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #111827;
+  cursor: grab;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.playerChip:hover,
+.playerSelected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.playerAssigned {
+  opacity: 0.55;
+}
+
+.playerNumber {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.playerName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.playerPosition {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pitchSection {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pitch {
+  position: relative;
+  min-height: 620px;
+  overflow: hidden;
+  border: 4px solid rgba(255, 255, 255, 0.7);
+  border-radius: 18px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 50%, transparent 50%),
+    repeating-linear-gradient(0deg, #15803d 0, #15803d 70px, #166534 70px, #166534 140px);
+  background-size: 80px 100%, auto;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5);
+}
+
+.centerLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.centerCircle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 130px;
+  height: 130px;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+
+.penaltyBoxTop,
+.penaltyBoxBottom {
+  position: absolute;
+  left: 28%;
+  width: 44%;
+  height: 90px;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+}
+
+.penaltyBoxTop {
+  top: -2px;
+  border-top: 0;
+}
+
+.penaltyBoxBottom {
+  bottom: -2px;
+  border-bottom: 0;
+}
+
+.pitchSlot {
+  position: absolute;
+  width: 112px;
+  min-height: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 7px;
+  border: 2px dashed rgba(255, 255, 255, 0.82);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.28);
+  color: #ffffff;
+  cursor: pointer;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(2px);
+}
+
+.pitchSlot:hover,
+.pitchSlot:focus-visible {
+  outline: none;
+  border-color: #facc15;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.pitchSlotFilled {
+  border-style: solid;
+  background: rgba(37, 99, 235, 0.86);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.28);
+}
+
+.slotRole {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.slotPlayer {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.assignedList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.assignedItem {
+  padding: 6px 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.buttonGroup {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.cancelButton,
+.saveButton {
+  min-width: 110px;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.cancelButton {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.saveButton {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.saveButton:disabled {
+  cursor: not-allowed;
+  background: #9ca3af;
+}
+
+@media (max-width: 840px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .pitch {
+    min-height: 540px;
+  }
+}

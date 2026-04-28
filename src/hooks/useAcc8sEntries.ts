@@ -14,14 +14,14 @@ export const useAcc8sEntries = (matchId: string) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchAcc8sEntries = useCallback(async () => {
+  const fetchAcc8sEntries = useCallback(async (options: { forceFresh?: boolean } = {}) => {
     if (!matchId) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const matchData = await getOrLoadMatchDocument(matchId);
+      const matchData = await getOrLoadMatchDocument(matchId, options);
       if (matchData) {
         const pendingEntries = getPendingField<Acc8sEntry[]>(matchId, "acc8sEntries");
         const serverEntries = matchData.acc8sEntries || [];
@@ -201,6 +201,11 @@ export const useAcc8sEntries = (matchId: string) => {
     fetchAcc8sEntries();
   }, [fetchAcc8sEntries]);
 
+  const refetchAcc8sEntries = useCallback(
+    () => fetchAcc8sEntries({ forceFresh: true }),
+    [fetchAcc8sEntries]
+  );
+
   return {
     acc8sEntries,
     isLoading,
@@ -209,6 +214,6 @@ export const useAcc8sEntries = (matchId: string) => {
     updateAcc8sEntry,
     deleteAcc8sEntry,
     bulkUpdateAcc8sEntries,
-    refetch: fetchAcc8sEntries,
+    refetch: refetchAcc8sEntries,
   };
 };

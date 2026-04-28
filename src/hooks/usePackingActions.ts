@@ -266,7 +266,11 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   const [cachedMatchId, setCachedMatchId] = useState<string | null>(null);
   // Ładuje dokument meczu (współdzielone z useShots/usePKEntries/useAcc8sEntries – 1 getDoc na zmianę meczu).
   /** meta: bieżący mecz z listy (np. z useMatchInfo) — gdy getDoc/cache puste, podstawa pod pending + derive po F5. */
-  const loadMatchIntoCache = useCallback(async (matchId: string, meta?: TeamInfo | null) => {
+  const loadMatchIntoCache = useCallback(async (
+    matchId: string,
+    meta?: TeamInfo | null,
+    options: { forceFresh?: boolean } = {}
+  ) => {
     const applyMetaFallback = () => {
       if (!meta || meta.matchId !== matchId) {
         return false;
@@ -281,7 +285,7 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
 
     try {
       setIsLoading(true);
-      const matchData = await getOrLoadMatchDocument(matchId);
+      const matchData = await getOrLoadMatchDocument(matchId, options);
       if (matchData) {
         setCachedMatchData(matchData);
         setCachedMatchId(matchId);
@@ -351,7 +355,8 @@ export function usePackingActions(players: Player[], matchInfo: TeamInfo | null,
   ]);
 
   const loadActionsForMatch = useCallback(
-    (matchId: string) => loadMatchIntoCache(matchId, matchInfo),
+    (matchId: string, options: { forceFresh?: boolean } = {}) =>
+      loadMatchIntoCache(matchId, matchInfo, options),
     [loadMatchIntoCache, matchInfo]
   );
 

@@ -466,7 +466,9 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
     }
 
     if (selectedMatch) {
-      playersToFilter = getModalPlayersForMatch(players, selectedMatch);
+      playersToFilter = getModalPlayersForMatch(players, selectedMatch, {
+        requirePlayerMinutes: true,
+      });
     } else {
       // Jeśli nie ma wybranego meczu, pokazuj wszystkich zawodników z zespołu
       playersToFilter = players;

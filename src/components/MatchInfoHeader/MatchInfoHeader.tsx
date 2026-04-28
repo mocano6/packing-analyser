@@ -202,6 +202,7 @@ interface MatchInfoHeaderProps {
   selectedTeam: string;
   onChangeTeam: (team: string) => void;
   onManagePlayerMinutes: (match: TeamInfo) => void;
+  onManageStartingLineup: (match: TeamInfo) => void;
   onAddNewMatch: () => void;
   refreshCounter?: number;
   isOfflineMode?: boolean;
@@ -222,6 +223,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   selectedTeam,
   onChangeTeam,
   onManagePlayerMinutes,
+  onManageStartingLineup,
   onAddNewMatch,
   refreshCounter = 0,
   isOfflineMode = false,
@@ -629,6 +631,18 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           ⌚
                         </button>
                         <button
+                          className={`${styles.editBtn} ${styles.lineupBtn}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onManageStartingLineup(match);
+                          }}
+                          title="Pierwszy skład"
+                          aria-label={`Ustaw pierwszy skład w meczu: ${getTeamName(match.team)} vs ${match.opponent}`}
+                          disabled={isBeingDeleted}
+                        >
+                          XI
+                        </button>
+                        <button
                           className={`${styles.editBtn} ${styles.dataBtn}`}
                           onClick={(e) => handleOpenMatchDataModal(e, match)}
                           title="Dane meczu"
@@ -687,6 +701,18 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
                           disabled={isBeingDeleted}
                         >
                           ⌚
+                        </button>
+                        <button
+                          className={`${styles.editBtn} ${styles.lineupBtn}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onManageStartingLineup(match);
+                          }}
+                          title="Pierwszy skład"
+                          aria-label={`Ustaw pierwszy skład w meczu: ${getTeamName(match.team)} vs ${match.opponent}`}
+                          disabled={isBeingDeleted}
+                        >
+                          XI
                         </button>
                         <button
                           className={`${styles.editBtn} ${styles.dataBtn}`}

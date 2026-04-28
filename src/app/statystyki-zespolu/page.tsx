@@ -16,6 +16,7 @@ import { getCached, setCached } from "@/lib/sessionCache";
 import { clearMatchDocumentCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import Link from "next/link";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
+import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import { isIn1TZoneCanonical, isInOpponent1TZoneCanonical } from "@/utils/pitchZones";
 import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPitch";
@@ -42,9 +43,18 @@ import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTube
 import { usePresentationMode } from "@/contexts/PresentationContext";
 import { getPkEntryKpiBreakdownCounts, isPkSfgEntry } from "@/lib/pkEntryKpiBreakdown";
 import { filterTeamsByUserAccess } from "@/lib/teamsForUserAccess";
+import { sumNonPenaltyXg } from "@/lib/xgNonPenalty";
 import styles from "./statystyki-zespolu.module.css";
 
+/** Spójny zielony / czerwony KPI na tej stronie (wspólny dla wykresów, KPI i akcji). */
+const TEAM_STATS_GREEN = '#059669';
+const TEAM_STATS_RED = '#dc2626';
+const TEAM_STATS_RADAR_REFERENCE = '#6366f1';
+/** Linia serii „Wartość” na radarze KPI (jak wcześniej — zielony, nie neutralny szary). */
+const TEAM_STATS_RADAR_VALUE_LINE = TEAM_STATS_GREEN;
+
 const GPS_MATCH_DAY_CACHE_TTL_MS = 10 * 60 * 1000;
+type KpiMatchPeriod = 'total' | 'firstHalf' | 'secondHalf';
 
 export default function StatystykiZespoluPage() {
   const { teams, isLoading: isTeamsLoading } = useTeams();
@@ -56,7 +66,7 @@ export default function StatystykiZespoluPage() {
   const [selectedPlayerForVideo, setSelectedPlayerForVideo] = useState<string | null>(null);
   const { players } = usePlayersState();
   const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
-  const { isPresentationMode, maskName } = usePresentationMode();
+  const { isPresentationMode } = usePresentationMode();
   
   // Resetuj stan zwijania gdy zmienia się wybrane KPI
   useEffect(() => {
@@ -91,6 +101,7 @@ export default function StatystykiZespoluPage() {
     }
     return "";
   });
+  const [isTeamsSelectorExpanded, setIsTeamsSelectorExpanded] = useState(false);
   
   // Ustaw domyślny zespół gdy teams się załadują i zapisz w localStorage
   useEffect(() => {
@@ -228,6 +239,7 @@ export default function StatystykiZespoluPage() {
   const [actionsModalOpen, setActionsModalOpen] = useState(false);
   const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<{ playerId: string; playerName: string; zoneName: string } | null>(null);
   const [matchDataPeriod, setMatchDataPeriod] = useState<'total' | 'firstHalf' | 'secondHalf'>('total');
+  const [kpiMatchPeriod, setKpiMatchPeriod] = useState<KpiMatchPeriod>('total');
   const [passesExpanded, setPassesExpanded] = useState(false);
   const [xgExpanded, setXgExpanded] = useState(false);
   const [xgExpandedMatchData, setXgExpandedMatchData] = useState(false);
@@ -3676,7 +3688,7 @@ export default function StatystykiZespoluPage() {
           <p>Akcja: #{data.actionIndex}</p>
           <hr style={{margin: '8px 0', border: 'none', borderTop: '1px solid #ddd'}} />
           <p style={{ color: '#8884d8' }}>Packing: {data.packing?.toFixed(0)}</p>
-          <p style={{ color: '#82ca9d' }}>PxT: {data.pxt?.toFixed(2)}</p>
+          <p style={{ color: TEAM_STATS_GREEN }}>PxT: {data.pxt?.toFixed(2)}</p>
           <p style={{ color: '#ffc658' }}>xT: {data.xt?.toFixed(3)}</p>
         </div>
       );
@@ -3768,29 +3780,22 @@ export default function StatystykiZespoluPage() {
       {/* Kompaktowa sekcja wyboru */}
       <div className={styles.compactSelectorsContainer}>
         <div className={`${styles.compactSelectorGroup} ${styles.teamGroup}`}>
-          <label htmlFor="team-select" className={styles.compactLabel}>
+          <label id="team-select-label" className={styles.compactLabel}>
             Zespół:
           </label>
           {isTeamsLoading ? (
             <p className={styles.loadingText}>Ładowanie...</p>
           ) : (
-            <select
-              id="team-select"
-              value={selectedTeam}
-              onChange={(e) => setSelectedTeam(e.target.value)}
-              className={styles.compactSelect}
-              disabled={availableTeams.length === 0}
-            >
-              {availableTeams.length === 0 ? (
-                <option value="">Brak dostępnych zespołów</option>
-              ) : (
-                Object.values(teamsObject).map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {isPresentationMode ? maskName(team.name) : team.name}
-                  </option>
-                ))
-              )}
-            </select>
+            <TeamsSelector
+              selectedTeam={selectedTeam}
+              onChange={setSelectedTeam}
+              teamsCatalog={teams}
+              userTeamAccess={{ isAdmin, allowedTeamIds: userTeams ?? [] }}
+              className={styles.compactTeamSelectorHeader}
+              showLabel={false}
+              isExpanded={isTeamsSelectorExpanded}
+              onToggle={() => setIsTeamsSelectorExpanded((isExpanded) => !isExpanded)}
+            />
           )}
         </div>
 
@@ -3953,6 +3958,30 @@ export default function StatystykiZespoluPage() {
                   // Oblicz dane dla spidermapy
                   const teamIdInMatch = selectedTeam;
                   const opponentIdInMatch = selectedMatchInfo.opponent;
+                  const getKpiEventMinute = (event: any): number => {
+                    const rawMinute = event?.minute ?? event?.min;
+                    const minute = typeof rawMinute === 'number' ? rawMinute : Number(rawMinute);
+                    return Number.isFinite(minute) ? minute : NaN;
+                  };
+                  const isInKpiMatchPeriod = (event: any): boolean => {
+                    if (kpiMatchPeriod === 'total') return true;
+                    const minute = getKpiEventMinute(event);
+                    if (!Number.isFinite(minute)) return false;
+                    return kpiMatchPeriod === 'firstHalf' ? minute <= 45 : minute > 45;
+                  };
+                  const kpiAllActions = allActions.filter(isInKpiMatchPeriod);
+                  const kpiAllRegainActions = allRegainActions.filter(isInKpiMatchPeriod);
+                  const kpiDerivedRegainActions = derivedRegainActions.filter(isInKpiMatchPeriod);
+                  const kpiDerivedLosesActions = derivedLosesActions.filter(isInKpiMatchPeriod);
+                  const kpiAllShots = allShots.filter(isInKpiMatchPeriod);
+                  const kpiAllPKEntries = (allPKEntries || []).filter(isInKpiMatchPeriod);
+                  const kpiAllAcc8sEntries = (allAcc8sEntries || []).filter(isInKpiMatchPeriod);
+                  const kpiPeriodLabel =
+                    kpiMatchPeriod === 'firstHalf'
+                      ? '1. połowa'
+                      : kpiMatchPeriod === 'secondHalf'
+                        ? '2. połowa'
+                        : 'Cały mecz';
                   const resolveShotTeamId = (shot: any): string | null => {
                     if (shot.teamId) return shot.teamId;
                     if (shot.teamContext === "attack") return teamIdInMatch;
@@ -3961,13 +3990,13 @@ export default function StatystykiZespoluPage() {
                   };
                   
                   // Filtruj strzały przeciwnika
-                  const opponentShots = allShots.filter(shot => {
+                  const opponentShots = kpiAllShots.filter(shot => {
                     const shotTeamId = resolveShotTeamId(shot);
                     return shotTeamId === opponentIdInMatch;
                   });
                   
                   // Filtruj strzały naszego zespołu
-                  const teamShots = allShots.filter(shot => {
+                  const teamShots = kpiAllShots.filter(shot => {
                     const shotTeamId = resolveShotTeamId(shot);
                     return shotTeamId === teamIdInMatch;
                   });
@@ -3979,6 +4008,8 @@ export default function StatystykiZespoluPage() {
                   const teamXG = teamShots.reduce((sum, shot) => sum + (shot.xG || 0), 0);
                   const teamShotsCount = teamShots.length;
                   const teamXGPerShot = teamShotsCount > 0 ? (teamXG / teamShotsCount) : 0;
+                  const teamNPxG = sumNonPenaltyXg(teamShots);
+                  const opponentNPxG = sumNonPenaltyXg(opponentShots);
                   const teamGoals = teamShots.filter((shot: any) => shot.isGoal || shot.shotType === 'goal').length;
                   const opponentGoals = opponentShots.filter((shot: any) => shot.isGoal || shot.shotType === 'goal').length;
                   const teamOnTarget = teamShots.filter((s: any) => s.shotType === 'on_target' || s.shotType === 'goal' || s.isGoal).length;
@@ -4006,8 +4037,8 @@ export default function StatystykiZespoluPage() {
                   const REGAIN_XG_FALLBACK_EPS = 1e-9;
 
                   const allRegainCombined = [
-                    ...allRegainActions,
-                    ...allActions.filter((a: any) => a.isRegain === true || isRegainAction(a)),
+                    ...kpiAllRegainActions,
+                    ...kpiAllActions.filter((a: any) => a.isRegain === true || isRegainAction(a)),
                   ];
                   const uniqueRegains = Array.from(
                     new Map(allRegainCombined.map(a => [a.id || `${a.minute}_${a.x}_${a.y}`, a])).values()
@@ -4216,11 +4247,11 @@ export default function StatystykiZespoluPage() {
                   const team1TContact1Percentage = teamShots1TCount > 0 ? (teamShots1TContact1 / teamShots1TCount) * 100 : 0;
                   
                   // Wejścia w PK przeciwnika (teamContext === 'defense')
-                  const opponentPKEntries = (allPKEntries || []).filter((e: any) => 
+                  const opponentPKEntries = kpiAllPKEntries.filter((e: any) =>
                     e && e.teamId === selectedTeam && (e.teamContext ?? "attack") === "defense"
                   );
                   const opponentPKEntriesCount = opponentPKEntries.length;
-                  const teamPKEntries = (allPKEntries || []).filter((e: any) =>
+                  const teamPKEntries = kpiAllPKEntries.filter((e: any) =>
                     e && e.teamId === selectedTeam && (e.teamContext ?? "attack") !== "defense"
                   );
                   const teamPKEntriesCount = teamPKEntries.length;
@@ -4335,10 +4366,13 @@ export default function StatystykiZespoluPage() {
                         vb = Number(vb) ?? 0;
                         return kpiPkSortDir === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number);
                       });
-                  // Łączne PxT z całego meczu (1. + 2. połowa) – używane w KPI PxT
-                  const totalPxtAll = halfTimeStats.firstHalf.pxt + halfTimeStats.secondHalf.pxt;
+                  const totalPxtAll = kpiMatchPeriod === 'firstHalf'
+                    ? halfTimeStats.firstHalf.pxt
+                    : kpiMatchPeriod === 'secondHalf'
+                      ? halfTimeStats.secondHalf.pxt
+                      : halfTimeStats.firstHalf.pxt + halfTimeStats.secondHalf.pxt;
                   // PxT per zawodnik: podanie (sender), odbiór (receiver), drybling (dribbler) + ile razy zdobyli/otrzymali piłkę w P2/P3
-                  const teamPxtActions = allActions.filter((a: any) => a.teamId === selectedTeam);
+                  const teamPxtActions = kpiAllActions.filter((a: any) => a.teamId === selectedTeam);
                   const pxtPlayersSummary = teamPxtActions.reduce(
                     (
                       acc: Record<string, {
@@ -4475,7 +4509,7 @@ export default function StatystykiZespoluPage() {
                     const pmZones = ['C5', 'C6', 'C7', 'C8', 'D5', 'D6', 'D7', 'D8', 'E5', 'E6', 'E7', 'E8', 'F5', 'F6', 'F7', 'F8'];
                     return pmZones.includes(normalized);
                   };
-                  let filteredRegainsForP2P3 = (derivedRegainActions || []).filter((a: any) => {
+                  let filteredRegainsForP2P3 = (kpiDerivedRegainActions || []).filter((a: any) => {
                     if (a.teamId !== selectedTeam) return false;
                     if (regainHalfFilter === 'pm') {
                       const attackZoneRaw = regainAttackZoneRawForMap(a);
@@ -4566,14 +4600,14 @@ export default function StatystykiZespoluPage() {
                       })
                     : p2p3PlayersList;
                   // Łączna liczba akcji P2/P3: podania progresywne (podający + drybling) + P2/P3 po regains
-                  const totalP2FromPass = teamStats.senderP2Count;
-                  const totalP2FromDribble = teamStats.dribblingP2Count;
-                  const totalP2FromRegain = teamRegainStats.allRegainP2Count;
+                  const totalP2FromPass = teamPxtActions.filter((a: any) => (a.isP2 || a.isP2Start) && String(a.actionType || '').toLowerCase() !== 'dribble').length;
+                  const totalP2FromDribble = teamPxtActions.filter((a: any) => (a.isP2 || a.isP2Start) && String(a.actionType || '').toLowerCase() === 'dribble').length;
+                  const totalP2FromRegain = filteredRegainsForP2P3.filter((a: any) => a.isP2 || a.isP2Start).length;
                   const totalP2Actions = totalP2FromPass + totalP2FromDribble + totalP2FromRegain;
 
-                  const totalP3FromPass = teamStats.senderP3Count;
-                  const totalP3FromDribble = teamStats.dribblingP3Count;
-                  const totalP3FromRegain = teamRegainStats.allRegainP3Count;
+                  const totalP3FromPass = teamPxtActions.filter((a: any) => (a.isP3 || a.isP3Start) && String(a.actionType || '').toLowerCase() !== 'dribble').length;
+                  const totalP3FromDribble = teamPxtActions.filter((a: any) => (a.isP3 || a.isP3Start) && String(a.actionType || '').toLowerCase() === 'dribble').length;
+                  const totalP3FromRegain = filteredRegainsForP2P3.filter((a: any) => a.isP3 || a.isP3Start).length;
                   const totalP3Actions = totalP3FromPass + totalP3FromDribble + totalP3FromRegain;
                   
                   // Oblicz % strat z isReaction5s === true
@@ -4581,7 +4615,7 @@ export default function StatystykiZespoluPage() {
                   // 2. Odejmujemy tylko straty z flagą isAut
                   // 3. Uwzględniamy straty z isReaction5s === true LUB isBadReaction5s === true (mają zaznaczony jeden z przycisków 5s)
                   // 4. Sprawdzamy, jaki % z tych strat ma flagę isReaction5s === true (✓ 5s)
-                  const allLoses = derivedLosesActions;
+                  const allLoses = kpiDerivedLosesActions;
                   // Wszystkie straty bez isAut, które mają zaznaczony jeden z przycisków 5s (✓ 5s LUB ✗ 5s)
                   // Uwaga: sprawdzamy dokładnie === true, aby wykluczyć undefined i false
                   // Wsparcie wsteczne: isReaction5sNotApplicable jest traktowane jak isBadReaction5s
@@ -4630,7 +4664,7 @@ export default function StatystykiZespoluPage() {
                   
                   // Oblicz statystyki 8s ACC
                   // allAcc8sEntries są już przefiltrowane dla wybranego meczu w useEffect
-                  const all8sAccEntries = (allAcc8sEntries || []).filter((entry: any) => entry);
+                  const all8sAccEntries = kpiAllAcc8sEntries.filter((entry: any) => entry);
                   const total8sAcc = all8sAccEntries.length;
                   
                   const pk8sEntries = all8sAccEntries.filter((entry: any) => entry.isPKEntryUnder8s === true);
@@ -4655,12 +4689,12 @@ export default function StatystykiZespoluPage() {
                     entry.videoTimestampRaw !== undefined && entry.videoTimestampRaw !== null
                   );
                   
-                  const pkEntriesWithTimestamp = (allPKEntries || []).filter((entry: any) => 
+                  const pkEntriesWithTimestamp = kpiAllPKEntries.filter((entry: any) =>
                     entry && (entry.videoTimestampRaw !== undefined && entry.videoTimestampRaw !== null || 
                               entry.videoTimestamp !== undefined && entry.videoTimestamp !== null)
                   );
                   
-                  const shotsWithTimestamp = (allShots || []).filter((entry: any) => 
+                  const shotsWithTimestamp = kpiAllShots.filter((entry: any) =>
                     entry && (entry.videoTimestampRaw !== undefined && entry.videoTimestampRaw !== null || 
                               entry.videoTimestamp !== undefined && entry.videoTimestamp !== null)
                   );
@@ -4740,9 +4774,9 @@ export default function StatystykiZespoluPage() {
                   const target8sAcc = 25;
                   const normalized8sAcc = Math.min((shotAndPK8sPercentage / target8sAcc) * 100, 100);
                   
-                  // Wartości KPI (cele) - wszystkie na tej samej odległości od środka (np. 80)
-                  const kpiRadarValue = 80; // Wszystkie KPI na tym samym poziomie
-                  
+                  /** Skala radaru: „na KPI” = ten poziom (0–100); wspólna dla niebieskiego wielokąta Cel i zielonej realizacji — ten sam promień przy spełnieniu KPI. */
+                  const kpiRadarValue = 52;
+
                   // xG przeciwnika: KPI < 1.0
                   const kpiXG = 1.0;
                   
@@ -4768,7 +4802,7 @@ export default function StatystykiZespoluPage() {
                   const kpiRegainsPPToPKShot8s = 25;
                   
                   // Oblicz przechwyty na połowie przeciwnika z videoTimestampRaw
-                  const regainsOnOpponentHalfWithTimestamp = derivedRegainActions
+                  const regainsOnOpponentHalfWithTimestamp = kpiDerivedRegainActions
                     .filter(action => {
                       const attackZoneRaw = regainAttackZoneRawForMap(action);
                       const attackZoneName = attackZoneRaw ? convertZoneToName(attackZoneRaw) : null;
@@ -4786,7 +4820,7 @@ export default function StatystykiZespoluPage() {
                     .sort((a, b) => a.timestamp - b.timestamp);
                   
                   // Przygotuj PK entries i shots w ataku z timestampami
-                  const pkEntriesAttackWithTimestamp = (allPKEntries || [])
+                  const pkEntriesAttackWithTimestamp = kpiAllPKEntries
                     .filter((entry: any) => {
                       if (!entry) return false;
                       const teamContext = entry.teamContext ?? "attack";
@@ -4808,7 +4842,7 @@ export default function StatystykiZespoluPage() {
                     .sort((a, b) => a.timestamp - b.timestamp);
                   
                   // Przygotuj loses z timestampami
-                  const losesWithTimestamp = derivedLosesActions
+                  const losesWithTimestamp = kpiDerivedLosesActions
                     .map(lose => ({
                       lose,
                       timestamp: lose.videoTimestampRaw ?? lose.videoTimestamp ?? 0,
@@ -4872,7 +4906,7 @@ export default function StatystykiZespoluPage() {
                   });
 
                   // Oblicz nasze straty na własnej połowie (bez autów) z videoTimestampRaw
-                  const losesOnOwnHalfWithTimestamp = derivedLosesActions
+                  const losesOnOwnHalfWithTimestamp = kpiDerivedLosesActions
                     .filter(action => {
                       const losesZoneRaw = action.losesAttackZone || action.fromZone || action.toZone || action.startZone || (action as { losesDefenseZone?: string }).losesDefenseZone;
                       const losesZoneName = losesZoneRaw ? convertZoneToName(losesZoneRaw) : null;
@@ -4892,7 +4926,7 @@ export default function StatystykiZespoluPage() {
                     .sort((a, b) => a.timestamp - b.timestamp);
 
                   // Przygotuj PK entries i shots przeciwnika z timestampami
-                  const pkEntriesDefenseWithTimestamp = (allPKEntries || [])
+                  const pkEntriesDefenseWithTimestamp = kpiAllPKEntries
                     .filter((entry: any) => {
                       if (!entry) return false;
                       const teamContext = entry.teamContext ?? "attack";
@@ -4914,7 +4948,7 @@ export default function StatystykiZespoluPage() {
                     .sort((a, b) => a.timestamp - b.timestamp);
 
                   // Przygotuj regains z timestampami (do sprawdzania czy przeciwnik nie stracił piłki)
-                  const regainsWithTimestamp = derivedRegainActions
+                  const regainsWithTimestamp = kpiDerivedRegainActions
                     .map(regain => ({
                       regain,
                       timestamp: regain.videoTimestampRaw ?? regain.videoTimestamp ?? 0,
@@ -4980,8 +5014,8 @@ export default function StatystykiZespoluPage() {
                       ? list.filter((action) => matchesSelectedActionFilter(action))
                       : list;
 
-                  // KPI ma stałe dane względem przełączników połowy (all/own/opponent/pm).
-                  const kpiDashboardFilteredRegains = kpiApplySelectedActionFilter(derivedRegainActions);
+                  // Dashboard KPI bazuje na wybranym zakresie czasu meczu.
+                  const kpiDashboardFilteredRegains = kpiApplySelectedActionFilter(kpiDerivedRegainActions);
                   const kpiRegainsAllPitchForDashboard = kpiDashboardFilteredRegains;
 
                   const regainsPpActionsForPlayers = kpiDashboardFilteredRegains.filter((action) => {
@@ -5015,8 +5049,8 @@ export default function StatystykiZespoluPage() {
                   );
                   const allPitchRegainsPlayerSummary = playerStatsSummary(allPitchRegainsByPlayer, allPitchRegainsTotal);
 
-                  // KPI ma stałe dane względem przełączników połowy (all/own/opponent/pm).
-                  const kpiDashboardFilteredLoses = kpiApplySelectedActionFilter(derivedLosesActions);
+                  // Dashboard KPI bazuje na wybranym zakresie czasu meczu.
+                  const kpiDashboardFilteredLoses = kpiApplySelectedActionFilter(kpiDerivedLosesActions);
                   const kpiLosesAllPitchForDashboard = kpiDashboardFilteredLoses;
 
                   const kpiDashboardLosesVisibleOnPitch = kpiLosesAllPitchForDashboard.filter((action) => {
@@ -5221,7 +5255,7 @@ export default function StatystykiZespoluPage() {
                   };
                   
                   // Specjalna funkcja dla "PK przeciwnik" - zapewnia, że gdy wartość = kpiPKEntries, to score = kpiRadarValue
-                  // Mapowanie: 0 → 100, kpiPKEntries (11) → kpiRadarValue (80), kpiPKEntries + 40 (51) → 0
+                  // Mapowanie: 0 → 100, kpiPKEntries (11) → kpiRadarValue, kpiPKEntries + 40 (51) → 0
                   // Punkt 0 na spidermapie = KPI + 40 (51), punkt 100 = 0 (najlepsze)
                   const maxPKOpponentEntries = kpiPKEntries + 40; // 51 = maksimum na spidermapie (punkt 0)
                   const toScorePKOpponent = (actualValue: number): number => {
@@ -5243,7 +5277,7 @@ export default function StatystykiZespoluPage() {
                   };
                   
                   // Specjalna funkcja dla "5s (reakcja)" - zapewnia, że gdy wartość = kpiReaction5s, to score = kpiRadarValue
-                  // Mapowanie: 0% → 0, kpiReaction5s (50%) → kpiRadarValue (80), kpiReaction5s + 40% (90%) → 100
+                  // Mapowanie: 0% → 0, kpiReaction5s (50%) → kpiRadarValue, kpiReaction5s + 40% (90%) → 100
                   // Punkt 0 na spidermapie = KPI (50%), punkt 100 = KPI + 40% (90%)
                   const maxReaction5sPercentage = kpiReaction5s + 40; // 90% = maksimum na spidermapie
                   const toScoreReaction5s = (actualPercentage: number): number => {
@@ -5306,14 +5340,13 @@ export default function StatystykiZespoluPage() {
                   };
 
                   const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+                  /**
+                   * „Więcej = lepiej”: przy actual === target poziom ≈ obręcz KPI (kpiRadarValue).
+                   * Nadmiar ponad KPI może dojechać do 100 (brzeg diagramu).
+                   */
                   const scoreHigherIsBetter = (actual: number, target: number) => {
                     if (target <= 0) return 0;
-                    return clamp((actual / target) * 100, 0, 200);
-                  };
-                  const scoreLowerIsBetter = (actual: number, target: number) => {
-                    if (target <= 0) return 0;
-                    if (actual <= 0) return 200;
-                    return clamp((target / actual) * 100, 0, 200);
+                    return clamp((actual / target) * kpiRadarValue, 0, 100);
                   };
                   const formatDelta = (delta: number, mode: 'higher' | 'lower', precision: number, unit?: string) => {
                     const value = Math.abs(delta).toFixed(precision);
@@ -5334,14 +5367,14 @@ export default function StatystykiZespoluPage() {
                   const regainsPPToPKShot8sDelta = regainsPPToPKShot8sPercentage - kpiRegainsPPToPKShot8s;
 
                   const baseRadarData = [
-                    { metric: 'xG/strzał', 'KPI': 100, 'Wartość': scoreHigherIsBetter(teamXGPerShot, kpiXGPerShot), value: scoreHigherIsBetter(teamXGPerShot, kpiXGPerShot), actualValue: teamXGPerShot, actualLabel: `${teamXGPerShot.toFixed(2)} (${teamShotsCount} strzałów)`, kpiLabel: `KPI > ${kpiXGPerShot.toFixed(2)}`, deltaLabel: formatDelta(xgPerShotDelta, 'higher', 2) },
-                    { metric: '1T', 'KPI': 100, 'Wartość': scoreHigherIsBetter(team1TContact1Percentage, kpi1TPercentage), value: scoreHigherIsBetter(team1TContact1Percentage, kpi1TPercentage), actualValue: team1TContact1Percentage, actualLabel: `${team1TContact1Percentage.toFixed(1)}%`, kpiLabel: `KPI ≥ ${kpi1TPercentage}%`, deltaLabel: formatDelta(oneTDelta, 'higher', 1, 'pp') },
-                    { metric: '5s', 'KPI': 100, 'Wartość': scoreHigherIsBetter(reaction5sPercentage, kpiReaction5s), value: scoreHigherIsBetter(reaction5sPercentage, kpiReaction5s), actualValue: reaction5sPercentage, actualLabel: `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesWith5sFlags.length})`, kpiLabel: `KPI > ${kpiReaction5s}%`, deltaLabel: formatDelta(reactionDelta, 'higher', 1, 'pp') },
-                    { metric: 'PK przeciwnik', 'KPI': 100, 'Wartość': scoreLowerIsBetter(opponentPKEntriesCount, kpiPKEntries), value: scoreLowerIsBetter(opponentPKEntriesCount, kpiPKEntries), actualValue: opponentPKEntriesCount, actualLabel: `${opponentPKEntriesCount}`, kpiLabel: `KPI < ${kpiPKEntries}`, deltaLabel: formatDelta(pkDelta, 'lower', 0) },
-                    { metric: 'PM Area straty', 'KPI': 100, 'Wartość': scoreLowerIsBetter(losesInPMAreaCount, kpiLosesPMAreaCount), value: scoreLowerIsBetter(losesInPMAreaCount, kpiLosesPMAreaCount), actualValue: losesInPMAreaCount, actualLabel: `${losesInPMAreaCount} (${losesInPMAreaPercentage.toFixed(1)}% z ${allLoses.length})`, kpiLabel: `KPI ≤ ${kpiLosesPMAreaCount}`, deltaLabel: formatDelta(losesPmDelta, 'lower', 0) },
-                    { metric: 'Przechwyty PP', 'KPI': 100, 'Wartość': scoreHigherIsBetter(ppRegainsTotalForShare, kpiRegainsOpponentHalf), value: scoreHigherIsBetter(ppRegainsTotalForShare, kpiRegainsOpponentHalf), actualValue: ppRegainsTotalForShare, actualLabel: `${ppRegainsTotalForShare}`, kpiLabel: `KPI ≥ ${kpiRegainsOpponentHalf}`, deltaLabel: formatDelta(regainsOpponentHalfDelta, 'higher', 0) },
-                    { metric: '8s CA', 'KPI': 100, 'Wartość': scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s), value: scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s), actualValue: regainsPPToPKShot8sPercentage, actualLabel: `${regainsPPToPKShot8sPercentage.toFixed(1)}% (${regainsPPWithPKOrShot8s}/${ppRegainsTotalForShare})`, kpiLabel: `KPI ≥ ${kpiRegainsPPToPKShot8s}%`, deltaLabel: formatDelta(regainsPPToPKShot8sDelta, 'higher', 1, 'pp') },
-                    { metric: '8s ACC', 'KPI': 100, 'Wartość': scoreHigherIsBetter(shotAndPK8sPercentage, target8sAcc), value: scoreHigherIsBetter(shotAndPK8sPercentage, target8sAcc), actualValue: shotAndPK8sPercentage, actualLabel: `${shotAndPK8sPercentage.toFixed(1)}% (${shotAndPK8sCount}/${total8sAcc})`, kpiLabel: `KPI ≥ ${target8sAcc}%`, deltaLabel: formatDelta(accDelta, 'higher', 1, 'pp') },
+                    { metric: 'xG/strzał', 'KPI': kpiRadarValue, 'Wartość': scoreHigherIsBetter(teamXGPerShot, kpiXGPerShot), value: scoreHigherIsBetter(teamXGPerShot, kpiXGPerShot), actualValue: teamXGPerShot, actualLabel: `${teamXGPerShot.toFixed(2)} (${teamShotsCount} strzałów)`, kpiLabel: `KPI > ${kpiXGPerShot.toFixed(2)}`, deltaLabel: formatDelta(xgPerShotDelta, 'higher', 2), kpiMet: teamXGPerShot >= kpiXGPerShot },
+                    { metric: '1T', 'KPI': kpiRadarValue, 'Wartość': scoreHigherIsBetter(team1TContact1Percentage, kpi1TPercentage), value: scoreHigherIsBetter(team1TContact1Percentage, kpi1TPercentage), actualValue: team1TContact1Percentage, actualLabel: `${team1TContact1Percentage.toFixed(1)}%`, kpiLabel: `KPI ≥ ${kpi1TPercentage}%`, deltaLabel: formatDelta(oneTDelta, 'higher', 1, 'pp'), kpiMet: team1TContact1Percentage >= kpi1TPercentage },
+                    { metric: '5s', 'KPI': kpiRadarValue, 'Wartość': scoreHigherIsBetter(reaction5sPercentage, kpiReaction5s), value: scoreHigherIsBetter(reaction5sPercentage, kpiReaction5s), actualValue: reaction5sPercentage, actualLabel: `${reaction5sPercentage.toFixed(1)}% (${reaction5sLoses.length}/${losesWith5sFlags.length})`, kpiLabel: `KPI > ${kpiReaction5s}%`, deltaLabel: formatDelta(reactionDelta, 'higher', 1, 'pp'), kpiMet: reaction5sPercentage >= kpiReaction5s },
+                    { metric: 'PK przeciwnik', 'KPI': kpiRadarValue, 'Wartość': toScorePKOpponent(opponentPKEntriesCount), value: toScorePKOpponent(opponentPKEntriesCount), actualValue: opponentPKEntriesCount, actualLabel: `${opponentPKEntriesCount}`, kpiLabel: `KPI < ${kpiPKEntries}`, deltaLabel: formatDelta(pkDelta, 'lower', 0), kpiMet: opponentPKEntriesCount <= kpiPKEntries },
+                    { metric: 'PM Area straty', 'KPI': kpiRadarValue, 'Wartość': toScoreLosesPMArea(losesInPMAreaCount), value: toScoreLosesPMArea(losesInPMAreaCount), actualValue: losesInPMAreaCount, actualLabel: `${losesInPMAreaCount} (${losesInPMAreaPercentage.toFixed(1)}% z ${allLoses.length})`, kpiLabel: `KPI ≤ ${kpiLosesPMAreaCount}`, deltaLabel: formatDelta(losesPmDelta, 'lower', 0), kpiMet: losesInPMAreaCount <= kpiLosesPMAreaCount },
+                    { metric: 'Przechwyty PP', 'KPI': kpiRadarValue, 'Wartość': scoreHigherIsBetter(ppRegainsTotalForShare, kpiRegainsOpponentHalf), value: scoreHigherIsBetter(ppRegainsTotalForShare, kpiRegainsOpponentHalf), actualValue: ppRegainsTotalForShare, actualLabel: `${ppRegainsTotalForShare}`, kpiLabel: `KPI ≥ ${kpiRegainsOpponentHalf}`, deltaLabel: formatDelta(regainsOpponentHalfDelta, 'higher', 0), kpiMet: ppRegainsTotalForShare >= kpiRegainsOpponentHalf },
+                    { metric: '8s CA', 'KPI': kpiRadarValue, 'Wartość': scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s), value: scoreHigherIsBetter(regainsPPToPKShot8sPercentage, kpiRegainsPPToPKShot8s), actualValue: regainsPPToPKShot8sPercentage, actualLabel: `${regainsPPToPKShot8sPercentage.toFixed(1)}% (${regainsPPWithPKOrShot8s}/${ppRegainsTotalForShare})`, kpiLabel: `KPI ≥ ${kpiRegainsPPToPKShot8s}%`, deltaLabel: formatDelta(regainsPPToPKShot8sDelta, 'higher', 1, 'pp'), kpiMet: regainsPPToPKShot8sPercentage >= kpiRegainsPPToPKShot8s },
+                    { metric: '8s ACC', 'KPI': kpiRadarValue, 'Wartość': scoreHigherIsBetter(shotAndPK8sPercentage, target8sAcc), value: scoreHigherIsBetter(shotAndPK8sPercentage, target8sAcc), actualValue: shotAndPK8sPercentage, actualLabel: `${shotAndPK8sPercentage.toFixed(1)}% (${shotAndPK8sCount}/${total8sAcc})`, kpiLabel: `KPI ≥ ${target8sAcc}%`, deltaLabel: formatDelta(accDelta, 'higher', 1, 'pp'), kpiMet: shotAndPK8sPercentage >= target8sAcc },
                   ];
 
                   const radarData = baseRadarData.map((item, idx) => ({
@@ -5369,12 +5402,28 @@ export default function StatystykiZespoluPage() {
                   const teamPossessionSecondHalf = possessionData?.teamSecondHalf || 0;
                   const opponentPossessionFirstHalf = possessionData?.opponentFirstHalf || 0;
                   const opponentPossessionSecondHalf = possessionData?.opponentSecondHalf || 0;
-                  const teamPossessionMinutes = teamPossessionFirstHalf + teamPossessionSecondHalf;
-                  const opponentPossessionMinutes = opponentPossessionFirstHalf + opponentPossessionSecondHalf;
+                  const teamPossessionMinutes = kpiMatchPeriod === 'firstHalf'
+                    ? teamPossessionFirstHalf
+                    : kpiMatchPeriod === 'secondHalf'
+                      ? teamPossessionSecondHalf
+                      : teamPossessionFirstHalf + teamPossessionSecondHalf;
+                  const opponentPossessionMinutes = kpiMatchPeriod === 'firstHalf'
+                    ? opponentPossessionFirstHalf
+                    : kpiMatchPeriod === 'secondHalf'
+                      ? opponentPossessionSecondHalf
+                      : opponentPossessionFirstHalf + opponentPossessionSecondHalf;
                   const liveMinutes = teamPossessionMinutes + opponentPossessionMinutes;
-                  const explicitDeadMinutes = (possessionData?.deadFirstHalf || 0) + (possessionData?.deadSecondHalf || 0);
-                  const inferredDeadMinutes = Math.max(0, 45 - (teamPossessionFirstHalf + opponentPossessionFirstHalf))
-                    + Math.max(0, 45 - (teamPossessionSecondHalf + opponentPossessionSecondHalf));
+                  const explicitDeadMinutes = kpiMatchPeriod === 'firstHalf'
+                    ? (possessionData?.deadFirstHalf || 0)
+                    : kpiMatchPeriod === 'secondHalf'
+                      ? (possessionData?.deadSecondHalf || 0)
+                      : (possessionData?.deadFirstHalf || 0) + (possessionData?.deadSecondHalf || 0);
+                  const inferredDeadMinutes = kpiMatchPeriod === 'firstHalf'
+                    ? Math.max(0, 45 - (teamPossessionFirstHalf + opponentPossessionFirstHalf))
+                    : kpiMatchPeriod === 'secondHalf'
+                      ? Math.max(0, 45 - (teamPossessionSecondHalf + opponentPossessionSecondHalf))
+                      : Math.max(0, 45 - (teamPossessionFirstHalf + opponentPossessionFirstHalf))
+                        + Math.max(0, 45 - (teamPossessionSecondHalf + opponentPossessionSecondHalf));
                   const deadMinutes = explicitDeadMinutes > 0 ? explicitDeadMinutes : inferredDeadMinutes;
                   const totalTrackedMinutes = liveMinutes + deadMinutes;
                   const teamPossessionPercent = liveMinutes > 0 ? (teamPossessionMinutes / liveMinutes) * 100 : 0;
@@ -5431,8 +5480,8 @@ export default function StatystykiZespoluPage() {
                       ? `${parseFloat(actualVal.toFixed(1))}%`
                       : (typeof actualVal === 'number' && actualVal % 1 !== 0 ? actualVal.toFixed(2) : String(actualVal));
                     const pctWykonania = Math.round(d.value);
-                    const achieved = d.value >= 100;
-                    const statusColor = achieved ? '#059669' : '#dc2626';
+                    const achieved = Boolean((d as { kpiMet?: boolean }).kpiMet);
+                    const statusColor = achieved ? TEAM_STATS_GREEN : TEAM_STATS_RED;
                     const statusLabel = achieved ? 'KPI osiągnięte' : 'KPI nieosiągnięte';
                     return (
                       <div style={{
@@ -5462,13 +5511,34 @@ export default function StatystykiZespoluPage() {
                             <div className={styles.kpiAnalysisPanel}>
                               <div className={styles.kpiAnalysisHeader}>
                                 <h4 className={styles.kpiAnalysisTitle}>Ocena modelu gry</h4>
+                                <div
+                                  className={`${styles.kpiPeriodSelector} ${styles.kpiPeriodSelectorInline}`}
+                                  role="group"
+                                  aria-label={`Zakres czasu KPI: ${kpiPeriodLabel}`}
+                                >
+                                  {[
+                                    { value: 'total', label: 'Cały mecz' },
+                                    { value: 'firstHalf', label: '1. połowa' },
+                                    { value: 'secondHalf', label: '2. połowa' },
+                                  ].map((period) => (
+                                    <button
+                                      key={period.value}
+                                      type="button"
+                                      className={`${styles.kpiPeriodButton} ${kpiMatchPeriod === period.value ? styles.active : ''}`}
+                                      onClick={() => setKpiMatchPeriod(period.value as KpiMatchPeriod)}
+                                      aria-pressed={kpiMatchPeriod === period.value}
+                                    >
+                                      {period.label}
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
                               <div className={styles.kpiRadarWrapper}>
                                 <ResponsiveRadar
                                   data={radarData}
                                   keys={['KPI', 'Wartość']}
                                   indexBy="displayMetric"
-                                  maxValue={200}
+                                  maxValue={100}
                                   margin={{ top: 40, right: 40, bottom: 40, left: 40 }}
                                   curve="linearClosed"
                                   borderWidth={2}
@@ -5479,8 +5549,19 @@ export default function StatystykiZespoluPage() {
                                   enableDots={true}
                                   dotSize={6}
                                   dotBorderWidth={2}
-                                  dotBorderColor={{ from: 'color' }}
-                                  colors={['#34C759', '#6366f1']}
+                                  dotColor={(dot) => {
+                                    if (dot.key === 'KPI') return TEAM_STATS_RADAR_REFERENCE;
+                                    const row = radarData.find((r) => r.displayMetric === dot.index);
+                                    const met = row != null && Boolean((row as { kpiMet?: boolean }).kpiMet);
+                                    return met ? TEAM_STATS_GREEN : TEAM_STATS_RED;
+                                  }}
+                                  dotBorderColor={(dot) => {
+                                    if (dot.key === 'KPI') return TEAM_STATS_RADAR_REFERENCE;
+                                    const row = radarData.find((r) => r.displayMetric === dot.index);
+                                    const met = row != null && Boolean((row as { kpiMet?: boolean }).kpiMet);
+                                    return met ? TEAM_STATS_GREEN : TEAM_STATS_RED;
+                                  }}
+                                  colors={[TEAM_STATS_RADAR_REFERENCE, TEAM_STATS_RADAR_VALUE_LINE]}
                                   fillOpacity={0.15}
                                   blendMode="multiply"
                                   motionConfig="wobbly"
@@ -5590,7 +5671,23 @@ export default function StatystykiZespoluPage() {
                                 <div className={styles.kpiScoreHeroCenter}>
                                   <span className={styles.kpiScoreHeroEyebrow}>Wynik</span>
                                   <span className={styles.kpiScoreHeroScore}>{teamGoals} : {opponentGoals}</span>
-                                  <span className={styles.kpiScoreHeroXg}>xG {teamXG.toFixed(2)} : {opponentXG.toFixed(2)}</span>
+                                  <div
+                                    className={styles.kpiScoreHeroXgStack}
+                                    aria-label={`Pełny xG ${teamXG.toFixed(2)}:${opponentXG.toFixed(2)}, NPxG ${teamNPxG.toFixed(2)}:${opponentNPxG.toFixed(2)}`}
+                                  >
+                                    <span
+                                      className={styles.kpiScoreHeroXgPrimary}
+                                      title="xG — oczekiwane bramki (wszystkie strzały)"
+                                    >
+                                      xG {teamXG.toFixed(2)} : {opponentXG.toFixed(2)}
+                                    </span>
+                                    <span
+                                      className={styles.kpiScoreHeroXgSecondary}
+                                      title="NPxG (non-penalty xG) — bez rzutów karnych"
+                                    >
+                                      NPxG {teamNPxG.toFixed(2)} : {opponentNPxG.toFixed(2)}
+                                    </span>
+                                  </div>
                                   <div className={styles.kpiScoreHeroDeltaRow} aria-label="Różnica xG i gole (my : rywal)">
                                     <span className={teamXgMinusGoals >= 0 ? styles.kpiXGDeltaNegative : styles.kpiXGDeltaPositive}>{formatSignedStat(teamXgMinusGoals)}</span>
                                     <span className={styles.kpiScoreHeroDeltaSep}>:</span>
@@ -5607,14 +5704,23 @@ export default function StatystykiZespoluPage() {
                                 </span>
                               </div>
                             </div>
-                          <div className={styles.kpiScoreMetrics}>
+                            <div className={styles.kpiScoreMetrics}>
                             <div
                               role="button"
                               tabIndex={0}
                               className={`${styles.kpiScoreRowClickable} ${kpiXgRowExpanded ? styles.kpiScoreRowClickableExpanded : ''}`}
                               onClick={() => setKpiXgRowExpanded(!kpiXgRowExpanded)}
                               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiXgRowExpanded(!kpiXgRowExpanded); } }}
-                              title={kpiXgRowExpanded ? 'Kliknij, aby zwinąć' : 'Kliknij, aby rozwinąć szczegóły xG'}
+                              title={
+                                kpiXgRowExpanded
+                                  ? 'Kliknij, aby zwinąć'
+                                  : 'Kliknij, aby rozwinąć szczegóły xG'
+                              }
+                              aria-label={
+                                kpiXgRowExpanded
+                                  ? 'Zwiń szczegóły xG'
+                                  : 'Rozwiń szczegóły xG'
+                              }
                               aria-expanded={kpiXgRowExpanded}
                             >
                               <span className={styles.kpiScoreRowCenterBlock}>
@@ -5662,7 +5768,7 @@ export default function StatystykiZespoluPage() {
                                         className={styles.kpiScoreRowValuesPossessionTime} 
                                         style={{ 
                                           marginRight: '6px',
-                                          color: diff > 0 ? '#059669' : diff < 0 ? '#dc2626' : 'inherit',
+                                          color: diff > 0 ? TEAM_STATS_GREEN : diff < 0 ? TEAM_STATS_RED : 'inherit',
                                           fontWeight: 500
                                         }}
                                       >
@@ -5689,9 +5795,9 @@ export default function StatystykiZespoluPage() {
                                   <div className={styles.kpiScoreRow}>
                                     <span className={styles.kpiScoreRowLabel}>Otwarta gra</span>
                                     <span className={styles.kpiScoreRowGoals}>
-                                      <span style={{ color: '#059669' }}>{teamGoalsOpenPlay}</span>
+                                      <span style={{ color: TEAM_STATS_GREEN }}>{teamGoalsOpenPlay}</span>
                                       <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
-                                      <span style={{ color: '#dc2626' }}>{opponentGoalsOpenPlay}</span>
+                                      <span style={{ color: TEAM_STATS_RED }}>{opponentGoalsOpenPlay}</span>
                                     </span>
                                     <span className={styles.kpiScoreRowValues}>
                                       {teamXGOpenPlay.toFixed(2)}{' '}
@@ -5708,9 +5814,9 @@ export default function StatystykiZespoluPage() {
                                   <div className={styles.kpiScoreRow}>
                                     <span className={styles.kpiScoreRowLabel}>SFG</span>
                                     <span className={styles.kpiScoreRowGoals}>
-                                      <span style={{ color: '#059669' }}>{teamGoalsSFG}</span>
+                                      <span style={{ color: TEAM_STATS_GREEN }}>{teamGoalsSFG}</span>
                                       <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
-                                      <span style={{ color: '#dc2626' }}>{opponentGoalsSFG}</span>
+                                      <span style={{ color: TEAM_STATS_RED }}>{opponentGoalsSFG}</span>
                                     </span>
                                     <span className={styles.kpiScoreRowValues}>
                                       {teamXGSFG.toFixed(2)}{' '}
@@ -5727,9 +5833,9 @@ export default function StatystykiZespoluPage() {
                                   <div className={styles.kpiScoreRow}>
                                     <span className={styles.kpiScoreRowLabel}>Regain</span>
                                     <span className={styles.kpiScoreRowGoals}>
-                                      <span style={{ color: '#059669' }}>{teamGoalsRegain}</span>
+                                      <span style={{ color: TEAM_STATS_GREEN }}>{teamGoalsRegain}</span>
                                       <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
-                                      <span style={{ color: '#dc2626' }}>{opponentGoalsRegain}</span>
+                                      <span style={{ color: TEAM_STATS_RED }}>{opponentGoalsRegain}</span>
                                     </span>
                                     <span className={styles.kpiScoreRowValues}>
                                       {teamXGRegain.toFixed(2)}{' '}
@@ -7693,7 +7799,7 @@ export default function StatystykiZespoluPage() {
                           <div style={{ 
                             width: '12px', 
                             height: '12px', 
-                            backgroundColor: '#4caf50', 
+                            backgroundColor: TEAM_STATS_GREEN, 
                             borderRadius: '3px',
                             border: 'none'
                           }}></div>
@@ -7713,9 +7819,9 @@ export default function StatystykiZespoluPage() {
                           <div style={{ 
                             width: '12px', 
                             height: '12px', 
-                            backgroundColor: '#4caf50', 
+                            backgroundColor: TEAM_STATS_GREEN, 
                             borderRadius: '3px',
-                            border: '1px solid #ef4444'
+                            border: `1px solid ${TEAM_STATS_RED}`
                           }}></div>
                           <span>Gol</span>
                         </div>
@@ -7742,7 +7848,7 @@ export default function StatystykiZespoluPage() {
                           <div style={{ 
                             width: '12px', 
                             height: '12px', 
-                            backgroundColor: '#4caf50', 
+                            backgroundColor: TEAM_STATS_GREEN, 
                             borderRadius: '3px',
                             border: 'none'
                           }}></div>
@@ -7762,9 +7868,9 @@ export default function StatystykiZespoluPage() {
                           <div style={{ 
                             width: '12px', 
                             height: '12px', 
-                            backgroundColor: '#4caf50', 
+                            backgroundColor: TEAM_STATS_GREEN, 
                             borderRadius: '3px',
-                            border: '1px solid #ef4444'
+                            border: `1px solid ${TEAM_STATS_RED}`
                           }}></div>
                           <span>Gol</span>
                         </div>
@@ -7790,7 +7896,7 @@ export default function StatystykiZespoluPage() {
                           <div style={{ 
                             width: '12px', 
                             height: '12px', 
-                            backgroundColor: '#ef4444', 
+                            backgroundColor: TEAM_STATS_RED, 
                             borderRadius: '3px',
                             border: 'none'
                           }}></div>
@@ -7802,7 +7908,7 @@ export default function StatystykiZespoluPage() {
                             height: '12px', 
                             backgroundColor: '#757575', 
                             borderRadius: '3px',
-                            border: '1px solid #4caf50'
+                            border: `1px solid ${TEAM_STATS_GREEN}`
                           }}></div>
                           <span>Gol</span>
                         </div>
@@ -7943,9 +8049,9 @@ export default function StatystykiZespoluPage() {
                                     }}
                                     style={{
                                       padding: '4px 8px',
-                                      backgroundColor: isSuccessful ? '#4caf50' : '#757575',
+                                      backgroundColor: isSuccessful ? TEAM_STATS_GREEN : '#757575',
                                       color: 'white',
-                                      border: isGoal ? '1px solid #ef4444' : 'none',
+                                      border: isGoal ? `1px solid ${TEAM_STATS_RED}` : 'none',
                                       borderRadius: '4px',
                                       cursor: 'pointer',
                                       fontSize: '11px',
@@ -8104,9 +8210,9 @@ export default function StatystykiZespoluPage() {
                                     }}
                                     style={{
                                       padding: '4px 8px',
-                                      backgroundColor: isContact1 ? '#4caf50' : '#757575',
+                                      backgroundColor: isContact1 ? TEAM_STATS_GREEN : '#757575',
                                       color: 'white',
-                                      border: isGoal ? '1px solid #ef4444' : 'none',
+                                      border: isGoal ? `1px solid ${TEAM_STATS_RED}` : 'none',
                                       borderRadius: '4px',
                                       cursor: 'pointer',
                                       fontSize: '11px',
@@ -8440,7 +8546,7 @@ export default function StatystykiZespoluPage() {
                                     }}
                                     style={{
                                       padding: '4px 8px',
-                                      backgroundColor: '#4caf50',
+                                      backgroundColor: TEAM_STATS_GREEN,
                                       color: 'white',
                                       border: 'none',
                                       borderRadius: '4px',
@@ -8711,7 +8817,7 @@ export default function StatystykiZespoluPage() {
                                     }}
                                     style={{
                                       padding: '4px 8px',
-                                      backgroundColor: isSuccessful ? '#4caf50' : '#757575',
+                                      backgroundColor: isSuccessful ? TEAM_STATS_GREEN : '#757575',
                                       color: 'white',
                                       border: 'none',
                                       borderRadius: '4px',
@@ -8762,7 +8868,7 @@ export default function StatystykiZespoluPage() {
                     <div style={{ 
                       width: '12px', 
                       height: '12px', 
-                      backgroundColor: '#4caf50', 
+                      backgroundColor: TEAM_STATS_GREEN, 
                       borderRadius: '3px',
                       border: 'none'
                     }}></div>
@@ -8782,9 +8888,9 @@ export default function StatystykiZespoluPage() {
                     <div style={{ 
                       width: '12px', 
                       height: '12px', 
-                      backgroundColor: '#4caf50', 
+                      backgroundColor: TEAM_STATS_GREEN, 
                       borderRadius: '3px',
-                      border: '1px solid #ef4444'
+                      border: `1px solid ${TEAM_STATS_RED}`
                     }}></div>
                     <span>Gol</span>
                   </div>
@@ -8811,7 +8917,7 @@ export default function StatystykiZespoluPage() {
                     <div style={{ 
                       width: '12px', 
                       height: '12px', 
-                      backgroundColor: '#4caf50', 
+                      backgroundColor: TEAM_STATS_GREEN, 
                       borderRadius: '3px',
                       border: 'none'
                     }}></div>
@@ -8831,9 +8937,9 @@ export default function StatystykiZespoluPage() {
                     <div style={{ 
                       width: '12px', 
                       height: '12px', 
-                      backgroundColor: '#4caf50', 
+                      backgroundColor: TEAM_STATS_GREEN, 
                       borderRadius: '3px',
-                      border: '1px solid #ef4444'
+                      border: `1px solid ${TEAM_STATS_RED}`
                     }}></div>
                     <span>Gol</span>
                   </div>
@@ -8860,7 +8966,7 @@ export default function StatystykiZespoluPage() {
                     <div style={{ 
                       width: '12px', 
                       height: '12px', 
-                      backgroundColor: '#ef4444', 
+                      backgroundColor: TEAM_STATS_RED, 
                       borderRadius: '3px',
                       border: 'none'
                     }}></div>
@@ -8872,7 +8978,7 @@ export default function StatystykiZespoluPage() {
                       height: '12px', 
                       backgroundColor: '#757575', 
                       borderRadius: '3px',
-                      border: '1px solid #4caf50'
+                      border: `1px solid ${TEAM_STATS_GREEN}`
                     }}></div>
                     <span>Gol</span>
                   </div>
@@ -9345,20 +9451,20 @@ export default function StatystykiZespoluPage() {
                         const isPKOpponent = selectedKpiForVideo === 'pk-opponent';
 
                         // Określ kolor tła i ramki
-                        let backgroundColor = item.isSuccessful ? '#4caf50' : '#757575';
+                        let backgroundColor = item.isSuccessful ? TEAM_STATS_GREEN : '#757575';
                         let borderStyle = 'none';
                         
                         if (isPKOpponent) {
                           // Dla PK przeciwnika: czerwony dla strzałów, zielony border dla goli
                           if (isShot) {
-                            backgroundColor = '#ef4444';
+                            backgroundColor = TEAM_STATS_RED;
                           }
                           if (isGoal) {
-                            borderStyle = '1px solid #4caf50';
+                            borderStyle = `1px solid ${TEAM_STATS_GREEN}`;
                           }
                         } else if ((isXGPerShot || is1TPercentage) && isGoal) {
                           // Dla xG/strzał i 1T: zielony border dla goli
-                          borderStyle = '1px solid #ef4444';
+                          borderStyle = `1px solid ${TEAM_STATS_RED}`;
                         }
 
                           return (
@@ -9384,17 +9490,17 @@ export default function StatystykiZespoluPage() {
                             }}
                             onMouseEnter={(e) => {
                               if (isPKOpponent && isShot) {
-                                e.currentTarget.style.backgroundColor = '#dc2626';
+                                e.currentTarget.style.backgroundColor = TEAM_STATS_RED;
                               } else {
-                                e.currentTarget.style.backgroundColor = item.isSuccessful ? '#66bb6a' : '#9e9e9e';
+                                e.currentTarget.style.backgroundColor = item.isSuccessful ? TEAM_STATS_GREEN : '#9e9e9e';
                               }
                               e.currentTarget.style.transform = 'scale(1.05)';
                             }}
                             onMouseLeave={(e) => {
                               if (isPKOpponent && isShot) {
-                                e.currentTarget.style.backgroundColor = '#ef4444';
+                                e.currentTarget.style.backgroundColor = TEAM_STATS_RED;
                               } else {
-                                e.currentTarget.style.backgroundColor = item.isSuccessful ? '#4caf50' : '#757575';
+                                e.currentTarget.style.backgroundColor = item.isSuccessful ? TEAM_STATS_GREEN : '#757575';
                               }
                               e.currentTarget.style.transform = 'scale(1)';
                             }}
@@ -9558,7 +9664,7 @@ export default function StatystykiZespoluPage() {
                     {/* Legenda mapy wejść w PK */}
                     <div className={styles.pkMapLegend} role="img" aria-label="Legenda wejść w pole karne">
                       <span className={styles.pkMapLegendItem}>
-                        <span className={styles.pkMapLegendLine} style={{ background: '#ef4444' }} />
+                        <span className={styles.pkMapLegendLine} style={{ background: TEAM_STATS_RED }} />
                         <span>Podanie</span>
                       </span>
                       <span className={styles.pkMapLegendItem}>
@@ -9566,7 +9672,7 @@ export default function StatystykiZespoluPage() {
                         <span>Drybling</span>
                       </span>
                       <span className={styles.pkMapLegendItem}>
-                        <span className={styles.pkMapLegendLine} style={{ background: '#10b981' }} />
+                        <span className={styles.pkMapLegendLine} style={{ background: TEAM_STATS_GREEN }} />
                         <span>SFG</span>
                       </span>
                       <span className={styles.pkMapLegendItem}>
@@ -9647,7 +9753,7 @@ export default function StatystykiZespoluPage() {
                       />
                       <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
                       <Bar dataKey="team" name="Zespół" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="opponent" name="Przeciwnik" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="opponent" name="Przeciwnik" fill={TEAM_STATS_RED} radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -10065,7 +10171,7 @@ export default function StatystykiZespoluPage() {
                                             <span><strong>Strefa:</strong> {action.zone}</span>
                                             <span><strong>xT:</strong> {action.xT.toFixed(2)}</span>
                                             {action.isBelow8s === true && (
-                                              <span style={{ color: '#10b981', fontWeight: '600' }}>Reakcja 5s</span>
+                                              <span style={{ color: TEAM_STATS_GREEN, fontWeight: '600' }}>Reakcja 5s</span>
                                             )}
                                             {action.isBelow8s !== true && (
                                               <span style={{ color: '#6b7280' }}>—</span>
@@ -10136,7 +10242,7 @@ export default function StatystykiZespoluPage() {
                             <div className={styles.tooltip}>
                               <p className={styles.tooltipLabel}>{`Przedział: ${data.minute} min`}</p>
                               <p style={{ color: '#3b82f6' }}>Przechwyty: {data.regains}</p>
-                              <p style={{ color: '#ef4444' }}>xT w ataku: {data.xtAttack?.toFixed(3)}</p>
+                              <p style={{ color: TEAM_STATS_RED }}>xT w ataku: {data.xtAttack?.toFixed(3)}</p>
                               <p style={{ color: '#6b7280' }}>xT w obronie: {data.xtDefense?.toFixed(3)}</p>
                             </div>
                           );
@@ -10144,7 +10250,7 @@ export default function StatystykiZespoluPage() {
                       />
                       <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
                       <Bar yAxisId="left" dataKey="regains" name="Przechwyty" fill="#3b82f6" radius={[4, 4, 0, 0]} opacity={0.85} />
-                      <Bar yAxisId="right" dataKey="xtAttack" name="xT w ataku" fill="#ef4444" radius={[4, 4, 0, 0]} opacity={0.85} />
+                      <Bar yAxisId="right" dataKey="xtAttack" name="xT w ataku" fill={TEAM_STATS_RED} radius={[4, 4, 0, 0]} opacity={0.85} />
                       <Bar yAxisId="right" dataKey="xtDefense" name="xT w obronie" fill="#6b7280" radius={[4, 4, 0, 0]} opacity={0.85} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -10178,7 +10284,7 @@ export default function StatystykiZespoluPage() {
                       />
                       <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
                       <Bar dataKey="regains" name="Przechwyty" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="loses" name="Straty" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="loses" name="Straty" fill={TEAM_STATS_RED} radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -10625,11 +10731,11 @@ export default function StatystykiZespoluPage() {
                                             <span><strong>Strefa:</strong> {action.zone}</span>
                                             <span><strong>xT:</strong> {action.xT.toFixed(2)}</span>
                                             {action.isAut === true ? (
-                                              <span style={{ color: '#ef4444', fontWeight: '600' }}>Aut</span>
+                                              <span style={{ color: TEAM_STATS_RED, fontWeight: '600' }}>Aut</span>
                                             ) : action.isBadReaction5s === true || (action as any).isReaction5sNotApplicable === true ? (
-                                              <span style={{ color: '#dc2626', fontWeight: '600' }}>✗ 5s</span>
+                                              <span style={{ color: TEAM_STATS_RED, fontWeight: '600' }}>✗ 5s</span>
                                             ) : action.isReaction5s === true ? (
-                                              <span style={{ color: '#10b981', fontWeight: '600' }}>Reakcja 5s</span>
+                                              <span style={{ color: TEAM_STATS_GREEN, fontWeight: '600' }}>Reakcja 5s</span>
                                             ) : (
                                               <span style={{ color: '#6b7280', fontWeight: '600' }}>Brak reakcji</span>
                                             )}
@@ -10691,7 +10797,7 @@ export default function StatystykiZespoluPage() {
                             <div className={styles.tooltip}>
                               <p className={styles.tooltipLabel}>{`Przedział: ${label} min`}</p>
                               <p style={{ color: '#3b82f6' }}><strong>Straty:</strong> {data.loses}</p>
-                              <p style={{ color: '#ef4444' }}><strong>xT w ataku:</strong> {data.xtAttack?.toFixed(3)}</p>
+                              <p style={{ color: TEAM_STATS_RED }}><strong>xT w ataku:</strong> {data.xtAttack?.toFixed(3)}</p>
                               <p style={{ color: '#6b7280' }}><strong>xT w obronie:</strong> {data.xtDefense?.toFixed(3)}</p>
                             </div>
                           );
@@ -10699,7 +10805,7 @@ export default function StatystykiZespoluPage() {
                       />
                       <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
                       <Bar yAxisId="left" dataKey="loses" name="Straty" fill="#3b82f6" radius={[4, 4, 0, 0]} opacity={0.85} />
-                      <Bar yAxisId="right" dataKey="xtAttack" name="xT w ataku" fill="#ef4444" radius={[4, 4, 0, 0]} opacity={0.85} />
+                      <Bar yAxisId="right" dataKey="xtAttack" name="xT w ataku" fill={TEAM_STATS_RED} radius={[4, 4, 0, 0]} opacity={0.85} />
                       <Bar yAxisId="right" dataKey="xtDefense" name="xT w obronie" fill="#6b7280" radius={[4, 4, 0, 0]} opacity={0.85} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -11374,7 +11480,7 @@ export default function StatystykiZespoluPage() {
                                   <span 
                                     className={styles.valueMain}
                                   style={{
-                                    color: teamXGPerShotValue >= XG_PER_SHOT_KPI ? '#10b981' : '#ef4444'
+                                    color: teamXGPerShotValue >= XG_PER_SHOT_KPI ? TEAM_STATS_GREEN : TEAM_STATS_RED
                                   }}
                                 >
                                   {teamXGPerShot}
@@ -11412,7 +11518,7 @@ export default function StatystykiZespoluPage() {
                                   <span 
                                     className={styles.valueMain}
                                   style={{
-                                    color: teamXGDiff > 0 ? '#ef4444' : teamXGDiff < 0 ? '#10b981' : '#6b7280'
+                                    color: teamXGDiff > 0 ? TEAM_STATS_RED : teamXGDiff < 0 ? TEAM_STATS_GREEN : '#6b7280'
                                   }}
                                 >
                                   {teamXGDiff > 0 ? '+' : ''}{teamXGDiff.toFixed(2)}
@@ -11566,7 +11672,7 @@ export default function StatystykiZespoluPage() {
                       {/* Legenda mapy xG – nad filtrami */}
                       <div className={styles.xgMapLegend} role="img" aria-label="Legenda mapy xG">
                         <span className={styles.xgMapLegendItem}>
-                          <span className={styles.xgMapLegendDot} style={{ background: '#10b981' }} />
+                          <span className={styles.xgMapLegendDot} style={{ background: TEAM_STATS_GREEN }} />
                           <span>Niski xG</span>
                         </span>
                         <span className={styles.xgMapLegendItem}>
@@ -11574,7 +11680,7 @@ export default function StatystykiZespoluPage() {
                           <span>Średni xG</span>
                         </span>
                         <span className={styles.xgMapLegendItem}>
-                          <span className={styles.xgMapLegendDot} style={{ background: '#dc2626' }} />
+                          <span className={styles.xgMapLegendDot} style={{ background: TEAM_STATS_RED }} />
                           <span>Wysoki xG</span>
                         </span>
                         <span className={styles.xgMapLegendItem}>
@@ -11783,7 +11889,7 @@ export default function StatystykiZespoluPage() {
                                     <div className={styles.tooltip}>
                                       <p className={styles.tooltipLabel}>{`Minuta: ${data.minute}'`}</p>
                                       <p style={{ color: '#3b82f6' }}>xG zespołu: {data.teamXG?.toFixed(2)}</p>
-                                      <p style={{ color: '#ef4444' }}>xG przeciwnika: {data.opponentXG?.toFixed(2)}</p>
+                                      <p style={{ color: TEAM_STATS_RED }}>xG przeciwnika: {data.opponentXG?.toFixed(2)}</p>
                                     </div>
                                   );
                                 }
@@ -11803,7 +11909,7 @@ export default function StatystykiZespoluPage() {
                             <Line 
                               type="monotone" 
                               dataKey="opponentXG" 
-                              stroke="#ef4444" 
+                              stroke={TEAM_STATS_RED} 
                               strokeWidth={2}
                               name="xG przeciwnika (skumulowane)"
                               connectNulls={true}
@@ -11843,7 +11949,7 @@ export default function StatystykiZespoluPage() {
                                     <div className={styles.tooltip}>
                                       <p className={styles.tooltipLabel}>{`Przedział: ${data.minute} min`}</p>
                                       <p style={{ color: '#3b82f6' }}>xG zespołu: {data.teamXG?.toFixed(2)}</p>
-                                      <p style={{ color: '#ef4444' }}>xG przeciwnika: {data.opponentXG?.toFixed(2)}</p>
+                                      <p style={{ color: TEAM_STATS_RED }}>xG przeciwnika: {data.opponentXG?.toFixed(2)}</p>
                                     </div>
                                   );
                                 }
@@ -11853,7 +11959,7 @@ export default function StatystykiZespoluPage() {
                             <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px' }} />
                             <Bar 
                               dataKey="opponentXG" 
-                              fill="#ef4444" 
+                              fill={TEAM_STATS_RED} 
                               name="xG przeciwnika"
                               radius={[4, 4, 0, 0]}
                               opacity={0.8}
@@ -12657,7 +12763,7 @@ export default function StatystykiZespoluPage() {
                                     {awayPKEntriesAttackCount}
                                     {awayAttackDiff !== 0 && (
                                       <span style={{ 
-                                        color: awayPKEntriesAttackCount > kpiPKEntriesAttack ? '#ef4444' : '#10b981', 
+                                        color: awayPKEntriesAttackCount > kpiPKEntriesAttack ? TEAM_STATS_RED : TEAM_STATS_GREEN, 
                                         marginLeft: '4px', 
                                         fontSize: '0.85em' 
                                       }}>
@@ -13238,9 +13344,9 @@ export default function StatystykiZespoluPage() {
                                     <>
                                       <span style={{ fontSize: '0.85em', color: '#6b7280' }}>({homeSuccessful}/{homeTotal})</span> <span>{homePercent}%</span>
                                       {homeDiff < 0 ? (
-                                        <span style={{ color: '#ef4444', marginLeft: '4px', fontSize: '0.85em' }}>-{Math.abs(homeDiff).toFixed(1)}%</span>
+                                        <span style={{ color: TEAM_STATS_RED, marginLeft: '4px', fontSize: '0.85em' }}>-{Math.abs(homeDiff).toFixed(1)}%</span>
                                       ) : homeDiff > 0 ? (
-                                        <span style={{ color: '#10b981', marginLeft: '4px', fontSize: '0.85em' }}>+{homeDiff.toFixed(1)}%</span>
+                                        <span style={{ color: TEAM_STATS_GREEN, marginLeft: '4px', fontSize: '0.85em' }}>+{homeDiff.toFixed(1)}%</span>
                                       ) : null}
                                     </>
                                   ) : (
@@ -13253,9 +13359,9 @@ export default function StatystykiZespoluPage() {
                                     <>
                                       <span>{awayPercent}%</span> <span style={{ fontSize: '0.85em', color: '#6b7280' }}>({awaySuccessful}/{awayTotal})</span>
                                       {awayDiff < 0 ? (
-                                        <span style={{ color: '#ef4444', marginLeft: '4px', fontSize: '0.85em' }}>-{Math.abs(awayDiff).toFixed(1)}%</span>
+                                        <span style={{ color: TEAM_STATS_RED, marginLeft: '4px', fontSize: '0.85em' }}>-{Math.abs(awayDiff).toFixed(1)}%</span>
                                       ) : awayDiff > 0 ? (
-                                        <span style={{ color: '#10b981', marginLeft: '4px', fontSize: '0.85em' }}>+{awayDiff.toFixed(1)}%</span>
+                                        <span style={{ color: TEAM_STATS_GREEN, marginLeft: '4px', fontSize: '0.85em' }}>+{awayDiff.toFixed(1)}%</span>
                                       ) : null}
                                     </>
                                   ) : (
@@ -14302,7 +14408,7 @@ export default function StatystykiZespoluPage() {
                     yAxisId="left"
                     type="monotone" 
                     dataKey="pxt" 
-                    stroke="#82ca9d" 
+                    stroke={TEAM_STATS_GREEN} 
                     strokeWidth={2}
                     name="PxT (skumulowane)"
                     connectNulls={true}
@@ -14355,7 +14461,7 @@ export default function StatystykiZespoluPage() {
                                 return (
                                   <div className={styles.tooltip}>
                                     <p className={styles.tooltipLabel}>{`Przedział: ${data.minute} min`}</p>
-                                    <p style={{ color: '#ef4444' }}>xT: {data.xt?.toFixed(3)}</p>
+                                    <p style={{ color: TEAM_STATS_RED }}>xT: {data.xt?.toFixed(3)}</p>
                                     <p style={{ color: '#3b82f6' }}>PxT: {data.pxt?.toFixed(2)}</p>
                                     <p style={{ color: '#6b7280' }}>Packing: {data.packing?.toFixed(0)}</p>
                                   </div>
@@ -14376,7 +14482,7 @@ export default function StatystykiZespoluPage() {
                           <Bar 
                             yAxisId="left"
                             dataKey="xt" 
-                            fill="#ef4444" 
+                            fill={TEAM_STATS_RED} 
                             name="xT"
                             radius={[4, 4, 0, 0]}
                             opacity={0.8}
@@ -14425,7 +14531,7 @@ export default function StatystykiZespoluPage() {
               {/* Legenda mapy xG w modalu – taka sama jak na stronie */}
               <div className={styles.xgMapLegend} role="img" aria-label="Legenda mapy xG">
                 <span className={styles.xgMapLegendItem}>
-                  <span className={styles.xgMapLegendDot} style={{ background: "#10b981" }} />
+                  <span className={styles.xgMapLegendDot} style={{ background: TEAM_STATS_GREEN }} />
                   <span>Niski xG</span>
                 </span>
                 <span className={styles.xgMapLegendItem}>
@@ -14433,7 +14539,7 @@ export default function StatystykiZespoluPage() {
                   <span>Średni xG</span>
                 </span>
                 <span className={styles.xgMapLegendItem}>
-                  <span className={styles.xgMapLegendDot} style={{ background: "#dc2626" }} />
+                  <span className={styles.xgMapLegendDot} style={{ background: TEAM_STATS_RED }} />
                   <span>Wysoki xG</span>
                 </span>
                 <span className={styles.xgMapLegendItem}>
@@ -14483,7 +14589,7 @@ export default function StatystykiZespoluPage() {
                 aria-label="Legenda wejść w pole karne"
               >
                 <span className={styles.pkMapLegendItem}>
-                  <span className={styles.pkMapLegendLine} style={{ background: "#ef4444" }} />
+                  <span className={styles.pkMapLegendLine} style={{ background: TEAM_STATS_RED }} />
                   <span>Podanie</span>
                 </span>
                 <span className={styles.pkMapLegendItem}>
@@ -14491,7 +14597,7 @@ export default function StatystykiZespoluPage() {
                   <span>Drybling</span>
                 </span>
                 <span className={styles.pkMapLegendItem}>
-                  <span className={styles.pkMapLegendLine} style={{ background: "#10b981" }} />
+                  <span className={styles.pkMapLegendLine} style={{ background: TEAM_STATS_GREEN }} />
                   <span>SFG</span>
                 </span>
                 <span className={styles.pkMapLegendItem}>

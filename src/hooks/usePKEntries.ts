@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { PKEntry } from "@/types";
 import { getDB } from "@/lib/firebase";
 import { commitMatchArrayFieldUpdate, syncPendingMatchArrayField } from "@/lib/matchArrayFieldWrite";
-import { getMatchDocumentFromCache, setMatchDocumentInCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
+import { getMatchDocumentFromCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import { getPendingField } from "@/lib/offlineMatchPending";
 import { mergeByIdPreferPending } from "@/lib/mergeMatchArrayById";
 
@@ -13,14 +13,14 @@ export const usePKEntries = (matchId: string) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPKEntries = useCallback(async () => {
+  const fetchPKEntries = useCallback(async (options: { forceFresh?: boolean } = {}) => {
     if (!matchId) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const matchData = await getOrLoadMatchDocument(matchId);
+      const matchData = await getOrLoadMatchDocument(matchId, options);
       if (matchData) {
         const pendingEntries = getPendingField<PKEntry[]>(matchId, "pkEntries");
         const serverEntries = matchData.pkEntries || [];
@@ -161,9 +161,18 @@ export const usePKEntries = (matchId: string) => {
     [persistPkEntries]
   );
 
+  const bulkUpdatePKEntries = useCallback(
+    async (updater: (prev: PKEntry[]) => PKEntry[]) => {
+      return await persistPkEntries(updater);
+    },
+    [persistPkEntries]
+  );
+
   useEffect(() => {
     fetchPKEntries();
   }, [fetchPKEntries]);
+
+  const refetchPKEntries = useCallback(() => fetchPKEntries({ forceFresh: true }), [fetchPKEntries]);
 
   return {
     pkEntries,
@@ -172,6 +181,7 @@ export const usePKEntries = (matchId: string) => {
     addPKEntry,
     updatePKEntry,
     deletePKEntry,
-    refetch: fetchPKEntries,
+    bulkUpdatePKEntries,
+    refetch: refetchPKEntries,
   };
 };

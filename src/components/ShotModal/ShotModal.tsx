@@ -13,8 +13,8 @@ export interface ShotModalProps {
   isOpen: boolean;
   isVideoInternal?: boolean;
   onClose: () => void;
-  onSave: (shot: Omit<Shot, "id" | "timestamp">) => void;
-  onDelete?: (shotId: string) => void;
+  onSave: (shot: Omit<Shot, "id" | "timestamp">) => boolean | void | Promise<boolean | void>;
+  onDelete?: (shotId: string) => boolean | void | Promise<boolean | void>;
   editingShot?: Shot;
   x: number;
   y: number;
@@ -893,7 +893,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.playerId) {
@@ -983,7 +983,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     const finalXG = calculateFinalXG();
     const lockedMinute = editingShot ? editingShot.minute : formData.minute;
     
-    onSave({
+    const saveResult = await onSave({
       x: editingShot ? editingShot.x : x,
       y: editingShot ? editingShot.y : y,
       xG: finalXG / 100, // Konwersja z procentów na ułamek
@@ -1024,6 +1024,10 @@ const ShotModal: React.FC<ShotModalProps> = ({
       ...(finalVideoTimestampRaw !== undefined && finalVideoTimestampRaw !== null && { videoTimestampRaw: finalVideoTimestampRaw }),
     });
 
+    if (saveResult === false) {
+      return;
+    }
+
     // Wyczyść tempVideoTimestamp po zapisaniu
     if (typeof window !== 'undefined') {
       localStorage.removeItem('tempVideoTimestamp');
@@ -1033,10 +1037,13 @@ const ShotModal: React.FC<ShotModalProps> = ({
     onClose();
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (editingShot && onDelete) {
       if (confirm("Czy na pewno chcesz usunąć ten strzał?")) {
-        onDelete(editingShot.id);
+        const deleteResult = await onDelete(editingShot.id);
+        if (deleteResult === false) {
+          return;
+        }
         onClose();
       }
     }
