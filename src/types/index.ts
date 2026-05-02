@@ -282,6 +282,19 @@ export interface Acc8sEntry {
   timestamp: number;
 }
 
+export interface PossessionSegment {
+  id: string;
+  type: "team" | "opponent" | "dead";
+  mode: "z" | "x" | "c";
+  half: 1 | 2;
+  startSec: number;
+  endSec: number;
+  durationSec: number;
+  startedAtVideoSec: number;
+  endedAtVideoSec: number;
+  createdAt: number;
+}
+
 export interface TeamInfo {
   matchId?: string;
   team: string;
@@ -316,6 +329,7 @@ export interface TeamInfo {
       deadFirstHalf?: number; // Czas martwy (piłka poza grą) w 1 połowie (min)
       deadSecondHalf?: number; // Czas martwy (piłka poza grą) w 2 połowie (min)
     };
+    possessionSegments?: PossessionSegment[]; // Pojedyncze segmenty posiadania / czasu martwego osadzone w czasie wideo
     // Liczba podań celnych na własnej połowie
     passes?: {
       teamFirstHalf?: number; // Liczba podań celnych naszego zespołu na własnej połowie w 1 połowie

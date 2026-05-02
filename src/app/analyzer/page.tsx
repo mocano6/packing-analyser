@@ -3,7 +3,7 @@
 
 import React, { useMemo, useEffect, useState, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { Player, TeamInfo, PlayerMinutes, Action, Shot } from "@/types";
+import { Player, TeamInfo, PlayerMinutes, Action, Shot, PossessionSegment } from "@/types";
 import Instructions from "@/components/Instructions/Instructions";
 import PlayersGrid from "@/components/PlayersGrid/PlayersGrid";
 import PlayerTile from "@/components/PlayersGrid/PlayerTile";
@@ -728,6 +728,207 @@ export default function Page() {
     deadSecondHalf: number;
   };
 
+  type PossessionMode = "z" | "x" | "c";
+  type PossessionType = PossessionSegment["type"];
+  const POSSESSION_EPS = 1e-6; // dla łączenia sąsiednich przedziałów (ułamki sekund)
+
+  const createEmptyPossessionCounters = (): PossessionCountersSec => ({
+    teamFirstHalf: 0,
+    opponentFirstHalf: 0,
+    deadFirstHalf: 0,
+    teamSecondHalf: 0,
+    opponentSecondHalf: 0,
+    deadSecondHalf: 0,
+  });
+
+  const addPossessionCounters = (
+    a: PossessionCountersSec,
+    b: PossessionCountersSec
+  ): PossessionCountersSec => ({
+    teamFirstHalf: a.teamFirstHalf + b.teamFirstHalf,
+    opponentFirstHalf: a.opponentFirstHalf + b.opponentFirstHalf,
+    deadFirstHalf: a.deadFirstHalf + b.deadFirstHalf,
+    teamSecondHalf: a.teamSecondHalf + b.teamSecondHalf,
+    opponentSecondHalf: a.opponentSecondHalf + b.opponentSecondHalf,
+    deadSecondHalf: a.deadSecondHalf + b.deadSecondHalf,
+  });
+
+  const possessionSegmentsToCounters = (segments: PossessionSegment[]): PossessionCountersSec => {
+    const totals = createEmptyPossessionCounters();
+    for (const segment of segments) {
+      const duration = Number(segment.durationSec);
+      if (!Number.isFinite(duration) || duration <= 0) continue;
+      if (segment.type === "dead") {
+        totals[segment.half === 2 ? "deadSecondHalf" : "deadFirstHalf"] += duration;
+      } else if (segment.type === "team") {
+        totals[segment.half === 2 ? "teamSecondHalf" : "teamFirstHalf"] += duration;
+      } else {
+        totals[segment.half === 2 ? "opponentSecondHalf" : "opponentFirstHalf"] += duration;
+      }
+    }
+    return totals;
+  };
+
+  const normalizePossessionCountersToWholeSeconds = (
+    counters: PossessionCountersSec
+  ): PossessionCountersSec => {
+    const normalized = createEmptyPossessionCounters();
+    const normalizeHalf = (
+      fields: Array<keyof PossessionCountersSec>
+    ): Array<[keyof PossessionCountersSec, number]> => {
+      const values = fields.map((field) => {
+        const raw = Number(counters[field]);
+        const safe = Number.isFinite(raw) && raw > 0 ? raw : 0;
+        const whole = Math.floor(safe);
+        return {
+          field,
+          whole,
+          remainder: safe - whole,
+        };
+      });
+      const targetTotal = Math.round(values.reduce((sum, value) => sum + value.whole + value.remainder, 0));
+      let missingSeconds = targetTotal - values.reduce((sum, value) => sum + value.whole, 0);
+      const byRemainder = [...values].sort((a, b) => b.remainder - a.remainder);
+
+      for (const value of byRemainder) {
+        if (missingSeconds <= 0) break;
+        value.whole += 1;
+        missingSeconds -= 1;
+      }
+
+      return values.map((value) => [value.field, value.whole]);
+    };
+
+    for (const [field, value] of normalizeHalf(["teamFirstHalf", "opponentFirstHalf", "deadFirstHalf"])) {
+      normalized[field] = value;
+    }
+    for (const [field, value] of normalizeHalf(["teamSecondHalf", "opponentSecondHalf", "deadSecondHalf"])) {
+      normalized[field] = value;
+    }
+
+    return normalized;
+  };
+
+  const possessionSegmentsToNormalizedCounters = (
+    segments: PossessionSegment[]
+  ): PossessionCountersSec => normalizePossessionCountersToWholeSeconds(possessionSegmentsToCounters(segments));
+
+  const sanitizePossessionSegments = (value: unknown): PossessionSegment[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((segment): PossessionSegment | null => {
+        const raw = segment as Partial<PossessionSegment>;
+        const startSec = Number(raw.startSec);
+        const endSec = Number(raw.endSec);
+        if (!Number.isFinite(startSec) || !Number.isFinite(endSec) || endSec <= startSec) {
+          return null;
+        }
+        const mode: PossessionMode =
+          raw.mode === "z" || raw.mode === "x" || raw.mode === "c" ? raw.mode : "x";
+        const type: PossessionType =
+          raw.type === "team" || raw.type === "opponent" || raw.type === "dead"
+            ? raw.type
+            : mode === "x"
+              ? "dead"
+              : "team";
+        const half: 1 | 2 = raw.half === 2 ? 2 : 1;
+        return {
+          id: String(raw.id || `pos_${Math.round(startSec * 1000)}_${Math.round(endSec * 1000)}`),
+          type,
+          mode,
+          half,
+          startSec,
+          endSec,
+          durationSec: endSec - startSec,
+          startedAtVideoSec: Number.isFinite(Number(raw.startedAtVideoSec))
+            ? Number(raw.startedAtVideoSec)
+            : startSec,
+          endedAtVideoSec: Number.isFinite(Number(raw.endedAtVideoSec))
+            ? Number(raw.endedAtVideoSec)
+            : endSec,
+          createdAt: Number.isFinite(Number(raw.createdAt)) ? Number(raw.createdAt) : Date.now(),
+        };
+      })
+      .filter((segment): segment is PossessionSegment => Boolean(segment))
+      .sort((a, b) => a.startSec - b.startSec || a.endSec - b.endSec);
+  };
+
+  const trimSegmentsByIntervals = (
+    segments: PossessionSegment[],
+    intervals: Array<[number, number]>
+  ): PossessionSegment[] => {
+    if (intervals.length === 0) return segments;
+    const normalizedIntervals = intervals
+      .map(([start, end]) => [Math.min(start, end), Math.max(start, end)] as [number, number])
+      .filter(([start, end]) => Number.isFinite(start) && Number.isFinite(end) && end > start)
+      .sort((a, b) => a[0] - b[0]);
+
+    return segments.flatMap((segment) => {
+      let pieces: Array<[number, number]> = [[segment.startSec, segment.endSec]];
+      for (const [cutStart, cutEnd] of normalizedIntervals) {
+        pieces = pieces.flatMap(([pieceStart, pieceEnd]) => {
+          if (pieceEnd <= cutStart || pieceStart >= cutEnd) return [[pieceStart, pieceEnd] as [number, number]];
+          const nextPieces: Array<[number, number]> = [];
+          if (pieceStart < cutStart) nextPieces.push([pieceStart, cutStart]);
+          if (cutEnd < pieceEnd) nextPieces.push([cutEnd, pieceEnd]);
+          return nextPieces;
+        });
+      }
+
+      return pieces
+        .filter(([start, end]) => end > start)
+        .map(([start, end], index) => ({
+          ...segment,
+          id:
+            start === segment.startSec && end === segment.endSec
+              ? segment.id
+              : `${segment.id}_part_${index}_${Math.round(start * 1000)}_${Math.round(end * 1000)}`,
+          startSec: start,
+          endSec: end,
+          durationSec: end - start,
+          startedAtVideoSec: start,
+          endedAtVideoSec: end,
+        }));
+    });
+  };
+
+  const upsertPossessionSegments = (
+    current: PossessionSegment[],
+    incoming: PossessionSegment[]
+  ): PossessionSegment[] => {
+    const sanitizedIncoming = sanitizePossessionSegments(incoming);
+    if (sanitizedIncoming.length === 0) return current;
+
+    const intervals = sanitizedIncoming.map(
+      (segment) => [segment.startSec, segment.endSec] as [number, number]
+    );
+    const withoutOverlaps = trimSegmentsByIntervals(current, intervals);
+    const sorted = [...withoutOverlaps, ...sanitizedIncoming].sort(
+      (a, b) => a.startSec - b.startSec || a.endSec - b.endSec
+    );
+
+    return sorted.reduce<PossessionSegment[]>((acc, segment) => {
+      const last = acc[acc.length - 1];
+      if (
+        last &&
+        last.type === segment.type &&
+        last.mode === segment.mode &&
+        last.half === segment.half &&
+        Math.abs(last.endSec - segment.startSec) <= POSSESSION_EPS
+      ) {
+        acc[acc.length - 1] = {
+          ...last,
+          endSec: segment.endSec,
+          durationSec: segment.endSec - last.startSec,
+          endedAtVideoSec: segment.endSec,
+        };
+        return acc;
+      }
+      acc.push(segment);
+      return acc;
+    }, []);
+  };
+
   const minutesToSecondsSafe = (minutes?: number): number => {
     if (minutes === undefined || minutes === null) return 0;
     const n = Number(minutes);
@@ -747,37 +948,61 @@ export default function Page() {
     return `${mm.toString().padStart(2, "0")}:${ss.toString().padStart(2, "0")}`;
   };
 
-  const [possessionSec, setPossessionSec] = useState<PossessionCountersSec>({
-    teamFirstHalf: 0,
-    opponentFirstHalf: 0,
-    deadFirstHalf: 0,
-    teamSecondHalf: 0,
-    opponentSecondHalf: 0,
-    deadSecondHalf: 0,
-  });
+  const [possessionSec, setPossessionSec] = useState<PossessionCountersSec>(createEmptyPossessionCounters);
+  const possessionBaseSecRef = useRef<PossessionCountersSec>(createEmptyPossessionCounters());
+  const [possessionDraftSegments, setPossessionDraftSegments] = useState<PossessionSegment[]>([]);
+  const possessionDraftSegmentsRef = useRef<PossessionSegment[]>([]);
+  useEffect(() => {
+    possessionDraftSegmentsRef.current = possessionDraftSegments;
+  }, [possessionDraftSegments]);
+
+  const recalculatePossessionFromDraft = (segments: PossessionSegment[]) => {
+    setPossessionSec(addPossessionCounters(possessionBaseSecRef.current, possessionSegmentsToNormalizedCounters(segments)));
+  };
 
   // Inicjalizuj liczniki z danych meczu (żeby można było kontynuować liczenie)
   useEffect(() => {
     const matchId = matchInfo?.matchId;
     if (!matchInfo || !matchId) {
-      setPossessionSec({
-        teamFirstHalf: 0,
-        opponentFirstHalf: 0,
-        deadFirstHalf: 0,
-        teamSecondHalf: 0,
-        opponentSecondHalf: 0,
-        deadSecondHalf: 0,
-      });
+      const empty = createEmptyPossessionCounters();
+      possessionBaseSecRef.current = empty;
+      setPossessionSec(empty);
+      setPossessionDraftSegments([]);
       return;
     }
+
+    const savedSegments = sanitizePossessionSegments((matchInfo as any).matchData?.possessionSegments);
+    const p: any = (matchInfo as any).matchData?.possession || {};
+    const baseCounters: PossessionCountersSec =
+      savedSegments.length > 0
+        ? possessionSegmentsToNormalizedCounters(savedSegments)
+        : {
+            teamFirstHalf: minutesToSecondsSafe(p.teamFirstHalf),
+            opponentFirstHalf: minutesToSecondsSafe(p.opponentFirstHalf),
+            deadFirstHalf: minutesToSecondsSafe(p.deadFirstHalf),
+            teamSecondHalf: minutesToSecondsSafe(p.teamSecondHalf),
+            opponentSecondHalf: minutesToSecondsSafe(p.opponentSecondHalf),
+            deadSecondHalf: minutesToSecondsSafe(p.deadSecondHalf),
+          };
+    possessionBaseSecRef.current = baseCounters;
 
     // Jeśli jest draft w localStorage, przywróć go (niezapisane do Firebase)
     if (typeof window !== "undefined") {
       try {
+        const rawSegmentsDraft = localStorage.getItem(`possession_draft_segments_${matchId}`);
+        if (rawSegmentsDraft) {
+          const parsedSegments = JSON.parse(rawSegmentsDraft);
+          const safeSegments = sanitizePossessionSegments(parsedSegments);
+          setPossessionDraftSegments(safeSegments);
+          setPossessionSec(addPossessionCounters(baseCounters, possessionSegmentsToNormalizedCounters(safeSegments)));
+          return;
+        }
+
         const rawDraft = localStorage.getItem(`possession_draft_sec_${matchId}`);
         if (rawDraft) {
           const parsed = JSON.parse(rawDraft) as Partial<PossessionCountersSec>;
           const safe = (v: any) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.round(Number(v)) : 0);
+          setPossessionDraftSegments([]);
           setPossessionSec({
             teamFirstHalf: safe(parsed.teamFirstHalf),
             opponentFirstHalf: safe(parsed.opponentFirstHalf),
@@ -793,15 +1018,8 @@ export default function Page() {
       }
     }
 
-    const p: any = (matchInfo as any).matchData?.possession || {};
-    setPossessionSec({
-      teamFirstHalf: minutesToSecondsSafe(p.teamFirstHalf),
-      opponentFirstHalf: minutesToSecondsSafe(p.opponentFirstHalf),
-      deadFirstHalf: minutesToSecondsSafe(p.deadFirstHalf),
-      teamSecondHalf: minutesToSecondsSafe(p.teamSecondHalf),
-      opponentSecondHalf: minutesToSecondsSafe(p.opponentSecondHalf),
-      deadSecondHalf: minutesToSecondsSafe(p.deadSecondHalf),
-    });
+    setPossessionDraftSegments([]);
+    setPossessionSec(baseCounters);
   }, [matchInfo?.matchId]);
 
   // Tryb licznika: zawsze 1 z 3 stanów (Z / X / C). Liczymy wg czasu WIDEO.
@@ -876,38 +1094,6 @@ export default function Page() {
     };
   }, [matchInfo?.matchId]);
 
-  // Toggle Z/X/C globalnie (bez keyup) — nie w polach tekstowych.
-  useEffect(() => {
-    const isEditable = (el: HTMLElement | null): boolean => {
-      if (!el) return false;
-      const tag = el.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-      if (el.isContentEditable) return true;
-      return false;
-    };
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (!matchInfo?.matchId) return;
-      if (!isPossessionCounterEnabled) return;
-
-      const activeEl = document.activeElement as HTMLElement | null;
-      if (isEditable(activeEl)) return;
-
-      const key = String(e.key || "").toLowerCase();
-      if (key !== "z" && key !== "x" && key !== "c") return;
-      if (e.repeat) return;
-
-      e.preventDefault();
-      // Zawsze ustawiamy 1 z 3 stanów; nie pozwalamy "odznaczyć" przez 2x klik/klawisz.
-      setPossessionMode(key as any);
-    };
-
-    // capture: działa niezależnie od fokusu / innych handlerów w tree
-    window.addEventListener("keydown", onKeyDown, { passive: false, capture: true } as any);
-    return () => window.removeEventListener("keydown", onKeyDown as any, true);
-  }, [matchInfo?.matchId, isPossessionCounterEnabled]);
-
   // Liczenie na podstawie zmiany czasu wideo.
   const lastVideoTimeRef = useRef<number | null>(null);
   const videoRemainderRef = useRef<number>(0);
@@ -921,7 +1107,6 @@ export default function Page() {
     lastCountedVideoSecRef.current = lastCountedVideoSec;
   }, [lastCountedVideoSec]);
 
-  const POSSESSION_EPS = 1e-6; // dla łączenia sąsiednich przedziałów (ułamki sekund)
   const mergePossessionIntervals = (intervals: PossessionInterval[]): PossessionInterval[] => {
     const sorted = [...intervals]
       .map(([a, b]) => [Math.min(a, b), Math.max(a, b)] as PossessionInterval)
@@ -940,26 +1125,6 @@ export default function Page() {
       }
     }
     return out;
-  };
-
-  const subtractFromUnion = (
-    union: PossessionInterval[],
-    start: number,
-    end: number
-  ): PossessionInterval[] => {
-    const s0 = Math.min(start, end);
-    const e0 = Math.max(start, end);
-    let cursor = s0;
-    const uncovered: PossessionInterval[] = [];
-    for (const [s, e] of union) {
-      if (e < cursor) continue;
-      if (s > e0) break;
-      if (s > cursor) uncovered.push([cursor, Math.min(e0, s)]);
-      cursor = Math.max(cursor, e);
-      if (cursor > e0) break;
-    }
-    if (cursor <= e0) uncovered.push([cursor, e0]);
-    return uncovered;
   };
 
   // Wczytaj stan zabezpieczenia per mecz (po refreshu)
@@ -1007,6 +1172,128 @@ export default function Page() {
     }, 500);
   };
 
+  const buildPossessionSegmentsForInterval = (
+    mode: PossessionMode,
+    start: number,
+    end: number
+  ): PossessionSegment[] => {
+    const intervalStart = Math.min(start, end);
+    const intervalEnd = Math.max(start, end);
+    if (!Number.isFinite(intervalStart) || !Number.isFinite(intervalEnd) || intervalEnd <= intervalStart) {
+      return [];
+    }
+
+    const secondHalfStart = (matchInfo as any)?.secondHalfStartTime as number | undefined;
+    const fallbackIsSecondHalf = Boolean(isSecondHalf);
+    const boundary = typeof secondHalfStart === "number" && Number.isFinite(secondHalfStart) ? secondHalfStart : null;
+    const isFlipped = pitchIsFlippedForPossession;
+    const leftOwner: "team" | "opponent" = isFlipped ? "team" : "opponent";
+    const rightOwner: "team" | "opponent" = isFlipped ? "opponent" : "team";
+
+    const typeForMode = (currentMode: PossessionMode): PossessionType => {
+      if (currentMode === "x") return "dead";
+      if (currentMode === "z") return leftOwner;
+      return rightOwner;
+    };
+
+    const splitByHalf = (a: number, b: number): Array<{ half: 1 | 2; start: number; end: number }> => {
+      if (b <= a) return [];
+      if (boundary === null) return [{ half: fallbackIsSecondHalf ? 2 : 1, start: a, end: b }];
+      const firstEnd = Math.min(b, boundary);
+      const secondStart = Math.max(a, boundary);
+      const parts: Array<{ half: 1 | 2; start: number; end: number }> = [];
+      if (a < firstEnd) parts.push({ half: 1, start: a, end: firstEnd });
+      if (secondStart < b) parts.push({ half: 2, start: secondStart, end: b });
+      return parts;
+    };
+
+    const type = typeForMode(mode);
+    const createdAt = Date.now();
+    return splitByHalf(intervalStart, intervalEnd).map((part) => ({
+      id: `pos_${matchInfo?.matchId || "match"}_${mode}_${Math.round(part.start * 1000)}_${Math.round(part.end * 1000)}`,
+      type,
+      mode,
+      half: part.half,
+      startSec: part.start,
+      endSec: part.end,
+      durationSec: part.end - part.start,
+      startedAtVideoSec: part.start,
+      endedAtVideoSec: part.end,
+      createdAt,
+    }));
+  };
+
+  const addPossessionDraftSegments = (incoming: PossessionSegment[]) => {
+    if (incoming.length === 0) return;
+    setPossessionDraftSegments((prev) => {
+      const next = upsertPossessionSegments(prev, incoming);
+      possessionDraftSegmentsRef.current = next;
+      recalculatePossessionFromDraft(next);
+      return next;
+    });
+  };
+
+  const flushPossessionIntervalBeforeModeChange = (mode: PossessionMode, currentVideoTime: number) => {
+    const last = lastVideoTimeRef.current;
+    if (last === null) {
+      lastVideoTimeRef.current = currentVideoTime;
+      return;
+    }
+
+    const delta = currentVideoTime - last;
+    if (delta <= 0 || delta > 30) {
+      lastVideoTimeRef.current = currentVideoTime;
+      videoRemainderRef.current = 0;
+      return;
+    }
+
+    const segments = buildPossessionSegmentsForInterval(mode, last, currentVideoTime);
+    addPossessionDraftSegments(segments);
+    countedIntervalsRef.current = mergePossessionIntervals([...countedIntervalsRef.current, [last, currentVideoTime]]);
+    setLastCountedVideoSec(currentVideoTime);
+    lastCountedVideoSecRef.current = currentVideoTime;
+    if (matchInfo?.matchId) persistCountedState(matchInfo.matchId);
+    lastVideoTimeRef.current = currentVideoTime;
+  };
+
+  const changePossessionMode = (nextMode: PossessionMode) => {
+    if (nextMode === possessionMode) return;
+    flushPossessionIntervalBeforeModeChange(possessionMode, possessionVideoTimeRef.current);
+    setPossessionMode(nextMode);
+  };
+
+  // Toggle Z/X/C globalnie (bez keyup) — nie w polach tekstowych.
+  useEffect(() => {
+    const isEditable = (el: HTMLElement | null): boolean => {
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+      if (el.isContentEditable) return true;
+      return false;
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!matchInfo?.matchId) return;
+      if (!isPossessionCounterEnabled) return;
+
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (isEditable(activeEl)) return;
+
+      const key = String(e.key || "").toLowerCase();
+      if (key !== "z" && key !== "x" && key !== "c") return;
+      if (e.repeat) return;
+
+      e.preventDefault();
+      // Zawsze ustawiamy 1 z 3 stanów; nie pozwalamy "odznaczyć" przez 2x klik/klawisz.
+      changePossessionMode(key as PossessionMode);
+    };
+
+    // capture: działa niezależnie od fokusu / innych handlerów w tree
+    window.addEventListener("keydown", onKeyDown, { passive: false, capture: true } as any);
+    return () => window.removeEventListener("keydown", onKeyDown as any, true);
+  }, [matchInfo?.matchId, isPossessionCounterEnabled, changePossessionMode]);
+
   useEffect(() => {
     // reset baseline po zmianie trybu / meczu
     lastVideoTimeRef.current = possessionVideoTimeSec;
@@ -1032,89 +1319,15 @@ export default function Page() {
       return;
     }
 
-    const secondHalfStart = (matchInfo as any)?.secondHalfStartTime as number | undefined;
-    const fallbackIsSecondHalf = Boolean(isSecondHalf);
-    const isSecondHalfAt = (tSec: number): boolean => {
-      if (typeof secondHalfStart === "number" && Number.isFinite(secondHalfStart)) {
-        return tSec >= secondHalfStart;
-      }
-      return fallbackIsSecondHalf;
-    };
-
-    const isFlipped = pitchIsFlippedForPossession;
-    const leftOwner: "team" | "opponent" = isFlipped ? "team" : "opponent";
-    const rightOwner: "team" | "opponent" = isFlipped ? "opponent" : "team";
-
     // Obserwowany przedział w czasie wideo (ułamki sekund — bez tracenia czasu przy częstych tickach).
     const observedStart = last;
     const observedEnd = current;
     const unionBefore = countedIntervalsRef.current;
-    const uncovered = subtractFromUnion(unionBefore, observedStart, observedEnd);
     countedIntervalsRef.current = mergePossessionIntervals([...unionBefore, [observedStart, observedEnd]]);
 
-    if (uncovered.length === 0) {
-      lastVideoTimeRef.current = current;
-      persistCountedState(matchInfo.matchId!);
-      return;
-    }
-
-    const add: PossessionCountersSec = {
-      teamFirstHalf: 0,
-      opponentFirstHalf: 0,
-      deadFirstHalf: 0,
-      teamSecondHalf: 0,
-      opponentSecondHalf: 0,
-      deadSecondHalf: 0,
-    };
-
-    const inc = (field: keyof PossessionCountersSec, by: number) => {
-      add[field] += by;
-    };
-
-    const boundary = typeof secondHalfStart === "number" && Number.isFinite(secondHalfStart) ? secondHalfStart : null;
-    const splitByHalf = (a: number, b: number): Array<{ is2: boolean; len: number }> => {
-      const len = b - a;
-      if (len <= 0) return [];
-      if (boundary === null) return [{ is2: fallbackIsSecondHalf, len }];
-      const firstEnd = Math.min(b, boundary);
-      const secondStart = Math.max(a, boundary);
-      const parts: Array<{ is2: boolean; len: number }> = [];
-      if (a < firstEnd) parts.push({ is2: false, len: firstEnd - a });
-      if (secondStart < b) parts.push({ is2: true, len: b - secondStart });
-      return parts;
-    };
-
-    for (const [a, b] of uncovered) {
-      for (const part of splitByHalf(a, b)) {
-        const is2 = part.is2;
-        const len = part.len;
-
-        if (possessionMode === "x") {
-          inc(is2 ? "deadSecondHalf" : "deadFirstHalf", len);
-        } else if (possessionMode === "z") {
-          if (leftOwner === "team") inc(is2 ? "teamSecondHalf" : "teamFirstHalf", len);
-          else inc(is2 ? "opponentSecondHalf" : "opponentFirstHalf", len);
-        } else {
-          if (rightOwner === "team") inc(is2 ? "teamSecondHalf" : "teamFirstHalf", len);
-          else inc(is2 ? "opponentSecondHalf" : "opponentFirstHalf", len);
-        }
-      }
-    }
-
-    setPossessionSec((prev) => ({
-      teamFirstHalf: prev.teamFirstHalf + add.teamFirstHalf,
-      opponentFirstHalf: prev.opponentFirstHalf + add.opponentFirstHalf,
-      deadFirstHalf: prev.deadFirstHalf + add.deadFirstHalf,
-      teamSecondHalf: prev.teamSecondHalf + add.teamSecondHalf,
-      opponentSecondHalf: prev.opponentSecondHalf + add.opponentSecondHalf,
-      deadSecondHalf: prev.deadSecondHalf + add.deadSecondHalf,
-    }));
-
-    const maxUncovered = uncovered.reduce((m, [, e]) => Math.max(m, e), 0);
-    if (maxUncovered > 0) {
-      setLastCountedVideoSec(maxUncovered);
-      lastCountedVideoSecRef.current = maxUncovered;
-    }
+    addPossessionDraftSegments(buildPossessionSegmentsForInterval(possessionMode, observedStart, observedEnd));
+    setLastCountedVideoSec(observedEnd);
+    lastCountedVideoSecRef.current = observedEnd;
     persistCountedState(matchInfo.matchId!);
 
     lastVideoTimeRef.current = current;
@@ -1128,17 +1341,8 @@ export default function Page() {
   useEffect(() => {
     if (!matchInfo?.matchId) return;
     if (!isPossessionCounterEnabled) return;
-    // jeśli jest cokolwiek policzone, pozwól zapisać
-    const any =
-      possessionSec.teamFirstHalf +
-        possessionSec.opponentFirstHalf +
-        possessionSec.teamSecondHalf +
-        possessionSec.opponentSecondHalf +
-        possessionSec.deadFirstHalf +
-        possessionSec.deadSecondHalf >
-      0;
-    if (any) setIsPossessionDraftDirty(true);
-  }, [possessionSec, matchInfo?.matchId, isPossessionCounterEnabled]);
+    if (possessionDraftSegments.length > 0) setIsPossessionDraftDirty(true);
+  }, [possessionDraftSegments, matchInfo?.matchId, isPossessionCounterEnabled]);
 
   // Persist draft do localStorage (żeby po refreshu wrócić do miejsca)
   const draftTimerRef = useRef<number | null>(null);
@@ -1148,7 +1352,16 @@ export default function Page() {
     if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
     draftTimerRef.current = window.setTimeout(() => {
       try {
+        if (possessionDraftSegments.length === 0 && !isPossessionDraftDirty) {
+          localStorage.removeItem(`possession_draft_sec_${matchId}`);
+          localStorage.removeItem(`possession_draft_segments_${matchId}`);
+          return;
+        }
         localStorage.setItem(`possession_draft_sec_${matchId}`, JSON.stringify(possessionSec));
+        localStorage.setItem(
+          `possession_draft_segments_${matchId}`,
+          JSON.stringify(possessionDraftSegments)
+        );
       } catch {
         // ignore quota
       }
@@ -1156,31 +1369,58 @@ export default function Page() {
     return () => {
       if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
     };
-  }, [possessionSec, matchInfo?.matchId]);
+  }, [possessionSec, possessionDraftSegments, isPossessionDraftDirty, matchInfo?.matchId]);
 
   const commitPossessionToFirebase = async () => {
     const matchId = matchInfo?.matchId;
     if (!matchId) return;
     setIsPossessionSaving(true);
     try {
-      // Nie nadpisuj połowy zerem, jeśli w zapisanym meczu jest już wartość (chroni przed skasowaniem 1. przy zapisie 2. i odwrotnie)
+      let draftSegments = possessionDraftSegmentsRef.current;
+      const currentVideoTime = possessionVideoTimeRef.current;
+      const last = lastVideoTimeRef.current;
+      if (last !== null) {
+        const delta = currentVideoTime - last;
+        if (delta > 0 && delta <= 30) {
+          draftSegments = upsertPossessionSegments(
+            draftSegments,
+            buildPossessionSegmentsForInterval(possessionMode, last, currentVideoTime)
+          );
+          possessionDraftSegmentsRef.current = draftSegments;
+          setPossessionDraftSegments(draftSegments);
+          lastVideoTimeRef.current = currentVideoTime;
+        }
+      }
+
       const existing = (matchInfo as any)?.matchData?.possession || {};
+      const existingSegments = sanitizePossessionSegments((matchInfo as any)?.matchData?.possessionSegments);
+      const mergedSegments = upsertPossessionSegments(existingSegments, draftSegments);
+      const countersForSave =
+        existingSegments.length > 0
+          ? possessionSegmentsToNormalizedCounters(mergedSegments)
+          : addPossessionCounters(possessionBaseSecRef.current, possessionSegmentsToNormalizedCounters(draftSegments));
       const keepIfZero = (sec: number, existingMin: number | undefined) =>
-        sec > 0 ? secondsToMinutesDecimal(sec) : (existingMin ?? 0);
+        sec > 0 || existingSegments.length > 0 ? secondsToMinutesDecimal(sec) : (existingMin ?? 0);
       const patch = {
         possession: {
-          teamFirstHalf: keepIfZero(possessionSec.teamFirstHalf, existing.teamFirstHalf),
-          opponentFirstHalf: keepIfZero(possessionSec.opponentFirstHalf, existing.opponentFirstHalf),
-          teamSecondHalf: keepIfZero(possessionSec.teamSecondHalf, existing.teamSecondHalf),
-          opponentSecondHalf: keepIfZero(possessionSec.opponentSecondHalf, existing.opponentSecondHalf),
-          deadFirstHalf: keepIfZero(possessionSec.deadFirstHalf, existing.deadFirstHalf),
-          deadSecondHalf: keepIfZero(possessionSec.deadSecondHalf, existing.deadSecondHalf),
+          teamFirstHalf: keepIfZero(countersForSave.teamFirstHalf, existing.teamFirstHalf),
+          opponentFirstHalf: keepIfZero(countersForSave.opponentFirstHalf, existing.opponentFirstHalf),
+          teamSecondHalf: keepIfZero(countersForSave.teamSecondHalf, existing.teamSecondHalf),
+          opponentSecondHalf: keepIfZero(countersForSave.opponentSecondHalf, existing.opponentSecondHalf),
+          deadFirstHalf: keepIfZero(countersForSave.deadFirstHalf, existing.deadFirstHalf),
+          deadSecondHalf: keepIfZero(countersForSave.deadSecondHalf, existing.deadSecondHalf),
         },
+        possessionSegments: mergedSegments,
       };
       await handleUpdateMatchData(matchId, patch, { persistToFirebase: true });
+      possessionBaseSecRef.current = countersForSave;
+      setPossessionSec(countersForSave);
+      setPossessionDraftSegments([]);
+      possessionDraftSegmentsRef.current = [];
       setIsPossessionDraftDirty(false);
       if (typeof window !== "undefined") {
         localStorage.removeItem(`possession_draft_sec_${matchId}`);
+        localStorage.removeItem(`possession_draft_segments_${matchId}`);
       }
     } finally {
       setIsPossessionSaving(false);
@@ -1195,15 +1435,10 @@ export default function Page() {
     );
     if (!ok) return;
 
-    // wyczyść liczniki (draft)
-    setPossessionSec({
-      teamFirstHalf: 0,
-      opponentFirstHalf: 0,
-      deadFirstHalf: 0,
-      teamSecondHalf: 0,
-      opponentSecondHalf: 0,
-      deadSecondHalf: 0,
-    });
+    // wyczyść tylko lokalny draft; zapisany stan meczu zostaje bazą.
+    setPossessionSec(possessionBaseSecRef.current);
+    setPossessionDraftSegments([]);
+    possessionDraftSegmentsRef.current = [];
     setIsPossessionDraftDirty(false);
 
     // wyczyść zabezpieczenia przed podwójnym liczeniem + "ostatnie"
@@ -1213,6 +1448,7 @@ export default function Page() {
 
     if (typeof window !== "undefined") {
       localStorage.removeItem(`possession_draft_sec_${matchId}`);
+      localStorage.removeItem(`possession_draft_segments_${matchId}`);
       localStorage.removeItem(`possession_counted_intervals_${matchId}`);
       localStorage.removeItem(`possession_last_counted_sec_${matchId}`);
     }
@@ -3760,6 +3996,11 @@ export default function Page() {
               ? (is2 ? possessionSec.teamSecondHalf : possessionSec.teamFirstHalf)
               : (is2 ? possessionSec.opponentSecondHalf : possessionSec.opponentFirstHalf);
           const deadSec = is2 ? possessionSec.deadSecondHalf : possessionSec.deadFirstHalf;
+          const currentActionSec =
+            [...possessionDraftSegments]
+              .reverse()
+              .find((segment) => segment.mode === possessionMode && segment.half === (is2 ? 2 : 1))
+              ?.durationSec ?? 0;
 
           return (
             <>
@@ -3768,7 +4009,7 @@ export default function Page() {
                 className={`${styles.videoPossessionButton} ${
                   possessionMode === "z" ? styles.videoPossessionButtonActive : ""
                 }`}
-                onClick={() => setPossessionMode("z")}
+                onClick={() => changePossessionMode("z")}
                 aria-pressed={possessionMode === "z"}
                 title={`Z — posiadanie: ${leftName} (toggle)`}
               >
@@ -3782,7 +4023,7 @@ export default function Page() {
                 className={`${styles.videoPossessionButton} ${
                   possessionMode === "x" ? styles.videoPossessionButtonActive : ""
                 }`}
-                onClick={() => setPossessionMode("x")}
+                onClick={() => changePossessionMode("x")}
                 aria-pressed={possessionMode === "x"}
                 title="X — czas martwy (toggle)"
               >
@@ -3796,7 +4037,7 @@ export default function Page() {
                 className={`${styles.videoPossessionButton} ${
                   possessionMode === "c" ? styles.videoPossessionButtonActive : ""
                 }`}
-                onClick={() => setPossessionMode("c")}
+                onClick={() => changePossessionMode("c")}
                 aria-pressed={possessionMode === "c"}
                 title={`C — posiadanie: ${rightName} (toggle)`}
               >
@@ -3810,6 +4051,9 @@ export default function Page() {
               </span>
               <span style={{ color: "rgba(255, 255, 255, 0.75)", fontSize: 12, marginLeft: 8 }}>
                 T: {formatMMSS(possessionVideoTimeSec)}
+              </span>
+              <span style={{ color: "rgba(255, 255, 255, 0.75)", fontSize: 12, marginLeft: 8 }}>
+                Akcja: {formatMMSS(currentActionSec)}
               </span>
               <button
                 type="button"
