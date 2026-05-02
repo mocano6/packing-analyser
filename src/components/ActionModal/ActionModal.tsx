@@ -1008,7 +1008,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                 Drybling
               </button>
             </div>
-            {/* Sekcja "Początek i koniec działania" z przyciskami P0-P3 */}
+            {/* Sekcja P0–P3: początek i koniec działania, jeden pod drugim */}
             <div className={styles.pSectionContainer}>
               <div className={styles.pStartEndContainer}>
                 <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Początek działania">
@@ -1106,10 +1106,9 @@ const ActionModal: React.FC<ActionModalProps> = ({
               </div>
             </div>
 
-            {/* Grupa przycisków kontaktów i przycisków pionowych obok siebie */}
+            {/* Minięty przeciwnik + skutek akcji (PK / strzał / gol) w jednej kolumnie, w tym samym rzędzie co P0–P3 */}
             <div className={styles.rightSideContainer}>
-              {/* Grupa przycisków kontaktów */}
-              <div className={styles.pSectionContainer}>
+              <div className={styles.contactControlsHidden} aria-hidden="true">
                 <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Liczba kontaktów">
                   <button
                     className={`${styles.actionTypeButton} ${
@@ -1118,6 +1117,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                     onClick={onContact1Toggle}
                     title="Aktywuj/Dezaktywuj 1T"
                     aria-pressed={isContact1Active}
+                    tabIndex={-1}
                     type="button"
                   >
                     1T
@@ -1129,6 +1129,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                     onClick={onContact2Toggle}
                     title="Aktywuj/Dezaktywuj 2T"
                     aria-pressed={isContact2Active}
+                    tabIndex={-1}
                     type="button"
                   >
                     2T
@@ -1140,104 +1141,100 @@ const ActionModal: React.FC<ActionModalProps> = ({
                     onClick={onContact3PlusToggle}
                     title="Aktywuj/Dezaktywuj 3T+"
                     aria-pressed={isContact3PlusActive}
+                    tabIndex={-1}
                     type="button"
                   >
                     3T+
                   </button>
                 </div>
-                {/* Przycisk "Minięty przeciwnik" */}
+              </div>
+              <div className={styles.minietyOutcomeColumn}>
                 {ACTION_BUTTONS.map((button, index) => {
                   if (button.type === "points" && button.label === "Minięty przeciwnik") {
+                    const defenseLocksMiniety =
+                      mode === "defense" &&
+                      selectedDefensePlayers &&
+                      selectedDefensePlayers.length > 0;
+                    const bypassedValues = Array.from({ length: 11 }, (_, i) => i);
                     return (
-                      <div 
-                        key={index} 
-                        className={styles.compactPointsButtonSmall}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          // W trybie unpacking wyłączamy przycisk "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
-                          if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
-                            return; // Nie wykonuj kliknięcia
-                          }
-                          handlePointsAdd(button.points);
-                        }}
-                        title={button.description}
+                      <div
+                        key={index}
+                        className={styles.packingCountSelector}
                         style={{
-                          // W trybie unpacking wyłączamy przycisk "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
-                          pointerEvents: mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0 ? 'none' : 'auto',
-                          opacity: mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0 ? 0.6 : 1
+                          pointerEvents: defenseLocksMiniety ? "none" : "auto",
+                          opacity: defenseLocksMiniety ? 0.6 : 1,
                         }}
                       >
-                        <span className={styles.compactLabelSmall}>{button.label}</span>
-                        <span className={styles.pointsValueSmall}><b>{currentPoints}</b></span>
-                        <button
-                          className={styles.compactSubtractButtonSmall}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            // W trybie unpacking wyłączamy przycisk odejmowania dla "Minięty przeciwnik" gdy są zaznaczeni zawodnicy
-                            if (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0) {
-                              return; // Nie wykonuj kliknięcia
-                            }
-                            handlePointsAdd(-button.points);
-                          }}
-                          title={`Odejmij ${button.points} pkt`}
-                          type="button"
-                          disabled={currentPoints < button.points || (mode === "defense" && selectedDefensePlayers && selectedDefensePlayers.length > 0)}
+                        <div className={styles.packingCountRowTitle}>{button.label}</div>
+                        <div
+                          className={styles.packingCountButtons}
+                          role="group"
+                          aria-label={button.description}
                         >
-                          −
-                        </button>
+                          {bypassedValues.map((n) => (
+                            <button
+                              key={n}
+                              type="button"
+                              className={`${styles.packingCountButton} ${
+                                currentPoints === n ? styles.packingCountButtonActive : ""
+                              }`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (defenseLocksMiniety) {
+                                  return;
+                                }
+                                handlePointsAdd(n - currentPoints);
+                              }}
+                              aria-pressed={currentPoints === n}
+                              title={`Ustaw ${n}`}
+                            >
+                              {n}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     );
                   }
                   return null;
                 })}
+                <div className={styles.outcomeButtonsColumn}>
+                  <button
+                    className={`${styles.compactButton} ${
+                      isPenaltyAreaEntry ? styles.activeButton : ""
+                    }`}
+                    onClick={handlePenaltyAreaEntryToggle}
+                    aria-pressed={isPenaltyAreaEntry}
+                    type="button"
+                    title="Wejście w pole karne"
+                  >
+                    <span className={styles.compactLabel}>Wejście PK</span>
+                  </button>
+                  <button
+                    className={`${styles.compactButton} ${isShot ? styles.activeButton : ""}`}
+                    onClick={handleShotToggle}
+                    aria-pressed={isShot}
+                    type="button"
+                    title="Strzał"
+                  >
+                    <span className={styles.compactLabel}>Strzał</span>
+                  </button>
+                  <button
+                    className={`${styles.compactButton} ${
+                      isGoal ? styles.activeButton : ""
+                    } ${!isShot ? styles.disabledButton : ""}`}
+                    onClick={handleGoalToggle}
+                    disabled={!isShot}
+                    aria-pressed={isGoal}
+                    aria-disabled={!isShot}
+                    type="button"
+                    title={!isShot ? "Musisz najpierw zaznaczyć Strzał" : "Gol"}
+                  >
+                    <span className={styles.compactLabel}>Gol</span>
+                  </button>
+                </div>
               </div>
-
-              {/* Przyciski ułożone pionowo: Wejście PK, Strzał, Gol */}
-              <div className={styles.verticalButtonsContainer}>
-              {/* Przycisk "Wejście PK" */}
-              <button
-                className={`${styles.compactButton} ${
-                  isPenaltyAreaEntry ? styles.activeButton : ""
-                }`}
-                onClick={handlePenaltyAreaEntryToggle}
-                aria-pressed={isPenaltyAreaEntry}
-                type="button"
-                title="Wejście w pole karne"
-              >
-                <span className={styles.compactLabel}>Wejście PK</span>
-              </button>
-
-              {/* Przycisk "Strzał" */}
-              <button
-                className={`${styles.compactButton} ${
-                  isShot ? styles.activeButton : ""
-                }`}
-                onClick={handleShotToggle}
-                aria-pressed={isShot}
-                type="button"
-                title="Strzał"
-              >
-                <span className={styles.compactLabel}>Strzał</span>
-              </button>
-
-              {/* Przycisk "Gol" */}
-              <button
-                className={`${styles.compactButton} ${
-                  isGoal ? styles.activeButton : ""
-                } ${!isShot ? styles.disabledButton : ""}`}
-                onClick={handleGoalToggle}
-                disabled={!isShot}
-                aria-pressed={isGoal}
-                aria-disabled={!isShot}
-                type="button"
-                title={!isShot ? "Musisz najpierw zaznaczyć Strzał" : "Gol"}
-              >
-                <span className={styles.compactLabel}>Gol</span>
-              </button>
             </div>
-          </div>
           </div>
           
           {/* Pole notatki kontrowersyjnej - pojawia się gdy isControversial jest true */}

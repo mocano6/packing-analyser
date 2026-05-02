@@ -3891,7 +3891,7 @@ export default function Page() {
                 selectedTeam={selectedTeam}
                 onChange={setSelectedTeam}
                 className={styles.teamDropdown}
-                teamsCatalog={allTeams}
+                teamsCatalog={availableTeams}
                 userTeamAccess={userTeamAccess}
                 showLabel={true}
                 isExpanded={isTeamsSelectorExpanded}
@@ -4251,7 +4251,7 @@ export default function Page() {
             actions={actions}
             onEditingActionChange={setEditingAction}
             getActionCategory={getActionCategory}
-            allTeams={allTeams}
+            allTeams={availableTeams}
             isAdmin={isAdmin}
             isPlayer={isPlayer}
             linkedPlayerId={linkedPlayerId}
@@ -4361,7 +4361,7 @@ export default function Page() {
             actions={actions}
             onEditingActionChange={setEditingAction}
             getActionCategory={getActionCategory}
-            allTeams={allTeams}
+            allTeams={availableTeams}
             isAdmin={isAdmin}
             isPlayer={isPlayer}
             linkedPlayerId={linkedPlayerId}
@@ -4375,7 +4375,7 @@ export default function Page() {
             <Acc8sTable
               entries={acc8sEntries}
               matchInfo={matchInfo || undefined}
-              allTeams={allTeams}
+              allTeams={availableTeams}
               allPKEntries={pkEntries}
               allShots={shots}
               onAddEntry={async () => {
@@ -4496,7 +4496,7 @@ export default function Page() {
               onShotClick={handleShotClick}
               selectedShotId={selectedShotId}
               matchInfo={matchInfo || undefined}
-              allTeams={allTeams}
+              allTeams={availableTeams}
               tabBar={analyzerModeTabs}
               rightExtraContent={
                 shots.length > 0 ? (
@@ -4943,7 +4943,7 @@ export default function Page() {
             }}
             selectedEntryId={selectedPKEntryId}
             matchInfo={matchInfo || undefined}
-            allTeams={allTeams}
+            allTeams={availableTeams}
             rightExtraContent={
               pkEntries.length > 0 ? (
                 <button
@@ -6196,7 +6196,7 @@ export default function Page() {
           onClose={closeNewMatchModal}
           onSave={handleSaveNewMatch}
           currentInfo={null}
-          teamsCatalog={allTeams}
+          teamsCatalog={availableTeams}
           userTeamAccess={userTeamAccess}
           selectedTeam={selectedTeam}
         />
@@ -6207,7 +6207,7 @@ export default function Page() {
           onClose={closeEditMatchModal}
           onSave={handleSaveEditedMatch}
           currentInfo={matchInfo}
-          teamsCatalog={allTeams}
+          teamsCatalog={availableTeams}
           userTeamAccess={userTeamAccess}
           selectedTeam={selectedTeam}
         />

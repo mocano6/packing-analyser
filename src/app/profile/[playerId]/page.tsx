@@ -25,6 +25,8 @@ import toast from "react-hot-toast";
 import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
+import { filterTeamsByUserAccess, type UserTeamAccess } from "@/lib/teamsForUserAccess";
+import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPitch";
 import { getOppositeXTValueForZone, getXTValueForZone, zoneNameToIndex, getZoneName, zoneNameToString } from "@/constants/xtValues";
 import SidePanel from "@/components/SidePanel/SidePanel";
@@ -84,6 +86,7 @@ export default function PlayerDetailsPage() {
     }
     return "";
   });
+  const [isTeamsSelectorExpanded, setIsTeamsSelectorExpanded] = useState(false);
   // Inicjalizuj selectedPlayerForView z localStorage lub pustym stringiem
   const [selectedPlayerForView, setSelectedPlayerForView] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -932,7 +935,7 @@ export default function PlayerDetailsPage() {
     }
   }, [selectedSeason, defaultSeason, availableSeasons]);
 
-  // Dostępne zespoły — dla roli player zespoły z konta (userTeams), żeby wybór był aktywny gdy admin przypisał wiele zespołów
+  // Dostępne zespoły — gracz: userTeams / dokument zawodnika; pozostali: jak statystyki zespołu (filterTeamsByUserAccess)
   const availableTeams = useMemo(() => {
     const allTeams = teams || [];
     if (isPlayer && linkedPlayerId) {
@@ -950,8 +953,41 @@ export default function PlayerDetailsPage() {
           : [];
       return allTeams.filter((t) => playerTeamIds.includes(t.id));
     }
-    return allTeams;
-  }, [teams, isPlayer, linkedPlayerId, players, userTeams]);
+    return filterTeamsByUserAccess(allTeams, {
+      isAdmin,
+      allowedTeamIds: userTeams ?? [],
+    });
+  }, [teams, isPlayer, linkedPlayerId, players, userTeams, isAdmin]);
+
+  /** Dostęp do TeamsSelector: jak analyzer/statystyki, ale gracz bez userTeams — wg zespołów z dokumentu zawodnika (availableTeams). */
+  const teamsSelectorUserAccess: UserTeamAccess = useMemo(() => {
+    if (isAdmin) {
+      return { isAdmin: true, allowedTeamIds: [] };
+    }
+    if (
+      isPlayer &&
+      linkedPlayerId &&
+      (!userTeams || userTeams.length === 0) &&
+      availableTeams.length > 0
+    ) {
+      return { isAdmin: false, allowedTeamIds: availableTeams.map((t) => t.id) };
+    }
+    return { isAdmin: false, allowedTeamIds: userTeams ?? [] };
+  }, [isAdmin, isPlayer, linkedPlayerId, userTeams, availableTeams]);
+
+  const handleProfileTeamChange = useCallback((newTeam: string) => {
+    setSelectedTeam(newTeam);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("selectedTeam", newTeam);
+    }
+    setAllActions([]);
+    setAllShots([]);
+    setSelectedMatchIds([]);
+    setManuallyDeselectedAll(false);
+    manualDeselectTriggeredRef.current = false;
+    hasLoadedActionsRef.current = false;
+    lastLoadedTeamRef.current = null;
+  }, []);
 
   // Aktualnie oglądany zawodnik na profilu (działa dla /profile i /profile/[playerId])
   const currentProfilePlayerId = selectedPlayerForView || playerId || linkedPlayerId || "";
@@ -4205,34 +4241,23 @@ export default function PlayerDetailsPage() {
       <div className={styles.playerSelectorContainer}>
         {isPlayer ? (
           <>
-            <div className={styles.selectorGroup}>
-              <label htmlFor="player-team-select" className={styles.selectorLabel}>Zespół:</label>
-              {availableTeams.length > 1 ? (
-                <select
-                  id="player-team-select"
-                  value={selectedTeam}
-                  onChange={(e) => {
-                    const newTeam = e.target.value;
-                    setSelectedTeam(newTeam);
-                    if (typeof window !== "undefined") localStorage.setItem("selectedTeam", newTeam);
-                    setAllActions([]);
-                    setAllShots([]);
-                    setSelectedMatchIds([]);
-                    setManuallyDeselectedAll(false);
-                    manualDeselectTriggeredRef.current = false;
-                    hasLoadedActionsRef.current = false;
-                    lastLoadedTeamRef.current = null;
-                  }}
-                  className={styles.selectorSelect}
-                >
-                  {availableTeams.map((team) => (
-                    <option key={team.id} value={team.id}>{team.name}</option>
-                  ))}
-                </select>
+            <div className={`${styles.selectorGroup} ${styles.teamSelectorGroup}`}>
+              <label id="player-team-select-label" className={styles.teamSelectorCompactLabel}>
+                Zespół:
+              </label>
+              {isTeamsLoading ? (
+                <p className={styles.selectorLoadingText}>Ładowanie...</p>
               ) : (
-                <div className={styles.selectorStaticValue}>
-                  {availableTeams.find((t) => t.id === selectedTeam)?.name ?? availableTeams[0]?.name ?? "-"}
-                </div>
+                <TeamsSelector
+                  selectedTeam={selectedTeam}
+                  onChange={handleProfileTeamChange}
+                  teamsCatalog={teams ?? []}
+                  userTeamAccess={teamsSelectorUserAccess}
+                  className={styles.compactTeamSelectorHeader}
+                  showLabel={false}
+                  isExpanded={isTeamsSelectorExpanded}
+                  onToggle={() => setIsTeamsSelectorExpanded((open) => !open)}
+                />
               )}
             </div>
             <div className={styles.selectorGroup}>
@@ -4246,34 +4271,24 @@ export default function PlayerDetailsPage() {
           </>
         ) : (
           <>
-            <div className={styles.selectorGroup}>
-              <label htmlFor="team-select" className={styles.selectorLabel}>Zespół:</label>
-              <select
-                id="team-select"
-                value={selectedTeam}
-                onChange={async (e) => {
-                  const newTeam = e.target.value;
-                  setSelectedTeam(newTeam);
-                  // Zapisz wybór zespołu w localStorage
-                  if (typeof window !== 'undefined') {
-                    localStorage.setItem('selectedTeam', newTeam);
-                  }
-                  // Wyczyść akcje, aby wymusić przeładowanie
-                  setAllActions([]);
-                  setAllShots([]);
-                  setSelectedMatchIds([]);
-                  setManuallyDeselectedAll(false);
-                  manualDeselectTriggeredRef.current = false;
-                  hasLoadedActionsRef.current = false;
-                  // Zresetuj lastLoadedTeamRef, aby umożliwić załadowanie meczów dla nowego zespołu
-                  lastLoadedTeamRef.current = null;
-                }}
-                className={styles.selectorSelect}
-              >
-                {availableTeams.map(team => (
-                  <option key={team.id} value={team.id}>{team.name}</option>
-                ))}
-              </select>
+            <div className={`${styles.selectorGroup} ${styles.teamSelectorGroup}`}>
+              <label id="team-select-label" className={styles.teamSelectorCompactLabel}>
+                Zespół:
+              </label>
+              {isTeamsLoading ? (
+                <p className={styles.selectorLoadingText}>Ładowanie...</p>
+              ) : (
+                <TeamsSelector
+                  selectedTeam={selectedTeam}
+                  onChange={handleProfileTeamChange}
+                  teamsCatalog={teams ?? []}
+                  userTeamAccess={teamsSelectorUserAccess}
+                  className={styles.compactTeamSelectorHeader}
+                  showLabel={false}
+                  isExpanded={isTeamsSelectorExpanded}
+                  onToggle={() => setIsTeamsSelectorExpanded((open) => !open)}
+                />
+              )}
             </div>
             <div className={styles.selectorGroup}>
               <label htmlFor="player-select" className={styles.selectorLabel}>Zawodnik:</label>
@@ -4656,7 +4671,7 @@ export default function PlayerDetailsPage() {
                                       opponent: xgStats.relevantMatchesCount > 1 ? "Różni" : "Przeciwnik",
                                     }
                               }
-                              allTeams={teams || []}
+                              allTeams={availableTeams}
                               hideTeamLogos
                               hideToggleButton
                             />
@@ -4902,7 +4917,7 @@ export default function PlayerDetailsPage() {
                                       opponent: pkEntriesStats.relevantMatchesCount > 1 ? "Różni" : "Przeciwnik",
                                     }
                               }
-                              allTeams={teams || []}
+                              allTeams={availableTeams}
                             />
 
                             {/* Filtry pod boiskiem */}

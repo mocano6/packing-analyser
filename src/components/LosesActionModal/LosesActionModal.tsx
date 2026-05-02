@@ -1091,7 +1091,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                 </button>
               </div>
               
-              {/* Grupa przycisków kontaktów i reakcji 5s */}
+              {/* Przyciski P0–P3 oraz reakcje 5s */}
               <div className={styles.pSectionContainer}>
                 {/* Sekcja z przyciskami P0-P3 - przestrzeń w której piłka została stracona */}
                 <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger} ${styles.tooltipRight}`} data-tooltip="Przestrzeń w której piłka została stracona">
@@ -1140,44 +1140,49 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                     P3
                   </button>
                 </div>
-                <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Liczba kontaktów z piłką">
-                  <button
-                    className={`${styles.actionTypeButton} ${
-                      isContact1Active ? styles.active : ""
-                    }`}
-                    onClick={onContact1Toggle}
-                    title="Aktywuj/Dezaktywuj 1T"
-                    aria-pressed={isContact1Active}
-                    type="button"
-                  >
-                    1T
-                  </button>
-                  <button
-                    className={`${styles.actionTypeButton} ${
-                      isContact2Active ? styles.active : ""
-                    }`}
-                    onClick={onContact2Toggle}
-                    title="Aktywuj/Dezaktywuj 2T"
-                    aria-pressed={isContact2Active}
-                    type="button"
-                  >
-                    2T
-                  </button>
-                  <button
-                    className={`${styles.actionTypeButton} ${
-                      isContact3PlusActive ? styles.active : ""
-                    }`}
-                    onClick={onContact3PlusToggle}
-                    title="Aktywuj/Dezaktywuj 3T+"
-                    aria-pressed={isContact3PlusActive}
-                    type="button"
-                  >
-                    3T+
-                  </button>
+                <div className={styles.contactControlsHidden} aria-hidden="true">
+                  <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger}`} data-tooltip="Liczba kontaktów z piłką">
+                    <button
+                      className={`${styles.actionTypeButton} ${
+                        isContact1Active ? styles.active : ""
+                      }`}
+                      onClick={onContact1Toggle}
+                      title="Aktywuj/Dezaktywuj 1T"
+                      aria-pressed={isContact1Active}
+                      tabIndex={-1}
+                      type="button"
+                    >
+                      1T
+                    </button>
+                    <button
+                      className={`${styles.actionTypeButton} ${
+                        isContact2Active ? styles.active : ""
+                      }`}
+                      onClick={onContact2Toggle}
+                      title="Aktywuj/Dezaktywuj 2T"
+                      aria-pressed={isContact2Active}
+                      tabIndex={-1}
+                      type="button"
+                    >
+                      2T
+                    </button>
+                    <button
+                      className={`${styles.actionTypeButton} ${
+                        isContact3PlusActive ? styles.active : ""
+                      }`}
+                      onClick={onContact3PlusToggle}
+                      title="Aktywuj/Dezaktywuj 3T+"
+                      aria-pressed={isContact3PlusActive}
+                      tabIndex={-1}
+                      type="button"
+                    >
+                      3T+
+                    </button>
+                  </div>
                 </div>
-              <div
-                className={`${styles.actionTypeSelector} ${styles.actionTypeSelectorSecond}`}
-              >
+                <div
+                  className={`${styles.actionTypeSelector} ${styles.actionTypeSelectorSecond}`}
+                >
                 <button
                   className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${styles.tooltipRight} ${
                     isReaction5sActive ? styles.active : ""

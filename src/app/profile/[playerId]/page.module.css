@@ -2227,14 +2227,14 @@
 .playerSelectorContainer {
   margin-top: 24px;
   margin-bottom: 16px;
-  padding: 20px;
+  padding: 16px 20px;
   background: white;
   border-radius: 12px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
+  display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
+  gap: 12px 16px;
 }
 
 .selectorGroup {
@@ -2242,6 +2242,7 @@
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  flex: 0 1 auto;
 }
 
 .selectorLabel {
@@ -2283,6 +2284,51 @@
   outline: none;
   border-color: #2196f3;
   box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+/* TeamsSelector na profilu — jak statystyki zespołu */
+.teamSelectorGroup {
+  flex: 0 0 auto;
+  width: 220px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.teamSelectorCompactLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.compactTeamSelectorHeader {
+  width: 100%;
+  min-width: 0;
+  justify-content: space-between;
+  text-align: left;
+  box-sizing: border-box;
+  background-image: none !important;
+  padding-right: 12px !important;
+  font-size: 14px;
+  font-weight: 400;
+  color: #1f2937;
+}
+
+.compactTeamSelectorHeader span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 400;
+  color: #1f2937;
+}
+
+.selectorLoadingText {
+  padding: 8px 10px;
+  color: #9ca3af;
+  font-size: 13px;
+  margin: 0;
 }
 
 .playerSelectButton {
@@ -2767,7 +2813,12 @@
 @media (max-width: 600px) {
   .playerSelectorContainer {
     flex-direction: column;
-    gap: 16px;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .teamSelectorGroup {
+    width: 100%;
   }
   
   .selectorGroup {

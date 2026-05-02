@@ -3790,7 +3790,7 @@ export default function StatystykiZespoluPage() {
             <TeamsSelector
               selectedTeam={selectedTeam}
               onChange={setSelectedTeam}
-              teamsCatalog={teams}
+              teamsCatalog={availableTeams}
               userTeamAccess={{ isAdmin, allowedTeamIds: userTeams ?? [] }}
               className={styles.compactTeamSelectorHeader}
               showLabel={false}

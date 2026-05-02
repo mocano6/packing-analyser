@@ -680,7 +680,6 @@ const ActionSection = memo(function ActionSection({
             const newValue = !isContact1Active;
             setIsContact1Active(newValue);
             if (newValue) {
-              // Jeśli aktywujemy 1T, wyłączamy pozostałe
               setIsContact2Active(false);
               setIsContact3PlusActive(false);
             }
@@ -690,7 +689,6 @@ const ActionSection = memo(function ActionSection({
             const newValue = !isContact2Active;
             setIsContact2Active(newValue);
             if (newValue) {
-              // Jeśli aktywujemy 2T, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact3PlusActive(false);
             }
@@ -700,7 +698,6 @@ const ActionSection = memo(function ActionSection({
             const newValue = !isContact3PlusActive;
             setIsContact3PlusActive(newValue);
             if (newValue) {
-              // Jeśli aktywujemy 3T+, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact2Active(false);
             }
@@ -822,7 +819,6 @@ const ActionSection = memo(function ActionSection({
             const newValue = !isContact1Active;
             setIsContact1Active(newValue);
             if (newValue) {
-              // Jeśli aktywujemy 1T, wyłączamy pozostałe
               setIsContact2Active(false);
               setIsContact3PlusActive(false);
             }
@@ -832,7 +828,6 @@ const ActionSection = memo(function ActionSection({
             const newValue = !isContact2Active;
             setIsContact2Active(newValue);
             if (newValue) {
-              // Jeśli aktywujemy 2T, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact3PlusActive(false);
             }
@@ -842,7 +837,6 @@ const ActionSection = memo(function ActionSection({
             const newValue = !isContact3PlusActive;
             setIsContact3PlusActive(newValue);
             if (newValue) {
-              // Jeśli aktywujemy 3T+, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact2Active(false);
             }
@@ -970,7 +964,6 @@ const ActionSection = memo(function ActionSection({
             const newValue = !isContact1Active;
             setIsContact1Active(newValue);
             if (newValue) {
-              // Jeśli aktywujemy 1T, wyłączamy pozostałe
               setIsContact2Active(false);
               setIsContact3PlusActive(false);
             }
@@ -980,7 +973,6 @@ const ActionSection = memo(function ActionSection({
             const newValue = !isContact2Active;
             setIsContact2Active(newValue);
             if (newValue) {
-              // Jeśli aktywujemy 2T, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact3PlusActive(false);
             }
@@ -990,7 +982,6 @@ const ActionSection = memo(function ActionSection({
             const newValue = !isContact3PlusActive;
             setIsContact3PlusActive(newValue);
             if (newValue) {
-              // Jeśli aktywujemy 3T+, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact2Active(false);
             }
@@ -1154,7 +1145,6 @@ const ActionSection = memo(function ActionSection({
             const newValue = !isContact1Active;
             setIsContact1Active(newValue);
             if (newValue) {
-              // Jeśli aktywujemy 1T, wyłączamy pozostałe
               setIsContact2Active(false);
               setIsContact3PlusActive(false);
             }
@@ -1164,7 +1154,6 @@ const ActionSection = memo(function ActionSection({
             const newValue = !isContact2Active;
             setIsContact2Active(newValue);
             if (newValue) {
-              // Jeśli aktywujemy 2T, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact3PlusActive(false);
             }
@@ -1174,7 +1163,6 @@ const ActionSection = memo(function ActionSection({
             const newValue = !isContact3PlusActive;
             setIsContact3PlusActive(newValue);
             if (newValue) {
-              // Jeśli aktywujemy 3T+, wyłączamy pozostałe
               setIsContact1Active(false);
               setIsContact2Active(false);
             }
