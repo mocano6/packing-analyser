@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Skrypt do aktualizacji formatu danych stref w bazie danych
  * Zamienia format string ("A1") na format JSON (["A", 1])

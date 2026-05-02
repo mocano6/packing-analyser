@@ -23,12 +23,12 @@ async function mergeQueryIntoMap(
 ): Promise<void> {
   try {
     const serverSnap = await getDocsFromServer(q);
-    serverSnap.docs.forEach((d) => byId.set(d.id, d));
+    serverSnap.docs.forEach((d) => byId.set(d.id, d as QueryDocumentSnapshot<DocumentData>));
   } catch (err) {
     console.warn(`[lista-zawodnikow] getDocsFromServer(${label}) — fallback do cache:`, err);
     try {
       const snap = await getDocs(q);
-      snap.docs.forEach((d) => byId.set(d.id, d));
+      snap.docs.forEach((d) => byId.set(d.id, d as QueryDocumentSnapshot<DocumentData>));
     } catch (e2) {
       console.warn(`[lista-zawodnikow] getDocs(${label})`, e2);
     }

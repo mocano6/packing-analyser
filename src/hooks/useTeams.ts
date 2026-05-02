@@ -92,7 +92,6 @@ export function useTeams() {
       
       invalidateCache(CACHE_KEYS.TEAMS_LIST);
       setTeams(prev => [...prev, { id: teamRef.id, name }]);
-      clearTeamsCache();
       return true;
     } catch (err) {
       console.error("Error adding team:", err);
@@ -110,7 +109,6 @@ export function useTeams() {
       setTeams(prev => prev.map(team => 
         team.id === id ? { ...team, name } : team
       ));
-      clearTeamsCache();
       return true;
     } catch (err) {
       console.error("Error updating team:", err);
@@ -125,7 +123,6 @@ export function useTeams() {
       invalidateCache(CACHE_KEYS.TEAMS_LIST);
       // Usunięcie zespołu lokalnie
       setTeams(prev => prev.filter(team => team.id !== id));
-      clearTeamsCache();
       return true;
     } catch (err) {
       console.error("Error deleting team:", err);

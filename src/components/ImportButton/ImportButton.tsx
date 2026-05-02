@@ -75,7 +75,7 @@ function cleanActionForFirestore(action: Action): Action {
 
 function cleanPlayerPayload(player: Player, teams: string[]): Record<string, unknown> {
   const base = removeUndefinedFields({ ...player, teams } as unknown as object);
-  return base;
+  return base as Record<string, unknown>;
 }
 
 const ImportButton: React.FC<ImportButtonProps> = ({ onImportSuccess, onImportError }) => {

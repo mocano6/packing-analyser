@@ -387,10 +387,14 @@ export function useMatchInfo() {
       const matchesSnapshot = await getDocs(matchesQuery);
       
       if (!matchesSnapshot.empty) {
-              return matchesSnapshot.docs.map(doc => ({
-          matchId: doc.id,
-          ...doc.data()
-        })) as TeamInfo[];
+              return matchesSnapshot.docs.map(doc => {
+          const data = doc.data() as TeamInfo;
+          return {
+            ...data,
+            id: doc.id,
+            matchId: doc.id,
+          } as TeamInfo;
+        });
             } else {
               return [];
             }
@@ -1229,7 +1233,7 @@ export function useMatchInfo() {
       try {
         // Lokalnie: cache + allMatches + matchInfo
         const updatedCacheData = localCacheRef.current.data.map((m: any) => {
-          if (m?.matchId !== matchId) return m;
+          if (m?.matchId !== matchId && m?.id !== matchId) return m;
           const merged = mergeMatchData((m as any).matchData, matchDataPatch);
           return { ...m, matchData: merged, lastUpdated: new Date().toISOString() };
         });
@@ -1242,13 +1246,13 @@ export function useMatchInfo() {
 
         setAllMatches((prev: any[]) =>
           prev.map((m: any) => {
-            if (m?.matchId !== matchId) return m;
+            if (m?.matchId !== matchId && m?.id !== matchId) return m;
             const merged = mergeMatchData(m?.matchData, matchDataPatch);
             return { ...m, matchData: merged, lastUpdated: new Date().toISOString() };
           })
         );
 
-        if ((matchInfo as any)?.matchId === matchId) {
+        if ((matchInfo as any)?.matchId === matchId || (matchInfo as any)?.id === matchId) {
           setMatchInfo((prev: any) => {
             if (!prev) return prev;
             const merged = mergeMatchData(prev?.matchData, matchDataPatch);
@@ -1258,13 +1262,18 @@ export function useMatchInfo() {
 
         // Firebase: tylko jeśli ktoś świadomie zatwierdzi zapis
         const shouldPersist = Boolean(opts?.persistToFirebase);
-        if (shouldPersist && !isOfflineMode) {
+        if (shouldPersist && isOfflineMode) {
+          toast.error("Nie zapisano do Firebase: aplikacja jest w trybie offline.");
+          return false;
+        }
+
+        if (shouldPersist) {
           try {
             const db = getDB();
             const matchRef = doc(db, "matches", matchId);
 
             // Pobierz aktualne matchData z cache (żeby wysłać pełny merged obiekt)
-            const cached = localCacheRef.current.data.find((m: any) => m?.matchId === matchId) as any;
+            const cached = localCacheRef.current.data.find((m: any) => m?.matchId === matchId || m?.id === matchId) as any;
             const merged = mergeMatchData(cached?.matchData, matchDataPatch);
             const cleaned = removeUndefinedValues(merged);
 
@@ -1274,7 +1283,8 @@ export function useMatchInfo() {
             });
           } catch (firebaseError) {
             console.error("❌ Błąd podczas zapisu matchData do Firebase:", firebaseError);
-            // Nie blokujemy pracy — dane są już w cache.
+            toast.error("Nie udało się zapisać danych meczu do Firebase.");
+            return false;
           }
         }
 

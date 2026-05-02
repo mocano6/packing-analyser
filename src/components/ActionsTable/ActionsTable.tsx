@@ -609,7 +609,7 @@ const ActionsTable: React.FC<ActionsTableProps> = ({
 
   // State dla filtra kontrowersyjnego
   const [showOnlyControversial, setShowOnlyControversial] = useState(false);
-  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
+  const playersIndex = useMemo(() => buildPlayersIndex(players ?? []), [players]);
 
   // Funkcja do obsługi kliknięcia na czas wideo
   const handleVideoTimeClick = async (videoTimestamp?: number) => {

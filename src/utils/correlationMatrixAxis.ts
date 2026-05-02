@@ -3,11 +3,11 @@
  */
 export type CorrelationMatrixAxisSide = "outcome" | "my" | "opp" | "neutral";
 
-export type CorrelationAxisHeadStyles = {
-  headAxisOutcome: string;
-  headAxisMy: string;
-  headAxisOpp: string;
-  headAxisNeutral: string;
+export type CorrelationAxisHeadStyles = Record<string, string> & {
+  headAxisOutcome?: string;
+  headAxisMy?: string;
+  headAxisOpp?: string;
+  headAxisNeutral?: string;
 };
 
 export function correlationAxisHeadClass(
@@ -16,13 +16,13 @@ export function correlationAxisHeadClass(
 ): string {
   switch (side) {
     case "outcome":
-      return styles.headAxisOutcome;
+      return styles.headAxisOutcome ?? "";
     case "my":
-      return styles.headAxisMy;
+      return styles.headAxisMy ?? "";
     case "opp":
-      return styles.headAxisOpp;
+      return styles.headAxisOpp ?? "";
     default:
-      return styles.headAxisNeutral;
+      return styles.headAxisNeutral ?? "";
   }
 }
 

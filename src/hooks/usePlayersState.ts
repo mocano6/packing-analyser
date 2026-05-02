@@ -434,7 +434,7 @@ export function usePlayersState() {
           error.message.includes("permission") ||
           error.message.includes("insufficient permissions") ||
           (typeof (error as { code?: string }).code === "string" &&
-            (error as { code: string }).code === "permission-denied")
+            (error as { code?: string }).code === "permission-denied")
         ) {
           errorMessage =
             "Brak uprawnień do usuwania zawodników (sprawdź reguły Firestore lub ustaw FIREBASE_SERVICE_ACCOUNT_KEY na serwerze).";
@@ -767,7 +767,7 @@ export function usePlayersState() {
             error.message.includes('permission') ||
             error.message.includes('insufficient permissions') ||
             (typeof (error as { code?: string }).code === 'string' &&
-              (error as { code: string }).code === 'permission-denied')
+              (error as { code?: string }).code === 'permission-denied')
           ) {
             errorMessage = 'Brak uprawnień do zapisywania zawodników. Sprawdź konfigurację Firebase.';
           } else {

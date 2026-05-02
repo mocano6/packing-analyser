@@ -74,7 +74,7 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
   const getHeatmapColor = useCallback((value: number, maxValue: number): string => {
     if (value <= 0 || maxValue <= 0) {
       const baseXT = getXTValueFromMatrix(0, 0);
-      return getXTColor(baseXT);
+      return getXTColor(baseXT) || '#f8fafc';
     }
     
     const normalizedValue = Math.min(value / maxValue, 1);

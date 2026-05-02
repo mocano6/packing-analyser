@@ -115,7 +115,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
               </Link>
             ) : (
               <>
-                {userRole !== 'coach' && userRole !== 'player' && (
+                {userRole !== 'coach' && (
                   <Link href="/zawodnicy" className={styles.menuItem}>
                     <span className={styles.icon}>👥</span>
                     <span>Statystyki zawodników</span>
@@ -133,7 +133,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
                   <span className={styles.icon}>👤</span>
                   <span>Profil zawodnika</span>
                 </Link>
-                {userRole !== 'player' && (
+                {!isPlayer && (
                   <Link href="/gps" className={styles.menuItem}>
                     <span className={styles.icon}>📍</span>
                     <span>Dane GPS</span>
@@ -182,7 +182,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
           )}
 
           {/* Sekcja Narzędzia - tylko dla admin/user (ukryta dla coach i player) */}
-          {!isPlayer && userRole !== 'coach' && userRole !== 'player' && (
+          {!isPlayer && userRole !== 'coach' && (
             <div className={styles.section}>
               <h4>🔧 Narzędzia</h4>
               <button 

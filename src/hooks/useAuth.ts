@@ -188,7 +188,7 @@ export function useAuth(): UseAuthReturnType {
       if (shouldWrite) {
         lastLoginWriteAt.set(uid, now);
         try {
-          const patch: Record<string, unknown> = { lastLogin: serverTimestamp() };
+          const patch: Record<string, any> = { lastLogin: serverTimestamp() };
           if (needsEmailUpdate && userEmail) patch.email = userEmail;
           await updateDoc(userRef, patch);
         } catch (error: unknown) {

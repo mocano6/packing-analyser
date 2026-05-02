@@ -2,9 +2,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { TeamInfo } from "@/types";
+import { PossessionSegment, TeamInfo } from "@/types";
 import { TEAMS } from "@/constants/teams";
 import styles from "./MatchDataModal.module.css";
+
+type MatchDataFormData = NonNullable<TeamInfo['matchData']>;
+type PossessionSegmentType = PossessionSegment["type"];
 
 interface MatchDataModalProps {
   isOpen: boolean;
@@ -62,6 +65,33 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
     return totalSeconds / 60;
   };
 
+  const formatSeconds = (seconds: number): string => {
+    const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+    const totalSeconds = Math.round(safe);
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const buildPossessionSegmentStats = (segments: PossessionSegment[]) => {
+    const summarize = (type: PossessionSegmentType) => {
+      const rows = segments.filter((segment) => segment.type === type);
+      const total = rows.reduce((sum, segment) => sum + Number(segment.durationSec || 0), 0);
+      return {
+        count: rows.length,
+        total,
+        avg: rows.length > 0 ? total / rows.length : 0,
+      };
+    };
+
+    return {
+      totalCount: segments.length,
+      team: summarize("team"),
+      opponent: summarize("opponent"),
+      dead: summarize("dead"),
+    };
+  };
+
   // Funkcja do pobierania nazwy zespołu
   const getTeamName = (teamId: string) => {
     const team = allAvailableTeams.find(t => t.id === teamId);
@@ -70,7 +100,7 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
     return defaultTeam ? defaultTeam.name : teamId;
   };
 
-  const [formData, setFormData] = useState<TeamInfo['matchData']>({
+  const [formData, setFormData] = useState<MatchDataFormData>({
     possession: {
       teamFirstHalf: undefined,
       opponentFirstHalf: undefined,
@@ -329,7 +359,13 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
     setIsSaving(true);
 
     try {
-      const result = onSave(formData);
+      const matchDataForSave: TeamInfo["matchData"] = {
+        ...formData,
+        ...(Array.isArray(currentMatch?.matchData?.possessionSegments)
+          ? { possessionSegments: currentMatch.matchData.possessionSegments }
+          : {}),
+      };
+      const result = onSave(matchDataForSave);
       
       // Jeśli onSave zwraca Promise, czekamy na jego zakończenie
       if (result instanceof Promise) {
@@ -349,12 +385,69 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
     }
   };
 
+  const handleResetPossession = async () => {
+    const segmentsCount = currentMatch?.matchData?.possessionSegments?.length ?? 0;
+    const ok = window.confirm(
+      `Zresetować całe posiadanie dla tego meczu? Usunięte zostaną zapisane czasy i ${segmentsCount} segmentów akcji. Tej operacji nie cofniemy automatycznie.`
+    );
+    if (!ok) return;
+
+    setError(null);
+    setIsSaving(true);
+
+    const resetMatchData: TeamInfo["matchData"] = {
+      ...(currentMatch?.matchData || {}),
+      possession: {
+        teamFirstHalf: 0,
+        opponentFirstHalf: 0,
+        teamSecondHalf: 0,
+        opponentSecondHalf: 0,
+        deadFirstHalf: 0,
+        deadSecondHalf: 0,
+      },
+      possessionSegments: [],
+    };
+
+    try {
+      const result = onSave(resetMatchData);
+      if (result instanceof Promise) {
+        await result;
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        possession: resetMatchData.possession,
+        possessionSegments: [],
+      }));
+      setPossessionTimeInputs({
+        teamFirstHalf: "00:00",
+        opponentFirstHalf: "00:00",
+        teamSecondHalf: "00:00",
+        opponentSecondHalf: "00:00",
+      });
+      setDeadTimeInputs({
+        deadFirstHalf: "00:00",
+        deadSecondHalf: "00:00",
+      });
+    } catch (error) {
+      console.error("Błąd podczas resetowania posiadania:", error);
+      const errorMessage = error instanceof Error
+        ? error.message
+        : "Wystąpił błąd podczas resetowania posiadania. Spróbuj ponownie.";
+      setError(errorMessage);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (!isOpen) {
     return null;
   }
 
   const teamName = currentMatch?.team ? getTeamName(currentMatch.team) : 'Nasz zespół';
   const opponentName = currentMatch?.opponent || 'Przeciwnik';
+  const possessionSegments = currentMatch?.matchData?.possessionSegments || [];
+  const possessionSegmentStats = buildPossessionSegmentStats(possessionSegments);
 
   return (
     <div className={styles.modal} onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="match-data-modal-title">
@@ -447,6 +540,47 @@ const MatchDataModal: React.FC<MatchDataModalProps> = ({
                 aria-disabled="true"
                 title="Czas martwy nie jest przypisany do zespołu"
               />
+            </div>
+
+            <div className={styles.possessionSegmentsSummary}>
+              <div className={styles.possessionSegmentsHeader}>
+                <div>
+                  <h3 className={styles.possessionSegmentsTitle}>Zapisane akcje posiadania</h3>
+                  <p className={styles.possessionSegmentsLead}>
+                    Te segmenty zostaną wyczyszczone przy resecie całego posiadania.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className={styles.resetPossessionButton}
+                  onClick={handleResetPossession}
+                  disabled={isSaving}
+                >
+                  Reset posiadania
+                </button>
+              </div>
+              <div className={styles.possessionSegmentsGrid}>
+                <div className={styles.possessionSegmentCard}>
+                  <span className={styles.possessionSegmentLabel}>{teamName}</span>
+                  <strong>{possessionSegmentStats.team.count} akcji</strong>
+                  <span>Śr. {formatSeconds(possessionSegmentStats.team.avg)}</span>
+                </div>
+                <div className={styles.possessionSegmentCard}>
+                  <span className={styles.possessionSegmentLabel}>{opponentName}</span>
+                  <strong>{possessionSegmentStats.opponent.count} akcji</strong>
+                  <span>Śr. {formatSeconds(possessionSegmentStats.opponent.avg)}</span>
+                </div>
+                <div className={styles.possessionSegmentCard}>
+                  <span className={styles.possessionSegmentLabel}>Czas martwy</span>
+                  <strong>{possessionSegmentStats.dead.count} przerw</strong>
+                  <span>Śr. {formatSeconds(possessionSegmentStats.dead.avg)}</span>
+                </div>
+                <div className={styles.possessionSegmentCard}>
+                  <span className={styles.possessionSegmentLabel}>Razem</span>
+                  <strong>{possessionSegmentStats.totalCount} segmentów</strong>
+                  <span>W 1. i 2. połowie</span>
+                </div>
+              </div>
             </div>
 
             {/* Liczba podań celnych na swojej połowie */}

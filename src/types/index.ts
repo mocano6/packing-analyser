@@ -5,6 +5,7 @@ export type Zone = number;
 
 export interface Player {
   id: string;
+  teamId?: string; // Legacy / import compatibility; canonical assignment is `teams`.
   firstName: string;
   lastName: string;
   name?: string; // Zachowane dla kompatybilności wstecznej - będzie wypełniane automatycznie
@@ -66,12 +67,16 @@ export interface Action {
   minute: number;
   fromZone?: string; // Opcjonalne - dla regain używamy regainAttackZone/regainDefenseZone
   toZone?: string; // Opcjonalne - dla regain używamy regainAttackZone/regainDefenseZone
-  regainAttackZone?: string; // Strefa ataku dla regain (opposite zone)
-  regainDefenseZone?: string; // Strefa obrony dla regain (gdzie nastąpił regain)
   actionType: string;
   videoTimestamp?: number; // Czas w sekundach z YouTube playera (po korekcie -10s)
   videoTimestampRaw?: number; // Surowy czas w sekundach z playera (bez korekty)
   possessionTeamId?: string | null; // ID zespołu posiadającego piłkę w czasie videoTimestampRaw (null = piłka niczyja)
+  playerId?: string; // Legacy shot-like action payloads
+  shot?: boolean; // Legacy shot-like action payloads
+  xG?: number; // Legacy shot-like action payloads
+  x?: number; // Legacy shot-like action payloads
+  y?: number; // Legacy shot-like action payloads
+  teamContext?: "attack" | "defense"; // Legacy shot-like action payloads
   // Dodatkowe pola z ActionsPacking
   senderId: string;
   /** @deprecated PII - nie zapisywać poza players */
@@ -230,6 +235,10 @@ export interface Shot {
   previousShotId?: string; // ID poprzedniego strzału (dla dobitki) - xG jest obliczane jako xG * (1 - xG_previous/100)
   isFromPK?: boolean; // Czy strzał był z pola karnego
   isOwnGoal?: boolean; // Bramka samobójcza (w ataku lub obronie)
+  isBlocked?: boolean; // Legacy/reporting compatibility
+  isOnTarget?: boolean; // Legacy/reporting compatibility
+  xGOT?: number; // Legacy/reporting compatibility
+  playersOnLine?: number; // Legacy/reporting compatibility
   /** Model przy zapisie — aplikacja ustawia zawsze torvaney; classic może wystąpić w starych danych. */
   xgModelVersion?: "classic" | "torvaney";
 }
@@ -297,12 +306,15 @@ export interface PossessionSegment {
 
 export interface TeamInfo {
   matchId?: string;
+  teamId?: string; // Legacy import/export compatibility; canonical field is `team`.
   team: string;
   opponent: string;
   opponentLogo?: string; // URL lub base64 grafiki przeciwnika
   isHome: boolean;
   competition: string;
   date: string;
+  time?: string;
+  lastUpdated?: string;
   matchType?: 'liga' | 'puchar' | 'towarzyski'; // Typ meczu
   videoUrl?: string; // URL wideo z YouTube dla tego meczu
   videoStoragePath?: string; // Ścieżka do wideo w Firebase Storage

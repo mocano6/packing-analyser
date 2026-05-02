@@ -493,7 +493,18 @@ export default function PackingChart({
         .map(([id, data]) => ({
           id,
           name: data.name,
-          value: data.actualMinutes // Pokaż minuty jako wartość
+          value: data.actualMinutes, // Pokaż minuty jako wartość
+          totalPacking: 0,
+          totalPxT: 0,
+          totalXT: 0,
+          totalDribbling: 0,
+          totalDribblingPxT: 0,
+          totalDribblingXT: 0,
+          actualMinutes: data.actualMinutes,
+          passCount: 0,
+          senderPassCount: 0,
+          receiverPassCount: 0,
+          dribblingCount: 0,
         }))
         .slice(0, 10); // Tylko top 10
         

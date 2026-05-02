@@ -17,7 +17,7 @@ export default function GPSPage() {
     }
     return "";
   });
-  const { players } = usePlayersState(selectedTeam);
+  const { players } = usePlayersState();
   const { teams: allAvailableTeams } = useTeams();
   const { isAdmin, userRole, userTeams, linkedPlayerId, logout } = useAuth();
 

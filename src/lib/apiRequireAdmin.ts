@@ -31,7 +31,7 @@ export async function requireAdminApi(request: NextRequest): Promise<AdminApiOk 
     }
 
     const { auth, db } = await getFirebaseAdminApp();
-    let decoded: { uid: string };
+    let decoded: { uid: string; admin?: boolean };
     try {
       decoded = await auth.verifyIdToken(idToken);
     } catch {

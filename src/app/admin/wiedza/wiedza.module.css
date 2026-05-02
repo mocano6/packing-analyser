@@ -406,6 +406,71 @@
   line-height: 1.5;
 }
 
+.possessionGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+  gap: 16px;
+  margin: 20px 0 8px;
+}
+
+.possessionChartCard {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.possessionBreakdownList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.possessionBreakdownRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+  color: #475569;
+}
+
+.possessionBreakdownRow:last-child {
+  border-bottom: 0;
+}
+
+.possessionBreakdownRow strong {
+  color: #0f172a;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.possessionTableSub {
+  display: inline-block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+@media (max-width: 900px) {
+  .possessionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .possessionBreakdownRow {
+    flex-direction: column;
+  }
+
+  .possessionBreakdownRow strong {
+    text-align: left;
+    white-space: normal;
+  }
+}
+
 .heatmapSection {
   margin-bottom: 24px;
   padding-bottom: 20px;

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, doc, setDoc, getDoc, writeBatch, query, where } from "firebase/firestore";
 import * as fs from 'fs';

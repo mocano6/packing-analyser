@@ -30,7 +30,7 @@ import ImportButton from "@/components/ImportButton/ImportButton";
 import { initializeTeams, checkTeamsCollection } from "@/utils/initializeTeams";
 import { useAuth } from "@/hooks/useAuth";
 import toast from 'react-hot-toast';
-import { doc, getDoc } from "@/lib/firestoreWithMetrics";
+import { collection, doc, getDoc, getDocs, query, updateDoc, where } from "@/lib/firestoreWithMetrics";
 import { getDB } from "@/lib/firebase";
 import {
   commitCrossMatchArrayFieldPairUpdate,
@@ -948,6 +948,50 @@ export default function Page() {
     return `${mm.toString().padStart(2, "0")}:${ss.toString().padStart(2, "0")}`;
   };
 
+  const resolvePossessionMatchDocument = async (preferredId: string): Promise<{ id: string; data: TeamInfo | null }> => {
+    const db = getDB();
+    const ids = [
+      preferredId,
+      String((matchInfo as any)?.id || ""),
+      String(matchInfo?.matchId || ""),
+    ].filter(Boolean);
+
+    const uniqueIds = [...new Set(ids)];
+    const directMatches: Array<{ id: string; data: TeamInfo }> = [];
+
+    for (const id of uniqueIds) {
+      const snap = await getDoc(doc(db, "matches", id));
+      if (!snap.exists()) continue;
+      const data = snap.data() as TeamInfo;
+      directMatches.push({ id: snap.id, data });
+      if (
+        data.team === matchInfo?.team &&
+        data.date === matchInfo?.date &&
+        (!matchInfo?.opponent || data.opponent === matchInfo.opponent)
+      ) {
+        return { id: snap.id, data };
+      }
+    }
+
+    if (matchInfo?.team && matchInfo?.date) {
+      const q = query(
+        collection(db, "matches"),
+        where("team", "==", matchInfo.team),
+        where("date", "==", matchInfo.date)
+      );
+      const snapshot = await getDocs(q);
+      const candidates = snapshot.docs.map((snap) => ({ id: snap.id, data: snap.data() as TeamInfo }));
+      const exact =
+        candidates.find(({ data }) => data.opponent === matchInfo.opponent && data.competition === matchInfo.competition) ||
+        candidates.find(({ data }) => data.opponent === matchInfo.opponent) ||
+        candidates[0];
+
+      if (exact) return exact;
+    }
+
+    return directMatches[0] ?? { id: preferredId, data: null };
+  };
+
   const [possessionSec, setPossessionSec] = useState<PossessionCountersSec>(createEmptyPossessionCounters);
   const possessionBaseSecRef = useRef<PossessionCountersSec>(createEmptyPossessionCounters());
   const [possessionDraftSegments, setPossessionDraftSegments] = useState<PossessionSegment[]>([]);
@@ -1372,7 +1416,7 @@ export default function Page() {
   }, [possessionSec, possessionDraftSegments, isPossessionDraftDirty, matchInfo?.matchId]);
 
   const commitPossessionToFirebase = async () => {
-    const matchId = matchInfo?.matchId;
+    const matchId = String((matchInfo as any)?.id || matchInfo?.matchId || "");
     if (!matchId) return;
     setIsPossessionSaving(true);
     try {
@@ -1392,8 +1436,12 @@ export default function Page() {
         }
       }
 
-      const existing = (matchInfo as any)?.matchData?.possession || {};
-      const existingSegments = sanitizePossessionSegments((matchInfo as any)?.matchData?.possessionSegments);
+      const resolvedMatch = await resolvePossessionMatchDocument(matchId);
+      const serverMatchData = resolvedMatch.data?.matchData;
+      const existing = serverMatchData?.possession || (matchInfo as any)?.matchData?.possession || {};
+      const existingSegments = sanitizePossessionSegments(
+        serverMatchData?.possessionSegments ?? (matchInfo as any)?.matchData?.possessionSegments
+      );
       const mergedSegments = upsertPossessionSegments(existingSegments, draftSegments);
       const countersForSave =
         existingSegments.length > 0
@@ -1412,7 +1460,18 @@ export default function Page() {
         },
         possessionSegments: mergedSegments,
       };
-      await handleUpdateMatchData(matchId, patch, { persistToFirebase: true });
+      if (mergedSegments.length === 0) {
+        toast.error("Brak segmentów posiadania do zapisania. Odtwórz fragment wideo i oznacz Z/X/C.");
+        return;
+      }
+
+      const db = getDB();
+      await updateDoc(doc(db, "matches", resolvedMatch.id), {
+        "matchData.possession": patch.possession,
+        "matchData.possessionSegments": mergedSegments,
+        lastUpdated: new Date().toISOString(),
+      } as any);
+      await handleUpdateMatchData(matchId, patch, { persistToFirebase: false });
       possessionBaseSecRef.current = countersForSave;
       setPossessionSec(countersForSave);
       setPossessionDraftSegments([]);
@@ -1422,6 +1481,10 @@ export default function Page() {
         localStorage.removeItem(`possession_draft_sec_${matchId}`);
         localStorage.removeItem(`possession_draft_segments_${matchId}`);
       }
+      toast.success(`Zapisano ${mergedSegments.length} segmentów posiadania do Firebase (${resolvedMatch.id}).`);
+    } catch (error) {
+      console.error("Nie zapisano segmentów posiadania do Firebase:", error);
+      toast.error("Nie zapisano segmentów posiadania do Firebase. Lokalny draft zostaje zachowany.");
     } finally {
       setIsPossessionSaving(false);
     }
@@ -4001,6 +4064,9 @@ export default function Page() {
               .reverse()
               .find((segment) => segment.mode === possessionMode && segment.half === (is2 ? 2 : 1))
               ?.durationSec ?? 0;
+          const hasSegmentsToPersist =
+            isPossessionDraftDirty ||
+            sanitizePossessionSegments((matchInfo as any)?.matchData?.possessionSegments).length > 0;
 
           return (
             <>
@@ -4072,8 +4138,8 @@ export default function Page() {
               <button
                 type="button"
                 className={styles.videoPossessionJumpButton}
-                disabled={!isPossessionDraftDirty || isPossessionSaving}
-                aria-disabled={!isPossessionDraftDirty || isPossessionSaving}
+                disabled={!hasSegmentsToPersist || isPossessionSaving}
+                aria-disabled={!hasSegmentsToPersist || isPossessionSaving}
                 title="Zatwierdź i zapisz posiadanie do Firebase"
                 onClick={commitPossessionToFirebase}
               >

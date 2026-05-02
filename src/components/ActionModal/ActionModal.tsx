@@ -61,6 +61,7 @@ interface ActionModalProps {
   onReset: () => void;
   onResetPoints: () => void;
   editingAction?: Action | null;
+  allTeams?: { id: string; name: string }[];
   allMatches?: TeamInfo[];
   selectedMatchId?: string | null;
   onMatchSelect?: (matchId: string) => void;

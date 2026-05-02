@@ -205,8 +205,8 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
           const words = fullName.trim().split(/\s+/);
           return words[words.length - 1].toLowerCase();
         };
-        const lastNameA = getLastName(a.name);
-        const lastNameB = getLastName(b.name);
+        const lastNameA = getLastName(a.name || `${a.firstName} ${a.lastName}`);
+        const lastNameB = getLastName(b.name || `${b.firstName} ${b.lastName}`);
         return lastNameA.localeCompare(lastNameB, 'pl', { sensitivity: 'base' });
       });
     });

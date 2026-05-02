@@ -991,7 +991,7 @@ export default function TrendyPage() {
                       <span className={`${styles.kpiMeta} ${meetsTarget ? styles.good : styles.bad}`}>
                         {formatKpiValue(latestValue, kpi.unit)} ({delta >= 0 ? "+" : ""}
                         {formatKpiValue(delta, kpi.unit)}) — KPI w zakresie w {completedCount}/{data.length} meczach (
-                        {completedPct.toFixed(0)}%)
+                        {(completedPct ?? 0).toFixed(0)}%)
                       </span>
                     ) : (kpi.id === "regains_opp_half" ||
                         kpi.id === "loses_pm_area" ||

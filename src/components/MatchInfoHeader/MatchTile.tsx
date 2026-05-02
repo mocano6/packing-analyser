@@ -49,6 +49,7 @@ const MatchTile = memo(function MatchTile({
   // Obsługa usuwania
   const handleDelete = useCallback((e: React.MouseEvent) => {
     e.stopPropagation(); // Zatrzymaj propagację, aby nie wybierać meczu
+    if (!match.matchId) return;
     if (window.confirm(`Czy na pewno chcesz usunąć mecz ${match.team} vs ${match.opponent}?`)) {
       onDelete(match.matchId);
     }

@@ -4,6 +4,8 @@ import React, { useState, useMemo } from "react";
 import { PKEntry, Player } from "@/types";
 import { buildPlayersIndex, getPlayerLabel, PlayersIndex } from "@/utils/playerUtils";
 import { useAuth } from "@/hooks/useAuth";
+import type { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
+import type { CustomVideoPlayerRef } from "@/components/CustomVideoPlayer/CustomVideoPlayer";
 import styles from "./PKEntriesTable.module.css";
 import sharedStyles from "@/styles/sharedTableStyles.module.css";
 

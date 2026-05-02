@@ -2,10 +2,10 @@
 
 import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { getDB } from '@/lib/firebase';
+import { collection, getDocs, getDocsFromServer, query, where } from 'firebase/firestore';
 import { useTeams } from '@/hooks/useTeams';
-import { Player, TeamInfo } from '@/types';
+import { Player, PossessionSegment, TeamInfo } from '@/types';
 import { usePlayersState } from '@/hooks/usePlayersState';
 import WiedzaGoalsXgWeights from '@/components/WiedzaGoalsXgWeights/WiedzaGoalsXgWeights';
 import {
@@ -86,6 +86,94 @@ const WIEDZA_TEAM_BAR_COLORS = [
 type WindowType = 5 | 8 | 15 | 20;
 type MetricType = 'pxt' | 'xg' | 'pk' | 'loses' | 'xtDelta' | 'packPts';
 type GroupingType = 'partners' | 'opponents' | 'diff';
+type PossessionOwnerType = PossessionSegment['type'];
+
+type WiedzaPossessionRow = PossessionSegment & {
+  matchId: string;
+  teamId: string;
+  teamName: string;
+  opponentName: string;
+  date: string;
+  competition: string;
+  matchLabel: string;
+  ownerLabel: string;
+  xg: number;
+  shots: number;
+  pkEntries: number;
+  packingActions: number;
+  packingPoints: number;
+  xtDelta: number;
+  regains: number;
+  loses: number;
+  isTeamActionBeforeLoss: boolean;
+  isOpponentActionBeforeRegain: boolean;
+};
+
+const POSSESSION_OWNER_LABELS: Record<PossessionOwnerType, string> = {
+  team: 'Nasz zespół',
+  opponent: 'Przeciwnik',
+  dead: 'Czas martwy',
+};
+
+const formatPossessionSeconds = (seconds: number): string => {
+  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  const whole = Math.floor(safe);
+  const mm = Math.floor(whole / 60);
+  const ss = whole % 60;
+  const dec = safe < 10 && safe % 1 > 0 ? `.${Math.round((safe % 1) * 10)}` : '';
+  return `${mm}:${ss.toString().padStart(2, '0')}${dec}`;
+};
+
+const getRawVideoTime = (item: { videoTimestampRaw?: number; videoTimestamp?: number }): number => {
+  const raw = Number(item.videoTimestampRaw);
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  const adjusted = Number(item.videoTimestamp);
+  return Number.isFinite(adjusted) && adjusted > 0 ? adjusted : 0;
+};
+
+const isWithinPossessionSegment = (time: number, segment: PossessionSegment): boolean =>
+  Number.isFinite(time) && time >= segment.startSec && time <= segment.endSec;
+
+const getPossessionSegmentsFromMatch = (match: FetchedMatch): PossessionSegment[] => {
+  const nested = match.matchData?.possessionSegments;
+  if (Array.isArray(nested)) return nested;
+
+  const legacyRoot = (match as unknown as { possessionSegments?: unknown }).possessionSegments;
+  return Array.isArray(legacyRoot) ? (legacyRoot as PossessionSegment[]) : [];
+};
+
+const isMatchWithinDateRange = (match: TeamInfo, from: string, to: string): boolean => {
+  if (from && match.date < from) return false;
+  if (to && match.date > to) return false;
+  return true;
+};
+
+const normalizeTeamKey = (value: unknown): string =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const isMatchForSelectedTeams = (
+  match: TeamInfo,
+  teamIds: string[],
+  allTeams: Array<{ id: string; name: string }>,
+): boolean => {
+  if (teamIds.length === 0) return true;
+  const selectedIds = new Set(teamIds);
+  const selectedNames = new Set(
+    allTeams
+      .filter((team) => selectedIds.has(team.id))
+      .flatMap((team) => [normalizeTeamKey(team.id), normalizeTeamKey(team.name)]),
+  );
+  return (
+    selectedIds.has(match.team) ||
+    Boolean(match.teamId && selectedIds.has(match.teamId)) ||
+    selectedNames.has(normalizeTeamKey(match.team)) ||
+    selectedNames.has(normalizeTeamKey(match.teamId))
+  );
+};
 
 export default function WiedzaPage() {
   const { user, isAdmin, userRole, linkedPlayerId, logout } = useAuth();
@@ -139,20 +227,52 @@ export default function WiedzaPage() {
         chunks.push(teamIds.slice(i, i + chunkSize));
       }
       const allFetched: FetchedMatch[] = [];
+      const db = getDB();
       for (const chunk of chunks) {
         const q = query(collection(db, 'matches'), where('team', 'in', chunk));
-        const snapshot = await getDocs(q);
+        let snapshot;
+        try {
+          snapshot = await getDocsFromServer(q);
+        } catch (error) {
+          console.warn('[Wiedza] getDocsFromServer(matches) fallback do cache:', error);
+          snapshot = await getDocs(q);
+        }
         snapshot.forEach((docSnap) => {
           const data = docSnap.data() as TeamInfo;
-          let keep = true;
-          if (from && data.date < from) keep = false;
-          if (to && data.date > to) keep = false;
-          if (keep) {
+          if (isMatchWithinDateRange(data, from, to)) {
             allFetched.push({ ...data, id: docSnap.id, matchId: docSnap.id });
           }
         });
       }
       return allFetched;
+    },
+    [],
+  );
+
+  const fetchPossessionMatchesByFilters = useCallback(
+    async (teamIds: string[], from: string, to: string): Promise<FetchedMatch[]> => {
+      const db = getDB();
+      let snapshot;
+      try {
+        snapshot = await getDocsFromServer(collection(db, 'matches'));
+      } catch (error) {
+        console.warn('[Wiedza] getDocsFromServer(matches possession scan) fallback do cache:', error);
+        snapshot = await getDocs(collection(db, 'matches'));
+      }
+
+      const matchesWithSegments: FetchedMatch[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as TeamInfo;
+        const match = { ...data, id: docSnap.id, matchId: docSnap.id } as FetchedMatch;
+        if (getPossessionSegmentsFromMatch(match).length === 0) return;
+        matchesWithSegments.push(match);
+      });
+
+      const teamFiltered = matchesWithSegments.filter((match) => isMatchForSelectedTeams(match, teamIds, teamsRef.current));
+      const dateFiltered = teamFiltered.filter((match) => isMatchWithinDateRange(match, from, to));
+
+      // W zakładce posiadania ważniejsze jest pokazanie zapisanych segmentów niż pusta próba przez zbyt wąski zakres dat.
+      return dateFiltered.length > 0 ? dateFiltered : teamFiltered;
     },
     [],
   );
@@ -482,6 +602,158 @@ export default function WiedzaPage() {
     return rawResults;
   }, [fetchedMatches, activeWindow, activeTab]);
 
+  // ------------------------------------------------------------------
+  // POSIADANIE — pojedyncze akcje i metryki w ich przedziałach wideo
+  // ------------------------------------------------------------------
+  const possessionRows = useMemo<WiedzaPossessionRow[]>(() => {
+    if (activeTab !== 'possession' || fetchedMatches.length === 0) return [];
+    const teamNameById = new Map(teams.map((team) => [team.id, team.name]));
+
+    return fetchedMatches.flatMap((match) => {
+      const segments = getPossessionSegmentsFromMatch(match);
+      if (segments.length === 0) return [];
+
+      const shots = match.shots ?? [];
+      const pkEntries = match.pkEntries ?? [];
+      const packing = match.actions_packing ?? [];
+      const regains = match.actions_regain ?? [];
+      const loses = match.actions_loses ?? [];
+      const teamName = teamNameById.get(match.team) ?? match.team;
+      const opponentName = match.opponent || 'Przeciwnik';
+      const matchLabel = `${teamName} vs ${opponentName}`;
+
+      return segments.map((segment) => {
+        const ownerLabel =
+          segment.type === 'team'
+            ? teamName
+            : segment.type === 'opponent'
+              ? opponentName
+              : POSSESSION_OWNER_LABELS.dead;
+
+        const eventBelongsToSegmentOwner = (teamContext?: string, teamId?: string | null): boolean => {
+          if (segment.type === 'dead') return true;
+          if (segment.type === 'team') {
+            return teamContext === 'attack' || (!teamContext && (!teamId || teamId === match.team));
+          }
+          return teamContext === 'defense' || Boolean(teamId && teamId !== match.team);
+        };
+
+        const segmentShots = shots.filter((shot) => {
+          const t = getRawVideoTime(shot);
+          return isWithinPossessionSegment(t, segment) && eventBelongsToSegmentOwner(shot.teamContext, shot.teamId);
+        });
+        const segmentPkEntries = pkEntries.filter((entry) => {
+          const t = getRawVideoTime(entry);
+          return isWithinPossessionSegment(t, segment) && eventBelongsToSegmentOwner(entry.teamContext, entry.teamId);
+        });
+        const segmentPacking =
+          segment.type === 'team'
+            ? packing.filter((action) => isWithinPossessionSegment(getRawVideoTime(action), segment))
+            : [];
+        const segmentRegains = regains.filter((action) => isWithinPossessionSegment(getRawVideoTime(action), segment));
+        const segmentLoses = loses.filter((action) => {
+          const t = action.videoTimestampRaw ?? (action.videoTimestamp !== undefined ? action.videoTimestamp + 10 : 0);
+          return isWithinPossessionSegment(t, segment);
+        });
+        const xtDelta = segmentPacking.reduce(
+          (sum, action) => sum + Number(action.xTValueEnd || 0) - Number(action.xTValueStart || 0),
+          0,
+        );
+
+        return {
+          ...segment,
+          matchId: match.matchId ?? match.id,
+          teamId: match.team,
+          teamName,
+          opponentName,
+          date: match.date,
+          competition: match.competition,
+          matchLabel,
+          ownerLabel,
+          xg: segmentShots.reduce((sum, shot) => sum + Number(shot.xG || 0), 0),
+          shots: segmentShots.length,
+          pkEntries: segmentPkEntries.length,
+          packingActions: segmentPacking.length,
+          packingPoints: segmentPacking.reduce((sum, action) => sum + Number(action.packingPoints || 0), 0),
+          xtDelta,
+          regains: segmentRegains.length,
+          loses: segmentLoses.length,
+          isTeamActionBeforeLoss: segment.type === 'team' && segmentLoses.length > 0,
+          isOpponentActionBeforeRegain: segment.type === 'opponent' && segmentRegains.length > 0,
+        };
+      });
+    }).sort((a, b) => b.durationSec - a.durationSec);
+  }, [activeTab, fetchedMatches, teams]);
+
+  const possessionSummary = useMemo(() => {
+    if (possessionRows.length === 0) return null;
+    const rowsByType = (type: PossessionOwnerType) => possessionRows.filter((row) => row.type === type);
+    const summarize = (rows: WiedzaPossessionRow[]) => {
+      const totalDuration = rows.reduce((sum, row) => sum + row.durationSec, 0);
+      const longest = rows.reduce<WiedzaPossessionRow | null>(
+        (best, row) => (!best || row.durationSec > best.durationSec ? row : best),
+        null,
+      );
+      return {
+        count: rows.length,
+        totalDuration,
+        avgDuration: rows.length > 0 ? totalDuration / rows.length : 0,
+        longest,
+      };
+    };
+    const teamRows = rowsByType('team');
+    const opponentRows = rowsByType('opponent');
+    const deadRows = rowsByType('dead');
+    const teamBeforeLoss = teamRows.filter((row) => row.isTeamActionBeforeLoss);
+    const opponentBeforeRegain = opponentRows.filter((row) => row.isOpponentActionBeforeRegain);
+
+    return {
+      totalSegments: possessionRows.length,
+      matchesWithSegments: new Set(possessionRows.map((row) => row.matchId)).size,
+      team: summarize(teamRows),
+      opponent: summarize(opponentRows),
+      dead: summarize(deadRows),
+      teamBeforeLoss: summarize(teamBeforeLoss),
+      opponentBeforeRegain: summarize(opponentBeforeRegain),
+      totalXg: possessionRows.reduce((sum, row) => sum + row.xg, 0),
+      totalPackingPoints: possessionRows.reduce((sum, row) => sum + row.packingPoints, 0),
+    };
+  }, [possessionRows]);
+
+  const possessionFetchDebug = useMemo(() => {
+    const matchesWithSegments = fetchedMatches.filter((match) => getPossessionSegmentsFromMatch(match).length > 0);
+    const totalSegments = matchesWithSegments.reduce(
+      (sum, match) => sum + getPossessionSegmentsFromMatch(match).length,
+      0,
+    );
+    return {
+      fetchedMatches: fetchedMatches.length,
+      matchesWithSegments: matchesWithSegments.length,
+      totalSegments,
+    };
+  }, [fetchedMatches]);
+
+  const possessionBucketRows = useMemo(() => {
+    const buckets = [
+      { key: '0-5', label: '0-5 s', min: 0, max: 5 },
+      { key: '5-10', label: '5-10 s', min: 5, max: 10 },
+      { key: '10-15', label: '10-15 s', min: 10, max: 15 },
+      { key: '15-20', label: '15-20 s', min: 15, max: 20 },
+      { key: '20-30', label: '20-30 s', min: 20, max: 30 },
+      { key: '30+', label: '30+ s', min: 30, max: Infinity },
+    ];
+    return buckets.map((bucket) => {
+      const rows = possessionRows.filter((row) => row.durationSec >= bucket.min && row.durationSec < bucket.max);
+      return {
+        name: bucket.label,
+        akcje: rows.length,
+        team: rows.filter((row) => row.type === 'team').length,
+        opponent: rows.filter((row) => row.type === 'opponent').length,
+        dead: rows.filter((row) => row.type === 'dead').length,
+      };
+    });
+  }, [possessionRows]);
+
   // Grupowanie wyników w buckety
   const chartData = useMemo(() => {
     const dataToUse = activeTab === 'regains' ? regainsData : losesData;
@@ -787,7 +1059,7 @@ export default function WiedzaPage() {
   };
 
   const handleAnalyze = async () => {
-    if (selectedTeams.length === 0) {
+    if (selectedTeams.length === 0 && activeTab !== 'possession') {
       toast.error('Wybierz co najmniej jeden zespół');
       return;
     }
@@ -795,7 +1067,14 @@ export default function WiedzaPage() {
     setIsLoading(true);
 
     try {
-      const allFetched = await fetchMatchesByFilters(selectedTeams, dateFrom, dateTo);
+      const allFetched =
+        activeTab === 'possession'
+          ? await fetchPossessionMatchesByFilters(selectedTeams, dateFrom, dateTo)
+          : await fetchMatchesByFilters(selectedTeams, dateFrom, dateTo);
+      const fetchedPossessionSegments = allFetched.reduce(
+        (sum, match) => sum + getPossessionSegmentsFromMatch(match).length,
+        0,
+      );
 
       setFetchedMatches(allFetched);
 
@@ -821,7 +1100,11 @@ export default function WiedzaPage() {
           { duration: 9000 },
         );
       } else {
-        toast.success(`Pobrano dane z ${allFetched.length} meczów`);
+        toast.success(
+          activeTab === 'possession'
+            ? `Pobrano mecze z segmentami: ${allFetched.length}, segmenty posiadania: ${fetchedPossessionSegments}`
+            : `Pobrano dane z ${allFetched.length} meczów, segmenty posiadania: ${fetchedPossessionSegments}`,
+        );
       }
     } catch (error) {
       console.error('Error fetching matches:', error);
@@ -944,7 +1227,7 @@ export default function WiedzaPage() {
           <button 
             className={styles.primaryButton} 
             onClick={handleAnalyze}
-            disabled={isLoading || selectedTeams.length === 0}
+            disabled={isLoading || (activeTab !== 'possession' && selectedTeams.length === 0)}
           >
             {isLoading ? 'Pobieranie...' : 'Analizuj'}
           </button>
@@ -1002,6 +1285,13 @@ export default function WiedzaPage() {
         >
           Minuty vs rok ur.
         </button>
+        <button
+          type="button"
+          className={`${styles.tabButton} ${activeTab === 'possession' ? styles.active : ''}`}
+          onClick={() => setActiveTab('possession')}
+        >
+          Posiadanie
+        </button>
       </div>
 
       <div className={styles.contentPanel}>
@@ -1043,7 +1333,7 @@ export default function WiedzaPage() {
                 roczniki w każdym zaznaczonym klubie — łatwiej zobaczyć, kto częściej stawia na młodszych zawodników.
               </p>
               <div className={styles.emptyState} role="status">
-                Wybierz zespoły, ustaw daty i kliknij „Analizuj”, aby załadować mecze.
+                Kliknij „Analizuj”, aby pobrać z Firebase tylko mecze z zapisanymi segmentami posiadania.
               </div>
             </div>
           ) : (
@@ -1155,6 +1445,188 @@ export default function WiedzaPage() {
                     .join(' · ')}
                 </p>
               ) : null}
+            </div>
+          )
+        ) : activeTab === 'possession' ? (
+          fetchedMatches.length === 0 ? (
+            <div className={styles.correlationMergedPanel}>
+              <h2 className={styles.correlationTabTitle}>Posiadanie</h2>
+              <p className={styles.correlationTabLead}>
+                Ta zakładka pokazuje pojedyncze akcje z licznika posiadania: czas trwania, właściciela piłki, czas martwy oraz
+                metryki z tego samego przedziału wideo.
+              </p>
+              <div className={styles.emptyState} role="status">
+                Wybierz zespoły, ustaw daty i kliknij „Analizuj”, aby załadować mecze.
+              </div>
+            </div>
+          ) : possessionRows.length === 0 || !possessionSummary ? (
+            <div className={styles.correlationMergedPanel}>
+              <h2 className={styles.correlationTabTitle}>Posiadanie</h2>
+              <p className={styles.correlationTabLead}>
+                Brak zapisanych segmentów posiadania w wybranej próbie. Segmenty pojawią się tutaj po policzeniu meczu w analizatorze
+                i kliknięciu „Zatwierdź”.
+              </p>
+              <div className={styles.emptyState} role="status">
+                W wybranych meczach nie ma jeszcze <code className={styles.inlineCode}>matchData.possessionSegments</code>.
+                <br />
+                Pobrano z Firebase: {possessionFetchDebug.fetchedMatches} meczów, z segmentami:{' '}
+                {possessionFetchDebug.matchesWithSegments}, segmentów: {possessionFetchDebug.totalSegments}.
+              </div>
+            </div>
+          ) : (
+            <div className={styles.correlationMergedPanel}>
+              <h2 className={styles.correlationTabTitle}>Posiadanie</h2>
+              <p className={styles.correlationTabLead}>
+                Próba: <strong>{possessionSummary.matchesWithSegments}</strong> meczów z segmentami,{' '}
+                <strong>{possessionSummary.totalSegments}</strong> pojedynczych odcinków. Segmenty są zestawiane po czasie wideo z xG,
+                packingiem, przechwytami i stratami, więc można sprawdzać m.in. średni czas akcji przed stratą albo najdłuższe akcje.
+              </p>
+
+              <div className={styles.summaryCards}>
+                <div className={styles.summaryCard}>
+                  <span className={styles.summaryCardLabel}>Śr. akcja naszego zespołu</span>
+                  <span className={styles.summaryCardValue}>{formatPossessionSeconds(possessionSummary.team.avgDuration)}</span>
+                </div>
+                <div className={styles.summaryCard}>
+                  <span className={styles.summaryCardLabel}>Śr. akcja przeciwnika</span>
+                  <span className={styles.summaryCardValue}>{formatPossessionSeconds(possessionSummary.opponent.avgDuration)}</span>
+                </div>
+                <div className={styles.summaryCard}>
+                  <span className={styles.summaryCardLabel}>Śr. czas martwy</span>
+                  <span className={styles.summaryCardValue}>{formatPossessionSeconds(possessionSummary.dead.avgDuration)}</span>
+                </div>
+                <div className={styles.summaryCard}>
+                  <span className={styles.summaryCardLabel}>Śr. nasza akcja przed stratą</span>
+                  <span className={styles.summaryCardValue}>{formatPossessionSeconds(possessionSummary.teamBeforeLoss.avgDuration)}</span>
+                </div>
+                <div className={styles.summaryCard}>
+                  <span className={styles.summaryCardLabel}>Najdłuższa akcja</span>
+                  <span className={styles.summaryCardValue}>
+                    {formatPossessionSeconds(
+                      Math.max(
+                        possessionSummary.team.longest?.durationSec ?? 0,
+                        possessionSummary.opponent.longest?.durationSec ?? 0,
+                        possessionSummary.dead.longest?.durationSec ?? 0,
+                      ),
+                    )}
+                  </span>
+                </div>
+                <div className={styles.summaryCard}>
+                  <span className={styles.summaryCardLabel}>xG / packing w segmentach</span>
+                  <span className={styles.summaryCardValue}>
+                    {possessionSummary.totalXg.toFixed(2)} / {possessionSummary.totalPackingPoints.toFixed(0)}
+                  </span>
+                </div>
+              </div>
+
+              <div className={styles.possessionGrid}>
+                <div className={styles.possessionChartCard}>
+                  <h3 className={styles.heatmapHead}>Rozkład długości akcji</h3>
+                  <p className={styles.heatmapLead}>
+                    Liczba segmentów w przedziałach czasu. Kolory rozbijają akcje naszego zespołu, przeciwnika i czas martwy.
+                  </p>
+                  <div className={styles.packingFlowChartWrap}>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={possessionBucketRows} margin={{ top: 16, right: 20, left: 0, bottom: 12 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                        <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} />
+                        <YAxis allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
+                        <RechartsTooltip cursor={{ fill: '#f3f4f6' }} />
+                        <Legend />
+                        <Bar dataKey="team" name="Nasz zespół" stackId="possession" fill="#2563eb" />
+                        <Bar dataKey="opponent" name="Przeciwnik" stackId="possession" fill="#f97316" />
+                        <Bar dataKey="dead" name="Czas martwy" stackId="possession" fill="#94a3b8" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className={styles.possessionChartCard}>
+                  <h3 className={styles.heatmapHead}>Podział segmentów</h3>
+                  <div className={styles.possessionBreakdownList}>
+                    {[
+                      ['Nasz zespół', possessionSummary.team],
+                      ['Przeciwnik', possessionSummary.opponent],
+                      ['Czas martwy', possessionSummary.dead],
+                      ['Nasza akcja przed stratą', possessionSummary.teamBeforeLoss],
+                      ['Akcja rywala przed naszym przechwytem', possessionSummary.opponentBeforeRegain],
+                    ].map(([label, stat]) => {
+                      const s = stat as typeof possessionSummary.team;
+                      return (
+                        <div key={String(label)} className={styles.possessionBreakdownRow}>
+                          <span>{String(label)}</span>
+                          <strong>
+                            n={s.count} · śr. {formatPossessionSeconds(s.avgDuration)} · max{' '}
+                            {formatPossessionSeconds(s.longest?.durationSec ?? 0)}
+                          </strong>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.regainPostWindowBlock}>
+                <h3 className={styles.regainPostWindowTitle}>Konkretne akcje posiadania</h3>
+                <p className={styles.regainPostWindowLead}>
+                  Tabela jest posortowana od najdłuższych segmentów. Czas start/koniec to sekundy wideo, więc można wrócić do akcji
+                  i zestawić ją z pozostałymi metrykami.
+                </p>
+                <div className={styles.regainPostWindowTableWrap}>
+                  <table className={styles.regainPostWindowTable}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Mecz</th>
+                        <th scope="col">Typ</th>
+                        <th scope="col">Poł.</th>
+                        <th scope="col">Start</th>
+                        <th scope="col">Koniec</th>
+                        <th scope="col">Czas</th>
+                        <th scope="col">xG</th>
+                        <th scope="col">Strz.</th>
+                        <th scope="col">PK</th>
+                        <th scope="col">Packing</th>
+                        <th scope="col">Σ pkt</th>
+                        <th scope="col">ΣΔxT</th>
+                        <th scope="col">Przechw.</th>
+                        <th scope="col">Straty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {possessionRows.slice(0, 120).map((row) => (
+                        <tr key={`${row.matchId}_${row.id}`}>
+                          <th scope="row" className={styles.regainPostThZone}>
+                            {row.matchLabel}
+                            <br />
+                            <span className={styles.possessionTableSub}>{row.date}</span>
+                          </th>
+                          <td>{row.ownerLabel}</td>
+                          <td>{row.half}</td>
+                          <td>{formatPossessionSeconds(row.startSec)}</td>
+                          <td>{formatPossessionSeconds(row.endSec)}</td>
+                          <td>
+                            <strong>{formatPossessionSeconds(row.durationSec)}</strong>
+                          </td>
+                          <td>{row.xg.toFixed(3)}</td>
+                          <td>{row.shots}</td>
+                          <td>{row.pkEntries}</td>
+                          <td>{row.packingActions}</td>
+                          <td>{row.packingPoints}</td>
+                          <td>{row.xtDelta.toFixed(3)}</td>
+                          <td>{row.regains}</td>
+                          <td>{row.loses}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {possessionRows.length > 120 ? (
+                  <p className={styles.youthFootnote}>
+                    Pokazano 120 najdłuższych segmentów z {possessionRows.length}. Pełny zestaw zostaje w danych i może być użyty do
+                    kolejnych filtrów/eksportu.
+                  </p>
+                ) : null}
+              </div>
             </div>
           )
         ) : (

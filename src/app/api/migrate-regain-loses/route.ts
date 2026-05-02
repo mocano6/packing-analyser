@@ -51,12 +51,13 @@ export async function POST(request: NextRequest) {
     const errors: string[] = [];
 
     for (const docSnap of matchesSnapshot.docs) {
-      const match = { id: docSnap.id, ...docSnap.data() };
+      const match = { id: docSnap.id, ...docSnap.data() } as Record<string, unknown>;
       let matchUpdated = false;
       const regainActions = (match.actions_regain as unknown[]) || [];
       const losesActions = (match.actions_loses as unknown[]) || [];
 
-      const updatedRegainActions = regainActions.map((action: Record<string, unknown>) => {
+      const updatedRegainActions = regainActions.map((actionRaw) => {
+        const action = actionRaw as Record<string, unknown>;
         if (action.oppositeXT !== undefined && action.oppositeZone && action.isAttack !== undefined) {
           return action;
         }
@@ -100,7 +101,8 @@ export async function POST(request: NextRequest) {
         };
       });
 
-      const updatedLosesActions = losesActions.map((action: Record<string, unknown>) => {
+      const updatedLosesActions = losesActions.map((actionRaw) => {
+        const action = actionRaw as Record<string, unknown>;
         if (action.oppositeXT !== undefined && action.oppositeZone && action.isAttack !== undefined) {
           return action;
         }

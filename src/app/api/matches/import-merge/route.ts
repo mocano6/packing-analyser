@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
 
   const ref = db.collection("matches").doc(matchId);
   const snap = await ref.get();
-  const existing = snap.exists ? ({ id: snap.id, ...snap.data() } as TeamInfo) : null;
+  const existing = snap.exists ? ({ id: snap.id, ...snap.data() } as unknown as TeamInfo) : null;
 
   if (existing) {
     const docTeam = normalizeTeamKey(existing);
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
 
   try {
     if (write.op === "set") {
-      const payload = prepareMatchDocumentForFirestore(write.data as TeamInfo);
+      const payload = prepareMatchDocumentForFirestore(write.data as unknown as TeamInfo);
       await ref.set(payload as DocumentData);
     } else {
       await ref.update(write.data as DocumentData);

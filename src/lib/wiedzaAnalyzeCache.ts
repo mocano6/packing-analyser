@@ -3,7 +3,7 @@ import { TeamInfo } from "../types";
 /** Persystencja ostatniej analizy Bazy wiedzy (filtry + mecze) — reguła projektu: teamStats_*. */
 export const WIEDZA_ANALYZE_CACHE_KEY = "teamStats_wiedzaAnalyze";
 
-export type WiedzaTabId = "regains" | "loses" | "correlations" | "packingZones" | "youth";
+export type WiedzaTabId = "regains" | "loses" | "correlations" | "packingZones" | "youth" | "possession";
 
 export type WiedzaCachedMatch = TeamInfo & { id: string };
 
@@ -38,7 +38,7 @@ export type WiedzaAnalyzeCacheV3 = {
 
 export type WiedzaAnalyzeCachePayload = WiedzaAnalyzeCacheV1 | WiedzaAnalyzeCacheV2 | WiedzaAnalyzeCacheV3;
 
-const TAB_IDS: WiedzaTabId[] = ["regains", "loses", "correlations", "packingZones", "youth"];
+const TAB_IDS: WiedzaTabId[] = ["regains", "loses", "correlations", "packingZones", "youth", "possession"];
 
 function normalizeTab(x: unknown): WiedzaTabId {
   if (x === "weights") return "correlations";

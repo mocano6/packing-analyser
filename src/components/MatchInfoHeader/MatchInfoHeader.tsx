@@ -363,6 +363,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
   /** Po kliknięciu w komórkę „Przeciwnik”: lista akcji + rozkład kształtu (packing/regain/loses) vs tablica w Firestore. */
   const logMatchActionsWithCategories = async (match: TeamInfo) => {
     try {
+      if (!match.matchId) return;
       const db = getDB();
       if (!db) {
         console.warn("[MatchInfoHeader] Brak połączenia z bazą – nie można wczytać akcji.");
@@ -452,6 +453,7 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
     if (!selectedMatchForData?.matchId) {
       throw new Error("Brak ID meczu. Nie można zapisać danych.");
     }
+    const firestoreMatchId = String((selectedMatchForData as any).id || selectedMatchForData.matchId);
 
     try {
       const db = getDB();
@@ -462,22 +464,24 @@ const MatchInfoHeader: React.FC<MatchInfoHeaderProps> = ({
       // Usuń wszystkie wartości undefined przed zapisem
       const cleanedMatchData = removeUndefinedValues(matchData);
       
-      const matchRef = doc(db, "matches", selectedMatchForData.matchId);
+      const matchRef = doc(db, "matches", firestoreMatchId);
       const snap = await getDoc(matchRef);
       const existingRoot = snap.exists() ? (snap.data() as TeamInfo) : null;
       const mergedMatchData = mergeMatchDataForFirestoreWrite(
         existingRoot?.matchData,
         cleanedMatchData as TeamInfo["matchData"]
       );
+      const cleanedMergedMatchData = removeUndefinedValues(mergedMatchData);
       await updateDoc(matchRef, {
-        matchData: mergedMatchData,
+        matchData: cleanedMergedMatchData,
       });
       
       // Aktualizuj lokalny stan (używamy wyczyszczonych danych)
       const updatedMatch = {
         ...selectedMatchForData,
-        matchData: mergedMatchData,
+        matchData: cleanedMergedMatchData,
       };
+      setSelectedMatchForData(updatedMatch);
       
       // Aktualizuj matchInfo jeśli to jest aktualnie wybrany mecz
       if (matchInfo?.matchId === selectedMatchForData.matchId) {

@@ -17,9 +17,9 @@ const firebaseConfig = {
 };
 
 let app: FirebaseApp | undefined;
-let db: Firestore | undefined;
-let auth: Auth | undefined;
-let storage: FirebaseStorage | undefined;
+let db = undefined as unknown as Firestore;
+let auth = undefined as unknown as Auth;
+let storage = undefined as unknown as FirebaseStorage;
 
 /** Inicjalizacja Firebase po stronie klienta (lazy) — przy pierwszym wywołaniu getDB/isFirebaseReady. Unika 5s blokady gdy moduł załadował się na SSR. */
 function ensureFirebaseInitialized(): void {
