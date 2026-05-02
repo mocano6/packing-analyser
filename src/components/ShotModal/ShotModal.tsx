@@ -77,6 +77,16 @@ const ShotModal: React.FC<ShotModalProps> = ({
     () => ({ x: editingShot?.x ?? x, y: editingShot?.y ?? y }),
     [editingShot?.x, editingShot?.y, x, y]
   );
+  const isTorvaneyHeaderBodyPart = (bodyPart: typeof formData.bodyPart): boolean =>
+    bodyPart === "head" || bodyPart === "other";
+  const calculatePositionXG = (
+    bodyPart: typeof formData.bodyPart,
+    teamContext: typeof formData.teamContext
+  ): number =>
+    getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
+      isHeader: isTorvaneyHeaderBodyPart(bodyPart),
+      teamContext,
+    });
   const isShotInPenaltyArea = useMemo(() => {
     return formData.teamContext === "defense"
       ? isInOpponentPenaltyAreaCanonical(shotCoords)
@@ -508,10 +518,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     setFormData((prev) => {
       let nextXG = prev.xG;
       if (prev.actionType !== "penalty") {
-        nextXG = getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
-          isHeader: prev.bodyPart === "head",
-          teamContext,
-        });
+        nextXG = calculatePositionXG(prev.bodyPart, teamContext);
       }
       return {
         ...prev,
@@ -535,10 +542,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       const actionType = value;
       let nextXG = prev.xG;
       if (actionType !== "penalty") {
-        nextXG = getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
-          isHeader: prev.bodyPart === "head",
-          teamContext: prev.teamContext,
-        });
+        nextXG = calculatePositionXG(prev.bodyPart, prev.teamContext);
       }
       return {
         ...prev,
@@ -550,8 +554,11 @@ const ShotModal: React.FC<ShotModalProps> = ({
   };
 
   const handleBodyPartSelect = (bodyPart: "foot_left" | "foot_right" | "head" | "other") => {
-    // Część ciała jest tylko metadanym — nie przeliczamy xG przy zmianie (użytkownik ustawia xG ręcznie / z pozycji).
-    setFormData((prev) => ({ ...prev, bodyPart }));
+    setFormData((prev) => ({
+      ...prev,
+      bodyPart,
+      xG: prev.actionType === "penalty" ? prev.xG : calculatePositionXG(bodyPart, prev.teamContext),
+    }));
   };
 
   const handleBlockingPlayerToggle = (playerId: string) => {
@@ -580,14 +587,11 @@ const ShotModal: React.FC<ShotModalProps> = ({
     }));
   };
 
-  // Funkcja pomocnicza do budowania łańcucha dobitek dla wyświetlenia
+  // Funkcja pomocnicza do budowania łańcucha dobitek dla wyświetlenia.
   // Funkcja odwracająca modyfikatory xG (używana przy ładowaniu edytowanego strzału)
   const reverseFinalXG = (finalXG: number, shot: Shot): number => {
     let baseXG = finalXG;
-    
-    // Odwróć obniżenie o 27% dla strzałów głową lub inną częścią ciała
-    // Usunięto odwracanie mnożnika dla głowy - użytkownik sam wpisuje wartość xG
-    
+
     // Odwróć modyfikację dla dobitki
     if (shot.previousShotId) {
       const shotChain: Shot[] = [];
@@ -632,7 +636,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     if (shot.actionType === "direct_free_kick" && (shot as any)?.sfgSubtype === "direct") {
       baseXG = baseXG / 1.65;
     }
-    
+
     // Odwróć obniżenie za zawodników na linii
     if (shot.teamContext === "defense") {
       const linePlayers = (shot as any)?.linePlayers || [];
@@ -641,7 +645,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       const linePlayersCount = (shot as any)?.linePlayersCount || 0;
       baseXG += linePlayersCount;
     }
-    
+
     return Math.max(1, Math.round(baseXG)); // Minimum 1%, zaokrąglij do całej liczby
   };
 
@@ -697,14 +701,14 @@ const ShotModal: React.FC<ShotModalProps> = ({
   // Stała wartość xG dla karnego (zgodnie z literaturą)
   const PENALTY_XG_PERCENT = 76;
 
-  // Oblicz finalny xG z uwzględnieniem zawodników na linii, SFG bezpośredni, dobitki i części ciała
+  // Oblicz finalny xG z uwzględnieniem zawodników na linii, SFG bezpośredni, dobitki i części ciała.
   const calculateFinalXG = () => {
     // Karny ma zawsze stały xG 76%
     if (formData.actionType === "penalty") {
       return PENALTY_XG_PERCENT;
     }
     let finalXG = formData.xG;
-    
+
     // Każdy zawodnik na linii obniża xG o 1%
     if (formData.teamContext === "defense") {
       finalXG -= formData.linePlayers.length;
@@ -716,7 +720,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     if (formData.actionType === "direct_free_kick" && formData.sfgSubtype === "direct") {
       finalXG *= 1.65;
     }
-    
+
     // Oblicz xG dla dobitki: p2 * (1-p1) gdzie p1 to poprzedni strzał
     // Obsługujemy łańcuch dobitek: p3 * (1-p2) * (1-p1), itd.
     if (formData.previousShotId) {
@@ -756,19 +760,14 @@ const ShotModal: React.FC<ShotModalProps> = ({
       }
       finalXG = finalXG * remainingProbability;
     }
-    
-    // Usunięto mnożnik dla głowy - użytkownik sam wpisuje wartość xG
-    
+
     return Math.max(1, Math.round(finalXG)); // Minimum 1%, zaokrąglij do całej liczby
   };
 
   const handleActionCategoryChange = (category: "open_play" | "sfg") => {
     setFormData((prev) => {
       const actionType = category === "open_play" ? "open_play" : "corner";
-      const nextXG = getTorvaneySimpleXGPercentRounded(shotCoords.x, shotCoords.y, {
-        isHeader: prev.bodyPart === "head",
-        teamContext: prev.teamContext,
-      });
+      const nextXG = calculatePositionXG(prev.bodyPart, prev.teamContext);
       return {
         ...prev,
         actionCategory: category,
@@ -1690,7 +1689,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                 return availableShots.map(shot => {
                   const chain = getShotChain(shot.id);
                   const isChain = chain.length > 1;
-                  const tooltipText = isChain 
+                  const tooltipText = isChain
                     ? `Dobitka - wybierz ten strzał jako poprzedni. Łańcuch dobitek: ${chain.map(s => `${s.minute}'`).join(' → ')}. xG tego strzału będzie obliczone jako: xG * (1 - xG_poprzedni/100)`
                     : `Dobitka - wybierz ten strzał jako poprzedni. xG tego strzału będzie obliczone jako: xG * (1 - xG_poprzedni/100)`;
                   // Czytelniejszy tekst: minuta, zawodnik i xG z separatorami

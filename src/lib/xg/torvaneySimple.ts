@@ -5,17 +5,61 @@
 
 export type TeamContextForXG = "attack" | "defense";
 
-/** Mapowanie współrzędnych aplikacji (%, bramka ataku po prawej dla ataku) → piksele Torvaney. */
+const PITCH_WIDTH_M = 68;
+const PITCH_LENGTH_M = 105;
+const TORVANEY_HALF_LENGTH_M = PITCH_LENGTH_M / 2;
+const PENALTY_AREA_DEPTH_M = 16.5;
+const GOAL_AREA_DEPTH_M = 5.5;
+const PENALTY_AREA_WIDTH_M = 40.32;
+const GOAL_AREA_WIDTH_M = 18.32;
+
+type AxisAnchor = { meters: number; pixels: number };
+
+const TORVANEY_LENGTH_ANCHORS: AxisAnchor[] = [
+  { meters: 0, pixels: 5 },
+  { meters: GOAL_AREA_DEPTH_M, pixels: 37.5 },
+  { meters: PENALTY_AREA_DEPTH_M, pixels: 100 },
+  { meters: TORVANEY_HALF_LENGTH_M, pixels: 285 },
+];
+
+const TORVANEY_WIDTH_ANCHORS: AxisAnchor[] = [
+  { meters: 0, pixels: 5 },
+  { meters: (PITCH_WIDTH_M - PENALTY_AREA_WIDTH_M) / 2, pixels: 85 },
+  { meters: (PITCH_WIDTH_M - GOAL_AREA_WIDTH_M) / 2, pixels: 140 },
+  { meters: PITCH_WIDTH_M / 2, pixels: 195 },
+  { meters: (PITCH_WIDTH_M + GOAL_AREA_WIDTH_M) / 2, pixels: 240 },
+  { meters: (PITCH_WIDTH_M + PENALTY_AREA_WIDTH_M) / 2, pixels: 304 },
+  { meters: PITCH_WIDTH_M, pixels: 385 },
+];
+
+function interpolateTorvaneyAxis(valueMeters: number, anchors: AxisAnchor[]): number {
+  if (valueMeters <= anchors[0].meters) return anchors[0].pixels;
+
+  for (let i = 1; i < anchors.length; i += 1) {
+    const prev = anchors[i - 1];
+    const next = anchors[i];
+    if (valueMeters <= next.meters) {
+      const t = (valueMeters - prev.meters) / (next.meters - prev.meters);
+      return prev.pixels + t * (next.pixels - prev.pixels);
+    }
+  }
+
+  return anchors[anchors.length - 1].pixels;
+}
+
+/** Mapowanie współrzędnych aplikacji → piksele SVG Torvaney, z kotwicami na ich narysowanych liniach pól. */
 export function percentToTorvaneyPixels(
   xPercent: number,
   yPercent: number,
   teamContext: TeamContextForXG
 ): { sx: number; sy: number } {
-  const sx = 5 + (yPercent / 100) * 380;
-  const sy =
+  const lateralMeters = (yPercent / 100) * PITCH_WIDTH_M;
+  const sx = interpolateTorvaneyAxis(lateralMeters, TORVANEY_WIDTH_ANCHORS);
+  const distanceToGoalMeters =
     teamContext === "attack"
-      ? 5 + ((100 - xPercent) / 100) * 280
-      : 5 + (xPercent / 100) * 280;
+      ? ((100 - xPercent) / 100) * PITCH_LENGTH_M
+      : (xPercent / 100) * PITCH_LENGTH_M;
+  const sy = interpolateTorvaneyAxis(distanceToGoalMeters, TORVANEY_LENGTH_ANCHORS);
   return { sx, sy };
 }
 
