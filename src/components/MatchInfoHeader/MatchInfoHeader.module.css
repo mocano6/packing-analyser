@@ -469,18 +469,6 @@
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }
 
-.lineupBtn {
-  color: #0f766e;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.lineupBtn:hover {
-  background-color: #ccfbf1;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
-}
-
 /* Style dla wiersza w trakcie usuwania */
 .deleteInProgress {
   opacity: 0.5;

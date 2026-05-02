@@ -3,7 +3,7 @@
 
 import React, { useMemo, useEffect, useState, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { Player, TeamInfo, PlayerMinutes, Action, Shot, StartingLineup } from "@/types";
+import { Player, TeamInfo, PlayerMinutes, Action, Shot } from "@/types";
 import Instructions from "@/components/Instructions/Instructions";
 import PlayersGrid from "@/components/PlayersGrid/PlayersGrid";
 import PlayerTile from "@/components/PlayersGrid/PlayerTile";
@@ -50,7 +50,6 @@ import { invalidateMatchCache } from "@/utils/matchDocCache";
 import pitchHeaderStyles from "@/components/PitchHeader/PitchHeader.module.css";
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesModal";
-import StartingLineupModal from "@/components/StartingLineupModal/StartingLineupModal";
 import TeamFormationBoard from "@/components/TeamFormationBoard/TeamFormationBoard";
 import MatchInfoModal from "@/components/MatchInfoModal/MatchInfoModal";
 import Link from "next/link";
@@ -192,7 +191,6 @@ export default function Page() {
   });
   
   const [isPlayerMinutesModalOpen, setIsPlayerMinutesModalOpen] = React.useState(false);
-  const [isStartingLineupModalOpen, setIsStartingLineupModalOpen] = React.useState(false);
   const [editingMatch, setEditingMatch] = React.useState<TeamInfo | null>(null);
   const [isActionModalOpen, setIsActionModalOpen] = React.useState(false);
   const [startZone, setStartZone] = React.useState<number | null>(null);
@@ -656,7 +654,6 @@ export default function Page() {
     handleSelectMatch,
     handleDeleteMatch,
     handleSavePlayerMinutes,
-    handleSaveStartingLineup,
     handleUpdateMatchData,
     fetchMatches,
     forceRefreshFromFirebase,
@@ -2473,27 +2470,12 @@ export default function Page() {
     setIsPlayerMinutesModalOpen(true);
   };
 
-  // Obsługa otwarcia modalu pierwszego składu
-  const handleOpenStartingLineupModal = (match: TeamInfo) => {
-    setEditingMatch(match);
-    setIsStartingLineupModalOpen(true);
-  };
-
   // Obsługa zapisywania minut zawodników
   const handleSaveMinutes = (playerMinutes: PlayerMinutes[]) => {
     if (editingMatch) {
       handleSavePlayerMinutes(editingMatch, playerMinutes);
     }
     setIsPlayerMinutesModalOpen(false);
-    setEditingMatch(null);
-  };
-
-  // Obsługa zapisywania pierwszego składu i minut startowych
-  const handleSaveStartingLineupSubmit = (startingLineup: StartingLineup, playerMinutes: PlayerMinutes[]) => {
-    if (editingMatch) {
-      handleSaveStartingLineup(editingMatch, startingLineup, playerMinutes);
-    }
-    setIsStartingLineupModalOpen(false);
     setEditingMatch(null);
   };
 
@@ -4085,7 +4067,6 @@ export default function Page() {
         selectedTeam={selectedTeam}
         onChangeTeam={setSelectedTeam}
         onManagePlayerMinutes={handleOpenPlayerMinutesModal}
-        onManageStartingLineup={handleOpenStartingLineupModal}
         onAddNewMatch={openNewMatchModal}
         refreshCounter={matchesListRefreshCounter}
         isOfflineMode={isOfflineMode}
@@ -6226,24 +6207,6 @@ export default function Page() {
               (player) => player.teams && player.teams.includes(editingMatch.team)
             )}
             currentPlayerMinutes={editingMatch.playerMinutes || []}
-          />
-        )}
-
-        {/* Modal pierwszego składu */}
-        {editingMatch && (
-          <StartingLineupModal
-            isOpen={isStartingLineupModalOpen}
-            onClose={() => {
-              setIsStartingLineupModalOpen(false);
-              setEditingMatch(null);
-            }}
-            onSave={handleSaveStartingLineupSubmit}
-            match={editingMatch}
-            players={players.filter(
-              (player) => player.teams && player.teams.includes(editingMatch.team)
-            )}
-            currentPlayerMinutes={editingMatch.playerMinutes || []}
-            currentStartingLineup={editingMatch.startingLineup}
           />
         )}
 
