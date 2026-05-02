@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import type { User as FirebaseUser } from "firebase/auth";
 import { FirebaseError } from "firebase/app";
-import { getDB } from "@/lib/firebase";
+import { getAuthClient, getDB } from "@/lib/firebase";
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "@/lib/firestoreWithMetrics";
 import { AuthService, AuthState } from "@/utils/authService";
 import { toast } from "react-hot-toast";
@@ -130,10 +130,28 @@ export function useAuth(): UseAuthReturnType {
       try {
       const db = getDB();
       const userRef = doc(db, "users", uid);
-      const userDoc = await getDoc(userRef).catch(error => {
-        handleFirestoreError(error, db);
+
+      const authUser = getAuthClient().currentUser;
+      if (!authUser || authUser.uid !== uid) {
+        return null;
+      }
+
+      let userDoc;
+      try {
+        userDoc = await getDoc(userRef);
+      } catch (error: unknown) {
+        const code = error instanceof FirebaseError ? error.code : "";
+        if (code === "permission-denied") {
+          if (process.env.NODE_ENV === "development") {
+            console.warn(
+              "[useAuth] Pominięto odczyt users/{uid} (permission-denied — np. sesja już zamknięta).",
+            );
+          }
+          return null;
+        }
+        void handleFirestoreError(error, db);
         throw error;
-      });
+      }
 
       if (!userDoc.exists()) {
         const newUserData: UserData = {
@@ -143,10 +161,19 @@ export function useAuth(): UseAuthReturnType {
           createdAt: new Date(),
           lastLogin: new Date()
         };
-        await setDoc(userRef, newUserData).catch(error => {
-          handleFirestoreError(error, db);
+        try {
+          await setDoc(userRef, newUserData);
+        } catch (error: unknown) {
+          const code = error instanceof FirebaseError ? error.code : "";
+          if (code === "permission-denied") {
+            if (process.env.NODE_ENV === "development") {
+              console.warn("[useAuth] Pominięto setDoc users/{uid} (permission-denied).");
+            }
+            return null;
+          }
+          void handleFirestoreError(error, db);
           throw error;
-        });
+        }
         userDataCache.set(uid, { data: newUserData, timestamp: now });
         lastLoginWriteAt.set(uid, now);
         return newUserData;
@@ -189,9 +216,12 @@ export function useAuth(): UseAuthReturnType {
       userDataCache.set(uid, { data: result, timestamp: now });
       return result;
       } catch (error) {
-        console.error("Błąd podczas pobierania danych użytkownika:", error);
-        if (isUserAuthenticated && isMounted()) {
-          toast.error("Błąd podczas pobierania uprawnień użytkownika");
+        const code = error instanceof FirebaseError ? error.code : "";
+        if (code !== "permission-denied") {
+          console.error("Błąd podczas pobierania danych użytkownika:", error);
+          if (isUserAuthenticated && isMounted()) {
+            toast.error("Błąd podczas pobierania uprawnień użytkownika");
+          }
         }
         return null;
       }

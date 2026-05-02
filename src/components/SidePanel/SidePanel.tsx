@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import styles from './SidePanel.module.css';
 import ExportButton from '../ExportButton/ExportButton';
@@ -81,7 +82,20 @@ const SidePanel: React.FC<SidePanelProps> = ({
               <path d="M8 1L2 6V14H6V10H10V14H14V6L8 1Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
             </svg>
           </Link>
-          <h3>Menu aplikacji</h3>
+          <div className={styles.headerBrand}>
+            <Image
+              src="/logo.png"
+              alt="LOOKBALL"
+              width={32}
+              height={32}
+              className={styles.brandLogo}
+              unoptimized
+            />
+            <div className={styles.headerTitles}>
+              <span className={styles.brandName}>LOOKBALL</span>
+              <h3 className={styles.menuHeading}>Menu aplikacji</h3>
+            </div>
+          </div>
           <button 
             className={styles.closeButton}
             onClick={() => setIsOpen(false)}

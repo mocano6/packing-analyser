@@ -101,13 +101,43 @@
   gap: 12px;
 }
 
-.header h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2937;
+.headerBrand {
   flex: 1;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.brandLogo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.headerTitles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brandName {
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.02em;
+}
+
+.menuHeading {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
 }
 
 .homeButton {

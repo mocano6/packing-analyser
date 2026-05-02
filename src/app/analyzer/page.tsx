@@ -23,6 +23,7 @@ import {
   zoneNameToString 
 } from "@/constants/xtValues";
 import styles from "./page.module.css";
+import pkVerifyStyles from "@/styles/pkVerifyModal.module.css";
 import OfflineStatus from '@/components/OfflineStatus/OfflineStatus';
 import ExportButton from "@/components/ExportButton/ExportButton";
 import ImportButton from "@/components/ImportButton/ImportButton";
@@ -5594,18 +5595,18 @@ export default function Page() {
             }
           />
           {showPKRegainVerifyModal && (
-            <div className={styles.pkVerifyOverlay} onClick={() => setShowPKRegainVerifyModal(false)}>
-              <div className={styles.pkVerifyModal} onClick={(e) => e.stopPropagation()}>
-                <div className={styles.pkVerifyHeader}>
+            <div className={pkVerifyStyles.pkVerifyOverlay} onClick={() => setShowPKRegainVerifyModal(false)}>
+              <div className={pkVerifyStyles.pkVerifyModal} onClick={(e) => e.stopPropagation()}>
+                <div className={pkVerifyStyles.pkVerifyHeader}>
                   <h3>Podgląd zmian automatycznych flag (isRegain, isShot, isGoal)</h3>
                   <button
-                    className={styles.pkVerifyClose}
+                    className={pkVerifyStyles.pkVerifyClose}
                     onClick={() => setShowPKRegainVerifyModal(false)}
                   >
                     ×
                   </button>
                 </div>
-                <div className={styles.pkVerifyBody}>
+                <div className={pkVerifyStyles.pkVerifyBody}>
                   <p>
                     Znaleziono <strong>{pendingPKRegainUpdates.length}</strong> wejść w PK do zaktualizowania:
                   </p>
@@ -5630,8 +5631,8 @@ export default function Page() {
                       const isSelected = selectedPKUpdates.has(entryId);
                       
                       return (
-                        <div key={entryId} className={styles.pkVerifyItem}>
-                          <div className={styles.pkVerifyItemHeader}>
+                        <div key={entryId} className={pkVerifyStyles.pkVerifyItem}>
+                          <div className={pkVerifyStyles.pkVerifyItemHeader}>
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -5646,29 +5647,29 @@ export default function Page() {
                               }}
                               style={{ marginRight: '8px', cursor: 'pointer' }}
                             />
-                            <span className={styles.pkVerifyTime}>{pkTimeString}</span>
-                            <span className={styles.pkVerifyMinute}>Minuta {update.entry.minute}'</span>
+                            <span className={pkVerifyStyles.pkVerifyTime}>{pkTimeString}</span>
+                            <span className={pkVerifyStyles.pkVerifyMinute}>Minuta {update.entry.minute}'</span>
                           </div>
-                          <div className={styles.pkVerifyFlags}>
+                          <div className={pkVerifyStyles.pkVerifyFlags}>
                             {update.entry.isRegain !== update.isRegain && (
                               <>
-                                <span className={styles.pkVerifyLabel}>isRegain:</span>
-                                <span className={styles.pkVerifyChange}>
-                                  <span className={styles.pkVerifyIcon}>{update.entry.isRegain ? "✓" : "✗"}</span>
+                                <span className={pkVerifyStyles.pkVerifyLabel}>isRegain:</span>
+                                <span className={pkVerifyStyles.pkVerifyChange}>
+                                  <span className={pkVerifyStyles.pkVerifyIcon}>{update.entry.isRegain ? "✓" : "✗"}</span>
                                   <span>→</span>
-                                  <span className={styles.pkVerifyIcon}>{update.isRegain ? "✓" : "✗"}</span>
+                                  <span className={pkVerifyStyles.pkVerifyIcon}>{update.isRegain ? "✓" : "✗"}</span>
                                   {update.regainTime && update.timeDiffSeconds !== undefined && (
-                                    <span className={styles.pkVerifyTimeHint}>
+                                    <span className={pkVerifyStyles.pkVerifyTimeHint}>
                                       ({update.entry.teamContext === "defense" ? "Strata" : "Regain"}: {update.regainTime}, {update.timeDiffSeconds >= 0 ? '+' : ''}{update.timeDiffSeconds.toFixed(1)}s)
                                     </span>
                                   )}
                                   {update.regainTime && update.timeDiffSeconds === undefined && (
-                                    <span className={styles.pkVerifyTimeHint}>
+                                    <span className={pkVerifyStyles.pkVerifyTimeHint}>
                                       ({update.entry.teamContext === "defense" ? "Strata" : "Regain"}: {update.regainTime})
                                     </span>
                                   )}
                                   {!update.regainTime && update.timeDiffSeconds !== undefined && (
-                                    <span className={styles.pkVerifyTimeHint}>
+                                    <span className={pkVerifyStyles.pkVerifyTimeHint}>
                                       ({update.timeDiffSeconds >= 0 ? '+' : ''}{update.timeDiffSeconds.toFixed(1)}s)
                                     </span>
                                   )}
@@ -5677,18 +5678,18 @@ export default function Page() {
                             )}
                             {update.isShot !== undefined && update.entry.isShot !== update.isShot && (
                               <>
-                                <span className={styles.pkVerifyLabel}>isShot:</span>
-                                <span className={styles.pkVerifyChange}>
-                                  <span className={styles.pkVerifyIcon}>{update.entry.isShot ? "✓" : "✗"}</span>
+                                <span className={pkVerifyStyles.pkVerifyLabel}>isShot:</span>
+                                <span className={pkVerifyStyles.pkVerifyChange}>
+                                  <span className={pkVerifyStyles.pkVerifyIcon}>{update.entry.isShot ? "✓" : "✗"}</span>
                                   <span>→</span>
-                                  <span className={styles.pkVerifyIcon}>{update.isShot ? "✓" : "✗"}</span>
+                                  <span className={pkVerifyStyles.pkVerifyIcon}>{update.isShot ? "✓" : "✗"}</span>
                                   {update.shotTime && update.shotTimeDiff !== undefined && (
-                                    <span className={styles.pkVerifyTimeHint}>
+                                    <span className={pkVerifyStyles.pkVerifyTimeHint}>
                                       (Strzał: {update.shotTime}, {update.shotTimeDiff >= 0 ? '+' : ''}{update.shotTimeDiff.toFixed(1)}s)
                                     </span>
                                   )}
                                   {update.shotTime && update.shotTimeDiff === undefined && (
-                                    <span className={styles.pkVerifyTimeHint}>
+                                    <span className={pkVerifyStyles.pkVerifyTimeHint}>
                                       (Strzał: {update.shotTime})
                                     </span>
                                   )}
@@ -5697,18 +5698,18 @@ export default function Page() {
                             )}
                             {update.isGoal !== undefined && update.entry.isGoal !== update.isGoal && (
                               <>
-                                <span className={styles.pkVerifyLabel}>isGoal:</span>
-                                <span className={styles.pkVerifyChange}>
-                                  <span className={styles.pkVerifyIcon}>{update.entry.isGoal ? "✓" : "✗"}</span>
+                                <span className={pkVerifyStyles.pkVerifyLabel}>isGoal:</span>
+                                <span className={pkVerifyStyles.pkVerifyChange}>
+                                  <span className={pkVerifyStyles.pkVerifyIcon}>{update.entry.isGoal ? "✓" : "✗"}</span>
                                   <span>→</span>
-                                  <span className={styles.pkVerifyIcon}>{update.isGoal ? "✓" : "✗"}</span>
+                                  <span className={pkVerifyStyles.pkVerifyIcon}>{update.isGoal ? "✓" : "✗"}</span>
                                   {update.shotTime && update.shotTimeDiff !== undefined && (
-                                    <span className={styles.pkVerifyTimeHint}>
+                                    <span className={pkVerifyStyles.pkVerifyTimeHint}>
                                       (Gol: {update.shotTime}, {update.shotTimeDiff >= 0 ? '+' : ''}{update.shotTimeDiff.toFixed(1)}s)
                                     </span>
                                   )}
                                   {update.shotTime && update.shotTimeDiff === undefined && (
-                                    <span className={styles.pkVerifyTimeHint}>
+                                    <span className={pkVerifyStyles.pkVerifyTimeHint}>
                                       (Gol: {update.shotTime})
                                     </span>
                                   )}
@@ -5727,7 +5728,7 @@ export default function Page() {
                             <h4 style={{ marginTop: '16px', marginBottom: '8px', fontWeight: 'bold' }}>
                               Atak (nasze wejścia w PK przeciwnika) - {attackUpdates.length}
                             </h4>
-                            <div className={styles.pkVerifyList}>
+                            <div className={pkVerifyStyles.pkVerifyList}>
                               {attackUpdates.map((update, index) => renderUpdateItem(update, index))}
                             </div>
                           </div>
@@ -5737,7 +5738,7 @@ export default function Page() {
                             <h4 style={{ marginTop: '16px', marginBottom: '8px', fontWeight: 'bold' }}>
                               Obrona (wejścia przeciwnika w nasze PK) - {defenseUpdates.length}
                             </h4>
-                            <div className={styles.pkVerifyList}>
+                            <div className={pkVerifyStyles.pkVerifyList}>
                               {defenseUpdates.map((update, index) => renderUpdateItem(update, index))}
                             </div>
                           </div>
@@ -5746,11 +5747,11 @@ export default function Page() {
                     );
                   })()}
                 </div>
-                <div className={styles.pkVerifyFooter}>
-                  <div className={styles.pkVerifySelectAllGroup}>
+                <div className={pkVerifyStyles.pkVerifyFooter}>
+                  <div className={pkVerifyStyles.pkVerifySelectAllGroup}>
                     <button
                       type="button"
-                      className={styles.pkVerifySelectAllButton}
+                      className={pkVerifyStyles.pkVerifySelectAllButton}
                       onClick={() => {
                         const allIds = new Set(pendingPKRegainUpdates.map((u) => u.entryKey).filter(Boolean));
                         setSelectedPKUpdates(allIds);
@@ -5760,15 +5761,15 @@ export default function Page() {
                     </button>
                     <button
                       type="button"
-                      className={styles.pkVerifySelectAllButton}
+                      className={pkVerifyStyles.pkVerifySelectAllButton}
                       onClick={() => setSelectedPKUpdates(new Set())}
                     >
                       Odznacz wszystkie
                     </button>
                   </div>
-                  <div className={styles.pkVerifyFooterActions}>
+                  <div className={pkVerifyStyles.pkVerifyFooterActions}>
                     <button
-                      className={styles.pkVerifyCancel}
+                      className={pkVerifyStyles.pkVerifyCancel}
                       onClick={() => {
                         setShowPKRegainVerifyModal(false);
                         setSelectedPKUpdates(new Set());
@@ -5777,7 +5778,7 @@ export default function Page() {
                       Anuluj
                     </button>
                     <button
-                      className={styles.pkVerifySave}
+                      className={pkVerifyStyles.pkVerifySave}
                       onClick={async () => {
                         if (!matchInfo?.matchId) {
                           alert("Wybierz mecz, aby zapisać zmiany.");
@@ -5928,18 +5929,18 @@ export default function Page() {
         )}
 
         {showShotsVerifyModal && (
-          <div className={styles.pkVerifyOverlay} onClick={() => setShowShotsVerifyModal(false)}>
-            <div className={styles.pkVerifyModal} onClick={(e) => e.stopPropagation()}>
-              <div className={styles.pkVerifyHeader}>
+          <div className={pkVerifyStyles.pkVerifyOverlay} onClick={() => setShowShotsVerifyModal(false)}>
+            <div className={pkVerifyStyles.pkVerifyModal} onClick={(e) => e.stopPropagation()}>
+              <div className={pkVerifyStyles.pkVerifyHeader}>
                 <h3>Podgląd zmian automatycznych actionType dla strzałów</h3>
                 <button
-                  className={styles.pkVerifyClose}
+                  className={pkVerifyStyles.pkVerifyClose}
                   onClick={() => setShowShotsVerifyModal(false)}
                 >
                   ×
                 </button>
               </div>
-                <div className={styles.pkVerifyBody}>
+                <div className={pkVerifyStyles.pkVerifyBody}>
                   <p>
                     Znaleziono <strong>{pendingShotsUpdates.length}</strong> strzałów do zaktualizowania:
                   </p>
@@ -5962,8 +5963,8 @@ export default function Page() {
                       const isSelected = selectedShotsUpdates.has(shotId);
 
                       return (
-                        <div key={shotId} className={styles.pkVerifyItem}>
-                          <div className={styles.pkVerifyItemHeader}>
+                        <div key={shotId} className={pkVerifyStyles.pkVerifyItem}>
+                          <div className={pkVerifyStyles.pkVerifyItemHeader}>
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -5978,22 +5979,22 @@ export default function Page() {
                               }}
                               style={{ marginRight: '8px', cursor: 'pointer' }}
                             />
-                            <span className={styles.pkVerifyTime}>{shotTimeString}</span>
-                            <span className={styles.pkVerifyMinute}>Minuta {update.shot.minute}'</span>
+                            <span className={pkVerifyStyles.pkVerifyTime}>{shotTimeString}</span>
+                            <span className={pkVerifyStyles.pkVerifyMinute}>Minuta {update.shot.minute}'</span>
                           </div>
-                          <div className={styles.pkVerifyFlags}>
-                            <span className={styles.pkVerifyLabel}>actionType:</span>
-                            <span className={styles.pkVerifyChange}>
-                              <span className={styles.pkVerifyIcon}>{(update.shot.actionType || 'open_play') === 'regain' ? "✓" : "✗"}</span>
+                          <div className={pkVerifyStyles.pkVerifyFlags}>
+                            <span className={pkVerifyStyles.pkVerifyLabel}>actionType:</span>
+                            <span className={pkVerifyStyles.pkVerifyChange}>
+                              <span className={pkVerifyStyles.pkVerifyIcon}>{(update.shot.actionType || 'open_play') === 'regain' ? "✓" : "✗"}</span>
                               <span>→</span>
-                              <span className={styles.pkVerifyIcon}>{update.actionType === 'regain' ? "✓" : "✗"}</span>
+                              <span className={pkVerifyStyles.pkVerifyIcon}>{update.actionType === 'regain' ? "✓" : "✗"}</span>
                               {update.actionType === 'regain' && update.regainTime && update.timeDiffSeconds !== undefined && (
-                                <span className={styles.pkVerifyTimeHint}>
+                                <span className={pkVerifyStyles.pkVerifyTimeHint}>
                                   (Regain: {update.regainTime}, {update.timeDiffSeconds >= 0 ? '+' : ''}{update.timeDiffSeconds.toFixed(1)}s)
                                 </span>
                               )}
                               {update.actionType === 'open_play' && (
-                                <span className={styles.pkVerifyTimeHint}>
+                                <span className={pkVerifyStyles.pkVerifyTimeHint}>
                                   (Brak regainu/straty w przedziale 8s)
                                 </span>
                               )}
@@ -6010,7 +6011,7 @@ export default function Page() {
                             <h4 style={{ marginTop: '16px', marginBottom: '8px', fontWeight: 'bold' }}>
                               Atak (nasze strzały) - {attackUpdates.length}
                             </h4>
-                            <div className={styles.pkVerifyList}>
+                            <div className={pkVerifyStyles.pkVerifyList}>
                               {attackUpdates.map((update, index) => renderUpdateItem(update, index))}
                             </div>
                           </div>
@@ -6020,7 +6021,7 @@ export default function Page() {
                             <h4 style={{ marginTop: '16px', marginBottom: '8px', fontWeight: 'bold' }}>
                               Obrona (strzały przeciwnika) - {defenseUpdates.length}
                             </h4>
-                            <div className={styles.pkVerifyList}>
+                            <div className={pkVerifyStyles.pkVerifyList}>
                               {defenseUpdates.map((update, index) => renderUpdateItem(update, index))}
                             </div>
                           </div>
@@ -6029,11 +6030,11 @@ export default function Page() {
                     );
                   })()}
                 </div>
-              <div className={styles.pkVerifyFooter}>
-                <div className={styles.pkVerifySelectAllGroup}>
+              <div className={pkVerifyStyles.pkVerifyFooter}>
+                <div className={pkVerifyStyles.pkVerifySelectAllGroup}>
                   <button
                     type="button"
-                    className={styles.pkVerifySelectAllButton}
+                    className={pkVerifyStyles.pkVerifySelectAllButton}
                     onClick={() => {
                       const allIds = new Set(pendingShotsUpdates.map((u) => u.shotKey).filter(Boolean));
                       setSelectedShotsUpdates(allIds);
@@ -6043,15 +6044,15 @@ export default function Page() {
                   </button>
                   <button
                     type="button"
-                    className={styles.pkVerifySelectAllButton}
+                    className={pkVerifyStyles.pkVerifySelectAllButton}
                     onClick={() => setSelectedShotsUpdates(new Set())}
                   >
                     Odznacz wszystkie
                   </button>
                 </div>
-                <div className={styles.pkVerifyFooterActions}>
+                <div className={pkVerifyStyles.pkVerifyFooterActions}>
                   <button
-                    className={styles.pkVerifyCancel}
+                    className={pkVerifyStyles.pkVerifyCancel}
                     onClick={() => {
                       setShowShotsVerifyModal(false);
                       setSelectedShotsUpdates(new Set());
@@ -6060,7 +6061,7 @@ export default function Page() {
                     Anuluj
                   </button>
                   <button
-                    className={styles.pkVerifySave}
+                    className={pkVerifyStyles.pkVerifySave}
                     onClick={async () => {
                       if (!matchInfo?.matchId) {
                         alert("Wybierz mecz, aby zapisać zmiany.");

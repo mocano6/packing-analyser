@@ -11,32 +11,33 @@ import { Toaster } from 'react-hot-toast';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Packing Analyzer',
+  title: 'LOOKBALL',
   description: 'Profesjonalna aplikacja do analizy podań i pressingów w piłce nożnej. Śledź metryki packingu, wartości xT i statystyki zespołowe.',
   keywords: ['piłka nożna', 'analiza', 'packing', 'xT', 'pressing', 'statystyki', 'football', 'soccer'],
-  authors: [{ name: 'Packing Analyzer Team' }],
-  creator: 'Packing Analyzer',
-  publisher: 'Packing Analyzer',
+  authors: [{ name: 'LOOKBALL' }],
+  creator: 'LOOKBALL',
+  publisher: 'LOOKBALL',
   formatDetection: {
     email: false,
     address: false,
     telephone: false,
   },
-  metadataBase: new URL('https://packing-analyzer.vercel.app'),
+  metadataBase: new URL('https://lookball.app'),
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: 'Packing Analyzer',
+    title: 'LOOKBALL',
     description: 'Profesjonalna aplikacja do analizy podań i pressingów w piłce nożnej',
-    url: 'https://packing-analyzer.vercel.app',
-    siteName: 'Packing Analyzer',
+    url: 'https://lookball.app',
+    siteName: 'LOOKBALL',
     locale: 'pl_PL',
     type: 'website',
+    images: [{ url: '/logo.png', width: 512, height: 512, alt: 'LOOKBALL' }],
   },
   twitter: {
     card: 'summary',
-    title: 'Packing Analyzer',
+    title: 'LOOKBALL',
     description: 'Profesjonalna aplikacja do analizy podań i pressingów w piłce nożnej',
   },
   robots: {
@@ -52,9 +53,8 @@ export const metadata: Metadata = {
   },
   manifest: '/manifest.json',
   icons: {
-    icon: [
-      { url: '/next.svg', type: 'image/svg+xml' },
-    ],
+    icon: [{ url: '/favicon.png', type: 'image/png' }],
+    apple: [{ url: '/logo.png', type: 'image/png' }],
   },
 };
 
@@ -69,7 +69,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#22c55e" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Packing Analyzer" />
+        <meta name="apple-mobile-web-app-title" content="LOOKBALL" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="msapplication-TileColor" content="#22c55e" />
         <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />

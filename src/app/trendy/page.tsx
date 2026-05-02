@@ -34,7 +34,8 @@ import {
 } from "@/utils/trendyKpis";
 import { getTrendyKpiPlayerContributions } from "@/utils/trendyKpiPlayerContributions";
 import { getPlayerFullName } from "@/utils/playerUtils";
-import { TeamInfo } from "@/types";
+import { calculateXgOutcomeProjection } from "@/utils/xgOutcomeProjection";
+import { Shot, TeamInfo } from "@/types";
 import { usePresentationMode } from "@/contexts/PresentationContext";
 import { Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ResponsiveRadar } from "@nivo/radar";
@@ -43,6 +44,92 @@ import styles from "./trendy.module.css";
 type MatchTypesEnabled = { liga: boolean; puchar: boolean; towarzyski: boolean };
 
 const DEFAULT_MATCH_TYPES: MatchTypesEnabled = { liga: true, puchar: true, towarzyski: true };
+
+/** Osobna karta „xPts” tuż pod kartą xG — stan zwijania niezależny od KPI xG. */
+const XPTS_TREND_EXPAND_KEY = "xpts_xg_model";
+
+type XptsTrendPoint = {
+  label: string;
+  actualPoints: number;
+  expectedPoints: number;
+  actualCumulative: number;
+  expectedCumulative: number;
+};
+
+function getActualPoints(teamGoals: number, opponentGoals: number): number {
+  if (teamGoals > opponentGoals) return 3;
+  if (teamGoals < opponentGoals) return 0;
+  return 1;
+}
+
+function getMatchShotsBySide(match: TeamInfo): { teamShots: Shot[]; opponentShots: Shot[] } {
+  const shots = match.shots ?? [];
+  const teamShots = shots.filter((shot) => shot.teamContext === "attack" || (!shot.teamContext && shot.teamId === match.team));
+  const opponentShots = shots.filter(
+    (shot) => shot.teamContext === "defense" || (!shot.teamContext && shot.teamId === match.opponent),
+  );
+
+  return { teamShots, opponentShots };
+}
+
+/** Wykres xPts vs rzeczywiste punkty (bez linii trendu) — treść `kpiBody` osobnej karty KPI. */
+function XptsTrendChartPlot({ data }: { data: XptsTrendPoint[] }) {
+  if (data.length === 0) {
+    return (
+      <div style={{ color: "#64748b", fontSize: 13, padding: "8px 0" }}>Brak danych dla wybranych meczów.</div>
+    );
+  }
+
+  return (
+    <>
+      <div className={styles.xptsTrendLegend} aria-hidden>
+        <span className={styles.xptsTrendLegendItem}>
+          <span className={`${styles.chartLegendDot} ${styles.xptsTrendLegendDotActual}`} />
+          Punkty (mecz)
+        </span>
+        <span className={styles.xptsTrendLegendItem}>
+          <span className={`${styles.chartLegendDot} ${styles.xptsTrendLegendDotExpected}`} />
+          xPts (model xG)
+        </span>
+      </div>
+      <div className={styles.xptsTrendChart}>
+        <ResponsiveContainer>
+          <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <XAxis dataKey="label" hide />
+            <YAxis width={32} domain={[0, 3]} tickCount={4} allowDecimals />
+            <ReferenceLine y={1} stroke="#cbd5e1" strokeDasharray="4 4" />
+            <Tooltip
+              formatter={(value: number, name: string) => {
+                const label = name === "actualPoints" ? "Punkty" : "xPts";
+                return [Number(value).toFixed(2), label];
+              }}
+              labelFormatter={(label) => String(label)}
+              contentStyle={{ borderRadius: "8px", border: "1px solid #e5e7eb", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)" }}
+            />
+            <Line
+              type="monotone"
+              dataKey="actualPoints"
+              stroke="#16a34a"
+              strokeWidth={2}
+              dot={{ r: 4, fill: "#16a34a", stroke: "#ffffff", strokeWidth: 1 }}
+              activeDot={{ r: 5, fill: "#16a34a", stroke: "#ffffff", strokeWidth: 1 }}
+              name="actualPoints"
+            />
+            <Line
+              type="monotone"
+              dataKey="expectedPoints"
+              stroke="#2563eb"
+              strokeWidth={2}
+              dot={{ r: 4, fill: "#2563eb", stroke: "#ffffff", strokeWidth: 1 }}
+              activeDot={{ r: 5, fill: "#2563eb", stroke: "#ffffff", strokeWidth: 1 }}
+              name="expectedPoints"
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </>
+  );
+}
 
 function formatTrendyPlayerContributionCell(kpiId: string, value: number, unit: TrendyKpiUnit): string {
   if (!Number.isFinite(value)) return "—";
@@ -486,6 +573,38 @@ export default function TrendyPage() {
     });
   }, [matches, isPresentationMode]);
 
+  const xptsTrendData = useMemo<XptsTrendPoint[]>(() => {
+    let actualCumulative = 0;
+    let expectedCumulative = 0;
+
+    return matches.map((match, idx) => {
+      const label = getMatchLabel(match, idx);
+      const teamGoals = getTeamGoalsForMatch(match);
+      const opponentGoals = getOpponentGoalsForMatch(match);
+      const actualPoints = getActualPoints(teamGoals, opponentGoals);
+      const { teamShots, opponentShots } = getMatchShotsBySide(match);
+      const expectedPoints = calculateXgOutcomeProjection(teamShots, opponentShots).expectedPoints;
+
+      actualCumulative += actualPoints;
+      expectedCumulative += expectedPoints;
+
+      return {
+        label,
+        actualPoints,
+        expectedPoints,
+        actualCumulative,
+        expectedCumulative,
+      };
+    });
+  }, [matches, isPresentationMode]);
+
+  const xptsTrendTotals = useMemo(() => {
+    if (xptsTrendData.length === 0) return null;
+    const actual = xptsTrendData.reduce((sum, point) => sum + point.actualPoints, 0);
+    const expected = xptsTrendData.reduce((sum, point) => sum + point.expectedPoints, 0);
+    return { actual, expected, delta: actual - expected };
+  }, [xptsTrendData]);
+
   // Korelacja Pearsona między xG, PK, PxT
   const xgPkPxtCorrelation = useMemo(() => {
     const data = xgPkPxtChartData;
@@ -856,8 +975,11 @@ export default function TrendyPage() {
           <div className={styles.kpiList}>
           {kpiRows.map(({ kpi, data, latestValue, delta, meetsTarget, kind, pkOpponentTarget, completedCount, completedPct }) => {
             const isOpen = expandedKpis[kpi.id] ?? false;
+            const showXptsCard = kpi.id === "xg_for" && matches.length > 0;
+            const xptsExpanded = expandedKpis[XPTS_TREND_EXPAND_KEY] ?? false;
             return (
-              <div key={kpi.id} className={styles.kpiCard}>
+              <React.Fragment key={kpi.id}>
+              <div className={styles.kpiCard}>
                 <div className={styles.kpiHeader}>
                   <button
                     type="button"
@@ -976,6 +1098,40 @@ export default function TrendyPage() {
                   </div>
                 )}
               </div>
+              {showXptsCard && xptsTrendTotals ? (
+                <div className={styles.kpiCard}>
+                  <div className={styles.kpiHeader}>
+                    <button
+                      type="button"
+                      className={styles.kpiHeaderToggle}
+                      onClick={() =>
+                        setExpandedKpis((prev) => ({
+                          ...prev,
+                          [XPTS_TREND_EXPAND_KEY]: !(prev[XPTS_TREND_EXPAND_KEY] ?? false),
+                        }))
+                      }
+                      aria-expanded={xptsExpanded}
+                      aria-controls="trendy-xpts-chart-panel"
+                      id="trendy-xpts-chart-toggle"
+                    >
+                      <span className={styles.kpiTitle}>xPts</span>
+                      <span
+                        className={`${styles.kpiMeta} ${xptsTrendTotals.delta >= 0 ? styles.good : styles.bad}`}
+                      >
+                        {xptsTrendTotals.expected.toFixed(2)} xPts · {xptsTrendTotals.actual.toFixed(0)} pkt (
+                        {xptsTrendTotals.delta >= 0 ? "+" : ""}
+                        {xptsTrendTotals.delta.toFixed(2)})
+                      </span>
+                    </button>
+                  </div>
+                  {xptsExpanded ? (
+                    <div className={styles.kpiBody} id="trendy-xpts-chart-panel" role="region" aria-labelledby="trendy-xpts-chart-toggle">
+                      <XptsTrendChartPlot data={xptsTrendData} />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              </React.Fragment>
             );
           })}
 

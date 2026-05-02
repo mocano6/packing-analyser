@@ -1,6 +1,6 @@
-# Packing Analyzer
+# LOOKBALL
 
-Aplikacja do analizy piłkarskich akcji boiskowych, z wykorzystaniem metryki "Packing" oraz Expected Threat (xT).
+Aplikacja do analizy piłkarskich akcji boiskowych, z wykorzystaniem metryki „Packing” oraz Expected Threat (xT). Produkcja: https://lookball.app
 
 ## Funkcjonalności
 

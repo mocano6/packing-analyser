@@ -107,8 +107,10 @@ export const handleFirebaseError = (
       case 'auth/user-not-found':
       case 'auth/wrong-password':
       case 'auth/invalid-credential':
-        response.message = opts.customMessage || 
-          "Nieprawidłowe dane logowania";
+      case 'auth/invalid-login-credentials':
+        response.message =
+          opts.customMessage ||
+          "Nieprawidłowe dane logowania (sprawdź e-mail i hasło; konto z Google — przycisk „Kontynuuj z Google”).";
         break;
         
       case 'auth/too-many-requests':

@@ -13,13 +13,21 @@ import {
   User,
   setPersistence,
   browserLocalPersistence,
+  GoogleAuthProvider,
+  signInWithPopup,
+  linkWithCredential,
+  EmailAuthProvider,
+  sendPasswordResetEmail as firebaseSendPasswordResetEmail,
+  type AuthCredential,
 } from "firebase/auth";
+import { FirebaseError } from "firebase/app";
 
 import { handleFirebaseError } from "./errorHandler";
+import { normalizeAuthEmail } from "./normalizeAuthEmail";
 import { getAuthClient, isFirebaseReady } from "@/lib/firebase";
 
 // Typy uwierzytelniania
-export type AuthMode = 'anonymous' | 'email';
+export type AuthMode = 'anonymous' | 'email' | 'google';
 
 // Stan uwierzytelniania
 export interface AuthState {
@@ -155,7 +163,7 @@ export class AuthService {
   private loadPreferredAuthMode(): void {
     try {
       const savedMode = localStorage.getItem('auth_mode') as AuthMode | null;
-      if (savedMode && (savedMode === 'anonymous' || savedMode === 'email')) {
+      if (savedMode && (savedMode === 'anonymous' || savedMode === 'email' || savedMode === 'google')) {
         this.preferredAuthMode = savedMode;
       }
     } catch (error) {
@@ -208,7 +216,7 @@ export class AuthService {
       this.updateAuthState({ isLoading: true, error: null });
       
       const auth = getAuthClient();
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, normalizeAuthEmail(email), password);
       
       this.savePreferredAuthMode('email');
 
@@ -232,7 +240,7 @@ export class AuthService {
       this.updateAuthState({ isLoading: true, error: null });
       
       const auth = getAuthClient();
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, normalizeAuthEmail(email), password);
       
       this.savePreferredAuthMode('email');
       return userCredential.user;
@@ -248,13 +256,104 @@ export class AuthService {
     }
   }
   
+  // Logowanie przez Google (popup)
+  public async signInWithGoogle(): Promise<void> {
+    await this.waitForInitialization();
+
+    try {
+      this.updateAuthState({ isLoading: true, error: null });
+
+      const auth = getAuthClient();
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      await signInWithPopup(auth, provider);
+
+      this.savePreferredAuthMode("google");
+    } catch (error) {
+      const isAccountExists =
+        error instanceof FirebaseError &&
+        error.code === "auth/account-exists-with-different-credential";
+      if (!isAccountExists) {
+        const response = handleFirebaseError(error, "logowanie przez Google", { showNotification: false });
+        this.updateAuthState({
+          isLoading: false,
+          error: response.message,
+        });
+      } else {
+        this.updateAuthState({
+          isLoading: false,
+          error: null,
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Łączy dostawcę Google z istniejącym kontem e-mail/hasło (ten sam UID).
+   * Wywołaj po signInWithGoogle → account-exists-with-different-credential, gdy użytkownik poda poprawne hasło.
+   */
+  public async linkGoogleCredentialAfterEmailPassword(
+    email: string,
+    password: string,
+    googleCredential: AuthCredential,
+  ): Promise<void> {
+    await this.waitForInitialization();
+
+    try {
+      this.updateAuthState({ isLoading: true, error: null });
+
+      const auth = getAuthClient();
+      const { user } = await signInWithEmailAndPassword(auth, normalizeAuthEmail(email), password);
+      await linkWithCredential(user, googleCredential);
+
+      this.savePreferredAuthMode("google");
+    } catch (error) {
+      const response = handleFirebaseError(error, "powiązanie konta Google", { showNotification: false });
+
+      this.updateAuthState({
+        isLoading: false,
+        error: response.message,
+      });
+
+      throw error;
+    }
+  }
+
+  /** Wysyła e-mail z linkiem resetu hasła (włącz Email/Password + szablony w Firebase). */
+  public async sendPasswordResetEmail(email: string): Promise<void> {
+    await this.waitForInitialization();
+    const auth = getAuthClient();
+    await firebaseSendPasswordResetEmail(auth, normalizeAuthEmail(email));
+  }
+
+  /**
+   * Dodaje logowanie e-mail/hasło do bieżącego użytkownika (np. po samym Google).
+   * Wymaga aktywnej sesji — wywołaj po zalogowaniu przez Google.
+   */
+  public async linkEmailPasswordProviderToCurrentUser(password: string): Promise<void> {
+    await this.waitForInitialization();
+    const auth = getAuthClient();
+    const user = auth.currentUser;
+    if (!user?.email) {
+      throw new Error("Brak zalogowanego użytkownika z adresem e-mail.");
+    }
+    if (password.length < 6) {
+      throw new Error("Hasło musi mieć co najmniej 6 znaków.");
+    }
+    const cred = EmailAuthProvider.credential(normalizeAuthEmail(user.email), password);
+    await linkWithCredential(user, cred);
+  }
+
   // Wylogowuje użytkownika
   public async signOut(): Promise<void> {
     await this.waitForInitialization();
     
     try {
-      this.updateAuthState({ isLoading: true, error: null });
-      
+      // Nie ustawiamy tu isLoading ani nie emitujemy stanu „w toku” z jeszcze aktywnym user —
+      // wywołuje to subskrybentów useAuth, które ponownie wołają Firestore tuż przed
+      // unieważnieniem tokenu i generują permission-denied w konsoli.
       const auth = getAuthClient();
       await firebaseSignOut(auth);
       

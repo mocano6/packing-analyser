@@ -4,7 +4,7 @@ export const CORRELATION_MATRIX_EXPORT_SCHEMA_VERSION = 1 as const;
 
 export type CorrelationKpiMatrixExportV1 = {
   schemaVersion: typeof CORRELATION_MATRIX_EXPORT_SCHEMA_VERSION;
-  exportType: "packing-analyzer.correlationKpiMatrix";
+  exportType: "lookball.correlationKpiMatrix";
   language: "pl";
   exportedAt: string;
   /** Krótki opis dla modeli LLM */
@@ -74,7 +74,7 @@ export function buildCorrelationKpiMatrixExportPayload(params: {
 
   return {
     schemaVersion: CORRELATION_MATRIX_EXPORT_SCHEMA_VERSION,
-    exportType: "packing-analyzer.correlationKpiMatrix",
+    exportType: "lookball.correlationKpiMatrix",
     language: "pl",
     exportedAt,
     description:

@@ -1,4 +1,4 @@
-# Migracja pól strefy w aplikacji Packing Analyzer
+# Migracja pól strefy w aplikacji LOOKBALL
 
 ## Wprowadzone zmiany
 

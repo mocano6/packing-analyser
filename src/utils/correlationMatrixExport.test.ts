@@ -19,7 +19,7 @@ const payload = buildCorrelationKpiMatrixExportPayload({
 });
 
 assert.equal(payload.schemaVersion, CORRELATION_MATRIX_EXPORT_SCHEMA_VERSION);
-assert.equal(payload.exportType, "packing-analyzer.correlationKpiMatrix");
+assert.equal(payload.exportType, "lookball.correlationKpiMatrix");
 assert.equal(payload.sample.matchCount, 5);
 assert.equal(payload.metrics.length, 2);
 assert.equal(payload.pearsonRMatrix[0][1], 0.5);

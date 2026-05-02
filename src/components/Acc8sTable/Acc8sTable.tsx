@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react";
 import styles from "./Acc8sTable.module.css";
 import sharedStyles from "@/styles/sharedTableStyles.module.css";
 import pitchHeaderStyles from "@/components/PitchHeader/PitchHeader.module.css";
-import pageStyles from "@/app/analyzer/page.module.css";
+import pkVerifyStyles from "@/styles/pkVerifyModal.module.css";
 import { Acc8sEntry } from "@/types";
 import { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import { CustomVideoPlayerRef } from "@/components/CustomVideoPlayer/CustomVideoPlayer";
@@ -425,15 +425,15 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
       
       {/* Modal z podglądem zmian automatycznych flag */}
       {showAutoFlagsModal && (
-        <div className={pageStyles.pkVerifyOverlay} onClick={() => setShowAutoFlagsModal(false)}>
-          <div className={pageStyles.pkVerifyModal} onClick={(e) => e.stopPropagation()}>
-            <div className={pageStyles.pkVerifyHeader}>
+        <div className={pkVerifyStyles.pkVerifyOverlay} onClick={() => setShowAutoFlagsModal(false)}>
+          <div className={pkVerifyStyles.pkVerifyModal} onClick={(e) => e.stopPropagation()}>
+            <div className={pkVerifyStyles.pkVerifyHeader}>
               <h3>Podgląd zmian automatycznych flag</h3>
-              <button className={pageStyles.pkVerifyClose} onClick={() => setShowAutoFlagsModal(false)}>×</button>
+              <button className={pkVerifyStyles.pkVerifyClose} onClick={() => setShowAutoFlagsModal(false)}>×</button>
             </div>
-            <div className={pageStyles.pkVerifyBody}>
+            <div className={pkVerifyStyles.pkVerifyBody}>
               <p>Znaleziono <strong>{pendingUpdates.length}</strong> akcji 8s ACC do zaktualizowania:</p>
-              <div className={pageStyles.pkVerifyList}>
+              <div className={pkVerifyStyles.pkVerifyList}>
                 {pendingUpdates.map((update, index) => {
                   const acc8sTimeRaw = update.entry.videoTimestampRaw !== undefined && update.entry.videoTimestampRaw !== null
                     ? update.entry.videoTimestampRaw
@@ -446,8 +446,8 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                   const isSelected = selectedAcc8sUpdates.has(entryId);
                   
                   return (
-                    <div key={entryId} className={pageStyles.pkVerifyItem}>
-                      <div className={pageStyles.pkVerifyItemHeader}>
+                    <div key={entryId} className={pkVerifyStyles.pkVerifyItem}>
+                      <div className={pkVerifyStyles.pkVerifyItemHeader}>
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -462,42 +462,42 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                           }}
                           style={{ marginRight: '8px', cursor: 'pointer' }}
                         />
-                        <span className={pageStyles.pkVerifyTime}>{acc8sTimeString}</span>
-                        <span className={pageStyles.pkVerifyMinute}>Minuta {update.entry.minute}'</span>
+                        <span className={pkVerifyStyles.pkVerifyTime}>{acc8sTimeString}</span>
+                        <span className={pkVerifyStyles.pkVerifyMinute}>Minuta {update.entry.minute}'</span>
                       </div>
-                      <div className={pageStyles.pkVerifyFlags}>
+                      <div className={pkVerifyStyles.pkVerifyFlags}>
                         {update.entry.isShotUnder8s !== update.isShotUnder8s && (
                           <>
-                            <span className={pageStyles.pkVerifyLabel}>Strzał 8s:</span>
-                            <span className={pageStyles.pkVerifyChange}>
-                              <span className={pageStyles.pkVerifyIcon}>{update.entry.isShotUnder8s ? '✓' : '✗'}</span>
+                            <span className={pkVerifyStyles.pkVerifyLabel}>Strzał 8s:</span>
+                            <span className={pkVerifyStyles.pkVerifyChange}>
+                              <span className={pkVerifyStyles.pkVerifyIcon}>{update.entry.isShotUnder8s ? '✓' : '✗'}</span>
                               <span>→</span>
-                              <span className={pageStyles.pkVerifyIcon}>{update.isShotUnder8s ? '✓' : '✗'}</span>
+                              <span className={pkVerifyStyles.pkVerifyIcon}>{update.isShotUnder8s ? '✓' : '✗'}</span>
                               {update.shotTime && update.shotTimeDiff !== undefined && (
-                                <span className={pageStyles.pkVerifyTimeHint}>
+                                <span className={pkVerifyStyles.pkVerifyTimeHint}>
                                   (Strzał: {update.shotTime}, różnica: {update.shotTimeDiff.toFixed(1)}s)
                                 </span>
                               )}
                               {update.shotTime && update.shotTimeDiff === undefined && (
-                                <span className={pageStyles.pkVerifyTimeHint}>({update.shotTime})</span>
+                                <span className={pkVerifyStyles.pkVerifyTimeHint}>({update.shotTime})</span>
                               )}
                             </span>
                           </>
                         )}
                         {update.entry.isPKEntryUnder8s !== update.isPKEntryUnder8s && (
                           <>
-                            <span className={pageStyles.pkVerifyLabel}>PK 8s:</span>
-                            <span className={pageStyles.pkVerifyChange}>
-                              <span className={pageStyles.pkVerifyIcon}>{update.entry.isPKEntryUnder8s ? '✓' : '✗'}</span>
+                            <span className={pkVerifyStyles.pkVerifyLabel}>PK 8s:</span>
+                            <span className={pkVerifyStyles.pkVerifyChange}>
+                              <span className={pkVerifyStyles.pkVerifyIcon}>{update.entry.isPKEntryUnder8s ? '✓' : '✗'}</span>
                               <span>→</span>
-                              <span className={pageStyles.pkVerifyIcon}>{update.isPKEntryUnder8s ? '✓' : '✗'}</span>
+                              <span className={pkVerifyStyles.pkVerifyIcon}>{update.isPKEntryUnder8s ? '✓' : '✗'}</span>
                               {update.pkTime && update.pkTimeDiff !== undefined && (
-                                <span className={pageStyles.pkVerifyTimeHint}>
+                                <span className={pkVerifyStyles.pkVerifyTimeHint}>
                                   (PK: {update.pkTime}, różnica: {update.pkTimeDiff.toFixed(1)}s)
                                 </span>
                               )}
                               {update.pkTime && update.pkTimeDiff === undefined && (
-                                <span className={pageStyles.pkVerifyTimeHint}>({update.pkTime})</span>
+                                <span className={pkVerifyStyles.pkVerifyTimeHint}>({update.pkTime})</span>
                               )}
                             </span>
                           </>
@@ -508,11 +508,11 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                 })}
               </div>
             </div>
-            <div className={pageStyles.pkVerifyFooter}>
-              <div className={pageStyles.pkVerifySelectAllGroup}>
+            <div className={pkVerifyStyles.pkVerifyFooter}>
+              <div className={pkVerifyStyles.pkVerifySelectAllGroup}>
                 <button
                   type="button"
-                  className={pageStyles.pkVerifySelectAllButton}
+                  className={pkVerifyStyles.pkVerifySelectAllButton}
                   onClick={() => {
                     const allIds = new Set(pendingUpdates.map(u => u.entry.id || `acc8s-${pendingUpdates.indexOf(u)}`).filter(Boolean));
                     setSelectedAcc8sUpdates(allIds);
@@ -522,19 +522,19 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                 </button>
                 <button
                   type="button"
-                  className={pageStyles.pkVerifySelectAllButton}
+                  className={pkVerifyStyles.pkVerifySelectAllButton}
                   onClick={() => setSelectedAcc8sUpdates(new Set())}
                 >
                   Odznacz wszystkie
                 </button>
               </div>
-              <div className={pageStyles.pkVerifyFooterActions}>
+              <div className={pkVerifyStyles.pkVerifyFooterActions}>
                 <button
                   onClick={() => {
                     setShowAutoFlagsModal(false);
                     setSelectedAcc8sUpdates(new Set());
                   }}
-                  className={pageStyles.pkVerifyCancel}
+                  className={pkVerifyStyles.pkVerifyCancel}
                 >
                   Anuluj
                 </button>
@@ -561,7 +561,7 @@ const Acc8sTable: React.FC<Acc8sTableProps> = ({
                     setPendingUpdates([]);
                     setSelectedAcc8sUpdates(new Set());
                   }}
-                  className={pageStyles.pkVerifySave}
+                  className={pkVerifyStyles.pkVerifySave}
                 >
                   Zatwierdź zmiany ({selectedAcc8sUpdates.size})
                 </button>

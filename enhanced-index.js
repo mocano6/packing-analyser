@@ -20,10 +20,10 @@ try {
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Packing Analyzer</title>
+    <title>LOOKBALL</title>
     <meta name="description" content="Football data analysis tool" />
     <base href=".">
-    <link rel="icon" href="./favicon.ico" type="image/x-icon" sizes="16x16" />
+    <link rel="icon" href="./favicon.png" type="image/png" sizes="32x32" />
     
     <!-- Preload kluczowych zasobów -->
     <link rel="preload" href="./_next/static/css/050d0908fb8e35e1.css" as="style">
@@ -201,7 +201,7 @@ try {
             
             <!-- Fallback content -->
             <div id="fallback-content" class="fallback-content">
-                <h1>Packing Analyzer</h1>
+                <h1>LOOKBALL</h1>
                 <p>Aplikacja do analizy danych piłkarskich</p>
                 <p>Nie udało się załadować aplikacji automatycznie. Przyczyną może być brak niektórych skryptów lub problem z konfiguracją serwera.</p>
                 <button class="fallback-btn" onclick="loadAppManually()">Załaduj aplikację ręcznie</button>
@@ -324,7 +324,7 @@ try {
             appContainer.innerHTML = \`
                 <div style="padding: 20px; max-width: 1200px; margin: 0 auto;">
                     <div style="margin-bottom: 20px; padding: 15px; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                        <h2 style="margin-top: 0; color: #2c3e50;">Packing Analyzer</h2>
+                        <h2 style="margin-top: 0; color: #2c3e50;">LOOKBALL</h2>
                         <p>Aplikacja do analizy danych piłkarskich</p>
                         <div style="display: flex; gap: 10px; margin-top: 15px;">
                             <button style="background: #3498db; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">

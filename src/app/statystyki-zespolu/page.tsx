@@ -44,6 +44,7 @@ import { usePresentationMode } from "@/contexts/PresentationContext";
 import { getPkEntryKpiBreakdownCounts, isPkSfgEntry } from "@/lib/pkEntryKpiBreakdown";
 import { filterTeamsByUserAccess } from "@/lib/teamsForUserAccess";
 import { sumNonPenaltyXg } from "@/lib/xgNonPenalty";
+import { calculateXgOutcomeProjection } from "@/utils/xgOutcomeProjection";
 import styles from "./statystyki-zespolu.module.css";
 
 /** Spójny zielony / czerwony KPI na tej stronie (wspólny dla wykresów, KPI i akcji). */
@@ -4018,6 +4019,7 @@ export default function StatystykiZespoluPage() {
                   const opponentOffTarget = opponentShots.filter((s: any) => s.shotType === 'off_target').length;
                   const teamBlocked = teamShots.filter((s: any) => s.shotType === 'blocked').length;
                   const opponentBlocked = opponentShots.filter((s: any) => s.shotType === 'blocked').length;
+                  const xgOutcomeProjection = calculateXgOutcomeProjection(teamShots, opponentShots);
                   const teamXGDelta = teamGoals - teamXG;
                   const opponentXGDelta = opponentGoals - opponentXG;
 
@@ -5438,6 +5440,8 @@ export default function StatystykiZespoluPage() {
                   };
                   const formatSignedStat = (value: number, digits = 2): string =>
                     `${value >= 0 ? "+" : ""}${value.toFixed(digits)}`;
+                  const formatOutcomeProbability = (value: number): string =>
+                    `${Math.round(value * 100)}%`;
                   const matchDateLabel = isPresentationMode
                     ? ""
                     : typeof selectedMatchInfo.date === "string" && selectedMatchInfo.date
@@ -5594,6 +5598,48 @@ export default function StatystykiZespoluPage() {
                                     },
                                   }}
                                 />
+                              </div>
+                              <div
+                                className={styles.kpiOutcomeProjection}
+                                aria-label={`Prognoza xG: zwycięstwo ${formatOutcomeProbability(xgOutcomeProjection.winProbability)}, remis ${formatOutcomeProbability(xgOutcomeProjection.drawProbability)}, porażka ${formatOutcomeProbability(xgOutcomeProjection.lossProbability)}, oczekiwane punkty ${xgOutcomeProjection.expectedPoints.toFixed(2)}`}
+                              >
+                                <div className={styles.kpiOutcomeProjectionHeader}>
+                                  <span className={styles.kpiOutcomeProjectionTitle}>Prognoza xG</span>
+                                  <span className={styles.kpiOutcomeProjectionPoints}>
+                                    xPts <strong>{xgOutcomeProjection.expectedPoints.toFixed(2)}</strong>
+                                  </span>
+                                </div>
+                                <div className={styles.kpiOutcomeProjectionBar} aria-hidden>
+                                  <span
+                                    className={`${styles.kpiOutcomeProjectionBarSegment} ${styles.kpiOutcomeProjectionBarWin}`}
+                                    style={{ width: `${xgOutcomeProjection.winProbability * 100}%` }}
+                                  />
+                                  <span
+                                    className={`${styles.kpiOutcomeProjectionBarSegment} ${styles.kpiOutcomeProjectionBarDraw}`}
+                                    style={{ width: `${xgOutcomeProjection.drawProbability * 100}%` }}
+                                  />
+                                  <span
+                                    className={`${styles.kpiOutcomeProjectionBarSegment} ${styles.kpiOutcomeProjectionBarLoss}`}
+                                    style={{ width: `${xgOutcomeProjection.lossProbability * 100}%` }}
+                                  />
+                                </div>
+                                <div className={styles.kpiOutcomeProjectionLegend}>
+                                  <span className={styles.kpiOutcomeProjectionLegendItem}>
+                                    <span className={`${styles.kpiOutcomeProjectionDot} ${styles.kpiOutcomeProjectionDotWin}`} aria-hidden />
+                                    <strong>{formatOutcomeProbability(xgOutcomeProjection.winProbability)}</strong>
+                                    <span>Wygrana</span>
+                                  </span>
+                                  <span className={styles.kpiOutcomeProjectionLegendItem}>
+                                    <span className={`${styles.kpiOutcomeProjectionDot} ${styles.kpiOutcomeProjectionDotDraw}`} aria-hidden />
+                                    <strong>{formatOutcomeProbability(xgOutcomeProjection.drawProbability)}</strong>
+                                    <span>Remis</span>
+                                  </span>
+                                  <span className={styles.kpiOutcomeProjectionLegendItem}>
+                                    <span className={`${styles.kpiOutcomeProjectionDot} ${styles.kpiOutcomeProjectionDotLoss}`} aria-hidden />
+                                    <strong>{formatOutcomeProbability(xgOutcomeProjection.lossProbability)}</strong>
+                                    <span>Porażka</span>
+                                  </span>
+                                </div>
                               </div>
                               {(() => {
                                 const kpiCount = 8;

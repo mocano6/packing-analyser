@@ -81,7 +81,7 @@ export function buildMatchExportData(
     formatVersion: "2.1",
     exportType: "match_data",
     appInfo: {
-      name: "Packing Analyzer",
+      name: "LOOKBALL",
       version: "1.0.0",
     },
     matchInfo: matchData,

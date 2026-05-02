@@ -1,4 +1,4 @@
-name: Deploy Packing Analyzer
+name: Deploy LOOKBALL
 
 on:
   push:

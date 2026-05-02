@@ -42,13 +42,14 @@ const nextConfig = {
       };
     }
 
-    // Dodajemy obsługę modułów ESM
+    // ESM w node_modules: fullySpecified tylko tam — globalnie psuje czasem chunki Next (undefined factory w webpack).
     config.module.rules.push({
       test: /\.m?js$/,
-      type: 'javascript/auto',
+      include: /node_modules/,
       resolve: {
         fullySpecified: false,
       },
+      type: 'javascript/auto',
     });
 
     // Konfiguracja cache - tymczasowo wyłączona

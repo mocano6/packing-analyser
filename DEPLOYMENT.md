@@ -1,4 +1,4 @@
-# Instrukcja wdrożenia Packing Analyzer
+# Instrukcja wdrożenia LOOKBALL
 
 ## Wymagania wstępne
 - Node.js w wersji 18 lub nowszej
@@ -140,7 +140,7 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=twój_measurement_id
 2. Dokumentacja Next.js: https://nextjs.org/docs
 3. Kontakt do pomocy technicznej: [wpisz kontakt]
 
-# Instrukcja wdrażania aplikacji Packing Analyzer na serwer vh.pl
+# Instrukcja wdrażania aplikacji LOOKBALL na serwer vh.pl
 
 ## Przygotowanie plików do wdrożenia
 
@@ -156,14 +156,14 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=twój_measurement_id
    - Tworzy plik index.php dla lepszej integracji z serwerem
    - Pakuje wszystko do pliku ZIP gotowego do wgrania na serwer
 
-2. Po zakończeniu procesu budowania, w głównym katalogu projektu powstanie plik `packing-analyzer-server.zip`, który jest gotowy do wgrania na serwer.
+2. Po zakończeniu procesu budowania, w głównym katalogu projektu powstanie plik `lookball-server.zip`, który jest gotowy do wgrania na serwer.
 
 ## Wdrażanie na serwer vh.pl
 
 1. Zaloguj się do panelu administracyjnego vh.pl
 2. Przejdź do menedżera plików
 3. Utwórz katalog dla aplikacji (np. `packing`) jeśli jeszcze nie istnieje
-4. Wgraj plik `packing-analyzer-server.zip` do utworzonego katalogu
+4. Wgraj plik `lookball-server.zip` do utworzonego katalogu
 5. Rozpakuj plik ZIP bezpośrednio na serwerze (można użyć opcji "Rozpakuj" w menedżerze plików)
 6. Upewnij się, że plik `.htaccess` został poprawnie wgrany i ma odpowiednie uprawnienia (644)
 

@@ -255,7 +255,7 @@ node src/scripts/restoreData.js
     if (readmeContent) {
       readmeContent += deploymentInstructions;
     } else {
-      readmeContent = `# Packing Analyzer
+      readmeContent = `# LOOKBALL
 
 A football analytics application for tracking and analyzing player actions, packing rates, and match statistics.
 ${deploymentInstructions}`;

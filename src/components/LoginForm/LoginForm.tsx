@@ -1,13 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { FirebaseError } from 'firebase/app';
+import { fetchSignInMethodsForEmail } from 'firebase/auth';
 import { AuthService } from '@/utils/authService';
-import { getDB } from '@/lib/firebase';
+import { getAuthClient, getDB } from '@/lib/firebase';
 import { doc, setDoc } from '@/lib/firestoreWithMetrics';
 import { handleFirestoreError } from '@/utils/firestoreErrorHandler';
 import { useAuth } from '@/hooks/useAuth';
+import { authLoginErrorMessage } from '@/utils/authLoginErrorMessage';
+import { passwordLoginBlockedByGoogleOnlyProvider } from '@/utils/passwordLoginHintFromSignInMethods';
+import { readGoogleLinkDataFromAccountExistsError } from '@/utils/googleAccountLinkFromError';
+import { normalizeAuthEmail } from '@/utils/normalizeAuthEmail';
 import styles from './LoginForm.module.css';
+import type { AuthCredential } from 'firebase/auth';
+import toast from 'react-hot-toast';
 
 /** Tymczasowo wyłączone — / to logowanie; pełny marketingowy landing włączysz tu później. */
 const LANDING_VISIBLE = false;
@@ -22,6 +31,11 @@ export default function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [pendingGoogleLink, setPendingGoogleLink] = useState<{
+    credential: AuthCredential;
+    email: string;
+  } | null>(null);
+  const [linkPassword, setLinkPassword] = useState('');
   const router = useRouter();
   const searchParams = useSearchParams();
   const authService = AuthService.getInstance();
@@ -33,11 +47,57 @@ export default function LoginForm() {
       return;
     }
     if (userRole === 'player' && userStatus !== 'approved') {
+      if (process.env.NODE_ENV === 'development') {
+        window.location.assign('/oczekuje');
+        return;
+      }
       router.push('/oczekuje');
+      return;
+    }
+    /* W dev pełny load — inaczej często 404 na /_next/static (?v=) po restarcie serwera / długiej sesji karty. */
+    if (process.env.NODE_ENV === 'development') {
+      window.location.assign('/analyzer');
       return;
     }
     router.push("/analyzer");
   }, [isAuthenticated, authLoading, userRole, userStatus, router]);
+
+  useEffect(() => {
+    if (isRegistering) {
+      setPendingGoogleLink(null);
+      setLinkPassword('');
+    }
+  }, [isRegistering]);
+
+  const cancelPendingGoogleLink = () => {
+    setPendingGoogleLink(null);
+    setLinkPassword('');
+    setError(null);
+  };
+
+  const handleCompleteGoogleLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pendingGoogleLink) {
+      return;
+    }
+    setError(null);
+    setIsLoading(true);
+    try {
+      await authService.linkGoogleCredentialAfterEmailPassword(
+        pendingGoogleLink.email,
+        linkPassword,
+        pendingGoogleLink.credential,
+      );
+      setPendingGoogleLink(null);
+      setLinkPassword('');
+      await refreshUserData();
+    } catch (err: unknown) {
+      console.error('Błąd powiązania Google:', err);
+      setError(authLoginErrorMessage(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,12 +123,13 @@ export default function LoginForm() {
           throw new Error('Wprowadź email i hasło');
         }
 
-        const registeredUser = await authService.registerWithEmail(email, password);
+        const regEmail = normalizeAuthEmail(email);
+        const registeredUser = await authService.registerWithEmail(regEmail, password);
         const db = getDB();
         const userRef = doc(db, "users", registeredUser.uid);
 
         await setDoc(userRef, {
-          email,
+          email: regEmail,
           role: 'player',
           status: 'pending',
           linkedPlayerId: null,
@@ -92,39 +153,79 @@ export default function LoginForm() {
         }
         await authService.signInWithEmail(email, password);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Błąd logowania:", err);
-      if (err.code === "auth/user-not-found") {
-        setError("Nie znaleziono użytkownika o tym adresie email");
-      } else if (err.code === "auth/wrong-password") {
-        setError("Nieprawidłowe hasło");
-      } else if (err.code === "auth/invalid-email") {
-        setError("Nieprawidłowy format adresu email");
-      } else if (err.code === "auth/email-already-in-use") {
-        setError("Konto z tym adresem email już istnieje");
-      } else if (err.code === "auth/weak-password") {
-        setError("Hasło jest zbyt słabe. Użyj co najmniej 6 znaków");
-      } else if (err.code === "auth/invalid-credential") {
-        setError("Nieprawidłowe dane logowania");
-      } else if (err.code === "auth/too-many-requests") {
-        setError("Zbyt wiele prób logowania. Spróbuj ponownie później");
-      } else if (err.code === "auth/operation-not-allowed") {
-        setError(
-          "Logowanie e-mailem jest wyłączone w Firebase (Authentication → Sign-in method → Email/Password).",
-        );
-      } else if (err.code === "auth/invalid-api-key" || err.code === "auth/api-key-not-valid.-please-pass-a-valid-api-key.") {
-        setError("Nieprawidłowy klucz API Firebase — sprawdź .env.local (NEXT_PUBLIC_FIREBASE_*).");
-      } else if (err.code === "auth/app-not-authorized") {
-        setError("Domena nieautoryzowana — dodaj ją w Firebase → Authentication → Settings → Authorized domains.");
-      } else if (err.code === "auth/configuration-not-found") {
-        setError("Błąd konfiguracji Auth — sprawdź zmienne NEXT_PUBLIC_FIREBASE_* i projekt w konsoli Firebase.");
-      } else if (err.code === "auth/user-disabled") {
-        setError("To konto zostało wyłączone. Skontaktuj się z administratorem.");
-      } else if (typeof err.code === "string" && err.code.startsWith("auth/")) {
-        setError(`Błąd logowania (${err.code}). Szczegóły w konsoli przeglądarki.`);
-      } else {
-        setError(err.message || "Wystąpił błąd podczas logowania");
+
+      const code = err instanceof FirebaseError ? err.code : null;
+      const trimmedEmail = normalizeAuthEmail(email);
+      const trySignInMethodsHint =
+        !isRegistering &&
+        trimmedEmail.length > 0 &&
+        (code === "auth/invalid-login-credentials" ||
+          code === "auth/invalid-credential" ||
+          code === "auth/wrong-password" ||
+          code === "auth/user-not-found");
+
+      if (trySignInMethodsHint) {
+        try {
+          const methods = await fetchSignInMethodsForEmail(getAuthClient(), trimmedEmail);
+          const googleOnly = passwordLoginBlockedByGoogleOnlyProvider(methods);
+          if (googleOnly) {
+            setError(googleOnly);
+            return;
+          }
+        } catch {
+          /* ochrona przed enumeracją / sieć — standardowy komunikat */
+        }
       }
+
+      setError(authLoginErrorMessage(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      await authService.signInWithGoogle();
+    } catch (err: unknown) {
+      console.error("Błąd logowania Google:", err);
+      const linkData = readGoogleLinkDataFromAccountExistsError(err);
+      if (linkData) {
+        setPendingGoogleLink({
+          credential: linkData.credential,
+          email: linkData.email,
+        });
+        setEmail(linkData.email);
+        setLinkPassword('');
+        setError(null);
+      } else {
+        setError(authLoginErrorMessage(err));
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePasswordResetRequest = async () => {
+    const normalized = normalizeAuthEmail(email);
+    if (!normalized) {
+      setError('Podaj adres e-mail w polu powyżej — wyślemy link do ustawienia hasła.');
+      return;
+    }
+    setError(null);
+    setIsLoading(true);
+    try {
+      await authService.sendPasswordResetEmail(normalized);
+      toast.success(
+        'Jeśli konto z tym adresem istnieje, Firebase wysłał wiadomość z linkiem do resetu hasła. Sprawdź skrzynkę i folder spam.',
+        { duration: 6000 },
+      );
+    } catch (err: unknown) {
+      console.error('Reset hasła:', err);
+      setError(authLoginErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -146,16 +247,146 @@ export default function LoginForm() {
       )}
 
       {showClassicLogin ? (
-        <main className={styles.classicLoginMain}>
+        <main
+          className={styles.classicLoginMain}
+          aria-labelledby="login-page-title"
+        >
+          <div className={styles.classicLoginBackdrop} aria-hidden="true" />
           <div className={styles.classicLoginContainer}>
             <div className={styles.classicLoginCard}>
-              <div className={styles.classicHeader}>
-                <h1 className={styles.classicTitle}>Packing Analyzer</h1>
+              <header className={styles.classicHeader}>
+                <div className={styles.classicBrand}>
+                  <Image
+                    src="/logo.png"
+                    alt=""
+                    width={88}
+                    height={88}
+                    className={styles.classicLogo}
+                    priority
+                    unoptimized
+                  />
+                  <span className={styles.classicWordmark}>LOOKBALL</span>
+                </div>
+                <h1 id="login-page-title" className={styles.classicHeadline}>
+                  {isRegistering ? 'Utwórz konto' : 'Zaloguj się'}
+                </h1>
                 <p className={styles.classicSubtitle}>
-                  {isRegistering ? 'Utwórz nowe konto' : 'Zaloguj się do aplikacji'}
+                  {isRegistering
+                    ? 'Po rejestracji konto wymaga akceptacji przez administratora.'
+                    : 'Zaloguj się przez Google lub e-mail, aby przejść do aplikacji.'}
                 </p>
-              </div>
+              </header>
 
+              {!isRegistering && pendingGoogleLink ? (
+                <div className={styles.classicLinkPanel}>
+                  <p className={styles.classicLinkHint} id="google-link-desc">
+                    To konto ma już logowanie e-mail i hasłem. Wpisz to samo hasło, aby połączyć Google
+                    z tym kontem — potem zalogujesz się tak jak dotąd e-mailem albo przez Google.
+                  </p>
+                  <form onSubmit={handleCompleteGoogleLink} className={styles.classicLinkForm}>
+                    <div className={styles.classicInputGroup}>
+                      <label htmlFor="link-email" className={styles.classicLabel}>
+                        E-mail
+                      </label>
+                      <input
+                        id="link-email"
+                        type="email"
+                        name="email"
+                        autoComplete="email"
+                        value={pendingGoogleLink.email}
+                        readOnly
+                        className={`${styles.classicInput} ${styles.classicInputReadonly}`}
+                        aria-describedby="google-link-desc"
+                      />
+                    </div>
+                    <div className={styles.classicInputGroup}>
+                      <label htmlFor="link-password" className={styles.classicLabel}>
+                        Hasło do konta
+                      </label>
+                      <input
+                        id="link-password"
+                        type="password"
+                        name="password"
+                        autoComplete="current-password"
+                        value={linkPassword}
+                        onChange={(e) => setLinkPassword(e.target.value)}
+                        className={styles.classicInput}
+                        placeholder="Hasło, którego używasz przy logowaniu e-mail"
+                        disabled={isLoading}
+                        required
+                      />
+                    </div>
+                    {error ? (
+                      <div className={styles.classicError} role="alert">
+                        {error}
+                      </div>
+                    ) : null}
+                    <div className={styles.classicLinkActions}>
+                      <button
+                        type="submit"
+                        className={styles.classicSubmitButton}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? (
+                          <span className={styles.spinnerWrap}>
+                            <span className={styles.spinner} aria-hidden />
+                            <span className={styles.srOnly}>Trwa przetwarzanie…</span>
+                          </span>
+                        ) : (
+                          'Połącz Google i zaloguj'
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.classicToggleButton}
+                        onClick={cancelPendingGoogleLink}
+                        disabled={isLoading}
+                      >
+                        Anuluj
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              ) : !isRegistering ? (
+                <div className={styles.classicOAuth}>
+                  <button
+                    type="button"
+                    className={styles.googleButton}
+                    onClick={handleGoogleSignIn}
+                    disabled={isLoading}
+                    aria-label="Kontynuuj z Google"
+                  >
+                    <span className={styles.googleIcon} aria-hidden>
+                      <svg width={20} height={20} viewBox="0 0 24 24">
+                        <path
+                          fill="#4285F4"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                        />
+                      </svg>
+                    </span>
+                    <span>Kontynuuj z Google</span>
+                  </button>
+                  <div className={styles.classicDivider} role="presentation">
+                    <span className={styles.classicDividerLine} />
+                    <span className={styles.classicDividerText}>lub</span>
+                    <span className={styles.classicDividerLine} />
+                  </div>
+                </div>
+              ) : null}
+
+              {(isRegistering || !pendingGoogleLink) ? (
               <form onSubmit={handleSubmit} className={styles.classicForm}>
                 {isRegistering && (
                   <>
@@ -166,6 +397,8 @@ export default function LoginForm() {
                       <input
                         id="firstName"
                         type="text"
+                        name="given-name"
+                        autoComplete="given-name"
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                         className={styles.classicInput}
@@ -181,6 +414,8 @@ export default function LoginForm() {
                       <input
                         id="lastName"
                         type="text"
+                        name="family-name"
+                        autoComplete="family-name"
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                         className={styles.classicInput}
@@ -196,6 +431,8 @@ export default function LoginForm() {
                       <input
                         id="birthYear"
                         type="number"
+                        name="bday-year"
+                        autoComplete="bday-year"
                         value={birthYear}
                         onChange={(e) => setBirthYear(e.target.value)}
                         className={styles.classicInput}
@@ -217,10 +454,12 @@ export default function LoginForm() {
                   <input
                     id="email"
                     type="email"
+                    name="email"
+                    autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className={styles.classicInput}
-                    placeholder="wprowadz@email.com"
+                    placeholder="twoj@email.com"
                     disabled={isLoading}
                     required
                   />
@@ -233,33 +472,81 @@ export default function LoginForm() {
                   <input
                     id="password"
                     type="password"
+                    name="password"
+                    autoComplete={isRegistering ? 'new-password' : 'current-password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className={styles.classicInput}
-                    placeholder="Wprowadź hasło"
+                    placeholder={isRegistering ? 'Minimum 6 znaków' : 'Twoje hasło'}
                     disabled={isLoading}
                     required
-                    minLength={6}
+                    minLength={isRegistering ? 6 : undefined}
                   />
                 </div>
 
-                {error && <div className={styles.classicError}>{error}</div>}
+                {!isRegistering ? (
+                  <div className={styles.forgotPasswordRow}>
+                    <button
+                      type="button"
+                      className={styles.forgotPasswordButton}
+                      onClick={handlePasswordResetRequest}
+                      disabled={isLoading}
+                    >
+                      Nie pamiętasz hasła? Wyślij link resetujący
+                    </button>
+                  </div>
+                ) : null}
 
-                <button type="submit" className={styles.classicSubmitButton} disabled={isLoading}>
-                  {isLoading ? <div className={styles.spinner} /> : isRegistering ? 'Utwórz konto' : 'Zaloguj się'}
-                </button>
+                {error && !pendingGoogleLink ? (
+                  <div className={styles.classicError} role="alert">
+                    {error}
+                  </div>
+                ) : null}
 
-                <button
-                  type="button"
-                  className={styles.classicToggleButton}
-                  onClick={() => {
-                    setIsRegistering(!isRegistering);
-                    setError(null);
-                  }}
-                  disabled={isLoading}
-                >
-                  {isRegistering ? 'Masz już konto? Zaloguj się' : 'Nie masz konta? Zarejestruj się'}
-                </button>
+                <div className={styles.classicFormActions}>
+                  <button
+                    type="submit"
+                    className={styles.classicSubmitButton}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <span className={styles.spinnerWrap}>
+                        <span className={styles.spinner} aria-hidden />
+                        <span className={styles.srOnly}>Trwa przetwarzanie…</span>
+                      </span>
+                    ) : isRegistering ? (
+                      'Utwórz konto'
+                    ) : (
+                      'Zaloguj się'
+                    )}
+                  </button>
+                </div>
+
+                <div className={styles.classicFooter}>
+                  <button
+                    type="button"
+                    className={styles.classicToggleButton}
+                    onClick={() => {
+                      setIsRegistering(!isRegistering);
+                      setError(null);
+                    }}
+                    disabled={isLoading}
+                  >
+                    {isRegistering ? (
+                      <>
+                        Masz już konto?{' '}
+                        <span className={styles.classicToggleEmphasis}>Zaloguj się</span>
+                      </>
+                    ) : (
+                      <>
+                        Nie masz konta?{' '}
+                        <span className={styles.classicToggleEmphasis}>
+                          Zarejestruj się
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
 
                 {LANDING_VISIBLE && (
                   <button
@@ -272,14 +559,24 @@ export default function LoginForm() {
                   </button>
                 )}
               </form>
+              ) : null}
             </div>
           </div>
         </main>
       ) : (
         <main className={styles.landing}>
           <section className={styles.hero}>
+            <Image
+              src="/logo.png"
+              alt="LOOKBALL"
+              width={88}
+              height={88}
+              className={styles.heroLogo}
+              priority
+              unoptimized
+            />
             <p className={styles.badge}>Nowa generacja analizy meczowej</p>
-            <h1 className={styles.title}>Packing Analyzer.</h1>
+            <h1 className={styles.title}>LOOKBALL.</h1>
             <h2 className={styles.titleSecondary}>Przewaga w każdym detalu.</h2>
             <p className={styles.subtitle}>
               Platforma dla sztabów i akademii, która zamienia surowe akcje meczowe w konkretne decyzje
@@ -329,7 +626,7 @@ export default function LoginForm() {
                 Krótkie wideo o aplikacji
               </h2>
               <p className={styles.sectionLead}>
-                Zobacz, jak w 90 sekund Packing Analyzer zmienia sposób, w jaki patrzysz na mecz.
+                Zobacz, jak w 90 sekund LOOKBALL zmienia sposób, w jaki patrzysz na mecz.
               </p>
             </div>
             <div className={styles.videoPlaceholder}>
