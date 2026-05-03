@@ -37,6 +37,7 @@ import "../utils/kpiRegainLosesZoneRaw.test";
 import "../utils/actionVideoSeekSeconds.test";
 import "../utils/profileHeatmapVideoPanelLayout.test";
 import "../components/FootballPitch/utils.test";
+import "../lib/possessionSegmentsUpsert.test";
 import "../lib/mergeMatchArrayById.test";
 import "../lib/ensureMatchArrayIds.test";
 import "../lib/matchArrayFieldWrite.test";

@@ -30,7 +30,16 @@ import ImportButton from "@/components/ImportButton/ImportButton";
 import { initializeTeams, checkTeamsCollection } from "@/utils/initializeTeams";
 import { useAuth } from "@/hooks/useAuth";
 import toast from 'react-hot-toast';
-import { collection, doc, getDoc, getDocs, query, updateDoc, where } from "@/lib/firestoreWithMetrics";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  updateDoc,
+  runTransaction,
+  where,
+} from "@/lib/firestoreWithMetrics";
 import { getDB } from "@/lib/firebase";
 import {
   commitCrossMatchArrayFieldPairUpdate,
@@ -47,6 +56,11 @@ import {
   replaceActionByIdInArray,
 } from "@/lib/matchDocumentArrayUpdaters";
 import { invalidateMatchCache } from "@/utils/matchDocCache";
+import {
+  POSSESSION_MERGE_EPS,
+  sanitizePossessionSegments,
+  upsertPossessionSegments,
+} from "@/lib/possessionSegmentsUpsert";
 import pitchHeaderStyles from "@/components/PitchHeader/PitchHeader.module.css";
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesModal";
@@ -730,7 +744,6 @@ export default function Page() {
 
   type PossessionMode = "z" | "x" | "c";
   type PossessionType = PossessionSegment["type"];
-  const POSSESSION_EPS = 1e-6; // dla łączenia sąsiednich przedziałów (ułamki sekund)
 
   const createEmptyPossessionCounters = (): PossessionCountersSec => ({
     teamFirstHalf: 0,
@@ -812,122 +825,6 @@ export default function Page() {
   const possessionSegmentsToNormalizedCounters = (
     segments: PossessionSegment[]
   ): PossessionCountersSec => normalizePossessionCountersToWholeSeconds(possessionSegmentsToCounters(segments));
-
-  const sanitizePossessionSegments = (value: unknown): PossessionSegment[] => {
-    if (!Array.isArray(value)) return [];
-    return value
-      .map((segment): PossessionSegment | null => {
-        const raw = segment as Partial<PossessionSegment>;
-        const startSec = Number(raw.startSec);
-        const endSec = Number(raw.endSec);
-        if (!Number.isFinite(startSec) || !Number.isFinite(endSec) || endSec <= startSec) {
-          return null;
-        }
-        const mode: PossessionMode =
-          raw.mode === "z" || raw.mode === "x" || raw.mode === "c" ? raw.mode : "x";
-        const type: PossessionType =
-          raw.type === "team" || raw.type === "opponent" || raw.type === "dead"
-            ? raw.type
-            : mode === "x"
-              ? "dead"
-              : "team";
-        const half: 1 | 2 = raw.half === 2 ? 2 : 1;
-        return {
-          id: String(raw.id || `pos_${Math.round(startSec * 1000)}_${Math.round(endSec * 1000)}`),
-          type,
-          mode,
-          half,
-          startSec,
-          endSec,
-          durationSec: endSec - startSec,
-          startedAtVideoSec: Number.isFinite(Number(raw.startedAtVideoSec))
-            ? Number(raw.startedAtVideoSec)
-            : startSec,
-          endedAtVideoSec: Number.isFinite(Number(raw.endedAtVideoSec))
-            ? Number(raw.endedAtVideoSec)
-            : endSec,
-          createdAt: Number.isFinite(Number(raw.createdAt)) ? Number(raw.createdAt) : Date.now(),
-        };
-      })
-      .filter((segment): segment is PossessionSegment => Boolean(segment))
-      .sort((a, b) => a.startSec - b.startSec || a.endSec - b.endSec);
-  };
-
-  const trimSegmentsByIntervals = (
-    segments: PossessionSegment[],
-    intervals: Array<[number, number]>
-  ): PossessionSegment[] => {
-    if (intervals.length === 0) return segments;
-    const normalizedIntervals = intervals
-      .map(([start, end]) => [Math.min(start, end), Math.max(start, end)] as [number, number])
-      .filter(([start, end]) => Number.isFinite(start) && Number.isFinite(end) && end > start)
-      .sort((a, b) => a[0] - b[0]);
-
-    return segments.flatMap((segment) => {
-      let pieces: Array<[number, number]> = [[segment.startSec, segment.endSec]];
-      for (const [cutStart, cutEnd] of normalizedIntervals) {
-        pieces = pieces.flatMap(([pieceStart, pieceEnd]) => {
-          if (pieceEnd <= cutStart || pieceStart >= cutEnd) return [[pieceStart, pieceEnd] as [number, number]];
-          const nextPieces: Array<[number, number]> = [];
-          if (pieceStart < cutStart) nextPieces.push([pieceStart, cutStart]);
-          if (cutEnd < pieceEnd) nextPieces.push([cutEnd, pieceEnd]);
-          return nextPieces;
-        });
-      }
-
-      return pieces
-        .filter(([start, end]) => end > start)
-        .map(([start, end], index) => ({
-          ...segment,
-          id:
-            start === segment.startSec && end === segment.endSec
-              ? segment.id
-              : `${segment.id}_part_${index}_${Math.round(start * 1000)}_${Math.round(end * 1000)}`,
-          startSec: start,
-          endSec: end,
-          durationSec: end - start,
-          startedAtVideoSec: start,
-          endedAtVideoSec: end,
-        }));
-    });
-  };
-
-  const upsertPossessionSegments = (
-    current: PossessionSegment[],
-    incoming: PossessionSegment[]
-  ): PossessionSegment[] => {
-    const sanitizedIncoming = sanitizePossessionSegments(incoming);
-    if (sanitizedIncoming.length === 0) return current;
-
-    const intervals = sanitizedIncoming.map(
-      (segment) => [segment.startSec, segment.endSec] as [number, number]
-    );
-    const withoutOverlaps = trimSegmentsByIntervals(current, intervals);
-    const sorted = [...withoutOverlaps, ...sanitizedIncoming].sort(
-      (a, b) => a.startSec - b.startSec || a.endSec - b.endSec
-    );
-
-    return sorted.reduce<PossessionSegment[]>((acc, segment) => {
-      const last = acc[acc.length - 1];
-      if (
-        last &&
-        last.type === segment.type &&
-        last.mode === segment.mode &&
-        last.half === segment.half &&
-        Math.abs(last.endSec - segment.startSec) <= POSSESSION_EPS
-      ) {
-        acc[acc.length - 1] = {
-          ...last,
-          endSec: segment.endSec,
-          durationSec: segment.endSec - last.startSec,
-          endedAtVideoSec: segment.endSec,
-        };
-        return acc;
-      }
-      acc.push(segment);
-      return acc;
-    }, []);
-  };
 
   const minutesToSecondsSafe = (minutes?: number): number => {
     if (minutes === undefined || minutes === null) return 0;
@@ -1162,7 +1059,7 @@ export default function Page() {
         continue;
       }
       const last = out[out.length - 1];
-      if (s <= last[1] + POSSESSION_EPS) {
+      if (s <= last[1] + POSSESSION_MERGE_EPS) {
         last[1] = Math.max(last[1], e);
       } else {
         out.push([s, e]);
@@ -1437,43 +1334,93 @@ export default function Page() {
       }
 
       const resolvedMatch = await resolvePossessionMatchDocument(matchId);
-      const serverMatchData = resolvedMatch.data?.matchData;
-      const existing = serverMatchData?.possession || (matchInfo as any)?.matchData?.possession || {};
-      const existingSegments = sanitizePossessionSegments(
-        serverMatchData?.possessionSegments ?? (matchInfo as any)?.matchData?.possessionSegments
-      );
-      const mergedSegments = upsertPossessionSegments(existingSegments, draftSegments);
-      const countersForSave =
-        existingSegments.length > 0
-          ? possessionSegmentsToNormalizedCounters(mergedSegments)
-          : addPossessionCounters(possessionBaseSecRef.current, possessionSegmentsToNormalizedCounters(draftSegments));
-      const keepIfZero = (sec: number, existingMin: number | undefined) =>
-        sec > 0 || existingSegments.length > 0 ? secondsToMinutesDecimal(sec) : (existingMin ?? 0);
-      const patch = {
+      if (!resolvedMatch?.id) {
+        toast.error("Nie znaleziono dokumentu meczu w Firebase.");
+        return;
+      }
+
+      const draftFrozen = [...draftSegments];
+      // Bez lokalnego draftu nie ma sensu pisać do Firebase — upsert([], []) zostawiłby stan serwera,
+      // ale unikamy zbędnego zapisu i niejasności dla użytkownika („czy coś zniknęło?”).
+      if (draftFrozen.length === 0) {
+        toast(
+          "Brak lokalnego draftu posiadania do wysłania — nic nie zapisano w Firebase (segmenty z serwera pozostają bez zmian)."
+        );
+        return;
+      }
+
+      const possessionBaseSnapshot: PossessionCountersSec = { ...possessionBaseSecRef.current };
+
+      const db = getDB();
+      const matchRef = doc(db, "matches", resolvedMatch.id);
+
+      let patchResult: {
         possession: {
+          teamFirstHalf: number;
+          opponentFirstHalf: number;
+          teamSecondHalf: number;
+          opponentSecondHalf: number;
+          deadFirstHalf: number;
+          deadSecondHalf: number;
+        };
+        possessionSegments: PossessionSegment[];
+      } | null = null;
+      let countersForSaveResult = createEmptyPossessionCounters();
+
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(matchRef);
+        if (!snap.exists()) {
+          throw new Error("MATCH_DOC_MISSING");
+        }
+        const serverData = snap.data() as TeamInfo;
+        const serverMatchData = serverData?.matchData;
+        const existing = serverMatchData?.possession || {};
+        const existingSegments = sanitizePossessionSegments(serverMatchData?.possessionSegments);
+
+        // upsert: przy pustym „incoming” zwraca wyłącznie stan serwera (lib); tu incoming jest niepuste dzięki guardowi wyżej.
+        const mergedSegments = upsertPossessionSegments(existingSegments, draftFrozen);
+        if (mergedSegments.length === 0) {
+          throw new Error("EMPTY_POSSESSION_MERGE");
+        }
+
+        const countersForSave =
+          existingSegments.length > 0
+            ? possessionSegmentsToNormalizedCounters(mergedSegments)
+            : addPossessionCounters(
+                possessionBaseSnapshot,
+                possessionSegmentsToNormalizedCounters(draftFrozen)
+              );
+
+        const keepIfZero = (sec: number, existingMin: number | undefined) =>
+          sec > 0 || existingSegments.length > 0 ? secondsToMinutesDecimal(sec) : (existingMin ?? 0);
+
+        const possessionPatch = {
           teamFirstHalf: keepIfZero(countersForSave.teamFirstHalf, existing.teamFirstHalf),
           opponentFirstHalf: keepIfZero(countersForSave.opponentFirstHalf, existing.opponentFirstHalf),
           teamSecondHalf: keepIfZero(countersForSave.teamSecondHalf, existing.teamSecondHalf),
           opponentSecondHalf: keepIfZero(countersForSave.opponentSecondHalf, existing.opponentSecondHalf),
           deadFirstHalf: keepIfZero(countersForSave.deadFirstHalf, existing.deadFirstHalf),
           deadSecondHalf: keepIfZero(countersForSave.deadSecondHalf, existing.deadSecondHalf),
-        },
-        possessionSegments: mergedSegments,
-      };
-      if (mergedSegments.length === 0) {
-        toast.error("Brak segmentów posiadania do zapisania. Odtwórz fragment wideo i oznacz Z/X/C.");
+        };
+
+        countersForSaveResult = countersForSave;
+        patchResult = { possession: possessionPatch, possessionSegments: mergedSegments };
+
+        transaction.update(matchRef, {
+          "matchData.possession": possessionPatch,
+          "matchData.possessionSegments": mergedSegments,
+          lastUpdated: new Date().toISOString(),
+        } as any);
+      });
+
+      if (!patchResult) {
+        toast.error("Nie zapisano segmentów posiadania do Firebase. Lokalny draft zostaje zachowany.");
         return;
       }
 
-      const db = getDB();
-      await updateDoc(doc(db, "matches", resolvedMatch.id), {
-        "matchData.possession": patch.possession,
-        "matchData.possessionSegments": mergedSegments,
-        lastUpdated: new Date().toISOString(),
-      } as any);
-      await handleUpdateMatchData(matchId, patch, { persistToFirebase: false });
-      possessionBaseSecRef.current = countersForSave;
-      setPossessionSec(countersForSave);
+      await handleUpdateMatchData(matchId, patchResult, { persistToFirebase: false });
+      possessionBaseSecRef.current = countersForSaveResult;
+      setPossessionSec(countersForSaveResult);
       setPossessionDraftSegments([]);
       possessionDraftSegmentsRef.current = [];
       setIsPossessionDraftDirty(false);
@@ -1481,10 +1428,18 @@ export default function Page() {
         localStorage.removeItem(`possession_draft_sec_${matchId}`);
         localStorage.removeItem(`possession_draft_segments_${matchId}`);
       }
-      toast.success(`Zapisano ${mergedSegments.length} segmentów posiadania do Firebase (${resolvedMatch.id}).`);
+      toast.success(
+        `Zapisano ${patchResult.possessionSegments.length} segmentów posiadania do Firebase (${resolvedMatch.id}).`
+      );
     } catch (error) {
       console.error("Nie zapisano segmentów posiadania do Firebase:", error);
-      toast.error("Nie zapisano segmentów posiadania do Firebase. Lokalny draft zostaje zachowany.");
+      const message =
+        error instanceof Error && error.message === "EMPTY_POSSESSION_MERGE"
+          ? "Brak segmentów posiadania do zapisania. Odtwórz fragment wideo i oznacz Z/X/C."
+          : error instanceof Error && error.message === "MATCH_DOC_MISSING"
+            ? "Nie znaleziono dokumentu meczu w Firebase."
+            : "Nie zapisano segmentów posiadania do Firebase. Lokalny draft zostaje zachowany.";
+      toast.error(message);
     } finally {
       setIsPossessionSaving(false);
     }
@@ -4065,8 +4020,7 @@ export default function Page() {
               .find((segment) => segment.mode === possessionMode && segment.half === (is2 ? 2 : 1))
               ?.durationSec ?? 0;
           const hasSegmentsToPersist =
-            isPossessionDraftDirty ||
-            sanitizePossessionSegments((matchInfo as any)?.matchData?.possessionSegments).length > 0;
+            isPossessionDraftDirty || possessionDraftSegments.length > 0;
 
           return (
             <>
@@ -4115,6 +4069,24 @@ export default function Page() {
               <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, marginLeft: 6 }}>
                 {is2 ? "2p" : "1p"}
               </span>
+              <button
+                type="button"
+                className={styles.videoPossessionJumpButton}
+                disabled={isPossessionSaving}
+                aria-disabled={isPossessionSaving}
+                title="Ustaw liczenie na II połowę; jeśli w meczu jest czas startu 2. połowy — przewiń wideo"
+                aria-label="Przejdź do drugiej połowy przy liczeniu posiadania"
+                onClick={async () => {
+                  handleSecondHalfToggle(true);
+                  const start2 = (matchInfo as any)?.secondHalfStartTime as number | undefined;
+                  if (typeof start2 === "number" && Number.isFinite(start2)) {
+                    await seekActiveVideo(start2);
+                    setPossessionVideoTimeSec(start2);
+                  }
+                }}
+              >
+                II połowa
+              </button>
               <span style={{ color: "rgba(255, 255, 255, 0.75)", fontSize: 12, marginLeft: 8 }}>
                 T: {formatMMSS(possessionVideoTimeSec)}
               </span>
