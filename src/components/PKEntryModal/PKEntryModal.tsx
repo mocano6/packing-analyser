@@ -6,6 +6,7 @@ import styles from "./PKEntryModal.module.css";
 import PlayerCard from "../ActionModal/PlayerCard";
 import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
 import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
+import { useModalFormHotkeys } from "@/hooks/useModalFormHotkeys";
 
 export interface PKEntryModalProps {
   isOpen: boolean;
@@ -66,6 +67,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
   const prevVideoTimestampRawRef = useRef<number | undefined>(undefined);
   const prevVideoTimestampRef = useRef<number | undefined>(undefined);
   const prevEditingEntryIdRef = useRef<string | undefined>(undefined);
+  const modalFormRef = useRef<HTMLFormElement | null>(null);
 
   // Funkcje pomocnicze do konwersji czasu
   const secondsToMMSS = (seconds: number): string => {
@@ -762,6 +764,8 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
     }
   };
 
+  useModalFormHotkeys({ isOpen, formRef: modalFormRef, onCancel: onClose });
+
   if (!isOpen) return null;
 
   return (
@@ -772,7 +776,7 @@ const PKEntryModal: React.FC<PKEntryModalProps> = ({
           <button className={styles.closeButton} onClick={onClose}>×</button>
         </div>
 
-        <form onSubmit={handleSubmit} className={styles.form}>
+        <form ref={modalFormRef} onSubmit={handleSubmit} className={styles.form}>
           {/* Informacja o czasie wideo */}
           <div className={styles.videoTimeInfo}>
             ⏱️ Czas wideo musi zaczynać się w momencie 1 kontaktu w PK

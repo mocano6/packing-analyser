@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import styles from "./RegainActionModal.module.css";
 import { Player, Action, TeamInfo } from "@/types";
 import { ACTION_BUTTONS } from "../PointsButtons/constants";
@@ -10,6 +10,7 @@ import { getOpponentLabelForPackingModal } from "@/lib/matchInfoPackingLabels";
 import { sortPlayersByLastName } from '@/utils/playerUtils';
 import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
 import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
+import { useModalFormHotkeys } from "@/hooks/useModalFormHotkeys";
 
 interface RegainActionModalProps {
   isOpen: boolean;
@@ -153,6 +154,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
 }) => {
   const clamp0to10 = (value: number) => Math.max(0, Math.min(10, value));
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
+  const modalFormRef = useRef<HTMLFormElement | null>(null);
 
   const opponentLineLabel = useMemo(
     () => getOpponentLabelForPackingModal(matchInfo),
@@ -555,6 +557,13 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
     return { byPosition, sortedPositions };
   }, [filteredPlayers, matchInfo, allMatches, currentSelectedMatch, isEditMode]);
 
+  const handleCancel = useCallback(() => {
+    onReset();
+    onClose();
+  }, [onReset, onClose]);
+
+  useModalFormHotkeys({ isOpen, formRef: modalFormRef, onCancel: handleCancel });
+
   if (!isOpen) return null;
 
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -787,11 +796,6 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
     void handleSave();
   };
 
-  const handleCancel = () => {
-    onReset();
-    onClose();
-  };
-
   const handleReset = () => {
     if (isEditMode) {
       // W trybie edycji - użyj oryginalnej funkcji onReset (przywraca oryginalną akcję)
@@ -813,7 +817,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
           </button>
         </div>
         
-        <form className={styles.form} onSubmit={handleFormSubmit}>
+        <form ref={modalFormRef} className={styles.form} onSubmit={handleFormSubmit}>
           {/* Wybór meczu - tylko w trybie edycji */}
           {isEditMode && allMatches && allMatches.length > 0 && (
             <div className={styles.formGroup}>

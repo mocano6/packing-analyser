@@ -7,6 +7,7 @@ import { isInPenaltyAreaCanonical, isInOpponentPenaltyAreaCanonical } from "@/ut
 import { getTorvaneySimpleXGPercentRounded } from "@/lib/xg";
 import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
 import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
+import { useModalFormHotkeys } from "@/hooks/useModalFormHotkeys";
 import styles from "./ShotModal.module.css";
 
 export interface ShotModalProps {
@@ -140,6 +141,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
   // Ref: inicjalizacja formularza tylko przy „otwarciu” (isOpen false→true) lub zmianie editingShot?.id; zapobiega resetowi przy zmianie typu strzału
   const lastInitOpenRef = useRef(false);
   const lastInitEditingShotIdRef = useRef<string | undefined>(undefined);
+  const modalFormRef = useRef<HTMLFormElement | null>(null);
 
   // Pobieranie czasu z wideo przy otwarciu modalu
   useEffect(() => {
@@ -1048,6 +1050,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
     }
   };
 
+  useModalFormHotkeys({ isOpen, formRef: modalFormRef, onCancel: onClose });
+
   if (!isOpen) return null;
 
   return (
@@ -1058,7 +1062,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
           <button className={styles.closeButton} onClick={onClose}>×</button>
         </div>
 
-        <form onSubmit={handleSubmit} className={styles.form}>
+        <form ref={modalFormRef} onSubmit={handleSubmit} className={styles.form}>
           {/* xG i dodatkowe pola */}
           <div className={styles.topRow}>
             <div className={styles.xgInput}>

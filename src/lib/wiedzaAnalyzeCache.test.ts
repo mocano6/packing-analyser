@@ -40,6 +40,20 @@ if (v2 && v2.v === 2) {
   assert.deepEqual(s2.selectedTeams, ["a"]);
 }
 
+const qualityIndexTab = parseWiedzaAnalyzeCache(
+  JSON.stringify({
+    v: 2,
+    dateFrom: "2026-01-01",
+    dateTo: "2026-03-01",
+    selectedTeams: ["a"],
+    activeTab: "qualityIndex",
+  }),
+);
+assert.ok(qualityIndexTab != null && qualityIndexTab.v === 2);
+if (qualityIndexTab && qualityIndexTab.v === 2) {
+  assert.equal(qualityIndexTab.activeTab, "qualityIndex");
+}
+
 const v3 = parseWiedzaAnalyzeCache(
   JSON.stringify({
     v: 3,

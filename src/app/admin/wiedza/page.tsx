@@ -18,6 +18,8 @@ import {
   ResponsiveContainer,
   Cell,
   Legend,
+  PieChart,
+  Pie,
 } from 'recharts';
 import styles from './wiedza.module.css';
 import toast from 'react-hot-toast';
@@ -54,6 +56,15 @@ import {
   summarizeRegainShapeBuckets,
   summarizeLoseShapeBuckets,
 } from '@/utils/wiedzaShapeBuckets';
+import {
+  buildPossessionLivePlayBlocks,
+  buildPossessionLivePlayBucketChartRows,
+  summarizePossessionLivePlayBlocks,
+} from '@/utils/possessionLivePlay';
+import {
+  buildTeamQualityIndexModel,
+  type TeamQualityIndexModel,
+} from '@/utils/teamQualityIndex';
 
 const REGAIN_TABLE_METRIC_COLS: { metric: keyof RegainPostWindowAgg; label: string }[] = [
   { metric: 'eligibleRegains', label: 'n' },
@@ -81,6 +92,18 @@ const WIEDZA_TEAM_BAR_COLORS = [
   '#65a30d',
   '#ea580c',
   '#4f46e5',
+];
+
+const QUALITY_INDEX_PIE_COLORS = [
+  '#2563eb',
+  '#16a34a',
+  '#f97316',
+  '#7c3aed',
+  '#0891b2',
+  '#dc2626',
+  '#65a30d',
+  '#db2777',
+  '#475569',
 ];
 
 type WindowType = 5 | 8 | 15 | 20;
@@ -174,6 +197,259 @@ const isMatchForSelectedTeams = (
     selectedNames.has(normalizeTeamKey(match.teamId))
   );
 };
+
+function TeamQualityIndexExplainer({ model }: { model?: TeamQualityIndexModel | null }) {
+  const formatNumber = (value: number, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : '0.00');
+  const formatCorrelation = (value: number | null) => (value === null ? '—' : value.toFixed(2));
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const selectedRow = model?.rows.find((row) => row.teamId === selectedTeamId) ?? model?.rows[0] ?? null;
+  const selectedPieData = useMemo(
+    () =>
+      selectedRow
+        ? selectedRow.metrics.map((metric) => ({
+            ...metric,
+            pieValue: Math.abs(metric.contribution),
+            displayContribution: metric.contribution,
+          }))
+        : [],
+    [selectedRow],
+  );
+
+  useEffect(() => {
+    if (!model?.rows.length) {
+      setSelectedTeamId(null);
+      return;
+    }
+    if (!selectedTeamId || !model.rows.some((row) => row.teamId === selectedTeamId)) {
+      setSelectedTeamId(model.rows[0].teamId);
+    }
+  }, [model, selectedTeamId]);
+
+  return (
+    <section className={styles.qualityIndexGuide} aria-labelledby="quality-index-guide-title">
+      <div className={styles.qualityIndexHeader}>
+        <span className={styles.qualityIndexEyebrow}>Model indeksu</span>
+        <h3 id="quality-index-guide-title" className={styles.qualityIndexTitle}>
+          Indeks jakości zespołu (QI)
+        </h3>
+        <p className={styles.qualityIndexLead}>
+          QI sprowadza kilka KPI do jednego wyniku 0-100. Każda składowa jest najpierw normalizowana względem ligi i sezonu, a
+          potem ważona siłą swojej korelacji z punktami na mecz w aktualnie pobranej próbie. Algorytm używa tylko tych składowych
+          z bazowego tekstu, które są dziś dostępne w danych meczowych.
+        </p>
+      </div>
+
+      <div className={styles.qualityIndexFormula} aria-label="Wzór na indeks jakości zespołu">
+        <code>
+          QI_raw,t = Σ s_i · (|r_i| / Σ|r_j|) · z_i,t
+          <br />
+          QI_t = 100 · (QI_raw,t - min(QI_raw)) / (max(QI_raw) - min(QI_raw))
+        </code>
+      </div>
+
+      {model && model.rows.length > 0 ? (
+        <div className={styles.qualityIndexResults} aria-label="Wyniki indeksu jakości zespołu">
+          <div className={styles.qualityIndexResultsHeader}>
+            <div>
+              <h4>Wyniki dla pobranej próby</h4>
+              <p>
+                Ranking liczony z <strong>{model.sampleMatches}</strong> meczów. Skala 0-100 jest względna dla aktualnie pobranych
+                zespołów, więc pokazuje, kto w tej próbie wypada najlepiej na tle pozostałych.
+              </p>
+            </div>
+            <span className={styles.qualityIndexWeightBadge}>
+              {model.usedCorrelationWeights ? 'Wagi z korelacji z PPM' : 'Równe wagi - za mała/stała próba dla korelacji'}
+            </span>
+          </div>
+
+          <div className={styles.qualityIndexResultsBody}>
+            <div className={styles.qualityIndexResultsTableWrap}>
+              <table className={styles.qualityIndexResultsTable}>
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Zespół</th>
+                    <th scope="col">Mecze</th>
+                    <th scope="col">PPM</th>
+                    <th scope="col">QI</th>
+                    <th scope="col">Najmocniejsze składowe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {model.rows.map((row, index) => {
+                    const isSelected = row.teamId === selectedRow?.teamId;
+                    return (
+                      <tr
+                        key={row.teamId}
+                        className={isSelected ? styles.qualityIndexSelectedRow : undefined}
+                        tabIndex={0}
+                        role="button"
+                        aria-pressed={isSelected}
+                        onClick={() => setSelectedTeamId(row.teamId)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setSelectedTeamId(row.teamId);
+                          }
+                        }}
+                      >
+                        <td>{index + 1}</td>
+                        <th scope="row">{row.teamName}</th>
+                        <td>{row.matches}</td>
+                        <td>{formatNumber(row.pointsPerMatch, 2)}</td>
+                        <td>
+                          <strong>{formatNumber(row.qualityIndex, 1)}</strong>
+                        </td>
+                        <td>
+                          <div className={styles.qualityIndexContributionList}>
+                            {row.metrics.slice(0, 3).map((metric) => (
+                              <span key={metric.id} className={metric.contribution >= 0 ? styles.qualityIndexPositive : styles.qualityIndexNegative}>
+                                {metric.label}: {metric.contribution >= 0 ? '+' : ''}
+                                {formatNumber(metric.contribution, 2)}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {selectedRow ? (
+              <aside className={styles.qualityIndexPiePanel} aria-label={`Składowe indeksu ${selectedRow.teamName}`}>
+                <div className={styles.qualityIndexPieHeader}>
+                  <span>Składowe indeksu</span>
+                  <strong>{selectedRow.teamName}</strong>
+                  <small>QI {formatNumber(selectedRow.qualityIndex, 1)} · PPM {formatNumber(selectedRow.pointsPerMatch, 2)}</small>
+                </div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie
+                      data={selectedPieData}
+                      dataKey="pieValue"
+                      nameKey="label"
+                      innerRadius={54}
+                      outerRadius={92}
+                      paddingAngle={2}
+                    >
+                      {selectedPieData.map((entry, index) => (
+                        <Cell key={entry.id} fill={QUALITY_INDEX_PIE_COLORS[index % QUALITY_INDEX_PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip
+                      content={({ active, payload }) => {
+                        const item = payload?.[0]?.payload as (typeof selectedPieData)[number] | undefined;
+                        if (!active || !item) return null;
+                        return (
+                          <div className={styles.tooltipCustom}>
+                            <div className={styles.tooltipLabel}>{item.label}</div>
+                            <div className={styles.tooltipRow}>
+                              <span className={styles.tooltipDesc}>Wkład do QI raw</span>
+                              <span className={styles.tooltipVal}>
+                                {item.displayContribution >= 0 ? '+' : ''}
+                                {formatNumber(item.displayContribution, 3)}
+                              </span>
+                            </div>
+                            <div className={styles.tooltipRow}>
+                              <span className={styles.tooltipDesc}>Średnia KPI</span>
+                              <span className={styles.tooltipVal}>{formatNumber(item.value, 3)}</span>
+                            </div>
+                            <div className={styles.tooltipRow}>
+                              <span className={styles.tooltipDesc}>z-score</span>
+                              <span className={styles.tooltipVal}>{formatNumber(item.zScore, 3)}</span>
+                            </div>
+                          </div>
+                        );
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className={styles.qualityIndexPieLegend}>
+                  {selectedPieData.map((entry, index) => (
+                    <span key={entry.id}>
+                      <i style={{ background: QUALITY_INDEX_PIE_COLORS[index % QUALITY_INDEX_PIE_COLORS.length] }} />
+                      {entry.label}
+                    </span>
+                  ))}
+                </div>
+              </aside>
+            ) : null}
+          </div>
+
+          <details className={styles.qualityIndexWeightsDetails}>
+            <summary>Wagi i korelacje użyte w tej próbie</summary>
+            <div className={styles.qualityIndexWeightsGrid}>
+              {model.weights.map((weight) => (
+                <span key={weight.id}>
+                  {weight.label}: w={formatNumber(weight.weight, 3)}, r={formatCorrelation(weight.correlation)}
+                  {weight.direction < 0 ? ', mniej=lepiej' : ''}
+                </span>
+              ))}
+            </div>
+          </details>
+        </div>
+      ) : null}
+
+      <div className={styles.qualityIndexGrid}>
+        <article className={styles.qualityIndexCard}>
+          <h4>Co mierzymy?</h4>
+          <p>
+            Ogólną jakość zespołu opartą na przewadze bramkowej i jakości sytuacji: GD, xGD, xG for, xGA oraz różnicy xG/strzał.
+            Zmienną docelową kalibracji jest PPM.
+          </p>
+        </article>
+        <article className={styles.qualityIndexCard}>
+          <h4>Skąd biorą się wagi?</h4>
+          <p>
+            Dla każdego dostępnego KPI liczymy korelację <var>r_i</var> z PPM. Siła wagi to <var>|r_i|</var>, a znak mówi, czy więcej
+            jest dobre, czy złe. Wagi są normalizowane tak, żeby ich suma wynosiła 1.
+          </p>
+        </article>
+        <article className={styles.qualityIndexCard}>
+          <h4>Jak czytać wynik?</h4>
+          <p>
+            Po zsumowaniu ważonych z-score wynik jest przeskalowany do 0-100: 0 oznacza najsłabszą drużynę w próbie, 100 najlepszą.
+            Porównuj QI do średniej ligi, TOP3 i trendu rolling.
+          </p>
+        </article>
+      </div>
+
+      <div className={styles.qualityIndexKpiGroups}>
+        <div>
+          <h4>Pakiet przewagi gry - wliczany</h4>
+          <ul>
+            <li>GD/90 i xGD/90 - im wyżej, tym lepiej.</li>
+            <li>xG for/90 oraz różnica xG/shot - jakość tworzenia sytuacji.</li>
+            <li>xGA/90 - KPI negatywny, więc działa z odwróconym znakiem.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Pakiet zdrowotności kadry - niewliczany</h4>
+          <ul>
+            <li>Match availability - dostępność minut zawodników z pierwszego składu.</li>
+            <li>Injury burden - dni absencji lub absencja na 1000 h, im mniej, tym lepiej.</li>
+            <li>Te KPI są częścią koncepcji z tekstu, ale nie są liczone bez danych o dostępności i kontuzjach.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Pakiet strukturalny - niewliczany</h4>
+          <ul>
+            <li>Wage bill lub ranking płac w lidze jako przybliżenie zasobów zespołu.</li>
+            <li>To również jest element bazowego algorytmu, ale nie jest wliczany, dopóki aplikacja nie ma takich danych.</li>
+            <li>TSR/SoT_diff nie są dodawane, bo nie są rdzeniem obecnie liczonego modelu.</li>
+          </ul>
+        </div>
+      </div>
+
+      <p className={styles.qualityIndexFootnote}>
+        Aktualny QI liczy wyłącznie wartości z Twojego tekstu, które są już dostępne w aplikacji: GD, xGD, xG for, xGA oraz
+        xG/strzał diff. Nie dokładamy tu PxT, packing, przechwytów ani strat, bo nie występują w bazowym opisie indeksu.
+      </p>
+    </section>
+  );
+}
 
 export default function WiedzaPage() {
   const { user, isAdmin, userRole, linkedPlayerId, logout } = useAuth();
@@ -720,6 +996,37 @@ export default function WiedzaPage() {
     };
   }, [possessionRows]);
 
+  const possessionLivePlayBlocks = useMemo(() => {
+    if (activeTab !== 'possession' || fetchedMatches.length === 0) return [];
+    const teamNameById = new Map(teams.map((team) => [team.id, team.name]));
+
+    return buildPossessionLivePlayBlocks(
+      fetchedMatches.map((match) => {
+        const teamName = teamNameById.get(match.team) ?? match.team;
+        const opponentName = match.opponent || 'Przeciwnik';
+        return {
+          matchId: match.matchId ?? match.id,
+          matchLabel: `${teamName} vs ${opponentName}`,
+          teamName,
+          opponentName,
+          date: match.date,
+          competition: match.competition,
+          segments: getPossessionSegmentsFromMatch(match),
+        };
+      }),
+    );
+  }, [activeTab, fetchedMatches, teams]);
+
+  const possessionLivePlaySummary = useMemo(
+    () => summarizePossessionLivePlayBlocks(possessionLivePlayBlocks),
+    [possessionLivePlayBlocks],
+  );
+
+  const possessionLivePlayBucketChartRows = useMemo(
+    () => buildPossessionLivePlayBucketChartRows(possessionLivePlayBlocks),
+    [possessionLivePlayBlocks],
+  );
+
   const possessionFetchDebug = useMemo(() => {
     const matchesWithSegments = fetchedMatches.filter((match) => getPossessionSegmentsFromMatch(match).length > 0);
     const totalSegments = matchesWithSegments.reduce(
@@ -852,6 +1159,11 @@ export default function WiedzaPage() {
   const matchesForCorrelation = useMemo(
     () => fetchedMatches.map((m) => ({ ...m, matchId: m.matchId ?? m.id }) as TeamInfo),
     [fetchedMatches],
+  );
+
+  const teamQualityIndexModel = useMemo(
+    () => buildTeamQualityIndexModel(matchesForCorrelation, new Map(teams.map((team) => [team.id, team.name]))),
+    [matchesForCorrelation, teams],
   );
 
   const playersById = useMemo(() => {
@@ -1273,6 +1585,13 @@ export default function WiedzaPage() {
         </button>
         <button
           type="button"
+          className={`${styles.tabButton} ${activeTab === 'qualityIndex' ? styles.active : ''}`}
+          onClick={() => setActiveTab('qualityIndex')}
+        >
+          Indeks QI
+        </button>
+        <button
+          type="button"
           className={`${styles.tabButton} ${activeTab === 'packingZones' ? styles.active : ''}`}
           onClick={() => setActiveTab('packingZones')}
         >
@@ -1300,8 +1619,8 @@ export default function WiedzaPage() {
             <div className={styles.correlationMergedPanel}>
               <h2 className={styles.correlationTabTitle}>Korelacje i Wagi</h2>
               <p className={styles.correlationTabLead}>
-                Ta zakładka pokazuje <strong>macierz korelacji metryk Wagi</strong> (gole, xG, PxT, suma ΔxT, suma pkt packing,
-                przechwyty, straty itd.) — jedna próba to jeden mecz. Po pobraniu danych zobaczysz tu pełny opis i tabelę.
+                Ta zakładka pokazuje korelacje wybranej metryki referencyjnej z pozostałymi metrykami Wagi — jedna próba to jeden
+                mecz. Po pobraniu danych wybierzesz dowolną metrykę referencyjną z listy.
               </p>
               <div className={styles.emptyState} role="status">
                 Wybierz zespoły, ustaw zakres dat i kliknij „Analizuj”, aby załadować mecze i wyświetlić macierz.
@@ -1311,17 +1630,29 @@ export default function WiedzaPage() {
             <div className={styles.correlationMergedPanel}>
               <h2 className={styles.correlationTabTitle}>Korelacje i Wagi</h2>
               <p className={styles.correlationTabLead}>
-                Jedna próba = jeden mecz. <strong>Macierz korelacji Pearsona</strong> — metryki z{" "}
-                <code className={styles.inlineCode}>wiedzaWeightsMetrics.ts</code> (sortowanie wierszy i kolumn). Pierwsze trzy
-                wiersze/kolumny: Wygrana, Remis, Przegrana (0/1 z goli); przy korelacji z innymi metrykami zera w tych wierszach nie
-                są pomijane jako „brak danych”. „Straty całe b.” tylko MY (bez OPP). Z akcji packing: PxT (Σ ΔxT × pkt), dodatkowo{" "}
-                <strong>xT (suma Δ)</strong> oraz <strong>Packing (suma pkt)</strong>. Korelacja <em>r</em>; kolory: zielono{" "}
-                <em>r</em> ≥ 0,4, czerwono <em>r</em> ≤ −0,4. Nagłówki: niebieski — MY, bursztynowy — OPP, fioletowy — W/R/P, szary —
-                agregat. Przekątna „—”. {selectedTeams.length} klubów, {fetchedMatches.length} meczów.
+                Jedna próba = jeden mecz. Wybierz dowolną metrykę referencyjną z listy. Tabela pokaże jej dodatnie i ujemne
+                korelacje Pearsona z metrykami z{" "}
+                <code className={styles.inlineCode}>wiedzaWeightsMetrics.ts</code>, posortowane od najsilniejszych. Kolory:
+                zielono <em>r</em> ≥ 0,4, czerwono <em>r</em> ≤ −0,4. Nagłówki: niebieski — MY, bursztynowy — OPP, fioletowy —
+                W/R/P. {selectedTeams.length} klubów, {fetchedMatches.length} meczów.
               </p>
               <WiedzaGoalsXgWeights matches={matchesForCorrelation} compact hideHint />
             </div>
           )
+        ) : activeTab === 'qualityIndex' ? (
+          <div className={styles.correlationMergedPanel}>
+            <h2 className={styles.correlationTabTitle}>Indeks QI</h2>
+            <p className={styles.correlationTabLead}>
+              Jeden indeks ogólny 0-100 zbudowany tylko z KPI dostępnych w aplikacji. Model normalizuje metryki między wybranymi
+              zespołami, waży je korelacją z PPM i pokazuje wkład każdej składowej.
+            </p>
+            {fetchedMatches.length === 0 ? (
+              <div className={styles.emptyState} role="status">
+                Wybierz zespoły, ustaw zakres dat i kliknij „Analizuj”, aby policzyć QI dla pobranej próby.
+              </div>
+            ) : null}
+            <TeamQualityIndexExplainer model={teamQualityIndexModel} />
+          </div>
         ) : activeTab === 'packingZones' ? (
           <WiedzaPackingFlowTab matches={matchesForCorrelation} />
         ) : activeTab === 'youth' ? (
@@ -1479,7 +1810,8 @@ export default function WiedzaPage() {
               <p className={styles.correlationTabLead}>
                 Próba: <strong>{possessionSummary.matchesWithSegments}</strong> meczów z segmentami,{' '}
                 <strong>{possessionSummary.totalSegments}</strong> pojedynczych odcinków. Segmenty są zestawiane po czasie wideo z xG,
-                packingiem, przechwytami i stratami, więc można sprawdzać m.in. średni czas akcji przed stratą albo najdłuższe akcje.
+                packingiem, przechwytami i stratami. Bloki płynnej gry sumują kolejne segmenty naszego zespołu i przeciwnika aż do
+                najbliższego czasu martwego, więc pokazują realny czas wysiłku bez przerwy.
               </p>
 
               <div className={styles.summaryCards}>
@@ -1518,6 +1850,79 @@ export default function WiedzaPage() {
                   </span>
                 </div>
               </div>
+
+              <section className={styles.possessionLivePlayCard} aria-labelledby="possession-live-play-title">
+                <div className={styles.possessionLivePlayHeader}>
+                  <div>
+                    <h3 id="possession-live-play-title" className={styles.heatmapHead}>
+                      Płynna gra bez przerw
+                    </h3>
+                    <p className={styles.heatmapLead}>
+                      Jeden blok = kolejne segmenty <strong>nasz zespół + przeciwnik</strong> do momentu wystąpienia{' '}
+                      <strong>czasu martwego</strong>. To mówi, na jak długi wysiłek ciągły przygotowywać zespół.{' '}
+                      <strong>P75</strong> i <strong>P90</strong> to percentyle długości bloków:{' '}
+                      <strong>P75</strong> — co najmniej 75% bloków jest nie dłuższych niż ta wartość (krótsze lub równe);{' '}
+                      <strong>P90</strong> — co najmniej 90% nie dłuższych (dłuższe stanowią górny „ogon”). Wykres poniżej:{' '}
+                      jaki <strong>udział procentowy wszystkich bloków</strong> wpada do danego przedziału czasu.
+                    </p>
+                  </div>
+                  <div className={styles.possessionLivePlayStats} aria-label="Podsumowanie płynnej gry bez przerw">
+                    <div>
+                      <span>Średnio</span>
+                      <strong>{formatPossessionSeconds(possessionLivePlaySummary.avgDuration)}</strong>
+                    </div>
+                    <div>
+                      <span>Mediana</span>
+                      <strong>{formatPossessionSeconds(possessionLivePlaySummary.medianDuration)}</strong>
+                    </div>
+                    <div>
+                      <span>P75</span>
+                      <strong>{formatPossessionSeconds(possessionLivePlaySummary.p75Duration)}</strong>
+                    </div>
+                    <div>
+                      <span>P90</span>
+                      <strong>{formatPossessionSeconds(possessionLivePlaySummary.p90Duration)}</strong>
+                    </div>
+                    <div>
+                      <span>Max</span>
+                      <strong>{formatPossessionSeconds(possessionLivePlaySummary.longest?.durationSec ?? 0)}</strong>
+                    </div>
+                  </div>
+                </div>
+                <div className={styles.packingFlowChartWrap}>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={possessionLivePlayBucketChartRows} margin={{ top: 16, right: 20, left: 8, bottom: 12 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                      <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 12 }} />
+                      <YAxis
+                        domain={[0, 100]}
+                        tickFormatter={(v) => `${v}%`}
+                        tick={{ fill: '#6b7280', fontSize: 12 }}
+                      />
+                      <RechartsTooltip
+                        cursor={{ fill: '#f3f4f6' }}
+                        formatter={(value: number, _name: string, props: { payload?: { blocks?: number } }) => {
+                          const count = props.payload?.blocks ?? 0;
+                          return [`${Number(value).toFixed(1)}% (${count} bloków)`, 'Udział'];
+                        }}
+                      />
+                      <Bar
+                        dataKey="pctOfBlocks"
+                        name="Udział bloków (%)"
+                        fill="#16a34a"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                {possessionLivePlaySummary.longest ? (
+                  <p className={styles.possessionLivePlayNote}>
+                    Najdłuższy blok: <strong>{formatPossessionSeconds(possessionLivePlaySummary.longest.durationSec)}</strong> w meczu{' '}
+                    {possessionLivePlaySummary.longest.matchLabel}, {possessionLivePlaySummary.longest.half}. połowa. Składał się z{' '}
+                    {possessionLivePlaySummary.longest.segments} segmentów live play.
+                  </p>
+                ) : null}
+              </section>
 
               <div className={styles.possessionGrid}>
                 <div className={styles.possessionChartCard}>

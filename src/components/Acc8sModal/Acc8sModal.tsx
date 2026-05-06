@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Acc8sEntry, TeamInfo, Player } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
-import { isFormEnterToSubmit } from "@/utils/formEnterSubmitKeydown";
+import { useModalFormHotkeys } from "@/hooks/useModalFormHotkeys";
 import styles from "./Acc8sModal.module.css";
 
 export interface Acc8sModalProps {
@@ -453,21 +453,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     }
   };
 
-  // Enter wysyła formularz jak „Zapisz”, także gdy fokus jest na body/przycisku, nie tylko w polu MM:SS
-  useEffect(() => {
-    if (!isOpen) return;
-    const onDocKey = (e: KeyboardEvent) => {
-      const form = formRef.current;
-      if (!form) return;
-      if (!isFormEnterToSubmit(e, form, () => document.activeElement)) {
-        return;
-      }
-      e.preventDefault();
-      form.requestSubmit();
-    };
-    document.addEventListener("keydown", onDocKey, true);
-    return () => document.removeEventListener("keydown", onDocKey, true);
-  }, [isOpen]);
+  useModalFormHotkeys({ isOpen, formRef, onCancel: onClose });
 
   if (!isOpen) return null;
 

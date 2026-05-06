@@ -179,6 +179,36 @@ export function getWiedzaWeightsMetricsFull(): WiedzaWeightsMetric[] {
       getValue: getTeamMatchLossIndicatorForMatch,
       axisSide: "outcome",
     },
+    {
+      id: "w_gd_per_match",
+      label: "GD/mecz",
+      getValue: (match) => getTeamGoalsForMatch(match) - getOpponentGoalsForMatch(match),
+      axisSide: "my",
+    },
+    {
+      id: "w_xgd_per_match",
+      label: "xGD/mecz",
+      getValue: (match) => getTeamXgForMatch(match) - getOpponentXGForMatch(match),
+      axisSide: "my",
+    },
+    {
+      id: "w_xg_shot_diff",
+      label: "xG/strz. diff",
+      getValue: (match) => getTeamXgPerShotForMatch(match) - getOpponentXgPerShot(match),
+      axisSide: "my",
+    },
+    {
+      id: "w_xg_for",
+      label: "xG for",
+      getValue: getTeamXgForMatch,
+      axisSide: "my",
+    },
+    {
+      id: "w_xga",
+      label: "xGA",
+      getValue: getOpponentXGForMatch,
+      axisSide: "my",
+    },
   ];
   for (const d of WIEDZA_WEIGHTS_METRIC_DEFS) {
     out.push({

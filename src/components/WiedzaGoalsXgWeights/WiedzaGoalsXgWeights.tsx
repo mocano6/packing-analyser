@@ -1,15 +1,8 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { TeamInfo } from "@/types";
 import { buildWiedzaWeightsCorrelation } from "@/utils/wiedzaWeightsMetrics";
-import {
-  correlationMatrixRowOrder,
-  correlationMatrixRowOrderByReferenceColumn,
-  permuteSquareCorrelationMatrix,
-  type CorrelationMatrixLabelSortMode,
-  type CorrelationMatrixSortMode,
-} from "@/utils/trendyKpis";
 import styles from "./WiedzaGoalsXgWeights.module.css";
 import { correlationAxisHeadClass } from "@/utils/correlationMatrixAxis";
 
@@ -38,44 +31,39 @@ export default function WiedzaGoalsXgWeights({
   compact = false,
   hideHint = false,
 }: WiedzaGoalsXgWeightsProps) {
-  const [sortMode, setSortMode] = useState<CorrelationMatrixSortMode>("trend");
-  const [sortRefColumnIndex, setSortRefColumnIndex] = useState(0);
+  const [referenceMetricId, setReferenceMetricId] = useState("w_gd_per_match");
   const data = useMemo(() => buildWiedzaWeightsCorrelation(matches, 3), [matches]);
+
+  /** Stan synchronizowany z listą metryk po zmianie próby. */
+  useEffect(() => {
+    if (!data?.metrics.length) return;
+    const exists = data.metrics.some((m) => m.id === referenceMetricId);
+    if (!exists) {
+      setReferenceMetricId(data.metrics[0].id);
+    }
+  }, [data, referenceMetricId]);
 
   const display = useMemo(() => {
     if (!data || data.metrics.length === 0) return null;
-    const n = data.metrics.length;
-    const refIdx = Math.min(Math.max(0, sortRefColumnIndex), n - 1);
-    const labels = data.metrics.map((m) => m.label);
-    let order: number[];
-    if (sortMode === "column_desc") {
-      order = correlationMatrixRowOrderByReferenceColumn(data.matrix, refIdx, "desc");
-    } else if (sortMode === "column_asc") {
-      order = correlationMatrixRowOrderByReferenceColumn(data.matrix, refIdx, "asc");
-    } else {
-      order = correlationMatrixRowOrder(labels, data.matrix, sortMode as CorrelationMatrixLabelSortMode);
-    }
-    const metrics = order.map((idx) => data.metrics[idx]);
-    const matrix = permuteSquareCorrelationMatrix(data.matrix, order);
-    return { metrics, matrix };
-  }, [data, sortMode, sortRefColumnIndex]);
+    const referenceOptions = data.metrics;
+    const selectedReference = referenceOptions.find((metric) => metric.id === referenceMetricId) ?? referenceOptions[0] ?? data.metrics[0];
+    const referenceIndex = data.metrics.findIndex((metric) => metric.id === selectedReference.id);
+    const correlations = data.metrics.flatMap((metric, index) => {
+      const r = data.matrix[referenceIndex]?.[index] ?? null;
+      if (metric.id === selectedReference.id || r === null) return [];
+      return [{ metric, r }];
+    });
+    const positive = correlations.filter((row) => row.r > 0).sort((a, b) => b.r - a.r);
+    const negative = correlations.filter((row) => row.r < 0).sort((a, b) => a.r - b.r);
+    return { referenceOptions, selectedReference, positive, negative };
+  }, [data, referenceMetricId]);
 
-  const onSortChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const v = e.target.value;
-    if (
-      v === "trend" ||
-      v === "alpha_pl" ||
-      v === "avg_abs" ||
-      v === "column_desc" ||
-      v === "column_asc"
-    ) {
-      setSortMode(v);
-    }
+  const onReferenceMetricChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setReferenceMetricId(e.target.value);
   }, []);
 
-  const onRefColumnChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const i = Number.parseInt(e.target.value, 10);
-    if (Number.isFinite(i) && i >= 0) setSortRefColumnIndex(i);
+  const selectMetricAsReference = useCallback((metricId: string) => {
+    setReferenceMetricId(metricId);
   }, []);
 
   const rootClass = compact ? `${styles.root} ${styles.rootCompact}` : styles.root;
@@ -84,9 +72,10 @@ export default function WiedzaGoalsXgWeights({
     <div className={rootClass}>
       {!hideHint ? (
         <p className={styles.hint}>
-          Pierwsze trzy kolumny/wiersze: <strong>Wygrana, Remis, Przegrana</strong> (0/1 z goli; jedna jedynka na mecz). Przy korelacji z innymi metrykami zera w tych wierszach nie są pomijane jako „brak danych”. „Straty całe b.” tylko MY (bez OPP). Reszta: metryki MY i OPP. Przekątna „—”.
-          <strong>Kolory komórek:</strong> r ≥ 0,4 zielono, r ≤ −0,4 czerwono.{" "}
-          <strong>Nagłówki:</strong> niebieski — nasz zespół (MY), bursztynowy — przeciwnik (OPP), fioletowy — wynik (W/R/P). Metryki:{" "}
+          Wybierz jedną metrykę referencyjną, a tabela pokaże wszystkie jej korelacje dodatnie i ujemne posortowane od najsilniejszych.
+          Kliknij wiersz korelacji, aby ustawić tę metrykę jako referencyjną.
+          <strong>Kolory:</strong> r ≥ 0,4 zielono, r ≤ −0,4 czerwono.{" "}
+          <strong>Nagłówki:</strong> niebieski — nasz zespół (MY), bursztynowy — przeciwnik (OPP), fioletowy — wynik (W/R/P). Metryki źródłowe:{" "}
           <code style={{ fontSize: "12px" }}>wiedzaWeightsMetrics.ts</code>.
           {scopeHint ? ` ${scopeHint}` : ""}
         </p>
@@ -96,101 +85,91 @@ export default function WiedzaGoalsXgWeights({
       ) : display ? (
         <>
           <div className={styles.toolbar}>
-            <label htmlFor="wiedza-weights-matrix-sort" className={styles.sortLabel}>
-              Sortuj wiersze i kolumny (Wagi)
+            <label htmlFor="wiedza-weights-reference-metric" className={styles.sortLabel}>
+              Metryka referencyjna
             </label>
             <select
-              id="wiedza-weights-matrix-sort"
-              name="wiedzaWeightsMatrixSort"
+              id="wiedza-weights-reference-metric"
+              name="wiedzaWeightsReferenceMetric"
               className={styles.select}
-              value={sortMode}
-              onChange={onSortChange}
-              aria-label="Sortowanie macierzy korelacji Wag"
+              value={display.selectedReference.id}
+              onChange={onReferenceMetricChange}
+              aria-label="Metryka referencyjna korelacji Wag"
             >
-              <option value="trend">Kolejność z definicji metryk</option>
-              <option value="alpha_pl">Alfabetycznie (A–Ż)</option>
-              <option value="avg_abs">Średnia |korelacja| z innymi (malejąco)</option>
-              <option value="column_desc">Po kolumnie: od największej korelacji</option>
-              <option value="column_asc">Po kolumnie: od najmniejszej korelacji</option>
+              {display.referenceOptions.map((metric) => (
+                <option key={metric.id} value={metric.id}>
+                  {metric.label}
+                </option>
+              ))}
             </select>
-            {(sortMode === "column_desc" || sortMode === "column_asc") && data ? (
-              <>
-                <label htmlFor="wiedza-weights-ref-col" className={styles.sortLabel}>
-                  Metryka (kolumna referencyjna)
-                </label>
-                <select
-                  id="wiedza-weights-ref-col"
-                  name="wiedzaWeightsRefColumn"
-                  className={styles.select}
-                  value={Math.min(Math.max(0, sortRefColumnIndex), data.metrics.length - 1)}
-                  onChange={onRefColumnChange}
-                  aria-label="Metryka referencyjna do sortowania po kolumnie"
-                >
-                  {data.metrics.map((m, i) => (
-                    <option key={m.id} value={i}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-              </>
-            ) : null}
           </div>
-          <div
-            className={styles.scroll}
-            role="region"
-            aria-label="Korelacje Pearsona — wszystkie metryki MY i OPP (Wagi)"
-            tabIndex={0}
-          >
-            <table className={styles.table}>
-              <caption className={styles.visuallyHidden}>
-                Pełna macierz korelacji: metryki naszego zespołu i przeciwnika w jednej siatce.
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col" className={styles.corner}>
-                    Metryka
-                  </th>
-                  {display.metrics.map((m) => (
-                    <th
-                      key={m.id}
-                      scope="col"
-                      className={`${styles.colHead} ${correlationAxisHeadClass(m.axisSide, styles)}`}
-                      title={m.label}
-                    >
-                      {m.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {display.metrics.map((rowM, i) => (
-                  <tr key={rowM.id}>
-                    <th
-                      scope="row"
-                      className={`${styles.rowHead} ${correlationAxisHeadClass(rowM.axisSide, styles)}`}
-                      title={rowM.label}
-                    >
-                      {rowM.label}
-                    </th>
-                    {display.matrix[i].map((r, j) => {
-                      const colM = display.metrics[j];
-                      const isDiagonal = i === j;
-                      const tone = isDiagonal ? styles.corrNA : cellToneClass(r, styles);
-                      const title = isDiagonal
-                        ? `${rowM.label}: ta sama metryka — pominięto autokorelację (r = 1)`
-                        : r == null
-                          ? `${rowM.label} ↔ ${colM.label}: brak obliczenia`
-                          : `${rowM.label} ↔ ${colM.label}: r = ${r.toFixed(3)}`;
-                      return (
-                        <td key={`${rowM.id}-${colM.id}`} className={`${styles.cell} ${tone}`} title={title}>
-                          {isDiagonal || r == null ? "—" : r.toFixed(2)}
+          <div className={styles.correlationColumns}>
+            {[
+              { title: "Korelacje dodatnie", rows: display.positive },
+              { title: "Korelacje ujemne", rows: display.negative },
+            ].map((section) => (
+              <div
+                key={section.title}
+                className={styles.scroll}
+                role="region"
+                aria-label={`${section.title} dla ${display.selectedReference.label}`}
+              >
+                <table className={styles.table}>
+                  <caption className={styles.correlationCaption}>
+                    {section.title}: {display.selectedReference.label}
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col" className={styles.corner}>
+                        Metryka
+                      </th>
+                      <th scope="col" className={styles.correlationValueHead}>
+                        r
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {section.rows.length > 0 ? (
+                      section.rows.map(({ metric, r }) => (
+                        <tr
+                          key={`${display.selectedReference.id}-${metric.id}`}
+                          className={styles.clickableCorrRow}
+                          tabIndex={0}
+                          aria-label={`Ustaw ${metric.label} jako metrykę referencyjną`}
+                          onClick={() => selectMetricAsReference(metric.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              selectMetricAsReference(metric.id);
+                            }
+                          }}
+                        >
+                          <th
+                            scope="row"
+                            className={`${styles.rowHead} ${correlationAxisHeadClass(metric.axisSide, styles)}`}
+                            title={metric.label}
+                          >
+                            {metric.label}
+                          </th>
+                          <td
+                            className={`${styles.cell} ${cellToneClass(r, styles)}`}
+                            title={`${display.selectedReference.label} ↔ ${metric.label}: r = ${r.toFixed(3)}`}
+                          >
+                            {r.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={2} className={`${styles.cell} ${styles.corrNA}`}>
+                          Brak korelacji w tej grupie.
                         </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ))}
           </div>
         </>
       ) : (

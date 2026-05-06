@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import styles from "./ActionModal.module.css";
 import { Player, Action, TeamInfo } from "@/types";
 import { ACTION_BUTTONS } from "../PointsButtons/constants";
@@ -9,6 +9,7 @@ import { TEAMS } from "@/constants/teams";
 import { sortPlayersByLastName } from '@/utils/playerUtils';
 import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
 import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
+import { useModalFormHotkeys } from "@/hooks/useModalFormHotkeys";
 
 interface ActionModalProps {
   isOpen: boolean;
@@ -148,6 +149,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
   const prevVideoTimestampRawRef = React.useRef<number | undefined>(undefined);
   const prevVideoTimestampRef = React.useRef<number | undefined>(undefined);
   const prevEditingActionIdRef = React.useRef<string | undefined>(undefined);
+  const modalFormRef = useRef<HTMLFormElement | null>(null);
 
   // Ładujemy ostatnio wybraną opcję trybu
   useEffect(() => {
@@ -531,6 +533,13 @@ const ActionModal: React.FC<ActionModalProps> = ({
     return { byPosition, sortedPositions };
   }, [filteredPlayers, matchInfo, allMatches, currentSelectedMatch, isEditMode]);
 
+  const handleCancel = useCallback(() => {
+    onReset();
+    onClose();
+  }, [onReset, onClose]);
+
+  useModalFormHotkeys({ isOpen, formRef: modalFormRef, onCancel: handleCancel });
+
   if (!isOpen) return null;
 
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -818,11 +827,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
     onSaveAction();
   };
 
-  const handleCancel = () => {
-    onReset();
-    onClose();
-  };
-
   const handleReset = () => {
     if (isEditMode) {
       // W trybie edycji - użyj oryginalnej funkcji onReset (przywraca oryginalną akcję)
@@ -866,7 +870,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
           </div>
         )}
         
-        <form className={styles.form} onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
+        <form ref={modalFormRef} className={styles.form} onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
           {/* Wybór meczu - tylko w trybie edycji */}
           {isEditMode && allMatches && allMatches.length > 0 && (
             <div className={styles.formGroup}>

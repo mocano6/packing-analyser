@@ -62,6 +62,12 @@ import {
   upsertPossessionSegments,
 } from "@/lib/possessionSegmentsUpsert";
 import pitchHeaderStyles from "@/components/PitchHeader/PitchHeader.module.css";
+import PossessionCounterToggle from "@/components/PossessionCounterToggle/PossessionCounterToggle";
+import {
+  POSSESSION_COUNTER_CHANGED_EVENT,
+  POSSESSION_COUNTER_STORAGE_KEY,
+  isPossessionCounterEnabledStoredValue,
+} from "@/utils/possessionCounterPreference";
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
 import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesModal";
 import TeamFormationBoard from "@/components/TeamFormationBoard/TeamFormationBoard";
@@ -345,7 +351,8 @@ export default function Page() {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (typeof window === "undefined") return;
       // W trybie "posiadanie ON" trzymamy fokus poza iframe, więc skróty muszą działać globalnie.
-      if (localStorage.getItem("possession_counter_enabled") === "false") return;
+      if (!isPossessionCounterEnabledStoredValue(localStorage.getItem(POSSESSION_COUNTER_STORAGE_KEY)))
+        return;
       if (localStorage.getItem("isVideoVisible") !== "true") return;
       // Jeśli nie ma żadnego playera, nie ma co przewijać
       if (!youtubeVideoRef.current && !customVideoRef.current) return;
@@ -700,9 +707,8 @@ export default function Page() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const v = localStorage.getItem("possession_counter_enabled");
-    // Brak wartości => domyślnie ON
-    setIsPossessionCounterEnabled(v !== "false");
+    const v = localStorage.getItem(POSSESSION_COUNTER_STORAGE_KEY);
+    setIsPossessionCounterEnabled(isPossessionCounterEnabledStoredValue(v));
   }, []);
 
   useEffect(() => {
@@ -711,8 +717,8 @@ export default function Page() {
       const enabled = Boolean(e?.detail?.enabled);
       setIsPossessionCounterEnabled(enabled);
     };
-    window.addEventListener("possessionCounterEnabledChanged", handler as EventListener);
-    return () => window.removeEventListener("possessionCounterEnabledChanged", handler as EventListener);
+    window.addEventListener(POSSESSION_COUNTER_CHANGED_EVENT, handler as EventListener);
+    return () => window.removeEventListener(POSSESSION_COUNTER_CHANGED_EVENT, handler as EventListener);
   }, []);
 
   const [pitchIsFlippedForPossession, setPitchIsFlippedForPossession] = useState<boolean>(() => {
@@ -4074,8 +4080,8 @@ export default function Page() {
                 className={styles.videoPossessionJumpButton}
                 disabled={isPossessionSaving}
                 aria-disabled={isPossessionSaving}
-                title="Ustaw liczenie na II połowę; jeśli w meczu jest czas startu 2. połowy — przewiń wideo"
-                aria-label="Przejdź do drugiej połowy przy liczeniu posiadania"
+                title="Ustaw liczenie na 2. połowę (2p); jeśli w meczu jest czas startu 2. połowy — przewiń wideo"
+                aria-label="2p — przejdź do drugiej połowy przy liczeniu posiadania"
                 onClick={async () => {
                   handleSecondHalfToggle(true);
                   const start2 = (matchInfo as any)?.secondHalfStartTime as number | undefined;
@@ -4085,7 +4091,7 @@ export default function Page() {
                   }
                 }}
               >
-                II połowa
+                2p
               </button>
               <span style={{ color: "rgba(255, 255, 255, 0.75)", fontSize: 12, marginLeft: 8 }}>
                 T: {formatMMSS(possessionVideoTimeSec)}
@@ -4249,6 +4255,7 @@ export default function Page() {
             >
               {isRefreshingData ? "Odświeżanie..." : "Odśwież dane"}
             </button>
+            {matchInfo?.matchId ? <PossessionCounterToggle /> : null}
           </div>
           {!isPlayer && (
             <div className={styles.controlsContainer}>
@@ -4730,7 +4737,7 @@ export default function Page() {
                 }}
                 editingEntry={acc8sModalData.editingEntry}
                 matchId={matchInfo?.matchId || ""}
-                matchInfo={matchInfo}
+                matchInfo={matchInfoForActionSection}
                 players={players}
                 onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
                 onGetVideoTime={async () => {
@@ -5144,7 +5151,7 @@ export default function Page() {
                 xG={shotModalData.xG}
                 matchId={matchInfo?.matchId || ""}
                 players={players}
-                matchInfo={matchInfo}
+                matchInfo={matchInfoForActionSection}
                 shots={shots}
                 onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
                 onGetVideoTime={async () => {
@@ -6135,7 +6142,7 @@ export default function Page() {
             endY={pkEntryModalData.endY}
             matchId={matchInfo?.matchId || ""}
             players={players}
-            matchInfo={matchInfo}
+            matchInfo={matchInfoForActionSection}
             onCalculateMinuteFromVideo={calculateMatchMinuteFromVideoTime}
             onGetVideoTime={async () => {
               // Najpierw sprawdź localStorage (ustawiony przy otwieraniu modala)

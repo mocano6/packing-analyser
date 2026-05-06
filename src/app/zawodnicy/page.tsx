@@ -1,418 +1,365 @@
-// @ts-nocheck
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Player, Action, TeamInfo } from "@/types";
-import { usePlayersState } from "@/hooks/usePlayersState";
-import { useMatchInfo } from "@/hooks/useMatchInfo";
-import { useTeams } from "@/hooks/useTeams";
-import { useAuth } from "@/hooks/useAuth";
-import PackingChart from '@/components/PackingChart/PackingChart';
-import PlayerModal from "@/components/PlayerModal/PlayerModal";
-import ActionSection from "@/components/ActionSection/ActionSection";
-import { db } from "@/lib/firebase";
-import { doc, collection, getDocs, updateDoc, query, where } from "@/lib/firestoreWithMetrics";
-import { enrichMatchDataWithLegacyPackingIfNeeded } from "@/lib/matchDocumentCache";
-import { buildMatchDocumentUpdatesForDuplicateMerge, collectAllActionsFromMatchDoc } from "@/lib/duplicatePlayerMergeRewrite";
-import { buildPlayersIndex, getPlayerLabel, sortPlayersByLastName } from "@/utils/playerUtils";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
-import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
+import { ResponsiveRadar } from "@nivo/radar";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import SidePanel from "@/components/SidePanel/SidePanel";
+import TeamsMultiSelectorModal from "@/components/TeamsMultiSelectorModal/TeamsMultiSelectorModal";
+import PositionsMultiSelectorModal from "@/components/PositionsMultiSelectorModal/PositionsMultiSelectorModal";
+import type { Team as TeamCatalogEntry } from "@/constants/teamsLoader";
+import { useAuth } from "@/hooks/useAuth";
+import { usePlayerComparisonData, type PlayerComparisonFilters } from "@/hooks/usePlayerComparisonData";
+import { usePlayersState } from "@/hooks/usePlayersState";
+import { useTeams } from "@/hooks/useTeams";
 import { filterTeamsByUserAccess } from "@/lib/teamsForUserAccess";
+import {
+  PLAYER_COMPARISON_AXIS_METRIC_IDS,
+  PLAYER_COMPARISON_FAMILY_OPTIONS,
+  PLAYER_COMPARISON_METRICS,
+  getMetricLeader,
+  resolvePlayerComparisonMetricId,
+  supportsComparisonMetricRole,
+  type PlayerComparisonMetricFamily,
+  type PlayerComparisonMetricId,
+  type PlayerComparisonMetricRole,
+  type PlayerComparisonRow,
+} from "@/utils/playerComparisonMetrics";
+import { getDefaultPlayerComparisonDateRange } from "@/utils/playerComparisonDateDefaults";
+import {
+  PLAYER_COMPARISON_PREFERENCES_STORAGE_KEY,
+  parsePlayerComparisonPreferences,
+  serializePlayerComparisonPreferences,
+} from "@/utils/playerComparisonPreferences";
 import styles from "./zawodnicy.module.css";
 
+/** Kolory serii A/B — spider + oznaczenia przy selectach. */
+const COMPARISON_PLAYER_COLORS = ["#2563eb", "#16a34a"] as const;
+
+const metricById = new Map(PLAYER_COMPARISON_METRICS.map((metric) => [metric.id, metric]));
+
+const formatMetricValue = (metricId: PlayerComparisonMetricId, value: number): string => {
+  if (!Number.isFinite(value)) return "—";
+  const digits = metricById.get(metricId)?.fractionDigits ?? 1;
+  return value.toLocaleString("pl-PL", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+};
+
+const getWorstMetricRow = (rows: PlayerComparisonRow[], metricId: PlayerComparisonMetricId): PlayerComparisonRow | null => {
+  const definition = metricById.get(metricId);
+  if (!definition || rows.length === 0) return null;
+  return rows.reduce((worst, row) => {
+    const diff = row.values[metricId] - worst.values[metricId];
+    return definition.direction === "lower" ? (diff > 0 ? row : worst) : diff < 0 ? row : worst;
+  }, rows[0]);
+};
+
+const normalizeRadarScore = (rows: PlayerComparisonRow[], row: PlayerComparisonRow, metricId: PlayerComparisonMetricId): number => {
+  const definition = metricById.get(metricId);
+  const values = rows.map((item) => item.values[metricId]).filter(Number.isFinite);
+  if (!definition || values.length === 0) return 0;
+  const max = Math.max(...values, 0);
+  if (max <= 0) return definition.direction === "lower" ? 100 : 0;
+  const value = row.values[metricId];
+  if (!Number.isFinite(value)) return 0;
+  const score = definition.direction === "lower" ? (1 - value / max) * 100 : (value / max) * 100;
+  return Math.max(0, Math.min(100, score));
+};
+
+const parseYear = (value: string): number | undefined => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+type FullTableSortColumn = "playerName" | "birthYear" | "position" | "minutes" | "matches" | "kpi";
+
+const defaultKpiTableSortDirection = (metricId: PlayerComparisonMetricId): "asc" | "desc" =>
+  metricById.get(metricId)?.direction === "lower" ? "asc" : "desc";
+
 export default function ZawodnicyPage() {
-  const [selectedMatches, setSelectedMatches] = useState<string[]>([]);
-  const [allActions, setAllActions] = useState<Action[]>([]);
-  const [isLoadingActions, setIsLoadingActions] = useState(false);
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
-  const [isMergingDuplicates, setIsMergingDuplicates] = useState(false);
-  const [birthYearFilter, setBirthYearFilter] = useState<{from: string; to: string}>({from: '', to: ''});
-  const [showTeamsDropdown, setShowTeamsDropdown] = useState(false);
-  const [showPositionsDropdown, setShowPositionsDropdown] = useState(false);
-  const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
-  const [showMatchSelector, setShowMatchSelector] = useState<boolean>(false);
-
-  // Funkcja do obsługi zaznaczania/odznaczania zespołów
-  const handleTeamToggle = (teamId: string) => {
-    setSelectedTeams(prev => {
-      if (prev.includes(teamId)) {
-        // Jeśli zespół jest zaznaczony, odznacz go
-        return prev.filter(id => id !== teamId);
-      } else {
-        // Jeśli zespół nie jest zaznaczony, zaznacz go
-        return [...prev, teamId];
-      }
-    });
-  };
-
-  // Funkcja do zaznaczania/odznaczania wszystkich zespołów
-  const handleSelectAllTeams = () => {
-    if (selectedTeams.length === availableTeams.length) {
-      // Jeśli wszystkie są zaznaczone, odznacz wszystkie
-      setSelectedTeams([]);
-    } else {
-      // Jeśli nie wszystkie są zaznaczone, zaznacz wszystkie
-      setSelectedTeams(availableTeams.map(team => team.id));
-    }
-  };
-
-  // Stabilne callback dla wyboru zawodnika
-  const handlePlayerSelect = useCallback((playerId: string | null) => {
-    setSelectedPlayerId(playerId);
-  }, []);
-
-  const {
-    players,
-    isModalOpen,
-    editingPlayerId,
-    editingPlayer,
-    setIsModalOpen,
-    handleDeletePlayer,
-    handleSavePlayer,
-    handleEditPlayer,
-    closeModal,
-  } = usePlayersState();
-
-  // Ref dla aktualnych players żeby uniknąć dependency w useEffect
-  const playersRef = useRef<Player[]>([]);
-  playersRef.current = players;
-  const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
-
-  const { allMatches, fetchMatches, forceRefreshFromFirebase } = useMatchInfo();
-  const { teams, isLoading: isTeamsLoading } = useTeams();
   const { isAuthenticated, isLoading: authLoading, userTeams, isAdmin, userRole, linkedPlayerId, logout } = useAuth();
+  const { teams, isLoading: teamsLoading } = useTeams();
+  const { players, refetchPlayers } = usePlayersState();
+  const { comparison, matches, isLoading, error, lastFilters, loadComparison } = usePlayerComparisonData();
 
-  // Funkcja do mapowania pozycji na etykiety
-  const getPositionLabel = (position: string): string => {
-    const labels: { [key: string]: string } = {
-      'GK': 'Bramkarz (GK)',
-      'CB': 'Środkowy obrońca (CB)',
-      'RB': 'Prawy obrońca (RB)',
-      'LB': 'Lewy obrońca (LB)',
-      'DM': 'Defensywny pomocnik (DM)',
-      'AM': 'Ofensywny pomocnik (AM)',
-      'LW': 'Lewy skrzydłowy (LS)',
-      'RW': 'Prawy skrzydłowy (RS)',
-      'ST': 'Napastnik (ST)',
-    };
-    return labels[position] || position;
-  };
+  const defaultDateRange = useMemo(() => getDefaultPlayerComparisonDateRange(), []);
 
-  // Dostępne pozycje
-  const availablePositions = useMemo(() => {
-    const positions = ['GK', 'CB', 'DM', 'AM', 'LW', 'RW', 'ST'];
-    return positions.map(pos => ({
-      value: pos,
-      label: getPositionLabel(pos)
-    }));
-  }, []);
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+  const [birthYearFrom, setBirthYearFrom] = useState("");
+  const [birthYearTo, setBirthYearTo] = useState("");
+  const [dateFrom, setDateFrom] = useState(defaultDateRange.from);
+  const [dateTo, setDateTo] = useState(defaultDateRange.to);
+  const [mode, setMode] = useState<"sum" | "per90">("per90");
+  const [metricFamily, setMetricFamily] = useState<PlayerComparisonMetricFamily>("pxt");
+  const [metricRole, setMetricRole] = useState<PlayerComparisonMetricRole>("sender");
+  const [minMinutesStr, setMinMinutesStr] = useState("");
+  const [minMatchesStr, setMinMatchesStr] = useState("");
+  const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
+  const [fullTableSort, setFullTableSort] = useState<{ column: FullTableSortColumn; direction: "asc" | "desc" }>(() => ({
+    column: "kpi",
+    direction: defaultKpiTableSortDirection(resolvePlayerComparisonMetricId("pxt", "sender")),
+  }));
+  const [primaryPlayerId, setPrimaryPlayerId] = useState("");
+  const [secondaryPlayerId, setSecondaryPlayerId] = useState("");
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
-  // Funkcje obsługi dropdown pozycji
-  const handlePositionToggle = (position: string) => {
-    setSelectedPositions(prev => {
-      if (prev.includes(position)) {
-        return prev.filter(pos => pos !== position);
-      } else {
-        return [...prev, position];
-      }
-    });
-  };
+  const userTeamAccess = useMemo(
+    () => ({ isAdmin, allowedTeamIds: userTeams ?? [] }),
+    [isAdmin, userTeams],
+  );
+  const availableTeams = useMemo(() => filterTeamsByUserAccess(teams, userTeamAccess), [teams, userTeamAccess]);
+  const teamsCatalog = teams as TeamCatalogEntry[];
+  const sidePanelTeamId = useMemo(
+    () => selectedTeamIds[0] ?? availableTeams[0]?.id ?? "",
+    [availableTeams, selectedTeamIds],
+  );
+  const teamNameById = useMemo(() => new Map(teams.map((team) => [team.id, team.name])), [teams]);
+  const rows = comparison?.rows ?? [];
+  const positionsCatalog = useMemo(() => rows.map((r) => r.position), [rows]);
 
-  const handleSelectAllPositions = () => {
-    const allPositions = availablePositions.map(pos => pos.value);
-    if (selectedPositions.length === allPositions.length) {
-      setSelectedPositions([]);
-    } else {
-      setSelectedPositions(allPositions);
-    }
-  };
+  const positionFilteredRows = useMemo(() => {
+    if (selectedPositions.length === 0) return rows;
+    return rows.filter((r) => selectedPositions.includes(r.position));
+  }, [rows, selectedPositions]);
 
-  // Zamknij dropdown'y przy kliknięciu poza nimi
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Element;
-      if (!target.closest('.dropdownContainer')) {
-        setShowTeamsDropdown(false);
-        setShowPositionsDropdown(false);
-      }
-    };
+  const minMinutesThreshold = Math.max(0, Number.parseInt(minMinutesStr, 10) || 0);
+  const minMatchesThreshold = Math.max(0, Number.parseInt(minMatchesStr, 10) || 0);
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  // Usunięto stabilne funkcje - nie są już potrzebne
-
-  const availableTeams = useMemo(
+  const eligibleRows = useMemo(
     () =>
-      filterTeamsByUserAccess(teams, {
-        isAdmin,
-        allowedTeamIds: userTeams ?? [],
-      }),
-    [userTeams, isAdmin, teams]
+      positionFilteredRows.filter(
+        (r) => r.minutes >= minMinutesThreshold && r.matchesPlayed >= minMatchesThreshold,
+      ),
+    [minMatchesThreshold, minMinutesThreshold, positionFilteredRows],
   );
 
-  // Konwertuj availableTeams array na format używany w komponencie
-  const teamsObject = useMemo(() => {
-    const obj: Record<string, { id: string; name: string }> = {};
-    availableTeams.forEach(team => {
-      obj[team.id] = team;
+  const activeMetricId = useMemo(
+    () => resolvePlayerComparisonMetricId(metricFamily, metricRole),
+    [metricFamily, metricRole],
+  );
+  const selectedMetric = metricById.get(activeMetricId) ?? PLAYER_COMPARISON_METRICS[0];
+  const rowsWithAnyValue = useMemo(
+    () =>
+      eligibleRows.filter((row) => PLAYER_COMPARISON_METRICS.some((metric) => Math.abs(row.values[metric.id]) > 0)),
+    [eligibleRows],
+  );
+
+  const sortedRows = useMemo(() => {
+    const direction = metricById.get(activeMetricId)?.direction ?? "higher";
+    return [...eligibleRows].sort((a, b) => {
+      const diff = a.values[activeMetricId] - b.values[activeMetricId];
+      return direction === "lower" ? diff : -diff;
     });
-    return obj;
-  }, [availableTeams]);
+  }, [activeMetricId, eligibleRows]);
 
-  // Inicjalizuj selectedTeams z localStorage lub pustą tablicą
-  const [selectedTeams, setSelectedTeams] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('selectedTeams');
-      return saved ? JSON.parse(saved) : [];
-    }
-    return [];
-  });
-  
-  // Ustaw domyślny zespół gdy teams się załadują i zapisz w localStorage
+  const sortedSelectRows = useMemo(
+    () =>
+      [...rowsWithAnyValue].sort((a, b) => {
+        const byLast = a.lastName.localeCompare(b.lastName, "pl", { sensitivity: "base", numeric: true });
+        if (byLast !== 0) return byLast;
+        return a.firstName.localeCompare(b.firstName, "pl", { sensitivity: "base", numeric: true });
+      }),
+    [rowsWithAnyValue],
+  );
+
   useEffect(() => {
-    if (availableTeams.length > 0 && selectedTeams.length === 0) {
-      const firstTeamId = availableTeams[0].id;
-      setSelectedTeams([firstTeamId]);
-      localStorage.setItem('selectedTeams', JSON.stringify([firstTeamId]));
-    }
-  }, [availableTeams, selectedTeams]);
-
-  // Zapisuj wybrane zespoły w localStorage przy każdej zmianie
-  useEffect(() => {
-    if (selectedTeams.length > 0) {
-      localStorage.setItem('selectedTeams', JSON.stringify(selectedTeams));
-    }
-  }, [selectedTeams]);
-
-  // Stan dla wybranego sezonu
-  const [selectedSeason, setSelectedSeason] = useState<string>("");
-  
-  // Stan dla aktywnej zakładki
-  const [activeTab, setActiveTab] = useState<'packing' | 'xg' | 'unpacking'>('packing');
-  
-  // Stany dla ActionSection (tylko dla zakładki unpacking)
-  const [selectedZone, setSelectedZone] = useState<string | number | null>(null);
-  const [selectedReceiverId, setSelectedReceiverId] = useState<string | null>(null);
-  const [actionMinute, setActionMinute] = useState<number>(0);
-  const [actionType, setActionType] = useState<"pass" | "dribble">("pass");
-  const [currentPoints, setCurrentPoints] = useState<number>(0);
-  const [isP1Active, setIsP1Active] = useState<boolean>(false);
-  const [isP2Active, setIsP2Active] = useState<boolean>(false);
-  const [isP3Active, setIsP3Active] = useState<boolean>(false);
-  const [isShot, setIsShot] = useState<boolean>(false);
-  const [isGoal, setIsGoal] = useState<boolean>(false);
-  const [isPenaltyAreaEntry, setIsPenaltyAreaEntry] = useState<boolean>(false);
-  const [isSecondHalf, setIsSecondHalf] = useState<boolean>(false);
-  const [isActionModalOpen, setIsActionModalOpen] = useState<boolean>(false);
-  const [startZone, setStartZone] = useState<number | null>(null);
-  const [endZone, setEndZone] = useState<number | null>(null);
-  const [actionMode, setActionMode] = useState<"attack" | "defense">("attack");
-  const [selectedDefensePlayers, setSelectedDefensePlayers] = useState<string[]>([]);
-
-  // Funkcje obsługi dla ActionSection
-  const handleZoneSelection = (zone: number, xT?: number, value1?: number, value2?: number) => {
-    setSelectedZone(zone);
-    // Logika dla stref - można rozszerzyć w przyszłości
-  };
-
-  const handleSaveAction = () => {
-    // Logika zapisywania akcji - można rozszerzyć w przyszłości
-  };
-
-  const resetActionState = () => {
-    setSelectedPlayerId(null);
-    setSelectedReceiverId(null);
-    setActionMinute(0);
-    setActionType("pass");
-    setCurrentPoints(0);
-    setIsP1Active(false);
-    setIsP2Active(false);
-    setIsP3Active(false);
-    setIsShot(false);
-    setIsGoal(false);
-    setIsPenaltyAreaEntry(false);
-    setIsSecondHalf(false);
-    setStartZone(null);
-    setEndZone(null);
-    setSelectedZone(null);
-    setActionMode("attack");
-    setSelectedDefensePlayers([]);
-  };
-
-  const resetActionPoints = () => {
-    setCurrentPoints(0);
-    setIsP1Active(false);
-    setIsP2Active(false);
-    setIsP3Active(false);
-  };
-
-  const handleP3Toggle = () => {
-    setIsP3Active(!isP3Active);
-  };
-
-  const handleSecondHalfToggle = () => {
-    setIsSecondHalf(!isSecondHalf);
-  };
-
-  // Inicjalizuj selectedSeason na najnowszy sezon na podstawie meczów
-  useEffect(() => {
-    if (!selectedSeason && allMatches.length > 0) {
-      const availableSeasons = getAvailableSeasonsFromMatches(allMatches);
-      if (availableSeasons.length > 0) {
-        // Wybierz najnowszy sezon (pierwszy w posortowanej liście)
-        setSelectedSeason(availableSeasons[0].id);
-      } else {
-        setSelectedSeason("all");
-      }
-    }
-  }, [selectedSeason, allMatches]);
-
-  // Pobierz mecze dla wybranych zespołów - tylko przy zmianie zespołów
-  useEffect(() => {
-    if (selectedTeams.length > 0) {
-      // Dla wielu zespołów, użyj forceRefreshFromFirebase bez teamId (pobierze wszystkie)
-      forceRefreshFromFirebase().catch(error => {
-        console.error('❌ Błąd podczas pobierania meczów:', error);
-      });
-    }
-  }, [selectedTeams]); // Tylko selectedTeams w dependency
-
-  // Filtruj mecze według wybranych zespołów i sezonu
-  const teamMatches = useMemo(() => {
-    const teamFiltered = allMatches.filter(match => 
-      selectedTeams.includes(match.team)
+    setFullTableSort((s) =>
+      s.column === "kpi" ? { column: "kpi", direction: defaultKpiTableSortDirection(activeMetricId) } : s,
     );
-    return selectedSeason ? filterMatchesBySeason(teamFiltered, selectedSeason) : teamFiltered;
-  }, [allMatches, selectedTeams, selectedSeason]);
+  }, [activeMetricId]);
 
-  // Oblicz dostępne sezony na podstawie meczów wybranych zespołów
-  const availableSeasons = useMemo(() => {
-    const teamFiltered = allMatches.filter(match => 
-      selectedTeams.includes(match.team)
-    );
-    return getAvailableSeasonsFromMatches(teamFiltered);
-  }, [allMatches, selectedTeams]);
+  const fullTableSortedRows = useMemo(() => {
+    const { column, direction } = fullTableSort;
+    const rows = [...eligibleRows];
 
-  // Zaznacz wszystkie mecze domyślnie przy zmianie zespołu
-  useEffect(() => {
-    if (teamMatches.length > 0) {
-      const validMatchIds = teamMatches
-        .map(match => match.matchId)
-        .filter((id): id is string => id !== undefined);
-      setSelectedMatches(validMatchIds);
-    }
-  }, [teamMatches]);
+    const finiteOr = (v: number, fallback: number): number => (Number.isFinite(v) ? v : fallback);
 
-  // Pobierz akcje ze wszystkich meczów zespołu
-  useEffect(() => {
-    const loadAllActionsForTeam = async () => {
-      if (teamMatches.length === 0) {
-        // Tylko resetuj jeśli rzeczywiście nie ma meczów dla zespołów, nie podczas ładowania
-        if (selectedTeams.length > 0 && allMatches.length > 0) {
-        setAllActions([]);
+    rows.sort((a, b) => {
+      let d = 0;
+      switch (column) {
+        case "playerName":
+          d = a.playerName.localeCompare(b.playerName, "pl", { sensitivity: "base", numeric: true });
+          break;
+        case "birthYear": {
+          const aNull = a.birthYear == null;
+          const bNull = b.birthYear == null;
+          if (aNull && bNull) d = 0;
+          else if (aNull) return 1;
+          else if (bNull) return -1;
+          else d = a.birthYear! - b.birthYear!;
+          break;
         }
-        return;
+        case "position":
+          d = (a.position || "").localeCompare(b.position || "", "pl", { sensitivity: "base", numeric: true });
+          break;
+        case "minutes":
+          d = a.minutes - b.minutes;
+          break;
+        case "matches":
+          d = a.matchesPlayed - b.matchesPlayed;
+          break;
+        case "kpi":
+          d =
+            finiteOr(a.values[activeMetricId], Number.POSITIVE_INFINITY) -
+            finiteOr(b.values[activeMetricId], Number.POSITIVE_INFINITY);
+          break;
+        default:
+          d = 0;
       }
-
-      setIsLoadingActions(true);
-
-      try {
-        const allActionsData: Action[] = [];
-
-        // Używamy danych meczów już załadowanych przez useMatchInfo (bez N+1 getDoc per mecz).
-        for (const match of teamMatches) {
-          if (!match.matchId) continue;
-          const asRecord = match as unknown as Record<string, unknown>;
-          collectAllActionsFromMatchDoc(asRecord, match.matchId).forEach((actionData) => {
-            allActionsData.push(actionData);
-          });
-        }
-
-        // Filtruj tylko akcje zawodników z wybranych zespołów
-        const teamPlayers = playersRef.current.filter(player => {
-          if (!player.teams) return false;
-          return player.teams.some(playerTeam => selectedTeams.includes(playerTeam));
-        });
-        
-        const teamPlayersIds = teamPlayers.map(player => player.id);
-
-        const filteredActions = allActionsData.filter(action => 
-          teamPlayersIds.includes(action.senderId) || 
-          (action.receiverId && teamPlayersIds.includes(action.receiverId))
-        );
-
-        setAllActions(filteredActions);
-      } catch (error) {
-        console.error("Błąd podczas pobierania akcji:", error);
-        setAllActions([]);
-      } finally {
-        setIsLoadingActions(false);
-      }
-    };
-
-    loadAllActionsForTeam();
-  }, [teamMatches, selectedTeams]);
-
-  // Filtruj zawodników według wybranych zespołów i pozycji (rocznik filtrowany w PackingChart)
-  const filteredPlayers = useMemo(() => {
-    let teamFiltered = players.filter(player => {
-      if (!player.teams) return false;
-      return player.teams.some(playerTeam => selectedTeams.includes(playerTeam));
-    });
-    
-    // Filtruj według pozycji jeśli wybrane
-    if (selectedPositions.length > 0) {
-      teamFiltered = teamFiltered.filter(player => 
-        selectedPositions.includes(player.position)
+      if (d !== 0) return direction === "asc" ? d : -d;
+      return (
+        a.lastName.localeCompare(b.lastName, "pl", { sensitivity: "base", numeric: true }) || a.playerId.localeCompare(b.playerId)
       );
+    });
+
+    return rows;
+  }, [activeMetricId, eligibleRows, fullTableSort]);
+
+  const handleFullTableSort = (column: FullTableSortColumn) => {
+    setFullTableSort((prev) => {
+      if (prev.column === column) {
+        return { column, direction: prev.direction === "asc" ? "desc" : "asc" };
+      }
+      const direction =
+        column === "kpi" ? defaultKpiTableSortDirection(activeMetricId) : "asc";
+      return { column, direction };
+    });
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const preferences = parsePlayerComparisonPreferences(window.localStorage.getItem(PLAYER_COMPARISON_PREFERENCES_STORAGE_KEY));
+    setSelectedTeamIds(preferences.selectedTeamIds);
+    setBirthYearFrom(preferences.birthYearFrom);
+    setBirthYearTo(preferences.birthYearTo);
+    setMode(preferences.mode);
+    setMetricFamily(preferences.comparisonMetricFamily);
+    setMetricRole(preferences.comparisonMetricRole);
+    setMinMinutesStr(preferences.minMinutes);
+    setMinMatchesStr(preferences.minMatches);
+    setSelectedPositions(preferences.selectedPositions);
+    setPreferencesLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesLoaded || typeof window === "undefined") return;
+    window.localStorage.setItem(
+      PLAYER_COMPARISON_PREFERENCES_STORAGE_KEY,
+      serializePlayerComparisonPreferences({
+        selectedTeamIds,
+        birthYearFrom,
+        birthYearTo,
+        mode,
+        comparisonMetricFamily: metricFamily,
+        comparisonMetricRole: metricRole,
+        minMinutes: minMinutesStr,
+        minMatches: minMatchesStr,
+        selectedPositions,
+      }),
+    );
+  }, [
+    birthYearFrom,
+    birthYearTo,
+    metricFamily,
+    metricRole,
+    minMatchesStr,
+    minMinutesStr,
+    mode,
+    preferencesLoaded,
+    selectedPositions,
+    selectedTeamIds,
+  ]);
+
+  useEffect(() => {
+    if (sortedSelectRows.length === 0) {
+      setPrimaryPlayerId("");
+      setSecondaryPlayerId("");
+      return;
     }
-    
-    // Sortowanie alfabetyczne po nazwisku
-    return sortPlayersByLastName(teamFiltered);
-  }, [players, selectedTeams, selectedPositions]);
-
-  // Filtruj akcje według zaznaczonych meczów
-  const filteredActions = useMemo(() => {
-    if (selectedMatches.length === 0) return [];
-    
-    return allActions.filter(action => 
-      action.matchId && selectedMatches.includes(action.matchId)
+    const firstId = sortedSelectRows[0].playerId;
+    setPrimaryPlayerId((current) =>
+      sortedSelectRows.some((row) => row.playerId === current) ? current : firstId,
     );
-  }, [allActions, selectedMatches]);
+    setSecondaryPlayerId((current) => {
+      if (sortedSelectRows.some((row) => row.playerId === current) && current !== firstId) return current;
+      return sortedSelectRows[1]?.playerId ?? firstId;
+    });
+  }, [sortedSelectRows]);
 
-  // Filtruj mecze według zaznaczonych - WAŻNE: stabilna referencja dla PackingChart
-  const selectedMatchesData = useMemo(() => {
-    return teamMatches.filter(match => 
-      match.matchId && selectedMatches.includes(match.matchId)
-    );
-  }, [teamMatches, selectedMatches]);
+  const loadedTeamNames = useMemo(() => {
+    const ids = lastFilters?.teamIds ?? selectedTeamIds;
+    return ids.map((teamId) => teamNameById.get(teamId) ?? teamId);
+  }, [lastFilters?.teamIds, selectedTeamIds, teamNameById]);
 
-  // TERAZ sprawdź czy aplikacja się ładuje - WSZYSTKIE HOOKI MUSZĄ BYĆ POWYŻEJ!
-  if (authLoading || isTeamsLoading) {
+  const barData = useMemo(
+    () =>
+      sortedRows.slice(0, 12).map((row) => {
+        const v = row.values[activeMetricId];
+        const value = Number.isFinite(v) ? Number(v.toFixed(3)) : 0;
+        return { name: row.playerName, value };
+      }),
+    [activeMetricId, sortedRows],
+  );
+
+  const primaryPlayer = sortedSelectRows.find((row) => row.playerId === primaryPlayerId) ?? null;
+  const secondaryPlayer = sortedSelectRows.find((row) => row.playerId === secondaryPlayerId) ?? null;
+  const radarData = useMemo(() => {
+    if (!primaryPlayer || !secondaryPlayer) return [];
+    return PLAYER_COMPARISON_AXIS_METRIC_IDS.map((axisId) => {
+      const metric = metricById.get(axisId)!;
+      return {
+        metric: metric.shortLabel,
+        [primaryPlayer.playerName]: normalizeRadarScore(eligibleRows, primaryPlayer, axisId),
+        [secondaryPlayer.playerName]: normalizeRadarScore(eligibleRows, secondaryPlayer, axisId),
+      };
+    });
+  }, [eligibleRows, primaryPlayer, secondaryPlayer]);
+
+  const handleLoad = async () => {
+    const filters: PlayerComparisonFilters = {
+      teamIds: selectedTeamIds,
+      birthYearFrom: parseYear(birthYearFrom),
+      birthYearTo: parseYear(birthYearTo),
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      mode,
+    };
+    await loadComparison(filters);
+  };
+
+  const sidePanel = (
+    <SidePanel
+      players={players}
+      actions={[]}
+      matchInfo={null}
+      isAdmin={isAdmin}
+      userRole={userRole ?? undefined}
+      linkedPlayerId={linkedPlayerId}
+      selectedTeam={sidePanelTeamId}
+      onRefreshData={refetchPlayers}
+      onImportSuccess={() => {}}
+      onImportError={() => {}}
+      onLogout={logout}
+    />
+  );
+
+  if (authLoading) {
     return (
-      <div className={styles.container}>
-        <div className={styles.loading}>
-          <div className={styles.spinner}></div>
+      <div className={styles.pageRoot}>
+        <div className={styles.centered}>
+          <div className={styles.spinner} />
           <p>Ładowanie aplikacji...</p>
         </div>
       </div>
     );
   }
 
-  // Sprawdź uwierzytelnienie
   if (!isAuthenticated) {
     return (
-      <div className={styles.container}>
-        <div className={styles.accessDenied}>
-          <h2>🔒 Brak dostępu</h2>
-          <p>Musisz być zalogowany, aby uzyskać dostęp do tej strony.</p>
-          <Link href="/login" className={styles.loginButton}>
+      <div className={styles.pageRoot}>
+        <div className={styles.centered}>
+          <h1 className={styles.centeredTitle}>Brak dostępu</h1>
+          <p className={styles.centeredHint}>Musisz być zalogowany, aby zobaczyć porównywarkę zawodników.</p>
+          <Link href="/login" className={styles.primaryButton}>
             Przejdź do logowania
           </Link>
         </div>
@@ -420,535 +367,574 @@ export default function ZawodnicyPage() {
     );
   }
 
-  // Sprawdź czy użytkownik ma dostęp do jakichkolwiek zespołów
   if (!isAdmin && (!userTeams || userTeams.length === 0)) {
     return (
-      <div className={styles.container}>
-        <div className={styles.noTeamsAccess}>
-          <h2>🚫 Brak dostępu do zespołów</h2>
-          <p>Twoje konto nie ma uprawnień do żadnego zespołu. Skontaktuj się z administratorem, aby uzyskać dostęp.</p>
-          <button 
-            onClick={logout}
-            className={styles.logoutButton}
-          >
+      <div className={styles.pageRoot}>
+        <div className={styles.centered}>
+          <h1 className={styles.centeredTitle}>Brak dostępu do zespołów</h1>
+          <p className={styles.centeredHint}>Twoje konto nie ma przypisanych zespołów.</p>
+          <button type="button" onClick={logout} className={styles.primaryButton}>
             Wyloguj się
           </button>
         </div>
+        {sidePanel}
       </div>
     );
   }
 
-  // Sprawdź czy są dostępne zespoły
-  if (availableTeams.length === 0) {
+  if (teamsLoading) {
     return (
-      <div className={styles.container}>
-        <div className={styles.noTeamsAccess}>
-          <h2>⚠️ Brak dostępnych zespołów</h2>
-          <p>Nie znaleziono żadnych zespołów dostępnych dla Twojego konta.</p>
-          <Link href="/analyzer" className={styles.backButton}>
-            Powrót do aplikacji
-          </Link>
+      <div className={styles.pageRoot}>
+        <div className={styles.centered}>
+          <div className={styles.spinner} />
+          <p>Ładowanie zespołów...</p>
         </div>
+        {sidePanel}
       </div>
     );
   }
-
-  // Znajdź potencjalne duplikaty - ulepszona wersja dla akcji vs zawodników
-  const findDuplicates = () => {
-    const duplicatesFound: { name: string; players: Player[] }[] = [];
-
-    const nameBuckets: Record<string, Player[]> = {};
-    filteredPlayers
-      .filter(player => !player.isDeleted)
-      .forEach(player => {
-        const name = getPlayerLabel(player.id, playersIndex).toLowerCase().trim();
-        if (!name) return;
-        if (!nameBuckets[name]) {
-          nameBuckets[name] = [];
-        }
-        nameBuckets[name].push(player);
-      });
-
-    Object.entries(nameBuckets).forEach(([name, playersWithName]) => {
-      if (playersWithName.length > 1) {
-        duplicatesFound.push({
-          name,
-          players: playersWithName
-        });
-      }
-    });
-
-    return duplicatesFound;
-  };
-
-  const duplicates = findDuplicates();
-  
-  // Funkcja do sparowania duplikatów
-  const mergeDuplicates = async () => {
-    if (duplicates.length === 0) {
-      alert('Nie znaleziono duplikatów do sparowania.');
-      return;
-    }
-
-    if (!db) {
-      alert('Firebase nie jest zainicjalizowane. Nie można sparować duplikatów.');
-      return;
-    }
-
-    const confirmMerge = window.confirm(
-      `Czy na pewno chcesz sparować ${duplicates.length} grup duplikatów?\n\n` +
-      'Operacja ta:\n' +
-      '• Przeniesie powiązania w meczu (akcje, strzały, PK, 8s, minuty, GPS w meczu, statystyki w matchData) oraz gps.playerId\n' +
-      '• Usunie duplikaty z bazy danych\n' +
-      '• Nie może być cofnięta\n\n' +
-      'Czy kontynuować?'
-    );
-
-    if (!confirmMerge) return;
-
-    setIsMergingDuplicates(true);
-    let mergedCount = 0;
-    let errorCount = 0;
-
-    try {
-      for (const { players: duplicatePlayers } of duplicates) {
-        if (duplicatePlayers.length < 2) continue;
-
-        // Sortuj zawodników: preferuj starszemu (ma więcej akcji), a jeśli równo to starszemu ID
-        const playersWithActionCounts = duplicatePlayers.map(player => ({
-          ...player,
-          actionsCount: allActions.filter(action => 
-            action.senderId === player.id || action.receiverId === player.id
-          ).length
-        }));
-
-        const sortedPlayers = playersWithActionCounts.sort((a, b) => {
-          if (a.actionsCount !== b.actionsCount) {
-            return b.actionsCount - a.actionsCount; // Więcej akcji = główny
-          }
-          return a.id.localeCompare(b.id); // Starsze ID = główny
-        });
-
-        const mainPlayer = sortedPlayers[0]; // Główny zawodnik (zostanie)
-        const duplicatesToMerge = sortedPlayers.slice(1); // Duplikaty (zostaną usunięte)
-
-        try {
-          const dupIds = duplicatesToMerge.map((d) => d.id);
-          const matchesSnapshot = await getDocs(collection(db, 'matches'));
-
-          for (const matchDoc of matchesSnapshot.docs) {
-            const matchId = matchDoc.id;
-            const raw = matchDoc.data() as Record<string, unknown>;
-            let matchData: Record<string, unknown>;
-            try {
-              matchData = await enrichMatchDataWithLegacyPackingIfNeeded(db, matchId, raw);
-            } catch (e) {
-              console.warn("[zawodnicy merge] enrichMatchData", matchId, e);
-              matchData = raw;
-            }
-            const { updates: matchUpdates, changed } = buildMatchDocumentUpdatesForDuplicateMerge(
-              matchData,
-              dupIds,
-              mainPlayer.id,
-            );
-            if (changed) {
-              await updateDoc(doc(db, 'matches', matchDoc.id), matchUpdates);
-            }
-          }
-
-          for (let gi = 0; gi < dupIds.length; gi += 10) {
-            const chunk = dupIds.slice(gi, gi + 10);
-            const gpsSnap = await getDocs(query(collection(db, 'gps'), where('playerId', 'in', chunk)));
-            await Promise.all(
-              gpsSnap.docs.map((d) => updateDoc(d.ref, { playerId: mainPlayer.id })),
-            );
-          }
-
-          // Krok 2: Soft delete duplikatów w kolekcji players
-          for (const duplicate of duplicatesToMerge) {
-            await updateDoc(doc(db, 'players', duplicate.id), { isDeleted: true });
-          }
-
-          mergedCount++;
-
-        } catch (error) {
-          errorCount++;
-        }
-      }
-
-      // Odśwież dane po zakończeniu
-      window.location.reload();
-
-    } catch (error) {
-      alert('Wystąpił błąd podczas sparowywania duplikatów. Sprawdź konsolę i spróbuj ponownie.');
-    } finally {
-      setIsMergingDuplicates(false);
-    }
-
-    if (mergedCount > 0 || errorCount > 0) {
-      alert(
-        `Sparowanie duplikatów zakończone!\n\n` +
-        `✅ Pomyślnie sparowano: ${mergedCount} grup\n` +
-        `❌ Błędy: ${errorCount} grup\n\n` +
-        `Strona zostanie odświeżona aby pokazać zaktualizowane dane.`
-      );
-    }
-  };
-
-  // Funkcja do zapisywania zawodnika z zespołami
-  const handleSavePlayerWithTeams = (playerData: Omit<Player, "id">) => {
-    let teams = playerData.teams || [];
-    
-    if (editingPlayerId) {
-      const existingPlayer = players.find(p => p.id === editingPlayerId);
-      
-      if (existingPlayer && !existingPlayer.teams && 'team' in existingPlayer) {
-        const oldTeam = (existingPlayer as any).team;
-        if (oldTeam && !teams.includes(oldTeam)) {
-          teams = [...teams, oldTeam];
-        }
-      }
-    }
-    
-    handleSavePlayer({
-      ...playerData,
-      teams: teams,
-    });
-  };
-
-  const onDeletePlayer = async (playerId: string) => {
-    const wasDeleted = await handleDeletePlayer(playerId);
-    if (wasDeleted && selectedPlayerId === playerId) {
-      setSelectedPlayerId(null);
-    }
-  };
-
-  // Obsługa zmiany zaznaczenia meczu
-  const handleMatchToggle = (matchId: string) => {
-    setSelectedMatches(prev => 
-      prev.includes(matchId) 
-        ? prev.filter(id => id !== matchId)
-        : [...prev, matchId]
-    );
-  };
-
-  // Obsługa zaznaczenia/odznaczenia wszystkich meczów
-  const handleSelectAllMatches = () => {
-    if (selectedMatches.length === teamMatches.length) {
-      setSelectedMatches([]);
-    } else {
-      const validMatchIds = teamMatches
-        .map(match => match.matchId)
-        .filter((id): id is string => id !== undefined);
-      setSelectedMatches(validMatchIds);
-    }
-  };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <Link href="/analyzer" className={styles.backButton} title="Powrót do głównej">
-          ←
-        </Link>
-        <h1>Statystyki zawodników</h1>
-      </div>
+    <div className={styles.pageRoot}>
+      <header className={styles.header}>
+        <div>
+          <h1>Porównywarka zawodników</h1>
+          <p>Dane KPI z meczów. Porównanie: Packing, PXT, xT, xG, wejścia PK, przechwyty, straty i xT strat.</p>
+        </div>
+      </header>
 
-      {/* Sekcja wyboru zespołu i sezonu - minimalistyczna */}
-      <div className={styles.selectorsContainer}>
-        <div className={styles.teamSelector}>
-          <label className={styles.label}>
-            Wybierz zespoły ({selectedTeams.length}/{availableTeams.length}):
-          </label>
-          {isTeamsLoading ? (
-            <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Ładowanie zespołów...</p>
-          ) : (
-            <div className={styles.teamsSelectContainer}>
-              {availableTeams.length === 0 ? (
-                <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Brak dostępnych zespołów</p>
-              ) : (
-                <div className={`${styles.dropdownContainer} dropdownContainer`}>
-                  <div 
-                    className={styles.dropdownToggle}
-                    onClick={() => setShowTeamsDropdown(!showTeamsDropdown)}
-                  >
-                    <span>
-                      {selectedTeams.length === 0 ? 'Brak wybranych zespołów' : 
-                       selectedTeams.length === availableTeams.length ? 'Wszystkie zespoły' :
-                       `${selectedTeams.length} zespołów`}
-                    </span>
-                    <span className={styles.dropdownArrow}>{showTeamsDropdown ? '▲' : '▼'}</span>
-                  </div>
-                  {showTeamsDropdown && (
-                    <div className={styles.dropdownMenu}>
-                      <div 
-                        className={styles.dropdownItem}
-                        onClick={handleSelectAllTeams}
-                      >
-                        <input 
-                          type="checkbox" 
-                          checked={selectedTeams.length === availableTeams.length}
-                          onChange={() => {}}
-                        />
-                        <span>Wszystkie zespoły</span>
-                      </div>
-                      {Object.values(teamsObject).map(team => (
-                        <div 
-                          key={team.id}
-                          className={styles.dropdownItem}
-                          onClick={() => handleTeamToggle(team.id)}
-                        >
-                          <input 
-                            type="checkbox" 
-                            checked={selectedTeams.includes(team.id)}
-                            onChange={() => {}}
-                          />
-                          <span>{team.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+      <section className={styles.filtersPanel} aria-labelledby="player-comparison-filters">
+        <div className={styles.sectionHeading}>
+          <h2 id="player-comparison-filters">Filtry porównania</h2>
+          <p className={styles.sectionHint}>Wybierz zespoły i roczniki. Pobieranie danych dopiero po kliknięciu przycisku.</p>
+        </div>
+
+        <div className={styles.filtersRow}>
+          <div className={styles.teamsFilterCell}>
+            <TeamsMultiSelectorModal
+              teamsCatalog={teamsCatalog}
+              userTeamAccess={userTeamAccess}
+              selectedTeamIds={selectedTeamIds}
+              onChange={setSelectedTeamIds}
+              containerClassName={styles.teamsMultiSelectorInRow}
+            />
+          </div>
+
+          <div className={`${styles.filterItem} ${styles.filterItemInRow}`}>
+            <span>Rocznik od</span>
+            <input
+              id="birth-year-from"
+              type="number"
+              inputMode="numeric"
+              placeholder="np. 2007"
+              value={birthYearFrom}
+              onChange={(event) => setBirthYearFrom(event.target.value)}
+              className={styles.input}
+            />
+          </div>
+          <div className={`${styles.filterItem} ${styles.filterItemInRow}`}>
+            <span>Rocznik do</span>
+            <input
+              id="birth-year-to"
+              type="number"
+              inputMode="numeric"
+              placeholder="np. 2009"
+              value={birthYearTo}
+              onChange={(event) => setBirthYearTo(event.target.value)}
+              className={styles.input}
+            />
+          </div>
+          <div className={`${styles.filterItem} ${styles.filterItemInRow}`}>
+            <span>Data meczu od</span>
+            <input id="date-from" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className={styles.input} />
+          </div>
+          <div className={`${styles.filterItem} ${styles.filterItemInRow}`}>
+            <span>Data meczu do</span>
+            <input id="date-to" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className={styles.input} />
+          </div>
+          <div className={`${styles.filterItem} ${styles.filterItemInRow}`}>
+            <span>Tryb</span>
+            <div className={styles.modeToggle} role="group" aria-label="Tryb porównania">
+              <button type="button" className={`${styles.modeButton} ${mode === "per90" ? styles.modeButtonActive : ""}`} onClick={() => setMode("per90")}>
+                Per 90
+              </button>
+              <button type="button" className={`${styles.modeButton} ${mode === "sum" ? styles.modeButtonActive : ""}`} onClick={() => setMode("sum")}>
+                Suma
+              </button>
             </div>
-          )}
-        </div>
-
-        <div className={styles.seasonSelector}>
-          <label className={styles.label}>
-            Wybierz sezon:
-          </label>
-          <SeasonSelector
-            selectedSeason={selectedSeason}
-            onChange={setSelectedSeason}
-            showLabel={false}
-            availableSeasons={availableSeasons}
-            className={styles.seasonSelect}
-          />
-        </div>
-        <div className={styles.matchToggleGroup}>
-          <button
-            className={styles.matchToggleButton}
-            onClick={() => setShowMatchSelector(!showMatchSelector)}
-          >
-            {showMatchSelector ? "Ukryj" : "Pokaż"} wybór meczów ({selectedMatches.length}/{teamMatches.length})
-          </button>
-        </div>
-      </div>
-
-      {/* Lista meczów do wyboru */}
-      {showMatchSelector && (
-        <div className={styles.matchesListContainer}>
-          <div className={styles.matchListHeader}>
-            <button
-              className={styles.selectAllButton}
-              onClick={() => {
-                const allIds = teamMatches
-                  .filter(m => m.matchId)
-                  .map(m => m.matchId!);
-                setSelectedMatches(allIds);
-              }}
-            >
-              Zaznacz wszystkie
-            </button>
-            <button
-              className={styles.deselectAllButton}
-              onClick={() => setSelectedMatches([])}
-            >
-              Odznacz wszystkie
+          </div>
+          <div className={styles.filterActions}>
+            <span className={styles.filterSummaryLine}>
+              <strong>{selectedTeamIds.length}</strong> zesp.
+              {birthYearFrom || birthYearTo ? ` · r. ${birthYearFrom || "…"}–${birthYearTo || "…"}` : ""}
+            </span>
+            <button type="button" className={styles.primaryButton} onClick={handleLoad} disabled={isLoading || selectedTeamIds.length === 0}>
+              {isLoading ? "Ładowanie…" : "Załaduj porównanie"}
             </button>
           </div>
-          <div className={styles.matchesCheckboxes}>
-            {teamMatches.length === 0 ? (
-              <p className={styles.noMatchesCompact}>Brak meczów dla wybranego zespołu</p>
-            ) : (
-              teamMatches.map((match) => (
-                <label key={match.matchId} className={styles.matchCheckbox}>
-                  <input
-                    type="checkbox"
-                    checked={selectedMatches.includes(match.matchId || "")}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedMatches([...selectedMatches, match.matchId!]);
-                      } else {
-                        setSelectedMatches(selectedMatches.filter(id => id !== match.matchId));
-                      }
-                    }}
-                  />
-                  <span>
-                    {match.opponent} ({typeof match.date === 'string' ? match.date : new Date(match.date).toLocaleDateString('pl-PL')}) - {match.competition}
-                  </span>
-                </label>
-              ))
-            )}
-          </div>
         </div>
+
+        <div className={`${styles.filtersRow} ${styles.filtersRowSecondary}`}>
+          <div className={styles.positionsFilterCell}>
+            <PositionsMultiSelectorModal
+              positionsCatalog={positionsCatalog}
+              selectedPositions={selectedPositions}
+              onChange={setSelectedPositions}
+              disabled={!comparison}
+            />
+          </div>
+          <div className={`${styles.filterItem} ${styles.filterItemInRow}`}>
+            <span>Min. minut (≥)</span>
+            <input
+              id="min-minutes-threshold"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              placeholder="0"
+              value={minMinutesStr}
+              onChange={(e) => setMinMinutesStr(e.target.value)}
+              className={styles.input}
+              aria-label="Minimalna liczba minut, aby uwzględnić zawodnika"
+            />
+          </div>
+          <div className={`${styles.filterItem} ${styles.filterItemInRow}`}>
+            <span>Min. meczów (≥)</span>
+            <input
+              id="min-matches-threshold"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              placeholder="0"
+              value={minMatchesStr}
+              onChange={(e) => setMinMatchesStr(e.target.value)}
+              className={styles.input}
+              aria-label="Minimalna liczba rozegranych meczów, aby uwzględnić zawodnika"
+            />
+          </div>
+          <p className={styles.filtersSecondaryHint}>
+            Progi i pozycje stosują się po załadowaniu danych. Pozycje — dopiero gdy tabela ma dane.
+          </p>
+        </div>
+      </section>
+
+      {error && <p className={styles.errorText}>{error}</p>}
+
+      {!comparison && !isLoading && (
+        <section className={styles.emptyState}>
+          <h2>Ustaw filtry, żeby rozpocząć</h2>
+          <p>Na starcie nie pobieramy listy meczów dla tej analizy. Wybierz zespoły i (opcjonalnie) roczniki, potem załaduj porównanie.</p>
+        </section>
       )}
 
-      {/* Sekcja duplikatów */}
-      {duplicates.length > 0 && (
-        <div className={styles.duplicatesSection}>
-          <div className={styles.duplicatesHeader}>
-            <h3>⚠️ Potencjalne duplikaty w wybranym zespole</h3>
-            <button
-              onClick={mergeDuplicates}
-              disabled={isMergingDuplicates}
-              className={styles.mergeDuplicatesButton}
-              title="Sparuj wszystkie duplikaty automatycznie"
-            >
-              {isMergingDuplicates ? 'Sparowywanie...' : `🔄 Sparuj ${duplicates.length} grup duplikatów`}
-            </button>
-          </div>
-          {duplicates.map(({ name, players: duplicatePlayers }) => (
-            <div key={name} className={styles.duplicateGroup}>
-              <h4>Nazwa: "{name.charAt(0).toUpperCase() + name.slice(1)}"</h4>
-              <div className={styles.duplicateList}>
-                {duplicatePlayers.map(player => {
-                  const playerActionsCount = allActions.filter(action => 
-                    action.senderId === player.id || action.receiverId === player.id
-                  ).length;
-                  
+      {comparison && (
+        <>
+          <section className={styles.summaryGrid} aria-label="Podsumowanie porównania">
+            <article className={styles.summaryCard}>
+              <span>Zawodnicy w analizie</span>
+              <strong title="Po progach minut, meczów i filtrze pozycji">
+                {eligibleRows.length}
+                {rows.length > 0 ? ` / ${rows.length}` : ""}
+              </strong>
+            </article>
+            <article className={styles.summaryCard}>
+              <span>Mecze</span>
+              <strong>{matches.length}</strong>
+            </article>
+            <article className={styles.summaryCard}>
+              <span>Tryb</span>
+              <strong>{lastFilters?.mode === "per90" ? "Per 90" : "Suma"}</strong>
+            </article>
+            <article className={styles.summaryCard}>
+              <span>Zespoły</span>
+              <strong className={styles.summaryTeams}>{loadedTeamNames.length ? loadedTeamNames.join(", ") : "—"}</strong>
+            </article>
+          </section>
+
+          {comparison.usedPer90Fallback && lastFilters?.mode === "per90" && (
+            <p className={styles.warningText}>
+              Dla części zawodników nie znaleziono minut w meczach. Ich wartości w trybie per 90 pokazujemy jak sumę (bez skalowania).
+            </p>
+          )}
+
+          {rows.length === 0 ? (
+            <section className={styles.emptyState}>
+              <h2>Brak zawodników dla wybranych filtrów</h2>
+              <p>Zmień zakres roczników albo wybierz inne zespoły.</p>
+            </section>
+          ) : eligibleRows.length === 0 ? (
+            <section className={styles.emptyState}>
+              <h2>Żaden zawodnik nie spełnia kryteriów</h2>
+              <p>
+                Zmniejsz próg minimalnych minut lub meczów albo poszerz filtr pozycji (albo usuń go — „Pokaż wszystkie pozycje” w modalu).
+              </p>
+            </section>
+          ) : (
+            <>
+              <section className={styles.kpiGrid} aria-label="Liderzy KPI">
+                {PLAYER_COMPARISON_AXIS_METRIC_IDS.map((axisId) => {
+                  const metric = metricById.get(axisId)!;
+                  const leader = getMetricLeader(eligibleRows, axisId);
+                  const weakest = getWorstMetricRow(eligibleRows, axisId);
                   return (
-                    <div key={player.id} className={styles.duplicateItem}>
-                      <div className={styles.playerInfo}>
-                        <span className={styles.playerName}>{getPlayerLabel(player.id, playersIndex)} ({player.id})</span>
-                        <span className={styles.playerNumber}>#{player.number}</span>
-                        <span className={styles.playerBirthYear}>
-                          {player.birthYear ? `ur. ${player.birthYear}` : 'Brak roku urodzenia'}
-                        </span>
-                        <span className={styles.playerTeams}>{player.teams?.join(', ') || 'Brak zespołu'}</span>
-                        <span className={styles.playerActions}>{playerActionsCount} akcji</span>
-                      </div>
-                    </div>
+                    <article key={axisId} className={styles.kpiCard}>
+                      <span>{metric.label}</span>
+                      <strong>{leader?.playerName ?? "—"}</strong>
+                      <small>
+                        Lider: {leader ? formatMetricValue(axisId, leader.values[axisId]) : "—"} · Najsłabiej:{" "}
+                        {weakest ? `${weakest.playerName} (${formatMetricValue(axisId, weakest.values[axisId])})` : "—"}
+                      </small>
+                    </article>
                   );
                 })}
-              </div>
-            </div>
-          ))}
-        </div>
+              </section>
+
+              <section className={`${styles.analysisGrid} ${styles.analysisGridRankingOnly}`}>
+                <article className={styles.panel}>
+                  <div className={styles.panelHeader}>
+                    <div>
+                      <h2 className={styles.panelTitle}>Ranking KPI</h2>
+                      <p className={styles.panelSubtitle}>Wybierz KPI i zobacz, kto się wyróżnia.</p>
+                    </div>
+                    <div className={styles.rankingControls}>
+                      <select
+                        value={metricFamily}
+                        onChange={(event) => {
+                          const next = event.target.value as PlayerComparisonMetricFamily;
+                          setMetricFamily(next);
+                          if (!supportsComparisonMetricRole(next)) {
+                            setMetricRole("sender");
+                          }
+                        }}
+                        className={styles.select}
+                        aria-label="Wybierz KPI do rankingu"
+                      >
+                        {PLAYER_COMPARISON_FAMILY_OPTIONS.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      {supportsComparisonMetricRole(metricFamily) && (
+                        <div className={styles.roleToggle} role="group" aria-label="Rola w akcji">
+                          <button
+                            type="button"
+                            className={`${styles.modeButton} ${metricRole === "sender" ? styles.modeButtonActive : ""}`}
+                            onClick={() => setMetricRole("sender")}
+                            aria-pressed={metricRole === "sender"}
+                          >
+                            Podający
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.modeButton} ${metricRole === "receiver" ? styles.modeButtonActive : ""}`}
+                            onClick={() => setMetricRole("receiver")}
+                            aria-pressed={metricRole === "receiver"}
+                          >
+                            Przyjmujący
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.modeButton} ${metricRole === "dribble" ? styles.modeButtonActive : ""}`}
+                            onClick={() => setMetricRole("dribble")}
+                            aria-pressed={metricRole === "dribble"}
+                          >
+                            Drybler
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className={styles.chartWrapper}>
+                    <ResponsiveContainer width="100%" height={320}>
+                      <BarChart data={barData} layout="vertical" margin={{ top: 8, right: 24, bottom: 8, left: 24 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
+                        <XAxis type="number" tick={{ fill: "#64748b", fontSize: 12 }} />
+                        <YAxis dataKey="name" type="category" width={120} tick={{ fill: "#475569", fontSize: 12 }} />
+                        <Tooltip
+                          formatter={(value) => [formatMetricValue(activeMetricId, Number(value)), selectedMetric.label]}
+                          contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb" }}
+                        />
+                        <Bar dataKey="value" fill="#2563eb" radius={[0, 8, 8, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </article>
+              </section>
+
+              <article className={styles.panel}>
+                <div className={styles.panelHeader}>
+                  <div>
+                    <h2 className={styles.panelTitle}>Porównanie dwóch zawodników</h2>
+                    <p className={styles.panelSubtitle}>SpiderMapa: skala względna w obrębie grupy po progach (0–100).</p>
+                    {primaryPlayer && secondaryPlayer ? (
+                      <ul className={styles.radarPlayerLegend} aria-label="Kolory serii na wykresie radarowym">
+                        <li>
+                          <span className={styles.playerColorDot} style={{ backgroundColor: COMPARISON_PLAYER_COLORS[0] }} aria-hidden />
+                          <span>{primaryPlayer.playerName}</span>
+                        </li>
+                        <li>
+                          <span className={styles.playerColorDot} style={{ backgroundColor: COMPARISON_PLAYER_COLORS[1] }} aria-hidden />
+                          <span>{secondaryPlayer.playerName}</span>
+                        </li>
+                      </ul>
+                    ) : null}
+                  </div>
+                  <div className={styles.playerSelects}>
+                    <div className={styles.playerSelectPair}>
+                      <span
+                        className={styles.playerColorDot}
+                        style={{ backgroundColor: COMPARISON_PLAYER_COLORS[0] }}
+                        title="Kolor zawodnika A na spider mapie"
+                        aria-hidden
+                      />
+                      <select
+                        value={primaryPlayerId}
+                        onChange={(event) => setPrimaryPlayerId(event.target.value)}
+                        className={styles.select}
+                        aria-label="Zawodnik A"
+                      >
+                        {sortedSelectRows.map((row) => (
+                          <option key={row.playerId} value={row.playerId}>
+                            {row.playerName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className={styles.playerSelectPair}>
+                      <span
+                        className={styles.playerColorDot}
+                        style={{ backgroundColor: COMPARISON_PLAYER_COLORS[1] }}
+                        title="Kolor zawodnika B na spider mapie"
+                        aria-hidden
+                      />
+                      <select
+                        value={secondaryPlayerId}
+                        onChange={(event) => setSecondaryPlayerId(event.target.value)}
+                        className={styles.select}
+                        aria-label="Zawodnik B"
+                      >
+                        {sortedSelectRows.map((row) => (
+                          <option key={row.playerId} value={row.playerId}>
+                            {row.playerName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {primaryPlayer && secondaryPlayer ? (
+                  <div className={styles.comparisonLayout}>
+                    <div className={styles.radarWrapper}>
+                      <ResponsiveRadar
+                        data={radarData}
+                        keys={[primaryPlayer.playerName, secondaryPlayer.playerName]}
+                        indexBy="metric"
+                        maxValue={100}
+                        margin={{ top: 48, right: 64, bottom: 48, left: 64 }}
+                        curve="linearClosed"
+                        borderWidth={2}
+                        borderColor={{ from: "color" }}
+                        gridLevels={5}
+                        gridShape="circular"
+                        gridLabelOffset={18}
+                        enableDots
+                        dotSize={6}
+                        dotBorderWidth={2}
+                        dotBorderColor={{ from: "color" }}
+                        colors={[...COMPARISON_PLAYER_COLORS]}
+                        fillOpacity={0.15}
+                        blendMode="multiply"
+                        motionConfig="wobbly"
+                        sliceTooltip={({ index }) => {
+                          const metric = PLAYER_COMPARISON_AXIS_METRIC_IDS.map((id) => metricById.get(id)!).find((m) => m.shortLabel === index);
+                          if (!metric) return null;
+                          return (
+                            <div className={styles.radarTooltip}>
+                              <strong>{metric.label}</strong>
+                              <span>
+                                {primaryPlayer.playerName}: {formatMetricValue(metric.id, primaryPlayer.values[metric.id])}
+                              </span>
+                              <span>
+                                {secondaryPlayer.playerName}: {formatMetricValue(metric.id, secondaryPlayer.values[metric.id])}
+                              </span>
+                            </div>
+                          );
+                        }}
+                      />
+                    </div>
+                    <div className={styles.compareTableWrapper}>
+                      <table className={styles.playersTable}>
+                        <thead>
+                          <tr>
+                            <th>KPI</th>
+                            <th>
+                              <span className={styles.compareTableHeadCell}>
+                                <span
+                                  className={styles.playerColorDot}
+                                  style={{ backgroundColor: COMPARISON_PLAYER_COLORS[0] }}
+                                  aria-hidden
+                                />
+                                {primaryPlayer.playerName}
+                              </span>
+                            </th>
+                            <th>
+                              <span className={styles.compareTableHeadCell}>
+                                <span
+                                  className={styles.playerColorDot}
+                                  style={{ backgroundColor: COMPARISON_PLAYER_COLORS[1] }}
+                                  aria-hidden
+                                />
+                                {secondaryPlayer.playerName}
+                              </span>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {PLAYER_COMPARISON_AXIS_METRIC_IDS.map((axisId) => {
+                            const metric = metricById.get(axisId)!;
+                            return (
+                              <tr key={axisId}>
+                                <td>{metric.label}</td>
+                                <td>{formatMetricValue(axisId, primaryPlayer.values[axisId])}</td>
+                                <td>{formatMetricValue(axisId, secondaryPlayer.values[axisId])}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <p className={styles.emptyInline}>Brak zawodników z danymi KPI do porównania w tym zakresie.</p>
+                )}
+              </article>
+
+              <details className={styles.playersTableDetails}>
+                <summary className={styles.playersTableSummary}>Pełna tabela zawodników (opcjonalnie rozwiń)</summary>
+                <p className={styles.playersTableHint}>
+                  Kliknij nagłówek kolumny, by sortować. Drugie kliknięcie odwraca kolejność. Kolumna KPI odpowiada aktualnemu zestawowi w rankingu (
+                  {selectedMetric.label}).
+                </p>
+                <div className={styles.tableWrapper}>
+                  <table className={styles.playersTable}>
+                    <thead>
+                      <tr>
+                        <th scope="col" aria-sort={fullTableSort.column === "playerName" ? (fullTableSort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                          <button
+                            type="button"
+                            className={styles.tableSortButton}
+                            onClick={() => handleFullTableSort("playerName")}
+                            aria-label="Sortuj według zawodnika"
+                          >
+                            Zawodnik
+                            {fullTableSort.column === "playerName" ? (
+                              <span className={styles.tableSortIndicator} aria-hidden>
+                                {fullTableSort.direction === "asc" ? " ↑" : " ↓"}
+                              </span>
+                            ) : null}
+                          </button>
+                        </th>
+                        <th scope="col" aria-sort={fullTableSort.column === "birthYear" ? (fullTableSort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                          <button
+                            type="button"
+                            className={styles.tableSortButton}
+                            onClick={() => handleFullTableSort("birthYear")}
+                            aria-label="Sortuj według rocznika"
+                          >
+                            Rocznik
+                            {fullTableSort.column === "birthYear" ? (
+                              <span className={styles.tableSortIndicator} aria-hidden>
+                                {fullTableSort.direction === "asc" ? " ↑" : " ↓"}
+                              </span>
+                            ) : null}
+                          </button>
+                        </th>
+                        <th scope="col" aria-sort={fullTableSort.column === "position" ? (fullTableSort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                          <button
+                            type="button"
+                            className={styles.tableSortButton}
+                            onClick={() => handleFullTableSort("position")}
+                            aria-label="Sortuj według pozycji"
+                          >
+                            Pozycja
+                            {fullTableSort.column === "position" ? (
+                              <span className={styles.tableSortIndicator} aria-hidden>
+                                {fullTableSort.direction === "asc" ? " ↑" : " ↓"}
+                              </span>
+                            ) : null}
+                          </button>
+                        </th>
+                        <th scope="col" aria-sort={fullTableSort.column === "minutes" ? (fullTableSort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                          <button
+                            type="button"
+                            className={styles.tableSortButton}
+                            onClick={() => handleFullTableSort("minutes")}
+                            aria-label="Sortuj według minut"
+                          >
+                            Min
+                            {fullTableSort.column === "minutes" ? (
+                              <span className={styles.tableSortIndicator} aria-hidden>
+                                {fullTableSort.direction === "asc" ? " ↑" : " ↓"}
+                              </span>
+                            ) : null}
+                          </button>
+                        </th>
+                        <th scope="col" aria-sort={fullTableSort.column === "matches" ? (fullTableSort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                          <button
+                            type="button"
+                            className={styles.tableSortButton}
+                            onClick={() => handleFullTableSort("matches")}
+                            aria-label="Sortuj według liczby meczów"
+                          >
+                            Mecze
+                            {fullTableSort.column === "matches" ? (
+                              <span className={styles.tableSortIndicator} aria-hidden>
+                                {fullTableSort.direction === "asc" ? " ↑" : " ↓"}
+                              </span>
+                            ) : null}
+                          </button>
+                        </th>
+                        <th scope="col" aria-sort={fullTableSort.column === "kpi" ? (fullTableSort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                          <button
+                            type="button"
+                            className={styles.tableSortButton}
+                            onClick={() => handleFullTableSort("kpi")}
+                            aria-label={`Sortuj według ${selectedMetric.label}`}
+                          >
+                            {selectedMetric.shortLabel}
+                            {fullTableSort.column === "kpi" ? (
+                              <span className={styles.tableSortIndicator} aria-hidden>
+                                {fullTableSort.direction === "asc" ? " ↑" : " ↓"}
+                              </span>
+                            ) : null}
+                          </button>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fullTableSortedRows.map((row) => (
+                        <tr key={row.playerId}>
+                          <td>
+                            <strong>{row.playerName}</strong>
+                            <span className={styles.playerMeta}>#{row.number || "—"}</span>
+                          </td>
+                          <td>{row.birthYear ?? "—"}</td>
+                          <td>{row.position || "—"}</td>
+                          <td>{Math.round(row.minutes)}</td>
+                          <td>{row.matchesPlayed}</td>
+                          <td>{formatMetricValue(activeMetricId, row.values[activeMetricId])}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            </>
+          )}
+        </>
       )}
-
-      <div className={styles.playersPanel}>
-        <h2>Statystyki zawodników</h2>
-        {isLoadingActions ? (
-          <p>Ładowanie akcji...</p>
-        ) : selectedMatches.length === 0 ? (
-          <p>Wybierz co najmniej jeden mecz, aby zobaczyć statystyki zawodników.</p>
-        ) : filteredPlayers.length === 0 ? (
-          <p>Brak zawodników spełniających kryteria filtrowania (zespół/pozycja).</p>
-        ) : (
-          <div>
-            <div className={styles.tableControls}>
-              <p>Pokazano statystyki z {filteredActions.length} akcji z {selectedMatches.length} meczów</p>
-            </div>
-            
-            {/* Wyświetl odpowiedni komponent w zależności od aktywnej zakładki */}
-            {activeTab === 'packing' && (
-              <PackingChart
-                actions={filteredActions}
-                players={filteredPlayers}
-                selectedPlayerId={selectedPlayerId}
-                onPlayerSelect={handlePlayerSelect}
-                matches={selectedMatchesData}
-                teams={teams}
-                birthYearFilter={birthYearFilter}
-                onBirthYearFilterChange={setBirthYearFilter}
-                selectedPositions={selectedPositions}
-                onSelectedPositionsChange={setSelectedPositions}
-                availablePositions={availablePositions}
-                showPositionsDropdown={showPositionsDropdown}
-                setShowPositionsDropdown={setShowPositionsDropdown}
-                handlePositionToggle={handlePositionToggle}
-                handleSelectAllPositions={handleSelectAllPositions}
-              />
-            )}
-            
-            {activeTab === 'xg' && (
-              <div className={styles.placeholder}>
-                <h3>xG Analysis</h3>
-                <p>Funkcja xG będzie dostępna wkrótce...</p>
-              </div>
-            )}
-            
-            {activeTab === 'unpacking' && (
-              <ActionSection
-                selectedZone={selectedZone}
-                handleZoneSelect={handleZoneSelection}
-                players={filteredPlayers}
-                selectedPlayerId={selectedPlayerId}
-                setSelectedPlayerId={setSelectedPlayerId}
-                selectedReceiverId={selectedReceiverId}
-                setSelectedReceiverId={setSelectedReceiverId}
-                actionMinute={actionMinute}
-                setActionMinute={setActionMinute}
-                actionType={actionType}
-                setActionType={setActionType}
-                currentPoints={currentPoints}
-                setCurrentPoints={setCurrentPoints}
-                isP1Active={isP1Active}
-                setIsP1Active={setIsP1Active}
-                isP2Active={isP2Active}
-                setIsP2Active={setIsP2Active}
-                isP3Active={isP3Active}
-                setIsP3Active={setIsP3Active}
-                isShot={isShot}
-                setIsShot={setIsShot}
-                isGoal={isGoal}
-                setIsGoal={setIsGoal}
-                isPenaltyAreaEntry={isPenaltyAreaEntry}
-                setIsPenaltyAreaEntry={setIsPenaltyAreaEntry}
-                isSecondHalf={isSecondHalf}
-                setIsSecondHalf={handleSecondHalfToggle}
-                handleSaveAction={handleSaveAction}
-                resetActionState={resetActionState}
-                resetActionPoints={resetActionPoints}
-                startZone={startZone}
-                endZone={endZone}
-                isActionModalOpen={isActionModalOpen}
-                setIsActionModalOpen={setIsActionModalOpen}
-                matchInfo={selectedMatchesData[0] || null}
-                // Nowe propsy dla trybu unpacking
-                mode={actionMode}
-                onModeChange={setActionMode}
-                selectedDefensePlayers={selectedDefensePlayers}
-                onDefensePlayersChange={setSelectedDefensePlayers}
-                losesBackAllyCount={0}
-                setLosesBackAllyCount={() => {}}
-                receptionBackAllyCount={0}
-                setReceptionBackAllyCount={() => {}}
-                playersLeftField={0}
-                setPlayersLeftField={() => {}}
-                opponentsLeftField={0}
-                setOpponentsLeftField={() => {}}
-              />
-            )}
-          </div>
-        )}
-      </div>
-
-      <PlayerModal
-        isOpen={isModalOpen}
-        onClose={closeModal}
-        onSave={handleSavePlayerWithTeams}
-        editingPlayer={editingPlayer || undefined} // Użyj editingPlayer z usePlayersState (ze świeżymi danymi z Firebase)
-        currentTeam={selectedTeams.length > 0 ? selectedTeams[0] : ''}
-        allTeams={Object.values(teamsObject)}
-        existingPlayers={players}
-      />
-
-      {/* Panel boczny z menu */}
-      <SidePanel
-        players={players}
-        actions={allActions}
-        matchInfo={null}
-        isAdmin={isAdmin}
-        userRole={userRole}
-        linkedPlayerId={linkedPlayerId}
-        selectedTeam={selectedTeams.length > 0 ? selectedTeams[0] : ''}
-        onRefreshData={() => forceRefreshFromFirebase().then(() => {})}
-        onImportSuccess={() => {}}
-        onImportError={() => {}}
-        onLogout={logout}
-      />
+      {sidePanel}
     </div>
   );
 }

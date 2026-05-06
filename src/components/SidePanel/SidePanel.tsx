@@ -118,7 +118,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
                 {userRole !== 'coach' && (
                   <Link href="/zawodnicy" className={styles.menuItem}>
                     <span className={styles.icon}>👥</span>
-                    <span>Statystyki zawodników</span>
+                    <span>Porównywarka zawodników</span>
                   </Link>
                 )}
                 <Link href="/statystyki-zespolu" className={styles.menuItem}>

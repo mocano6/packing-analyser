@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import styles from "./LosesActionModal.module.css";
 import { Player, Action, TeamInfo } from "@/types";
 import { ACTION_BUTTONS } from "../PointsButtons/constants";
@@ -10,6 +10,7 @@ import { getOurSquadLabelForPackingModal } from "@/lib/matchInfoPackingLabels";
 import { sortPlayersByLastName } from '@/utils/playerUtils';
 import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
 import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
+import { useModalFormHotkeys } from "@/hooks/useModalFormHotkeys";
 
 interface LosesActionModalProps {
   isOpen: boolean;
@@ -180,6 +181,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
 }) => {
   const clamp0to10 = (value: number) => Math.max(0, Math.min(10, value));
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
+  const modalFormRef = useRef<HTMLFormElement | null>(null);
 
   const ourSquadLabel = useMemo(() => {
     const fromSelector = packingSquadDisplayName?.trim();
@@ -606,6 +608,13 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
     return { byPosition, sortedPositions };
   }, [filteredPlayers, matchInfo, allMatches, currentSelectedMatch, isEditMode]);
 
+  const handleCancel = useCallback(() => {
+    onReset();
+    onClose();
+  }, [onReset, onClose]);
+
+  useModalFormHotkeys({ isOpen, formRef: modalFormRef, onCancel: handleCancel });
+
   if (!isOpen) return null;
 
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -841,11 +850,6 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
     void handleSave();
   };
 
-  const handleCancel = () => {
-    onReset();
-    onClose();
-  };
-
   const handleReset = () => {
     if (isEditMode) {
       // W trybie edycji - użyj oryginalnej funkcji onReset (przywraca oryginalną akcję)
@@ -867,7 +871,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
           </button>
         </div>
         
-        <form className={styles.form} onSubmit={handleFormSubmit}>
+        <form ref={modalFormRef} className={styles.form} onSubmit={handleFormSubmit}>
           {/* Wybór meczu - tylko w trybie edycji */}
           {isEditMode && allMatches && allMatches.length > 0 && (
             <div className={styles.formGroup}>

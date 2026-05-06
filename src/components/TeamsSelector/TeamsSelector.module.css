@@ -275,4 +275,58 @@
   text-align: center;
   color: #666;
   font-size: 14px;
+}
+
+.teamsSelectorModalWithFooter .teamsSelectorModalContent {
+  max-height: calc(90vh - 140px);
+}
+
+.modalToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.modalToolbarButton {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4b5563;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.modalToolbarButton:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.teamsSelectorModalFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  flex-shrink: 0;
+}
+
+.modalPrimaryButton {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: #2196f3;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.modalPrimaryButton:hover {
+  background: #1976d2;
 } 
