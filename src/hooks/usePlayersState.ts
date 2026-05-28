@@ -6,7 +6,8 @@ import { getAuthClient, getDB } from "../lib/firebase";
 import { getPlayerFullName } from '@/utils/playerUtils';
 import { 
   collection, getDocs, addDoc, updateDoc,
-  doc, setDoc, getDoc
+  doc, setDoc, getDoc, query, where, documentId,
+  type DocumentData
 } from "@/lib/firestoreWithMetrics";
 import { getCachedWithTimestamp, setCached, invalidateCache, CACHE_KEYS } from "@/lib/sessionCache";
 import { NewPlayer, TeamMembership } from "@/types/migration";
@@ -132,79 +133,75 @@ export function usePlayersState() {
           return [];
         }
 
-      // 2. Pobierz członków z wszystkich zespołów
-      const allPlayers = new Map<string, Player>();
-      
+      // 2. Zbierz członkostwa ze wszystkich zespołów (równolegle, bez odczytu zawodników).
+      type CollectedMembership = { playerId: string; number: number; teamId: string };
+      const memberships: CollectedMembership[] = [];
+
       await Promise.all(
         teamsSnapshot.docs.map(async (teamDoc) => {
           const teamId = teamDoc.id;
-          
           try {
             const membersSnapshot = await getDocs(collection(getDB(), "teams", teamId, "members"));
-            
-            await Promise.all(
-              membersSnapshot.docs.map(async (memberDoc) => {
-                try {
-                  const membership = memberDoc.data() as TeamMembership;
-                  
-                  // Sprawdź czy membership ma wymagane pola
-                  if (!membership.playerId || typeof membership.number !== 'number') {
-                    return;
-                  }
-                  
-                  const playerDoc = await getDoc(doc(getDB(), "players", membership.playerId));
-                  
-                  if (!playerDoc.exists()) {
-                    return;
-                  }
-                  
-                  const playerData = playerDoc.data();
-                  
-                  // Sprawdź czy playerData ma wymagane pola (bardziej elastyczna walidacja)
-                  if (!playerData) {
-                    return;
-                  }
-                  if (playerData.isDeleted === true) {
-                    return;
-                  }
-                  
-
-                  
-                  // Mniej restrykcyjna walidacja - nie wymagaj position
-                  if (!playerData.firstName && !playerData.name) {
-                    return;
-                  }
-                  
-                  const existingPlayer = allPlayers.get(membership.playerId);
-                  
-                  const player: Player = {
-                    id: membership.playerId,
-                    firstName: playerData.firstName || '',
-                    lastName: playerData.lastName || '',
-                    name: playerData.name || `${playerData.firstName || ''} ${playerData.lastName || ''}`.trim(),
-                    birthYear: playerData.birthYear,
-                    imageUrl: playerData.imageUrl,
-                    position: playerData.position || 'CB', // Domyślna pozycja jeśli brak
-                    number: membership.number || 0, // Domyślny numer
-                    teams: existingPlayer 
-                      ? [...(existingPlayer.teams || []), teamId]
-                      : [teamId]
-                  };
-
-                  
-                  allPlayers.set(membership.playerId, player);
-                  
-                } catch (memberError) {
-                  console.error(`Błąd przetwarzania członka ${memberDoc.id} w zespole ${teamId}:`, memberError);
-                }
-              })
-            );
+            membersSnapshot.docs.forEach((memberDoc) => {
+              const membership = memberDoc.data() as TeamMembership;
+              if (!membership.playerId || typeof membership.number !== 'number') {
+                return;
+              }
+              memberships.push({ playerId: membership.playerId, number: membership.number, teamId });
+            });
           } catch (teamError) {
             console.error(`Błąd przetwarzania zespołu ${teamId}:`, teamError);
           }
         })
       );
-      
+
+      // 3. Pobierz potrzebnych zawodników WSADOWO (where documentId in chunk≤30) zamiast getDoc per członek (eliminacja N+1).
+      const uniquePlayerIds = [...new Set(memberships.map((m) => m.playerId))];
+      const playerDataById = new Map<string, DocumentData>();
+      const ID_IN_CHUNK = 30;
+      await Promise.all(
+        Array.from({ length: Math.ceil(uniquePlayerIds.length / ID_IN_CHUNK) }, (_, i) =>
+          uniquePlayerIds.slice(i * ID_IN_CHUNK, i * ID_IN_CHUNK + ID_IN_CHUNK),
+        )
+          .filter((chunk) => chunk.length > 0)
+          .map(async (chunk) => {
+            try {
+              const snap = await getDocs(query(collection(getDB(), "players"), where(documentId(), "in", chunk)));
+              snap.docs.forEach((d) => playerDataById.set(d.id, d.data()));
+            } catch (chunkError) {
+              console.error("Błąd wsadowego pobierania zawodników:", chunkError);
+            }
+          }),
+      );
+
+      // 4. Zbuduj listę zawodników, scalając zespoły (kolejność członkostw zachowuje poprzednie zachowanie nr/zespołów).
+      const allPlayers = new Map<string, Player>();
+      for (const m of memberships) {
+        const playerData = playerDataById.get(m.playerId);
+        if (!playerData || playerData.isDeleted === true) {
+          continue;
+        }
+        // Mniej restrykcyjna walidacja - nie wymagaj position
+        if (!playerData.firstName && !playerData.name) {
+          continue;
+        }
+        const existingPlayer = allPlayers.get(m.playerId);
+        const player: Player = {
+          id: m.playerId,
+          firstName: playerData.firstName || '',
+          lastName: playerData.lastName || '',
+          name: playerData.name || `${playerData.firstName || ''} ${playerData.lastName || ''}`.trim(),
+          birthYear: playerData.birthYear,
+          imageUrl: playerData.imageUrl,
+          position: playerData.position || 'CB', // Domyślna pozycja jeśli brak
+          number: m.number || 0, // Domyślny numer
+          teams: existingPlayer
+            ? [...(existingPlayer.teams || []), m.teamId]
+            : [m.teamId],
+        };
+        allPlayers.set(m.playerId, player);
+      }
+
       const playersList = Array.from(allPlayers.values());
       
       return playersList;

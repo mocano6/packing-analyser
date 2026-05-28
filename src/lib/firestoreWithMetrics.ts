@@ -18,6 +18,7 @@ import { recordFirestoreRead, recordFirestoreWrite } from "./firestoreMetricsSto
 export {
   collection,
   doc,
+  documentId,
   query,
   where,
   orderBy,

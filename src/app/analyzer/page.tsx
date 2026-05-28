@@ -877,13 +877,21 @@ export default function Page() {
     }
 
     if (matchInfo?.team && matchInfo?.date) {
-      const q = query(
-        collection(db, "matches"),
-        where("team", "==", matchInfo.team),
-        where("date", "==", matchInfo.date)
-      );
-      const snapshot = await getDocs(q);
-      const candidates = snapshot.docs.map((snap) => ({ id: snap.id, data: snap.data() as TeamInfo }));
+      // Po obu polach (team + teamId) — legacy mecze z samym teamId też muszą się dopasować.
+      const byId = new Map<string, { id: string; data: TeamInfo }>();
+      const runField = async (field: "team" | "teamId") => {
+        try {
+          const snapshot = await getDocs(
+            query(collection(db, "matches"), where(field, "==", matchInfo.team), where("date", "==", matchInfo.date)),
+          );
+          snapshot.docs.forEach((snap) => byId.set(snap.id, { id: snap.id, data: snap.data() as TeamInfo }));
+        } catch (e) {
+          console.warn(`[analyzer] resolvePossession ${field} query`, e);
+        }
+      };
+      await Promise.all([runField("team"), runField("teamId")]);
+
+      const candidates = Array.from(byId.values());
       const exact =
         candidates.find(({ data }) => data.opponent === matchInfo.opponent && data.competition === matchInfo.competition) ||
         candidates.find(({ data }) => data.opponent === matchInfo.opponent) ||
