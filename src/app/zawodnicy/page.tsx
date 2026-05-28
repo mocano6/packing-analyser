@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { toast } from "react-hot-toast";
 import { ResponsiveRadar } from "@nivo/radar";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import SidePanel from "@/components/SidePanel/SidePanel";
@@ -471,6 +472,10 @@ export default function ZawodnicyPage() {
         ),
       ).catch((error: unknown) => {
         console.error("Błąd zapisu pakietów wag do Firebase:", error);
+        // id → deduplikacja przy debounce'owanym zapisie (bez zalewania toastami)
+        toast.error("Nie udało się zapisać pakietów wag w chmurze. Zmiany są zapisane lokalnie.", {
+          id: "weighted-index-save-error",
+        });
       });
     }, 450);
 

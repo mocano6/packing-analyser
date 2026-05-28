@@ -7,18 +7,23 @@ import {
 
 const store = new Map<string, string>();
 (globalThis as unknown as { window: typeof globalThis }).window = globalThis;
-(globalThis as unknown as { localStorage: Storage }).localStorage = {
-  getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
-  setItem: (k: string, v: string) => {
-    store.set(k, v);
-  },
-  removeItem: (k: string) => {
-    store.delete(k);
-  },
-  clear: () => store.clear(),
-  key: () => null,
-  length: 0,
-};
+// defineProperty (nie zwykłe przypisanie) — w nowszym Node localStorage bywa read-only globalem.
+Object.defineProperty(globalThis, "localStorage", {
+  configurable: true,
+  writable: true,
+  value: {
+    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+    setItem: (k: string, v: string) => {
+      store.set(k, v);
+    },
+    removeItem: (k: string) => {
+      store.delete(k);
+    },
+    clear: () => store.clear(),
+    key: () => null,
+    length: 0,
+  } as Storage,
+});
 
 store.clear();
 assert.equal(setPendingMatchUpdate("m1", "actions_packing", []), true);

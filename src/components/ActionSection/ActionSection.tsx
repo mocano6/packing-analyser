@@ -10,7 +10,7 @@ import PlayerMatchStatsModal from "../PlayerMatchStatsModal/PlayerMatchStatsModa
 import styles from "./ActionSection.module.css";
 import { Player, TeamInfo, Action, PlayerMatchStats } from "@/types";
 import { getDB } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "@/lib/firestoreWithMetrics";
+import { doc, runTransaction } from "@/lib/firestoreWithMetrics";
 import { getReceptionBackAllyCountForDisplay } from "@/lib/regainReceptionDisplay";
 import { getLosesBackAllyCountForDisplay } from "@/lib/losesBackAllyDisplay";
 
@@ -255,10 +255,13 @@ const ActionSection = memo(function ActionSection({
       throw new Error("Brak ID meczu.");
     }
 
-    try {
-      const db = getDB();
-      const matchRef = doc(db, "matches", matchId);
-      const matchSnap = await getDoc(matchRef);
+    const db = getDB();
+    const matchRef = doc(db, "matches", matchId);
+
+    // Transakcja: odczyt + zapis atomowo — równoległe zapisy statystyk różnych zawodników
+    // tego samego meczu nie nadpisują się nawzajem (read-modify-write bez transakcji powodował utratę danych).
+    await runTransaction(db, async (transaction) => {
+      const matchSnap = await transaction.get(matchRef);
       if (!matchSnap.exists()) {
         throw new Error("Mecz nie istnieje.");
       }
@@ -271,19 +274,17 @@ const ActionSection = memo(function ActionSection({
         stats,
       ];
 
-      await updateDoc(matchRef, {
+      transaction.update(matchRef, {
         matchData: {
           ...existingMatchData,
           playerStats: updatedStats,
         },
       });
+    });
 
-      window.dispatchEvent(new CustomEvent('matchesListRefresh', {
-        detail: { timestamp: Date.now() }
-      }));
-    } catch (error) {
-      throw error;
-    }
+    window.dispatchEvent(new CustomEvent('matchesListRefresh', {
+      detail: { timestamp: Date.now() }
+    }));
   };
   // Funkcja do obliczania minuty meczu na podstawie czasu wideo
   const calculateMatchMinuteFromVideoTime = React.useCallback(async (): Promise<{ minute: number; isSecondHalf: boolean } | null> => {

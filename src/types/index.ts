@@ -426,7 +426,8 @@ export interface StartingLineup {
 export interface PlayerMinutesModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (playerMinutes: PlayerMinutes[]) => void;
+  /** Zapis minut. Może być asynchroniczny — modal czeka i zamyka się dopiero po sukcesie. */
+  onSave: (playerMinutes: PlayerMinutes[]) => void | Promise<unknown>;
   match: TeamInfo;
   players: Player[];
   currentPlayerMinutes?: PlayerMinutes[];

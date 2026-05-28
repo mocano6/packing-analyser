@@ -17,6 +17,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
 }) => {
   const [playerMinutes, setPlayerMinutes] = useState<PlayerMinutes[]>([]);
   const [initialized, setInitialized] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
 
   // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
@@ -130,8 +131,9 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
     return Math.max(0, endMinute - startMinute + 1);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     // Sprawdź, czy wartości są poprawne
     const validPlayerMinutes = playerMinutes.filter(pm => 
       pm.startMinute >= 0 &&
@@ -139,8 +141,20 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
       pm.endMinute <= 130
     );
     
-    onSave(validPlayerMinutes);
-    onClose();
+    // Czekamy na zapis i zamykamy modal dopiero po sukcesie (bez "fałszywego sukcesu").
+    setIsSaving(true);
+    try {
+      const result = await onSave(validPlayerMinutes);
+      if (result === null || result === false) {
+        throw new Error("Zapis minut nie powiódł się.");
+      }
+      onClose();
+    } catch (error) {
+      console.error("Błąd podczas zapisywania minut zawodników:", error);
+      alert("Nie udało się zapisać minut zawodników. Spróbuj ponownie.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -215,7 +229,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
   }, [players, match.team]);
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
+    <div className={styles.modalOverlay} onClick={isSaving ? undefined : onClose}>
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalHeader}>
           <div>
@@ -232,6 +246,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
             onClick={onClose}
             aria-label="Zamknij"
             title="Zamknij"
+            disabled={isSaving}
           >
             ×
           </button>
@@ -361,11 +376,12 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
               type="button"
               className={styles.cancelButton}
               onClick={onClose}
+              disabled={isSaving}
             >
               Anuluj
             </button>
-            <button type="submit" className={styles.saveButton}>
-              Zapisz
+            <button type="submit" className={styles.saveButton} disabled={isSaving}>
+              {isSaving ? "Zapisywanie…" : "Zapisz"}
             </button>
           </div>
         </form>

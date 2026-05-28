@@ -2730,13 +2730,10 @@ export default function Page() {
     setIsPlayerMinutesModalOpen(true);
   };
 
-  // Obsługa zapisywania minut zawodników
-  const handleSaveMinutes = (playerMinutes: PlayerMinutes[]) => {
-    if (editingMatch) {
-      handleSavePlayerMinutes(editingMatch, playerMinutes);
-    }
-    setIsPlayerMinutesModalOpen(false);
-    setEditingMatch(null);
+  // Obsługa zapisywania minut zawodników — czekamy na wynik; zamknięcie modala obsługuje sam modal (onClose) po sukcesie.
+  const handleSaveMinutes = async (playerMinutes: PlayerMinutes[]) => {
+    if (!editingMatch) return false;
+    return handleSavePlayerMinutes(editingMatch, playerMinutes);
   };
 
   // Funkcja do otwierania modalu nowego meczu

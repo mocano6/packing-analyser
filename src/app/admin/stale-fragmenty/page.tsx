@@ -3,7 +3,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { collection, doc, getDoc, getDocs, orderBy, query, where } from "@/lib/firestoreWithMetrics";
+import { doc, getDoc } from "@/lib/firestoreWithMetrics";
+import { fetchMatchesForTeamDualField } from "@/lib/matchTeamMatching";
 import { getDB } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { usePlayersState } from "@/hooks/usePlayersState";
@@ -71,10 +72,10 @@ export default function StaleFragmentyPage() {
     let cancelled = false;
     setIsLoadingMatches(true);
 
-    getDocs(query(collection(getDB(), "matches"), where("team", "==", selectedTeamId), orderBy("date", "desc")))
-      .then((snapshot) => {
+    fetchMatchesForTeamDualField(getDB(), "matches", selectedTeamId)
+      .then((docs) => {
         if (cancelled) return;
-        const list = snapshot.docs.map((docSnap) => ({
+        const list = docs.map((docSnap) => ({
           ...(docSnap.data() as TeamInfo),
           id: docSnap.id,
           matchId: docSnap.id,

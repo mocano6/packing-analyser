@@ -91,6 +91,30 @@ export function mergeMatchDataForFirestoreWrite(
       mergeNestedPartials(e.unsuccessful8sActions, i.unsuccessful8sActions) ??
       e.unsuccessful8sActions ??
       i.unsuccessful8sActions,
-    playerStats: i.playerStats !== undefined ? i.playerStats : e.playerStats,
+    playerStats: mergePlayerStatsPreferNonEmpty(e.playerStats, i.playerStats),
   };
+}
+
+type MatchPlayerStats = NonNullable<TeamInfo["matchData"]>["playerStats"];
+
+/**
+ * playerStats: jawne [] z klienta NIE może skasować niepustych statystyk z serwera
+ * (formularz często wysyła pustą tablicę, choć serwer ma dane). Zachowujemy istniejące.
+ */
+function mergePlayerStatsPreferNonEmpty(
+  existing: MatchPlayerStats,
+  incoming: MatchPlayerStats
+): MatchPlayerStats {
+  if (incoming === undefined) {
+    return existing;
+  }
+  if (
+    Array.isArray(incoming) &&
+    incoming.length === 0 &&
+    Array.isArray(existing) &&
+    existing.length > 0
+  ) {
+    return existing;
+  }
+  return incoming;
 }

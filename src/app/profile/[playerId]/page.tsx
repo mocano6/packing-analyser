@@ -36,7 +36,7 @@ import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
 import XGPitch from "@/components/XGPitch/XGPitch";
 import PlayerMatchStatsModal from "@/components/PlayerMatchStatsModal/PlayerMatchStatsModal";
 import { getDB } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "@/lib/firestoreWithMetrics";
+import { doc, runTransaction } from "@/lib/firestoreWithMetrics";
 import styles from "./page.module.css";
 
 export default function PlayerDetailsPage() {
@@ -1006,18 +1006,21 @@ export default function PlayerDetailsPage() {
       if (!matchId) throw new Error("Brak ID meczu.");
       const db = getDB();
       const matchRef = doc(db, "matches", matchId);
-      const matchSnap = await getDoc(matchRef);
-      if (!matchSnap.exists()) {
-        throw new Error("Mecz nie istnieje.");
-      }
-      const existingMatchData = (matchSnap.data() as TeamInfo).matchData || {};
-      const existingStats = existingMatchData.playerStats || [];
-      const updatedStats = [
-        ...existingStats.filter((item: PlayerMatchStats) => item.playerId !== stats.playerId),
-        stats,
-      ];
-      await updateDoc(matchRef, {
-        matchData: { ...existingMatchData, playerStats: updatedStats },
+      // Transakcja: równoległe zapisy statystyk różnych zawodników tego meczu nie nadpisują się.
+      await runTransaction(db, async (transaction) => {
+        const matchSnap = await transaction.get(matchRef);
+        if (!matchSnap.exists()) {
+          throw new Error("Mecz nie istnieje.");
+        }
+        const existingMatchData = (matchSnap.data() as TeamInfo).matchData || {};
+        const existingStats = existingMatchData.playerStats || [];
+        const updatedStats = [
+          ...existingStats.filter((item: PlayerMatchStats) => item.playerId !== stats.playerId),
+          stats,
+        ];
+        transaction.update(matchRef, {
+          matchData: { ...existingMatchData, playerStats: updatedStats },
+        });
       });
       setPlayerMatchStatsByMatchId((prev) => ({ ...prev, [matchId]: stats }));
       window.dispatchEvent(new CustomEvent("matchesListRefresh", { detail: { timestamp: Date.now() } }));

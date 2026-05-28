@@ -8,6 +8,7 @@ import { buildPlayersIndex, getPlayerFirstName, getPlayerFullName, getPlayerLabe
 import { getAvailableSeasonsFromMatches, getSeasonForDate } from "@/utils/seasonUtils";
 import { getDB } from "@/lib/firebase";
 import { collection, addDoc, query, where, orderBy, getDocs, deleteDoc, doc, getDoc, updateDoc, setDoc } from "@/lib/firestoreWithMetrics";
+import { fetchMatchesForTeamDualField } from "@/lib/matchTeamMatching";
 import { getMatchDocumentFromCache, getOrLoadMatchDocument } from "@/lib/matchDocumentCache";
 import { POSITIONS, mapOldPositionToNew } from "@/constants/positions";
 import styles from "./GPSDataSection.module.css";
@@ -558,12 +559,8 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
     const load = async () => {
       try {
         const db = getDB();
-        const q = query(
-          collection(db, "matches"),
-          where("team", "==", selectedTeam),
-          orderBy("date", "desc")
-        );
-        const snap = await getDocs(q);
+        // Po obu polach (team + teamId) — legacy mecze z samym teamId też muszą się znaleźć.
+        const matchDocs = await fetchMatchesForTeamDualField(db, "matches", selectedTeam);
         if (cancelled) return;
         const toDateStr = (v: unknown): string => {
           if (!v) return "";
@@ -571,7 +568,7 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
           if (typeof (v as { toDate?: () => Date }).toDate === "function") return (v as { toDate: () => Date }).toDate().toISOString().slice(0, 10);
           return String(v).slice(0, 10);
         };
-        const match = snap.docs
+        const match = matchDocs
           .map((d) => ({ matchId: d.id, ...d.data() } as TeamInfo))
           .find((m) => toDateStr(m.date) === selectedDate.slice(0, 10));
         if (!match?.playerMinutes?.length) {
@@ -1284,9 +1281,9 @@ const GPSDataSection: React.FC<GPSDataSectionProps> = ({
     }
     let cancelled = false;
     const db = getDB();
-    getDocs(query(collection(db, "matches"), where("team", "==", selectedTeam), orderBy("date", "desc"))).then((snap) => {
+    fetchMatchesForTeamDualField(db, "matches", selectedTeam).then((docs) => {
       if (cancelled) return;
-      const list = snap.docs.map((d) => {
+      const list = docs.map((d) => {
         const data = d.data() as TeamInfo;
         return { matchId: d.id, dateStr: toDateStr(data.date), opponent: data.opponent || "—" };
       });

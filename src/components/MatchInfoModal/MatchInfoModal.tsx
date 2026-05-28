@@ -23,7 +23,11 @@ import {
 interface MatchInfoModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (matchInfo: TeamInfo) => void;
+  /**
+   * Zapis meczu. Może być asynchroniczny — modal czeka na zakończenie i zamyka się
+   * dopiero po sukcesie. Zwrócenie null/false traktujemy jako nieudany zapis (modal zostaje otwarty).
+   */
+  onSave: (matchInfo: TeamInfo) => void | Promise<unknown>;
   currentInfo: TeamInfo | null;
   /** Pełny katalog zespołów; dostęp ogranicza userTeamAccess. */
   teamsCatalog: Team[];
@@ -108,6 +112,9 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   const [formData, setFormData] = useState<TeamInfo>(
     currentInfo || getDefaultMatchInfo(teamsCatalog, userTeamAccess, selectedTeam)
   );
+
+  /** Trwa zapis meczu — blokuje przyciski i utrzymuje modal otwarty do zakończenia. */
+  const [isSaving, setIsSaving] = useState(false);
 
   /** Po „Usuń logo” nie wstawiamy ponownie automatycznie, dopóki nazwa się nie zmieni lub użytkownik nie kliknie przycisku. */
   const [dismissedLogoForNormalizedOpponent, setDismissedLogoForNormalizedOpponent] = useState<string | null>(
@@ -208,8 +215,9 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     
     // Kopiujemy obiekt, aby uniknąć modyfikacji oryginalnego obiektu
     const infoToSave = { ...formData };
@@ -256,41 +264,34 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
     // Zapamiętaj ID zespołu przed zapisem
     const teamId = infoToSave.team;
     
-    // Wywołujemy funkcję zapisu
+    // Czekamy na zakończenie zapisu — modal zamykamy DOPIERO po sukcesie,
+    // żeby nie pokazać "fałszywego sukcesu", gdy zapis do Firebase jeszcze trwa lub się nie powiódł.
+    setIsSaving(true);
     try {
-      // Blokuj przycisk zapisu i pokaż wskaźnik ładowania
-      (document.querySelector('button[type="submit"]') as HTMLButtonElement)?.setAttribute('disabled', 'true');
-      
-      // Dodaj klasę wskazującą na trwający zapis
-      const modalContent = document.querySelector(`.${styles.modalContent}`) as HTMLElement;
-      if (modalContent) {
-        modalContent.classList.add(styles.savingInProgress);
+      const result = await onSave(infoToSave);
+      // Caller (np. handleSaveNewMatch) zwraca null/false, gdy zapis się nie powiódł.
+      if (result === null || result === false) {
+        throw new Error("Zapis meczu nie powiódł się.");
       }
-      
-      // Wywołaj funkcję zapisu
-      onSave(infoToSave);
-      
-      // Zamykamy modal
       onClose();
-      
-      // Lepsze rozwiązanie: Użyj hash URL do wymuszenia odświeżenia listy meczów
-      // To pozwala na odświeżenie listy bez pełnego przeładowania strony
+      // Wymuszenie odświeżenia listy meczów bez pełnego przeładowania strony.
       window.location.hash = `refresh=${teamId}`;
-      
     } catch (error) {
       console.error("Błąd podczas zapisywania meczu:", error);
       alert("Wystąpił błąd podczas zapisywania meczu. Spróbuj ponownie.");
-      
-      // Odblokuj przycisk zapisu w przypadku błędu
-      (document.querySelector('button[type="submit"]') as HTMLButtonElement)?.removeAttribute('disabled');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className={styles.modal} onClick={onClose}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+    <div className={styles.modal} onClick={isSaving ? undefined : onClose}>
+      <div
+        className={`${styles.modalContent}${isSaving ? ` ${styles.savingInProgress}` : ""}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2>{currentInfo ? "Edytuj mecz" : "Dodaj nowy mecz"}</h2>
         <form onSubmit={handleSubmit}>
           {/* Sekcja podstawowych informacji */}
@@ -559,11 +560,12 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
               type="button"
               className={styles.cancelButton}
               onClick={onClose}
+              disabled={isSaving}
             >
               Anuluj
             </button>
-            <button type="submit" className={styles.saveButton}>
-              {currentInfo ? "Zapisz zmiany" : "Dodaj mecz"}
+            <button type="submit" className={styles.saveButton} disabled={isSaving}>
+              {isSaving ? "Zapisywanie…" : currentInfo ? "Zapisz zmiany" : "Dodaj mecz"}
             </button>
           </div>
         </form>

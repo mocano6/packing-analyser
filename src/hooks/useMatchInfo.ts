@@ -7,9 +7,10 @@ import { getAuthClient, getDB } from "@/lib/firebase";
 import { isFirebasePermissionDenied } from "@/utils/isFirebasePermissionDenied";
 import { 
   collection, getDocs, addDoc, updateDoc, deleteDoc, 
-  doc, query, where, orderBy, writeBatch, getDoc, setDoc
+  doc, query, orderBy, writeBatch, getDoc, setDoc
 } from "@/lib/firestoreWithMetrics";
 import { prepareMatchDocumentForFirestore } from "@/lib/prepareMatchDocumentForFirestore";
+import { fetchMatchesForTeamDualField, matchBelongsToTeam, resolveMatchTeamId } from "@/lib/matchTeamMatching";
 import { normalizeTeamInfoHalfStarts } from "../utils/normalizeTeamInfoHalfStarts";
 import { stripEmptyHeavyArraysThatWouldWipeServer } from "@/lib/matchDocumentMergeForSave";
 import { compactTeamInfoForLocalStorage } from "@/lib/compactTeamInfoForLocalStorage";
@@ -374,29 +375,21 @@ export function useMatchInfo() {
       const matchesData = await firebaseQueue.add(async () => {
         return withRetry(async () => {
           try {
-      const matchesCollection = collection(getDB(), "matches");
-      let matchesQuery;
+      // Mecze pobieramy po OBU polach (team + teamId) — legacy/importowane dokumenty mają czasem tylko teamId,
+      // a samo where("team") je pomijało (mecze „znikały”). Bez teamId: pełna lista (admin).
+      const matchDocs = teamId
+        ? await fetchMatchesForTeamDualField(getDB(), "matches", teamId)
+        : (await getDocs(query(collection(getDB(), "matches"), orderBy("date", "desc")))).docs;
       
-      if (teamId) {
-        matchesQuery = query(
-          matchesCollection, 
-          where("team", "==", teamId),
-          orderBy("date", "desc")
-        );
-      } else {
-        matchesQuery = query(
-          matchesCollection,
-          orderBy("date", "desc")
-        );
-      }
-      
-      const matchesSnapshot = await getDocs(matchesQuery);
-      
-      if (!matchesSnapshot.empty) {
-              return matchesSnapshot.docs.map((docSnap) => {
+      if (matchDocs.length > 0) {
+              return matchDocs.map((docSnap) => {
           const data = docSnap.data() as TeamInfo;
+          // Normalizujemy team do wartości kanonicznej (team → teamId → teams[0]),
+          // żeby dalsze filtry `m.team === selectedTeam` działały też dla legacy dokumentów.
+          const canonicalTeam = resolveMatchTeamId(data);
           return normalizeTeamInfoHalfStarts({
             ...data,
+            ...(canonicalTeam ? { team: canonicalTeam } : {}),
             id: docSnap.id,
             matchId: docSnap.id,
           } as TeamInfo);
@@ -424,7 +417,7 @@ export function useMatchInfo() {
               // Zwracamy dane z cache zamiast rzucać wyjątek
               const cachedMatches = localCacheRef.current.data;
               const filteredMatches = teamId 
-                ? cachedMatches.filter(match => match.team === teamId)
+                ? cachedMatches.filter(match => matchBelongsToTeam(match, teamId))
                 : cachedMatches;
               
               return filteredMatches;
@@ -437,7 +430,7 @@ export function useMatchInfo() {
               // Zwracamy dane z cache zamiast rzucać wyjątek
               const cachedMatches = localCacheRef.current.data;
               const filteredMatches = teamId 
-                ? cachedMatches.filter(match => match.team === teamId)
+                ? cachedMatches.filter(match => matchBelongsToTeam(match, teamId))
                 : cachedMatches;
               
               return filteredMatches;

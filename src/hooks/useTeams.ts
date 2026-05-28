@@ -6,6 +6,7 @@ import {
 } from "@/lib/firestoreWithMetrics";
 import { getCached, setCached, invalidateCache, CACHE_KEYS } from "@/lib/sessionCache";
 import { isTeamActive } from "@/utils/teamActive";
+import { toast } from "react-hot-toast";
 
 export interface Team {
   id: string;
@@ -95,6 +96,7 @@ export function useTeams() {
       return true;
     } catch (err) {
       console.error("Error adding team:", err);
+      toast.error("Nie udało się dodać zespołu. Spróbuj ponownie.");
       return false;
     }
   };
@@ -112,6 +114,7 @@ export function useTeams() {
       return true;
     } catch (err) {
       console.error("Error updating team:", err);
+      toast.error("Nie udało się zaktualizować zespołu. Spróbuj ponownie.");
       return false;
     }
   };
@@ -126,6 +129,7 @@ export function useTeams() {
       return true;
     } catch (err) {
       console.error("Error deleting team:", err);
+      toast.error("Nie udało się usunąć zespołu. Spróbuj ponownie.");
       return false;
     }
   };

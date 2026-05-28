@@ -3,7 +3,8 @@
 import { useCallback, useMemo, useState } from "react";
 import type { Player, TeamInfo } from "@/types";
 import { getDB } from "@/lib/firebase";
-import { collection, getDocs, orderBy, query, where } from "@/lib/firestoreWithMetrics";
+import { collection, getDocs, query, where } from "@/lib/firestoreWithMetrics";
+import { fetchMatchesForTeamDualField } from "@/lib/matchTeamMatching";
 import { buildPlayerComparisonRows, type PlayerComparisonMode, type PlayerComparisonResult } from "@/utils/playerComparisonMetrics";
 import { filterPlayerComparisonMatchesExcludingExtreme } from "@/utils/playerComparisonExtremeMatch";
 
@@ -93,24 +94,26 @@ async function fetchPlayersForTeams(teamIds: string[]): Promise<Player[]> {
 
 async function fetchMatchesForTeams(teamIds: string[], dateFrom?: string, dateTo?: string): Promise<TeamInfo[]> {
   const db = getDB();
-  const matchesCollection = collection(db, "matches");
-  const allMatches: TeamInfo[] = [];
+  // Po obu polach (team + teamId) i równolegle dla wszystkich zespołów; dedup po ID dokumentu.
+  const perTeam = await Promise.all(
+    teamIds.map((teamId) => fetchMatchesForTeamDualField(db, "matches", teamId)),
+  );
 
-  for (const teamId of teamIds) {
-    const snapshot = await getDocs(query(matchesCollection, where("team", "==", teamId), orderBy("date", "desc")));
-    for (const docSnap of snapshot.docs) {
+  const byId = new Map<string, TeamInfo>();
+  for (const docs of perTeam) {
+    for (const docSnap of docs) {
       const match = {
         ...(docSnap.data() as TeamInfo),
         id: docSnap.id,
         matchId: docSnap.id,
       } as TeamInfo;
       if (isMatchInDateRange(match, dateFrom, dateTo)) {
-        allMatches.push(match);
+        byId.set(docSnap.id, match);
       }
     }
   }
 
-  return allMatches;
+  return Array.from(byId.values());
 }
 
 export function usePlayerComparisonData(

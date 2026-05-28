@@ -132,6 +132,7 @@ export default function EisenhowerQuadrantTab({ uid }: EisenhowerQuadrantTabProp
         await deleteDoc(taskDoc(uid, taskId));
       } catch (e) {
         console.error("Błąd usuwania zadania:", e);
+        toast.error("Nie udało się usunąć zadania. Spróbuj ponownie.");
       }
     },
     [uid]

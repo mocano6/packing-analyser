@@ -41,6 +41,25 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     }
   }, [isLoading, isAuthenticated, router, pathname]);
 
+  /**
+   * Zalogowany użytkownik nigdy nie powinien zostać na "/" (ekran logowania).
+   * Przekierowujemy od razu z poziomu guarda — zanim wyrenderuje się formularz logowania —
+   * żeby przy wejściu z aktywną sesją nie migał ekran logowania ani nie było pełnego przeładowania.
+   */
+  useEffect(() => {
+    if (isLoading || !isAuthenticated) return;
+    if (pathname !== "/") return;
+    if (isPlayer && userStatus !== "approved") {
+      router.replace("/oczekuje");
+      return;
+    }
+    if (isPlayer) {
+      router.replace(linkedPlayerId ? `/profile/${linkedPlayerId}` : "/profile");
+      return;
+    }
+    router.replace("/analyzer");
+  }, [isLoading, isAuthenticated, isPlayer, userStatus, pathname, router, linkedPlayerId]);
+
   /* Player: strona startowa = profil zawodnika; tylko profil i oczekuje są dozwolone */
   useEffect(() => {
     if (isLoading || !isAuthenticated || !isPlayer) return;
@@ -51,11 +70,11 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     }
   }, [isLoading, isAuthenticated, isPlayer, userStatus, pathname, router, linkedPlayerId]);
 
-  /* Player zalogowany wchodzi na "/" lub /analyzer → przekieruj na profil */
+  /* Player zalogowany wchodzi na /analyzer → przekieruj na profil (wejście na "/" obsługuje efekt wyżej) */
   useEffect(() => {
     if (isLoading || !isAuthenticated || !isPlayer) return;
     if (userStatus !== 'approved') return;
-    if (pathname === "/" || pathname === "/analyzer") {
+    if (pathname === "/analyzer") {
       const profilePath = linkedPlayerId ? `/profile/${linkedPlayerId}` : '/profile';
       router.replace(profilePath);
     }
@@ -70,6 +89,15 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   }
 
   if (pathname === "/login" || pathname === "/oczekuje" || pathname === "/") {
+    /* Zalogowany na "/" jest właśnie przekierowywany (efekt wyżej) — pokaż spinner zamiast
+       formularza logowania, żeby nie mignął ekran logowania przed wejściem do aplikacji. */
+    if (pathname === "/" && isAuthenticated) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-gray-100">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      );
+    }
     return (
       <>
         <SetPasswordForGoogleAccountBanner />

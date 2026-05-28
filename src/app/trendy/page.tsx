@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTeams } from "@/hooks/useTeams";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import SidePanel from "@/components/SidePanel/SidePanel";
-import { collection, getDocs, query, where } from "@/lib/firestoreWithMetrics";
+import { fetchMatchesForTeamDualField } from "@/lib/matchTeamMatching";
 import { getDB } from "@/lib/firebase";
 import KpiTrendChart from "@/components/KpiTrendChart/KpiTrendChart";
 import PossessionTrendChart, { PossessionTrendPoint } from "@/components/PossessionTrendChart/PossessionTrendChart";
@@ -304,9 +304,9 @@ export default function TrendyPage() {
     setMatches([]);
 
     try {
-      const q = query(collection(getDB(), "matches"), where("team", "==", selectedTeam));
-      const snapshot = await getDocs(q);
-      const allTeamMatches = snapshot.docs.map((doc) => ({ ...(doc.data() as TeamInfo), matchId: doc.id } as TeamInfo));
+      // Po obu polach (team + teamId) — legacy mecze z samym teamId też trafiają do trendów.
+      const matchDocs = await fetchMatchesForTeamDualField(getDB(), "matches", selectedTeam);
+      const allTeamMatches = matchDocs.map((doc) => ({ ...(doc.data() as TeamInfo), matchId: doc.id } as TeamInfo));
 
       const filtered = allTeamMatches
         .filter((match) => {

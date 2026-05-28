@@ -42,9 +42,9 @@ export const DEFAULT_TRENDY_XG_MAP_FILTERS: TrendyXgMapFilters = {
   xgMax: null,
 };
 
-/** Wartość xG strzału do filtrów mapy (brak / NaN → 0). */
+/** Wartość xG strzału do filtrów mapy (brak / NaN → 0). Legacy dane bywają stringiem ("0,12"). */
 export function getShotXgForMapFilter(shot: Shot): number {
-  const raw = shot.xG;
+  const raw: unknown = shot.xG;
   if (typeof raw === "number" && Number.isFinite(raw)) return Math.max(0, raw);
   if (typeof raw === "string") {
     const parsed = Number.parseFloat(raw.replace(",", "."));

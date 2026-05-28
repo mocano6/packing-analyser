@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { getDB } from '@/lib/firebase';
-import { collection, getDocs, getDocsFromServer, query, where } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromServer, query, where } from '@/lib/firestoreWithMetrics';
 import { useTeams } from '@/hooks/useTeams';
 import { Player, PossessionSegment, TeamInfo } from '@/types';
 import { usePlayersState } from '@/hooks/usePlayersState';
@@ -502,25 +502,29 @@ export default function WiedzaPage() {
       for (let i = 0; i < teamIds.length; i += chunkSize) {
         chunks.push(teamIds.slice(i, i + chunkSize));
       }
-      const allFetched: FetchedMatch[] = [];
+      const byId = new Map<string, FetchedMatch>();
       const db = getDB();
-      for (const chunk of chunks) {
-        const q = query(collection(db, 'matches'), where('team', 'in', chunk));
+      const collectInto = async (field: 'team' | 'teamId', chunk: string[]) => {
+        const q = query(collection(db, 'matches'), where(field, 'in', chunk));
         let snapshot;
         try {
           snapshot = await getDocsFromServer(q);
         } catch (error) {
-          console.warn('[Wiedza] getDocsFromServer(matches) fallback do cache:', error);
+          console.warn(`[Wiedza] getDocsFromServer(matches.${field}) fallback do cache:`, error);
           snapshot = await getDocs(q);
         }
         snapshot.forEach((docSnap) => {
           const data = docSnap.data() as TeamInfo;
           if (isMatchWithinDateRange(data, from, to)) {
-            allFetched.push({ ...data, id: docSnap.id, matchId: docSnap.id });
+            byId.set(docSnap.id, { ...data, id: docSnap.id, matchId: docSnap.id });
           }
         });
+      };
+      for (const chunk of chunks) {
+        // Po obu polach (team + teamId) — legacy mecze z samym teamId nie mogą wypadać z analizy.
+        await Promise.all([collectInto('team', chunk), collectInto('teamId', chunk)]);
       }
-      return allFetched;
+      return Array.from(byId.values());
     },
     [],
   );
@@ -528,21 +532,44 @@ export default function WiedzaPage() {
   const fetchPossessionMatchesByFilters = useCallback(
     async (teamIds: string[], from: string, to: string): Promise<FetchedMatch[]> => {
       const db = getDB();
-      let snapshot;
-      try {
-        snapshot = await getDocsFromServer(collection(db, 'matches'));
-      } catch (error) {
-        console.warn('[Wiedza] getDocsFromServer(matches possession scan) fallback do cache:', error);
-        snapshot = await getDocs(collection(db, 'matches'));
+      const byId = new Map<string, FetchedMatch>();
+
+      const collectFromSnapshot = (snapshot: Awaited<ReturnType<typeof getDocs>>) => {
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as TeamInfo;
+          const match = { ...data, id: docSnap.id, matchId: docSnap.id } as FetchedMatch;
+          if (getPossessionSegmentsFromMatch(match).length === 0) return;
+          byId.set(docSnap.id, match);
+        });
+      };
+
+      // Gdy wybrano zespoły — pobieramy tylko ich mecze (oba pola), zamiast skanować całą kolekcję (koszt).
+      // Bez wybranych zespołów zostawiamy pełny skan (filtr „wszystko”).
+      if (teamIds.length > 0) {
+        const chunkSize = 10;
+        for (let i = 0; i < teamIds.length; i += chunkSize) {
+          const chunk = teamIds.slice(i, i + chunkSize);
+          const runField = async (field: 'team' | 'teamId') => {
+            const q = query(collection(db, 'matches'), where(field, 'in', chunk));
+            try {
+              collectFromSnapshot(await getDocsFromServer(q));
+            } catch (error) {
+              console.warn(`[Wiedza] possession getDocsFromServer(matches.${field}) fallback do cache:`, error);
+              collectFromSnapshot(await getDocs(q));
+            }
+          };
+          await Promise.all([runField('team'), runField('teamId')]);
+        }
+      } else {
+        try {
+          collectFromSnapshot(await getDocsFromServer(collection(db, 'matches')));
+        } catch (error) {
+          console.warn('[Wiedza] getDocsFromServer(matches possession scan) fallback do cache:', error);
+          collectFromSnapshot(await getDocs(collection(db, 'matches')));
+        }
       }
 
-      const matchesWithSegments: FetchedMatch[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as TeamInfo;
-        const match = { ...data, id: docSnap.id, matchId: docSnap.id } as FetchedMatch;
-        if (getPossessionSegmentsFromMatch(match).length === 0) return;
-        matchesWithSegments.push(match);
-      });
+      const matchesWithSegments: FetchedMatch[] = Array.from(byId.values());
 
       const teamFiltered = matchesWithSegments.filter((match) => isMatchForSelectedTeams(match, teamIds, teamsRef.current));
       const dateFiltered = teamFiltered.filter((match) => isMatchWithinDateRange(match, from, to));

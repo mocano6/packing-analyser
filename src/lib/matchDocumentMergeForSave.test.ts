@@ -24,6 +24,32 @@ import {
   assert.strictEqual(merged?.successful8sActions?.teamFirstHalf, 1);
 }
 
+// mergeMatchDataForWrite — jawne playerStats: [] NIE kasuje niepustych statystyk z serwera
+{
+  const existing = {
+    playerStats: [{ playerId: "p1", possessionMinutes: 5 }],
+  };
+  const incoming = {
+    playerStats: [] as { playerId: string }[],
+  };
+  const merged = mergeMatchDataForFirestoreWrite(existing, incoming);
+  assert.strictEqual(merged?.playerStats?.length, 1);
+  assert.strictEqual(merged?.playerStats?.[0].playerId, "p1");
+}
+
+// mergeMatchDataForWrite — niepuste playerStats z klienta nadpisuje serwer
+{
+  const existing = {
+    playerStats: [{ playerId: "p1" }],
+  };
+  const incoming = {
+    playerStats: [{ playerId: "p2" }],
+  };
+  const merged = mergeMatchDataForFirestoreWrite(existing, incoming);
+  assert.strictEqual(merged?.playerStats?.length, 1);
+  assert.strictEqual(merged?.playerStats?.[0].playerId, "p2");
+}
+
 // stripEmptyHeavyArraysThatWouldWipeServer — usuwa pustą tablicę, żeby merge nie nadpisał serwera
 {
   const payload = {

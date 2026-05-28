@@ -89,6 +89,7 @@ import "../lib/matchImportMergeApply.test";
 import "../lib/firebasePublicEnvGuard.test";
 import "../lib/compactTeamInfoForLocalStorage.test";
 import "../lib/matchDocumentMergeForSave.test";
+import "../lib/matchTeamMatching.test";
 import "../lib/teamInfoHeavyArraysPreferSession.test";
 import "../utils/isFirebasePermissionDenied.test";
 import "../utils/errorHandler.authCodes.test";
