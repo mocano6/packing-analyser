@@ -1,6 +1,13 @@
 import assert from "assert";
 import type { Action } from "@/types";
-import { losesAttackZoneRawForMap, regainAttackZoneRawForMap } from "./kpiRegainLosesZoneRaw";
+import {
+  isLoseOnOpponentHalfForMap,
+  isLoseOnOwnHalfForMap,
+  isRegainOnOpponentHalfForMap,
+  isRegainOnOwnHalfForMap,
+  losesAttackZoneRawForMap,
+  regainAttackZoneRawForMap,
+} from "./kpiRegainLosesZoneRaw";
 
 const base = {} as Action;
 
@@ -33,5 +40,19 @@ assert.strictEqual(
   "L6",
 );
 assert.strictEqual(losesAttackZoneRawForMap({ ...base } as Action), undefined);
+
+assert.equal(isRegainOnOpponentHalfForMap({ ...base, regainAttackZone: "D1" } as Action), false);
+assert.equal(isRegainOnOpponentHalfForMap({ ...base, regainAttackZone: "D7" } as Action), true);
+assert.equal(isRegainOnOwnHalfForMap({ ...base, regainAttackZone: "C3" } as Action), true);
+assert.equal(isRegainOnOwnHalfForMap({ ...base, regainAttackZone: "D7" } as Action), false);
+assert.equal(isRegainOnOpponentHalfForMap({ ...base, oppositeZone: "E8" } as Action), true);
+assert.equal(isRegainOnOpponentHalfForMap({ ...base } as Action), false);
+
+assert.equal(isLoseOnOwnHalfForMap({ ...base, losesAttackZone: "C3" } as Action), true);
+assert.equal(isLoseOnOpponentHalfForMap({ ...base, losesAttackZone: "D7" } as Action), true);
+assert.equal(
+  isLoseOnOwnHalfForMap({ ...base, fromZone: "B2", losesDefenseZone: "G8" } as Action),
+  true,
+);
 
 console.log("kpiRegainLosesZoneRaw.test: OK");

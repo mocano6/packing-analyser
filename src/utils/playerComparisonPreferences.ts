@@ -1,5 +1,6 @@
 import {
   PLAYER_COMPARISON_FAMILY_OPTIONS,
+  supportsComparisonMetricDribbleRole,
   supportsComparisonMetricRole,
   type PlayerComparisonMetricFamily,
   type PlayerComparisonMetricId,
@@ -55,10 +56,28 @@ const LEGACY_METRIC_TO_PREF: Partial<
   pkEntriesSender: { family: "pkEntries", role: "sender" },
   pkEntriesReceiver: { family: "pkEntries", role: "receiver" },
   pkEntriesDribble: { family: "pkEntries", role: "dribble" },
+  xgOnPitchAttack: { family: "xgOnPitchAttack", role: "sender" },
+  xgOnPitchDefense: { family: "xgOnPitchDefense", role: "sender" },
+  pkEntriesOnPitchAttack: { family: "pkEntriesOnPitchAttack", role: "sender" },
+  pkEntriesOnPitchDefense: { family: "pkEntriesOnPitchDefense", role: "sender" },
+  phaseP1Sender: { family: "phaseP1", role: "sender" },
+  phaseP1Receiver: { family: "phaseP1", role: "receiver" },
+  phaseP2Sender: { family: "phaseP2", role: "sender" },
+  phaseP2Receiver: { family: "phaseP2", role: "receiver" },
+  phaseP3Sender: { family: "phaseP3", role: "sender" },
+  phaseP3Receiver: { family: "phaseP3", role: "receiver" },
   regains: { family: "regains", role: "sender" },
+  regainsOwnHalf: { family: "regainsOwnHalf", role: "sender" },
+  regainsOpponentHalf: { family: "regainsOpponentHalf", role: "sender" },
   regainsXt: { family: "regainsXt", role: "sender" },
+  regainsXtAttack: { family: "regainsXtAttack", role: "sender" },
+  regainsXtDefense: { family: "regainsXtDefense", role: "sender" },
   loses: { family: "loses", role: "sender" },
+  losesOwnHalf: { family: "losesOwnHalf", role: "sender" },
+  losesOpponentHalf: { family: "losesOpponentHalf", role: "sender" },
   losesXt: { family: "losesXt", role: "sender" },
+  losesXtAttack: { family: "losesXtAttack", role: "sender" },
+  losesXtDefense: { family: "losesXtDefense", role: "sender" },
 };
 
 const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
@@ -76,6 +95,9 @@ function normalizeFamilyRole(
   role: PlayerComparisonMetricRole,
 ): { family: PlayerComparisonMetricFamily; role: PlayerComparisonMetricRole } {
   if (!supportsComparisonMetricRole(family)) {
+    return { family, role: "sender" };
+  }
+  if (!supportsComparisonMetricDribbleRole(family) && role === "dribble") {
     return { family, role: "sender" };
   }
   return { family, role };

@@ -750,17 +750,6 @@
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
 
-.matchMinuteInfo {
-  font-size: 12px;
-  color: #6c757d;
-  font-weight: 500;
-  white-space: nowrap;
-  padding: 0;
-  background-color: transparent;
-  border: none;
-  border-left: 1px solid #dee2e6;
-  padding-left: 6px;
-}
 
 .minuteField::-webkit-inner-spin-button,
 .minuteField::-webkit-outer-spin-button {

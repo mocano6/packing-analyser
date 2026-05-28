@@ -1,7 +1,7 @@
 // src/components/MatchInfoModal/MatchInfoModal.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { TeamInfo } from "@/types";
 import { TEAMS } from "@/constants/teams";
 import { Team } from "@/constants/teamsLoader";
@@ -10,6 +10,15 @@ import OpponentLogoInput from "@/components/OpponentLogoInput/OpponentLogoInput"
 import VideoUploadInput from "@/components/VideoUploadInput/VideoUploadInput";
 import styles from "./MatchInfoModal.module.css";
 import { filterTeamsByUserAccess, type UserTeamAccess } from "@/lib/teamsForUserAccess";
+import {
+  formatHalfSecondsDisplay,
+  halfSecondsFromRaw,
+  sanitizeHalfSecondsRaw,
+} from "@/utils/matchInfoHalfTimeInput";
+import {
+  findSuggestedOpponentLogoFromMatches,
+  normalizeOpponentNameForLogoLookup,
+} from "@/utils/findSuggestedOpponentLogoFromMatches";
 
 interface MatchInfoModalProps {
   isOpen: boolean;
@@ -20,6 +29,8 @@ interface MatchInfoModalProps {
   teamsCatalog: Team[];
   userTeamAccess: UserTeamAccess;
   selectedTeam?: string;
+  /** Istniejące meczu (np. z cache / Firebase) — do podpowiedzi logo przeciwnika po nazwie. */
+  matchesForOpponentLogoLookup?: TeamInfo[];
 }
 
 const getDefaultMatchInfo = (teamsCatalog: Team[], userTeamAccess: UserTeamAccess, selectedTeam?: string): TeamInfo => {
@@ -69,11 +80,14 @@ const getDefaultMatchInfo = (teamsCatalog: Team[], userTeamAccess: UserTeamAcces
 };
 
 // Funkcje pomocnicze do konwersji sekund na minuty i sekundy (poza komponentem, żeby były dostępne w useState)
-const secondsToMinutesAndSeconds = (seconds?: number): { minutes: number; seconds: number } => {
-  if (!seconds) return { minutes: 0, seconds: 0 };
+const secondsToMinutesAndSeconds = (seconds?: number | null): { minutes: number; seconds: number } => {
+  if (seconds == null || !Number.isFinite(Number(seconds))) {
+    return { minutes: 0, seconds: 0 };
+  }
+  const total = Math.max(0, Math.floor(Number(seconds)));
   return {
-    minutes: Math.floor(seconds / 60),
-    seconds: seconds % 60
+    minutes: Math.floor(total / 60),
+    seconds: total % 60,
   };
 };
 
@@ -89,20 +103,49 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   teamsCatalog,
   userTeamAccess,
   selectedTeam,
+  matchesForOpponentLogoLookup,
 }) => {
   const [formData, setFormData] = useState<TeamInfo>(
     currentInfo || getDefaultMatchInfo(teamsCatalog, userTeamAccess, selectedTeam)
   );
 
-  // Stany dla czasu startu połów (w formacie minuty:sekundy)
+  /** Po „Usuń logo” nie wstawiamy ponownie automatycznie, dopóki nazwa się nie zmieni lub użytkownik nie kliknie przycisku. */
+  const [dismissedLogoForNormalizedOpponent, setDismissedLogoForNormalizedOpponent] = useState<string | null>(
+    null
+  );
+
+  const normalizedOpponentKey = useMemo(
+    () => normalizeOpponentNameForLogoLookup(formData.opponent ?? ""),
+    [formData.opponent]
+  );
+
+  const suggestedLogoFromExistingMatches = useMemo(() => {
+    if (!matchesForOpponentLogoLookup?.length || !formData.team || !normalizedOpponentKey) {
+      return undefined;
+    }
+    return findSuggestedOpponentLogoFromMatches(
+      matchesForOpponentLogoLookup,
+      formData.team,
+      formData.opponent ?? "",
+      { excludeMatchId: currentInfo?.matchId }
+    );
+  }, [
+    matchesForOpponentLogoLookup,
+    formData.team,
+    formData.opponent,
+    normalizedOpponentKey,
+    currentInfo?.matchId,
+  ]);
+
+  // Stany dla czasu startu połów: minuty jako liczba, sekundy jako tekst (np. "07"), żeby number input nie ucinał zer
   const [firstHalfTime, setFirstHalfTime] = useState(() => {
     const time = secondsToMinutesAndSeconds(currentInfo?.firstHalfStartTime);
-    return time;
+    return { minutes: time.minutes, secondsStr: formatHalfSecondsDisplay(time.seconds) };
   });
 
   const [secondHalfTime, setSecondHalfTime] = useState(() => {
     const time = secondsToMinutesAndSeconds(currentInfo?.secondHalfStartTime);
-    return time;
+    return { minutes: time.minutes, secondsStr: formatHalfSecondsDisplay(time.seconds) };
   });
 
   // Reset formularza przy otwarciu modalu
@@ -113,9 +156,38 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
     // Resetuj również czasy połów
     const firstHalf = secondsToMinutesAndSeconds(newFormData.firstHalfStartTime);
     const secondHalf = secondsToMinutesAndSeconds(newFormData.secondHalfStartTime);
-    setFirstHalfTime(firstHalf);
-    setSecondHalfTime(secondHalf);
-  }, [currentInfo, isOpen, teamsCatalog, userTeamAccess, selectedTeam, secondsToMinutesAndSeconds]);
+    setFirstHalfTime({
+      minutes: firstHalf.minutes,
+      secondsStr: formatHalfSecondsDisplay(firstHalf.seconds),
+    });
+    setSecondHalfTime({
+      minutes: secondHalf.minutes,
+      secondsStr: formatHalfSecondsDisplay(secondHalf.seconds),
+    });
+  }, [currentInfo, isOpen, teamsCatalog, userTeamAccess, selectedTeam]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setDismissedLogoForNormalizedOpponent(null);
+  }, [isOpen, currentInfo?.matchId]);
+
+  useEffect(() => {
+    setDismissedLogoForNormalizedOpponent((prev) =>
+      prev !== null && prev !== normalizedOpponentKey ? null : prev
+    );
+  }, [normalizedOpponentKey]);
+
+  useEffect(() => {
+    if (!suggestedLogoFromExistingMatches) return;
+    if (formData.opponentLogo) return;
+    if (dismissedLogoForNormalizedOpponent === normalizedOpponentKey) return;
+    setFormData((prev) => ({ ...prev, opponentLogo: suggestedLogoFromExistingMatches }));
+  }, [
+    suggestedLogoFromExistingMatches,
+    formData.opponentLogo,
+    dismissedLogoForNormalizedOpponent,
+    normalizedOpponentKey,
+  ]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -143,18 +215,22 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
     const infoToSave = { ...formData };
     
     // Konwertuj minuty i sekundy na sekundy dla czasu startu połów
-    const firstHalfSeconds = minutesAndSecondsToSeconds(firstHalfTime.minutes, firstHalfTime.seconds);
-    const secondHalfSeconds = minutesAndSecondsToSeconds(secondHalfTime.minutes, secondHalfTime.seconds);
-    
-    // Jeśli wartości są >= 0, ustaw je (0 jest ważną wartością - oznacza początek wideo)
-    // Jeśli oba pola są puste (undefined), usuń pole
-    if (firstHalfTime.minutes !== undefined || firstHalfTime.seconds !== undefined) {
+    const firstHalfSeconds = minutesAndSecondsToSeconds(
+      firstHalfTime.minutes,
+      halfSecondsFromRaw(firstHalfTime.secondsStr)
+    );
+    const secondHalfSeconds = minutesAndSecondsToSeconds(
+      secondHalfTime.minutes,
+      halfSecondsFromRaw(secondHalfTime.secondsStr)
+    );
+
+    if (firstHalfSeconds > 0) {
       infoToSave.firstHalfStartTime = firstHalfSeconds;
     } else {
       delete infoToSave.firstHalfStartTime;
     }
-    
-    if (secondHalfTime.minutes !== undefined || secondHalfTime.seconds !== undefined) {
+
+    if (secondHalfSeconds > 0) {
       infoToSave.secondHalfStartTime = secondHalfSeconds;
     } else {
       delete infoToSave.secondHalfStartTime;
@@ -251,8 +327,33 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
               <OpponentLogoInput
                 value={formData.opponentLogo}
                 onChange={(logoUrl) => setFormData(prev => ({ ...prev, opponentLogo: logoUrl }))}
-                onRemove={() => setFormData(prev => ({ ...prev, opponentLogo: undefined }))}
+                onRemove={() => {
+                  setDismissedLogoForNormalizedOpponent(normalizeOpponentNameForLogoLookup(formData.opponent ?? ""));
+                  setFormData((prev) => ({ ...prev, opponentLogo: undefined }));
+                }}
               />
+              {suggestedLogoFromExistingMatches &&
+                !formData.opponentLogo &&
+                dismissedLogoForNormalizedOpponent === normalizedOpponentKey && (
+                  <div className={styles.logoSuggestionRow}>
+                    <small className={styles.helpText}>
+                      W bazie jest już logo dla tego przeciwnika — możesz je wstawić zamiast wklejać ponownie.
+                    </small>
+                    <button
+                      type="button"
+                      className={styles.suggestionButton}
+                      onClick={() => {
+                        setDismissedLogoForNormalizedOpponent(null);
+                        setFormData((prev) => ({
+                          ...prev,
+                          opponentLogo: suggestedLogoFromExistingMatches,
+                        }));
+                      }}
+                    >
+                      Wstaw zapisane logo
+                    </button>
+                  </div>
+                )}
             </div>
           </div>
 
@@ -360,21 +461,24 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
                     <span className={styles.timeSeparator}>:</span>
                     <input
                       id="firstHalfSeconds"
-                      type="number"
-                      min="0"
-                      max="59"
-                      step="1"
-                      value={firstHalfTime.seconds === 0 ? 0 : (firstHalfTime.seconds || "")}
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={2}
+                      value={firstHalfTime.secondsStr}
                       onChange={(e) => {
-                        const value = e.target.value === "" ? undefined : parseInt(e.target.value, 10);
-                        if (value !== undefined && !isNaN(value)) {
-                          setFirstHalfTime(prev => ({ ...prev, seconds: Math.max(0, Math.min(59, value)) }));
-                        } else {
-                          setFirstHalfTime(prev => ({ ...prev, seconds: 0 }));
-                        }
+                        const next = sanitizeHalfSecondsRaw(e.target.value);
+                        setFirstHalfTime((prev) => ({ ...prev, secondsStr: next }));
                       }}
-                      placeholder="0"
+                      onBlur={() => {
+                        setFirstHalfTime((prev) => ({
+                          ...prev,
+                          secondsStr: formatHalfSecondsDisplay(halfSecondsFromRaw(prev.secondsStr)),
+                        }));
+                      }}
+                      placeholder="00"
                       className={`${styles.timeInput} ${styles.timeInputSeconds}`}
+                      aria-label="Sekundy (0–59), pierwsza połowa"
                     />
                   </div>
                 </div>
@@ -402,21 +506,24 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
                     <span className={styles.timeSeparator}>:</span>
                     <input
                       id="secondHalfSeconds"
-                      type="number"
-                      min="0"
-                      max="59"
-                      step="1"
-                      value={secondHalfTime.seconds === 0 ? 0 : (secondHalfTime.seconds || "")}
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={2}
+                      value={secondHalfTime.secondsStr}
                       onChange={(e) => {
-                        const value = e.target.value === "" ? undefined : parseInt(e.target.value, 10);
-                        if (value !== undefined && !isNaN(value)) {
-                          setSecondHalfTime(prev => ({ ...prev, seconds: Math.max(0, Math.min(59, value)) }));
-                        } else {
-                          setSecondHalfTime(prev => ({ ...prev, seconds: 0 }));
-                        }
+                        const next = sanitizeHalfSecondsRaw(e.target.value);
+                        setSecondHalfTime((prev) => ({ ...prev, secondsStr: next }));
                       }}
-                      placeholder="0"
+                      onBlur={() => {
+                        setSecondHalfTime((prev) => ({
+                          ...prev,
+                          secondsStr: formatHalfSecondsDisplay(halfSecondsFromRaw(prev.secondsStr)),
+                        }));
+                      }}
+                      placeholder="00"
                       className={`${styles.timeInput} ${styles.timeInputSeconds}`}
+                      aria-label="Sekundy (0–59), druga połowa"
                     />
                   </div>
                 </div>

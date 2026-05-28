@@ -89,6 +89,16 @@ export default function AdminPage() {
       </section>
 
       <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Stałe fragmenty</h2>
+        <p className={styles.sectionDesc}>
+          Ustawienia rzutu rożnego i wolnego w ataku — zawodnicy, zadania i strefy na boisku (zapis lokalny).
+        </p>
+        <Link href="/admin/stale-fragmenty" className={styles.linkButton}>
+          Otwórz stałe fragmenty
+        </Link>
+      </section>
+
+      <section className={styles.section}>
         <h2 className={styles.sectionTitle}>KPI trendów</h2>
         <p className={styles.sectionDesc}>Definicje i cele KPI wykorzystywane na stronie Trendy.</p>
         <Link href="/admin/kpi" className={styles.linkButton}>

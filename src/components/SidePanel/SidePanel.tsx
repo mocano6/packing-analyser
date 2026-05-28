@@ -171,6 +171,10 @@ const SidePanel: React.FC<SidePanelProps> = ({
                 <span className={styles.icon}>✅</span>
                 <span>Zadania</span>
               </Link>
+              <Link href="/admin/stale-fragmenty" className={styles.menuItem}>
+                <span className={styles.icon}>⚽</span>
+                <span>Stałe fragmenty</span>
+              </Link>
               <button 
                 onClick={togglePresentationMode} 
                 className={styles.menuItem}

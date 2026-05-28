@@ -10,6 +10,7 @@ import {
   doc, query, where, orderBy, writeBatch, getDoc, setDoc
 } from "@/lib/firestoreWithMetrics";
 import { prepareMatchDocumentForFirestore } from "@/lib/prepareMatchDocumentForFirestore";
+import { normalizeTeamInfoHalfStarts } from "../utils/normalizeTeamInfoHalfStarts";
 import { stripEmptyHeavyArraysThatWouldWipeServer } from "@/lib/matchDocumentMergeForSave";
 import { compactTeamInfoForLocalStorage } from "@/lib/compactTeamInfoForLocalStorage";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
@@ -262,9 +263,10 @@ export function useMatchInfo() {
   // Funkcja do aktualizacji lokalnego cache'u (newData jest po dacie desc — najnowsze pierwsze)
   const updateLocalCache = (newData: TeamInfo[], teamId?: string) => {
     const maxCacheSize = 100;
-    const limitedData = newData.length > maxCacheSize
+    const limitedData = (newData.length > maxCacheSize
       ? newData.slice(0, maxCacheSize)
-      : newData;
+      : newData
+    ).map(normalizeTeamInfoHalfStarts);
 
     localCacheRef.current = {
       data: limitedData,
@@ -282,27 +284,31 @@ export function useMatchInfo() {
 
     const cachedData = loadLocalCache();
     if (cachedData) {
-      localCacheRef.current = cachedData;
-      setAllMatches(cachedData.data);
+      const hydrated: typeof cachedData = {
+        ...cachedData,
+        data: cachedData.data.map(normalizeTeamInfoHalfStarts),
+      };
+      localCacheRef.current = hydrated;
+      setAllMatches(hydrated.data);
       
       // Jeśli są dane w cache'u, ustaw pierwszy mecz jako wybrany
-      if (cachedData.data.length > 0) {
-        const teamId = cachedData.lastTeamId;
+      if (hydrated.data.length > 0) {
+        const teamId = hydrated.lastTeamId;
         if (teamId) {
           // Jeśli jest zapamiętany zespół, znajdź jego mecze
-          const teamMatches = cachedData.data.filter(m => m.team === teamId);
+          const teamMatches = hydrated.data.filter(m => m.team === teamId);
           if (teamMatches.length > 0) {
             setMatchInfo(teamMatches[0]);
           } else {
-            setMatchInfo(cachedData.data[0]);
+            setMatchInfo(hydrated.data[0]);
           }
         } else {
-          setMatchInfo(cachedData.data[0]);
+          setMatchInfo(hydrated.data[0]);
         }
       }
       
-      const isStale = Date.now() - cachedData.timestamp > MATCHES_CACHE_STALE_MS;
-      const diskIsCompactOnly = (cachedData.cacheVersion ?? 0) >= 3;
+      const isStale = Date.now() - hydrated.timestamp > MATCHES_CACHE_STALE_MS;
+      const diskIsCompactOnly = (hydrated.cacheVersion ?? 0) >= 3;
       const online =
         typeof navigator !== "undefined" &&
         navigator.onLine &&
@@ -310,7 +316,7 @@ export function useMatchInfo() {
         !localStorage.getItem("firestore_offline_mode");
 
       if (online && (isStale || diskIsCompactOnly)) {
-        fetchFromFirebase(cachedData.lastTeamId).catch(() => {
+        fetchFromFirebase(hydrated.lastTeamId).catch(() => {
           /* offline / blad */
         });
       }
@@ -387,13 +393,13 @@ export function useMatchInfo() {
       const matchesSnapshot = await getDocs(matchesQuery);
       
       if (!matchesSnapshot.empty) {
-              return matchesSnapshot.docs.map(doc => {
-          const data = doc.data() as TeamInfo;
-          return {
+              return matchesSnapshot.docs.map((docSnap) => {
+          const data = docSnap.data() as TeamInfo;
+          return normalizeTeamInfoHalfStarts({
             ...data,
-            id: doc.id,
-            matchId: doc.id,
-          } as TeamInfo;
+            id: docSnap.id,
+            matchId: docSnap.id,
+          } as TeamInfo);
         });
             } else {
               return [];
@@ -866,11 +872,11 @@ export function useMatchInfo() {
       const matchId = info.matchId && info.matchId !== 'local' ? info.matchId : uuidv4();
       
       // Przygotowujemy obiekt meczu
-      const matchData: TeamInfo = {
+      const matchData: TeamInfo = normalizeTeamInfoHalfStarts({
         ...info,
         matchId,
         lastUpdated: new Date().toISOString(),
-      };
+      });
       
   
       

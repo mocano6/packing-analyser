@@ -1033,6 +1033,11 @@ const ActionSection = memo(function ActionSection({
               // Tylko jeden z: ✓ 5s / ✗ 5s / Aut
               setIsReaction5sActive(false);
               setIsBadReaction5sActive(false);
+              setIsP0Active(false);
+              setIsP1Active(false);
+              setIsP2Active(false);
+              setIsP3Active(false);
+              setLosesBackAllyCount(0);
             }
           }}
           losesBackAllyCount={losesBackAllyCount}
@@ -1488,6 +1493,16 @@ const ActionSection = memo(function ActionSection({
                 isAut: newValue,
                 isReaction5s: newValue ? false : editingAction.isReaction5s,
                 isBadReaction5s: newValue ? false : editingAction.isBadReaction5s,
+                ...(newValue && {
+                  isP0: false,
+                  isP1: false,
+                  isP2: false,
+                  isP3: false,
+                  losesOppRosterSquadTallyF1: 0,
+                  losesBackAllyCount: undefined,
+                  playersBehindBall: undefined,
+                  opponentsBehindBall: undefined,
+                }),
               });
             }
           }}

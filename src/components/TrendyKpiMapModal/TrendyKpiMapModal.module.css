@@ -1,0 +1,342 @@
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 6px;
+  background-color: rgba(15, 23, 42, 0.45);
+}
+
+.modalContent {
+  display: flex;
+  flex-direction: column;
+  width: min(1920px, calc(100vw - 12px));
+  height: min(96vh, 100dvh - 16px);
+  overflow: hidden;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow:
+    0 24px 48px -12px rgba(15, 23, 42, 0.18),
+    0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  padding: 12px 18px 10px;
+}
+
+.modalTitle {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.modalHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.modalCount {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f8fafc;
+}
+
+.modalClose {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.modalClose:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.modalClose:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.45);
+}
+
+.modalBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modalPitchArea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px 4px;
+  overflow: hidden;
+  container-type: size;
+  container-name: pitch-modal;
+}
+
+.modalHeatmapWrap {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modalPitchArea :global([class*="pitchContainer"]) {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  gap: 4px;
+}
+
+/* W modalu tytuł meczu jest w nagłówku — zostaw tylko przyciski (np. Obróć) */
+.modalPitchArea :global([class*="pitchHeader"]) {
+  flex-shrink: 0;
+  width: 100%;
+  margin-bottom: 0;
+  grid-template-columns: 1fr auto;
+}
+
+.modalPitchArea :global([class*="pitchHeaderCenter"]) {
+  display: none;
+}
+
+.modalPitchArea :global([class*="pitchHeaderLeft"]:empty) {
+  display: none;
+}
+
+/* Boisko 105×68 m (aspect-ratio 1.544): największy prostokąt w obszarze modala bez zniekształceń */
+@container pitch-modal (min-width: 0) {
+  .modalPitchArea :global([class*="pitchWrapper"]) {
+    flex: 0 0 auto;
+    width: min(100cqw, calc((100cqh - 44px) * 1.544));
+    height: min(calc(100cqh - 44px), calc(100cqw / 1.544));
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: 1.544;
+    position: relative;
+  }
+}
+
+.modalEmpty {
+  margin: 0;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.modalBottomPanel {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 18px 12px;
+  border-top: 1px solid #f1f5f9;
+  background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
+}
+
+.modalLegendRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 18px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.modalLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.modalLegendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.modalLegendDotHex {
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
+.modalLegendDotGoalRing {
+  border: 1.5px solid #90ee90;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.modalLegendLine {
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.modalFiltersRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 20px;
+}
+
+.modalFilterSegment {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.modalFilterLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #cbd5e1;
+}
+
+.modalChipRow {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+.modalChip {
+  padding: 5px 11px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.modalChip:hover {
+  color: #334155;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.modalChip.active {
+  color: #1d4ed8;
+  background: #ffffff;
+  border-color: #dbeafe;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.08);
+}
+
+.modalChip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.45);
+}
+
+.modalXgRangeRow {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px 8px;
+}
+
+.modalXgRangeField {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.modalXgRangeFieldLabel {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.modalXgRangeInput {
+  width: 4.5rem;
+  padding: 5px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.modalXgRangeInput:hover {
+  border-color: #cbd5e1;
+}
+
+.modalXgRangeInput:focus-visible {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.modalXgRangeSep {
+  align-self: center;
+  padding-bottom: 6px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+@media (max-width: 760px) {
+  .modalHeader {
+    padding: 14px 16px 12px;
+  }
+
+  .modalPitchArea {
+    padding: 0 12px 4px;
+  }
+
+  .modalBottomPanel {
+    padding: 12px 16px 16px;
+    gap: 12px;
+  }
+
+  .modalFiltersRow {
+    gap: 10px 14px;
+  }
+}

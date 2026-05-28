@@ -2825,7 +2825,11 @@ export default function Page() {
   };
 
   // Funkcja do obsługi wyboru strefy dla zakładki regain (pojedynczy klik)
-  const handleRegainZoneSelection = (zoneId: number, xT?: number) => {
+  const handleRegainZoneSelection = (
+    zoneId: number,
+    xT?: number,
+    presetModalActionType: "pass" | "dribble" = "pass",
+  ) => {
     if (zoneId === null || zoneId === undefined) {
       return;
     }
@@ -2835,7 +2839,7 @@ export default function Page() {
     setEndZone(zoneId); // Dla regain używamy tej samej strefy jako start i end
     localStorage.setItem('tempStartZone', String(zoneId));
     localStorage.setItem('tempEndZone', String(zoneId));
-    setActionType("pass"); // Domyślnie pass, ale można zmienić w modalu
+    setActionType(presetModalActionType);
     
     // Odczekaj chwilę przed otwarciem modalu, aby stan się zaktualizował
     setTimeout(() => {
@@ -2844,7 +2848,11 @@ export default function Page() {
   };
 
   // Funkcja do obsługi wyboru strefy dla zakładki loses (pojedynczy klik)
-  const handleLosesZoneSelection = (zoneId: number, xT?: number) => {
+  const handleLosesZoneSelection = (
+    zoneId: number,
+    xT?: number,
+    presetModalActionType: "pass" | "dribble" = "pass",
+  ) => {
     if (zoneId === null || zoneId === undefined) {
       return;
     }
@@ -2854,7 +2862,7 @@ export default function Page() {
     setEndZone(zoneId); // Dla loses używamy tej samej strefy jako start i end
     localStorage.setItem('tempStartZone', String(zoneId));
     localStorage.setItem('tempEndZone', String(zoneId));
-    setActionType("pass"); // Domyślnie pass, ale można zmienić w modalu
+    setActionType(presetModalActionType);
     
     // Odczekaj chwilę przed otwarciem modalu, aby stan się zaktualizował
     setTimeout(() => {
@@ -2949,15 +2957,26 @@ export default function Page() {
     }
   };
 
-  // Funkcja obsługująca wybór w popupie
-  const handleRegainLosesChoice = (choice: "regain" | "loses") => {
+  // Funkcja obsługująca wybór w popupie (regain/strata + podanie/drybling — jedna decyzja przed modalem)
+  const handleRegainLosesChoice = (
+    choice: "regain" | "loses",
+    modality: "pass" | "dribble",
+  ) => {
     if (pendingZoneSelection) {
       setRegainLosesMode(choice);
       setShowRegainLosesPopup(false);
       if (choice === "regain") {
-        handleRegainZoneSelection(pendingZoneSelection.zoneId, pendingZoneSelection.xT);
+        handleRegainZoneSelection(
+          pendingZoneSelection.zoneId,
+          pendingZoneSelection.xT,
+          modality,
+        );
       } else {
-        handleLosesZoneSelection(pendingZoneSelection.zoneId, pendingZoneSelection.xT);
+        handleLosesZoneSelection(
+          pendingZoneSelection.zoneId,
+          pendingZoneSelection.xT,
+          modality,
+        );
       }
       setPendingZoneSelection(null);
     }
@@ -6167,24 +6186,68 @@ export default function Page() {
             setShowRegainLosesPopup(false);
             setPendingZoneSelection(null);
           }}>
-            <div className={styles.regainLosesPopup} onClick={(e) => e.stopPropagation()}>
-              <h3>Wybierz typ akcji</h3>
-              <div className={styles.regainLosesPopupButtons}>
-                <button
-                  className={styles.regainLosesPopupButton}
-                  onClick={() => handleRegainLosesChoice("regain")}
-                >
-                  Regain
-                </button>
-                <button
-                  className={styles.regainLosesPopupButton}
-                  onClick={() => handleRegainLosesChoice("loses")}
-                >
-                  Loses
-                </button>
+            <div
+              className={styles.regainLosesPopup}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Wybór straty lub regainu oraz podanie albo drybling"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className={styles.regainLosesPopupBody}>
+                <div className={`${styles.regainLosesPopupSection} ${styles.regainLosesPopupSectionLoses}`}>
+                  <span className={styles.regainLosesPopupCategory} id="regain-loses-losses-heading">
+                    Loses
+                  </span>
+                  <div
+                    className={styles.regainLosesToggleRow}
+                    role="group"
+                    aria-labelledby="regain-loses-losses-heading"
+                  >
+                    <button
+                      type="button"
+                      className={`${styles.regainLosesToggleBtn} ${styles.regainLosesToggleBtnLoses}`}
+                      onClick={() => handleRegainLosesChoice("loses", "pass")}
+                    >
+                      Podanie
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.regainLosesToggleBtn} ${styles.regainLosesToggleBtnLoses}`}
+                      onClick={() => handleRegainLosesChoice("loses", "dribble")}
+                    >
+                      Drybling
+                    </button>
+                  </div>
+                </div>
+                <div className={`${styles.regainLosesPopupSection} ${styles.regainLosesPopupSectionRegain}`}>
+                  <span className={styles.regainLosesPopupCategory} id="regain-loses-regain-heading">
+                    Regain
+                  </span>
+                  <div
+                    className={styles.regainLosesToggleRow}
+                    role="group"
+                    aria-labelledby="regain-loses-regain-heading"
+                  >
+                    <button
+                      type="button"
+                      className={`${styles.regainLosesToggleBtn} ${styles.regainLosesToggleBtnRegain}`}
+                      onClick={() => handleRegainLosesChoice("regain", "pass")}
+                    >
+                      Podanie
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.regainLosesToggleBtn} ${styles.regainLosesToggleBtnRegain}`}
+                      onClick={() => handleRegainLosesChoice("regain", "dribble")}
+                    >
+                      Drybling
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className={styles.regainLosesPopupCancel}>
                 <button
+                  type="button"
                   className={styles.regainLosesPopupCancelButton}
                   onClick={() => {
                     setShowRegainLosesPopup(false);
@@ -6469,6 +6532,7 @@ export default function Page() {
           teamsCatalog={availableTeams}
           userTeamAccess={userTeamAccess}
           selectedTeam={selectedTeam}
+          matchesForOpponentLogoLookup={allMatches}
         />
 
         {/* Modal dla edycji meczu */}
@@ -6480,6 +6544,7 @@ export default function Page() {
           teamsCatalog={availableTeams}
           userTeamAccess={userTeamAccess}
           selectedTeam={selectedTeam}
+          matchesForOpponentLogoLookup={allMatches}
         />
 
         {/* Modal minut zawodników */}

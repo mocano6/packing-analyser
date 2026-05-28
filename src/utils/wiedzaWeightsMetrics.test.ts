@@ -7,15 +7,17 @@ import {
 } from "./wiedzaWeightsMetrics";
 import { TeamInfo } from "../types";
 
-assert.ok(WIEDZA_WEIGHTS_METRIC_DEFS.length >= 27);
+assert.ok(WIEDZA_WEIGHTS_METRIC_DEFS.length >= 28);
 const full = getWiedzaWeightsMetricsFull();
 assert.equal(full.length, WIEDZA_WEIGHTS_METRICS.length);
-assert.ok(full.length >= 43);
+assert.ok(full.length >= 45);
 assert.ok(full.some((x) => x.id === "w_match_loss"));
 assert.ok(full.some((x) => x.id === "w_xt_delta_my"));
 assert.ok(full.some((x) => x.id === "w_packing_pts_my"));
 assert.ok(full.some((x) => x.id === "w_shots_on_target_my"));
 assert.ok(full.some((x) => x.id === "w_shots_blocked_opp"));
+assert.ok(full.some((x) => x.id === "w_xpts_my"));
+assert.ok(full.some((x) => x.id === "w_xpts_opp"));
 assert.equal(
   full.find((x) => x.id === "w_regains_full_pitch_opp")?.label,
   "Straty wł. pp. OPP",

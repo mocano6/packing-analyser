@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { calculateXgOutcomeProjection } from "./xgOutcomeProjection";
 import {
   buildPearsonCorrelationMatrix,
   calculateTrendyKpiValue,
@@ -35,6 +36,8 @@ import {
   getLosesFullPitchCount,
   getOpponentXgPerShot,
   getTeamXgForMatch,
+  getTeamXptsForMatch,
+  getOpponentXptsForMatch,
   getTeamLosesInPMAreaCountForMatch,
   getTeamRegainsInPMAreaCountForMatch,
   getTeamCounterpress5sPctForMatch,
@@ -140,6 +143,12 @@ assert.equal(
   calculateTrendyKpiValue(sampleMatch, "counterpress_5s_pct"),
 );
 assert.equal(getTeamXgForMatch(sampleMatch), calculateTrendyKpiValue(sampleMatch, "xg_for"));
+const xptsProj = calculateXgOutcomeProjection(
+  sampleMatch.shots!.filter((s) => s.teamContext === "attack"),
+  sampleMatch.shots!.filter((s) => s.teamContext === "defense"),
+);
+assert.ok(Math.abs(getTeamXptsForMatch(sampleMatch) - xptsProj.expectedPoints) < 1e-9);
+assert.ok(Math.abs(getOpponentXptsForMatch(sampleMatch) - xptsProj.opponentExpectedPoints) < 1e-9);
 assert.ok(getRegainsFullPitchCount(sampleMatch) >= 0);
 assert.ok(getLosesFullPitchCount(sampleMatch) >= 1);
 assert.ok(getOpponentXgPerShot(sampleMatch) >= 0);

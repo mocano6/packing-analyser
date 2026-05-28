@@ -374,7 +374,6 @@
 }
 
 .summaryGrid,
-.kpiGrid,
 .analysisGrid {
   display: grid;
   gap: 16px;
@@ -385,8 +384,7 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.summaryCard,
-.kpiCard {
+.summaryCard {
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 16px;
@@ -394,8 +392,7 @@
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
 }
 
-.summaryCard span,
-.kpiCard span {
+.summaryCard span {
   display: block;
   font-size: 12px;
   font-weight: 600;
@@ -413,6 +410,17 @@
   line-height: 1.2;
 }
 
+.summaryCardMeta {
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.4;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .summaryTeams {
   font-size: 14px !important;
   font-weight: 500 !important;
@@ -421,24 +429,19 @@
   color: #374151 !important;
 }
 
-.kpiGrid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.kpiCard strong {
-  display: block;
-  margin-top: 10px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #111827;
-}
-
-.kpiCard small {
-  display: block;
-  margin-top: 8px;
+.phaseAggregationHint {
+  margin: 0 0 16px;
+  padding: 12px 14px;
   font-size: 13px;
-  color: #64748b;
-  line-height: 1.45;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  line-height: 1.5;
+}
+
+.phaseAggregationHint strong {
+  color: #1e293b;
 }
 
 .analysisGrid {
@@ -449,12 +452,228 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-.rankingControls {
+.rankingToolbarStrip {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 10px 16px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+.rankingToolbarStrip::after {
+  content: "";
+  flex: 0 0 4px;
+  width: 4px;
+  height: 1px;
+}
+
+.rankingField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.rankingFieldList {
+  flex: 1 1 160px;
+  min-width: 140px;
+  max-width: 260px;
+}
+
+.rankingFieldLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.rankingKpiSelect {
+  width: 100%;
+  min-width: 160px;
+  max-width: 220px;
+}
+
+.rankingPositionsWrap {
+  width: 100%;
+  min-width: 0;
+}
+
+.rankingThresholds {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
   gap: 10px 12px;
-  justify-content: flex-end;
+  flex: 0 0 auto;
+}
+
+.rankingThresholdField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.rankingToolbarStrip .rankingThresholdField .input {
+  width: 72px;
+  min-width: 64px;
+  box-sizing: border-box;
+}
+
+.rankingToolbarStrip .roleToggle {
+  flex-wrap: nowrap;
+  gap: 5px;
+}
+
+.rankingToolbarStrip .modeToggle {
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+.rankingToolbarStrip .modeButton {
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rankingToolbarStrip .extremeMatchToggle {
+  align-self: flex-start;
+  max-width: min(220px, 100%);
+  text-align: center;
+  line-height: 1.25;
+}
+
+.rankingExtremeWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: min(320px, 100%);
+}
+
+.rankingExtremeTooltip {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  box-sizing: border-box;
+  min-width: min(300px, calc(100vw - 48px));
+  max-width: min(380px, calc(100vw - 48px));
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #f8fafc;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.14s ease, visibility 0.14s ease;
+}
+
+.rankingExtremeTooltipP {
+  margin: 0 0 10px;
+}
+
+.rankingExtremeTooltipP:last-child {
+  margin-bottom: 0;
+}
+
+.rankingExtremeTooltipP strong {
+  color: #e2e8f0;
+}
+
+.rankingExtremeWrap:hover .rankingExtremeTooltip,
+.rankingExtremeWrap:focus-within .rankingExtremeTooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .rankingExtremeTooltip {
+    position: static;
+    margin-top: 8px;
+    pointer-events: auto;
+    opacity: 1;
+    visibility: visible;
+    color: #334155;
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    box-shadow: none;
+  }
+
+  .rankingExtremeTooltipP strong {
+    color: #0f172a;
+  }
+}
+
+.panelHeaderRankingBlock {
+  margin-bottom: 12px;
+}
+
+.panelHeaderRankingBlock .panelTitle {
+  margin: 0 0 12px;
+}
+
+.rankingClientHint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .rankingToolbarStrip {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .rankingToolbarStrip::after {
+    display: none;
+  }
+
+  .rankingToolbarStrip .roleToggle {
+    flex-wrap: wrap;
+  }
+
+  .rankingToolbarStrip .modeToggle {
+    flex-wrap: wrap;
+  }
+
+  .rankingFieldList {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .rankingThresholds {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .rankingToolbarStrip .rankingThresholdField .input {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
 }
 
 .roleToggle {
@@ -535,6 +754,13 @@
   flex-wrap: wrap;
 }
 
+.panelComparisonSubheader {
+  margin-top: 4px;
+  margin-bottom: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
 .chartWrapper {
   width: 100%;
   min-height: 300px;
@@ -543,6 +769,63 @@
 .tableWrapper,
 .compareTableWrapper {
   overflow: auto;
+}
+
+.compareTableCaption {
+  caption-side: top;
+  text-align: left;
+  padding: 0 4px 12px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.comparePairTable td.compareValueCell {
+  vertical-align: top;
+}
+
+.compareMinutesRow td {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 13px;
+  color: #475569;
+}
+
+.compareMinutesRow td:not(:first-child) {
+  font-variant-numeric: tabular-nums;
+}
+
+.compareCellBetter {
+  background: #ecfdf5;
+  box-shadow: inset 4px 0 0 #16a34a;
+}
+
+.compareCellWorse {
+  background: #fef2f2;
+  box-shadow: inset 4px 0 0 #dc2626;
+}
+
+.compareCellEven {
+  background: #f8fafc;
+}
+
+.compareValueLine {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.compareValueMain {
+  font-variant-numeric: inherit;
+}
+
+.compareValueDelta {
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  white-space: nowrap;
 }
 
 .playersTable {
@@ -580,18 +863,36 @@
   color: #64748b;
 }
 
-.playerSelects {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(140px, 1fr));
-  gap: 10px;
-  min-width: min(100%, 400px);
+.compareTableThPlayer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
 }
 
-.playerSelectPair {
+.compareTableThPlayerRow {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.compareTableHeadSelect {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.comparePairTable thead th:nth-child(n + 2) {
+  text-transform: none;
+  letter-spacing: normal;
+  vertical-align: top;
 }
 
 .playerColorDot {
@@ -600,30 +901,6 @@
   border-radius: 9999px;
   flex-shrink: 0;
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
-}
-
-.radarPlayerLegend {
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px 20px;
-  font-size: 13px;
-  color: #475569;
-}
-
-.radarPlayerLegend li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-}
-
-.compareTableHeadCell {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .tableSortButton {
@@ -667,6 +944,365 @@
   align-items: start;
 }
 
+.comparisonActivityToggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 4px;
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.weightedIndexLayout {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.weightedIndexConfigPanel {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.weightedIndexConfigTitle {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.weightedIndexConfigHint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.weightedIndexPresetPanel {
+  margin-bottom: 14px;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.weightedIndexPresetTitle {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.weightedIndexPresetRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.weightedIndexPresetLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.weightedIndexPresetRow .select,
+.weightedIndexPresetRow .input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.weightedIndexPresetActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.secondaryButton {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.secondaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondaryButtonDanger {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.secondaryButtonDanger:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.secondaryButtonDanger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.weightedIndexPresetMessage {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #047857;
+  line-height: 1.4;
+}
+
+.weightedIndexMetricList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.weightedIndexMetricRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.weightedIndexMetricLabel {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: #1f2937;
+  line-height: 1.35;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.weightedIndexMetricLabel span {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.weightedIndexMetricLabel input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.weightedIndexMetricControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.weightedIndexDirectionToggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.weightedIndexDirectionBtn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.weightedIndexDirectionBtn + .weightedIndexDirectionBtn {
+  border-left: 1px solid #e5e7eb;
+}
+
+.weightedIndexDirectionBtnActive {
+  background: #ede9fe;
+  color: #6d28d9;
+  font-weight: 700;
+}
+
+.weightedIndexDirectionBtn:hover:not(:disabled):not(.weightedIndexDirectionBtnActive) {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.weightedIndexDirectionBtn:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 1px;
+  z-index: 1;
+}
+
+.weightedIndexDirectionBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.weightedIndexWeightField {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.weightedIndexWeightLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.weightedIndexWeightField .input {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 6px;
+  font-size: 13px;
+}
+
+.weightedIndexSummary {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: #475569;
+}
+
+.weightedIndexBudgetOk {
+  color: #047857;
+}
+
+.weightedIndexBudgetBad {
+  color: #b91c1c;
+}
+
+.weightedIndexResults {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.weightedIndexMetricLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.weightedIndexMetricLegendTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #581c87;
+}
+
+.weightedIndexMetricLegendList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weightedIndexMetricLegendItem {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.weightedIndexMetricLegendSwatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.weightedIndexMetricLegendLabel {
+  min-width: 0;
+}
+
+.weightedIndexMetricLegendWeight {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.weightedIndexTooltip {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  font-size: 12px;
+  color: #334155;
+}
+
+.weightedIndexTableMetricHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.weightedIndexTotalRow td {
+  background: #eef2ff;
+  border-bottom: 1px solid #c7d2fe;
+  font-variant-numeric: tabular-nums;
+}
+
+.weightedIndexTotalRow td strong {
+  color: #312e81;
+}
+
 .radarWrapper {
   width: 100%;
   min-height: 380px;
@@ -699,13 +1335,13 @@
 }
 
 @media (max-width: 1100px) {
-  .summaryGrid,
-  .kpiGrid {
+  .summaryGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .analysisGrid,
-  .comparisonLayout {
+  .comparisonLayout,
+  .weightedIndexLayout {
     grid-template-columns: 1fr;
   }
 }
@@ -719,8 +1355,7 @@
     font-size: 22px;
   }
 
-  .summaryGrid,
-  .kpiGrid {
+  .summaryGrid {
     grid-template-columns: 1fr;
   }
 
@@ -729,9 +1364,13 @@
     align-items: stretch;
   }
 
-  .playerSelects {
+  .weightedIndexMetricRow {
     grid-template-columns: 1fr;
-    min-width: 0;
+    gap: 8px;
+  }
+
+  .weightedIndexMetricControls {
+    justify-content: flex-end;
   }
 
   .radarWrapper {

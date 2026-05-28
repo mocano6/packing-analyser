@@ -1,0 +1,381 @@
+.pitchWrapper {
+  position: relative;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.pitchCaption {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.pitchViewport {
+  --marker-avatar-size: clamp(20px, 2.1vw, 28px);
+  --marker-badge-size: 9px;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 0.772;
+  min-height: 220px;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+  border: 2px solid #111827;
+  touch-action: none;
+  user-select: none;
+  background: #ffffff;
+}
+
+.pitchHalf {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 200%;
+  height: 100%;
+}
+
+.pitch {
+  --goal-inset: 0%;
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  position: relative;
+  overflow: hidden;
+}
+
+.pitchDrawMode {
+  cursor: crosshair;
+}
+
+.pitchReadOnly {
+  cursor: default;
+}
+
+.playerMarkerReadOnly {
+  cursor: default;
+  pointer-events: none;
+}
+
+.pitchLines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.pitchLines::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: 2px solid #111827;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.centerLine {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: #111827;
+  transform: translateX(-50%);
+}
+
+.centerCircle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 17.4%;
+  height: 26.9%;
+  border: 2px solid #111827;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.centerSpot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  background: #111827;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+}
+
+.penaltyAreaLeft,
+.penaltyAreaRight {
+  position: absolute;
+  top: calc(100% * (68 - 40.32) / 2 / 68);
+  width: calc((100% - 2 * var(--goal-inset)) * 16.5 / 105);
+  height: calc(100% * 40.32 / 68);
+  border: 2px solid #111827;
+}
+
+.penaltyAreaLeft {
+  left: var(--goal-inset);
+  border-left: none;
+}
+
+.penaltyAreaRight {
+  right: var(--goal-inset);
+  border-right: none;
+}
+
+.goalAreaLeft,
+.goalAreaRight {
+  position: absolute;
+  top: calc(100% * (68 - 18.32) / 2 / 68);
+  width: calc((100% - 2 * var(--goal-inset)) * 5.5 / 105);
+  height: calc(100% * 18.32 / 68);
+  border: 2px solid #111827;
+}
+
+.goalAreaLeft {
+  left: var(--goal-inset);
+  border-left: none;
+}
+
+.goalAreaRight {
+  right: var(--goal-inset);
+  border-right: none;
+}
+
+.penaltyArcLeft,
+.penaltyArcRight {
+  position: absolute;
+  top: 50%;
+  width: 8%;
+  height: 20%;
+  border: 2px solid #111827;
+  border-radius: 50%;
+}
+
+.penaltyArcLeft {
+  left: calc(var(--goal-inset) + (100% - 2 * var(--goal-inset)) * 16.5 / 105 - 4%);
+  transform: translateY(-50%);
+  border-left: none;
+  clip-path: inset(0 0 0 50%);
+}
+
+.penaltyArcRight {
+  right: calc(var(--goal-inset) + (100% - 2 * var(--goal-inset)) * 16.5 / 105 - 4%);
+  transform: translateY(-50%);
+  border-right: none;
+  clip-path: inset(0 50% 0 0);
+}
+
+.penaltySpotLeft,
+.penaltySpotRight {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  background: #111827;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+
+.penaltySpotLeft {
+  left: calc(var(--goal-inset) + (100% - 2 * var(--goal-inset)) * 11 / 105);
+}
+
+.penaltySpotRight {
+  right: calc(var(--goal-inset) + (100% - 2 * var(--goal-inset)) * 11 / 105);
+}
+
+.goalLeft,
+.goalRight {
+  position: absolute;
+  top: calc(100% * (68 - 7.32) / 2 / 68);
+  width: calc((100% - 2 * var(--goal-inset)) * 2 / 105);
+  height: calc(100% * 7.32 / 68);
+  border: 2px solid #111827;
+}
+
+.goalLeft {
+  left: 0;
+  border-left: none;
+}
+
+.goalRight {
+  right: 0;
+  border-right: none;
+}
+
+.zonesLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.zoneRect {
+  position: absolute;
+  border-radius: 6px;
+  border-width: 2px;
+  border-style: dashed;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  pointer-events: auto;
+}
+
+.zoneMovement {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: #2563eb;
+}
+
+.zoneTarget {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: #16a34a;
+}
+
+.zoneLabel {
+  margin: 4px 6px 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111827;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zoneTaskHint {
+  margin: 0 6px 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #1f2937;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.25;
+  max-width: 92%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.draftZone {
+  position: absolute;
+  border: 2px dashed #7c3aed;
+  background: rgba(124, 58, 237, 0.12);
+  border-radius: 6px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.markersLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+}
+
+.playerMarker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.playerMarker:active {
+  cursor: grabbing;
+}
+
+.playerMarkerSelected {
+  z-index: 6;
+}
+
+.playerMarkerSelected .avatarRing {
+  box-shadow: 0 0 0 3px #2563eb, 0 4px 12px rgba(37, 99, 235, 0.45);
+}
+
+.playerMarkerOpponent .avatarRing {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+
+.playerMarkerOpponent .markerBadge {
+  background: #dc2626;
+}
+
+.playerMarkerOpponent.playerMarkerSelected .avatarRing {
+  box-shadow: 0 0 0 3px #dc2626, 0 4px 12px rgba(220, 38, 38, 0.4);
+}
+
+.avatarRing {
+  width: var(--marker-avatar-size);
+  height: var(--marker-avatar-size);
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1.5px solid #111827;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatarImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatarFallback {
+  font-size: var(--marker-badge-size);
+  font-weight: 800;
+  color: #374151;
+}
+
+.markerBadge {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #111827;
+  color: #fff;
+  font-size: var(--marker-badge-size);
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.markerName {
+  display: none;
+  max-width: 72px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #d1d5db;
+  color: #111827;
+  font-size: 8px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerMarker:hover .markerName,
+.playerMarkerSelected .markerName {
+  display: block;
+}

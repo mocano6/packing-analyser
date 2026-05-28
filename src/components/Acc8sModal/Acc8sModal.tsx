@@ -73,17 +73,6 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     return mins * 60 + secs;
   };
 
-  // Minuta meczu na żywo z pola MM:SS (korekta -10s jak w videoTimestamp)
-  const matchMinuteFromVideoInput = useMemo(() => {
-    const rawSeconds = mmssToSeconds(videoTimeMMSS);
-    const correctedSeconds = Math.max(0, rawSeconds - 10);
-    const minutesIntoHalf = Math.floor(correctedSeconds / 60);
-    if (formData.isSecondHalf) {
-      return Math.min(90, 45 + minutesIntoHalf + 1);
-    }
-    return Math.min(45, minutesIntoHalf + 1);
-  }, [videoTimeMMSS, formData.isSecondHalf]);
-
   // Pobieranie czasu z wideo przy otwarciu modalu
   useEffect(() => {
     if (isOpen) {
@@ -457,6 +446,18 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
 
   if (!isOpen) return null;
 
+  const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = parseInt(e.target.value, 10);
+    if (Number.isNaN(raw)) {
+      setFormData((prev) => ({ ...prev, minute: 0 }));
+      return;
+    }
+    const next = formData.isSecondHalf
+      ? Math.max(46, Math.min(90, raw))
+      : Math.max(1, Math.min(45, raw));
+    setFormData((prev) => ({ ...prev, minute: next }));
+  };
+
   return (
     <div className={`${styles.overlay} ${isVideoInternal ? styles.overlayInternal : ''}`} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -540,9 +541,18 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
                   className={styles.videoTimeField}
                   maxLength={5}
                 />
-                <span className={styles.matchMinuteInfo}>
-                  {matchMinuteFromVideoInput}'
-                </span>
+                <input
+                  id="action-minute-input"
+                  type="number"
+                  min={formData.isSecondHalf ? 46 : 1}
+                  max={formData.isSecondHalf ? 90 : 45}
+                  step="1"
+                  value={formData.minute || ""}
+                  onChange={handleMinuteChange}
+                  className={styles.videoTimeField}
+                  aria-label="Minuta akcji"
+                  title="Ręczna minuta zapisywana w akcji"
+                />
               </div>
             </div>
             <button type="submit" className={styles.saveButton}>

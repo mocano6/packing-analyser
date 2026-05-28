@@ -1,6 +1,7 @@
 import { Action, PKEntry, Shot, TeamInfo } from "@/types";
 import { zoneNameToIndex } from "../constants/xtValues";
 import { isIn1TZoneCanonical } from "./pitchZones";
+import { calculateXgOutcomeProjection } from "./xgOutcomeProjection";
 
 export type TrendyKpiDirection = "higher" | "lower";
 export type TrendyKpiUnit = "percent" | "number" | "ratio" | "seconds";
@@ -151,6 +152,16 @@ export const getOpponentGoalsPerShotForMatch = (match: TeamInfo): number => {
 
 /** xG zespołu (atak) — to samo co KPI xG w trendach. */
 export const getTeamXgForMatch = (match: TeamInfo): number => getTeamXG(match);
+
+/**
+ * Oczekiwane punkty meczu z modelu rozkładu bramek na xG (nasze strzały vs strzały przeciwnika) — jak xPts w trendach.
+ */
+export const getTeamXptsForMatch = (match: TeamInfo): number =>
+  calculateXgOutcomeProjection(getTeamShots(match), getOpponentShots(match)).expectedPoints;
+
+/** Oczekiwane punkty przeciwnika z tego samego modelu. */
+export const getOpponentXptsForMatch = (match: TeamInfo): number =>
+  calculateXgOutcomeProjection(getTeamShots(match), getOpponentShots(match)).opponentExpectedPoints;
 
 /** Wszystkie przechwyty zespołu w meczu (bez filtrowania połowy). */
 export const getRegainsFullPitchCount = (match: TeamInfo): number =>

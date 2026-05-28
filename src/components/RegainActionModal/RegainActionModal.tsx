@@ -217,6 +217,12 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
 
   // Określamy czy jesteśmy w trybie edycji
   const isEditMode = !!editingAction;
+  const selectedMatchForTiming = useMemo(() => {
+    if (isEditMode && allMatches && currentSelectedMatch) {
+      return allMatches.find((match) => match.matchId === currentSelectedMatch) || matchInfo;
+    }
+    return matchInfo;
+  }, [isEditMode, allMatches, currentSelectedMatch, matchInfo]);
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
   const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
   
@@ -253,8 +259,8 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   // Minuta meczu na żywo z pola MM:SS - spójna z logiką calculateMatchMinuteFromVideoTime
   const calculateMatchMinuteFromVideoSeconds = useCallback(
     (videoSeconds: number) => {
-      const firstHalfStart = matchInfo?.firstHalfStartTime;
-      const secondHalfStart = matchInfo?.secondHalfStartTime;
+      const firstHalfStart = selectedMatchForTiming?.firstHalfStartTime;
+      const secondHalfStart = selectedMatchForTiming?.secondHalfStartTime;
 
       if (secondHalfStart !== undefined && videoSeconds >= secondHalfStart) {
         const secondsIntoSecondHalf = videoSeconds - secondHalfStart;
@@ -283,13 +289,34 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
       const minute = Math.floor(videoSeconds / 60) + 1;
       return Math.max(1, Math.min(45, minute));
     },
-    [matchInfo?.firstHalfStartTime, matchInfo?.secondHalfStartTime]
+    [selectedMatchForTiming?.firstHalfStartTime, selectedMatchForTiming?.secondHalfStartTime]
   );
 
   const matchMinuteFromVideoInput = useMemo(() => {
     const rawSeconds = mmssToSeconds(videoTimeMMSS);
     return calculateMatchMinuteFromVideoSeconds(rawSeconds);
   }, [videoTimeMMSS, calculateMatchMinuteFromVideoSeconds]);
+  const isSecondHalfFromVideoInput = matchMinuteFromVideoInput >= 46;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (isSecondHalf !== isSecondHalfFromVideoInput) {
+      onSecondHalfToggle(isSecondHalfFromVideoInput);
+    }
+
+    if (actionMinute !== matchMinuteFromVideoInput) {
+      onMinuteChange(matchMinuteFromVideoInput);
+    }
+  }, [
+    isOpen,
+    isSecondHalf,
+    isSecondHalfFromVideoInput,
+    onSecondHalfToggle,
+    actionMinute,
+    matchMinuteFromVideoInput,
+    onMinuteChange,
+  ]);
 
   // Pobieranie czasu z wideo przy otwarciu modalu
   useEffect(() => {
@@ -567,8 +594,15 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   if (!isOpen) return null;
 
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isEditMode) return;
-    onMinuteChange(parseInt(e.target.value) || 0);
+    const raw = parseInt(e.target.value, 10);
+    if (Number.isNaN(raw)) {
+      onMinuteChange(0);
+      return;
+    }
+    const next = isSecondHalf
+      ? Math.max(46, Math.min(90, raw))
+      : Math.max(1, Math.min(45, raw));
+    onMinuteChange(next);
   };
 
   const handleVideoTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -709,15 +743,14 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   };
 
   const handleSecondHalfToggle = (value: boolean) => {
-    if (isEditMode) return;
     onSecondHalfToggle(value);
     
     // Jeśli włączamy drugą połowę, a minuta jest mniejsza niż 46, ustawiamy na 46
     if (value && actionMinute < 46) {
       onMinuteChange(46);
     }
-    // Jeśli włączamy pierwszą połowę, a minuta jest większa niż 65, ustawiamy na 45
-    else if (!value && actionMinute > 65) {
+    // Jeśli włączamy pierwszą połowę, a minuta jest większa niż 45, ustawiamy na 45
+    else if (!value && actionMinute > 45) {
       onMinuteChange(45);
     }
     
@@ -743,14 +776,10 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
       }
     }
 
-    // W trybie edycji aktualizujemy minutę i połowę na podstawie bieżącego czasu z wideo
-    if (isEditMode && matchMinuteFromVideoInput > 0) {
-      const nextMinute = matchMinuteFromVideoInput;
-      const nextIsSecondHalf = nextMinute >= 46;
-      onMinuteChange(nextMinute);
-      onSecondHalfToggle(nextIsSecondHalf);
-      localStorage.setItem('tempEditedActionMinute', String(nextMinute));
-      localStorage.setItem('tempEditedActionIsSecondHalf', nextIsSecondHalf ? 'true' : 'false');
+    // W trybie edycji minuta i połowa wynikają z czasu wideo oraz startów połówek.
+    if (isEditMode) {
+      localStorage.setItem('tempEditedActionMinute', String(matchMinuteFromVideoInput));
+      localStorage.setItem('tempEditedActionIsSecondHalf', isSecondHalfFromVideoInput ? 'true' : 'false');
     }
 
     // Zapisz videoTimestamp z pola MM:SS do localStorage
@@ -862,8 +891,6 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                       e.preventDefault();
                       e.stopPropagation();
                     }}
-                    disabled={isEditMode}
-                    aria-disabled={isEditMode}
                     style={{ pointerEvents: 'auto', zIndex: 11 }}
                   >
                     P1
@@ -880,8 +907,6 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                       e.preventDefault();
                       e.stopPropagation();
                     }}
-                    disabled={isEditMode}
-                    aria-disabled={isEditMode}
                     style={{ pointerEvents: 'auto', zIndex: 11 }}
                   >
                     P2
@@ -1216,9 +1241,18 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
                   className={styles.videoTimeField}
                   maxLength={6}
                 />
-                <span className={styles.matchMinuteInfo}>
-                  {matchMinuteFromVideoInput}'
-                </span>
+                <input
+                  id="action-minute-input"
+                  type="number"
+                  min={isSecondHalf ? 46 : 1}
+                  max={isSecondHalf ? 90 : 45}
+                  step="1"
+                  value={actionMinute || ""}
+                  onChange={handleMinuteChange}
+                  className={styles.videoTimeField}
+                  aria-label="Minuta akcji"
+                  title="Ręczna minuta zapisywana w akcji"
+                />
               </div>
             </div>
             

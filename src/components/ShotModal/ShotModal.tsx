@@ -88,6 +88,11 @@ const ShotModal: React.FC<ShotModalProps> = ({
       isHeader: isTorvaneyHeaderBodyPart(bodyPart),
       teamContext,
     });
+
+  const isOwnGoalFormState = (data: Pick<typeof formData, "teamContext" | "playerId" | "isOwnGoal">): boolean =>
+    data.teamContext === "attack"
+      ? data.playerId === OWN_GOAL_PLAYER_ID
+      : data.isOwnGoal;
   const isShotInPenaltyArea = useMemo(() => {
     return formData.teamContext === "defense"
       ? isInOpponentPenaltyAreaCanonical(shotCoords)
@@ -122,17 +127,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
     if (isNaN(secs)) return mins * 60; // Jeśli sekundy są niepoprawne, traktuj jako minuty
     return mins * 60 + secs;
   };
-
-  // Minuta meczu na żywo z pola MM:SS (korekta -10s jak w videoTimestamp); isP2Active = druga połowa
-  const matchMinuteFromVideoInput = useMemo(() => {
-    const rawSeconds = mmssToSeconds(videoTimeMMSS);
-    const correctedSeconds = Math.max(0, rawSeconds - 10);
-    const minutesIntoHalf = Math.floor(correctedSeconds / 60);
-    if (formData.isP2Active) {
-      return Math.min(90, 45 + minutesIntoHalf + 1);
-    }
-    return Math.min(45, minutesIntoHalf + 1);
-  }, [videoTimeMMSS, formData.isP2Active]);
 
   // Refs do śledzenia poprzednich wartości, aby uniknąć nadpisywania podczas edycji
   const prevVideoTimestampRawRef = useRef<number | undefined>(undefined);
@@ -400,7 +394,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
             : (editingShot.playerId || ""),
         isOwnGoal: editingTeamContext === "defense" ? isOwnGoalShot : false,
         minute: editingShot.minute,
-        xG: reverseFinalXG(Math.round(editingShot.xG * 100), editingShot),
+        xG: isOwnGoalShot ? 0 : reverseFinalXG(Math.round(editingShot.xG * 100), editingShot),
         bodyPart: editingShot.bodyPart === "foot_right"
           ? "foot_right"
           : editingShot.bodyPart === "foot_left" || editingShot.bodyPart === "foot"
@@ -488,12 +482,26 @@ const ShotModal: React.FC<ShotModalProps> = ({
   }, [formData.teamContext, defaultGoalkeeper, formData.playerId]);
 
   const handlePlayerSelect = (playerId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      playerId,
-      // Bramka samobójcza = gol
-      shotType: playerId === OWN_GOAL_PLAYER_ID ? "goal" : prev.shotType,
-    }));
+    setFormData((prev) => {
+      const isOg = playerId === OWN_GOAL_PLAYER_ID;
+      let nextXG = prev.xG;
+      if (isOg) {
+        nextXG = 0;
+      } else if (prev.playerId === OWN_GOAL_PLAYER_ID) {
+        nextXG =
+          prev.actionType === "penalty"
+            ? prev.xG
+            : calculatePositionXG(prev.bodyPart, prev.teamContext);
+      } else if (isOwnGoalFormState(prev)) {
+        nextXG = 0;
+      }
+      return {
+        ...prev,
+        playerId,
+        shotType: isOg ? "goal" : prev.shotType,
+        xG: nextXG,
+      };
+    });
   };
 
   const handleAssistantSelect = (playerId: string) => {
@@ -519,7 +527,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
   const handleTeamContextChange = (teamContext: "attack" | "defense") => {
     setFormData((prev) => {
       let nextXG = prev.xG;
-      if (prev.actionType !== "penalty") {
+      if (!isOwnGoalFormState(prev) && prev.actionType !== "penalty") {
         nextXG = calculatePositionXG(prev.bodyPart, teamContext);
       }
       return {
@@ -543,7 +551,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
     setFormData((prev) => {
       const actionType = value;
       let nextXG = prev.xG;
-      if (actionType !== "penalty") {
+      if (isOwnGoalFormState(prev)) {
+        nextXG = 0;
+      } else if (actionType !== "penalty") {
         nextXG = calculatePositionXG(prev.bodyPart, prev.teamContext);
       }
       return {
@@ -559,7 +569,11 @@ const ShotModal: React.FC<ShotModalProps> = ({
     setFormData((prev) => ({
       ...prev,
       bodyPart,
-      xG: prev.actionType === "penalty" ? prev.xG : calculatePositionXG(bodyPart, prev.teamContext),
+      xG: isOwnGoalFormState(prev)
+        ? 0
+        : prev.actionType === "penalty"
+        ? prev.xG
+        : calculatePositionXG(bodyPart, prev.teamContext),
     }));
   };
 
@@ -705,6 +719,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
 
   // Oblicz finalny xG z uwzględnieniem zawodników na linii, SFG bezpośredni, dobitki i części ciała.
   const calculateFinalXG = () => {
+    if (isOwnGoalFormState(formData)) {
+      return 0;
+    }
     // Karny ma zawsze stały xG 76%
     if (formData.actionType === "penalty") {
       return PENALTY_XG_PERCENT;
@@ -769,7 +786,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
   const handleActionCategoryChange = (category: "open_play" | "sfg") => {
     setFormData((prev) => {
       const actionType = category === "open_play" ? "open_play" : "corner";
-      const nextXG = calculatePositionXG(prev.bodyPart, prev.teamContext);
+      const nextXG = isOwnGoalFormState(prev)
+        ? 0
+        : calculatePositionXG(prev.bodyPart, prev.teamContext);
       return {
         ...prev,
         actionCategory: category,
@@ -981,7 +1000,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
       ? (isValidTimestampRaw ? parsedVideoTimestampRaw : (editingShot as any)?.videoTimestampRaw)
       : (isValidTimestampRaw ? parsedVideoTimestampRaw : undefined);
 
-    const finalXG = calculateFinalXG();
+    const isOwnGoal = isOwnGoalFormState(formData);
+    const finalXG = isOwnGoal ? 0 : calculateFinalXG();
     const lockedMinute = editingShot ? editingShot.minute : formData.minute;
     
     const saveResult = await onSave({
@@ -990,12 +1010,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
       xG: finalXG / 100, // Konwersja z procentów na ułamek
       xgModelVersion: "torvaney",
       playerId: formData.playerId,
-      isOwnGoal:
-        formData.teamContext === "defense"
-          ? formData.isOwnGoal
-          : formData.playerId === OWN_GOAL_PLAYER_ID,
+      isOwnGoal,
       minute: lockedMinute,
-      isGoal: formData.shotType === "goal",
+      isGoal: isOwnGoal || formData.shotType === "goal",
       bodyPart: formData.bodyPart,
       shotType: formData.shotType === "goal" ? "on_target" : formData.shotType,
       teamContext: formData.teamContext,
@@ -1054,6 +1071,18 @@ const ShotModal: React.FC<ShotModalProps> = ({
 
   if (!isOpen) return null;
 
+  const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = parseInt(e.target.value, 10);
+    if (Number.isNaN(raw)) {
+      setFormData((prev) => ({ ...prev, minute: 0 }));
+      return;
+    }
+    const next = formData.isP2Active
+      ? Math.max(46, Math.min(90, raw))
+      : Math.max(1, Math.min(45, raw));
+    setFormData((prev) => ({ ...prev, minute: next }));
+  };
+
   return (
     <div className={`${styles.overlay} ${isVideoInternal ? styles.overlayInternal : ''}`} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -1073,9 +1102,10 @@ const ShotModal: React.FC<ShotModalProps> = ({
                 step="1"
                 min="0"
                 max="100"
-                value={formData.xG}
+                value={isOwnGoalFormState(formData) ? 0 : formData.xG}
                 onChange={(e) => setFormData({...formData, xG: parseInt(e.target.value) || 0})}
                 className={styles.input}
+                disabled={isOwnGoalFormState(formData)}
                 required
               />
               {!isShotInPenaltyArea && (
@@ -1196,7 +1226,21 @@ const ShotModal: React.FC<ShotModalProps> = ({
                           <div className={styles.playersGridItems}>
                             <div
                               className={`${styles.playerTile} ${formData.isOwnGoal ? styles.playerOwnGoalTile : ""}`}
-                              onClick={() => setFormData((prev) => ({ ...prev, isOwnGoal: !prev.isOwnGoal }))}
+                              onClick={() =>
+                                setFormData((prev) => {
+                                  const nextIsOwnGoal = !prev.isOwnGoal;
+                                  return {
+                                    ...prev,
+                                    isOwnGoal: nextIsOwnGoal,
+                                    xG: nextIsOwnGoal
+                                      ? 0
+                                      : prev.actionType === "penalty"
+                                      ? prev.xG
+                                      : calculatePositionXG(prev.bodyPart, prev.teamContext),
+                                    shotType: nextIsOwnGoal ? "goal" : prev.shotType,
+                                  };
+                                })
+                              }
                             >
                               <div className={styles.playerContent}>
                                 <div className={styles.ownGoalLabel}>Bramka samobójcza</div>
@@ -1822,9 +1866,18 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     className={styles.videoTimeField}
                     maxLength={5}
                   />
-                  <span className={styles.matchMinuteInfo}>
-                    {matchMinuteFromVideoInput}'
-                  </span>
+                  <input
+                    id="action-minute-input"
+                    type="number"
+                    min={formData.isP2Active ? 46 : 1}
+                    max={formData.isP2Active ? 90 : 45}
+                    step="1"
+                    value={formData.minute || ""}
+                    onChange={handleMinuteChange}
+                    className={styles.videoTimeField}
+                    aria-label="Minuta akcji"
+                    title="Ręczna minuta zapisywana w akcji"
+                  />
                 </div>
               </div>
               <button type="submit" className={styles.saveButton}>

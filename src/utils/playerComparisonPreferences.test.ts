@@ -28,6 +28,7 @@ const parsed = parsePlayerComparisonPreferences(
     mode: "sum",
     comparisonMetricFamily: "pkEntries",
     comparisonMetricRole: "receiver",
+    comparisonPackingPhase: "p2",
     minMinutes: "180",
     minMatches: "3",
     selectedPositions: ["OB", "", 1, "CM"],
@@ -47,7 +48,7 @@ const serialized = serializePlayerComparisonPreferences(parsed);
 assert.ok(!serialized.includes("dateFrom"));
 assert.ok(!serialized.includes("dateTo"));
 assert.ok(!serialized.includes("selectedMetricId"));
-assert.ok(serialized.includes('"minMinutes":"180"'));
+assert.ok(!serialized.includes("comparisonPackingPhase"));
 assert.ok(serialized.includes('"minMatches":"3"'));
 assert.ok(serialized.includes('"OB"'));
 
@@ -68,5 +69,11 @@ const invalidFamily = parsePlayerComparisonPreferences(
 );
 assert.strictEqual(invalidFamily.comparisonMetricFamily, "pxt");
 assert.strictEqual(invalidFamily.comparisonMetricRole, "sender");
+
+const phaseDribbleCoerced = parsePlayerComparisonPreferences(
+  JSON.stringify({ comparisonMetricFamily: "phaseP1", comparisonMetricRole: "dribble" }),
+);
+assert.strictEqual(phaseDribbleCoerced.comparisonMetricFamily, "phaseP1");
+assert.strictEqual(phaseDribbleCoerced.comparisonMetricRole, "sender");
 
 console.log("playerComparisonPreferences.test: OK");

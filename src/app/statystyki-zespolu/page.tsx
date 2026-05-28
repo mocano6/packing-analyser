@@ -46,6 +46,7 @@ import { getPkEntryKpiBreakdownCounts, isPkSfgEntry } from "@/lib/pkEntryKpiBrea
 import { filterTeamsByUserAccess } from "@/lib/teamsForUserAccess";
 import { sumNonPenaltyXg } from "@/lib/xgNonPenalty";
 import { calculateXgOutcomeProjection } from "@/utils/xgOutcomeProjection";
+import { summarizeCleanShots } from "@/utils/shotLinePlayers";
 import styles from "./statystyki-zespolu.module.css";
 
 /** Spójny zielony / czerwony KPI na tej stronie (wspólny dla wykresów, KPI i akcji). */
@@ -4094,6 +4095,16 @@ export default function StatystykiZespoluPage() {
                   const opponentXGOpenPlay = opponentXG - opponentXGSFG - opponentXGRegain;
                   const teamGoalsOpenPlay = teamGoals - teamGoalsSFG - teamGoalsRegain;
                   const opponentGoalsOpenPlay = opponentGoals - opponentGoalsSFG - opponentGoalsRegain;
+
+                  const teamCleanShots = summarizeCleanShots(teamShots);
+                  const opponentCleanShots = summarizeCleanShots(opponentShots);
+                  const teamXGClean = teamCleanShots.xg;
+                  const opponentXGClean = opponentCleanShots.xg;
+                  const teamGoalsClean = teamCleanShots.goals;
+                  const opponentGoalsClean = opponentCleanShots.goals;
+                  const teamCleanShotsCount = teamCleanShots.shots;
+                  const opponentCleanShotsCount = opponentCleanShots.shots;
+
                   const teamShotToRegainWindowMap = new Map<string, boolean>();
                   if (teamXGRegainWindow > REGAIN_XG_FALLBACK_EPS) {
                     regainWithTs.forEach((item, i) => {
@@ -5893,6 +5904,31 @@ export default function StatystykiZespoluPage() {
                                       {opponentXGRegain.toFixed(2)}{' '}
                                       <span className={styles.kpiScoreRowValuesPct}>
                                         ({opponentXG > 0 ? Math.round(opponentXGRegain / opponentXG * 100) : 0}%)
+                                      </span>
+                                    </span>
+                                  </div>
+                                  <div className={styles.kpiScoreRow}>
+                                    <span
+                                      className={`${styles.kpiScoreRowLabel} ${styles.tooltipTrigger}`}
+                                      data-tooltip={'Clean xG — xG ze strzałów bez zawodnika na linii strzału (otwarta linia do bramki).\n\nPrzy naszym ataku: żaden przeciwnik nie blokował linii. Przy strzale przeciwnika: żaden nasz zawodnik nie stał na linii.\n\nPokazuje: bramki · suma xG · liczba strzałów · udział w całkowitym xG (%).'}
+                                      title="Clean xG — xG ze strzałów bez zawodnika na linii strzału"
+                                    >
+                                      Clean xG
+                                    </span>
+                                    <span className={styles.kpiScoreRowGoals}>
+                                      <span style={{ color: TEAM_STATS_GREEN }}>{teamGoalsClean}</span>
+                                      <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
+                                      <span style={{ color: TEAM_STATS_RED }}>{opponentGoalsClean}</span>
+                                    </span>
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {teamXGClean.toFixed(2)}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({teamCleanShotsCount} strz., {teamXG > 0 ? Math.round(teamXGClean / teamXG * 100) : 0}%)
+                                      </span>
+                                      {' : '}
+                                      {opponentXGClean.toFixed(2)}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({opponentCleanShotsCount} strz., {opponentXG > 0 ? Math.round(opponentXGClean / opponentXG * 100) : 0}%)
                                       </span>
                                     </span>
                                   </div>

@@ -207,11 +207,14 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       onChange: (next: number) => void,
       ariaLabelPrefix: string,
       groupDomId: string,
+      interactionDisabled?: boolean,
     ) => {
       const values = Array.from({ length: 11 }, (_, i) => i); // 0..10
-      const ariaLabel = subtitle
+      const disabledHint = interactionDisabled ? " Wyłączone przy Out/aut/BR." : "";
+      const baseAriaLabel = subtitle
         ? `${ariaLabelPrefix}. Zespół: ${subtitle}.`
         : ariaLabelPrefix;
+      const ariaLabel = `${baseAriaLabel}${disabledHint}`;
 
       return (
         <div className={styles.countRow}>
@@ -229,13 +232,15 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
               <button
                 key={n}
                 type="button"
-                className={`${styles.countButton} ${value === n ? styles.countButtonActive : ""}`}
+                disabled={interactionDisabled}
+                className={`${styles.countButton} ${!interactionDisabled && value === n ? styles.countButtonActive : ""}`}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  if (interactionDisabled) return;
                   onChange(n);
                 }}
-                aria-pressed={value === n}
+                aria-pressed={interactionDisabled ? false : value === n}
                 title={`Ustaw ${n}`}
               >
                 {n}
@@ -251,6 +256,12 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
 
   // Określamy czy jesteśmy w trybie edycji
   const isEditMode = !!editingAction;
+  const selectedMatchForTiming = useMemo(() => {
+    if (isEditMode && allMatches && currentSelectedMatch) {
+      return allMatches.find((match) => match.matchId === currentSelectedMatch) || matchInfo;
+    }
+    return matchInfo;
+  }, [isEditMode, allMatches, currentSelectedMatch, matchInfo]);
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
   const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
   const [controversyNote, setControversyNote] = useState<string>(""); // Notatka dotycząca kontrowersyjnej akcji
@@ -301,8 +312,8 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   // Minuta meczu na żywo z pola MM:SS - spójna z logiką calculateMatchMinuteFromVideoTime
   const calculateMatchMinuteFromVideoSeconds = useCallback(
     (videoSeconds: number) => {
-      const firstHalfStart = matchInfo?.firstHalfStartTime;
-      const secondHalfStart = matchInfo?.secondHalfStartTime;
+      const firstHalfStart = selectedMatchForTiming?.firstHalfStartTime;
+      const secondHalfStart = selectedMatchForTiming?.secondHalfStartTime;
 
       if (secondHalfStart !== undefined && videoSeconds >= secondHalfStart) {
         const secondsIntoSecondHalf = videoSeconds - secondHalfStart;
@@ -332,13 +343,34 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       const minute = Math.floor(videoSeconds / 60) + 1;
       return Math.max(1, Math.min(45, minute));
     },
-    [matchInfo?.firstHalfStartTime, matchInfo?.secondHalfStartTime]
+    [selectedMatchForTiming?.firstHalfStartTime, selectedMatchForTiming?.secondHalfStartTime]
   );
 
   const matchMinuteFromVideoInput = useMemo(() => {
     const rawSeconds = mmssToSeconds(videoTimeMMSS);
     return calculateMatchMinuteFromVideoSeconds(rawSeconds);
   }, [videoTimeMMSS, calculateMatchMinuteFromVideoSeconds]);
+  const isSecondHalfFromVideoInput = matchMinuteFromVideoInput >= 46;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (isSecondHalf !== isSecondHalfFromVideoInput) {
+      onSecondHalfToggle(isSecondHalfFromVideoInput);
+    }
+
+    if (actionMinute !== matchMinuteFromVideoInput) {
+      onMinuteChange(matchMinuteFromVideoInput);
+    }
+  }, [
+    isOpen,
+    isSecondHalf,
+    isSecondHalfFromVideoInput,
+    onSecondHalfToggle,
+    actionMinute,
+    matchMinuteFromVideoInput,
+    onMinuteChange,
+  ]);
 
   // Pobieranie czasu z wideo przy otwarciu modalu
   useEffect(() => {
@@ -618,8 +650,15 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   if (!isOpen) return null;
 
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isEditMode) return;
-    onMinuteChange(parseInt(e.target.value) || 0);
+    const raw = parseInt(e.target.value, 10);
+    if (Number.isNaN(raw)) {
+      onMinuteChange(0);
+      return;
+    }
+    const next = isSecondHalf
+      ? Math.max(46, Math.min(90, raw))
+      : Math.max(1, Math.min(45, raw));
+    onMinuteChange(next);
   };
 
   const handleVideoTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -760,15 +799,14 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   };
 
   const handleSecondHalfToggle = (value: boolean) => {
-    if (isEditMode) return;
     onSecondHalfToggle(value);
     
     // Jeśli włączamy drugą połowę, a minuta jest mniejsza niż 46, ustawiamy na 46
     if (value && actionMinute < 46) {
       onMinuteChange(46);
     }
-    // Jeśli włączamy pierwszą połowę, a minuta jest większa niż 65, ustawiamy na 45
-    else if (!value && actionMinute > 65) {
+    // Jeśli włączamy pierwszą połowę, a minuta jest większa niż 45, ustawiamy na 45
+    else if (!value && actionMinute > 45) {
       onMinuteChange(45);
     }
     
@@ -794,14 +832,10 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       }
     }
 
-    // W trybie edycji aktualizujemy minutę i połowę na podstawie bieżącego czasu z wideo
-    if (isEditMode && matchMinuteFromVideoInput > 0) {
-      const nextMinute = matchMinuteFromVideoInput;
-      const nextIsSecondHalf = nextMinute >= 46;
-      onMinuteChange(nextMinute);
-      onSecondHalfToggle(nextIsSecondHalf);
-      localStorage.setItem('tempEditedActionMinute', String(nextMinute));
-      localStorage.setItem('tempEditedActionIsSecondHalf', nextIsSecondHalf ? 'true' : 'false');
+    // W trybie edycji minuta i połowa wynikają z czasu wideo oraz startów połówek.
+    if (isEditMode) {
+      localStorage.setItem('tempEditedActionMinute', String(matchMinuteFromVideoInput));
+      localStorage.setItem('tempEditedActionIsSecondHalf', isSecondHalfFromVideoInput ? 'true' : 'false');
     }
 
     // Zapisz videoTimestamp z pola MM:SS do localStorage
@@ -833,7 +867,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       onSaveAction({
         playersLeftField,
         opponentsLeftField,
-        losesOppRosterSquadTallyF1: losesBackAllyCount,
+        losesOppRosterSquadTallyF1: isAutActive ? 0 : losesBackAllyCount,
         losesBackAllyCount: undefined,
         totalPlayersOnField: 11 - playersLeftField,
         totalOpponentsOnField: 11 - opponentsLeftField,
@@ -903,8 +937,6 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   <button
                     className={`${styles.halfButton} ${!isSecondHalf ? styles.activeHalf : ''}`}
                     onClick={() => handleSecondHalfToggle(false)}
-                    disabled={isEditMode}
-                    aria-disabled={isEditMode}
                     type="button"
                   >
                     P1
@@ -912,8 +944,6 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
                   <button
                     className={`${styles.halfButton} ${isSecondHalf ? styles.activeHalf : ''}`}
                     onClick={() => handleSecondHalfToggle(true)}
-                    disabled={isEditMode}
-                    aria-disabled={isEditMode}
                     type="button"
                   >
                     P2
@@ -1098,47 +1128,64 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
               {/* Przyciski P0–P3 oraz reakcje 5s */}
               <div className={styles.pSectionContainer}>
                 {/* Sekcja z przyciskami P0-P3 - przestrzeń w której piłka została stracona */}
-                <div className={`${styles.actionTypeSelector} ${styles.tooltipTrigger} ${styles.tooltipRight}`} data-tooltip="Przestrzeń w której piłka została stracona">
+                <div
+                  className={`${styles.actionTypeSelector} ${styles.tooltipTrigger} ${styles.tooltipRight}`}
+                  role="group"
+                  aria-label={
+                    isAutActive
+                      ? "Strefy P0–P3 wyłączone przy stracie Out, aut lub restarcie od bramki (aut/BR)"
+                      : "Przestrzeń w której piłka została stracona, przyciski P0 do P3"
+                  }
+                  data-tooltip={
+                    isAutActive
+                      ? "Przy Out / aut / BR strefy P0–P3 nie obowiązują (przyciski wyłączone)."
+                      : "Przestrzeń w której piłka została stracona"
+                  }
+                >
                   <button
                     className={`${styles.actionTypeButton} ${
-                      isP0Active ? styles.active : ""
+                      isAutActive ? "" : isP0Active ? styles.active : ""
                     }`}
                     onClick={onP0Toggle}
                     title="Aktywuj/Dezaktywuj P0"
-                    aria-pressed={isP0Active}
+                    aria-pressed={isAutActive ? false : isP0Active}
+                    disabled={isAutActive}
                     type="button"
                   >
                     P0
                   </button>
                   <button
                     className={`${styles.actionTypeButton} ${
-                      isP1Active ? styles.active : ""
+                      isAutActive ? "" : isP1Active ? styles.active : ""
                     }`}
                     onClick={onP1Toggle}
                     title="Aktywuj/Dezaktywuj P1"
-                    aria-pressed={isP1Active}
+                    aria-pressed={isAutActive ? false : isP1Active}
+                    disabled={isAutActive}
                     type="button"
                   >
                     P1
                   </button>
                   <button
                     className={`${styles.actionTypeButton} ${
-                      isP2Active ? styles.active : ""
+                      isAutActive ? "" : isP2Active ? styles.active : ""
                     }`}
                     onClick={onP2Toggle}
                     title="Aktywuj/Dezaktywuj P2"
-                    aria-pressed={isP2Active}
+                    aria-pressed={isAutActive ? false : isP2Active}
+                    disabled={isAutActive}
                     type="button"
                   >
                     P2
                   </button>
                   <button
                     className={`${styles.actionTypeButton} ${
-                      isP3Active ? styles.active : ""
+                      isAutActive ? "" : isP3Active ? styles.active : ""
                     }`}
                     onClick={onP3Toggle}
                     title="Aktywuj/Dezaktywuj P3"
-                    aria-pressed={isP3Active}
+                    aria-pressed={isAutActive ? false : isP3Active}
+                    disabled={isAutActive}
                     type="button"
                   >
                     P3
@@ -1220,9 +1267,10 @@ className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${styles.tooltip
                   onClick={onAutToggle}
                   aria-pressed={isAutActive}
                   type="button"
-                  data-tooltip="Aut"
+                  data-tooltip="Out — strata przy piłce poza boiskiem; także aut / restart od bramki (aut/BR)."
+                  title="Out, aut / BR"
                   >
-                    Aut
+                    aut/BR
                   </button>
                 </div>
               </div>
@@ -1231,15 +1279,20 @@ className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${styles.tooltip
             {/* Liczba zawodników miniętych w momencie straty (jak Regain) */}
             <div
               className={`${styles.countSelectorContainer} ${styles.tooltipTrigger}`}
-              data-tooltip={backAllyTooltip}
+              data-tooltip={
+                isAutActive
+                  ? `${backAllyTooltip} Przy Out/aut/BR nie obowiązuje — ustawione na 0, wybór wyłączony.`
+                  : backAllyTooltip
+              }
             >
               {renderCountRow(
                 "Zawodnicy minięci",
                 ourSquadLabel,
-                clamp0to10(losesBackAllyCount),
+                clamp0to10(isAutActive ? 0 : losesBackAllyCount),
                 (n) => onLosesBackAllyCountChange(clamp0to10(n)),
                 "Liczba zawodników miniętych w momencie straty (0-10)",
                 "packingLoses",
+                isAutActive,
               )}
             </div>
             
@@ -1336,9 +1389,18 @@ className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${styles.tooltip
                   className={styles.videoTimeField}
                   maxLength={6}
                 />
-                <span className={styles.matchMinuteInfo}>
-                  {matchMinuteFromVideoInput}'
-                </span>
+                <input
+                  id="action-minute-input"
+                  type="number"
+                  min={isSecondHalf ? 46 : 1}
+                  max={isSecondHalf ? 90 : 45}
+                  step="1"
+                  value={actionMinute || ""}
+                  onChange={handleMinuteChange}
+                  className={styles.videoTimeField}
+                  aria-label="Minuta akcji"
+                  title="Ręczna minuta zapisywana w akcji"
+                />
               </div>
             </div>
             

@@ -25,6 +25,8 @@ import {
   getTeamXgPerShotForMatch,
   getTeamGoalsPerShotForMatch,
   getOpponentGoalsPerShotForMatch,
+  getTeamXptsForMatch,
+  getOpponentXptsForMatch,
   getTeamPxtForMatch,
   getTeamXtDeltaSumForMatch,
   getTeamPackingPointsSumForMatch,
@@ -88,6 +90,12 @@ export const WIEDZA_WEIGHTS_METRIC_DEFS: WiedzaWeightsMetricDef[] = [
   },
   { id: "w_pk", label: "PK", getTeam: getTeamPKEntriesCountForMatch, getOpponent: getOpponentPKEntriesCountForMatch },
   { id: "w_xg", label: "xG", getTeam: getTeamXgForMatch, getOpponent: getOpponentXGForMatch },
+  {
+    id: "w_xpts",
+    label: "xPts",
+    getTeam: getTeamXptsForMatch,
+    getOpponent: getOpponentXptsForMatch,
+  },
   {
     id: "w_xg_per_shot",
     label: "xG/strz.",

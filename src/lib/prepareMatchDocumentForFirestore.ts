@@ -4,6 +4,7 @@
  */
 
 import type { TeamInfo } from "@/types";
+import { normalizeTeamInfoHalfStarts } from "../utils/normalizeTeamInfoHalfStarts";
 
 const FORBIDDEN_ROOT_KEYS = [
   "firstName",
@@ -39,7 +40,7 @@ function removeUndefinedDeep(obj: unknown): unknown {
  * Obiekt gotowy do setDoc(matches/{id}, data) — bez undefined, bez zakazanych kluczy, team + teamId spójne.
  */
 export function prepareMatchDocumentForFirestore(match: TeamInfo): Record<string, unknown> {
-  const cleaned = removeUndefinedDeep({ ...match }) as Record<string, unknown>;
+  const cleaned = removeUndefinedDeep({ ...normalizeTeamInfoHalfStarts(match) }) as Record<string, unknown>;
   for (const k of FORBIDDEN_ROOT_KEYS) {
     delete cleaned[k];
   }

@@ -42,6 +42,25 @@ function testDerivesTeamFromTeamIdOrTeams() {
   assert.strictEqual(fromTeams.teamId, "solo");
 }
 
+function testStripsInvalidHalfStartTimes() {
+  const z = prepareMatchDocumentForFirestore({
+    ...base,
+    firstHalfStartTime: 0,
+    secondHalfStartTime: null as unknown as number | undefined,
+  } as TeamInfo);
+  assert.strictEqual(z.firstHalfStartTime, undefined);
+  assert.strictEqual(z.secondHalfStartTime, undefined);
+
+  const ok = prepareMatchDocumentForFirestore({
+    ...base,
+    firstHalfStartTime: 60,
+    secondHalfStartTime: 3000,
+  });
+  assert.strictEqual(ok.firstHalfStartTime, 60);
+  assert.strictEqual(ok.secondHalfStartTime, 3000);
+}
+
 testStripsForbiddenKeysAndSetsTeamId();
 testDerivesTeamFromTeamIdOrTeams();
+testStripsInvalidHalfStartTimes();
 console.log("prepareMatchDocumentForFirestore tests: OK");

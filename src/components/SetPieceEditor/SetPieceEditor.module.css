@@ -1,0 +1,528 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.typeTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.typeTab {
+  flex: 1 1 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border-radius: 10px;
+  border: 2px solid #e5e7eb;
+  background: #fff;
+  overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.typeTab:hover {
+  border-color: #93c5fd;
+}
+
+.typeTabActive {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.15);
+}
+
+.typeTabHeader {
+  width: 100%;
+  padding: 10px 14px 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.typeTabHeader:hover {
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.typeTabLabel {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.typeTabDesc {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
+.typeTabVariants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid #e5e7eb;
+  background: rgba(249, 250, 251, 0.85);
+}
+
+.typeTabActive .typeTabVariants {
+  border-top-color: #bfdbfe;
+  background: rgba(239, 246, 255, 0.9);
+}
+
+.variantChip {
+  position: relative;
+  flex: 1 1 28px;
+  min-width: 28px;
+  max-width: 36px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, transform 0.1s ease;
+}
+
+.variantChip:hover {
+  border-color: #93c5fd;
+  transform: translateY(-1px);
+}
+
+.variantChipActive {
+  border-color: #2563eb;
+  background: #2563eb;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.35);
+}
+
+.variantIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 11px;
+  font-weight: 800;
+  color: #374151;
+  line-height: 1;
+}
+
+.variantChipActive .variantIcon {
+  color: #fff;
+}
+
+.variantSavedDot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 1px solid #fff;
+}
+
+.variantChipActive .variantSavedDot {
+  border-color: #2563eb;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.toolButton {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toolButtonActive {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.helpText {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.playerList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.playerRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+}
+
+.playerRowSelected {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.opponentSection {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.playerRowOpponent.playerRowIncluded {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.playerRowOpponent.playerRowSelected {
+  border-color: #dc2626;
+  background: #fee2e2;
+}
+
+.opponentActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.playerRowIncluded {
+  border-color: #86efac;
+}
+
+.playerCheckbox {
+  flex: 0 0 auto;
+}
+
+.playerMeta {
+  flex: 1;
+  min-width: 0;
+}
+
+.playerName {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerPosition {
+  display: block;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.detailPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.fieldLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.textInput,
+.textArea,
+.selectInput {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  font-size: 13px;
+  color: #111827;
+}
+
+.textArea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.photoActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.secondaryButton,
+.dangerButton {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondaryButton {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+}
+
+.dangerButton {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.zonesList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.zoneCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+}
+
+.zoneCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.zoneKindBadge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.zoneFieldLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.zoneTextInput {
+  height: 34px;
+  resize: none;
+}
+
+.zoneTaskInput {
+  min-height: 48px;
+  resize: vertical;
+}
+
+.zoneTextInput,
+.zoneTaskInput {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #111827;
+}
+
+.savedHint {
+  margin: 0;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.framesBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.framesActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.frameTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.frameTab {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+}
+
+.frameTab:hover {
+  border-color: #93c5fd;
+  background: #f8fafc;
+}
+
+.frameTabActive {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.pitchColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pitchColumnHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pitchFrame {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+}
+
+.pitchSurface {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  width: 100%;
+}
+
+.pitchSurface > * {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.pitchOverlay {
+  position: relative;
+  z-index: 10;
+  align-self: stretch;
+  justify-self: stretch;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.88);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.pitchOverlayTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.pitchOverlayText {
+  margin: 0;
+  max-width: 360px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #4b5563;
+}
+
+.selectAllButton {
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.selectAllButton:hover {
+  background: #1d4ed8;
+}

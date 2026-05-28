@@ -39,6 +39,13 @@ import { Shot, TeamInfo } from "@/types";
 import { usePresentationMode } from "@/contexts/PresentationContext";
 import { Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ResponsiveRadar } from "@nivo/radar";
+import TrendyKpiMapModal, { TrendyKpiMapModalKind } from "@/components/TrendyKpiMapModal/TrendyKpiMapModal";
+import {
+  buildRegainsOppHalfHeatmap,
+  collectMapPkEntriesFromMatches,
+  collectMapShotsFromMatches,
+  countRegainsOppHalfFromMatches,
+} from "@/utils/trendyMapFilters";
 import styles from "./trendy.module.css";
 
 type MatchTypesEnabled = { liga: boolean; puchar: boolean; towarzyski: boolean };
@@ -173,6 +180,7 @@ export default function TrendyPage() {
   const [kpiPlayersModal, setKpiPlayersModal] = useState<{ kpiId: string; label: string; unit: TrendyKpiUnit } | null>(
     null,
   );
+  const [kpiMapModal, setKpiMapModal] = useState<{ kind: TrendyKpiMapModalKind; title: string } | null>(null);
 
   const resolveTrendyPlayerName = useMemo(() => {
     const map = new Map<string, string>();
@@ -186,6 +194,11 @@ export default function TrendyPage() {
     if (!kpiPlayersModal || matches.length === 0) return null;
     return getTrendyKpiPlayerContributions(matches, kpiPlayersModal.kpiId, resolveTrendyPlayerName);
   }, [kpiPlayersModal, matches, resolveTrendyPlayerName]);
+
+  const trendyMapShots = useMemo(() => collectMapShotsFromMatches(matches), [matches]);
+  const trendyMapPkEntries = useMemo(() => collectMapPkEntriesFromMatches(matches), [matches]);
+  const trendyRegainsOppHalfHeatmap = useMemo(() => buildRegainsOppHalfHeatmap(matches), [matches]);
+  const trendyRegainsOppHalfCount = useMemo(() => countRegainsOppHalfFromMatches(matches), [matches]);
 
   useEffect(() => {
     if (!kpiPlayersModal) return;
@@ -205,10 +218,12 @@ export default function TrendyPage() {
       const parsed = JSON.parse(raw) as {
         selectedTeam?: string;
         dateFrom?: string;
+        dateTo?: string;
         matchTypesEnabled?: MatchTypesEnabled;
       };
       if (parsed.selectedTeam) setSelectedTeam(parsed.selectedTeam);
       if (parsed.dateFrom) setDateFrom(parsed.dateFrom);
+      if (parsed.dateTo) setDateTo(parsed.dateTo);
       if (parsed.matchTypesEnabled) setMatchTypesEnabled(parsed.matchTypesEnabled);
     } catch {
       // ignore broken storage
@@ -220,6 +235,7 @@ export default function TrendyPage() {
     const payload = JSON.stringify({
       selectedTeam,
       dateFrom,
+      dateTo,
       matchTypesEnabled,
     });
     try {
@@ -227,7 +243,7 @@ export default function TrendyPage() {
     } catch {
       // ignore quota issues
     }
-  }, [selectedTeam, dateFrom, matchTypesEnabled]);
+  }, [selectedTeam, dateFrom, dateTo, matchTypesEnabled]);
 
   const availableTeams = useMemo(
     () =>
@@ -236,6 +252,11 @@ export default function TrendyPage() {
         allowedTeamIds: userTeams ?? [],
       }),
     [teams, isAdmin, userTeams]
+  );
+
+  const selectedTeamName = useMemo(
+    () => availableTeams.find((team) => team.id === selectedTeam)?.name,
+    [availableTeams, selectedTeam],
   );
 
   useEffect(() => {
@@ -259,26 +280,24 @@ export default function TrendyPage() {
     };
   }, []);
 
-  const clampDateRange = (from: string, to: string): { from: string; to: string } => {
-    const toDate = new Date(to || new Date().toISOString().split("T")[0]);
-    const minFromDate = new Date(toDate);
-    minFromDate.setMonth(minFromDate.getMonth() - 3);
+  const normalizeDateRange = (from: string, to: string): { from: string; to: string } => {
+    const today = new Date().toISOString().split("T")[0];
+    const fromStr = from || today;
+    const toStr = to || today;
 
-    const fromDate = new Date(from || minFromDate.toISOString().split("T")[0]);
-    const clampedFrom = fromDate < minFromDate ? minFromDate : fromDate;
+    if (fromStr <= toStr) {
+      return { from: fromStr, to: toStr };
+    }
 
-    return {
-      from: clampedFrom.toISOString().split("T")[0],
-      to: toDate.toISOString().split("T")[0],
-    };
+    return { from: toStr, to: fromStr };
   };
 
   const handleAnalyze = async () => {
     if (!selectedTeam) return;
 
-    const clamped = clampDateRange(dateFrom, dateTo);
-    if (clamped.from !== dateFrom) setDateFrom(clamped.from);
-    if (clamped.to !== dateTo) setDateTo(clamped.to);
+    const normalized = normalizeDateRange(dateFrom, dateTo);
+    if (normalized.from !== dateFrom) setDateFrom(normalized.from);
+    if (normalized.to !== dateTo) setDateTo(normalized.to);
 
     setIsLoading(true);
     setLoadError(null);
@@ -291,8 +310,14 @@ export default function TrendyPage() {
 
       const filtered = allTeamMatches
         .filter((match) => {
-          if (clamped.from && match.date < clamped.from) return false;
-          if (clamped.to && match.date > clamped.to) return false;
+          const matchDate =
+            match.date && typeof match.date === "string"
+              ? match.date.includes("T")
+                ? match.date.slice(0, 10)
+                : match.date
+              : "";
+          if (normalized.from && matchDate < normalized.from) return false;
+          if (normalized.to && matchDate > normalized.to) return false;
           const mt = (match.matchType || "liga") as keyof MatchTypesEnabled;
           return Boolean(matchTypesEnabled[mt]);
         })
@@ -1015,7 +1040,105 @@ export default function TrendyPage() {
                     )}
                   </button>
                   {matches.length > 0 &&
-                    !["possession_pct", "dead_time_pct", "acc8s_pct"].includes(kpi.id) && (
+                    (kpi.id === "xg_for" ||
+                      kpi.id === "shots_for" ||
+                      kpi.id === "pk_for" ||
+                      kpi.id === "regains_opp_half") && (
+                    <div className={styles.kpiHeaderActions}>
+                      <button
+                        type="button"
+                        className={styles.kpiMapIconButton}
+                        title={
+                          kpi.id === "pk_for"
+                            ? "Otwórz mapę wejść w PK"
+                            : kpi.id === "shots_for"
+                              ? "Otwórz mapę strzałów"
+                              : kpi.id === "regains_opp_half"
+                                ? "Otwórz mapę przechwytów na połowie przeciwnika"
+                                : "Otwórz mapę xG"
+                        }
+                        aria-label={
+                          kpi.id === "pk_for"
+                            ? "Otwórz mapę wejść w pole karne"
+                            : kpi.id === "shots_for"
+                              ? "Otwórz mapę strzałów"
+                              : kpi.id === "regains_opp_half"
+                                ? "Otwórz mapę przechwytów na połowie przeciwnika"
+                                : "Otwórz mapę xG"
+                        }
+                        onClick={() =>
+                          setKpiMapModal({
+                            kind:
+                              kpi.id === "pk_for"
+                                ? "pk"
+                                : kpi.id === "regains_opp_half"
+                                  ? "regains_opp_half"
+                                  : "shots",
+                            title:
+                              kpi.id === "pk_for"
+                                ? "Mapa wejść w PK"
+                                : kpi.id === "shots_for"
+                                  ? "Mapa strzałów"
+                                  : kpi.id === "regains_opp_half"
+                                    ? "Mapa przechwytów na połowie przeciwnika"
+                                    : "Mapa xG",
+                          })
+                        }
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden
+                        >
+                          <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+                          <line x1="8" y1="2" x2="8" y2="18" />
+                          <line x1="16" y1="6" x2="16" y2="22" />
+                        </svg>
+                      </button>
+                      {!["possession_pct", "dead_time_pct", "acc8s_pct"].includes(kpi.id) && (
+                        <button
+                          type="button"
+                          className={styles.kpiPlayersIconButton}
+                          title={`Wkład zawodników: ${kpi.label}`}
+                          aria-label={`Pokaż wkład zawodników — ${kpi.label}`}
+                          onClick={() => setKpiPlayersModal({ kpiId: kpi.id, label: kpi.label, unit: kpi.unit })}
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden
+                          >
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {matches.length > 0 &&
+                    ![
+                      "xg_for",
+                      "shots_for",
+                      "pk_for",
+                      "regains_opp_half",
+                      "possession_pct",
+                      "dead_time_pct",
+                      "acc8s_pct",
+                    ].includes(kpi.id) && (
                     <button
                       type="button"
                       className={styles.kpiPlayersIconButton}
@@ -1506,6 +1629,23 @@ export default function TrendyPage() {
           )}
         </div>
         </>
+      )}
+
+      {kpiMapModal && (
+        <TrendyKpiMapModal
+          kind={kpiMapModal.kind}
+          title={kpiMapModal.title}
+          matchCount={matches.length}
+          teamId={selectedTeam}
+          teamName={selectedTeamName}
+          shots={trendyMapShots}
+          pkEntries={trendyMapPkEntries}
+          regainsHeatmap={trendyRegainsOppHalfHeatmap}
+          regainsCount={trendyRegainsOppHalfCount}
+          players={players}
+          allTeams={availableTeams}
+          onClose={() => setKpiMapModal(null)}
+        />
       )}
 
       {kpiPlayersModal && (

@@ -208,47 +208,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
     return mins * 60 + secs;
   };
 
-  // Minuta meczu na żywo z pola MM:SS - spójna z logiką calculateMatchMinuteFromVideoTime
-  const calculateMatchMinuteFromVideoSeconds = useCallback(
-    (videoSeconds: number) => {
-      const firstHalfStart = matchInfo?.firstHalfStartTime;
-      const secondHalfStart = matchInfo?.secondHalfStartTime;
-
-      if (secondHalfStart !== undefined && videoSeconds >= secondHalfStart) {
-        const secondsIntoSecondHalf = videoSeconds - secondHalfStart;
-        const minute = Math.floor(secondsIntoSecondHalf / 60) + 46;
-        return Math.max(46, minute);
-      }
-
-      if (firstHalfStart !== undefined && videoSeconds >= firstHalfStart) {
-        const secondsIntoFirstHalf = videoSeconds - firstHalfStart;
-        const minute = Math.floor(secondsIntoFirstHalf / 60) + 1;
-        return Math.max(1, Math.min(45, minute));
-      }
-
-      if (secondHalfStart !== undefined && videoSeconds < secondHalfStart) {
-        const minute = Math.floor(videoSeconds / 60) + 1;
-        return Math.max(1, Math.min(45, minute));
-      }
-
-      // Fallback gdy brak czasów startu połów: MM:SS = czas absolutny w nagraniu, 2. połowa od 45:00
-      const DEFAULT_SECOND_HALF_START = 45 * 60;
-      if (videoSeconds >= DEFAULT_SECOND_HALF_START) {
-        const secondsIntoSecondHalf = videoSeconds - DEFAULT_SECOND_HALF_START;
-        const minute = Math.floor(secondsIntoSecondHalf / 60) + 46;
-        return Math.max(46, minute);
-      }
-      const minute = Math.floor(videoSeconds / 60) + 1;
-      return Math.max(1, Math.min(45, minute));
-    },
-    [matchInfo?.firstHalfStartTime, matchInfo?.secondHalfStartTime]
-  );
-
-  const matchMinuteFromVideoInput = useMemo(() => {
-    const rawSeconds = mmssToSeconds(videoTimeMMSS);
-    return calculateMatchMinuteFromVideoSeconds(rawSeconds);
-  }, [videoTimeMMSS, calculateMatchMinuteFromVideoSeconds]);
-
   // Inicjalizacja notatki przy otwarciu modalu lub zmianie akcji
   useEffect(() => {
     if (isOpen) {
@@ -543,8 +502,15 @@ const ActionModal: React.FC<ActionModalProps> = ({
   if (!isOpen) return null;
 
   const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isEditMode) return;
-    onMinuteChange(parseInt(e.target.value) || 0);
+    const raw = parseInt(e.target.value, 10);
+    if (Number.isNaN(raw)) {
+      onMinuteChange(0);
+      return;
+    }
+    const next = isSecondHalf
+      ? Math.max(46, Math.min(90, raw))
+      : Math.max(1, Math.min(45, raw));
+    onMinuteChange(next);
   };
 
   const handleVideoTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -734,7 +700,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
   };
 
   const handleSecondHalfToggle = (value: boolean) => {
-    if (isEditMode) return;
     onSecondHalfToggle(value);
     
     // Jeśli ustawiamy wartości automatycznie z wideo, nie zmieniajmy minuty
@@ -746,8 +711,8 @@ const ActionModal: React.FC<ActionModalProps> = ({
     if (value && actionMinute < 46) {
       onMinuteChange(46);
     }
-    // Jeśli włączamy pierwszą połowę, a minuta jest większa niż 65, ustawiamy na 45
-    else if (!value && actionMinute > 65) {
+    // Jeśli włączamy pierwszą połowę, a minuta jest większa niż 45, ustawiamy na 45
+    else if (!value && actionMinute > 45) {
       onMinuteChange(45);
     }
     
@@ -812,14 +777,13 @@ const ActionModal: React.FC<ActionModalProps> = ({
       }
     }
 
-    // W trybie edycji aktualizujemy minutę i połowę na podstawie bieżącego czasu z wideo
-    if (isEditMode && matchMinuteFromVideoInput > 0) {
-      const nextMinute = matchMinuteFromVideoInput;
-      const nextIsSecondHalf = nextMinute >= 46;
-      onMinuteChange(nextMinute);
-      onSecondHalfToggle(nextIsSecondHalf);
+    // W trybie edycji zapisujemy ręcznie ustawioną minutę i połowę, nie nadpisujemy ich czasem wideo.
+    if (isEditMode) {
+      const nextMinute = isSecondHalf
+        ? Math.max(46, Math.min(90, actionMinute || 46))
+        : Math.max(1, Math.min(45, actionMinute || 1));
       localStorage.setItem('tempEditedActionMinute', String(nextMinute));
-      localStorage.setItem('tempEditedActionIsSecondHalf', nextIsSecondHalf ? 'true' : 'false');
+      localStorage.setItem('tempEditedActionIsSecondHalf', isSecondHalf ? 'true' : 'false');
     }
 
     // Wywołaj funkcję zapisującą akcję, ale nie zamykaj modalu od razu
@@ -903,8 +867,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
                     type="button"
                     className={`${styles.halfButton} ${!isSecondHalf ? styles.activeHalf : ''}`}
                     onClick={() => handleSecondHalfToggle(false)}
-                    disabled={isEditMode}
-                    aria-disabled={isEditMode}
                   >
                     P1
                   </button>
@@ -912,8 +874,6 @@ const ActionModal: React.FC<ActionModalProps> = ({
                     type="button"
                     className={`${styles.halfButton} ${isSecondHalf ? styles.activeHalf : ''}`}
                     onClick={() => handleSecondHalfToggle(true)}
-                    disabled={isEditMode}
-                    aria-disabled={isEditMode}
                   >
                     P2
                   </button>
@@ -1297,9 +1257,18 @@ const ActionModal: React.FC<ActionModalProps> = ({
                   className={styles.videoTimeField}
                   maxLength={6}
                 />
-                <span className={styles.matchMinuteInfo}>
-                  {matchMinuteFromVideoInput}'
-                </span>
+                <input
+                  id="action-minute-input"
+                  type="number"
+                  min={isSecondHalf ? 46 : 1}
+                  max={isSecondHalf ? 90 : 45}
+                  step="1"
+                  value={actionMinute || ""}
+                  onChange={handleMinuteChange}
+                  className={styles.videoTimeField}
+                  aria-label="Minuta akcji"
+                  title="Ręczna minuta zapisywana w akcji"
+                />
               </div>
             </div>
             

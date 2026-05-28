@@ -116,8 +116,8 @@
   background: white;
   border-radius: 12px;
   padding: 24px;
-  min-width: 280px;
-  max-width: 400px;
+  width: calc(100% - 40px);
+  max-width: 420px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
   animation: modalIn 0.3s ease-out;
 }
@@ -133,43 +133,110 @@
   }
 }
 
-.regainLosesPopup h3 {
-  margin: 0 0 20px 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2937;
-  text-align: center;
-}
-
-.regainLosesPopupButtons {
+.regainLosesPopupBody {
   display: flex;
-  gap: 10px;
+  flex-direction: row;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
-.regainLosesPopupButton {
+.regainLosesPopupSection {
+  display: flex;
   flex: 1;
-  padding: 12px 20px;
-  border: 2px solid #3b82f6;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.regainLosesPopupSectionLoses {
+  background-color: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-top: 3px solid #dc2626;
+}
+
+.regainLosesPopupSectionRegain {
+  background-color: rgba(22, 163, 74, 0.06);
+  border: 1px solid rgba(22, 163, 74, 0.2);
+  border-top: 3px solid #16a34a;
+}
+
+.regainLosesPopupCategory {
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.regainLosesPopupSectionLoses .regainLosesPopupCategory {
+  color: #dc2626;
+}
+
+.regainLosesPopupSectionRegain .regainLosesPopupCategory {
+  color: #16a34a;
+}
+
+.regainLosesToggleRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.regainLosesToggleBtn {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #e0e0e0;
   border-radius: 8px;
-  background-color: #3b82f6;
-  color: white;
+  margin: 0;
+  background-color: #fff;
+  color: #4a5568;
   font-size: 14px;
   font-weight: 500;
+  font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
-.regainLosesPopupButton:hover {
-  background-color: #2563eb;
-  border-color: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+.regainLosesToggleBtnLoses:hover {
+  background-color: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.35);
+  color: #b91c1c;
 }
 
-.regainLosesPopupButton:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+.regainLosesToggleBtnRegain:hover {
+  background-color: rgba(22, 163, 74, 0.08);
+  border-color: rgba(22, 163, 74, 0.35);
+  color: #15803d;
+}
+
+.regainLosesToggleBtnLoses:focus-visible {
+  outline: 2px solid #dc2626;
+  outline-offset: 2px;
+}
+
+.regainLosesToggleBtnRegain:focus-visible {
+  outline: 2px solid #16a34a;
+  outline-offset: 2px;
+}
+
+.regainLosesToggleBtnLoses:active {
+  background-color: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.regainLosesToggleBtnRegain:active {
+  background-color: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
 }
 
 .regainLosesPopupCancel {
