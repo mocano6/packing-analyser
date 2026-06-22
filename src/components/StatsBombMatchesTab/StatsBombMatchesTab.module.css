@@ -1,0 +1,191 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.lead {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.tableFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tableFilterButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+}
+
+.tableFilterCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.tableFilterAll.tableFilterButtonActive {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.tableFilterWin.tableFilterButtonActive {
+  border-color: #16a34a;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.tableFilterDraw.tableFilterButtonActive {
+  border-color: #d97706;
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.tableFilterLoss.tableFilterButtonActive {
+  border-color: #dc2626;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.tableFilterButtonActive .tableFilterCount {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.matchRow {
+  cursor: pointer;
+}
+
+.matchRowWin {
+  background: #f0fdf4;
+}
+
+.matchRowDraw {
+  background: #fffbeb;
+}
+
+.matchRowLoss {
+  background: #fef2f2;
+}
+
+.matchRow:hover {
+  filter: brightness(0.97);
+}
+
+.matchRow:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+.matchRowSelected {
+  box-shadow: inset 0 0 0 2px #2563eb;
+}
+
+.matchRowSelected.matchRowWin {
+  background: #dcfce7;
+}
+
+.matchRowSelected.matchRowDraw {
+  background: #fef3c7;
+}
+
+.matchRowSelected.matchRowLoss {
+  background: #fee2e2;
+}
+
+.matchNumber {
+  font-weight: 700;
+  color: #1d4ed8;
+  text-align: center;
+  width: 40px;
+}
+
+.outcomeBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.badgeWin {
+  background: #bbf7d0;
+  color: #15803d;
+}
+
+.badgeDraw {
+  background: #fde68a;
+  color: #b45309;
+}
+
+.badgeLoss {
+  background: #fecaca;
+  color: #b91c1c;
+}
+
+.emptyTable {
+  text-align: center;
+  color: #64748b;
+  padding: 24px !important;
+}
+
+.medianSection {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 20px;
+  scroll-margin-top: 16px;
+}
+
+.medianHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.medianTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.medianSubtitle {
+  font-weight: 500;
+  color: #475569;
+  font-size: 14px;
+}
+
+.medianHint {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+@media (max-width: 720px) {
+  .medianHeader {
+    gap: 10px;
+  }
+}

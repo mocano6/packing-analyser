@@ -1,0 +1,55 @@
+.leaderRow {
+  background: #fffbeb;
+}
+
+.leaderCell {
+  font-weight: 600;
+  color: #b45309;
+}
+
+.tableWrapFull {
+  max-height: min(70vh, 720px);
+}
+
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.filterButton {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+}
+
+.filterButton:hover {
+  background: #f8fafc;
+}
+
+.filterButtonActive {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.searchInput {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  min-width: 200px;
+}
+
+.descCell {
+  max-width: 280px;
+  color: #64748b;
+  line-height: 1.35;
+  font-size: 11px;
+}

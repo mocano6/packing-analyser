@@ -1,0 +1,292 @@
+.reportRoot {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hint {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.summaryCard {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.summaryLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.summaryValue {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 4px;
+}
+
+.summarySub {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.phaseBannerGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.phaseBanner {
+  border-radius: 10px;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.phaseBannerAttack {
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+  border-color: #bfdbfe;
+}
+
+.phaseBannerDefense {
+  background: linear-gradient(135deg, #fff7ed 0%, #f8fafc 100%);
+  border-color: #fed7aa;
+}
+
+.phaseBannerTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 6px 0;
+}
+
+.phaseBannerText {
+  font-size: 12px;
+  color: #475569;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.sectionLead {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+.tableWrap {
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  max-height: 420px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.table th,
+.table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  font-weight: 600;
+  color: #475569;
+  z-index: 1;
+  white-space: nowrap;
+}
+
+.table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.metricLabel {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.metricClickable {
+  cursor: pointer;
+  color: #1d4ed8;
+  text-decoration: underline dotted rgba(37, 99, 235, 0.45);
+  text-underline-offset: 2px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+}
+
+.metricClickable:hover {
+  color: #1e40af;
+}
+
+.metricClickable:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.metricWithDef {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
+.interpretation {
+  max-width: 320px;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badgeAttack {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.badgeDefense {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.badgeGeneral {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.badgeStrength {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badgeWeakness {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.badgeNeutral {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.corrPosStrong {
+  background: #ecfdf5;
+  color: #047857;
+  font-weight: 600;
+}
+
+.corrNegStrong {
+  background: #fef2f2;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.corrNeutral {
+  color: #334155;
+}
+
+.splitColumns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.emptySection {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 0;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px dashed #e2e8f0;
+}
+
+.headAxisMy {
+  border-left: 3px solid #2563eb;
+}
+
+.headAxisOpp {
+  border-left: 3px solid #d97706;
+}
+
+.headAxisNeutral {
+  border-left: 3px solid #94a3b8;
+}
+
+.subTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 10px;
+}
+
+.subTab {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+}
+
+.subTab:hover {
+  background: #f8fafc;
+}
+
+.subTabActive {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
