@@ -14,6 +14,13 @@ import {
   buildOnPitchPlayersByMinuteIndex,
   getOnPitchPlayerIdsAtMinute,
 } from "./playerOnPitchMinutes";
+import { buildSuccessfulTeamRegainIds } from "./kpiRegainPostWindowSuccess";
+import {
+  bumpPlayerComparisonEventCountOnly,
+  bumpPlayerComparisonEventStat,
+  createEmptyPlayerComparisonEventStats,
+  type PlayerComparisonEventStatsMap,
+} from "./playerComparisonMetricEventStats";
 
 export type PlayerComparisonMode = "sum" | "per90";
 
@@ -61,7 +68,9 @@ export type PlayerComparisonMetricId =
   | "phaseP2Sender"
   | "phaseP2Receiver"
   | "phaseP3Sender"
-  | "phaseP3Receiver";
+  | "phaseP3Receiver"
+  | "defenseShotLine"
+  | "defenseShotBlockXg";
 
 /** Metryki widoczne w jednym wyborze (ranking) — rola wybierana osobno tam, gdzie ma sens. */
 export type PlayerComparisonMetricFamily =
@@ -368,6 +377,20 @@ export const PLAYER_COMPARISON_METRICS: PlayerComparisonMetricDefinition[] = [
   { id: "phaseP2Receiver", label: "P2 (przyjęcie)", shortLabel: "P2 prz.", direction: "higher", fractionDigits: 0 },
   { id: "phaseP3Sender", label: "P3 (podanie)", shortLabel: "P3 pod.", direction: "higher", fractionDigits: 0 },
   { id: "phaseP3Receiver", label: "P3 (przyjęcie)", shortLabel: "P3 prz.", direction: "higher", fractionDigits: 0 },
+  {
+    id: "defenseShotLine",
+    label: "Na linii strzału (obrona)",
+    shortLabel: "Linia strz.",
+    direction: "higher",
+    fractionDigits: 0,
+  },
+  {
+    id: "defenseShotBlockXg",
+    label: "xG zablokowanych strzałów (obrona)",
+    shortLabel: "xG bloków",
+    direction: "higher",
+    fractionDigits: 2,
+  },
 ];
 
 /** Etykiety osi / kart — dla faz P1–P3 zależą od wybranej roli (podanie vs przyjęcie). */
@@ -546,6 +569,8 @@ export type PlayerComparisonRow = {
   matchesPlayed: number;
   raw: PlayerComparisonRawMetrics;
   values: PlayerComparisonRawMetrics;
+  /** Liczniki zdarzeń / skutecznych zdarzeń stojących za metrykami (nie skalują się per 90). */
+  eventStats: PlayerComparisonEventStatsMap;
   hasMinutes: boolean;
 };
 
@@ -600,6 +625,8 @@ const emptyMetrics = (): PlayerComparisonRawMetrics => ({
   phaseP2Receiver: 0,
   phaseP3Sender: 0,
   phaseP3Receiver: 0,
+  defenseShotLine: 0,
+  defenseShotBlockXg: 0,
 });
 
 const toNumber = (value: unknown): number => {
@@ -634,6 +661,49 @@ const addValue = (
   if (!row) return;
   row.raw[metricId] += value;
 };
+
+const bumpEventForPlayer = (
+  rowsByPlayerId: Map<string, PlayerComparisonRow>,
+  playerId: string | undefined,
+  metricId: PlayerComparisonMetricId,
+  isSuccessful: boolean,
+  count = 1,
+): void => {
+  const id = String(playerId ?? "").trim();
+  if (!id || count <= 0) return;
+  const row = rowsByPlayerId.get(id);
+  if (!row) return;
+  bumpPlayerComparisonEventStat(row.eventStats, metricId, isSuccessful, count);
+};
+
+const bumpEventCountForPlayer = (
+  rowsByPlayerId: Map<string, PlayerComparisonRow>,
+  playerId: string | undefined,
+  metricId: PlayerComparisonMetricId,
+  count = 1,
+): void => {
+  const id = String(playerId ?? "").trim();
+  if (!id || count <= 0) return;
+  const row = rowsByPlayerId.get(id);
+  if (!row) return;
+  bumpPlayerComparisonEventCountOnly(row.eventStats, metricId, count);
+};
+
+const bumpOnPitchExposureForPlayers = (
+  rowsByPlayerId: Map<string, PlayerComparisonRow>,
+  onPitchByMinute: Map<number, Set<string>>,
+  minute: number,
+  metricId: PlayerComparisonMetricId,
+): void => {
+  const players = getOnPitchPlayerIdsAtMinute(onPitchByMinute, minute);
+  if (!players) return;
+  for (const playerId of players) {
+    bumpEventCountForPlayer(rowsByPlayerId, playerId, metricId);
+  }
+};
+
+const isSuccessfulAttackShot = (shot: Shot): boolean =>
+  shot.isGoal === true || shot.shotType === "goal" || shot.shotType === "on_target";
 
 const addSplitValue = (
   rowsByPlayerId: Map<string, PlayerComparisonRow>,
@@ -702,7 +772,11 @@ const bumpPhasePackingParticipation = (
   for (const [flag, senderMetric, receiverMetric] of triples) {
     if (action[flag] !== true) continue;
     addValue(rowsByPlayerId, action.senderId, senderMetric, 1);
-    if (!isDribble) addValue(rowsByPlayerId, action.receiverId, receiverMetric, 1);
+    bumpEventCountForPlayer(rowsByPlayerId, action.senderId, senderMetric);
+    if (!isDribble) {
+      addValue(rowsByPlayerId, action.receiverId, receiverMetric, 1);
+      bumpEventCountForPlayer(rowsByPlayerId, action.receiverId, receiverMetric);
+    }
   }
 };
 
@@ -820,6 +894,8 @@ const normalizeValues = (
     phaseP2Receiver: raw.phaseP2Receiver * factor,
     phaseP3Sender: raw.phaseP3Sender * factor,
     phaseP3Receiver: raw.phaseP3Receiver * factor,
+    defenseShotLine: raw.defenseShotLine * factor,
+    defenseShotBlockXg: raw.defenseShotBlockXg * factor,
   };
 };
 
@@ -857,11 +933,13 @@ export function buildPlayerComparisonRows(players: Player[], matches: TeamInfo[]
       matchesPlayed: 0,
       raw: emptyMetrics(),
       values: emptyMetrics(),
+      eventStats: createEmptyPlayerComparisonEventStats(),
       hasMinutes: false,
     });
   }
 
   for (const match of matches) {
+    const successfulRegainIds = buildSuccessfulTeamRegainIds(match);
     const onPitchByMinute = buildOnPitchPlayersByMinuteIndex(
       match.playerMinutes,
       new Set(rowsByPlayerId.keys()),
@@ -879,8 +957,11 @@ export function buildPlayerComparisonRows(players: Player[], matches: TeamInfo[]
       if (!action || action.mode === "defense" || !isTeamAction(action, match)) continue;
       const metrics = packingActionMetrics(action);
       addSplitValue(rowsByPlayerId, action.senderId, action.receiverId, "packing", metrics.packPts);
+      bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "packingSender");
+      bumpEventCountForPlayer(rowsByPlayerId, action.receiverId, "packingReceiver");
       if (isDribblePackingAction(action)) {
         addValue(rowsByPlayerId, action.senderId, "packingDribble", metrics.packPts);
+        bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "packingDribble");
       } else {
         addValue(rowsByPlayerId, action.senderId, "packingSender", metrics.packPts);
         addValue(rowsByPlayerId, action.receiverId, "packingReceiver", metrics.packPts);
@@ -888,12 +969,18 @@ export function buildPlayerComparisonRows(players: Player[], matches: TeamInfo[]
       addSplitValue(rowsByPlayerId, action.senderId, action.receiverId, "pxt", metrics.pxt);
       addValue(rowsByPlayerId, action.senderId, "pxtSender", metrics.pxt);
       addValue(rowsByPlayerId, action.receiverId, "pxtReceiver", metrics.pxt);
+      bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "pxtSender");
+      bumpEventCountForPlayer(rowsByPlayerId, action.receiverId, "pxtReceiver");
       addSplitValue(rowsByPlayerId, action.senderId, action.receiverId, "xt", metrics.xtDelta);
       addValue(rowsByPlayerId, action.senderId, "xtSender", metrics.xtDelta);
       addValue(rowsByPlayerId, action.receiverId, "xtReceiver", metrics.xtDelta);
+      bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "xtSender");
+      bumpEventCountForPlayer(rowsByPlayerId, action.receiverId, "xtReceiver");
       if (isDribblePackingAction(action)) {
         addValue(rowsByPlayerId, action.senderId, "pxtDribble", metrics.pxt);
         addValue(rowsByPlayerId, action.senderId, "xtDribble", metrics.xtDelta);
+        bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "pxtDribble");
+        bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "xtDribble");
       }
       bumpPhasePackingParticipation(rowsByPlayerId, action);
     }
@@ -909,11 +996,20 @@ export function buildPlayerComparisonRows(players: Player[], matches: TeamInfo[]
           "xgOnPitchAttack",
           toNumber(shot.xG),
         );
+        bumpOnPitchExposureForPlayers(
+          rowsByPlayerId,
+          onPitchByMinute,
+          shotMinute,
+          "xgOnPitchAttack",
+        );
         const playerId = String(shot.playerId ?? "").trim();
+        const shotOk = isSuccessfulAttackShot(shot);
         addValue(rowsByPlayerId, shot.playerId, "shots", 1);
+        bumpEventForPlayer(rowsByPlayerId, shot.playerId, "shots", shotOk);
         const isPenalty = shotIsPenalty(shot);
         if (!isPenalty) {
           addValue(rowsByPlayerId, shot.playerId, "xg", toNumber(shot.xG));
+          bumpEventForPlayer(rowsByPlayerId, shot.playerId, "xg", shotOk);
           if (playerId) {
             const np = nonPenaltyShootingByPlayerId.get(playerId);
             if (np) np.shots += 1;
@@ -921,6 +1017,7 @@ export function buildPlayerComparisonRows(players: Player[], matches: TeamInfo[]
         }
         if (shot.isGoal === true && shot.isOwnGoal !== true) {
           addValue(rowsByPlayerId, shot.playerId, "goals", 1);
+          bumpEventForPlayer(rowsByPlayerId, shot.playerId, "goals", true);
           if (!isPenalty && playerId) {
             const np = nonPenaltyShootingByPlayerId.get(playerId);
             if (np) np.goals += 1;
@@ -934,6 +1031,24 @@ export function buildPlayerComparisonRows(players: Player[], matches: TeamInfo[]
           "xgOnPitchDefense",
           toNumber(shot.xG),
         );
+        bumpOnPitchExposureForPlayers(
+          rowsByPlayerId,
+          onPitchByMinute,
+          shotMinute,
+          "xgOnPitchDefense",
+        );
+        const defenseShotBlocked = shot.shotType === "blocked";
+        for (const playerId of shot.linePlayers ?? []) {
+          addValue(rowsByPlayerId, playerId, "defenseShotLine", 1);
+          bumpEventForPlayer(rowsByPlayerId, playerId, "defenseShotLine", defenseShotBlocked);
+        }
+        if (defenseShotBlocked) {
+          const blockedXg = toNumber(shot.xG);
+          for (const playerId of shot.blockingPlayers ?? []) {
+            addValue(rowsByPlayerId, playerId, "defenseShotBlockXg", blockedXg);
+            bumpEventCountForPlayer(rowsByPlayerId, playerId, "defenseShotBlockXg");
+          }
+        }
       }
     }
 
@@ -942,51 +1057,84 @@ export function buildPlayerComparisonRows(players: Player[], matches: TeamInfo[]
       const entryMinute = toNumber(entry.minute);
       if (isTeamPKEntry(entry, match)) {
         addValueToOnPitchPlayers(rowsByPlayerId, onPitchByMinute, entryMinute, "pkEntriesOnPitchAttack", 1);
+        bumpOnPitchExposureForPlayers(
+          rowsByPlayerId,
+          onPitchByMinute,
+          entryMinute,
+          "pkEntriesOnPitchAttack",
+        );
         if (entry.entryType === "dribble") {
           addValue(rowsByPlayerId, entry.senderId, "pkEntries", 1);
           addValue(rowsByPlayerId, entry.senderId, "pkEntriesDribble", 1);
+          bumpEventCountForPlayer(rowsByPlayerId, entry.senderId, "pkEntriesDribble");
         } else {
           addSplitValue(rowsByPlayerId, entry.senderId, entry.receiverId, "pkEntries", 1);
           addValue(rowsByPlayerId, entry.senderId, "pkEntriesSender", 1);
           addValue(rowsByPlayerId, entry.receiverId, "pkEntriesReceiver", 1);
+          bumpEventCountForPlayer(rowsByPlayerId, entry.senderId, "pkEntriesSender");
+          bumpEventCountForPlayer(rowsByPlayerId, entry.receiverId, "pkEntriesReceiver");
         }
       } else if (isTeamPKEntryDefense(entry)) {
         addValueToOnPitchPlayers(rowsByPlayerId, onPitchByMinute, entryMinute, "pkEntriesOnPitchDefense", 1);
+        bumpOnPitchExposureForPlayers(
+          rowsByPlayerId,
+          onPitchByMinute,
+          entryMinute,
+          "pkEntriesOnPitchDefense",
+        );
       }
     }
 
     for (const action of match.actions_regain ?? []) {
       if (!action || !isTeamAction(action, match)) continue;
+      const regainId = String(action.id ?? "").trim();
+      const regainSuccessful = regainId.length > 0 && successfulRegainIds.has(regainId);
       addValue(rowsByPlayerId, action.senderId, "regains", 1);
+      bumpEventForPlayer(rowsByPlayerId, action.senderId, "regains", regainSuccessful);
       if (isRegainOnOwnHalfForMap(action)) {
         addValue(rowsByPlayerId, action.senderId, "regainsOwnHalf", 1);
+        bumpEventForPlayer(rowsByPlayerId, action.senderId, "regainsOwnHalf", regainSuccessful);
       }
       if (isRegainOnOpponentHalfForMap(action)) {
         addValue(rowsByPlayerId, action.senderId, "regainsOpponentHalf", 1);
+        bumpEventForPlayer(rowsByPlayerId, action.senderId, "regainsOpponentHalf", regainSuccessful);
       }
       const regainAttackXt = getRegainAttackXtValue(action);
       const regainDefenseXt = getRegainDefenseXtValue(action);
       addValue(rowsByPlayerId, action.senderId, "regainsXtAttack", regainAttackXt);
       addValue(rowsByPlayerId, action.senderId, "regainsXtDefense", regainDefenseXt);
       addValue(rowsByPlayerId, action.senderId, "regainsXt", Math.max(0, regainAttackXt - regainDefenseXt));
+      bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "regainsXt");
+      if (isRegainOnOwnHalfForMap(action)) {
+        bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "regainsXtDefense");
+      }
+      if (isRegainOnOpponentHalfForMap(action)) {
+        bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "regainsXtAttack");
+      }
     }
 
     for (const action of match.actions_loses ?? []) {
       if (!action || action.isAut === true || !isTeamAction(action, match)) continue;
       addValue(rowsByPlayerId, action.senderId, "loses", 1);
+      bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "loses");
       if (isLoseOnOwnHalfForMap(action)) {
         addValue(rowsByPlayerId, action.senderId, "losesOwnHalf", 1);
+        bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "losesOwnHalf");
       }
       if (isLoseOnOpponentHalfForMap(action)) {
         addValue(rowsByPlayerId, action.senderId, "losesOpponentHalf", 1);
+        bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "losesOpponentHalf");
       }
       const loseZoneXt = getLosesZoneXtValue(action);
       addValue(rowsByPlayerId, action.senderId, "losesXt", getLosesXtValue(action));
+      bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "losesXt");
       if (isLoseOnOwnHalfForMap(action)) {
         addValue(rowsByPlayerId, action.senderId, "losesXtDefense", loseZoneXt);
+        bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "losesXtDefense");
       }
       if (isLoseOnOpponentHalfForMap(action)) {
         addValue(rowsByPlayerId, action.senderId, "losesXtAttack", loseZoneXt);
+        bumpEventCountForPlayer(rowsByPlayerId, action.senderId, "losesXtAttack");
       }
     }
   }

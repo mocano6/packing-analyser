@@ -315,34 +315,35 @@
 
 .cancelButton {
   padding: 10px 20px;
-  background-color: #f3f4f6;
-  color: #374151;
-  border: none;
-  border-radius: 6px;
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
 }
 
 .cancelButton:hover {
-  background-color: #e5e7eb;
+  background-color: var(--surface-hover);
+  border-color: var(--text-muted);
 }
 
 .saveButton {
   padding: 10px 20px;
-  background-color: #2196f3;
-  color: white;
-  border: none;
-  border-radius: 6px;
+  background-color: var(--color-primary);
+  color: var(--text-on-primary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color 0.18s ease;
 }
 
 .saveButton:hover {
-  background-color: #1976d2;
+  background-color: var(--color-primary-hover);
 }
 
 .saveButton:disabled,

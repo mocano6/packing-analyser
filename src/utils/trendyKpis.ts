@@ -24,6 +24,26 @@ export const DEFAULT_TRENDY_KPI_DEFINITIONS: TrendyKpiDefinition[] = [
   { id: "pxt", label: "PxT", target: 2, direction: "higher", unit: "number", active: true, order: 40 },
   { id: "pxt_p2p3", label: "PxT P2/P3", target: 25, direction: "higher", unit: "number", active: true, order: 50 },
   { id: "regains_opp_half", label: "Przechwyty na połowie przeciwnika", target: 27, direction: "higher", unit: "number", active: true, order: 60 },
+  {
+    id: "regains_tilt",
+    label: "Przechwyty",
+    target: 0,
+    direction: "higher",
+    unit: "number",
+    active: true,
+    order: 61,
+    description: "Całe boisko — profil xT przechwytów w ataku i obronie",
+  },
+  {
+    id: "loses_tilt",
+    label: "Straty",
+    target: 0,
+    direction: "lower",
+    unit: "number",
+    active: true,
+    order: 64,
+    description: "Całe boisko — profil xT strat w ataku i obronie",
+  },
   { id: "loses_pm_area", label: "PM AREA STRATY", target: 6, direction: "lower", unit: "number", active: true, order: 65 },
   { id: "possession_pct", label: "Posiadanie", target: 55, direction: "higher", unit: "percent", active: true, order: 70 },
   { id: "dead_time_pct", label: "Czas martwy", target: 45, direction: "higher", unit: "percent", active: true, order: 80 },
@@ -535,6 +555,10 @@ export const calculateTrendyKpiValue = (match: TeamInfo, kpiId: string): number 
       return getP2P3Count(match);
     case "regains_opp_half":
       return getRegainsInOpponentHalf(match);
+    case "regains_tilt":
+      return getTeamRegainsFullPitchCountForMatch(match);
+    case "loses_tilt":
+      return getTeamLosesFullPitchCountForMatch(match);
     case "loses_pm_area":
       return getLosesInPMAreaCount(match);
     case "possession_pct":

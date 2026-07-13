@@ -4,43 +4,19 @@ import { isRegainInOpponentHalfZone } from "./trendyKpis";
 import { normalizeWiedzaPitchZone } from "./wiedzaZoneHeatmaps";
 
 export type TrendyMapSide = "attack" | "defense";
+export type TrendyMapSideFilter = TrendyMapSide | "all";
+
+export function shotMatchesMapSideFilter(shot: Shot, side: TrendyMapSideFilter): boolean {
+  if (side === "all") return true;
+  return (shot.teamContext ?? "attack") === side;
+}
+
+export function filterShotsByMapSide<T extends Shot>(shots: T[], side: TrendyMapSideFilter): T[] {
+  if (side === "all") return shots;
+  return shots.filter((shot) => shotMatchesMapSideFilter(shot, side));
+}
 
 export type TrendyXgMapBodyPartFilter = "all" | "foot" | "foot_left" | "foot_right" | "head" | "other";
-
-export type TrendyXgMapFilters = {
-  bodyPart: TrendyXgMapBodyPartFilter;
-  sfg: boolean;
-  counter: boolean;
-  regain: boolean;
-  goal: boolean;
-  blocked: boolean;
-  onTarget: boolean;
-  /** Dolna granica xG (włącznie); null = bez dolnego limitu. */
-  xgMin: number | null;
-  /** Górna granica xG (włącznie); null = bez górnego limitu. */
-  xgMax: number | null;
-};
-
-export type TrendyPkEntryTypeFilter = "all" | "pass" | "dribble" | "sfg";
-
-export type TrendyPkMapFilters = {
-  entryType: TrendyPkEntryTypeFilter;
-  onlyRegain: boolean;
-  onlyShot: boolean;
-  onlyGoal: boolean;
-};
-
-export const DEFAULT_TRENDY_XG_MAP_FILTERS: TrendyXgMapFilters = {
-  bodyPart: "all",
-  sfg: true,
-  counter: true,
-  regain: true,
-  goal: true,
-  blocked: true,
-  onTarget: true,
-  xgMin: null,
-  xgMax: null,
-};
 
 /** Wartość xG strzału do filtrów mapy (brak / NaN → 0). Legacy dane bywają stringiem ("0,12"). */
 export function getShotXgForMapFilter(shot: Shot): number {
@@ -75,21 +51,6 @@ export function shotMatchesTrendyXgRange(
   if (hi !== null && xg > hi) return false;
   return true;
 }
-
-export const DEFAULT_TRENDY_PK_MAP_FILTERS: TrendyPkMapFilters = {
-  entryType: "all",
-  onlyRegain: false,
-  onlyShot: false,
-  onlyGoal: false,
-};
-
-const SET_PIECE_ACTION_TYPES = new Set([
-  "corner",
-  "free_kick",
-  "direct_free_kick",
-  "penalty",
-  "throw_in",
-]);
 
 export function isTeamAttackShot(match: TeamInfo, shot: Shot): boolean {
   return getShotMapSide(match, shot) === "attack";
@@ -168,97 +129,6 @@ export function collectTeamAttackShotsFromMatches(matches: TeamInfo[]): Shot[] {
 /** @deprecated Użyj collectMapPkEntriesFromMatches(matches, "attack") */
 export function collectTeamAttackPkEntriesFromMatches(matches: TeamInfo[]): PKEntry[] {
   return collectMapPkEntriesFromMatches(matches, "attack");
-}
-
-function isShotSetPiece(shot: Shot): boolean {
-  return (
-    (shot as { actionCategory?: string }).actionCategory === "sfg" ||
-    Boolean(shot.actionType && SET_PIECE_ACTION_TYPES.has(shot.actionType))
-  );
-}
-
-function isShotCounter(shot: Shot): boolean {
-  return shot.actionType === "counter";
-}
-
-/** Filtr mapy strzałów — ta sama logika co Statystyki zespołu + filtr kontry. */
-export function filterShotsForTrendyMap(shots: Shot[], filters: TrendyXgMapFilters): Shot[] {
-  return shots.filter((shot) => {
-    if (!shotMatchesTrendyXgRange(shot, filters.xgMin, filters.xgMax)) {
-      return false;
-    }
-
-    if (filters.bodyPart !== "all") {
-      const bodyPart = filters.bodyPart;
-      const shotBodyPart = shot.bodyPart;
-      if (bodyPart === "foot") {
-        if (shotBodyPart !== "foot" && shotBodyPart !== "foot_left" && shotBodyPart !== "foot_right") {
-          return false;
-        }
-      } else if (shotBodyPart !== bodyPart) {
-        return false;
-      }
-    }
-
-    const allTypeFiltersOff =
-      !filters.sfg &&
-      !filters.counter &&
-      !filters.regain &&
-      !filters.goal &&
-      !filters.blocked &&
-      !filters.onTarget;
-
-    if (allTypeFiltersOff) return true;
-
-    let matchesAnyFilter = false;
-
-    if (filters.sfg && isShotSetPiece(shot)) {
-      matchesAnyFilter = true;
-    }
-
-    if (filters.counter && isShotCounter(shot)) {
-      matchesAnyFilter = true;
-    }
-
-    if (filters.regain && shot.actionType === "regain") {
-      matchesAnyFilter = true;
-    }
-
-    if (filters.goal && shot.isGoal) {
-      matchesAnyFilter = true;
-    }
-
-    if (filters.blocked && shot.shotType === "blocked") {
-      matchesAnyFilter = true;
-    }
-
-    if (filters.onTarget && (shot.shotType === "on_target" || shot.shotType === "goal")) {
-      matchesAnyFilter = true;
-    }
-
-    if (!matchesAnyFilter) {
-      const isOffTarget = shot.shotType === "off_target";
-      const isOpenPlay = shot.actionType === "open_play";
-      const isOtherType = isOffTarget || (isOpenPlay && shot.actionType !== "regain");
-      if (isOtherType && allTypeFiltersOff) return true;
-      return false;
-    }
-
-    return true;
-  });
-}
-
-/** Filtr mapy wejść w PK — jak Statystyki zespołu (typ + flagi wyniku). */
-export function filterPkEntriesForTrendyMap(entries: PKEntry[], filters: TrendyPkMapFilters): PKEntry[] {
-  return entries.filter((entry) => {
-    if (filters.entryType !== "all" && (entry.entryType || "pass") !== filters.entryType) {
-      return false;
-    }
-    if (filters.onlyRegain && !entry.isRegain) return false;
-    if (filters.onlyShot && !entry.isShot) return false;
-    if (filters.onlyGoal && !entry.isGoal) return false;
-    return true;
-  });
 }
 
 /** Przechwyty naszego zespołu na połowie przeciwnika — jak KPI regains_opp_half. */

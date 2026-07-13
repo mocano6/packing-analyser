@@ -1,0 +1,79 @@
+.viewportWrap {
+  position: relative;
+  width: 100%;
+}
+
+.viewport {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #f1f5f9;
+  touch-action: none;
+  user-select: none;
+}
+
+.viewport.pannable {
+  cursor: grab;
+}
+
+.viewport.pannable:active {
+  cursor: grabbing;
+}
+
+.content {
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.zoomControls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
+}
+
+.zoomBtn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.zoomBtn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.zoomBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
+}
+
+.zoomLevel {
+  min-width: 44px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
+  padding: 0 4px;
+}
+
+.zoomHint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+}

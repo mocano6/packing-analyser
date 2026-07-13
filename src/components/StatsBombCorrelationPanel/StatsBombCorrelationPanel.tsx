@@ -3,8 +3,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { StatsBombMatchRow, StatsBombSquadPlayerRow } from "@/utils/statsbombCsvParser";
 import { buildStatsBombCorrelation, type StatsBombMetric } from "@/utils/statsbombCorrelation";
+import StatsBombCorrelationNetwork from "@/components/StatsBombCorrelationNetwork/StatsBombCorrelationNetwork";
 import StatsBombPlayerMetricShareModal from "@/components/StatsBombPlayerMetricShareModal/StatsBombPlayerMetricShareModal";
-import { canBuildPlayerMetricShare } from "@/utils/statsBombPlayerMetricShare";
+import { canOpenPlayerMetricShareModal } from "@/utils/statsBombPlayerMetricShare";
 import styles from "@/components/WiedzaGoalsXgWeights/WiedzaGoalsXgWeights.module.css";
 import panelStyles from "./StatsBombCorrelationPanel.module.css";
 import { correlationAxisHeadClass } from "@/utils/correlationMatrixAxis";
@@ -26,6 +27,7 @@ export type StatsBombCorrelationPanelProps = {
 };
 
 type CorrelationRow = { metric: StatsBombMetric; r: number };
+type CorrelationViewTab = "list" | "network";
 
 function defaultSectionSort(): Record<CorrelationSectionKind, CorrelationListSort> {
   return {
@@ -64,6 +66,7 @@ export default function StatsBombCorrelationPanel({
   scopeHint,
 }: StatsBombCorrelationPanelProps) {
   const [referenceMetricId, setReferenceMetricId] = useState("sb_gd");
+  const [viewTab, setViewTab] = useState<CorrelationViewTab>("list");
   const [shareMetricLabel, setShareMetricLabel] = useState<string | null>(null);
   const [shareContextNote, setShareContextNote] = useState<string | undefined>();
   const [rListSort, setRListSort] = useState<Record<CorrelationSectionKind, CorrelationListSort>>(
@@ -123,9 +126,14 @@ export default function StatsBombCorrelationPanel({
     setReferenceMetricId(metricId);
   }, []);
 
+  const exploreMetricNetwork = useCallback((metricId: string) => {
+    setReferenceMetricId(metricId);
+    setViewTab("network");
+  }, []);
+
   const openShareModal = useCallback(
     (metric: StatsBombMetric, r: number, referenceLabel: string) => {
-      if (!canBuildPlayerMetricShare(squadPlayers, metric.label)) return;
+      if (!canOpenPlayerMetricShareModal(squadPlayers, metric.label)) return;
       setShareMetricLabel(metric.label);
       setShareContextNote(`Korelacja z ${referenceLabel}: r=${r.toFixed(3)}.`);
     },
@@ -150,7 +158,7 @@ export default function StatsBombCorrelationPanel({
         podkreśleniem kropkowanym mają definicję — najedź kursorem.
         Kolory: r ≥ 0,36 zielono, r ≤ −0,36 czerwono. Kliknij nagłówek kolumny r, aby przełączyć sortowanie
         rosnąco / malejąco (domyślnie najsilniejsze |r| na górze). Kliknij wiersz korelacji, aby ustawić
-        metrykę referencyjną.
+        metrykę referencyjną i otworzyć sieć powiązań w podzakładce „Sieć korelacji”.
         {showPlayerShareColumn
           ? " Ikona zawodników po prawej otwiera udział w składzie (Squad STATS)."
           : ""}
@@ -186,6 +194,35 @@ export default function StatsBombCorrelationPanel({
             Definicje: glossary raportu Wyscout/StatsBomb (SSA Jagiellonia) + nazewnictwo MatchStats CSV.
             Opisane metryki: {definedCount} / {data.metrics.length}.
           </p>
+          <div className={panelStyles.subTabs} role="tablist" aria-label="Widok korelacji StatsBomb">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewTab === "list"}
+              className={`${panelStyles.subTab} ${viewTab === "list" ? panelStyles.subTabActive : ""}`}
+              onClick={() => setViewTab("list")}
+            >
+              Lista korelacji
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewTab === "network"}
+              className={`${panelStyles.subTab} ${viewTab === "network" ? panelStyles.subTabActive : ""}`}
+              onClick={() => setViewTab("network")}
+            >
+              Sieć korelacji
+            </button>
+          </div>
+          {viewTab === "network" && data ? (
+            <StatsBombCorrelationNetwork
+              data={data}
+              rootMetricId={display.selectedReference.id}
+              rootMetricLabel={display.selectedReference.label}
+              onRootMetricChange={selectMetricAsReference}
+            />
+          ) : null}
+          {viewTab === "list" ? (
           <div className={styles.correlationColumns}>
             {(
               [
@@ -246,18 +283,18 @@ export default function StatsBombCorrelationPanel({
                       section.rows.map(({ metric, r }) => {
                         const shareable =
                           showPlayerShareColumn &&
-                          canBuildPlayerMetricShare(squadPlayers, metric.label);
+                          canOpenPlayerMetricShareModal(squadPlayers, metric.label);
                         return (
                         <tr
                           key={`${display.selectedReference.id}-${metric.id}-${metric.label}`}
                           className={styles.clickableCorrRow}
                           tabIndex={0}
-                          aria-label={`Ustaw ${metric.label} jako metrykę referencyjną`}
-                          onClick={() => selectMetricAsReference(metric.id)}
+                          aria-label={`Ustaw ${metric.label} jako metrykę referencyjną i pokaż sieć korelacji`}
+                          onClick={() => exploreMetricNetwork(metric.id)}
                           onKeyDown={(event) => {
                             if (event.key === "Enter" || event.key === " ") {
                               event.preventDefault();
-                              selectMetricAsReference(metric.id);
+                              exploreMetricNetwork(metric.id);
                             }
                           }}
                         >
@@ -303,6 +340,7 @@ export default function StatsBombCorrelationPanel({
             );
             })}
           </div>
+          ) : null}
           <StatsBombPlayerMetricShareModal
             isOpen={shareMetricLabel !== null}
             metricLabel={shareMetricLabel}

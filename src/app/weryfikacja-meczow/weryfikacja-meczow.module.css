@@ -154,9 +154,9 @@
 
 .select {
   padding: 8px 12px;
-  border: 2px solid #e2e8f0;
-  border-radius: 6px;
-  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
   font-size: 14px;
   color: #2d3748;
   transition: border-color 0.2s ease;
@@ -164,8 +164,8 @@
 
 .select:focus {
   outline: none;
-  border-color: #3182ce;
-  box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
 }
 
 .dropdownContainer {

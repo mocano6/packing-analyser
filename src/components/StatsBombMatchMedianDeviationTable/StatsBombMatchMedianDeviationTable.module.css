@@ -1,0 +1,74 @@
+.deviationSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.deviationHint {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.deviationTableWrap {
+  max-height: 540px;
+}
+
+.deviationSortHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.deviationSortHead:hover {
+  color: #2563eb;
+}
+
+.deviationSortHeadActive {
+  color: #1d4ed8;
+}
+
+.deviationSortIndicator {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.deviationSortHeadActive .deviationSortIndicator {
+  color: #2563eb;
+}
+
+.deviationPositive {
+  color: #15803d;
+}
+
+.deviationNegative {
+  color: #b91c1c;
+}
+
+.deviationBarCell {
+  min-width: 72px;
+  padding-left: 8px !important;
+}
+
+.deviationBarTrack {
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.deviationBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, #93c5fd, #2563eb);
+  border-radius: 3px;
+  min-width: 2px;
+}

@@ -37,7 +37,7 @@
   font-size: 22px;
   font-weight: 600;
   line-height: 1;
-  background-color: #3b82f6;
+  background-color: var(--color-primary);
   color: white;
   border: none;
   border-radius: 50%;
@@ -49,7 +49,7 @@
 }
 
 .openDataButton:hover {
-  background-color: #2563eb;
+  background-color: var(--color-primary-hover);
 }
 
 /* Zakładki */
@@ -104,15 +104,15 @@
 .uploadButton {
   display: inline-block;
   padding: 10px 20px;
-  background-color: #3b82f6;
+  background-color: var(--color-primary);
   color: white;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-weight: 500;
   transition: background-color 0.2s;
 }
 
 .uploadButton:hover {
-  background-color: #2563eb;
+  background-color: var(--color-primary-hover);
 }
 
 .clearButton {
@@ -592,8 +592,8 @@
 
 .select:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
 }
 
 .saveButton {
@@ -720,7 +720,7 @@
 
 .refreshButton {
   padding: 8px 16px;
-  background-color: #3b82f6;
+  background-color: var(--color-primary);
   color: white;
   border: none;
   border-radius: 6px;
@@ -731,7 +731,7 @@
 }
 
 .refreshButton:hover:not(:disabled) {
-  background-color: #2563eb;
+  background-color: var(--color-primary-hover);
 }
 
 .refreshButton:disabled {

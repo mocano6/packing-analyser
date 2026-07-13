@@ -153,4 +153,59 @@ function testMergeWhenSenderIdIsDocumentReference() {
 
 testMergeWhenSenderIdIsDocumentReference();
 
+function assertNoUndefinedInValue(val: unknown, path = "root"): void {
+  if (val === undefined) {
+    throw new Error(`undefined at ${path}`);
+  }
+  if (Array.isArray(val)) {
+    val.forEach((item, i) => assertNoUndefinedInValue(item, `${path}[${i}]`));
+    return;
+  }
+  if (val !== null && typeof val === "object") {
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      assertNoUndefinedInValue(v, `${path}.${k}`);
+    }
+  }
+}
+
+/** Akcja bez receiverId (undefined w obiekcie) — update do Firestore nie może zawierać undefined. */
+const docSparseReceiver: Record<string, unknown> = {
+  actions_packing: [
+    {
+      id: "sparse-1",
+      matchId: "m1",
+      teamId: "t1",
+      minute: 10,
+      senderId: "dup-a",
+      receiverId: undefined,
+      actionType: "pass",
+      isSecondHalf: false,
+      senderName: "Stary",
+      receiverNumber: undefined,
+    },
+  ],
+  shots: [
+    {
+      id: "s-sparse",
+      playerId: "dup-a",
+      assistantId: undefined,
+      minute: 1,
+      xG: 0.05,
+      isGoal: false,
+      matchId: "m1",
+      timestamp: 1,
+      shotType: "on_target",
+      teamContext: "attack",
+      teamId: "t1",
+    } as Shot,
+  ],
+};
+const sparseMerge = buildMatchDocumentUpdatesForDuplicateMerge(docSparseReceiver, ["dup-a"], main);
+assert.equal(sparseMerge.changed, true);
+assertNoUndefinedInValue(sparseMerge.updates);
+const sparseAction = (sparseMerge.updates.actions_packing as Action[])[0] as unknown as Record<string, unknown>;
+assert.equal(sparseAction.senderId, main);
+assert.ok(!("receiverId" in sparseAction), "receiverId should be omitted when undefined");
+assert.ok(!("senderName" in sparseAction), "denormalized names stripped and not left as undefined");
+
 console.log("duplicatePlayerMergeRewrite tests: OK");

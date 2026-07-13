@@ -542,7 +542,7 @@ const PKEntriesPitch = memo(function PKEntriesPitch({
               <div className={styles.pkEntryHoverTooltipInner}>
                 {hoveredEntry.isGoal && <span className={`${styles.pkEntryHoverTooltipBadge} ${styles.pkEntryHoverTooltipGoal}`}>Gol</span>}
                 {hoveredEntry.isShot && !hoveredEntry.isGoal && <span className={styles.pkEntryHoverTooltipBadge}>Strzał</span>}
-                {hoveredEntry.isRegain && <span className={styles.pkEntryHoverTooltipBadge}>Regain</span>}
+                {hoveredEntry.isRegain && <span className={styles.pkEntryHoverTooltipBadge}>Po regainie</span>}
                 {playerLabel && (
                   <strong>
                     {playerLabel}

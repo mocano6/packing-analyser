@@ -159,6 +159,10 @@ const SidePanel: React.FC<SidePanelProps> = ({
                 <span className={styles.icon}>🧠</span>
                 <span>Baza Wiedzy</span>
               </Link>
+              <Link href="/admin/statsbomb" className={styles.menuItem}>
+                <span className={styles.icon}>📈</span>
+                <span>StatsBomb</span>
+              </Link>
               <Link href="/admin/kpi" className={styles.menuItem}>
                 <span className={styles.icon}>🎯</span>
                 <span>KPI trendów</span>

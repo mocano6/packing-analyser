@@ -140,6 +140,37 @@ const match: TeamInfo = {
       isOwnGoal: false,
       shotType: "goal",
     },
+    {
+      id: "s4",
+      matchId: "m1",
+      teamId: "opp",
+      teamContext: "defense",
+      playerId: "opp-striker",
+      x: 50,
+      y: 50,
+      minute: 50,
+      timestamp: 4,
+      xG: 0.35,
+      isGoal: false,
+      shotType: "blocked",
+      linePlayers: ["p3", "p2"],
+      blockingPlayers: ["p3"],
+    },
+    {
+      id: "s5",
+      matchId: "m1",
+      teamId: "opp",
+      teamContext: "defense",
+      playerId: "opp-striker",
+      x: 48,
+      y: 52,
+      minute: 51,
+      timestamp: 5,
+      xG: 0.2,
+      isGoal: false,
+      shotType: "on_target",
+      linePlayers: ["p3"],
+    },
   ],
   pkEntries: [
     {
@@ -292,6 +323,17 @@ assert.ok(Math.abs((p2.raw.pxtDribble ?? 0) - 0.5) < 1e-9);
 assert.ok(Math.abs((p2.raw.xtDribble ?? 0) - 0.1) < 1e-9);
 assert.equal(p2.raw.phaseP3Sender, 1);
 assert.equal(p2.raw.phaseP3Receiver, 0);
+assert.equal(p2.raw.defenseShotLine, 1);
+assert.equal(p2.raw.defenseShotBlockXg, 0);
+assert.equal(p3.raw.defenseShotLine, 2);
+assert.ok(Math.abs(p3.raw.defenseShotBlockXg - 0.35) < 1e-9);
+assert.equal(p3.eventStats.defenseShotLine?.total, 2);
+assert.equal(p3.eventStats.defenseShotLine?.successful, 1);
+assert.equal(p3.eventStats.defenseShotBlockXg?.total, 1);
+assert.equal(p3.eventStats.defenseShotBlockXg?.successful, 0);
+assert.equal(p3.eventStats.defenseShotBlockXg?.total, 1);
+assert.equal(p2.eventStats.defenseShotLine?.total, 1);
+assert.equal(p2.eventStats.defenseShotLine?.successful, 1);
 
 assert.equal(resolvePlayerComparisonMetricId("pxt", "receiver"), "pxtReceiver");
 assert.equal(resolvePlayerComparisonMetricId("pkEntries", "dribble"), "pkEntriesDribble");

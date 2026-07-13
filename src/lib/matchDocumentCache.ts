@@ -178,6 +178,35 @@ export async function getOrLoadMatchDocument(
   return promise;
 }
 
+/**
+ * Cache-first odczyt dokumentu meczu do edycji/zapisu — bez rzucania błędu offline.
+ * Kolejność: pamięć/sessionStorage → sieć (z fallbackiem do cache) → meta z listy meczów.
+ */
+export async function resolveMatchDocumentWithFallback(
+  matchId: string,
+  fallbackMeta?: TeamInfo | null,
+): Promise<TeamInfo | null> {
+  if (!matchId) return null;
+
+  const cached = getMatchDocumentFromCache(matchId);
+  if (cached) return cached;
+
+  const loaded = await getOrLoadMatchDocument(matchId);
+  if (loaded) return loaded;
+
+  if (fallbackMeta?.matchId === matchId) {
+    return {
+      ...fallbackMeta,
+      actions_packing: fallbackMeta.actions_packing ?? [],
+      actions_unpacking: fallbackMeta.actions_unpacking ?? [],
+      actions_regain: fallbackMeta.actions_regain ?? [],
+      actions_loses: fallbackMeta.actions_loses ?? [],
+    };
+  }
+
+  return null;
+}
+
 /** Czy data meczu (date string) jest starsza niż 7 dni od teraz */
 export function isMatchOlderThan7Days(matchDate: string): boolean {
   const t = new Date(matchDate).getTime();

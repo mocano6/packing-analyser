@@ -7,24 +7,31 @@ import { useAuth } from "@/hooks/useAuth";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import StatsBombCorrelationPanel from "@/components/StatsBombCorrelationPanel/StatsBombCorrelationPanel";
 import StatsBombPlayerReportPanel from "@/components/StatsBombPlayerReportPanel/StatsBombPlayerReportPanel";
+import StatsBombPlayerScoutingPanel from "@/components/StatsBombPlayerScoutingPanel/StatsBombPlayerScoutingPanel";
 import StatsBombTeamReportPanel from "@/components/StatsBombTeamReportPanel/StatsBombTeamReportPanel";
 import StatsBombMatchesTab from "@/components/StatsBombMatchesTab/StatsBombMatchesTab";
 import {
   clearStatsBombCsvFromStorage,
+  clearStatsBombScoutCsvFromStorage,
   clearStatsBombSquadCsvFromStorage,
   detectStatsBombCsvKind,
   loadStatsBombCsvFromStorage,
+  loadStatsBombScoutCsvFromStorage,
   loadStatsBombSquadCsvFromStorage,
   parseStatsBombMatchStatsCsv,
+  parseStatsBombPlayerScoutCsv,
   parseStatsBombSquadStatsCsv,
   saveStatsBombCsvToStorage,
+  saveStatsBombScoutCsvToStorage,
   saveStatsBombSquadCsvToStorage,
   type StatsBombMatchRow,
+  type StatsBombScoutPlayerRow,
   type StatsBombSquadPlayerRow,
 } from "@/utils/statsbombCsvParser";
 import styles from "./statsbomb.module.css";
 
-type TabId = "players" | "report" | "correlations" | "matches";
+type MainTabId = "scouting" | "team";
+type TeamTabId = "players" | "report" | "correlations" | "matches";
 
 export default function AdminStatsBombPage() {
   const { user, isAdmin, isLoading, userRole, linkedPlayerId, logout } = useAuth();
@@ -32,7 +39,12 @@ export default function AdminStatsBombPage() {
   const [matchFileName, setMatchFileName] = useState<string>("");
   const [squadCsvText, setSquadCsvText] = useState<string>("");
   const [squadFileName, setSquadFileName] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<TabId>("players");
+  const [scoutCsvText, setScoutCsvText] = useState<string>("");
+  const [scoutFileName, setScoutFileName] = useState<string>("");
+  const [scoutPlayers, setScoutPlayers] = useState<StatsBombScoutPlayerRow[]>([]);
+  const [isParsingScout, setIsParsingScout] = useState(false);
+  const [mainTab, setMainTab] = useState<MainTabId>("scouting");
+  const [teamTab, setTeamTab] = useState<TeamTabId>("players");
 
   useEffect(() => {
     const savedMatch = loadStatsBombCsvFromStorage();
@@ -45,15 +57,50 @@ export default function AdminStatsBombPage() {
       setSquadCsvText(savedSquad);
       setSquadFileName("Zapisany lokalnie (skład)");
     }
+    const savedScout = loadStatsBombScoutCsvFromStorage();
+    if (savedScout) {
+      setScoutCsvText(savedScout);
+      setScoutFileName("Zapisany lokalnie (PlayerScout)");
+    }
   }, []);
 
   useEffect(() => {
     if (squadCsvText.trim()) {
-      setActiveTab((prev) => (prev === "report" || prev === "correlations" || prev === "matches") && !matchCsvText.trim() ? "players" : prev);
+      setTeamTab((prev) =>
+        (prev === "report" || prev === "correlations" || prev === "matches") && !matchCsvText.trim()
+          ? "players"
+          : prev,
+      );
     } else if (matchCsvText.trim()) {
-      setActiveTab((prev) => (prev === "players" ? "report" : prev));
+      setTeamTab((prev) => (prev === "players" ? "report" : prev));
     }
   }, [matchCsvText, squadCsvText]);
+
+  useEffect(() => {
+    if (!scoutCsvText.trim()) {
+      setScoutPlayers([]);
+      setIsParsingScout(false);
+      return;
+    }
+
+    setIsParsingScout(true);
+    const timer = window.setTimeout(() => {
+      try {
+        const parsed = parseStatsBombPlayerScoutCsv(scoutCsvText);
+        setScoutPlayers(parsed);
+      } catch (error) {
+        setScoutPlayers([]);
+        toast.error(
+          "Błąd parsowania PlayerScout: " +
+            (error instanceof Error ? error.message : String(error)),
+        );
+      } finally {
+        setIsParsingScout(false);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [scoutCsvText]);
 
   const matchRows = useMemo(() => {
     if (!matchCsvText.trim()) return [] as StatsBombMatchRow[];
@@ -101,6 +148,8 @@ export default function AdminStatsBombPage() {
       setMatchCsvText(text);
       setMatchFileName(file.name);
       saveStatsBombCsvToStorage(text);
+      setMainTab("team");
+      setTeamTab("report");
       toast.success(`Wczytano ${parsed.length} meczów ze StatsBomb.`);
     } catch (error) {
       toast.error(
@@ -122,7 +171,7 @@ export default function AdminStatsBombPage() {
       const text = await file.text();
       const kind = detectStatsBombCsvKind(text);
       if (kind !== "squad") {
-        toast.error("To nie wygląda na plik Squad STATS — użyj importu MatchStats powyżej.");
+        toast.error("To nie wygląda na plik Squad STATS — użyj importu MatchStats lub PlayerScout.");
         return;
       }
       const parsed = parseStatsBombSquadStatsCsv(text);
@@ -133,8 +182,50 @@ export default function AdminStatsBombPage() {
       setSquadCsvText(text);
       setSquadFileName(file.name);
       saveStatsBombSquadCsvToStorage(text);
-      setActiveTab("players");
+      setMainTab("team");
+      setTeamTab("players");
       toast.success(`Wczytano ${parsed.length} zawodników ze Squad STATS.`);
+    } catch (error) {
+      toast.error(
+        "Błąd parsowania CSV: " + (error instanceof Error ? error.message : String(error)),
+      );
+    } finally {
+      event.target.value = "";
+    }
+  }, []);
+
+  const handleScoutFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      toast.error("Wybierz plik CSV (PlayerScout).");
+      return;
+    }
+    try {
+      const text = await file.text();
+      const kind = detectStatsBombCsvKind(text);
+      if (kind !== "scout") {
+        toast.error(
+          "To nie wygląda na plik PlayerScout — nagłówek musi zawierać kolumny Player i Current Team.",
+        );
+        return;
+      }
+      const parsed = parseStatsBombPlayerScoutCsv(text);
+      if (parsed.length === 0) {
+        toast.error("Nie znaleziono kandydatów w pliku.");
+        return;
+      }
+      setScoutCsvText(text);
+      setScoutFileName(file.name);
+      try {
+        saveStatsBombScoutCsvToStorage(text);
+      } catch {
+        toast.error(
+          "Plik wczytany, ale nie udało się zapisać w przeglądarce (limit pamięci). Po odświeżeniu wgraj ponownie.",
+        );
+      }
+      setMainTab("scouting");
+      toast.success(`Wczytano ${parsed.length} kandydatów z PlayerScout.`);
     } catch (error) {
       toast.error(
         "Błąd parsowania CSV: " + (error instanceof Error ? error.message : String(error)),
@@ -158,7 +249,14 @@ export default function AdminStatsBombPage() {
     toast.success("Usunięto plik składu.");
   }, []);
 
-  const hasAnyData = matchRows.length > 0 || squadPlayers.length > 0;
+  const handleClearScout = useCallback(() => {
+    setScoutCsvText("");
+    setScoutFileName("");
+    clearStatsBombScoutCsvFromStorage();
+    toast.success("Usunięto plik PlayerScout.");
+  }, []);
+
+  const hasTeamData = matchRows.length > 0 || squadPlayers.length > 0;
 
   if (isLoading) {
     return <div className={styles.emptyState}>Ładowanie...</div>;
@@ -207,8 +305,8 @@ export default function AdminStatsBombPage() {
           <div>
             <h1>StatsBomb</h1>
             <p>
-              Importuj eksporty StatsBomb: Squad STATS (zawodnicy) oraz MatchStats (mecze).
-              Analizuj profile indywidualne względem składu oraz korelacje zespołu z wynikiem meczu.
+              Scouting kandydatów (PlayerScout) oraz analiza własnego zespołu (Squad STATS +
+              MatchStats): profile, korelacje i rozkłady median.
             </p>
           </div>
           <Link href="/admin" className={styles.backLink}>
@@ -216,188 +314,274 @@ export default function AdminStatsBombPage() {
           </Link>
         </div>
 
-        <section className={styles.panel} aria-labelledby="statsbomb-upload-title">
-          <h2 id="statsbomb-upload-title" className={styles.panelTitle}>
-            Import CSV
-          </h2>
-          <div className={styles.uploadGrid}>
-            <div className={styles.uploadBlock}>
-              <h3 className={styles.uploadBlockTitle}>Squad STATS — dane indywidualne</h3>
-              <div className={styles.uploadRow}>
-                <input
-                  id="statsbomb-squad-csv-upload"
-                  type="file"
-                  accept=".csv,text/csv"
-                  className={styles.fileInput}
-                  onChange={handleSquadFileChange}
-                  aria-label="Wybierz plik CSV StatsBomb Squad STATS"
-                />
-                {squadCsvText ? (
-                  <button type="button" className={styles.clearButton} onClick={handleClearSquad}>
-                    Usuń skład
-                  </button>
-                ) : null}
-              </div>
-              {squadPlayers.length > 0 ? (
-                <div className={styles.meta}>
-                  <span>
-                    Plik: <strong>{squadFileName || "Squad CSV"}</strong>
-                  </span>
-                  <span>
-                    Zawodnicy: <strong>{squadPlayers.length}</strong>
-                  </span>
-                  <span>
-                    Metryki: <strong>{Object.keys(squadPlayers[0]?.numeric ?? {}).length}</strong>
-                  </span>
-                </div>
-              ) : (
-                <p className={styles.meta}>
-                  Wgraj plik typu <strong>JagielloniaBiałystok-Squad STATS.csv</strong>.
-                </p>
-              )}
-            </div>
+        <div className={styles.mainTabs} role="tablist" aria-label="Główne sekcje StatsBomb">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mainTab === "scouting"}
+            className={`${styles.mainTab} ${mainTab === "scouting" ? styles.mainTabActive : ""}`}
+            onClick={() => setMainTab("scouting")}
+          >
+            Scouting
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mainTab === "team"}
+            className={`${styles.mainTab} ${mainTab === "team" ? styles.mainTabActive : ""}`}
+            onClick={() => setMainTab("team")}
+          >
+            Analiza zespołu
+          </button>
+        </div>
 
-            <div className={styles.uploadBlock}>
-              <h3 className={styles.uploadBlockTitle}>MatchStats — dane zespołowe</h3>
-              <div className={styles.uploadRow}>
-                <input
-                  id="statsbomb-csv-upload"
-                  type="file"
-                  accept=".csv,text/csv"
-                  className={styles.fileInput}
-                  onChange={handleMatchFileChange}
-                  aria-label="Wybierz plik CSV StatsBomb MatchStats"
-                />
-                {matchCsvText ? (
-                  <button type="button" className={styles.clearButton} onClick={handleClearMatch}>
-                    Usuń mecze
-                  </button>
-                ) : null}
-              </div>
-              {matchRows.length > 0 ? (
-                <div className={styles.meta}>
-                  <span>
-                    Plik: <strong>{matchFileName || "Match CSV"}</strong>
-                  </span>
-                  <span>
-                    Mecze: <strong>{matchRows.length}</strong>
-                  </span>
-                  {dateRange ? (
-                    <span>
-                      Zakres dat: <strong>{dateRange.from}</strong> – <strong>{dateRange.to}</strong>
-                    </span>
-                  ) : null}
-                  <span>
-                    Metryki liczbowe: <strong>{Object.keys(matchRows[0]?.numeric ?? {}).length}</strong>
-                  </span>
-                </div>
-              ) : (
-                <p className={styles.meta}>
-                  Wgraj plik typu <strong>JagielloniaBiałystok-MatchStats.csv</strong>.
-                </p>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {hasAnyData ? (
+        {mainTab === "scouting" ? (
           <>
-            <div className={styles.tabs} role="tablist" aria-label="Zakładki StatsBomb">
-              {squadPlayers.length > 0 ? (
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === "players"}
-                  className={`${styles.tab} ${activeTab === "players" ? styles.tabActive : ""}`}
-                  onClick={() => setActiveTab("players")}
-                >
-                  Dane indywidualne
-                </button>
-              ) : null}
-              {matchRows.length > 0 ? (
-                <>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeTab === "report"}
-                    className={`${styles.tab} ${activeTab === "report" ? styles.tabActive : ""}`}
-                    onClick={() => setActiveTab("report")}
-                  >
-                    Raport zespołu
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeTab === "correlations"}
-                    className={`${styles.tab} ${activeTab === "correlations" ? styles.tabActive : ""}`}
-                    onClick={() => setActiveTab("correlations")}
-                  >
-                    Korelacje
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeTab === "matches"}
-                    className={`${styles.tab} ${activeTab === "matches" ? styles.tabActive : ""}`}
-                    onClick={() => setActiveTab("matches")}
-                  >
-                    Lista meczów
-                  </button>
-                </>
-              ) : null}
-            </div>
-
-            {activeTab === "players" && squadPlayers.length > 0 ? (
-              <section className={styles.panel} aria-labelledby="statsbomb-players-title">
-                <h2 id="statsbomb-players-title" className={styles.panelTitle}>
-                  Profile zawodników
-                </h2>
-                <StatsBombPlayerReportPanel
-                  players={squadPlayers}
-                  scopeHint={`Skład: ${squadPlayers.length} zawodników.`}
+            <section className={styles.panel} aria-labelledby="statsbomb-scout-upload-title">
+              <h2 id="statsbomb-scout-upload-title" className={styles.panelTitle}>
+                Import PlayerScout CSV
+              </h2>
+              <p className={styles.scoutIntro}>
+                Lista kandydatów spoza własnego składu — np. eksport{" "}
+                <strong>PlayerScout number 6.csv</strong>. Porównanie odbywa się wyłącznie w obrębie
+                wczytanych zawodników, nie względem składu Jagielloni.
+              </p>
+              <div className={styles.uploadRow}>
+                <input
+                  id="statsbomb-scout-csv-upload"
+                  type="file"
+                  accept=".csv,text/csv"
+                  className={styles.fileInput}
+                  onChange={handleScoutFileChange}
+                  aria-label="Wybierz plik CSV PlayerScout"
                 />
-              </section>
-            ) : null}
+                {scoutCsvText ? (
+                  <button type="button" className={styles.clearButton} onClick={handleClearScout}>
+                    Usuń PlayerScout
+                  </button>
+                ) : null}
+              </div>
+              {scoutPlayers.length > 0 ? (
+                <div className={styles.meta}>
+                  <span>
+                    Plik: <strong>{scoutFileName || "PlayerScout CSV"}</strong>
+                  </span>
+                  <span>
+                    Kandydaci: <strong>{scoutPlayers.length}</strong>
+                  </span>
+                  <span>
+                    Kluby:{" "}
+                    <strong>
+                      {new Set(scoutPlayers.map((p) => p.currentTeam).filter(Boolean)).size}
+                    </strong>
+                  </span>
+                  <span>
+                    Metryki: <strong>{Object.keys(scoutPlayers[0]?.numeric ?? {}).length}</strong>
+                  </span>
+                </div>
+              ) : isParsingScout ? (
+                <p className={styles.meta}>Wczytywanie i parsowanie pliku PlayerScout…</p>
+              ) : (
+                <p className={styles.meta}>
+                  Wgraj plik z kolumnami <strong>Player</strong> i <strong>Current Team</strong>.
+                </p>
+              )}
+            </section>
 
-            {activeTab === "report" && matchRows.length > 0 ? (
-              <section className={styles.panel} aria-labelledby="statsbomb-report-title">
-                <h2 id="statsbomb-report-title" className={styles.panelTitle}>
-                  Raport zespołu
-                </h2>
-                <StatsBombTeamReportPanel
-                  rows={matchRows}
-                  squadPlayers={squadPlayers}
-                  scopeHint={`Próba: ${matchRows.length} meczów.`}
-                />
-              </section>
-            ) : null}
-
-            {activeTab === "correlations" && matchRows.length > 0 ? (
-              <section className={styles.panel} aria-labelledby="statsbomb-corr-title">
-                <h2 id="statsbomb-corr-title" className={styles.panelTitle}>
-                  Korelacje z wynikiem
-                </h2>
-                <StatsBombCorrelationPanel
-                  rows={matchRows}
-                  squadPlayers={squadPlayers}
-                  scopeHint={`Próba: ${matchRows.length} meczów.`}
-                />
-              </section>
-            ) : null}
-
-            {activeTab === "matches" && matchRows.length > 0 ? (
-              <section className={styles.panel} aria-labelledby="statsbomb-matches-title">
-                <h2 id="statsbomb-matches-title" className={styles.panelTitle}>
-                  Lista meczów ({matchRows.length})
-                </h2>
-                <StatsBombMatchesTab rows={matchRows} />
-              </section>
-            ) : null}
+            <section className={styles.panel} aria-labelledby="statsbomb-scouting-title">
+              <h2 id="statsbomb-scouting-title" className={styles.panelTitle}>
+                Profil scoutingowy — defensywny pomocnik (6)
+              </h2>
+              <StatsBombPlayerScoutingPanel players={scoutPlayers} matchRows={matchRows} />
+            </section>
           </>
         ) : (
-          <div className={styles.emptyState}>
-            Brak danych — wgraj Squad STATS i/lub MatchStats CSV.
-          </div>
+          <>
+            <section className={styles.panel} aria-labelledby="statsbomb-upload-title">
+              <h2 id="statsbomb-upload-title" className={styles.panelTitle}>
+                Import CSV — własny zespół
+              </h2>
+              <div className={styles.uploadGrid}>
+                <div className={styles.uploadBlock}>
+                  <h3 className={styles.uploadBlockTitle}>Squad STATS — dane indywidualne</h3>
+                  <div className={styles.uploadRow}>
+                    <input
+                      id="statsbomb-squad-csv-upload"
+                      type="file"
+                      accept=".csv,text/csv"
+                      className={styles.fileInput}
+                      onChange={handleSquadFileChange}
+                      aria-label="Wybierz plik CSV StatsBomb Squad STATS"
+                    />
+                    {squadCsvText ? (
+                      <button type="button" className={styles.clearButton} onClick={handleClearSquad}>
+                        Usuń skład
+                      </button>
+                    ) : null}
+                  </div>
+                  {squadPlayers.length > 0 ? (
+                    <div className={styles.meta}>
+                      <span>
+                        Plik: <strong>{squadFileName || "Squad CSV"}</strong>
+                      </span>
+                      <span>
+                        Zawodnicy: <strong>{squadPlayers.length}</strong>
+                      </span>
+                      <span>
+                        Metryki: <strong>{Object.keys(squadPlayers[0]?.numeric ?? {}).length}</strong>
+                      </span>
+                    </div>
+                  ) : (
+                    <p className={styles.meta}>
+                      Wgraj plik typu <strong>JagielloniaBiałystok-Squad STATS.csv</strong>.
+                    </p>
+                  )}
+                </div>
+
+                <div className={styles.uploadBlock}>
+                  <h3 className={styles.uploadBlockTitle}>MatchStats — dane zespołowe</h3>
+                  <div className={styles.uploadRow}>
+                    <input
+                      id="statsbomb-csv-upload"
+                      type="file"
+                      accept=".csv,text/csv"
+                      className={styles.fileInput}
+                      onChange={handleMatchFileChange}
+                      aria-label="Wybierz plik CSV StatsBomb MatchStats"
+                    />
+                    {matchCsvText ? (
+                      <button type="button" className={styles.clearButton} onClick={handleClearMatch}>
+                        Usuń mecze
+                      </button>
+                    ) : null}
+                  </div>
+                  {matchRows.length > 0 ? (
+                    <div className={styles.meta}>
+                      <span>
+                        Plik: <strong>{matchFileName || "Match CSV"}</strong>
+                      </span>
+                      <span>
+                        Mecze: <strong>{matchRows.length}</strong>
+                      </span>
+                      {dateRange ? (
+                        <span>
+                          Zakres dat: <strong>{dateRange.from}</strong> – <strong>{dateRange.to}</strong>
+                        </span>
+                      ) : null}
+                      <span>
+                        Metryki liczbowe:{" "}
+                        <strong>{Object.keys(matchRows[0]?.numeric ?? {}).length}</strong>
+                      </span>
+                    </div>
+                  ) : (
+                    <p className={styles.meta}>
+                      Wgraj plik typu <strong>JagielloniaBiałystok-MatchStats.csv</strong>.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {hasTeamData ? (
+              <>
+                <div className={styles.tabs} role="tablist" aria-label="Zakładki analizy zespołu">
+                  {squadPlayers.length > 0 ? (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={teamTab === "players"}
+                      className={`${styles.tab} ${teamTab === "players" ? styles.tabActive : ""}`}
+                      onClick={() => setTeamTab("players")}
+                    >
+                      Dane indywidualne
+                    </button>
+                  ) : null}
+                  {matchRows.length > 0 ? (
+                    <>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={teamTab === "report"}
+                        className={`${styles.tab} ${teamTab === "report" ? styles.tabActive : ""}`}
+                        onClick={() => setTeamTab("report")}
+                      >
+                        Raport zespołu
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={teamTab === "correlations"}
+                        className={`${styles.tab} ${teamTab === "correlations" ? styles.tabActive : ""}`}
+                        onClick={() => setTeamTab("correlations")}
+                      >
+                        Korelacje
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={teamTab === "matches"}
+                        className={`${styles.tab} ${teamTab === "matches" ? styles.tabActive : ""}`}
+                        onClick={() => setTeamTab("matches")}
+                      >
+                        Lista meczów
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+
+                {teamTab === "players" && squadPlayers.length > 0 ? (
+                  <section className={styles.panel} aria-labelledby="statsbomb-players-title">
+                    <h2 id="statsbomb-players-title" className={styles.panelTitle}>
+                      Profile zawodników
+                    </h2>
+                    <StatsBombPlayerReportPanel
+                      players={squadPlayers}
+                      scopeHint={`Skład: ${squadPlayers.length} zawodników.`}
+                    />
+                  </section>
+                ) : null}
+
+                {teamTab === "report" && matchRows.length > 0 ? (
+                  <section className={styles.panel} aria-labelledby="statsbomb-report-title">
+                    <h2 id="statsbomb-report-title" className={styles.panelTitle}>
+                      Raport zespołu
+                    </h2>
+                    <StatsBombTeamReportPanel
+                      rows={matchRows}
+                      squadPlayers={squadPlayers}
+                      scopeHint={`Próba: ${matchRows.length} meczów.`}
+                    />
+                  </section>
+                ) : null}
+
+                {teamTab === "correlations" && matchRows.length > 0 ? (
+                  <section className={styles.panel} aria-labelledby="statsbomb-corr-title">
+                    <h2 id="statsbomb-corr-title" className={styles.panelTitle}>
+                      Korelacje z wynikiem
+                    </h2>
+                    <StatsBombCorrelationPanel
+                      rows={matchRows}
+                      squadPlayers={squadPlayers}
+                      scopeHint={`Próba: ${matchRows.length} meczów.`}
+                    />
+                  </section>
+                ) : null}
+
+                {teamTab === "matches" && matchRows.length > 0 ? (
+                  <section className={styles.panel} aria-labelledby="statsbomb-matches-title">
+                    <h2 id="statsbomb-matches-title" className={styles.panelTitle}>
+                      Lista meczów ({matchRows.length})
+                    </h2>
+                    <StatsBombMatchesTab rows={matchRows} />
+                  </section>
+                ) : null}
+              </>
+            ) : (
+              <div className={styles.emptyState}>
+                Brak danych zespołowych — wgraj Squad STATS i/lub MatchStats CSV.
+              </div>
+            )}
+          </>
         )}
       </div>
     </>

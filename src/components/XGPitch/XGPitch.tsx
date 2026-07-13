@@ -7,6 +7,7 @@ import styles from "./XGPitch.module.css";
 import PitchHeader from "../PitchHeader/PitchHeader";
 import pitchHeaderStyles from "../PitchHeader/PitchHeader.module.css";
 import { buildPlayersIndex, getPlayerLabel, PlayersIndex } from "@/utils/playerUtils";
+import { getShotXgForMapFilter } from "@/utils/trendyMapFilters";
 import { computePitchClickXG } from "@/lib/xg";
 
 const HOVER_TOOLTIP_DELAY_MS = 1500;
@@ -35,6 +36,12 @@ export interface XGPitchProps {
   rightExtraContent?: React.ReactNode; // Dodatkowa zawartość po prawej stronie nagłówka
   /** Pasek trybów analitycznych — pod nagłówkiem meczu, przed boiskiem */
   tabBar?: React.ReactNode;
+  /** Etykieta meczu w dymce strzału (np. agregat Wiedzy). */
+  getShotMatchLabel?: (shot: Shot) => string | undefined;
+  /** Kliknięcie w marker przypina dymkę (do ponownego kliknięcia lub tła). */
+  pinTooltipOnClick?: boolean;
+  /** Wywoływane przy przypięciu / odpięciu dymki (np. sync zaznaczenia). */
+  onPinTooltipChange?: (shot: Shot | null) => void;
 }
 
 const XGPitch = memo(function XGPitch({
@@ -50,6 +57,9 @@ const XGPitch = memo(function XGPitch({
   hideToggleButton = false,
   rightExtraContent,
   tabBar,
+  getShotMatchLabel,
+  pinTooltipOnClick = false,
+  onPinTooltipChange,
 }: XGPitchProps) {
   const localPlayersIndex = useMemo(
     () => playersIndex ?? buildPlayersIndex(players),
@@ -68,6 +78,7 @@ const XGPitch = memo(function XGPitch({
   // Tooltip po dłuższym najechaniu (1,5 s)
   const [hoveredShot, setHoveredShot] = useState<Shot | null>(null);
   const [showHoverTooltip, setShowHoverTooltip] = useState(false);
+  const [pinnedShot, setPinnedShot] = useState<Shot | null>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoveredMarkerRef = useRef<HTMLDivElement | null>(null);
 
@@ -109,6 +120,12 @@ const XGPitch = memo(function XGPitch({
     if (target.closest(`.${styles.shotMarker}`)) {
       return; // Nie dodawaj nowego strzału, jeśli kliknięto na istniejący
     }
+
+    if (pinTooltipOnClick) {
+      setPinnedShot(null);
+      setShowHoverTooltip(false);
+      onPinTooltipChange?.(null);
+    }
     
     if (!onShotAdd) return;
     
@@ -129,10 +146,20 @@ const XGPitch = memo(function XGPitch({
   // Obsługa kliknięcia na strzał
   const handleShotClick = (event: React.MouseEvent, shot: Shot) => {
     event.stopPropagation();
+    if (pinTooltipOnClick) {
+      hoveredMarkerRef.current = event.currentTarget as HTMLDivElement;
+      setPinnedShot((prev) => {
+        const next = prev?.id === shot.id ? null : shot;
+        setShowHoverTooltip(next !== null);
+        onPinTooltipChange?.(next);
+        return next;
+      });
+    }
     onShotClick?.(shot);
   };
 
   const handleShotMouseEnter = (e: React.MouseEvent<HTMLDivElement>, shot: Shot) => {
+    if (pinnedShot) return;
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     hoveredMarkerRef.current = e.currentTarget;
     setHoveredShot(shot);
@@ -141,6 +168,7 @@ const XGPitch = memo(function XGPitch({
   };
 
   const handleShotMouseLeave = () => {
+    if (pinnedShot) return;
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
@@ -229,9 +257,11 @@ const XGPitch = memo(function XGPitch({
           const isSetPieceClass = isSetPiece ? styles.isSetPiece : '';
           const isGoalAndSetPiece = shot.isGoal && isSetPiece;
           
+          const shotXg = getShotXgForMapFilter(shot);
+          
           // Oblicz rozmiar kropki na podstawie xG (min 12px, max 36px)
           // Im wyższy xG, tym większa kropka
-          const dotSize = Math.max(12, Math.min(36, 12 + (shot.xG * 24)));
+          const dotSize = Math.max(12, Math.min(36, 12 + shotXg * 24));
           
           // Oblicz kolor na podstawie xG - popularna skala kolorów
           // xG 0.0-0.1: zielony (#10b981)
@@ -272,7 +302,7 @@ const XGPitch = memo(function XGPitch({
             return `rgb(${r}, ${g}, ${b})`;
           };
           
-          const xGColor = getXGColor(shot.xG);
+          const xGColor = getXGColor(shotXg);
           
           return (
             <div
@@ -294,7 +324,7 @@ const XGPitch = memo(function XGPitch({
               onMouseEnter={(e) => handleShotMouseEnter(e, shot)}
               onMouseLeave={handleShotMouseLeave}
               title={undefined}
-              aria-label={`Strzał ${getPlayerLabel(shot.playerId, localPlayersIndex)}, ${shot.minute}′, xG ${shot.xG.toFixed(2)}${shot.isGoal ? ', gol' : ''}`}
+              aria-label={`Strzał ${getPlayerLabel(shot.playerId, localPlayersIndex)}, ${shot.minute}′, xG ${shotXg.toFixed(2)}${shot.isGoal ? ', gol' : ''}`}
             >
               {isGoalAndSetPiece ? (
                 <div className={styles.shotMarkerGoalInner} style={{ backgroundColor: xGColor }}>
@@ -308,7 +338,7 @@ const XGPitch = memo(function XGPitch({
                         textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.5)'
                       }}
                     >
-                      {Math.round(shot.xG * 100)}
+                      {Math.round(shotXg * 100)}
                     </span>
                   </div>
                 </div>
@@ -323,17 +353,30 @@ const XGPitch = memo(function XGPitch({
                       textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.5)'
                     }}
                   >
-                    {Math.round(shot.xG * 100)}
+                    {Math.round(shotXg * 100)}
                   </span>
                 </div>
               )}
             </div>
           );
         })}
-        {showHoverTooltip && hoveredShot && (() => {
-          const isAssist = !!hoveredShot.assistantId;
-          const actionTypeLabel = hoveredShot.actionType === 'open_play' ? 'Otwarta gra' : hoveredShot.actionType === 'penalty' ? 'Karny' : hoveredShot.actionType === 'corner' ? 'Rzut rożny' : hoveredShot.actionType === 'direct_free_kick' ? 'Rzut wolny bezpośredni' : hoveredShot.actionType || 'Otwarta gra';
+        {(() => {
+          const tooltipShot = pinnedShot ?? (showHoverTooltip ? hoveredShot : null);
+          if (!tooltipShot) return null;
+
+          const isAssist = !!tooltipShot.assistantId;
+          const actionTypeLabel =
+            tooltipShot.actionType === 'open_play'
+              ? 'Otwarta gra'
+              : tooltipShot.actionType === 'penalty'
+                ? 'Karny'
+                : tooltipShot.actionType === 'corner'
+                  ? 'Rzut rożny'
+                  : tooltipShot.actionType === 'direct_free_kick'
+                    ? 'Rzut wolny bezpośredni'
+                    : tooltipShot.actionType || 'Otwarta gra';
           const rect = hoveredMarkerRef.current?.getBoundingClientRect();
+          const matchLabel = getShotMatchLabel?.(tooltipShot);
           const tooltipContent = (
             <div
               className={styles.shotHoverTooltip}
@@ -350,12 +393,17 @@ const XGPitch = memo(function XGPitch({
               }
               role="tooltip"
             >
-              <div className={styles.shotHoverTooltipInner}>
+              <div
+                className={`${styles.shotHoverTooltipInner} ${matchLabel ? styles.shotHoverTooltipInnerWide : ''}`}
+              >
                 {isAssist && <span className={styles.shotHoverTooltipBadge}>Asysta</span>}
-                <strong>{getPlayerLabel(hoveredShot.playerId, localPlayersIndex)}</strong>
-                <span>{hoveredShot.minute}&#8242; · xG: {hoveredShot.xG.toFixed(2)}</span>
-                {hoveredShot.isGoal && <span className={styles.shotHoverTooltipGoal}>Gol</span>}
+                <strong>{getPlayerLabel(tooltipShot.playerId, localPlayersIndex)}</strong>
+                <span>
+                  {tooltipShot.minute}&#8242; · xG: {getShotXgForMapFilter(tooltipShot).toFixed(2)}
+                </span>
+                {tooltipShot.isGoal && <span className={styles.shotHoverTooltipGoal}>Gol</span>}
                 <span className={styles.shotHoverTooltipType}>{actionTypeLabel}</span>
+                {matchLabel ? <span className={styles.shotHoverTooltipMatch}>{matchLabel}</span> : null}
               </div>
             </div>
           );

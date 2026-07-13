@@ -46,6 +46,43 @@
   background: #f9fafb;
 }
 
+.mainTabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 0;
+}
+
+.mainTab {
+  padding: 10px 18px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  background: transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mainTab:hover {
+  color: #334155;
+}
+
+.mainTabActive {
+  color: #1d4ed8;
+  border-bottom-color: #2563eb;
+}
+
+.scoutIntro {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+  max-width: 820px;
+}
+
 .panel {
   background: #fff;
   border-radius: 12px;

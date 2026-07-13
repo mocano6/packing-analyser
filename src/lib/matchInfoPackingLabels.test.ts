@@ -3,6 +3,8 @@ import {
   getOurSquadLabelForPackingModal,
   getOpponentLabelForPackingModal,
   looksLikeOpaqueTeamToken,
+  resolveMatchOpponentDisplayName,
+  shortTeamDisplayLabel,
 } from "./matchInfoPackingLabels";
 import type { TeamInfo } from "@/types";
 
@@ -57,6 +59,16 @@ assert.equal(
     [{ id: "3XQSaCCRndPO4JdKoU3b", name: "Górnik" }],
   ),
   "Górnik",
+);
+
+assert.equal(shortTeamDisplayLabel("Chrobry Głogów U19"), "U19");
+assert.equal(
+  resolveMatchOpponentDisplayName(
+    { ...base, team: "my-team", opponent: "opp-id", opponentName: "Raków U19" } as TeamInfo,
+    "my-team",
+    [{ id: "opp-id", name: "Raków Częstochowa U19" }],
+  ),
+  "Raków Częstochowa U19",
 );
 
 console.log("matchInfoPackingLabels tests: OK");

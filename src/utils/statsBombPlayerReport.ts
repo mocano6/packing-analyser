@@ -136,7 +136,7 @@ export function computePlayerMetricPercentile(
   return ((betterCount + equalCount * 0.5) / poolValues.length) * 100;
 }
 
-function metricAppliesToPlayer(
+export function metricAppliesToPlayer(
   label: string,
   player: StatsBombSquadPlayerRow,
   playerValue: number,

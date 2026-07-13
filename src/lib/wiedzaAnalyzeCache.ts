@@ -10,7 +10,9 @@ export type WiedzaTabId =
   | "qualityIndex"
   | "packingZones"
   | "youth"
-  | "possession";
+  | "possession"
+  | "shots"
+  | "pkEntries";
 
 export type WiedzaCachedMatch = TeamInfo & { id: string };
 
@@ -45,7 +47,17 @@ export type WiedzaAnalyzeCacheV3 = {
 
 export type WiedzaAnalyzeCachePayload = WiedzaAnalyzeCacheV1 | WiedzaAnalyzeCacheV2 | WiedzaAnalyzeCacheV3;
 
-const TAB_IDS: WiedzaTabId[] = ["regains", "loses", "correlations", "qualityIndex", "packingZones", "youth", "possession"];
+const TAB_IDS: WiedzaTabId[] = [
+  "regains",
+  "loses",
+  "correlations",
+  "qualityIndex",
+  "packingZones",
+  "youth",
+  "possession",
+  "shots",
+  "pkEntries",
+];
 
 function normalizeTab(x: unknown): WiedzaTabId {
   if (x === "weights") return "correlations";

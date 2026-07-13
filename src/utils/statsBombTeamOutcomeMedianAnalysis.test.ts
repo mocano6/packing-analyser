@@ -41,6 +41,22 @@ const passesMetric = outcomeReport!.metrics.find((m) => m.label === "Passes");
 assert.ok(passesMetric);
 assert.equal(passesMetric!.win.matchCount, 2);
 assert.ok(passesMetric!.win.avgDeviation !== null);
+assert.ok(passesMetric!.win.avgDeviationPct !== null);
+assert.ok(passesMetric!.win.avgAbsDeviationPct !== null);
+assert.equal(passesMetric!.win.pctReliable, true);
+
+{
+  const sortedByPct = sortOutcomeMetricSummaries(
+    outcomeReport!.metrics,
+    "all",
+    "avgAbsDeviationPct",
+    "desc",
+  );
+  assert.ok(sortedByPct.length >= 2);
+  assert.ok(
+    (sortedByPct[0]!.all.avgAbsDeviationPct ?? 0) >= (sortedByPct[1]!.all.avgAbsDeviationPct ?? 0),
+  );
+}
 
 {
   const sorted = sortOutcomeMetricSummaries(outcomeReport!.metrics, "all", "label", "asc");

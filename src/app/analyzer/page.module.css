@@ -309,15 +309,16 @@
 .seasonDropdown:focus,
 .teamDropdown:focus {
   outline: none;
-  border-color: #2196f3;
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
 }
 
 .addButton {
   padding: 8px 16px;
-  background-color: #2196f3;
+  background-color: var(--color-primary);
   color: white;
-  border: none;
-  border-radius: 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
@@ -334,7 +335,7 @@
 }
 
 .addButton:hover {
-  background-color: #1976d2;
+  background-color: var(--color-primary-hover);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 

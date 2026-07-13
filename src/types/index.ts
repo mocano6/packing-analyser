@@ -268,7 +268,7 @@ export interface PKEntry {
   opponentsInPKCount?: number; // Liczba przeciwników w PK
   isShot?: boolean; // Czy po wejściu w PK był strzał
   isGoal?: boolean; // Czy po wejściu w PK był gol
-  isRegain?: boolean; // Czy był przechwyt piłki
+  isRegain?: boolean; // Wejście w PK po wcześniejszym odbiorze (regain w oknie czasowym)
   isControversial?: boolean;
   controversyNote?: string; // Notatka analityka dotycząca kontrowersyjnego wejścia PK
   timestamp: number;

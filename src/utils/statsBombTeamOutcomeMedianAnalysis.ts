@@ -8,7 +8,13 @@ import {
   type StatsBombMedianDistributionReport,
   type StatsBombMetricDistributionRow,
   type StatsBombTeamMedianCategoryId,
+  type StatsBombDistributionStats,
 } from "./statsBombMedianDistribution";
+import {
+  aggregateGroupDeviationPct,
+  computeStatsBombDeviationPct,
+  isStatsBombDeviationPctReliable,
+} from "./statsBombMedianDeviation";
 import { statsBombMatchRowId } from "./statsBombTeamMedianDistribution";
 
 export type StatsBombOutcomeMedianGroupKey = "all" | StatsBombMatchOutcome;
@@ -28,6 +34,12 @@ export type StatsBombOutcomeGroupMetricStats = {
   avgValue: number | null;
   avgDeviation: number | null;
   avgAbsDeviation: number | null;
+  /** Średnie odchylenie względem mediany sezonu (%). */
+  avgDeviationPct: number | null;
+  /** Średnie |odchylenie| względem mediany sezonu (%). */
+  avgAbsDeviationPct: number | null;
+  /** Czy kolumny % mają sensowną skalę odniesienia (nie dot. zerowych/rzadkich metryk). */
+  pctReliable: boolean;
   aboveMedianCount: number;
   belowMedianCount: number;
   topPositive: StatsBombMatchDeviationEntry[];
@@ -57,17 +69,15 @@ export type StatsBombTeamOutcomeMedianReport = {
 const OUTCOME_GROUPS: StatsBombOutcomeMedianGroupKey[] = ["all", "win", "draw", "loss"];
 const TOP_DEVIATIONS = 3;
 
-function deviationPct(value: number, median: number): number | null {
-  if (!Number.isFinite(median) || Math.abs(median) < 1e-9) return null;
-  return ((value - median) / Math.abs(median)) * 100;
-}
-
 function emptyGroupStats(): StatsBombOutcomeGroupMetricStats {
   return {
     matchCount: 0,
     avgValue: null,
     avgDeviation: null,
     avgAbsDeviation: null,
+    avgDeviationPct: null,
+    avgAbsDeviationPct: null,
+    pctReliable: false,
     aboveMedianCount: 0,
     belowMedianCount: 0,
     topPositive: [],
@@ -82,18 +92,26 @@ function mean(values: number[]): number | null {
 
 function buildGroupStats(
   entries: StatsBombMatchDeviationEntry[],
-  median: number,
+  seasonMedian: number,
+  distributionStats: StatsBombDistributionStats,
 ): StatsBombOutcomeGroupMetricStats {
   if (entries.length === 0) return emptyGroupStats();
 
   const deviations = entries.map((e) => e.deviation);
   const values = entries.map((e) => e.value);
+  const avgValue = mean(values);
+  const pctReliable = isStatsBombDeviationPctReliable(distributionStats, values);
+  const avgDeviationPct = pctReliable
+    ? aggregateGroupDeviationPct(avgValue, seasonMedian, distributionStats)
+    : null;
+  const avgAbsDeviationPct =
+    avgDeviationPct === null ? null : Math.abs(avgDeviationPct);
   let aboveMedianCount = 0;
   let belowMedianCount = 0;
 
   for (const entry of entries) {
-    if (entry.value > median) aboveMedianCount += 1;
-    else if (entry.value < median) belowMedianCount += 1;
+    if (entry.value > seasonMedian) aboveMedianCount += 1;
+    else if (entry.value < seasonMedian) belowMedianCount += 1;
   }
 
   const sortedPositive = [...entries].sort((a, b) => b.deviation - a.deviation);
@@ -101,9 +119,12 @@ function buildGroupStats(
 
   return {
     matchCount: entries.length,
-    avgValue: mean(values),
+    avgValue,
     avgDeviation: mean(deviations),
     avgAbsDeviation: mean(deviations.map((d) => Math.abs(d))),
+    avgDeviationPct,
+    avgAbsDeviationPct,
+    pctReliable,
     aboveMedianCount,
     belowMedianCount,
     topPositive: sortedPositive.slice(0, TOP_DEVIATIONS),
@@ -115,7 +136,8 @@ function buildMetricSummary(
   metric: StatsBombMetricDistributionRow,
   outcomeByMatchId: Map<string, StatsBombMatchOutcome>,
 ): StatsBombOutcomeMetricSummary {
-  const median = metric.stats.median;
+  const seasonMedian = metric.stats.median;
+  const distributionStats = metric.stats;
   const allEntries: StatsBombMatchDeviationEntry[] = [];
   const winEntries: StatsBombMatchDeviationEntry[] = [];
   const drawEntries: StatsBombMatchDeviationEntry[] = [];
@@ -129,8 +151,8 @@ function buildMetricSummary(
       date: obs.subLabel ?? "",
       outcome,
       value: obs.value,
-      deviation: obs.value - median,
-      deviationPct: deviationPct(obs.value, median),
+      deviation: obs.value - seasonMedian,
+      deviationPct: computeStatsBombDeviationPct(obs.value, seasonMedian, distributionStats),
     };
     allEntries.push(entry);
     if (outcome === "win") winEntries.push(entry);
@@ -149,11 +171,11 @@ function buildMetricSummary(
     categoryId: metric.categoryId as StatsBombTeamMedianCategoryId,
     categoryLabel,
     phase: metric.phase,
-    seasonMedian: median,
-    all: buildGroupStats(allEntries, median),
-    win: buildGroupStats(winEntries, median),
-    draw: buildGroupStats(drawEntries, median),
-    loss: buildGroupStats(lossEntries, median),
+    seasonMedian,
+    all: buildGroupStats(allEntries, seasonMedian, distributionStats),
+    win: buildGroupStats(winEntries, seasonMedian, distributionStats),
+    draw: buildGroupStats(drawEntries, seasonMedian, distributionStats),
+    loss: buildGroupStats(lossEntries, seasonMedian, distributionStats),
   };
 }
 
@@ -162,7 +184,12 @@ function rankMetricsByGroup(
   group: StatsBombOutcomeMedianGroupKey,
 ): StatsBombOutcomeMetricSummary[] {
   return [...metrics]
-    .filter((metric) => metric[group].matchCount > 0 && metric[group].avgAbsDeviation !== null)
+    .filter((metric) => {
+      const stats = metric[group];
+      if (stats.matchCount === 0 || stats.avgAbsDeviation === null) return false;
+      if (stats.avgAbsDeviation <= 1e-12) return false;
+      return true;
+    })
     .sort((a, b) => (b[group].avgAbsDeviation ?? 0) - (a[group].avgAbsDeviation ?? 0));
 }
 
@@ -226,6 +253,8 @@ export type StatsBombOutcomeSummarySortKey =
   | "avgValue"
   | "avgDeviation"
   | "avgAbsDeviation"
+  | "avgDeviationPct"
+  | "avgAbsDeviationPct"
   | "aboveMedianCount"
   | "belowMedianCount"
   | "matchCount";
@@ -278,6 +307,10 @@ export function getOutcomeMetricSummarySortValue(
       return stats.avgDeviation;
     case "avgAbsDeviation":
       return stats.avgAbsDeviation;
+    case "avgDeviationPct":
+      return stats.avgDeviationPct;
+    case "avgAbsDeviationPct":
+      return stats.avgAbsDeviationPct;
     case "aboveMedianCount":
       return stats.aboveMedianCount;
     case "belowMedianCount":
@@ -322,6 +355,8 @@ export function toggleOutcomeSummarySort(
     "avgValue",
     "avgDeviation",
     "avgAbsDeviation",
+    "avgDeviationPct",
+    "avgAbsDeviationPct",
     "aboveMedianCount",
     "belowMedianCount",
     "matchCount",

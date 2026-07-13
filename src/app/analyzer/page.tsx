@@ -102,8 +102,11 @@ import Acc8sModal from "@/components/Acc8sModal/Acc8sModal";
 import Acc8sTable from "@/components/Acc8sTable/Acc8sTable";
 import { normalizeActionFieldCountsForSave } from "@/lib/normalizeActionFieldCountsForSave";
 import { getActionCategory } from "@/utils/actionCategory";
-import { findActionCollectionFieldInMatchData } from "@/lib/findActionCollectionField";
-import { clearMatchDocumentCache } from "@/lib/matchDocumentCache";
+import {
+  findActionCollectionFieldInMatchData,
+  findActionInMatchDocument,
+} from "@/lib/findActionCollectionField";
+import { resolveMatchDocumentWithFallback } from "@/lib/matchDocumentCache";
 import { filterTeamsByUserAccess } from "@/lib/teamsForUserAccess";
 
 
@@ -3407,30 +3410,14 @@ export default function Page() {
 
       let originalAction = actions.find(a => a.id === editedAction.id);
       
-      // Jeśli nie znaleziono w actions, spróbuj znaleźć bezpośrednio w bazie danych
+      // Jeśli nie znaleziono w actions, spróbuj znaleźć w cache / lokalnym dokumencie meczu
       if (!originalAction && editedAction.matchId) {
-        try {
-          const matchRef = doc(db, "matches", editedAction.matchId);
-          const matchDoc = await getDoc(matchRef);
-          
-          if (matchDoc.exists()) {
-            const matchData = matchDoc.data() as TeamInfo;
-            // Sprawdź we wszystkich kolekcjach packing
-            const packingActions = matchData.actions_packing || [];
-            const unpackingActions = matchData.actions_unpacking || [];
-            const allPackingActions = [...packingActions, ...unpackingActions];
-            originalAction = allPackingActions.find(a => a.id === editedAction.id);
-            
-            // Jeśli nadal nie znaleziono, sprawdź w regain i loses
-            if (!originalAction) {
-              const regainActions = matchData.actions_regain || [];
-              const losesActions = matchData.actions_loses || [];
-              const allRegainLosesActions = [...regainActions, ...losesActions];
-              originalAction = allRegainLosesActions.find(a => a.id === editedAction.id);
-            }
-          }
-        } catch (error) {
-          console.error("Błąd podczas wyszukiwania oryginalnej akcji w bazie:", error);
+        const matchData = await resolveMatchDocumentWithFallback(
+          editedAction.matchId,
+          matchInfo?.matchId === editedAction.matchId ? matchInfo : null,
+        );
+        if (matchData) {
+          originalAction = findActionInMatchDocument(matchData, editedAction.id);
         }
       }
       
@@ -3560,10 +3547,15 @@ export default function Page() {
       if (isMovedToNewMatch) {
         const oldMatchId = originalMatchId || editedAction.matchId;
 
-        const newMatchRef = doc(db, "matches", editedAction.matchId);
-        const newMatchDoc = await getDoc(newMatchRef);
+        const newMatchMeta =
+          allMatches.find((m) => m.matchId === editedAction.matchId) ??
+          (matchInfo?.matchId === editedAction.matchId ? matchInfo : null);
+        const newMatchData = await resolveMatchDocumentWithFallback(
+          editedAction.matchId,
+          newMatchMeta,
+        );
         
-        if (!newMatchDoc.exists()) {
+        if (!newMatchData) {
           console.error("❌ Nowy mecz nie istnieje:", editedAction.matchId);
           alert("Wybrany mecz nie istnieje");
           return;
@@ -3654,25 +3646,27 @@ export default function Page() {
             "Zapis na serwerze opóźniony. Zmiany są w kolejce lokalnej i zostaną wysłane po ustabilizowaniu połączenia."
           );
         }
-        clearMatchDocumentCache(oldMatchId);
-        clearMatchDocumentCache(editedAction.matchId);
         invalidateMatchCache(oldMatchId);
         invalidateMatchCache(editedAction.matchId);
         if (matchInfo && (matchInfo.matchId === editedAction.matchId || matchInfo.matchId === oldMatchId)) {
-          await loadActionsForMatch(matchInfo.matchId);
+          try {
+            await loadActionsForMatch(matchInfo.matchId);
+          } catch (refreshError) {
+            console.warn("Odświeżenie akcji po przeniesieniu meczu:", refreshError);
+          }
         }
       } else {
         // Aktualizacja akcji w tym samym meczu
-        const matchRef = doc(db, "matches", editedAction.matchId);
-        const matchDoc = await getDoc(matchRef);
+        const matchData = await resolveMatchDocumentWithFallback(
+          editedAction.matchId,
+          matchInfo?.matchId === editedAction.matchId ? matchInfo : null,
+        );
 
-        if (!matchDoc.exists()) {
+        if (!matchData) {
           console.error("❌ Mecz nie istnieje:", editedAction.matchId);
           alert("Wybrany mecz nie istnieje");
           return;
         }
-
-        const matchData = matchDoc.data() as TeamInfo;
         // Źródło prawdy: w której tablicy w dokumencie meczu faktycznie leży akcja (unika błędnej heurystyki regain vs loses).
         const fieldFromDb = findActionCollectionFieldInMatchData(matchData, editedAction.id);
         if (fieldFromDb === null) {
@@ -3731,10 +3725,13 @@ export default function Page() {
                 );
               }
 
-              clearMatchDocumentCache(editedAction.matchId);
               invalidateMatchCache(editedAction.matchId);
               if (matchInfo?.matchId === editedAction.matchId) {
-                await loadActionsForMatch(editedAction.matchId);
+                try {
+                  await loadActionsForMatch(editedAction.matchId);
+                } catch (refreshError) {
+                  console.warn("Odświeżenie akcji po zmianie trybu:", refreshError);
+                }
               }
               
               setIsActionEditModalOpen(false);
@@ -3868,10 +3865,13 @@ export default function Page() {
           );
         }
 
-        clearMatchDocumentCache(editedAction.matchId);
         invalidateMatchCache(editedAction.matchId);
         if (matchInfo?.matchId === editedAction.matchId) {
-          await loadActionsForMatch(editedAction.matchId);
+          try {
+            await loadActionsForMatch(editedAction.matchId);
+          } catch (refreshError) {
+            console.warn("Odświeżenie akcji po edycji:", refreshError);
+          }
         }
       }
 

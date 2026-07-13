@@ -48,6 +48,12 @@ import { resolveTeamFieldForMatchLabel } from '@/lib/listaZawodnikowMatchLabel';
 import { readListaPageCache, writeListaPageCache } from '@/lib/listaZawodnikowPageCache';
 import { filterActiveDuplicateIdsForBulkDelete } from '@/lib/listaZawodnikowDuplicateBulkSelection';
 import {
+  buildMainTableMergeTargetCandidates,
+  describeMainTableMergeCandidateScope,
+} from '@/lib/listaZawodnikowMergeCandidates';
+import { permanentDeleteEligiblePlayerIds } from '@/lib/listaZawodnikowPermanentDeleteEligible';
+import { rewriteUsersLinkedPlayerIdForDuplicateMerge } from '@/lib/duplicatePlayerMergeLinkedUsers';
+import {
   accumulateMatchDocumentPerMatchParticipation,
   participationMapToRecord,
   lookupPerMatchParticipationRows,
@@ -254,9 +260,18 @@ export default function ListaZawodnikow() {
   const [duplicateMergeTargetBySourceId, setDuplicateMergeTargetBySourceId] = useState<Record<string, string>>(
     {},
   );
+  /** Główna tabela: który wiersz ma otwarty panel ręcznego scalania. */
+  const [mainTableMergeOpenId, setMainTableMergeOpenId] = useState<string | null>(null);
+  const [mainTableMergeTargetBySourceId, setMainTableMergeTargetBySourceId] = useState<Record<string, string>>(
+    {},
+  );
+  const [mainTableMergeSearchBySourceId, setMainTableMergeSearchBySourceId] = useState<Record<string, string>>(
+    {},
+  );
   /** Zaznaczenia do hurtowego soft delete we wszystkich grupach duplikatów naraz. */
   const [duplicateBulkSelectedPlayerIds, setDuplicateBulkSelectedPlayerIds] = useState<string[]>([]);
   const [duplicateBulkDeleting, setDuplicateBulkDeleting] = useState(false);
+  const [permanentDeleteInProgress, setPermanentDeleteInProgress] = useState(false);
   const [globalCountsByPlayerId, setGlobalCountsByPlayerId] = useState<
     Record<string, GlobalPlayerDataCounts>
   >({});
@@ -671,6 +686,18 @@ export default function ListaZawodnikow() {
     });
   }, [playersWithStats, searchTerm, filterTeamId, sortBy, sortDirection, playersIndex]);
 
+  const permanentDeleteEligibleIds = useMemo(
+    () =>
+      permanentDeleteEligiblePlayerIds(
+        playersWithStats.map((p) => ({
+          id: p.id,
+          isDeleted: p.isDeleted,
+          globalDataTotal: p.globalDataTotal,
+        })),
+      ),
+    [playersWithStats],
+  );
+
   const handleRemovePlayerFromTeam = React.useCallback(
     async (playerId: string, teamId: string) => {
       const tid = teamId.trim();
@@ -843,6 +870,17 @@ export default function ListaZawodnikow() {
       setDuplicateBulkSelectedPlayerIds((prev) => {
         const filtered = prev.filter((id) => !mergedDupIds.has(id));
         return filtered.length === prev.length ? prev : filtered;
+      });
+      setMainTableMergeOpenId((openId) => (openId && mergedDupIds.has(openId) ? null : openId));
+      setMainTableMergeTargetBySourceId((prev) => {
+        const next = { ...prev };
+        for (const id of mergedDupIds) {
+          delete next[id];
+        }
+        for (const [src, tgt] of Object.entries(prev)) {
+          if (mergedDupIds.has(tgt)) delete next[src];
+        }
+        return next;
       });
       await fetchAllPlayersIncludingDeleted();
       setListaAggregatesRefreshKey((k) => k + 1);
@@ -1033,6 +1071,13 @@ export default function ListaZawodnikow() {
         }
       }
       await flushGpsBatch();
+    }
+
+    try {
+      await rewriteUsersLinkedPlayerIdForDuplicateMerge(db, dupToMain);
+    } catch (error) {
+      console.error("[lista-zawodnikow merge] rewriteUsersLinkedPlayerId", error);
+      throw error;
     }
 
     for (const { mainPlayer, duplicatesToMerge } of prepared) {
@@ -1420,6 +1465,104 @@ export default function ListaZawodnikow() {
     }
   };
 
+  const handlePermanentDeleteEmptyArchived = async () => {
+    const ids = permanentDeleteEligibleIds;
+    if (ids.length === 0) {
+      toast.error(
+        'Brak kart do trwałego usunięcia. Warunek: status „usunięty” i zero powiązań z danymi (po załadowaniu liczników).',
+      );
+      return;
+    }
+    if (listaAggregatesLoadingUi) {
+      toast.error('Poczekaj na zakończenie ładowania liczników powiązań z meczów.');
+      return;
+    }
+    const preview = ids
+      .slice(0, 12)
+      .map((id) => `• ${getPlayerLabel(id, playersIndex)} (${id.slice(0, 8)}…)`)
+      .join('\n');
+    const more = ids.length > 12 ? `\n… i jeszcze ${ids.length - 12} kart.` : '';
+    if (
+      !window.confirm(
+        `TRWAŁE usunięcie ${ids.length} zawodników z bazy (kolekcja players)?\n\n` +
+          'Warunki (już spełnione na liście):\n' +
+          '• status usunięty (archiwum / soft delete)\n' +
+          '• zero powiązań z danymi (mecze, GPS, akcje itd.)\n\n' +
+          'Operacji nie można cofnąć. Dokumenty znikną z Firestore.\n\n' +
+          preview +
+          more +
+          '\n\nKontynuować?',
+      )
+    ) {
+      return;
+    }
+    if (!user) {
+      toast.error('Brak sesji — zaloguj się ponownie.');
+      return;
+    }
+
+    setPermanentDeleteInProgress(true);
+    const toastId = toast.loading(`Trwałe usuwanie ${ids.length} kart…`);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/players-hard-delete-batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ playerIds: ids }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        code?: string;
+        deletedCount?: number;
+        deleted?: string[];
+        failed?: { playerId: string; error: string }[];
+      };
+      if (!res.ok) {
+        let msg =
+          typeof payload.error === 'string' && payload.error
+            ? payload.error
+            : `HTTP ${res.status}`;
+        if (res.status === 503 && payload.code === 'admin-config-missing') {
+          msg +=
+            ' Na hostingu ustaw FIREBASE_SERVICE_ACCOUNT_KEY (lub PATH) — bez tego API admin nie działa.';
+        }
+        toast.error(`Trwałe usuwanie nie powiodło się: ${msg}`, { id: toastId, duration: 8000 });
+        return;
+      }
+
+      const deletedSet = new Set(payload.deleted ?? []);
+      const failed = payload.failed ?? [];
+      if (deletedSet.size > 0) {
+        setAllPlayersIncludingDeleted((prev) => prev.filter((p) => !deletedSet.has(p.id)));
+        setListaAggregatesRefreshKey((k) => k + 1);
+      }
+
+      if (failed.length === 0) {
+        toast.success(
+          `Trwale usunięto ${payload.deletedCount ?? deletedSet.size} kart z bazy.`,
+          { id: toastId, duration: 6000 },
+        );
+      } else {
+        const failLines = failed
+          .slice(0, 5)
+          .map((f) => `${f.playerId.slice(0, 8)}…: ${f.error}`)
+          .join('; ');
+        toast.error(
+          `Usunięto ${deletedSet.size}, błędów: ${failed.length}. ${failLines}`,
+          { id: toastId, duration: 9000 },
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('Błąd podczas trwałego usuwania. Sprawdź konsolę.', { id: toastId, duration: 6500 });
+    } finally {
+      setPermanentDeleteInProgress(false);
+    }
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -1494,6 +1637,12 @@ export default function ListaZawodnikow() {
           <span className={styles.filteredCount}>
             Wyświetlanych: {filteredAndSortedPlayers.length}
           </span>
+          <span
+            className={styles.permanentDeleteEligibleCount}
+            title="Usunięci (soft delete) bez powiązań z meczami, GPS itd. — można trwale skasować dokument z Firestore"
+          >
+            Do trwałego usunięcia: {permanentDeleteEligibleIds.length}
+          </span>
           {isLoadingAllPlayers && (
             <span className={styles.loadingLabel}>Ładowanie listy…</span>
           )}
@@ -1509,6 +1658,22 @@ export default function ListaZawodnikow() {
             title="Sparuj wszystkie duplikaty automatycznie"
           >
             {isMergingDuplicates ? 'Sparowywanie...' : `🔄 Sparuj ${duplicates.length} grup duplikatów`}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handlePermanentDeleteEmptyArchived()}
+            disabled={
+              permanentDeleteInProgress ||
+              permanentDeleteEligibleIds.length === 0 ||
+              listaAggregatesLoadingUi ||
+              isLoading
+            }
+            className={styles.permanentDeleteButton}
+            title="Trwale usuń z Firestore wszystkie karty: status usunięty i zero powiązań z danymi"
+          >
+            {permanentDeleteInProgress
+              ? 'Usuwanie trwałe…'
+              : `🗑️ Trwale usuń puste archiwum (${permanentDeleteEligibleIds.length})`}
           </button>
           <button 
             onClick={() => {}}
@@ -1885,6 +2050,11 @@ export default function ListaZawodnikow() {
       )}
 
       {/* Tabela wszystkich zawodników */}
+      <p className={styles.mainTableMergeHint}>
+        Błędny wpis (np. zła osoba przy tym samym nazwisku)? W kolumnie Akcje użyj{' '}
+        <strong>Scal w…</strong> — przepisze powiązania z meczów i GPS na wybraną kartę i oznaczy tę jako
+        usuniętą (jak w sekcji duplikatów).
+      </p>
       <div className={styles.tableContainer}>
         <table className={styles.table}>
           <thead>
@@ -1911,8 +2081,23 @@ export default function ListaZawodnikow() {
             </tr>
           </thead>
           <tbody>
-            {filteredAndSortedPlayers.map((player) => (
-              <tr key={player.id} className={`${styles.tableRow} ${player.isDeleted ? styles.rowDeleted : ''}`}>
+            {filteredAndSortedPlayers.map((player) => {
+              const mergeSearchTerm = mainTableMergeSearchBySourceId[player.id] ?? '';
+              const mergeTargetCandidates = !player.isDeleted
+                ? buildMainTableMergeTargetCandidates(
+                    player,
+                    playersWithStats,
+                    mergeSearchTerm,
+                    (id) => getPlayerLabel(id, playersIndex),
+                  )
+                : [];
+              const selectedMainMergeTargetId =
+                mainTableMergeTargetBySourceId[player.id] ?? mergeTargetCandidates[0]?.id ?? '';
+              const mergePanelOpen = mainTableMergeOpenId === player.id;
+
+              return (
+              <React.Fragment key={player.id}>
+              <tr className={`${styles.tableRow} ${player.isDeleted ? styles.rowDeleted : ''}`}>
                 <td className={styles.playerName}>{getPlayerLabel(player.id, playersIndex)}</td>
                 <td className={styles.playerNumber}>#{player.number || 'Brak'}</td>
                 <td className={styles.playerId} title={player.id}>{player.id.slice(0, 8)}...</td>
@@ -2020,6 +2205,18 @@ export default function ListaZawodnikow() {
                   ) : (
                     <>
                       <button
+                        type="button"
+                        className={styles.mainTableMergeToggleBtn}
+                        title="Scal tę kartę z inną (błędny wpis → właściwa osoba)"
+                        aria-expanded={mergePanelOpen}
+                        disabled={isMergingDuplicates}
+                        onClick={() =>
+                          setMainTableMergeOpenId((prev) => (prev === player.id ? null : player.id))
+                        }
+                      >
+                        {mergePanelOpen ? '▲ Scal' : '🔗 Scal w…'}
+                      </button>
+                      <button
                         onClick={() => handleDeletePlayerFromList(player.id)}
                         className={styles.deleteButton}
                         title="Usuń zawodnika"
@@ -2036,7 +2233,102 @@ export default function ListaZawodnikow() {
                   )}
                 </td>
               </tr>
-            ))}
+              {!player.isDeleted && mergePanelOpen && (
+                <tr className={styles.mainTableMergeRow}>
+                  <td colSpan={9}>
+                    <div className={styles.mainTableMergePanel}>
+                      <p className={styles.mainTableMergePanelTitle}>
+                        Scal kartę <strong>{getPlayerLabel(player.id, playersIndex)}</strong> w inną (ta
+                        karta zostanie w archiwum):
+                      </p>
+                      <p className={styles.mainTableMergePanelScope}>
+                        {describeMainTableMergeCandidateScope(mergeSearchTerm, mergeTargetCandidates.length)}
+                      </p>
+                      <label className={styles.mainTableMergeSearchLabel} htmlFor={`main-merge-search-${player.id}`}>
+                        Szukaj karty docelowej
+                      </label>
+                      <input
+                        id={`main-merge-search-${player.id}`}
+                        type="search"
+                        className={styles.mainTableMergeSearchInput}
+                        placeholder="Nazwisko, numer, ID docelowej karty…"
+                        value={mergeSearchTerm}
+                        onChange={(e) =>
+                          setMainTableMergeSearchBySourceId((prev) => ({
+                            ...prev,
+                            [player.id]: e.target.value,
+                          }))
+                        }
+                        aria-label={`Wyszukaj kartę docelową do scalenia — ${getPlayerLabel(player.id, playersIndex)}`}
+                      />
+                      {mergeTargetCandidates.length === 0 ? (
+                        <p className={styles.mainTableMergePanelEmpty}>
+                          Brak kandydatów — wpisz nazwisko, numer lub ID docelowej karty w polu powyżej.
+                        </p>
+                      ) : (
+                        <div className={styles.duplicateCardMergeRow}>
+                          <label
+                            className={styles.duplicateCardMergeLabel}
+                            htmlFor={`main-merge-target-${player.id}`}
+                          >
+                            Karta docelowa (zachowana)
+                          </label>
+                          <select
+                            id={`main-merge-target-${player.id}`}
+                            className={styles.duplicateCardMergeSelect}
+                            value={selectedMainMergeTargetId}
+                            onChange={(e) =>
+                              setMainTableMergeTargetBySourceId((prev) => ({
+                                ...prev,
+                                [player.id]: e.target.value,
+                              }))
+                            }
+                            aria-label={`Wybierz docelową kartę dla scalenia — ${getPlayerLabel(player.id, playersIndex)}`}
+                          >
+                            {mergeTargetCandidates.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {getPlayerLabel(t.id, playersIndex, { includeNumber: true })} · ∑{' '}
+                                {listaAggregatesLoadingUi ? '…' : t.globalDataTotal}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            className={styles.duplicateCardMergeButton}
+                            disabled={
+                              isMergingDuplicates ||
+                              !selectedMainMergeTargetId ||
+                              selectedMainMergeTargetId === player.id
+                            }
+                            title="Przepisz powiązania z meczów i GPS na wybraną kartę; tę oznacz jako usuniętą"
+                            onClick={() => {
+                              const mainRow = playersWithStats.find((p) => p.id === selectedMainMergeTargetId);
+                              if (!mainRow) return;
+                              void mergeOneDuplicateCardIntoTarget(
+                                player,
+                                mainRow,
+                                'ręczne scalenie (tabela)',
+                              );
+                            }}
+                          >
+                            {isMergingDuplicates ? '…' : '🔗 Sparuj z wybraną'}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.mainTableMergeCancelBtn}
+                            onClick={() => setMainTableMergeOpenId(null)}
+                          >
+                            Anuluj
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
 

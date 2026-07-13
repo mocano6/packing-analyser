@@ -213,6 +213,33 @@
   transform: translateY(-1px);
 }
 
+.permanentDeleteEligibleCount {
+  font-size: 13px;
+  color: #842029;
+  font-weight: 500;
+}
+
+.permanentDeleteButton {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: #b02a37;
+  border: 1px solid #842029;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.permanentDeleteButton:hover:not(:disabled) {
+  background: #842029;
+}
+
+.permanentDeleteButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .mergeDuplicatesButton:disabled {
   background-color: #6c757d;
   cursor: not-allowed;
@@ -888,6 +915,113 @@
   background-color: #e9ecef;
   padding: 2px 4px;
   border-radius: 3px;
+}
+
+.mainTableMergeHint {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #495057;
+  background: #e7f1ff;
+  border: 1px solid #b6d4fe;
+  border-radius: 8px;
+  line-height: 1.45;
+}
+
+.mainTableMergeToggleBtn {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0d6efd;
+  background: #e7f1ff;
+  border: 1px solid #9ec5fe;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.mainTableMergeToggleBtn:hover:not(:disabled) {
+  background: #cfe2ff;
+}
+
+.mainTableMergeToggleBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mainTableMergeRow {
+  background: #f8f9fa;
+}
+
+.mainTableMergeRow td {
+  padding: 0 10px 14px !important;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.mainTableMergePanel {
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+}
+
+.mainTableMergePanelTitle {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: #212529;
+}
+
+.mainTableMergePanelScope {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.mainTableMergeSearchLabel {
+  display: block;
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.mainTableMergeSearchInput {
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.mainTableMergePanelEmpty {
+  margin: 0;
+  font-size: 13px;
+  color: #856404;
+}
+
+.mainTableMergeCancelBtn {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #495057;
+  background: #fff;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.mainTableMergeCancelBtn:hover {
+  background: #f8f9fa;
+}
+
+.mainTableMergePanel .duplicateCardMergeRow {
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 /* Tabela */

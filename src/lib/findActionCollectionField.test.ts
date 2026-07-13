@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { TeamInfo } from "@/types";
-import { findActionCollectionFieldInMatchData } from "./findActionCollectionField";
+import { findActionCollectionFieldInMatchData, findActionInMatchDocument } from "./findActionCollectionField";
 
 const base: TeamInfo = {
   team: "t",
@@ -19,5 +19,9 @@ assert.equal(findActionCollectionFieldInMatchData(base, "u1"), "actions_unpackin
 assert.equal(findActionCollectionFieldInMatchData(base, "r1"), "actions_regain");
 assert.equal(findActionCollectionFieldInMatchData(base, "l1"), "actions_loses");
 assert.equal(findActionCollectionFieldInMatchData(base, "missing"), null);
+
+assert.equal(findActionInMatchDocument(base, "p1")?.id, "p1");
+assert.equal(findActionInMatchDocument(base, "l1")?.id, "l1");
+assert.equal(findActionInMatchDocument(base, "missing"), undefined);
 
 console.log("findActionCollectionField tests: OK");

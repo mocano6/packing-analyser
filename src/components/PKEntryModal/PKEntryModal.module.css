@@ -246,12 +246,12 @@
 }
 
 .saveButton {
-  background-color: #2196f3;
-  color: white;
+  background-color: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .saveButton:hover {
-  background-color: #1976d2;
+  background-color: var(--color-primary-hover);
 }
 
 .saveButton:disabled {
@@ -261,12 +261,14 @@
 }
 
 .cancelButton {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .cancelButton:hover {
-  background-color: #e5e7eb;
+  background-color: var(--surface-hover);
+  border-color: var(--text-muted);
 }
 
 .cancelButton:disabled {
@@ -276,15 +278,15 @@
 }
 
 .deleteButton {
-  background: #ef4444;
-  color: white;
+  background: var(--danger);
+  color: var(--text-on-primary);
   margin-right: auto;
 }
 
 .deleteButton:hover {
-  background: #dc2626;
+  background: var(--danger-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
+  box-shadow: 0 4px 8px rgba(var(--danger-rgb), 0.3);
 }
 
 /* Przełącznik połowy */

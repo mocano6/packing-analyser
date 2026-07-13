@@ -1382,11 +1382,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     <p className={styles.helperText}>Brak zawodników w składzie meczu.</p>
                   ) : (
                     (() => {
-                      const withoutGk = filteredPlayers.filter(
-                        (p) => p.position !== "GK" && p.position !== "Bramkarz"
-                      );
-                      const list = withoutGk.length > 0 ? withoutGk : filteredPlayers;
-                      const byPos = getPlayersByPosition(list);
+                      const byPos = getPlayersByPosition(filteredPlayers);
                       return byPos.sortedPositions.map((position) => (
                         <div key={position} className={styles.positionGroup}>
                           <div className={styles.playersGrid}>

@@ -1,0 +1,267 @@
+.tilt {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+/* —— Liczba akcji: atak vs obrona —— */
+.countRow {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.countSide {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 8px 6px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.countSideAttack {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.countSideDefense {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+.countValue {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+
+.countSideAttack .countValue {
+  color: #b91c1c;
+}
+
+.countSideDefense .countValue {
+  color: #475569;
+}
+
+.countLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+}
+
+.countPct {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #94a3b8;
+}
+
+.countDivider {
+  display: flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #cbd5e1;
+}
+
+/* —— Pasek udziału liczby akcji —— */
+.shareBar {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e2e8f0;
+}
+
+.shareBarAttack {
+  height: 100%;
+  background: #dc2626;
+}
+
+.shareBarDefense {
+  height: 100%;
+  background: #94a3b8;
+}
+
+/* —— Waga / szala xT —— */
+.scaleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.scaleHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.scaleTitle {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.scaleVerdict {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.scaleVerdictAttack {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.scaleVerdictDefense {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+}
+
+.scaleVerdictBalanced {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+
+.scaleValues {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.scaleValueAttack {
+  color: #b91c1c;
+}
+
+.scaleValueDefense {
+  color: #475569;
+}
+
+.scaleShare {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.scaleTrack {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+.scaleHalfDefense,
+.scaleHalfAttack {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+}
+
+.scaleHalfDefense {
+  left: 0;
+  background: linear-gradient(to left, rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.04));
+}
+
+.scaleHalfAttack {
+  right: 0;
+  background: linear-gradient(to right, rgba(220, 38, 38, 0.12), rgba(220, 38, 38, 0.04));
+}
+
+.scaleCenter {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: #94a3b8;
+  z-index: 2;
+}
+
+.scaleFill {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 999px;
+  z-index: 1;
+}
+
+.scaleFillAttack {
+  background: rgba(220, 38, 38, 0.55);
+}
+
+.scaleFillDefense {
+  background: rgba(100, 116, 139, 0.55);
+}
+
+.scaleNeedle {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 3px;
+  transform: translateX(-50%);
+  background: #0f172a;
+  border-radius: 999px;
+  z-index: 3;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+.scaleAxis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #94a3b8;
+}
+
+.hint {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+
+.dualXtLead {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.dualXtLead strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  margin-right: 4px;
+}

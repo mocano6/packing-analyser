@@ -1691,10 +1691,10 @@
 }
 
 .gpsValueModeButton.active {
-  border-color: #2196f3;
-  background-color: #e3f2fd;
-  color: #1d4ed8;
-  box-shadow: 0 2px 6px rgba(33, 150, 243, 0.18);
+  border-color: var(--color-primary-border);
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary-hover);
+  box-shadow: 0 2px 6px rgba(var(--color-primary-rgb), 0.18);
 }
 
 .gpsPeriodSelector {
@@ -1724,9 +1724,9 @@
 }
 
 .gpsPeriodSelector .periodButton.active {
-  background-color: #e3f2fd;
-  color: #1d4ed8;
-  border-color: #2196f3;
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary-hover);
+  border-color: var(--color-primary-border);
   box-shadow: 0 2px 6px rgba(33, 150, 243, 0.18);
 }
 

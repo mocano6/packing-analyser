@@ -40,6 +40,8 @@ import { usePresentationMode } from "@/contexts/PresentationContext";
 import { Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ResponsiveRadar } from "@nivo/radar";
 import TrendyKpiMapModal, { TrendyKpiMapModalKind } from "@/components/TrendyKpiMapModal/TrendyKpiMapModal";
+import TrendyXtTiltKpiBody from "@/components/TrendyXtTiltKpiBody/TrendyXtTiltKpiBody";
+import { buildTrendyRegainLosesTiltSummary, formatTrendyTiltVerdictShort } from "@/utils/trendyRegainLosesTilt";
 import {
   buildRegainsOppHalfHeatmap,
   collectMapPkEntriesFromMatches,
@@ -199,6 +201,7 @@ export default function TrendyPage() {
   const trendyMapPkEntries = useMemo(() => collectMapPkEntriesFromMatches(matches), [matches]);
   const trendyRegainsOppHalfHeatmap = useMemo(() => buildRegainsOppHalfHeatmap(matches), [matches]);
   const trendyRegainsOppHalfCount = useMemo(() => countRegainsOppHalfFromMatches(matches), [matches]);
+  const trendyRegainLosesTilt = useMemo(() => buildTrendyRegainLosesTiltSummary(matches), [matches]);
 
   useEffect(() => {
     if (!kpiPlayersModal) return;
@@ -1012,7 +1015,17 @@ export default function TrendyPage() {
                     onClick={() => setExpandedKpis((prev) => ({ ...prev, [kpi.id]: !isOpen }))}
                   >
                     <span className={styles.kpiTitle}>{kpi.label}</span>
-                    {kpi.id === "pk_for" && typeof completedCount === "number" ? (
+                    {kpi.id === "regains_tilt" ? (
+                      <span className={styles.kpiMeta}>
+                        {trendyRegainLosesTilt.regains.total} na całym boisku ·{" "}
+                        {formatTrendyTiltVerdictShort(trendyRegainLosesTilt.regains)}
+                      </span>
+                    ) : kpi.id === "loses_tilt" ? (
+                      <span className={styles.kpiMeta}>
+                        {trendyRegainLosesTilt.loses.total} na całym boisku ·{" "}
+                        {formatTrendyTiltVerdictShort(trendyRegainLosesTilt.loses)}
+                      </span>
+                    ) : kpi.id === "pk_for" && typeof completedCount === "number" ? (
                       <span className={`${styles.kpiMeta} ${meetsTarget ? styles.good : styles.bad}`}>
                         {formatKpiValue(latestValue, kpi.unit)} ({delta >= 0 ? "+" : ""}
                         {formatKpiValue(delta, kpi.unit)}) — KPI w zakresie w {completedCount}/{data.length} meczach (
@@ -1101,7 +1114,7 @@ export default function TrendyPage() {
                           <line x1="16" y1="6" x2="16" y2="22" />
                         </svg>
                       </button>
-                      {!["possession_pct", "dead_time_pct", "acc8s_pct"].includes(kpi.id) && (
+                      {!["possession_pct", "dead_time_pct", "acc8s_pct", "regains_tilt", "loses_tilt"].includes(kpi.id) && (
                         <button
                           type="button"
                           className={styles.kpiPlayersIconButton}
@@ -1135,6 +1148,8 @@ export default function TrendyPage() {
                       "shots_for",
                       "pk_for",
                       "regains_opp_half",
+                      "regains_tilt",
+                      "loses_tilt",
                       "possession_pct",
                       "dead_time_pct",
                       "acc8s_pct",
@@ -1167,7 +1182,11 @@ export default function TrendyPage() {
                 </div>
                 {isOpen && (
                   <div className={styles.kpiBody}>
-                    {kpi.id === "possession_pct" && kind === "possession" ? (
+                    {kpi.id === "regains_tilt" ? (
+                      <TrendyXtTiltKpiBody side="regains" summary={trendyRegainLosesTilt} />
+                    ) : kpi.id === "loses_tilt" ? (
+                      <TrendyXtTiltKpiBody side="loses" summary={trendyRegainLosesTilt} />
+                    ) : kpi.id === "possession_pct" && kind === "possession" ? (
                       <PossessionTrendChart data={data as PossessionTrendPoint[]} unit={kpi.unit} />
                     ) : kpi.id === "pxt_p2p3" && kind === "p2p3" ? (
                       <P2P3TrendChart data={data as P2P3TrendPoint[]} />

@@ -71,10 +71,16 @@ function readWeight(value: unknown): number {
   return parsed;
 }
 
+const LEGACY_WEIGHTED_METRIC_ID: Partial<Record<string, PlayerComparisonMetricId>> = {
+  defenseShotBlock: "defenseShotBlockXg",
+};
+
 function resolveStoredMetricId(item: Record<string, unknown>): PlayerComparisonMetricId | null {
   const rawMetricId = item.metricId;
-  if (typeof rawMetricId === "string" && isWeightedIndexSelectableMetricId(rawMetricId)) {
-    return rawMetricId;
+  if (typeof rawMetricId === "string") {
+    const migrated = LEGACY_WEIGHTED_METRIC_ID[rawMetricId];
+    if (migrated) return migrated;
+    if (isWeightedIndexSelectableMetricId(rawMetricId)) return rawMetricId;
   }
 
   const rawAxisId = item.axisId;

@@ -3,13 +3,10 @@ import {
   buildRegainsOppHalfHeatmap,
   collectMapPkEntriesFromMatches,
   collectMapShotsFromMatches,
+  filterShotsByMapSide,
   collectTeamAttackPkEntriesFromMatches,
   collectTeamAttackShotsFromMatches,
   countRegainsOppHalfFromMatches,
-  DEFAULT_TRENDY_PK_MAP_FILTERS,
-  DEFAULT_TRENDY_XG_MAP_FILTERS,
-  filterPkEntriesForTrendyMap,
-  filterShotsForTrendyMap,
   getPkEntryMapSide,
   getShotMapSide,
   getShotXgForMapFilter,
@@ -133,96 +130,20 @@ function makePkEntry(overrides: Partial<PKEntry> = {}): PKEntry {
   assert.equal(opponent[0].teamContext, "defense");
 })();
 
-(function testFilterShotsForTrendyMapGoalsOnly() {
-  const shots = [
-    makeShot({ id: "g", isGoal: true, shotType: "goal" }),
-    makeShot({ id: "o", isGoal: false, shotType: "off_target" }),
-  ];
-
-  const filtered = filterShotsForTrendyMap(shots, {
-    ...DEFAULT_TRENDY_XG_MAP_FILTERS,
-    sfg: false,
-    counter: false,
-    regain: false,
-    blocked: false,
-    onTarget: false,
-    goal: true,
-  });
-
-  assert.equal(filtered.length, 1);
-  assert.equal(filtered[0].id, "g");
-})();
-
-(function testFilterShotsForTrendyMapXgRange() {
-  const noTypeFilters = {
-    ...DEFAULT_TRENDY_XG_MAP_FILTERS,
-    sfg: false,
-    counter: false,
-    regain: false,
-    goal: false,
-    blocked: false,
-    onTarget: false,
-  };
-
+(function testShotXgRangeHelpers() {
   const shots = [
     makeShot({ id: "low", xG: 0.05 }),
     makeShot({ id: "mid", xG: 0.35 }),
     makeShot({ id: "high", xG: 0.82 }),
   ];
 
-  assert.deepEqual(
-    filterShotsForTrendyMap(shots, { ...noTypeFilters, xgMin: 0.1, xgMax: 0.5 }).map((s) => s.id),
-    ["mid"],
-  );
-
-  assert.deepEqual(
-    filterShotsForTrendyMap(shots, { ...noTypeFilters, xgMin: 0.5, xgMax: 0.1 }).map((s) => s.id),
-    ["mid"],
-  );
+  assert.equal(shotMatchesTrendyXgRange(shots[0], 0.1, 0.5), false);
+  assert.equal(shotMatchesTrendyXgRange(shots[1], 0.1, 0.5), true);
+  assert.equal(shotMatchesTrendyXgRange(shots[2], 0.1, 0.5), false);
+  assert.equal(shotMatchesTrendyXgRange(shots[1], 0.5, 0.1), true);
 
   assert.equal(getShotXgForMapFilter(makeShot({ xG: undefined })), 0);
   assert.equal(shotMatchesTrendyXgRange(makeShot({ xG: 0.2 }), null, null), true);
-})();
-
-(function testFilterShotsForTrendyMapCounter() {
-  const shots = [
-    makeShot({ id: "c", actionType: "counter" }),
-    makeShot({ id: "o", actionType: "open_play" }),
-  ];
-
-  const filtered = filterShotsForTrendyMap(shots, {
-    ...DEFAULT_TRENDY_XG_MAP_FILTERS,
-    sfg: false,
-    regain: false,
-    goal: false,
-    blocked: false,
-    onTarget: false,
-    counter: true,
-  });
-
-  assert.equal(filtered.length, 1);
-  assert.equal(filtered[0].id, "c");
-})();
-
-(function testFilterPkEntriesForTrendyMap() {
-  const entries = [
-    makePkEntry({ id: "d", entryType: "dribble", isGoal: true }),
-    makePkEntry({ id: "p", entryType: "pass", isGoal: false }),
-  ];
-
-  const byType = filterPkEntriesForTrendyMap(entries, {
-    ...DEFAULT_TRENDY_PK_MAP_FILTERS,
-    entryType: "dribble",
-  });
-  assert.equal(byType.length, 1);
-  assert.equal(byType[0].id, "d");
-
-  const goalsOnly = filterPkEntriesForTrendyMap(entries, {
-    ...DEFAULT_TRENDY_PK_MAP_FILTERS,
-    onlyGoal: true,
-  });
-  assert.equal(goalsOnly.length, 1);
-  assert.equal(goalsOnly[0].id, "d");
 })();
 
 (function testRegainsOppHalfHeatmap() {
@@ -271,5 +192,14 @@ function makePkEntry(overrides: Partial<PKEntry> = {}): PKEntry {
   assert.equal(heatmap.get("G10"), 1);
   assert.equal(heatmap.get("D3"), undefined);
 })();
+
+{
+  const attack = makeShot({ id: "a", teamContext: "attack" });
+  const defense = makeShot({ id: "d", teamContext: "defense" });
+  const both = [attack, defense];
+  assert.deepEqual(filterShotsByMapSide(both, "all").map((s) => s.id), ["a", "d"]);
+  assert.deepEqual(filterShotsByMapSide(both, "attack").map((s) => s.id), ["a"]);
+  assert.deepEqual(filterShotsByMapSide(both, "defense").map((s) => s.id), ["d"]);
+}
 
 console.log("trendyMapFilters.test.ts: OK");

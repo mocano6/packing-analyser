@@ -5,6 +5,11 @@ import {
   type PlayerComparisonMetricRole,
   type PlayerComparisonRow,
 } from "./playerComparisonMetrics";
+import {
+  getWeightedIndexEventDisplayMode,
+  resolvePlayerComparisonMetricEventStats,
+  type WeightedIndexEventDisplayMode,
+} from "./playerComparisonMetricEventStats";
 
 export type WeightedIndexBetterWhen = "higher" | "lower";
 
@@ -58,6 +63,8 @@ export const WEIGHTED_INDEX_SELECTABLE_METRIC_IDS: readonly PlayerComparisonMetr
   "losesXt",
   "losesXtAttack",
   "losesXtDefense",
+  "defenseShotLine",
+  "defenseShotBlockXg",
 ];
 
 const WEIGHTED_INDEX_METRIC_ID_SET = new Set<string>(WEIGHTED_INDEX_SELECTABLE_METRIC_IDS);
@@ -116,6 +123,14 @@ export type PlayerComparisonWeightedMetricContribution = {
   weight: number;
   normalizedScore: number;
   contribution: number;
+  /** Wartość surowa w wybranym trybie (suma lub per 90) użyta do normalizacji. */
+  rawValue: number;
+  /** Liczba zdarzeń w zakresie (nie skaluje się per 90). */
+  eventTotal: number | null;
+  /** Zdarzenia uznane za skuteczne (definicja zależy od KPI). */
+  eventSuccessful: number | null;
+  /** ratio = etykieta skuteczne/wszystkie; countOnly = sama liczba zdarzeń. */
+  eventDisplayMode: WeightedIndexEventDisplayMode;
 };
 
 export type PlayerComparisonWeightedIndexResult = {
@@ -235,12 +250,17 @@ export function computePlayerWeightedIndex(
       config.betterWhen,
     );
     const weightFraction = config.weight / weightSum;
+    const eventStats = resolvePlayerComparisonMetricEventStats(row, config.metricId);
     return {
       metricId: config.metricId,
       label: getWeightedIndexMetricLabel(config.metricId),
       weight: config.weight,
       normalizedScore,
       contribution: normalizedScore * weightFraction,
+      rawValue: row.values[config.metricId],
+      eventTotal: eventStats?.total ?? null,
+      eventSuccessful: eventStats?.successful ?? null,
+      eventDisplayMode: getWeightedIndexEventDisplayMode(config.metricId),
     };
   });
 

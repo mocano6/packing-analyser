@@ -5,6 +5,11 @@ import type { StatsBombMatchRow } from "@/utils/statsbombCsvParser";
 import StatsBombMedianDistributionPanel from "@/components/StatsBombMedianDistributionPanel/StatsBombMedianDistributionPanel";
 import StatsBombOutcomeMedianPanel from "@/components/StatsBombOutcomeMedianPanel/StatsBombOutcomeMedianPanel";
 import {
+  countStatsBombIncludedMatches,
+  filterStatsBombMatchesForMedianAnalysis,
+  pruneStatsBombExcludedMatchIds,
+} from "@/utils/statsBombMatchInclusion";
+import {
   countStatsBombMatchOutcomes,
   filterStatsBombMatchesByOutcome,
   getStatsBombMatchOutcome,
@@ -60,14 +65,36 @@ export default function StatsBombMatchesTab({ rows }: StatsBombMatchesTabProps) 
   const [selectedMatchId, setSelectedMatchId] = useState<string>("");
   const [tableOutcomeFilter, setTableOutcomeFilter] = useState<StatsBombMatchOutcomeFilter>("all");
   const [medianSubTab, setMedianSubTab] = useState<MedianSubTab>("distribution");
+  const [excludedMatchIds, setExcludedMatchIds] = useState<Set<string>>(() => new Set());
   const medianSectionRef = useRef<HTMLElement | null>(null);
 
-  const medianReport = useMemo(() => buildStatsBombTeamMedianDistribution(rows), [rows]);
-  const outcomeCounts = useMemo(() => countStatsBombMatchOutcomes(rows), [rows]);
+  const allMatchIds = useMemo(() => rows.map(statsBombMatchRowId), [rows]);
+
+  useEffect(() => {
+    setExcludedMatchIds((prev) => pruneStatsBombExcludedMatchIds(prev, allMatchIds));
+  }, [allMatchIds]);
+
+  const includedRows = useMemo(
+    () => filterStatsBombMatchesForMedianAnalysis(rows, excludedMatchIds),
+    [rows, excludedMatchIds],
+  );
+
+  const includedCount = countStatsBombIncludedMatches(rows.length, excludedMatchIds);
+  const medianReport = useMemo(
+    () => buildStatsBombTeamMedianDistribution(includedRows),
+    [includedRows],
+  );
+  const outcomeCounts = useMemo(() => countStatsBombMatchOutcomes(includedRows), [includedRows]);
+  const tableOutcomeCounts = useMemo(() => countStatsBombMatchOutcomes(rows), [rows]);
 
   const filteredRows = useMemo(
     () => filterStatsBombMatchesByOutcome(rows, tableOutcomeFilter),
     [rows, tableOutcomeFilter],
+  );
+
+  const allVisibleIncluded = useMemo(
+    () => filteredRows.every((row) => !excludedMatchIds.has(statsBombMatchRowId(row))),
+    [filteredRows, excludedMatchIds],
   );
 
   const matchHighlightOptions = useMemo(
@@ -90,6 +117,10 @@ export default function StatsBombMatchesTab({ rows }: StatsBombMatchesTabProps) 
     [rows, selectedMatchId],
   );
 
+  const selectedMatchIncluded = selectedMatch
+    ? !excludedMatchIds.has(statsBombMatchRowId(selectedMatch))
+    : true;
+
   useEffect(() => {
     if (rows.length === 0) {
       setSelectedMatchId("");
@@ -100,6 +131,50 @@ export default function StatsBombMatchesTab({ rows }: StatsBombMatchesTabProps) 
       setSelectedMatchId(statsBombMatchRowId(rows[rows.length - 1]!));
     }
   }, [rows, selectedMatchId]);
+
+  const isMatchIncluded = useCallback(
+    (matchId: string) => !excludedMatchIds.has(matchId),
+    [excludedMatchIds],
+  );
+
+  const setMatchIncluded = useCallback((matchId: string, included: boolean) => {
+    setExcludedMatchIds((prev) => {
+      const next = new Set(prev);
+      if (included) {
+        next.delete(matchId);
+      } else {
+        next.add(matchId);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleMatchIncluded = useCallback(
+    (matchId: string) => {
+      setMatchIncluded(matchId, !isMatchIncluded(matchId));
+    },
+    [isMatchIncluded, setMatchIncluded],
+  );
+
+  const toggleAllVisibleIncluded = useCallback(() => {
+    const includeAll = !allVisibleIncluded;
+    setExcludedMatchIds((prev) => {
+      const next = new Set(prev);
+      for (const row of filteredRows) {
+        const id = statsBombMatchRowId(row);
+        if (includeAll) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+      }
+      return next;
+    });
+  }, [allVisibleIncluded, filteredRows]);
+
+  const resetAllIncluded = useCallback(() => {
+    setExcludedMatchIds(new Set());
+  }, []);
 
   const selectMatch = useCallback((row: StatsBombMatchRow, scroll = true) => {
     setSelectedMatchId(statsBombMatchRowId(row));
@@ -130,12 +205,29 @@ export default function StatsBombMatchesTab({ rows }: StatsBombMatchesTabProps) 
     [rows, selectMatch],
   );
 
+  const analysisScopeHint =
+    includedCount === rows.length
+      ? `Próba mediany: ${includedCount} meczów (${outcomeCounts.win}W · ${outcomeCounts.draw}R · ${outcomeCounts.loss}L).`
+      : `Próba mediany: ${includedCount} z ${rows.length} meczów (${outcomeCounts.win}W · ${outcomeCounts.draw}R · ${outcomeCounts.loss}L). Wyłączone mecze nie wchodzą do mediany ani podsumowania wg wyniku.`;
+
   return (
     <div className={styles.root}>
       <p className={styles.lead}>
-        Kliknij wiersz meczu, aby zobaczyć jego pozycję względem mediany sezonu. Kolory wierszy:
-        zielony — wygrana, żółty — remis, czerwony — porażka.
+        Odznacz mecz w kolumnie „Med.”, aby wyłączyć go z mediany sezonu i porównań. Kliknij wiersz,
+        aby zobaczyć pozycję meczu względem mediany z pozostałych zaznaczonych meczów. Kolory
+        wierszy: zielony — wygrana, żółty — remis, czerwony — porażka.
       </p>
+
+      <div className={styles.inclusionBar}>
+        <span className={styles.inclusionSummary}>
+          W medianie: <strong>{includedCount}</strong> / {rows.length} meczów
+        </span>
+        {excludedMatchIds.size > 0 ? (
+          <button type="button" className={styles.inclusionReset} onClick={resetAllIncluded}>
+            Przywróć wszystkie
+          </button>
+        ) : null}
+      </div>
 
       <div className={styles.tableFilters} role="tablist" aria-label="Filtr wyniku meczu w tabeli">
         {OUTCOME_FILTERS.map(({ id, label }) => (
@@ -150,12 +242,12 @@ export default function StatsBombMatchesTab({ rows }: StatsBombMatchesTabProps) 
             {label}
             <span className={styles.tableFilterCount}>
               {id === "all"
-                ? outcomeCounts.total
+                ? tableOutcomeCounts.total
                 : id === "win"
-                  ? outcomeCounts.win
+                  ? tableOutcomeCounts.win
                   : id === "draw"
-                    ? outcomeCounts.draw
-                    : outcomeCounts.loss}
+                    ? tableOutcomeCounts.draw
+                    : tableOutcomeCounts.loss}
             </span>
           </button>
         ))}
@@ -165,6 +257,16 @@ export default function StatsBombMatchesTab({ rows }: StatsBombMatchesTabProps) 
         <table className={pageStyles.table}>
           <thead>
             <tr>
+              <th scope="col" className={styles.includeHead}>
+                <input
+                  type="checkbox"
+                  className={styles.includeCheckbox}
+                  checked={filteredRows.length > 0 && allVisibleIncluded}
+                  aria-label="Zaznacz lub odznacz wszystkie widoczne mecze w medianie"
+                  onChange={toggleAllVisibleIncluded}
+                />
+                <span className={styles.includeHeadLabel}>Med.</span>
+              </th>
               <th scope="col">#</th>
               <th scope="col">Wynik</th>
               <th scope="col">Data</th>
@@ -182,7 +284,7 @@ export default function StatsBombMatchesTab({ rows }: StatsBombMatchesTabProps) 
           <tbody>
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={12} className={styles.emptyTable}>
+                <td colSpan={13} className={styles.emptyTable}>
                   Brak meczów dla wybranego filtra wyniku.
                 </td>
               </tr>
@@ -192,17 +294,27 @@ export default function StatsBombMatchesTab({ rows }: StatsBombMatchesTabProps) 
                 const seasonIndex = rows.findIndex((r) => statsBombMatchRowId(r) === rowId) + 1;
                 const outcome = getStatsBombMatchOutcome(row);
                 const isSelected = rowId === selectedMatchId;
+                const included = isMatchIncluded(rowId);
                 return (
                   <tr
                     key={rowId}
-                    className={`${styles.matchRow} ${outcomeRowClass(outcome)} ${isSelected ? styles.matchRowSelected : ""}`}
+                    className={`${styles.matchRow} ${outcomeRowClass(outcome)} ${isSelected ? styles.matchRowSelected : ""} ${included ? "" : styles.matchRowExcluded}`}
                     tabIndex={0}
                     role="button"
                     aria-pressed={isSelected}
-                    aria-label={`Mecz ${seasonIndex}: ${statsBombMatchOutcomeLabel(outcome)}, ${row.opponent}, ${row.date}`}
+                    aria-label={`Mecz ${seasonIndex}: ${statsBombMatchOutcomeLabel(outcome)}, ${row.opponent}, ${row.date}${included ? "" : ", wyłączony z mediany"}`}
                     onClick={() => selectMatch(row)}
                     onKeyDown={(event) => onRowKeyDown(event, row)}
                   >
+                    <td className={styles.includeCell} onClick={(event) => event.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className={styles.includeCheckbox}
+                        checked={included}
+                        aria-label={`Uwzględnij mecz ${row.opponent} (${row.date}) w medianie`}
+                        onChange={() => toggleMatchIncluded(rowId)}
+                      />
+                    </td>
                     <td className={styles.matchNumber}>{seasonIndex}</td>
                     <td>
                       <span
@@ -245,6 +357,7 @@ export default function StatsBombMatchesTab({ rows }: StatsBombMatchesTabProps) 
             {selectedMatch && selectedMatchIndex >= 0 ? (
               <span className={styles.medianSubtitle}>
                 — mecz #{selectedMatchIndex + 1}: {selectedMatch.opponent} ({selectedMatch.date})
+                {!selectedMatchIncluded ? " · poza próbą mediany" : ""}
               </span>
             ) : null}
           </h3>
@@ -271,10 +384,10 @@ export default function StatsBombMatchesTab({ rows }: StatsBombMatchesTabProps) 
           </div>
         </div>
 
-        {rows.length < STATSBOMB_TEAM_MEDIAN_MIN_MATCHES ? (
+        {includedCount < STATSBOMB_TEAM_MEDIAN_MIN_MATCHES ? (
           <p className={styles.medianHint}>
-            Potrzebujesz co najmniej {STATSBOMB_TEAM_MEDIAN_MIN_MATCHES} meczów, aby pokazać analizę
-            median.
+            Potrzebujesz co najmniej {STATSBOMB_TEAM_MEDIAN_MIN_MATCHES} meczów w medianie, aby
+            pokazać analizę (obecnie: {includedCount}). Zaznacz więcej meczów w tabeli.
           </p>
         ) : medianReport ? (
           medianSubTab === "distribution" ? (
@@ -282,13 +395,14 @@ export default function StatsBombMatchesTab({ rows }: StatsBombMatchesTabProps) 
               report={medianReport}
               mode="team"
               highlightId={selectedMatchId}
+              highlightMatchRow={selectedMatchIncluded ? null : selectedMatch}
               highlightOptions={matchHighlightOptions}
               onHighlightChange={setSelectedMatchId}
-              scopeHint={`Próba: ${rows.length} meczów (${outcomeCounts.win}W · ${outcomeCounts.draw}R · ${outcomeCounts.loss}L).`}
+              scopeHint={analysisScopeHint}
             />
           ) : (
             <StatsBombOutcomeMedianPanel
-              rows={rows}
+              rows={includedRows}
               medianReport={medianReport}
               onSelectMatch={onSelectMatchFromOutcome}
             />

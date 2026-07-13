@@ -28,6 +28,27 @@ function normalizedMainId(mainPlayerId: string): string {
   return normalizeFirestorePlayerId(mainPlayerId) ?? mainPlayerId;
 }
 
+/** Firestore updateDoc / WriteBatch odrzucają pola z wartością undefined. */
+export function removeUndefinedDeep(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(removeUndefinedDeep).filter((x) => x !== undefined);
+  }
+  if (typeof obj === "object") {
+    const cleaned: Record<string, unknown> = {};
+    Object.keys(obj as object).forEach((k) => {
+      const v = (obj as Record<string, unknown>)[k];
+      if (v !== undefined) cleaned[k] = removeUndefinedDeep(v);
+    });
+    return cleaned;
+  }
+  return obj;
+}
+
+function sanitizeMatchMergeUpdates(updates: Record<string, unknown>): Record<string, unknown> {
+  return removeUndefinedDeep(updates) as Record<string, unknown>;
+}
+
 export const MATCH_ACTION_ARRAY_KEYS = [
   "actions_packing",
   "actions_unpacking",
@@ -400,7 +421,7 @@ export function buildMatchDocumentUpdatesForDuplicateMerge(
     }
   }
 
-  return { updates, changed };
+  return { updates: sanitizeMatchMergeUpdates(updates), changed };
 }
 
 /** Jedna operacja scalenia duplikatów w dokumencie meczu (subset kart do main). */
@@ -436,5 +457,5 @@ export function buildMatchDocumentUpdatesForDuplicateMergeMany(
       working = { ...working, ...updates };
     }
   }
-  return { updates: accumulated, changed };
+  return { updates: sanitizeMatchMergeUpdates(accumulated), changed };
 }

@@ -23,3 +23,16 @@ export function findActionCollectionFieldInMatchData(
   }
   return null;
 }
+
+/** Zwraca akcję z dowolnej tablicy w dokumencie meczu. */
+export function findActionInMatchDocument(
+  data: TeamInfo,
+  actionId: string,
+): Action | undefined {
+  for (const k of ACTION_ARRAY_KEYS) {
+    const arr = (data[k] as Action[] | undefined) || [];
+    const found = arr.find((a) => a.id === actionId);
+    if (found) return found;
+  }
+  return undefined;
+}

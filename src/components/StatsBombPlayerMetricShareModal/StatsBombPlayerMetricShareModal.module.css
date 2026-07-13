@@ -21,6 +21,10 @@
   flex-direction: column;
 }
 
+.dialogWide {
+  width: min(920px, 100%);
+}
+
 .header {
   display: flex;
   align-items: flex-start;
@@ -177,4 +181,89 @@
   font-size: 12px;
   line-height: 1.45;
   color: #64748b;
+}
+
+.tabButton {
+  border: 1px solid #d1d5db;
+  background: #f8fafc;
+  color: #475569;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tabButton:hover {
+  background: #eef2ff;
+  color: #1e293b;
+}
+
+.tabButtonActive {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.emptyTab {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.emptyTab p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.setPieceHead {
+  min-width: 150px;
+}
+
+.setPieceCell {
+  min-width: 150px;
+  max-width: 220px;
+}
+
+.setPieceTypeList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.setPieceTypeTag,
+.setPieceTypeTagDominant {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  line-height: 1.2;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.setPieceTypeTag {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.setPieceTypeTagDominant {
+  background: #dbeafe;
+  color: #1e40af;
+  font-weight: 700;
+}
+
+.setPieceEmpty {
+  color: #94a3b8;
 }

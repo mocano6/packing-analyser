@@ -285,8 +285,13 @@
   margin-top: -5px;
   background: #2563eb;
   opacity: 1;
-  box-shadow: 0 0 0 2px #bfdbfe;
   z-index: 3;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px #2563eb;
+}
+
+.obsDotExternal {
+  background: #7c3aed;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px #7c3aed;
 }
 
 .metricValues {
@@ -308,4 +313,34 @@
 .statChipHighlight {
   font-weight: 600;
   color: #1d4ed8;
+}
+
+.viewTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+.viewTab {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.viewTab:hover {
+  color: #334155;
+  background: #f8fafc;
+}
+
+.viewTabActive {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #bfdbfe;
 }

@@ -54,3 +54,36 @@ export function getOpponentLabelForPackingModal(
   }
   return null;
 }
+
+/** Skrócona etykieta zespołu (ostatnie słowo nazwy) do filtrów i kart. */
+export function shortTeamDisplayLabel(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return parts.length > 1 ? (parts[parts.length - 1] ?? name) : name;
+}
+
+/**
+ * Nazwa drużyny przeciwnej z perspektywy wybranego zespołu (Statystyki zespołu, karty KPI).
+ * Unika surowego ID i słowa „Przeciwnik”.
+ */
+export function resolveMatchOpponentDisplayName(
+  matchInfo: TeamInfo,
+  selectedTeam: string,
+  availableTeams: readonly TeamListEntry[],
+): string {
+  const opponentId = matchInfo.team === selectedTeam ? matchInfo.opponent : matchInfo.team;
+  const fromList = availableTeams.find((t) => t.id === opponentId)?.name?.trim();
+  if (fromList) return fromList;
+
+  const ext = matchInfo as TeamInfo & { opponentName?: string; teamName?: string };
+  if (matchInfo.team === selectedTeam) {
+    const fromDoc = ext.opponentName?.trim();
+    if (fromDoc) return fromDoc;
+  } else {
+    const homeName = ext.teamName?.trim();
+    if (homeName) return homeName;
+  }
+
+  const trimmedId = opponentId?.trim();
+  if (trimmedId && !looksLikeOpaqueTeamToken(trimmedId)) return trimmedId;
+  return trimmedId || "—";
+}

@@ -6,6 +6,8 @@ import {
   parseStatsBombMatchStatsCsv,
   parseStatsBombNumber,
   parseStatsBombSquadStatsCsv,
+  parseMarketValueEuro,
+  formatStatsBombMarketValueEur,
 } from "./statsbombCsvParser";
 
 const SAMPLE_HEADER =
@@ -56,6 +58,17 @@ assert.equal(parseStatsBombMatchStatsCsv(bomCsv).length, 2);
 // Procenty: "55%" -> 55 (skalowanie nie zmienia korelacji).
 assert.equal(parseStatsBombNumber("55%"), 55);
 assert.equal(parseStatsBombNumber("0.5%"), 0.5);
+
+assert.equal(parseMarketValueEuro("2.5M"), 2_500_000);
+assert.equal(parseMarketValueEuro("€1.2m"), 1_200_000);
+assert.equal(parseMarketValueEuro("800000"), 800_000);
+assert.equal(formatStatsBombMarketValueEur(2_500_000), "2,5 mln €");
+
+const marketCsv =
+  "Player,Minutes,Age,Market Value,Player SBD ID\n" +
+  "Star,2000,24,3.5M,1\n";
+const marketRows = parseStatsBombSquadStatsCsv(marketCsv);
+assert.equal(marketRows[0]?.marketValue, 3_500_000);
 
 // CRLF (eksport Excel/StatsBomb): ostatnia kolumna outcome musi być nadal rozpoznana.
 const crlfHeader =

@@ -1,0 +1,136 @@
+.panel {
+  position: fixed;
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+  width: min(440px, calc(100vw - 24px));
+  max-height: min(420px, 50vh);
+  z-index: 10050;
+  padding: 10px 12px 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.panelCustom {
+  right: auto !important;
+  bottom: auto !important;
+  max-height: none;
+}
+
+.panelHidden {
+  visibility: hidden;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.headerDraggable {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.headerDraggable:active {
+  cursor: grabbing;
+}
+
+.headerActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.resetLayout {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #4b5563;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.resetLayout:hover {
+  background: #f3f4f6;
+}
+
+.resizeHandle {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 5;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 10px 0 0 0;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(315deg, transparent 55%, rgba(15, 23, 42, 0.22) 55%);
+}
+
+.resizeHandle:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.playerShell {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-inline-start: 30px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.hideButton {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.hideButton:hover {
+  background: #f3f4f6;
+}
+
+@media print {
+  .panel {
+    display: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .panel {
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: max(12px, env(safe-area-inset-right, 0px));
+    width: auto;
+    max-height: 42vh;
+  }
+}

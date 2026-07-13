@@ -54,10 +54,17 @@
 
 .dateInput {
   padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   font-size: 14px;
-  color: #1f2937;
+  color: var(--text);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.dateInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
 }
 
 .teamsGrid {
@@ -101,11 +108,11 @@
 }
 
 .primaryButton {
-  background-color: #3b82f6;
-  color: white;
+  background-color: var(--color-primary);
+  color: var(--text-on-primary);
   padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
@@ -113,7 +120,7 @@
 }
 
 .primaryButton:hover {
-  background-color: #2563eb;
+  background-color: var(--color-primary-hover);
 }
 
 .primaryButton:disabled {
@@ -144,12 +151,12 @@
 }
 
 .tabButton:hover {
-  color: #3b82f6;
+  color: var(--color-primary);
 }
 
 .tabButton.active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
 
 /* We don't need disabled specific styles since it's enabled now */

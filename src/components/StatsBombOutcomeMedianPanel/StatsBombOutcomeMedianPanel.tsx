@@ -35,8 +35,8 @@ function formatSigned(value: number | null, label: string): string {
   return formatted;
 }
 
-function formatPct(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "—";
+function formatPct(value: number | null, reliable = true): string {
+  if (!reliable || value === null || !Number.isFinite(value)) return "—";
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
   return `${sign}${Math.abs(value).toFixed(0)}%`;
 }
@@ -54,7 +54,9 @@ const SORT_COLUMNS: Array<{ key: StatsBombOutcomeSummarySortKey; label: string }
   { key: "seasonMedian", label: "Mediana sezonu" },
   { key: "avgValue", label: "Śr. wartość" },
   { key: "avgDeviation", label: "Śr. odchylenie" },
+  { key: "avgDeviationPct", label: "Śr. odchyl. %" },
   { key: "avgAbsDeviation", label: "Śr. |odchylenie|" },
+  { key: "avgAbsDeviationPct", label: "Śr. |odchyl.| %" },
   { key: "aboveMedianCount", label: "Pow. med." },
   { key: "belowMedianCount", label: "Poniżej med." },
   { key: "matchCount", label: "Mecze" },
@@ -177,10 +179,30 @@ function OutcomeSummaryTable({
                   <td className={`${teamStyles.num} ${(stats.avgDeviation ?? 0) > 0 ? styles.positive : (stats.avgDeviation ?? 0) < 0 ? styles.negative : ""}`}>
                     {formatSigned(stats.avgDeviation, metric.label)}
                   </td>
+                  <td
+                    className={`${teamStyles.num} ${(stats.avgDeviationPct ?? 0) > 0 ? styles.positive : (stats.avgDeviationPct ?? 0) < 0 ? styles.negative : ""}`}
+                    title={
+                      stats.pctReliable
+                        ? "Odchylenie średniej grupy względem mediany sezonu (%)."
+                        : "Brak sensownej skali % (mediana ≈ 0 lub bardzo rzadkie zdarzenia)."
+                    }
+                  >
+                    {formatPct(stats.avgDeviationPct, stats.pctReliable)}
+                  </td>
                   <td className={teamStyles.num}>
                     {stats.avgAbsDeviation === null
                       ? "—"
                       : formatDistributionValue(stats.avgAbsDeviation, metric.label)}
+                  </td>
+                  <td
+                    className={teamStyles.num}
+                    title={
+                      stats.pctReliable
+                        ? "|Odchylenie %| średniej grupy względem mediany sezonu."
+                        : "Brak sensownej skali % (mediana ≈ 0 lub bardzo rzadkie zdarzenia)."
+                    }
+                  >
+                    {formatPct(stats.avgAbsDeviationPct, stats.pctReliable)}
                   </td>
                   <td className={teamStyles.num}>{stats.aboveMedianCount}</td>
                   <td className={teamStyles.num}>{stats.belowMedianCount}</td>
@@ -198,7 +220,7 @@ function OutcomeSummaryTable({
                 </tr>
                 {isExpanded ? (
                   <tr className={styles.detailsRow}>
-                    <td colSpan={10}>
+                    <td colSpan={12}>
                       <div className={styles.detailsGrid}>
                         <div>
                           <h4 className={styles.detailsTitle}>Najwyżej ponad medianą</h4>
@@ -221,7 +243,10 @@ function OutcomeSummaryTable({
                                   )}
                                   : {formatDistributionValue(entry.value, metric.label)} (
                                   {formatSigned(entry.deviation, metric.label)}
-                                  {entry.deviationPct !== null ? `, ${formatPct(entry.deviationPct)}` : ""})
+                                  {stats.pctReliable && entry.deviationPct !== null
+                                    ? `, ${formatPct(entry.deviationPct, true)}`
+                                    : ""}
+                                  )
                                 </li>
                               ))
                             )}
@@ -248,7 +273,10 @@ function OutcomeSummaryTable({
                                   )}
                                   : {formatDistributionValue(entry.value, metric.label)} (
                                   {formatSigned(entry.deviation, metric.label)}
-                                  {entry.deviationPct !== null ? `, ${formatPct(entry.deviationPct)}` : ""})
+                                  {stats.pctReliable && entry.deviationPct !== null
+                                    ? `, ${formatPct(entry.deviationPct, true)}`
+                                    : ""}
+                                  )
                                 </li>
                               ))
                             )}
@@ -304,6 +332,8 @@ export default function StatsBombOutcomeMedianPanel({
       <p className={teamStyles.hint}>
         Porównanie parametrów meczów z medianą sezonu, posegregowane wg wyniku (W/R/P). Kliknij
         nagłówek kolumny, aby posortować tabelę — domyślnie według średniego |odchylenia|.
+        Kolumny % pokazują odchylenie średniej danej grupy (W/R/P) względem mediany sezonu.
+        Przy metrykach rzadkich (np. xG z autów) lub z medianą ≈ 0 procenty są ukryte (—) — patrz wtedy na odchylenie bezwzględne.
       </p>
 
       <div className={styles.summaryGrid}>

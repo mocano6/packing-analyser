@@ -30,6 +30,7 @@ const makeRow = (id: string, values: Partial<Record<string, number>>): PlayerCom
   matchesPlayed: 10,
   hasMinutes: true,
   raw: {} as PlayerComparisonRow["raw"],
+  eventStats: {},
   values: {
     packing: 0,
     packingSender: 0,
@@ -75,6 +76,8 @@ const makeRow = (id: string, values: Partial<Record<string, number>>): PlayerCom
     phaseP2Receiver: 0,
     phaseP3Sender: 0,
     phaseP3Receiver: 0,
+    defenseShotLine: 0,
+    defenseShotBlockXg: 0,
     ...values,
   },
 });
@@ -92,6 +95,8 @@ const configs = sanitizeWeightedIndexConfigs([
 ]);
 
 assert.equal(getWeightedIndexMetricLabel("pxtSender"), "PXT/podanie");
+assert.equal(getWeightedIndexMetricLabel("defenseShotLine"), "Na linii strzału (obrona)");
+assert.equal(getWeightedIndexMetricLabel("defenseShotBlockXg"), "xG zablokowanych strzałów (obrona)");
 assert.equal(getDefaultWeightedIndexBetterWhen("loses"), "lower");
 assert.equal(getDefaultWeightedIndexBetterWhen("goals"), "higher");
 assert.equal(getActiveWeightedMetricWeightSum(configs), 50);

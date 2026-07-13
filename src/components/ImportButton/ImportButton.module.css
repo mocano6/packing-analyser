@@ -1,13 +1,13 @@
 /* src/components/ImportButton/ImportButton.module.css */
 .importButton {
   padding: 10px 15px;
-  background-color: #805ad5;
-  color: white;
-  border: none;
-  border-radius: 5px;
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   font-size: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -15,22 +15,21 @@
   min-width: 150px;
   height: 38px;
   font-weight: 500;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .importButton:hover {
-  background-color: #6b46c1;
+  background-color: var(--surface-hover);
+  border-color: var(--text-muted);
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .importButton:active {
   transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .importButton:disabled {
-  background-color: #a0a0a0;
+  opacity: 0.55;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
@@ -120,7 +119,7 @@
   flex-shrink: 0;
   width: 1rem;
   height: 1rem;
-  accent-color: #805ad5;
+  accent-color: var(--color-primary);
 }
 
 .checkboxRow input:disabled + span {
@@ -140,11 +139,11 @@
 .modalBtnSecondary,
 .modalBtnPrimary {
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
-  border: none;
+  border: 1px solid transparent;
 }
 
 .modalBtnSecondary {
@@ -157,12 +156,12 @@
 }
 
 .modalBtnPrimary {
-  background: #805ad5;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .modalBtnPrimary:hover:not(:disabled) {
-  background: #6b46c1;
+  background: var(--color-primary-hover);
 }
 
 .modalBtnSecondary:disabled,

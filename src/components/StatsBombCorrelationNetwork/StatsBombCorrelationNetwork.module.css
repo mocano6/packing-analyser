@@ -1,0 +1,175 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+
+.controlLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.controlSelect {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #1f2937;
+  background: #fff;
+  cursor: pointer;
+}
+
+.hint {
+  font-size: 11px;
+  line-height: 1.45;
+  color: #64748b;
+  margin: 0;
+}
+
+.viewport {
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+  max-height: min(72vh, 920px);
+}
+
+.svg {
+  display: block;
+  min-width: 100%;
+}
+
+.edge {
+  fill: none;
+  stroke: #cbd5e1;
+  stroke-width: 1.5;
+}
+
+.edgeStrongPos {
+  stroke: #16a34a;
+  stroke-width: 2;
+}
+
+.edgeStrongNeg {
+  stroke: #dc2626;
+  stroke-width: 2;
+}
+
+.edgeLabel {
+  font-size: 10px;
+  font-weight: 700;
+  fill: #475569;
+  pointer-events: none;
+}
+
+.edgeLabelPosStrong {
+  fill: #15803d;
+}
+
+.edgeLabelNegStrong {
+  fill: #b91c1c;
+}
+
+.nodeGroup {
+  cursor: pointer;
+}
+
+.nodeRect {
+  fill: #fff;
+  stroke: #cbd5e1;
+  stroke-width: 1.5;
+  rx: 8;
+}
+
+.nodeRectRoot {
+  fill: #eff6ff;
+  stroke: #2563eb;
+  stroke-width: 2;
+}
+
+.nodeRectOutcome {
+  stroke: #7c3aed;
+}
+
+.nodeRectMy {
+  stroke: #059669;
+}
+
+.nodeRectOpp {
+  stroke: #ea580c;
+}
+
+.nodeRectNeutral {
+  stroke: #64748b;
+}
+
+.nodeRect:focus-visible,
+.nodeGroup:focus-visible .nodeRect {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.nodeLabel {
+  font-size: 11px;
+  font-weight: 600;
+  fill: #1e293b;
+  pointer-events: none;
+}
+
+.depthGuide {
+  font-size: 10px;
+  font-weight: 700;
+  fill: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.empty {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  padding: 16px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legendSwatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1.5px solid #cbd5e1;
+  background: #fff;
+}
+
+.legendSwatchRoot {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.legendSwatchPos {
+  border-color: #16a34a;
+}
+
+.legendSwatchNeg {
+  border-color: #dc2626;
+}

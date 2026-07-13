@@ -2563,7 +2563,7 @@
 
 .playerSelectPlayerItemActive .playerSelectPlayerNumber {
   color: white;
-  background-color: #2196f3;
+  background-color: var(--color-primary);
 }
 
 .playerSelectPlayerName {

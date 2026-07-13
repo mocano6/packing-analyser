@@ -5,16 +5,30 @@ import XGPitch from "@/components/XGPitch/XGPitch";
 import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
 import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPitch";
 import { PKEntry, Player, Shot } from "@/types";
+import { TrendyMapSide, TrendyXgMapBodyPartFilter } from "@/utils/trendyMapFilters";
 import {
-  DEFAULT_TRENDY_PK_MAP_FILTERS,
-  DEFAULT_TRENDY_XG_MAP_FILTERS,
-  filterPkEntriesForTrendyMap,
-  filterShotsForTrendyMap,
-  TrendyMapSide,
-  TrendyPkMapFilters,
-  TrendyXgMapBodyPartFilter,
-  TrendyXgMapFilters,
-} from "@/utils/trendyMapFilters";
+  DEFAULT_WIEDZA_PK_ENTRIES_FILTERS,
+  filterPkEntriesForWiedzaTab,
+  WIEDZA_PK_ENTRY_TYPE_OPTIONS,
+  WIEDZA_PK_OUTCOME_OPTIONS,
+  WiedzaPkEntriesFilterState,
+  WiedzaPkEntryTypeFilter,
+  WiedzaPkOutcomeFilter,
+} from "@/utils/wiedzaPkEntriesFilters";
+import {
+  DEFAULT_WIEDZA_SHOTS_FILTERS,
+  filterShotsForWiedzaTab,
+  WIEDZA_SHOT_ACTION_CATEGORY_OPTIONS,
+  WIEDZA_SHOT_OUTCOME_OPTIONS,
+  WIEDZA_SFG_PHASE_OPTIONS,
+  WIEDZA_SFG_SUBTYPE_OPTIONS,
+  WIEDZA_SFG_TYPE_OPTIONS,
+  withWiedzaShotActionCategory,
+  WiedzaSfgPhaseFilter,
+  WiedzaSfgSubtypeFilter,
+  WiedzaSfgTypeFilter,
+  WiedzaShotsFilterState,
+} from "@/utils/wiedzaShotsFilters";
 import styles from "./TrendyKpiMapModal.module.css";
 
 const TEAM_STATS_GREEN = "#059669";
@@ -179,15 +193,6 @@ function XgRangeFilterSegment({
   );
 }
 
-const XG_TYPE_OPTIONS: { key: keyof Pick<TrendyXgMapFilters, "sfg" | "counter" | "regain" | "goal" | "blocked" | "onTarget">; label: string }[] = [
-  { key: "sfg", label: "SFG" },
-  { key: "counter", label: "Kontra" },
-  { key: "regain", label: "Regain" },
-  { key: "goal", label: "Gol" },
-  { key: "blocked", label: "Zablokowane" },
-  { key: "onTarget", label: "Celne" },
-];
-
 function MapLegend({ kind }: { kind: TrendyKpiMapModalKind }) {
   if (kind === "pk") {
     return (
@@ -272,13 +277,13 @@ export default function TrendyKpiMapModal({
   allTeams,
   onClose,
 }: TrendyKpiMapModalProps) {
-  const [xgMapFilters, setXgMapFilters] = useState<TrendyXgMapFilters>(DEFAULT_TRENDY_XG_MAP_FILTERS);
-  const [pkMapFilters, setPkMapFilters] = useState<TrendyPkMapFilters>(DEFAULT_TRENDY_PK_MAP_FILTERS);
+  const [shotsFilters, setShotsFilters] = useState<WiedzaShotsFilterState>(DEFAULT_WIEDZA_SHOTS_FILTERS);
+  const [pkFilters, setPkFilters] = useState<WiedzaPkEntriesFilterState>(DEFAULT_WIEDZA_PK_ENTRIES_FILTERS);
   const [mapSide, setMapSide] = useState<TrendyMapSide>("attack");
 
   useEffect(() => {
-    setXgMapFilters(DEFAULT_TRENDY_XG_MAP_FILTERS);
-    setPkMapFilters(DEFAULT_TRENDY_PK_MAP_FILTERS);
+    setShotsFilters(DEFAULT_WIEDZA_SHOTS_FILTERS);
+    setPkFilters(DEFAULT_WIEDZA_PK_ENTRIES_FILTERS);
     setMapSide("attack");
   }, [kind, matchCount, teamId]);
 
@@ -301,14 +306,21 @@ export default function TrendyKpiMapModal({
   );
 
   const filteredShots = useMemo(
-    () => filterShotsForTrendyMap(sideShots, xgMapFilters),
-    [sideShots, xgMapFilters],
+    () => filterShotsForWiedzaTab(sideShots, shotsFilters),
+    [sideShots, shotsFilters],
   );
 
   const filteredPkEntries = useMemo(
-    () => filterPkEntriesForTrendyMap(sidePkEntries, pkMapFilters),
-    [sidePkEntries, pkMapFilters],
+    () => filterPkEntriesForWiedzaTab(sidePkEntries, pkFilters),
+    [sidePkEntries, pkFilters],
   );
+
+  const showSfgSubtypeRow =
+    shotsFilters.actionCategory === "sfg" &&
+    shotsFilters.sfgType !== "all" &&
+    shotsFilters.sfgType !== "penalty";
+
+  const showSfgPhaseRow = shotsFilters.actionCategory === "sfg" && shotsFilters.sfgType !== "penalty";
 
   const pitchMatchInfo = useMemo(
     () => ({
@@ -417,42 +429,30 @@ export default function TrendyKpiMapModal({
                 {kind === "pk" ? (
                   <>
                     <FilterSegment label="Typ">
-                      {(
-                        [
-                          ["all", "Wszystkie"],
-                          ["dribble", "Drybling"],
-                          ["pass", "Podanie"],
-                          ["sfg", "SFG"],
-                        ] as const
-                      ).map(([value, label]) => (
+                      {WIEDZA_PK_ENTRY_TYPE_OPTIONS.map(({ value, label }) => (
                         <FilterChip
                           key={value}
-                          active={pkMapFilters.entryType === value}
-                          onClick={() => setPkMapFilters((prev) => ({ ...prev, entryType: value }))}
+                          active={pkFilters.entryType === value}
+                          onClick={() =>
+                            setPkFilters((prev) => ({ ...prev, entryType: value as WiedzaPkEntryTypeFilter }))
+                          }
                         >
                           {label}
                         </FilterChip>
                       ))}
                     </FilterSegment>
-                    <FilterSegment label="Wynik">
-                      <FilterChip
-                        active={pkMapFilters.onlyRegain}
-                        onClick={() => setPkMapFilters((prev) => ({ ...prev, onlyRegain: !prev.onlyRegain }))}
-                      >
-                        Przechwyt
-                      </FilterChip>
-                      <FilterChip
-                        active={pkMapFilters.onlyShot}
-                        onClick={() => setPkMapFilters((prev) => ({ ...prev, onlyShot: !prev.onlyShot }))}
-                      >
-                        Strzał
-                      </FilterChip>
-                      <FilterChip
-                        active={pkMapFilters.onlyGoal}
-                        onClick={() => setPkMapFilters((prev) => ({ ...prev, onlyGoal: !prev.onlyGoal }))}
-                      >
-                        Gol
-                      </FilterChip>
+                    <FilterSegment label="Skutek">
+                      {WIEDZA_PK_OUTCOME_OPTIONS.map(({ value, label }) => (
+                        <FilterChip
+                          key={value}
+                          active={pkFilters.outcome === value}
+                          onClick={() =>
+                            setPkFilters((prev) => ({ ...prev, outcome: value as WiedzaPkOutcomeFilter }))
+                          }
+                        >
+                          {label}
+                        </FilterChip>
+                      ))}
                     </FilterSegment>
                   </>
                 ) : (
@@ -461,34 +461,105 @@ export default function TrendyKpiMapModal({
                       {BODY_PART_OPTIONS.map(({ value, label }) => (
                         <FilterChip
                           key={value}
-                          active={xgMapFilters.bodyPart === value}
-                          onClick={() => setXgMapFilters((prev) => ({ ...prev, bodyPart: value }))}
+                          active={shotsFilters.bodyPart === value}
+                          onClick={() => setShotsFilters((prev) => ({ ...prev, bodyPart: value }))}
                         >
                           {label}
                         </FilterChip>
                       ))}
                     </FilterSegment>
-                    <FilterSegment label="Typ">
-                      {XG_TYPE_OPTIONS.map(({ key, label }) => (
+                    <FilterSegment label="Akcja">
+                      {WIEDZA_SHOT_ACTION_CATEGORY_OPTIONS.map(({ value, label }) => (
                         <FilterChip
-                          key={key}
-                          active={xgMapFilters[key]}
-                          onClick={() => setXgMapFilters((prev) => ({ ...prev, [key]: !prev[key] }))}
+                          key={value}
+                          active={shotsFilters.actionCategory === value}
+                          onClick={() =>
+                            setShotsFilters((prev) => withWiedzaShotActionCategory(prev, value))
+                          }
+                        >
+                          {label}
+                        </FilterChip>
+                      ))}
+                    </FilterSegment>
+                    <FilterSegment label="Wynik">
+                      {WIEDZA_SHOT_OUTCOME_OPTIONS.map(({ value, label }) => (
+                        <FilterChip
+                          key={value}
+                          active={shotsFilters.outcome === value}
+                          onClick={() => setShotsFilters((prev) => ({ ...prev, outcome: value }))}
                         >
                           {label}
                         </FilterChip>
                       ))}
                     </FilterSegment>
                     <XgRangeFilterSegment
-                      xgMin={xgMapFilters.xgMin}
-                      xgMax={xgMapFilters.xgMax}
+                      xgMin={shotsFilters.xgMin}
+                      xgMax={shotsFilters.xgMax}
                       onChange={({ xgMin, xgMax }) =>
-                        setXgMapFilters((prev) => ({ ...prev, xgMin, xgMax }))
+                        setShotsFilters((prev) => ({ ...prev, xgMin, xgMax }))
                       }
                     />
                   </>
                 )}
               </div>
+
+              {kind === "shots" && shotsFilters.actionCategory === "sfg" ? (
+                <div className={styles.modalFiltersRow}>
+                  <FilterSegment label="Typ SFG">
+                    {WIEDZA_SFG_TYPE_OPTIONS.map(({ value, label }) => (
+                      <FilterChip
+                        key={value}
+                        active={shotsFilters.sfgType === value}
+                        onClick={() =>
+                          setShotsFilters((prev) => ({
+                            ...prev,
+                            sfgType: value as WiedzaSfgTypeFilter,
+                            sfgSubtype: value === "penalty" ? "all" : prev.sfgSubtype,
+                            sfgPhase: value === "penalty" ? "all" : prev.sfgPhase,
+                          }))
+                        }
+                      >
+                        {label}
+                      </FilterChip>
+                    ))}
+                  </FilterSegment>
+
+                  {showSfgPhaseRow ? (
+                    <FilterSegment label="Faza SFG">
+                      {WIEDZA_SFG_PHASE_OPTIONS.map(({ value, label }) => (
+                        <FilterChip
+                          key={value}
+                          active={shotsFilters.sfgPhase === value}
+                          onClick={() =>
+                            setShotsFilters((prev) => ({ ...prev, sfgPhase: value as WiedzaSfgPhaseFilter }))
+                          }
+                        >
+                          {label}
+                        </FilterChip>
+                      ))}
+                    </FilterSegment>
+                  ) : null}
+
+                  {showSfgSubtypeRow ? (
+                    <FilterSegment label="Podrodzaj SFG">
+                      {WIEDZA_SFG_SUBTYPE_OPTIONS.map(({ value, label }) => (
+                        <FilterChip
+                          key={value}
+                          active={shotsFilters.sfgSubtype === value}
+                          onClick={() =>
+                            setShotsFilters((prev) => ({
+                              ...prev,
+                              sfgSubtype: value as WiedzaSfgSubtypeFilter,
+                            }))
+                          }
+                        >
+                          {label}
+                        </FilterChip>
+                      ))}
+                    </FilterSegment>
+                  ) : null}
+                </div>
+              ) : null}
             </footer>
           )}
         </div>

@@ -2,14 +2,13 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { Player, Action, TeamInfo, PKEntry, Shot, PlayerMatchStats } from "@/types";
 import { usePlayersState } from "@/hooks/usePlayersState";
 import { useMatchInfo } from "@/hooks/useMatchInfo";
 import { useTeams } from "@/hooks/useTeams";
 import { useAuth } from "@/hooks/useAuth";
-import { useProfileHeatmapVideoPanelLayout } from "@/hooks/useProfileHeatmapVideoPanelLayout";
+import MatchVideoFloatingPanel from "@/components/MatchVideoFloatingPanel/MatchVideoFloatingPanel";
 import {
   clearMatchDocumentCache,
   getMatchDocumentFromCache,
@@ -23,7 +22,6 @@ import { losesAttackZoneRawForMap, regainAttackZoneRawForMap } from "@/utils/kpi
 import { getVideoTimestampSeconds } from "@/utils/actionVideoSeekSeconds";
 import { hasExternalVideoSource } from "@/utils/externalVideoMatchInfo";
 import toast from "react-hot-toast";
-import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
 import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import { filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import { filterTeamsByUserAccess, type UserTeamAccess } from "@/lib/teamsForUserAccess";
@@ -228,23 +226,11 @@ export default function PlayerDetailsPage() {
   const [xgHalf, setXgHalf] = useState<"all" | "first" | "second">("all");
   const [xgFilter, setXgFilter] = useState<"all" | "sfg" | "open_play">("all");
   const [isPrintingProfile, setIsPrintingProfile] = useState(false);
-  const youtubeVideoRef = useRef<YouTubeVideoRef>(null);
+  const [hasProfileVideoPanel, setHasProfileVideoPanel] = useState(false);
+  const [isProfileVideoOpen, setIsProfileVideoOpen] = useState(false);
   const [profileVideoMatch, setProfileVideoMatch] = useState<TeamInfo | null>(null);
   const [profileVideoSeekTargetSeconds, setProfileVideoSeekTargetSeconds] = useState<number | null>(null);
-  const [profileVideoPortalReady, setProfileVideoPortalReady] = useState(false);
-  const {
-    panelRef: profileHeatmapVideoPanelRef,
-    panelStyle: profileHeatmapVideoPanelStyle,
-    resetLayout: resetProfileHeatmapVideoPanelLayout,
-    onHeaderPointerDown: onProfileHeatmapVideoHeaderPointerDown,
-    onResizePointerDown: onProfileHeatmapVideoResizePointerDown,
-    onDragPointerMove: onProfileHeatmapVideoDragPointerMove,
-    onDragPointerUp: onProfileHeatmapVideoDragPointerUp,
-    layout: profileHeatmapVideoPanelLayout,
-  } = useProfileHeatmapVideoPanelLayout();
-  useEffect(() => {
-    setProfileVideoPortalReady(true);
-  }, []);
+  const [profileVideoSeekRequestId, setProfileVideoSeekRequestId] = useState(0);
 
   useEffect(() => {
     const handleAfterPrint = () => setIsPrintingProfile(false);
@@ -330,18 +316,14 @@ export default function PlayerDetailsPage() {
         toast.error("Brak znacznika czasu wideo.");
         return;
       }
+      setHasProfileVideoPanel(true);
       setProfileVideoMatch(match);
-      setProfileVideoSeekTargetSeconds(sec);
-      window.setTimeout(() => {
-        const external = (window as unknown as { externalVideoWindow?: Window | null }).externalVideoWindow;
-        if (external && !external.closed) {
-          try {
-            external.postMessage({ type: "SEEK_TO_TIME", time: sec }, "*");
-          } catch {
-            /* ignore */
-          }
-        }
-      }, 500);
+      setIsProfileVideoOpen(true);
+      setProfileVideoSeekRequestId((id) => id + 1);
+      setProfileVideoSeekTargetSeconds(null);
+      window.requestAnimationFrame(() => {
+        setProfileVideoSeekTargetSeconds(sec);
+      });
     },
     [filteredMatchesBySeason],
   );
@@ -4411,83 +4393,30 @@ export default function PlayerDetailsPage() {
 
               {/* Szczegóły poniżej */}
               <div className={styles.detailsPanel}>
-                {profileVideoPortalReady &&
-                  typeof document !== "undefined" &&
+                {hasProfileVideoPanel &&
+                  profileVideoMatch &&
                   (expandedCategory === "pxt" ||
                     expandedCategory === "regains" ||
                     expandedCategory === "loses" ||
                     expandedCategory === "xg" ||
-                    expandedCategory === "pk_entries") &&
-                  profileVideoMatch &&
-                  createPortal(
-                    <div
-                      ref={profileHeatmapVideoPanelRef}
-                      className={`${styles.profileHeatmapVideoPanel}${profileHeatmapVideoPanelLayout ? ` ${styles.profileHeatmapVideoPanelCustom}` : ""}`}
-                      style={profileHeatmapVideoPanelStyle}
-                      role="complementary"
-                      aria-label="Odtwarzacz wideo meczu"
-                    >
-                      <div
-                        className={`${styles.profileHeatmapVideoHeader} ${styles.profileHeatmapVideoHeaderDraggable}`}
-                        title="Przeciągnij panel — zachowaj układ w tej przeglądarce"
-                        onPointerDown={onProfileHeatmapVideoHeaderPointerDown}
-                        onPointerMove={onProfileHeatmapVideoDragPointerMove}
-                        onPointerUp={onProfileHeatmapVideoDragPointerUp}
-                        onPointerCancel={onProfileHeatmapVideoDragPointerUp}
-                      >
-                        <span>
-                          Wideo —{" "}
-                          {profileVideoMatch.isHome
-                            ? `${profileVideoMatch.opponent} (D)`
-                            : `${profileVideoMatch.opponent} (W)`}
-                        </span>
-                        <span className={styles.profileHeatmapVideoHeaderActions}>
-                          <button
-                            type="button"
-                            className={styles.profileHeatmapVideoResetLayout}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              resetProfileHeatmapVideoPanelLayout();
-                            }}
-                          >
-                            Układ domyślny
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.profileHeatmapVideoHide}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setProfileVideoSeekTargetSeconds(null);
-                              setProfileVideoMatch(null);
-                            }}
-                          >
-                            Ukryj wideo
-                          </button>
-                        </span>
-                      </div>
-                      <div className={styles.profileHeatmapVideoPlayerShell}>
-                        <YouTubeVideo
-                          ref={youtubeVideoRef}
-                          matchInfo={profileVideoMatch}
-                          isVisible
-                          isFullscreen={false}
-                          seekTargetSeconds={profileVideoSeekTargetSeconds}
-                          onSeekTargetConsumed={() => setProfileVideoSeekTargetSeconds(null)}
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.profileHeatmapVideoResizeHandle}
-                        title="Przeciągnij lewy górny róg panelu, aby zmienić rozmiar"
-                        aria-label="Zmiana rozmiaru panelu wideo — uchwyt w lewym górnym rogu panelu"
-                        onPointerDown={onProfileHeatmapVideoResizePointerDown}
-                        onPointerMove={onProfileHeatmapVideoDragPointerMove}
-                        onPointerUp={onProfileHeatmapVideoDragPointerUp}
-                        onPointerCancel={onProfileHeatmapVideoDragPointerUp}
-                      />
-                    </div>,
-                    document.body,
-                  )}
+                    expandedCategory === "pk_entries") ? (
+                  <MatchVideoFloatingPanel
+                    matchInfo={profileVideoMatch}
+                    title={
+                      profileVideoMatch.isHome
+                        ? `${profileVideoMatch.opponent} (D)`
+                        : `${profileVideoMatch.opponent} (W)`
+                    }
+                    isOpen={isProfileVideoOpen}
+                    seekTargetSeconds={profileVideoSeekTargetSeconds}
+                    seekRequestId={profileVideoSeekRequestId}
+                    onSeekTargetConsumed={() => setProfileVideoSeekTargetSeconds(null)}
+                    onClose={() => {
+                      setProfileVideoSeekTargetSeconds(null);
+                      setIsProfileVideoOpen(false);
+                    }}
+                  />
+                ) : null}
                 {expandedCategory === 'xg' && (
                   <div className={styles.xgDetails}>
                     <h3>Szczegóły xG</h3>

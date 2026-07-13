@@ -4,7 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "react-hot-toast";
 import { ResponsiveRadar } from "@nivo/radar";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  LabelList,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import TeamsMultiSelectorModal from "@/components/TeamsMultiSelectorModal/TeamsMultiSelectorModal";
 import PlayerComparisonRankingToolbar from "@/components/PlayerComparisonRankingToolbar/PlayerComparisonRankingToolbar";
@@ -62,8 +72,15 @@ import {
   toggleWeightedIndexMetric,
   WEIGHTED_INDEX_PERCENT_BUDGET,
   type PlayerComparisonWeightedMetricConfig,
+  type PlayerComparisonWeightedMetricContribution,
   type WeightedIndexBetterWhen,
 } from "@/utils/playerComparisonWeightedIndex";
+import {
+  formatWeightedIndexChartEventLabel,
+  formatWeightedIndexContributionRawValue,
+  formatWeightedIndexEventBreakdown,
+  type PlayerComparisonMetricEventStats,
+} from "@/utils/playerComparisonMetricEventStats";
 import {
   buildDefaultWeightedIndexConfigs,
   cloneWeightedIndexConfigs,
@@ -105,6 +122,42 @@ const WEIGHTED_INDEX_CHART_COLORS = [
 ] as const;
 
 const metricById = new Map(PLAYER_COMPARISON_METRICS.map((metric) => [metric.id, metric]));
+
+type WeightedIndexChartRow = Record<string, string | number> & {
+  name: string;
+  playerId: string;
+  index: number;
+};
+
+const weightedIndexEventStatsFromContribution = (
+  contribution: PlayerComparisonWeightedMetricContribution | undefined,
+): PlayerComparisonMetricEventStats | null => {
+  if (!contribution || contribution.eventTotal == null || contribution.eventTotal <= 0) return null;
+  return {
+    total: contribution.eventTotal,
+    successful: contribution.eventSuccessful ?? 0,
+  };
+};
+
+const WeightedIndexMetricCell = ({
+  contribution,
+}: {
+  contribution: PlayerComparisonWeightedMetricContribution | undefined;
+}) => {
+  if (!contribution) return <>—</>;
+  const eventStats = weightedIndexEventStatsFromContribution(contribution);
+  const rawLabel = formatWeightedIndexContributionRawValue(contribution.metricId, contribution.rawValue);
+  const eventLabel = formatWeightedIndexEventBreakdown(contribution.metricId, eventStats);
+  return (
+    <div className={styles.weightedIndexMetricCell}>
+      <span className={styles.weightedIndexMetricCellContribution}>
+        {formatWeightedIndexValue(contribution.contribution)}
+      </span>
+      {rawLabel ? <span className={styles.weightedIndexMetricCellMeta}>{rawLabel}</span> : null}
+      {eventLabel ? <span className={styles.weightedIndexMetricCellMeta}>{eventLabel}</span> : null}
+    </div>
+  );
+};
 
 const formatMetricValue = (metricId: PlayerComparisonMetricId, value: number): string => {
   if (!Number.isFinite(value)) return "—";
@@ -527,21 +580,34 @@ export default function ZawodnicyPage() {
     [activeWeightedMetrics],
   );
 
-  const weightedIndexStackedBarData = useMemo(
-    () =>
-      weightedIndexRanking.map((entry) => {
-        const row: Record<string, string | number> = {
-          name: maskName(entry.row.playerName),
-          playerId: entry.row.playerId,
-          index: Number(entry.index.toFixed(1)),
-        };
-        for (const contribution of entry.contributions) {
-          row[contribution.metricId] = Number(contribution.contribution.toFixed(2));
+  const weightedIndexStackedBarData = useMemo((): WeightedIndexChartRow[] => {
+    return weightedIndexRanking.map((entry) => {
+      const row: WeightedIndexChartRow = {
+        name: maskName(entry.row.playerName),
+        playerId: entry.row.playerId,
+        index: Number(entry.index.toFixed(1)),
+      };
+      for (const contribution of entry.contributions) {
+        row[contribution.metricId] = Number(contribution.contribution.toFixed(2));
+        if (contribution.eventTotal != null && contribution.eventTotal > 0) {
+          row[`${contribution.metricId}__evTotal`] = contribution.eventTotal;
+          row[`${contribution.metricId}__evOk`] = contribution.eventSuccessful ?? 0;
         }
-        return row;
-      }),
-    [isPresentationMode, maskName, weightedIndexRanking],
-  );
+      }
+      return row;
+    });
+  }, [maskName, weightedIndexRanking]);
+
+  const weightedIndexContributionByPlayerId = useMemo(() => {
+    const map = new Map<string, Map<PlayerComparisonMetricId, PlayerComparisonWeightedMetricContribution>>();
+    for (const entry of weightedIndexRanking) {
+      map.set(
+        entry.row.playerId,
+        new Map(entry.contributions.map((item) => [item.metricId, item])),
+      );
+    }
+    return map;
+  }, [weightedIndexRanking]);
 
   const weightedIndexChartHeight = useMemo(
     () => Math.max(320, weightedIndexRanking.length * 36),
@@ -1145,7 +1211,9 @@ export default function ZawodnicyPage() {
                         <strong>{WEIGHTED_INDEX_PERCENT_BUDGET} %</strong> — mniejsza suma też jest OK. Przy każdej
                         metryce wybierz, czy lepszy wynik to <strong>↑ więcej</strong>, czy{" "}
                         <strong>↓ mniej</strong> (np. straty domyślnie „mniej”). Metryki wielorolowe (Packing, PXT,
-                        xT, PK, P1–P3) wybierasz osobno dla podania, przyjęcia i dryblingu.
+                        xT, PK, P1–P3) wybierasz osobno dla podania, przyjęcia i dryblingu. Dla obrońców:{" "}
+                        <strong>na linii strzału</strong> oraz <strong>łączne xG zablokowanych strzałów</strong> przy
+                        obronie przed strzałami przeciwnika.
                       </p>
 
                       <div className={styles.weightedIndexPresetPanel} aria-labelledby="weighted-index-presets-title">
@@ -1392,20 +1460,43 @@ export default function ZawodnicyPage() {
                                           (sum, item) => sum + Number(item.value ?? 0),
                                           0,
                                         );
+                                        const chartRow = payload[0]?.payload as WeightedIndexChartRow | undefined;
                                         return (
                                           <div className={styles.weightedIndexTooltip}>
                                             <strong>{label}</strong>
                                             <span>Indeks: {formatWeightedIndexValue(total)}</span>
                                             {payload
                                               .filter((item) => Number(item.value) > 0)
-                                              .map((item) => (
-                                                <span key={String(item.dataKey)} style={{ color: item.color }}>
-                                                  {getWeightedIndexMetricLabel(
-                                                    String(item.dataKey) as PlayerComparisonMetricId,
-                                                  )}
-                                                  : {formatWeightedIndexValue(Number(item.value))}
-                                                </span>
-                                              ))}
+                                              .map((item) => {
+                                                const metricId = String(item.dataKey) as PlayerComparisonMetricId;
+                                                const evTotal = chartRow?.[`${metricId}__evTotal`];
+                                                const evOk = chartRow?.[`${metricId}__evOk`];
+                                                const eventStats =
+                                                  typeof evTotal === "number" && evTotal > 0
+                                                    ? {
+                                                        total: evTotal,
+                                                        successful: typeof evOk === "number" ? evOk : 0,
+                                                      }
+                                                    : null;
+                                                const rawValue = chartRow
+                                                  ? weightedIndexContributionByPlayerId
+                                                      .get(String(chartRow.playerId))
+                                                      ?.get(metricId)?.rawValue
+                                                  : undefined;
+                                                const rawLabel =
+                                                  rawValue != null
+                                                    ? formatWeightedIndexContributionRawValue(metricId, rawValue)
+                                                    : null;
+                                                const eventLabel = formatWeightedIndexEventBreakdown(metricId, eventStats);
+                                                return (
+                                                  <span key={String(item.dataKey)} style={{ color: item.color }}>
+                                                    {getWeightedIndexMetricLabel(metricId)}:{" "}
+                                                    {formatWeightedIndexValue(Number(item.value))}
+                                                    {rawLabel ? ` · ${rawLabel}` : ""}
+                                                    {eventLabel ? ` · ${eventLabel}` : ""}
+                                                  </span>
+                                                );
+                                              })}
                                           </div>
                                         );
                                       }}
@@ -1418,7 +1509,58 @@ export default function ZawodnicyPage() {
                                         name={series.label}
                                         stackId="weightedIndex"
                                         fill={series.color}
-                                      />
+                                      >
+                                        <LabelList
+                                          dataKey={series.metricId}
+                                          position="center"
+                                          content={(labelProps) => {
+                                            const { x, y, width, height, value, index } = labelProps;
+                                            const contribution = Number(value ?? 0);
+                                            if (
+                                              contribution <= 0 ||
+                                              width == null ||
+                                              height == null ||
+                                              x == null ||
+                                              y == null ||
+                                              index == null ||
+                                              width < 52 ||
+                                              height < 16
+                                            ) {
+                                              return null;
+                                            }
+                                            const chartRow = weightedIndexStackedBarData[index];
+                                            if (!chartRow) return null;
+                                            const evTotal = chartRow[`${series.metricId}__evTotal`];
+                                            const evOk = chartRow[`${series.metricId}__evOk`];
+                                            const eventStats =
+                                              typeof evTotal === "number" && evTotal > 0
+                                                ? {
+                                                    total: evTotal,
+                                                    successful: typeof evOk === "number" ? evOk : 0,
+                                                  }
+                                                : null;
+                                            const eventLabel = formatWeightedIndexChartEventLabel(
+                                              series.metricId,
+                                              eventStats,
+                                            );
+                                            if (!eventLabel) return null;
+                                            return (
+                                              <text
+                                                x={Number(x) + Number(width) / 2}
+                                                y={Number(y) + Number(height) / 2}
+                                                fill="#fff"
+                                                textAnchor="middle"
+                                                dominantBaseline="central"
+                                                fontSize={10}
+                                                fontWeight={600}
+                                                pointerEvents="none"
+                                              >
+                                                {eventLabel}
+                                              </text>
+                                            );
+                                          }}
+                                        />
+                                      </Bar>
                                     ))}
                                   </BarChart>
                             </ResponsiveContainer>
@@ -1428,6 +1570,8 @@ export default function ZawodnicyPage() {
                                 <table className={styles.playersTable}>
                                   <caption className={styles.compareTableCaption}>
                                     Indeks z rozbiciem na kolorowe składowe (wkład = wynik w grupie × udział procentowy).
+                                    Pod wkładem: wartość surowa KPI oraz liczba zdarzeń w zakresie dat (format X/Y tam,
+                                    gdzie ma to sens, inaczej sama liczba).
                                   </caption>
                                   <thead>
                                     <tr>
@@ -1449,9 +1593,9 @@ export default function ZawodnicyPage() {
                                   </thead>
                                   <tbody>
                                     {weightedIndexRanking.map((entry) => {
-                                      const contributionByMetric = new Map(
-                                        entry.contributions.map((item) => [item.metricId, item.contribution]),
-                                      );
+                                      const contributionByMetric =
+                                        weightedIndexContributionByPlayerId.get(entry.row.playerId) ??
+                                        new Map<PlayerComparisonMetricId, PlayerComparisonWeightedMetricContribution>();
                                       return (
                                         <tr key={entry.row.playerId}>
                                           <td>
@@ -1462,9 +1606,9 @@ export default function ZawodnicyPage() {
                                           </td>
                                           {weightedIndexMetricChartSeries.map((series) => (
                                             <td key={series.metricId}>
-                                              {formatWeightedIndexValue(
-                                                contributionByMetric.get(series.metricId) ?? 0,
-                                              )}
+                                              <WeightedIndexMetricCell
+                                                contribution={contributionByMetric.get(series.metricId)}
+                                              />
                                             </td>
                                           ))}
                                         </tr>

@@ -33,6 +33,8 @@ import {
   type WiedzaTabId,
 } from '@/lib/wiedzaAnalyzeCache';
 import WiedzaPackingFlowTab from '@/components/WiedzaPackingFlowTab/WiedzaPackingFlowTab';
+import WiedzaShotsTab from '@/components/WiedzaShotsTab/WiedzaShotsTab';
+import WiedzaPkEntriesTab from '@/components/WiedzaPkEntriesTab/WiedzaPkEntriesTab';
 import { compactWiedzaMatchForStorage } from '@/lib/wiedzaMatchCompact';
 import { getLosesBackAllyCountForDisplay } from '@/lib/losesBackAllyDisplay';
 import {
@@ -1638,6 +1640,20 @@ export default function WiedzaPage() {
         >
           Posiadanie
         </button>
+        <button
+          type="button"
+          className={`${styles.tabButton} ${activeTab === 'shots' ? styles.active : ''}`}
+          onClick={() => setActiveTab('shots')}
+        >
+          Strzały
+        </button>
+        <button
+          type="button"
+          className={`${styles.tabButton} ${activeTab === 'pkEntries' ? styles.active : ''}`}
+          onClick={() => setActiveTab('pkEntries')}
+        >
+          Wejścia PK
+        </button>
       </div>
 
       <div className={styles.contentPanel}>
@@ -1805,6 +1821,10 @@ export default function WiedzaPage() {
               ) : null}
             </div>
           )
+        ) : activeTab === 'shots' ? (
+          <WiedzaShotsTab matches={matchesForCorrelation} players={players} teams={teams} />
+        ) : activeTab === 'pkEntries' ? (
+          <WiedzaPkEntriesTab matches={matchesForCorrelation} players={players} teams={teams} />
         ) : activeTab === 'possession' ? (
           fetchedMatches.length === 0 ? (
             <div className={styles.correlationMergedPanel}>
