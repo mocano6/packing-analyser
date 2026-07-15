@@ -1,6 +1,7 @@
 import assert from "assert";
 import {
   applyPositionTemplateLibraryUpdateWithCascade,
+  buildPositionPhaseDisplayLayout,
   buildPositionSystemTree,
   canDropPositionTemplateOnTarget,
   countPositionTemplateUsage,
@@ -177,5 +178,34 @@ assert.equal(
   linkedNodes.find((n) => n.id === sharedChild!.id)?.parentIds.filter((id) => id === "p2").length,
   1
 );
+
+const displayLayout = buildPositionPhaseDisplayLayout([
+  { id: "p1", templateId: "t1", positionId: "GK", phaseId: "attack", parentIds: [], order: 0 },
+  { id: "p2", templateId: "t1", positionId: "GK", phaseId: "attack", parentIds: [], order: 1 },
+  {
+    id: "c1",
+    templateId: "t2",
+    positionId: "GK",
+    phaseId: "attack",
+    parentIds: ["p1", "p2"],
+    order: 0,
+  },
+  {
+    id: "e1",
+    templateId: "t3",
+    positionId: "GK",
+    phaseId: "attack",
+    parentIds: ["p1"],
+    order: 0,
+  },
+]);
+assert.equal(displayLayout.sharedForest.length, 1);
+assert.equal(displayLayout.sharedForest[0].id, "c1");
+assert.equal(displayLayout.roots.length, 2);
+assert.equal(displayLayout.roots[0].children.length, 1);
+assert.equal(displayLayout.roots[0].children[0].id, "e1");
+assert.equal(displayLayout.roots[0].sharedLinks.length, 1);
+assert.equal(displayLayout.roots[1].sharedLinks.length, 1);
+assert.equal(displayLayout.roots[1].children.length, 0);
 
 console.log("positionSystemTree.test.ts: OK");

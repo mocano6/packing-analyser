@@ -466,6 +466,94 @@
   text-transform: lowercase;
 }
 
+.parentRootsBadge {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 220px;
+  padding: 2px 6px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #6d28d9;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 999px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sharedSection {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, #faf5ff 0%, #f8fafc 100%);
+  border: 1px dashed #c4b5fd;
+  border-radius: 8px;
+}
+
+.sharedSectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 2px;
+  font: inherit;
+  text-align: left;
+  color: #5b21b6;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.sharedSectionTitle {
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.sharedSectionMeta {
+  margin-left: auto;
+  font-size: 0.6875rem;
+  color: #7c3aed;
+}
+
+.sharedSectionList {
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px solid #e9d5ff;
+}
+
+.sharedLinksRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 6px 28px;
+  padding: 6px 8px;
+  background: #f5f3ff;
+  border-radius: 6px;
+  border-left: 3px solid #a78bfa;
+}
+
+.sharedLinksLabel {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #6d28d9;
+}
+
+.sharedLinkChip {
+  padding: 2px 8px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #5b21b6;
+  background: #fff;
+  border: 1px solid #c4b5fd;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.sharedLinkChip:hover {
+  background: #ede9fe;
+}
+
 .treeItem {
   margin-bottom: 2px;
 }

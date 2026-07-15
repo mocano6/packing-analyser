@@ -56,6 +56,86 @@ export function buildPositionSystemTree(
   }));
 }
 
+export function positionNodeIsShared(node: PositionTaskNode): boolean {
+  return positionNodeParentIds(node).length > 1;
+}
+
+export type PositionPhaseRootTreeNode = PositionSystemTreeNode & {
+  /** Wspólne sub-zasady powiązane z tą zasadą P3 (renderowane osobno). */
+  sharedLinks: PositionTaskNode[];
+};
+
+export type PositionPhaseDisplayLayout = {
+  /** Zasady P3 z wyłącznie unikalnymi (nie-wspólnymi) dziećmi w drzewie. */
+  roots: PositionPhaseRootTreeNode[];
+  /** Wspólne sub-zasady — każda tylko raz, z własnym poddrzewem. */
+  sharedForest: PositionSystemTreeNode[];
+};
+
+/**
+ * Układ widoku per pozycja × faza: wspólne węzły nie są powielane pod każdym P3.
+ */
+export function buildPositionPhaseDisplayLayout(
+  phaseNodes: PositionTaskNode[]
+): PositionPhaseDisplayLayout {
+  const sharedIds = new Set(
+    phaseNodes.filter((n) => positionNodeIsShared(n)).map((n) => n.id)
+  );
+
+  function buildExclusiveChildren(parentId: string): PositionSystemTreeNode[] {
+    return sortByOrder(
+      phaseNodes.filter(
+        (n) =>
+          positionNodeHasParent(n, parentId) &&
+          !sharedIds.has(n.id) &&
+          positionNodeParentIds(n).length === 1
+      )
+    ).map((n) => ({
+      ...n,
+      children: buildExclusiveChildren(n.id),
+    }));
+  }
+
+  const roots: PositionPhaseRootTreeNode[] = sortByOrder(
+    phaseNodes.filter(positionNodeIsRoot)
+  ).map((root) => ({
+    ...root,
+    children: buildExclusiveChildren(root.id),
+    sharedLinks: sortByOrder(
+      phaseNodes.filter((n) => sharedIds.has(n.id) && positionNodeHasParent(n, root.id))
+    ),
+  }));
+
+  const sharedForest: PositionSystemTreeNode[] = sortByOrder(
+    phaseNodes.filter((n) => sharedIds.has(n.id))
+  ).map((node) => ({
+    ...node,
+    children: buildExclusiveChildren(node.id),
+  }));
+
+  return { roots, sharedForest };
+}
+
+export function getPositionNodeParentRootLabels(
+  node: PositionTaskNode,
+  phaseNodes: PositionTaskNode[],
+  templates: GameModelRuleTemplate[]
+): string[] {
+  return positionNodeParentIds(node)
+    .map((parentId) => phaseNodes.find((n) => n.id === parentId))
+    .filter((n): n is PositionTaskNode => n != null)
+    .map((n) => positionTemplateById(templates, n.templateId)?.title ?? n.id);
+}
+
+/** Klucz rozwinięcia sekcji wspólnych sub-zasad w fazie. */
+export function sharedSectionExpandKey(phaseId: PositionSystemPhaseId): string {
+  return `shared:${phaseId}`;
+}
+
+export function isSharedSectionExpandKey(key: string): boolean {
+  return key.startsWith("shared:");
+}
+
 export function positionTemplateById(
   templates: GameModelRuleTemplate[],
   id: string

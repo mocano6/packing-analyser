@@ -14,16 +14,19 @@ import {
   POSITION_SYSTEM_PHASES,
 } from "@/types/positionSystem";
 import {
-  buildPositionSystemTree,
+  buildPositionPhaseDisplayLayout,
   copyGameModelSubtreeToPositionTarget,
   countNodesForPosition,
   countUniquePositionTemplates,
   filterNodesForPositionAndPhase,
+  getPositionNodeParentRootLabels,
   movePositionNodeWithSubtree,
   placePositionTemplate,
   positionNodeParentIds,
   positionTemplateById,
   removePositionNode,
+  sharedSectionExpandKey,
+  type PositionPhaseRootTreeNode,
   type PositionSystemTreeNode,
 } from "@/utils/positionSystemTree";
 import type { TemplateLibraryUpdatePatch } from "@/utils/gameModelTree";
@@ -204,12 +207,28 @@ function SharedBadge({ parentCount }: { parentCount: number }) {
   );
 }
 
+function ParentRootsBadge({ labels }: { labels: string[] }) {
+  if (labels.length === 0) return null;
+  const text = labels.join(", ");
+  return (
+    <span
+      className={styles.parentRootsBadge}
+      title={`Powiązane z: ${text}`}
+      aria-label={`Powiązane z zasadami: ${text}`}
+    >
+      → {text}
+    </span>
+  );
+}
+
 function PositionTreeNode({
   item,
   depth,
   positionId,
   underParentId,
   templates,
+  parentRootLabels,
+  nodeDomId,
   expandedIds,
   toggleExpanded,
   dragNodeId,
@@ -230,6 +249,8 @@ function PositionTreeNode({
   positionId: PositionRoleId;
   underParentId: string | null;
   templates: GameModelRuleTemplate[];
+  parentRootLabels?: string[];
+  nodeDomId?: string;
   expandedIds: Set<string>;
   toggleExpanded: (id: string) => void;
   dragNodeId: string | null;
@@ -266,7 +287,7 @@ function PositionTreeNode({
   const canAcceptChildren = level < 2 && !isEditing;
 
   return (
-    <li className={styles.treeItem}>
+    <li className={styles.treeItem} id={nodeDomId}>
       <div className={styles.modelNodeRow} style={{ paddingLeft: depth * 10 }}>
         {hasChildren ? (
           <button
@@ -308,7 +329,11 @@ function PositionTreeNode({
             </button>
           </div>
           <div className={styles.chipMeta}>
-            <SharedBadge parentCount={parentCount} />
+            {parentRootLabels && parentRootLabels.length > 0 ? (
+              <ParentRootsBadge labels={parentRootLabels} />
+            ) : (
+              <SharedBadge parentCount={parentCount} />
+            )}
             <div className={styles.chipActionsRow}>
               <button
                 type="button"
@@ -373,6 +398,317 @@ function PositionTreeNode({
   );
 }
 
+type TreeNodeHandlers = {
+  positionId: PositionRoleId;
+  templates: GameModelRuleTemplate[];
+  expandedIds: Set<string>;
+  toggleExpanded: (id: string) => void;
+  ensureExpanded: (id: string) => void;
+  dragNodeId: string | null;
+  dragOverTarget: string | null;
+  editingTemplateId: string | null;
+  onDragStartNode: (e: React.DragEvent, nodeId: string) => void;
+  onDragEnd: () => void;
+  onDragOverTarget: (e: React.DragEvent, target: DropTarget) => void;
+  onDragLeaveTarget: () => void;
+  onDropOnTarget: (e: React.DragEvent, target: DropTarget) => void;
+  onRemoveNode: (nodeId: string, underParentId: string | null) => void;
+  onStartEditTemplate: (templateId: string) => void;
+  onCancelEditTemplate: () => void;
+  onSaveTemplate: (
+    templateId: string,
+    patch: TemplateLibraryUpdatePatch,
+    options?: { skipConfirm?: boolean }
+  ) => void;
+};
+
+function PositionRootTreeNode({
+  item,
+  phaseId,
+  onFocusSharedNode,
+  handlers,
+}: {
+  item: PositionPhaseRootTreeNode;
+  phaseId: PositionSystemPhaseId;
+  onFocusSharedNode: (sharedNodeId: string) => void;
+  handlers: TreeNodeHandlers;
+}) {
+  const tpl = positionTemplateById(handlers.templates, item.templateId);
+  const title = tpl?.title ?? "Nieznane zadanie";
+  const level = tpl?.level ?? 0;
+  const expanded = handlers.expandedIds.has(item.id);
+  const hasExclusiveChildren = item.children.length > 0;
+  const hasSharedLinks = item.sharedLinks.length > 0;
+  const showExpand = hasExclusiveChildren || hasSharedLinks;
+  const isEditing = handlers.editingTemplateId === item.templateId;
+  const nodeTarget: DropTarget = {
+    kind: "node",
+    positionId: handlers.positionId,
+    phaseId: item.phaseId,
+    parentId: item.id,
+  };
+  const targetKey = dropTargetKey(nodeTarget);
+  const canAcceptChildren = level < 2 && !isEditing;
+
+  const handleToggle = () => {
+    const willExpand = !expanded;
+    handlers.toggleExpanded(item.id);
+    if (willExpand && hasSharedLinks) {
+      handlers.ensureExpanded(sharedSectionExpandKey(phaseId));
+    }
+  };
+
+  return (
+    <li className={styles.treeItem}>
+      <div className={styles.modelNodeRow}>
+        {showExpand ? (
+          <button
+            type="button"
+            className={styles.expandButton}
+            onClick={handleToggle}
+            aria-expanded={expanded}
+            aria-label={expanded ? `Zwiń ${title}` : `Rozwiń ${title}`}
+          >
+            {expanded ? "▾" : "▸"}
+          </button>
+        ) : (
+          <span className={styles.expandSpacer} aria-hidden />
+        )}
+        <div
+          className={`${styles.modelNodeChip} ${
+            isEditing ? styles.chipNotDraggable : ""
+          } ${handlers.dragNodeId === item.id ? styles.modelNodeChipDragging : ""} ${
+            handlers.dragOverTarget === targetKey && canAcceptChildren
+              ? styles.modelNodeChipDragOver
+              : ""
+          }`}
+          data-level={level}
+          draggable={!isEditing}
+          onDragStart={
+            isEditing ? undefined : (e) => handlers.onDragStartNode(e, item.id)
+          }
+          onDragEnd={handlers.onDragEnd}
+          onDragOver={
+            canAcceptChildren ? (e) => handlers.onDragOverTarget(e, nodeTarget) : undefined
+          }
+          onDragLeave={canAcceptChildren ? handlers.onDragLeaveTarget : undefined}
+          onDrop={canAcceptChildren ? (e) => handlers.onDropOnTarget(e, nodeTarget) : undefined}
+        >
+          <div className={styles.chipBody}>
+            <button
+              type="button"
+              className={styles.chipTitleButton}
+              onClick={() => handlers.onStartEditTemplate(item.templateId)}
+              title="Edytuj treść i poziom"
+            >
+              {title}
+            </button>
+          </div>
+          <div className={styles.chipMeta}>
+            <div className={styles.chipActionsRow}>
+              <button
+                type="button"
+                className={`${styles.editButton} ${isEditing ? styles.editButtonActive : ""}`}
+                onClick={() =>
+                  isEditing
+                    ? handlers.onCancelEditTemplate()
+                    : handlers.onStartEditTemplate(item.templateId)
+                }
+                aria-label={isEditing ? "Zamknij edycję" : `Edytuj ${title}`}
+              >
+                {isEditing ? "✕" : "✎"}
+              </button>
+              <button
+                type="button"
+                className={styles.deleteButton}
+                onClick={() => handlers.onRemoveNode(item.id, null)}
+                aria-label={`Usuń z pozycji: ${title}`}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {isEditing && (
+        <TemplateEditForm
+          templateId={item.templateId}
+          templates={handlers.templates}
+          onSave={handlers.onSaveTemplate}
+          onCancel={handlers.onCancelEditTemplate}
+          compact
+        />
+      )}
+      {expanded && hasSharedLinks && (
+        <div
+          className={styles.sharedLinksRow}
+          role="group"
+          aria-label={`Wspólne sub-zasady dla ${title}`}
+        >
+          <span className={styles.sharedLinksLabel}>↗ Wspólne:</span>
+          {item.sharedLinks.map((link) => {
+            const linkTitle =
+              positionTemplateById(handlers.templates, link.templateId)?.title ?? "Sub-zasada";
+            return (
+              <button
+                key={link.id}
+                type="button"
+                className={styles.sharedLinkChip}
+                onClick={() => onFocusSharedNode(link.id)}
+              >
+                {linkTitle}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {expanded && hasExclusiveChildren && (
+        <ul className={styles.nestedList} data-level={1}>
+          {item.children.map((child) => (
+            <PositionTreeNode
+              key={child.id}
+              item={child}
+              depth={1}
+              positionId={handlers.positionId}
+              underParentId={item.id}
+              templates={handlers.templates}
+              expandedIds={handlers.expandedIds}
+              toggleExpanded={handlers.toggleExpanded}
+              dragNodeId={handlers.dragNodeId}
+              dragOverTarget={handlers.dragOverTarget}
+              editingTemplateId={handlers.editingTemplateId}
+              onDragStartNode={handlers.onDragStartNode}
+              onDragEnd={handlers.onDragEnd}
+              onDragOverTarget={handlers.onDragOverTarget}
+              onDragLeaveTarget={handlers.onDragLeaveTarget}
+              onDropOnTarget={handlers.onDropOnTarget}
+              onRemoveNode={handlers.onRemoveNode}
+              onStartEditTemplate={handlers.onStartEditTemplate}
+              onCancelEditTemplate={handlers.onCancelEditTemplate}
+              onSaveTemplate={handlers.onSaveTemplate}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+function PositionPhaseTreeView({
+  phaseId,
+  phaseNodes,
+  handlers,
+}: {
+  phaseId: PositionSystemPhaseId;
+  phaseNodes: PositionTaskNode[];
+  handlers: TreeNodeHandlers;
+}) {
+  const layout = useMemo(
+    () => buildPositionPhaseDisplayLayout(phaseNodes),
+    [phaseNodes]
+  );
+  const sharedKey = sharedSectionExpandKey(phaseId);
+  const sharedExpanded = handlers.expandedIds.has(sharedKey);
+
+  const focusSharedNode = useCallback(
+    (sharedNodeId: string) => {
+      handlers.ensureExpanded(sharedKey);
+      handlers.ensureExpanded(sharedNodeId);
+      requestAnimationFrame(() => {
+        document.getElementById(`shared-node-${sharedNodeId}`)?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      });
+    },
+    [handlers, sharedKey]
+  );
+
+  if (layout.roots.length === 0 && layout.sharedForest.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      {layout.sharedForest.length > 0 && (
+        <section
+          className={styles.sharedSection}
+          id={`shared-section-${phaseId}`}
+          aria-label="Wspólne sub-zasady"
+        >
+          <button
+            type="button"
+            className={styles.sharedSectionHeader}
+            aria-expanded={sharedExpanded}
+            aria-controls={`shared-section-body-${phaseId}`}
+            onClick={() => handlers.toggleExpanded(sharedKey)}
+          >
+            <span className={styles.phaseChevron} aria-hidden="true">
+              {sharedExpanded ? "▼" : "▶"}
+            </span>
+            <span className={styles.sharedSectionTitle}>Wspólne sub-zasady</span>
+            <span className={styles.sharedSectionMeta}>
+              {layout.sharedForest.length}{" "}
+              {layout.sharedForest.length === 1 ? "element" : "elementy"} · jeden węzeł na wiele P3
+            </span>
+          </button>
+          {sharedExpanded && (
+            <ul
+              id={`shared-section-body-${phaseId}`}
+              className={`${styles.treeList} ${styles.sharedSectionList}`}
+            >
+              {layout.sharedForest.map((item) => (
+                <PositionTreeNode
+                  key={item.id}
+                  item={item}
+                  depth={0}
+                  positionId={handlers.positionId}
+                  underParentId={null}
+                  templates={handlers.templates}
+                  parentRootLabels={getPositionNodeParentRootLabels(
+                    item,
+                    phaseNodes,
+                    handlers.templates
+                  )}
+                  nodeDomId={`shared-node-${item.id}`}
+                  expandedIds={handlers.expandedIds}
+                  toggleExpanded={handlers.toggleExpanded}
+                  dragNodeId={handlers.dragNodeId}
+                  dragOverTarget={handlers.dragOverTarget}
+                  editingTemplateId={handlers.editingTemplateId}
+                  onDragStartNode={handlers.onDragStartNode}
+                  onDragEnd={handlers.onDragEnd}
+                  onDragOverTarget={handlers.onDragOverTarget}
+                  onDragLeaveTarget={handlers.onDragLeaveTarget}
+                  onDropOnTarget={handlers.onDropOnTarget}
+                  onRemoveNode={handlers.onRemoveNode}
+                  onStartEditTemplate={handlers.onStartEditTemplate}
+                  onCancelEditTemplate={handlers.onCancelEditTemplate}
+                  onSaveTemplate={handlers.onSaveTemplate}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {layout.roots.length > 0 && (
+        <ul className={styles.treeList}>
+          {layout.roots.map((root) => (
+            <PositionRootTreeNode
+              key={root.id}
+              item={root}
+              phaseId={phaseId}
+              onFocusSharedNode={focusSharedNode}
+              handlers={handlers}
+            />
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
 export default function PositionSystemTab({
   templates,
   state,
@@ -428,6 +764,15 @@ export default function PositionSystemTab({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const ensureTreeExpanded = useCallback((id: string) => {
+    setTreeExpanded((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
       return next;
     });
   }, []);
@@ -632,6 +977,47 @@ export default function PositionSystemTab({
     [placeTemplate, copyGameModelSubtree, moveNode, handleDragEnd]
   );
 
+  const treeHandlers: TreeNodeHandlers = useMemo(
+    () => ({
+      positionId: selectedPositionId,
+      templates,
+      expandedIds: treeExpanded,
+      toggleExpanded: toggleTreeExpanded,
+      ensureExpanded: ensureTreeExpanded,
+      dragNodeId,
+      dragOverTarget,
+      editingTemplateId,
+      onDragStartNode: handleDragStartNode,
+      onDragEnd: handleDragEnd,
+      onDragOverTarget: handleDragOverTarget,
+      onDragLeaveTarget: handleDragLeaveTarget,
+      onDropOnTarget: handleDropOnTarget,
+      onRemoveNode: removeNode,
+      onStartEditTemplate: startEditTemplate,
+      onCancelEditTemplate: cancelEditTemplate,
+      onSaveTemplate: saveTemplate,
+    }),
+    [
+      selectedPositionId,
+      templates,
+      treeExpanded,
+      toggleTreeExpanded,
+      ensureTreeExpanded,
+      dragNodeId,
+      dragOverTarget,
+      editingTemplateId,
+      handleDragStartNode,
+      handleDragEnd,
+      handleDragOverTarget,
+      handleDragLeaveTarget,
+      handleDropOnTarget,
+      removeNode,
+      startEditTemplate,
+      cancelEditTemplate,
+      saveTemplate,
+    ]
+  );
+
   if (loading && !embedded) {
     return (
       <div className={styles.loadingBox} role="status">
@@ -692,7 +1078,9 @@ export default function PositionSystemTab({
               selectedPositionId,
               phase.id
             );
-            const tree = buildPositionSystemTree(phaseNodes);
+            const phaseLayout = buildPositionPhaseDisplayLayout(phaseNodes);
+            const hasPhaseContent =
+              phaseLayout.roots.length > 0 || phaseLayout.sharedForest.length > 0;
             const phaseTarget: DropTarget = {
               kind: "phase",
               positionId: selectedPositionId,
@@ -756,38 +1144,17 @@ export default function PositionSystemTab({
                     onDragLeave={handleDragLeaveTarget}
                     onDrop={(e) => handleDropOnTarget(e, phaseTarget)}
                   >
-                    {tree.length === 0 ? (
+                    {hasPhaseContent ? (
+                      <PositionPhaseTreeView
+                        phaseId={phase.id}
+                        phaseNodes={phaseNodes}
+                        handlers={treeHandlers}
+                      />
+                    ) : (
                       <p className={styles.emptyHint}>
                         Upuść zasadę (poziom główny) tutaj — z biblioteki po lewej lub z modelu
                         drużyny powyżej.
                       </p>
-                    ) : (
-                      <ul className={styles.treeList}>
-                        {tree.map((item) => (
-                          <PositionTreeNode
-                            key={item.id}
-                            item={item}
-                            depth={0}
-                            positionId={selectedPositionId}
-                            underParentId={null}
-                            templates={templates}
-                            expandedIds={treeExpanded}
-                            toggleExpanded={toggleTreeExpanded}
-                            dragNodeId={dragNodeId}
-                            dragOverTarget={dragOverTarget}
-                            editingTemplateId={editingTemplateId}
-                            onDragStartNode={handleDragStartNode}
-                            onDragEnd={handleDragEnd}
-                            onDragOverTarget={handleDragOverTarget}
-                            onDragLeaveTarget={handleDragLeaveTarget}
-                            onDropOnTarget={handleDropOnTarget}
-                            onRemoveNode={removeNode}
-                            onStartEditTemplate={startEditTemplate}
-                            onCancelEditTemplate={cancelEditTemplate}
-                            onSaveTemplate={saveTemplate}
-                          />
-                        ))}
-                      </ul>
                     )}
                   </div>
                 </div>
