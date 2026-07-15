@@ -1,7 +1,7 @@
 import assert from "assert";
 import {
   applyPositionTemplateLibraryUpdateWithCascade,
-  buildPositionPhaseDisplayLayout,
+  buildPositionPhaseGraphLayout,
   buildPositionSystemTree,
   canDropPositionTemplateOnTarget,
   countPositionTemplateUsage,
@@ -179,33 +179,35 @@ assert.equal(
   1
 );
 
-const displayLayout = buildPositionPhaseDisplayLayout([
-  { id: "p1", templateId: "t1", positionId: "GK", phaseId: "attack", parentIds: [], order: 0 },
-  { id: "p2", templateId: "t1", positionId: "GK", phaseId: "attack", parentIds: [], order: 1 },
-  {
-    id: "c1",
-    templateId: "t2",
-    positionId: "GK",
-    phaseId: "attack",
-    parentIds: ["p1", "p2"],
-    order: 0,
-  },
-  {
-    id: "e1",
-    templateId: "t3",
-    positionId: "GK",
-    phaseId: "attack",
-    parentIds: ["p1"],
-    order: 0,
-  },
-]);
-assert.equal(displayLayout.sharedForest.length, 1);
-assert.equal(displayLayout.sharedForest[0].id, "c1");
-assert.equal(displayLayout.roots.length, 2);
-assert.equal(displayLayout.roots[0].children.length, 1);
-assert.equal(displayLayout.roots[0].children[0].id, "e1");
-assert.equal(displayLayout.roots[0].sharedLinks.length, 1);
-assert.equal(displayLayout.roots[1].sharedLinks.length, 1);
-assert.equal(displayLayout.roots[1].children.length, 0);
+const graphLayout = buildPositionPhaseGraphLayout(
+  [
+    { id: "p1", templateId: "t1", positionId: "GK", phaseId: "attack", parentIds: [], order: 0 },
+    { id: "p2", templateId: "t1", positionId: "GK", phaseId: "attack", parentIds: [], order: 1 },
+    {
+      id: "c1",
+      templateId: "t2",
+      positionId: "GK",
+      phaseId: "attack",
+      parentIds: ["p1", "p2"],
+      order: 0,
+    },
+    {
+      id: "e1",
+      templateId: "t3",
+      positionId: "GK",
+      phaseId: "attack",
+      parentIds: ["p1"],
+      order: 0,
+    },
+  ],
+  templates
+);
+assert.equal(graphLayout.layers.length, 3);
+assert.equal(graphLayout.layers[0]?.nodes.length, 2);
+assert.equal(graphLayout.layers[1]?.nodes.length, 1);
+assert.equal(graphLayout.layers[2]?.nodes.length, 1);
+assert.equal(graphLayout.edges.length, 3);
+assert.ok(graphLayout.edges.some((e) => e.fromId === "p1" && e.toId === "c1"));
+assert.ok(graphLayout.edges.some((e) => e.fromId === "p2" && e.toId === "c1"));
 
 console.log("positionSystemTree.test.ts: OK");

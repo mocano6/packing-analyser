@@ -10,6 +10,7 @@ import "../utils/gameModelTree.test";
 import "../utils/positionSystemTree.test";
 import "../utils/copyGameModelToPosition.test";
 import "../utils/adminZadaniaTabPreference.test";
+import "../utils/positionPhaseViewPreference.test";
 import "../utils/trainingMicrocycle.test";
 import "../utils/microcycleMatches.test";
 import "../utils/microcycleDaySchedules.test";
