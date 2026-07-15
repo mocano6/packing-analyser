@@ -455,6 +455,17 @@
   background: #ccfbf1;
 }
 
+.sharedBadge {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #7c3aed;
+  background: #ede9fe;
+  border-radius: 999px;
+  text-transform: lowercase;
+}
+
 .treeItem {
   margin-bottom: 2px;
 }

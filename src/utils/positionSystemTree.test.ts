@@ -4,16 +4,20 @@ import {
   buildPositionSystemTree,
   canDropPositionTemplateOnTarget,
   countPositionTemplateUsage,
-  removeAllPositionNodesForTemplate,
+  countUniquePositionTemplates,
+  dedupePositionNodesByTemplate,
   filterNodesForPositionAndPhase,
+  linkPositionNodeToParent,
   movePositionNodeWithSubtree,
   nextOrderForPositionParent,
   nodesRemovedByPositionTemplateLevelChange,
+  placePositionTemplate,
+  removeAllPositionNodesForTemplate,
   validatePositionTemplateLibraryUpdate,
   validatePositionTemplatePlacement,
   wouldCreatePositionCycle,
 } from "./positionSystemTree";
-import type { GameModelNode, GameModelRuleTemplate } from "@/types/gameModel";
+import type { GameModelRuleTemplate } from "@/types/gameModel";
 import type { PositionTaskNode } from "@/types/positionSystem";
 
 const templates: GameModelRuleTemplate[] = [
@@ -28,7 +32,7 @@ const nodes: PositionTaskNode[] = [
     templateId: "t1",
     positionId: "CB",
     phaseId: "defense",
-    parentId: null,
+    parentIds: [],
     order: 0,
   },
   {
@@ -36,7 +40,7 @@ const nodes: PositionTaskNode[] = [
     templateId: "t2",
     positionId: "CB",
     phaseId: "defense",
-    parentId: "n1",
+    parentIds: ["n1"],
     order: 0,
   },
   {
@@ -44,7 +48,7 @@ const nodes: PositionTaskNode[] = [
     templateId: "t2",
     positionId: "CB",
     phaseId: "attack",
-    parentId: null,
+    parentIds: [],
     order: 0,
   },
   {
@@ -52,7 +56,7 @@ const nodes: PositionTaskNode[] = [
     templateId: "t3",
     positionId: "CB",
     phaseId: "defense",
-    parentId: "n2",
+    parentIds: ["n2"],
     order: 0,
   },
 ];
@@ -70,6 +74,7 @@ assert.equal(canDropPositionTemplateOnTarget(templates[1], nodes[0], templates),
 
 assert.equal(nextOrderForPositionParent(nodes, "CB", "defense", "n1"), 1);
 assert.equal(countPositionTemplateUsage(nodes, "t2"), 2);
+assert.equal(countUniquePositionTemplates(nodes, "CB", "defense"), 3);
 
 const titleOk = validatePositionTemplateLibraryUpdate(templates, "t1", {
   title: "Nowa linia",
@@ -114,5 +119,63 @@ const moved = movePositionNodeWithSubtree(
 );
 assert.equal(moved.ok, true);
 assert.ok(moved.ok && moved.nodes.find((n) => n.id === "n1")?.positionId === "GK");
+
+let idCounter = 0;
+const createId = () => `new-${++idCounter}`;
+
+const linked = placePositionTemplate(
+  [
+    ...nodes,
+    {
+      id: "n1b",
+      templateId: "t1",
+      positionId: "CB",
+      phaseId: "defense",
+      parentIds: [],
+      order: 1,
+    },
+  ],
+  templates[1],
+  { positionId: "CB", phaseId: "defense", parentId: "n1b" },
+  templates,
+  createId
+);
+assert.equal(linked.ok, true);
+if (linked.ok) {
+  assert.equal(linked.linked, true);
+  assert.equal(linked.nodeId, "n2");
+}
+
+const dedupeSource: PositionTaskNode[] = [
+  { id: "p1", templateId: "t1", positionId: "GK", phaseId: "attack", parentIds: [], order: 0 },
+  { id: "p2", templateId: "t1", positionId: "GK", phaseId: "attack", parentIds: [], order: 1 },
+  {
+    id: "c1",
+    templateId: "t2",
+    positionId: "GK",
+    phaseId: "attack",
+    parentIds: ["p1"],
+    order: 0,
+  },
+  {
+    id: "c2",
+    templateId: "t2",
+    positionId: "GK",
+    phaseId: "attack",
+    parentIds: ["p2"],
+    order: 0,
+  },
+];
+const deduped = dedupePositionNodesByTemplate(dedupeSource);
+assert.equal(deduped.filter((n) => n.templateId === "t2").length, 1);
+const sharedChild = deduped.find((n) => n.templateId === "t2");
+assert.ok(sharedChild);
+assert.deepEqual(new Set(sharedChild!.parentIds), new Set(["p1", "p2"]));
+
+const linkedNodes = linkPositionNodeToParent(deduped, sharedChild!.id, "p2");
+assert.equal(
+  linkedNodes.find((n) => n.id === sharedChild!.id)?.parentIds.filter((id) => id === "p2").length,
+  1
+);
 
 console.log("positionSystemTree.test.ts: OK");

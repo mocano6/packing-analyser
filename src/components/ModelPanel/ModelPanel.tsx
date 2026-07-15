@@ -555,7 +555,6 @@ export default function ModelPanel({
           state={positionSystemState}
           setPositionSystemState={setPositionSystemState}
           loading={false}
-          usageCounts={usageCounts}
           editingTemplateId={editingTemplateId}
           onStartEditTemplate={setEditingTemplateId}
           onCancelEditTemplate={() => setEditingTemplateId(null)}

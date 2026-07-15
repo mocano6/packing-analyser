@@ -1,5 +1,10 @@
-import type { PositionSystemState } from "@/types/positionSystem";
+import type { PositionSystemState, PositionTaskNode } from "@/types/positionSystem";
 import { POSITION_SYSTEM_VERSION } from "@/types/positionSystem";
+import {
+  dedupePositionNodesByTemplate,
+  normalizePositionTaskNode,
+  positionNodeParentIds,
+} from "@/utils/positionSystemTree";
 
 const VALID_PHASES = new Set<string>(["defense", "attack"]);
 
@@ -38,6 +43,29 @@ function safeUnixMs(n: unknown): number {
   return Math.floor(x);
 }
 
+function parseParentIds(raw: Record<string, unknown>): string[] {
+  if (Array.isArray(raw.parentIds)) {
+    return raw.parentIds.map((id) => String(id)).filter(Boolean);
+  }
+  const legacy = raw.parentId;
+  if (legacy == null || legacy === "") return [];
+  return [String(legacy)];
+}
+
+function parseRawNode(raw: Record<string, unknown>): PositionTaskNode | null {
+  const positionId = safePosition(raw.positionId);
+  const phaseId = safePhase(raw.phaseId);
+  if (!positionId || !phaseId) return null;
+  return normalizePositionTaskNode({
+    id: String(raw.id ?? ""),
+    positionId,
+    phaseId,
+    templateId: String(raw.templateId ?? ""),
+    parentIds: parseParentIds(raw),
+    order: safeInt(raw.order, 0),
+  });
+}
+
 export function buildSanitizedPositionSystemState(
   state: PositionSystemState
 ): Record<string, unknown> {
@@ -52,7 +80,7 @@ export function buildSanitizedPositionSystemState(
           positionId,
           phaseId,
           templateId: String(n.templateId ?? ""),
-          parentId: n.parentId == null || n.parentId === "" ? null : String(n.parentId),
+          parentIds: positionNodeParentIds(n),
           order: safeInt(n.order, 0),
         };
       })
@@ -69,23 +97,11 @@ export function migratePositionSystemFromFirestore(
 
   const nodes = Array.isArray(inner.nodes)
     ? (inner.nodes as Record<string, unknown>[])
-        .map((n) => {
-          const positionId = safePosition(n.positionId);
-          const phaseId = safePhase(n.phaseId);
-          if (!positionId || !phaseId) return null;
-          return {
-            id: String(n.id ?? ""),
-            positionId,
-            phaseId,
-            templateId: String(n.templateId ?? ""),
-            parentId: n.parentId == null || n.parentId === "" ? null : String(n.parentId),
-            order: safeInt(n.order, 0),
-          };
-        })
-        .filter((n): n is NonNullable<typeof n> => n !== null)
+        .map(parseRawNode)
+        .filter((n): n is PositionTaskNode => n !== null)
     : [];
 
-  return { nodes };
+  return { nodes: dedupePositionNodesByTemplate(nodes) };
 }
 
 export function buildPositionSystemTaskDocument(

@@ -25,7 +25,7 @@ function positionSystemStateDoc(uid: string) {
 function isAcceptedVersion(v: unknown): boolean {
   if (v === undefined) return true;
   const n = typeof v === "number" ? v : Number(v);
-  return n === POSITION_SYSTEM_VERSION || n === 1;
+  return n === POSITION_SYSTEM_VERSION || n === 1 || n === 2;
 }
 
 export function usePositionSystem(uid: string | null) {

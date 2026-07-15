@@ -17,11 +17,13 @@ import {
   buildPositionSystemTree,
   copyGameModelSubtreeToPositionTarget,
   countNodesForPosition,
+  countUniquePositionTemplates,
   filterNodesForPositionAndPhase,
   movePositionNodeWithSubtree,
-  nextOrderForPositionParent,
+  placePositionTemplate,
+  positionNodeParentIds,
   positionTemplateById,
-  validatePositionTemplatePlacement,
+  removePositionNode,
   type PositionSystemTreeNode,
 } from "@/utils/positionSystemTree";
 import type { TemplateLibraryUpdatePatch } from "@/utils/gameModelTree";
@@ -90,7 +92,6 @@ export interface PositionSystemTabProps {
   setPositionSystemState: React.Dispatch<React.SetStateAction<PositionSystemState>>;
   loading: boolean;
   embedded?: boolean;
-  usageCounts?: Map<string, number>;
   editingTemplateId?: string | null;
   onStartEditTemplate?: (templateId: string) => void;
   onCancelEditTemplate?: () => void;
@@ -190,14 +191,15 @@ function TemplateEditForm({
   );
 }
 
-function UsageBadge({ count }: { count: number }) {
+function SharedBadge({ parentCount }: { parentCount: number }) {
+  if (parentCount <= 1) return null;
   return (
     <span
-      className={`${styles.usageBadge} ${count > 0 ? styles.usageBadgeActive : ""}`}
-      title={`Przypisana w systemie: ${count}×`}
-      aria-label={`Przypisana w systemie ${count} razy`}
+      className={styles.sharedBadge}
+      title={`Współdzielona przez ${parentCount} zasad`}
+      aria-label={`Współdzielona przez ${parentCount} zasad`}
     >
-      {count}
+      wspólna
     </span>
   );
 }
@@ -206,8 +208,8 @@ function PositionTreeNode({
   item,
   depth,
   positionId,
+  underParentId,
   templates,
-  usageCounts,
   expandedIds,
   toggleExpanded,
   dragNodeId,
@@ -226,8 +228,8 @@ function PositionTreeNode({
   item: PositionSystemTreeNode<PositionTaskNode>;
   depth: number;
   positionId: PositionRoleId;
+  underParentId: string | null;
   templates: GameModelRuleTemplate[];
-  usageCounts: Map<string, number>;
   expandedIds: Set<string>;
   toggleExpanded: (id: string) => void;
   dragNodeId: string | null;
@@ -238,7 +240,7 @@ function PositionTreeNode({
   onDragOverTarget: (e: React.DragEvent, target: DropTarget) => void;
   onDragLeaveTarget: () => void;
   onDropOnTarget: (e: React.DragEvent, target: DropTarget) => void;
-  onRemoveNode: (id: string) => void;
+  onRemoveNode: (nodeId: string, underParentId: string | null) => void;
   onStartEditTemplate: (templateId: string) => void;
   onCancelEditTemplate: () => void;
   onSaveTemplate: (
@@ -250,7 +252,7 @@ function PositionTreeNode({
   const tpl = positionTemplateById(templates, item.templateId);
   const title = tpl?.title ?? "Nieznane zadanie";
   const level = tpl?.level ?? 0;
-  const usageCount = usageCounts.get(item.templateId) ?? 0;
+  const parentCount = positionNodeParentIds(item).length;
   const hasChildren = item.children.length > 0;
   const expanded = expandedIds.has(item.id);
   const isEditing = editingTemplateId === item.templateId;
@@ -306,7 +308,7 @@ function PositionTreeNode({
             </button>
           </div>
           <div className={styles.chipMeta}>
-            <UsageBadge count={usageCount} />
+            <SharedBadge parentCount={parentCount} />
             <div className={styles.chipActionsRow}>
               <button
                 type="button"
@@ -321,7 +323,7 @@ function PositionTreeNode({
               <button
                 type="button"
                 className={styles.deleteButton}
-                onClick={() => onRemoveNode(item.id)}
+                onClick={() => onRemoveNode(item.id, underParentId)}
                 aria-label={`Usuń z pozycji: ${title}`}
               >
                 ×
@@ -343,12 +345,12 @@ function PositionTreeNode({
         <ul className={styles.nestedList} data-level={level < 2 ? level + 1 : 2}>
           {item.children.map((child) => (
             <PositionTreeNode
-              key={child.id}
+              key={`${underParentId ?? "root"}-${child.id}`}
               item={child}
               depth={depth + 1}
               positionId={positionId}
+              underParentId={item.id}
               templates={templates}
-              usageCounts={usageCounts}
               expandedIds={expandedIds}
               toggleExpanded={toggleExpanded}
               dragNodeId={dragNodeId}
@@ -377,7 +379,6 @@ export default function PositionSystemTab({
   setPositionSystemState,
   loading,
   embedded = false,
-  usageCounts: usageCountsProp,
   editingTemplateId: editingTemplateIdProp,
   onStartEditTemplate: onStartEditTemplateProp,
   onCancelEditTemplate: onCancelEditTemplateProp,
@@ -413,15 +414,6 @@ export default function PositionSystemTab({
   const editingTemplateId = embedded
     ? (editingTemplateIdProp ?? null)
     : editingTemplateIdLocal;
-
-  const usageCounts = useMemo(() => {
-    if (usageCountsProp) return usageCountsProp;
-    const counts = new Map<string, number>();
-    for (const node of state.nodes) {
-      counts.set(node.templateId, (counts.get(node.templateId) ?? 0) + 1);
-    }
-    return counts;
-  }, [usageCountsProp, state.nodes]);
 
   const positionNodeCounts = useMemo(() => {
     const map = new Map<PositionRoleId, number>();
@@ -493,26 +485,20 @@ export default function PositionSystemTab({
   );
 
   const removeNode = useCallback(
-    (nodeId: string) => {
-      const toRemove = new Set<string>();
-      const collect = (id: string) => {
-        toRemove.add(id);
-        state.nodes.filter((n) => n.parentId === id).forEach((n) => collect(n.id));
-      };
-      collect(nodeId);
+    (nodeId: string, underParentId: string | null) => {
       setPositionSystemState((prev) => ({
         ...prev,
-        nodes: prev.nodes.filter((n) => !toRemove.has(n.id)),
+        nodes: removePositionNode(prev.nodes, nodeId, underParentId),
       }));
     },
-    [state.nodes, setPositionSystemState]
+    [setPositionSystemState]
   );
 
   const placeTemplate = useCallback(
     (templateId: string, target: DropTarget) => {
       const template = positionTemplateById(templates, templateId);
       if (!template) return;
-      const result = validatePositionTemplatePlacement(
+      const result = placePositionTemplate(
         state.nodes,
         template,
         {
@@ -520,35 +506,19 @@ export default function PositionSystemTab({
           phaseId: target.phaseId,
           parentId: target.parentId,
         },
-        templates
+        templates,
+        generateId
       );
       if (!result.ok) {
         toast.error(result.message);
         return;
       }
-      const id = generateId();
-      const order = nextOrderForPositionParent(
-        state.nodes,
-        target.positionId,
-        target.phaseId,
-        target.parentId
-      );
-      setPositionSystemState((prev) => ({
-        ...prev,
-        nodes: [
-          ...prev.nodes,
-          {
-            id,
-            templateId,
-            positionId: target.positionId,
-            phaseId: target.phaseId,
-            parentId: target.parentId,
-            order,
-          },
-        ],
-      }));
+      setPositionSystemState((prev) => ({ ...prev, nodes: result.nodes }));
       if (target.parentId) {
         setTreeExpanded((prev) => new Set(prev).add(target.parentId!));
+      }
+      if (result.linked) {
+        toast.success("Podlinkowano istniejącą sub-zasadę.");
       }
     },
     [state.nodes, templates, setPositionSystemState]
@@ -604,11 +574,15 @@ export default function PositionSystemTab({
       if (target.parentId) {
         setTreeExpanded((prev) => new Set(prev).add(target.parentId!));
       }
-      toast.success(
-        result.copiedCount === 1
-          ? "Skopiowano 1 element z modelu drużyny."
-          : `Skopiowano ${result.copiedCount} elementów z modelu drużyny.`
-      );
+      if (result.createdCount > 0) {
+        toast.success(
+          result.createdCount === 1
+            ? "Dodano 1 unikalną zasadę z modelu drużyny."
+            : `Dodano ${result.createdCount} unikalne zasady z modelu drużyny.`
+        );
+      } else if (result.linkedCount > 0) {
+        toast.success("Podlinkowano istniejące sub-zasady z modelu drużyny.");
+      }
     },
     [gameModelNodes, state.nodes, templates, setPositionSystemState]
   );
@@ -695,7 +669,10 @@ export default function PositionSystemTab({
               >
                 {role.shortLabel}
                 {count > 0 && (
-                  <span className={styles.positionPillCount} aria-label={`${count} przypisań`}>
+                  <span
+                    className={styles.positionPillCount}
+                    aria-label={`${count} unikalnych zasad`}
+                  >
                     ({count})
                   </span>
                 )}
@@ -724,7 +701,11 @@ export default function PositionSystemTab({
             };
             const phaseTargetKey = dropTargetKey(phaseTarget);
             const isPhaseExpanded = expandedPhases.has(phase.id);
-            const nodeCount = phaseNodes.length;
+            const nodeCount = countUniquePositionTemplates(
+              state.nodes,
+              selectedPositionId,
+              phase.id
+            );
 
             return (
               <article
@@ -752,7 +733,8 @@ export default function PositionSystemTab({
                     </span>
                     <h3 className={styles.phaseTitle}>{phase.label}</h3>
                     <span className={styles.phaseMeta}>
-                      {nodeCount} {nodeCount === 1 ? "element" : "elementów"}
+                      {nodeCount}{" "}
+                      {nodeCount === 1 ? "unikalna zasada" : "unikalne zasady"}
                     </span>
                   </button>
                 </div>
@@ -787,8 +769,8 @@ export default function PositionSystemTab({
                             item={item}
                             depth={0}
                             positionId={selectedPositionId}
+                            underParentId={null}
                             templates={templates}
-                            usageCounts={usageCounts}
                             expandedIds={treeExpanded}
                             toggleExpanded={toggleTreeExpanded}
                             dragNodeId={dragNodeId}

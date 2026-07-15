@@ -36,7 +36,8 @@ export interface PositionTaskNode {
   positionId: PositionRoleId;
   phaseId: PositionSystemPhaseId;
   templateId: string;
-  parentId: string | null;
+  /** Rodzice w drzewie — sub-zasady mogą mieć wielu rodziców (współdzielone węzły). */
+  parentIds: string[];
   order: number;
 }
 
@@ -44,7 +45,7 @@ export interface PositionSystemState {
   nodes: PositionTaskNode[];
 }
 
-export const POSITION_SYSTEM_VERSION = 2 as const;
+export const POSITION_SYSTEM_VERSION = 3 as const;
 
 /** Dokument w `users/{uid}/tasks/` — nie pokazuj w kwadrancie Eisenhowera. */
 export const POSITION_SYSTEM_TASKS_DOC_ID = "positionSystemState" as const;
