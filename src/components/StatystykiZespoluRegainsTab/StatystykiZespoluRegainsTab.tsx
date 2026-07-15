@@ -4,8 +4,8 @@ import React, { useCallback, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   Bar,
-  BarChart,
   CartesianGrid,
+  ComposedChart,
   Legend,
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
@@ -42,6 +42,11 @@ import {
   filterRegainByMatchHalf,
   type RegainMatchHalfFilter,
 } from '@/utils/statystykiZespoluRegainStats';
+import { renderChartMatchEventMarkers } from '@/components/ChartMatchEventMarkers/ChartMatchEventMarkers';
+import {
+  buildChartMatchEvents,
+  buildIntervalMarkerPoints,
+} from '@/utils/statystykiZespoluChartEvents';
 import pageStyles from '@/app/statystyki-zespolu/statystyki-zespolu.module.css';
 import styles from '../StatystykiZespoluXgTab/StatystykiZespoluXgTab.module.css';
 
@@ -96,6 +101,7 @@ function ToggleFilterButton({ active, onClick, children, variant = 'segment' }: 
 export default function StatystykiZespoluRegainsTab({
   regainActions,
   matchInfo,
+  selectedTeam,
   teamName,
   opponentName,
   playersIndex,
@@ -138,6 +144,18 @@ export default function StatystykiZespoluRegainsTab({
     [filteredByMatchHalf, pitchHalf, pFilters, contextMode, heatmapMode],
   );
   const timeline = useMemo(() => buildRegainTimelineXT(filteredByMatchHalf), [filteredByMatchHalf]);
+  const chartEvents = useMemo(() => {
+    const regainHalf = matchHalf === 'first' ? 'first' : matchHalf === 'second' ? 'second' : 'all';
+    return buildChartMatchEvents(allShots, allPkEntries, matchInfo, selectedTeam, regainHalf);
+  }, [allShots, allPkEntries, matchInfo, selectedTeam, matchHalf]);
+  const timelineMarkerPoints = useMemo(
+    () => buildIntervalMarkerPoints(chartEvents, timeline, { valueKeys: ['regains', 'xtAttack', 'xtDefense'] }),
+    [chartEvents, timeline],
+  );
+  const regainLosesMarkerPoints = useMemo(
+    () => buildIntervalMarkerPoints(chartEvents, regainLosesTimeline, { valueKeys: ['regains', 'loses'] }),
+    [chartEvents, regainLosesTimeline],
+  );
   const playerRows = useMemo(
     () => buildRegainPlayerRows(filteredByMatchHalf, teamStats.totalRegains, (id) => getPlayerLabel(id, playersIndex)),
     [filteredByMatchHalf, teamStats.totalRegains, playersIndex],
@@ -405,7 +423,7 @@ export default function StatystykiZespoluRegainsTab({
           <div className={styles.chartCard}>
             <h3 className={styles.chartTitle}>Przechwyty i xT co 5 min — {teamShort}</h3>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={timeline} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+              <ComposedChart data={timeline} margin={{ top: 22, right: 20, left: 0, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
                 <XAxis dataKey="minute" tick={{ fontSize: 11 }} angle={-45} textAnchor="end" height={50} />
                 <YAxis yAxisId="left" allowDecimals={false} tick={{ fontSize: 12 }} />
@@ -415,7 +433,8 @@ export default function StatystykiZespoluRegainsTab({
                 <Bar yAxisId="left" dataKey="regains" name="Przechwyty" fill={TEAM_BLUE} radius={[4, 4, 0, 0]} />
                 <Bar yAxisId="right" dataKey="xtAttack" name="xT atak" fill={TEAM_RED} radius={[4, 4, 0, 0]} />
                 <Bar yAxisId="right" dataKey="xtDefense" name="xT obrona" fill="#6b7280" radius={[4, 4, 0, 0]} />
-              </BarChart>
+                {renderChartMatchEventMarkers({ points: timelineMarkerPoints, yAxisId: 'left' })}
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
 
@@ -423,7 +442,7 @@ export default function StatystykiZespoluRegainsTab({
             <div className={styles.chartCard}>
               <h3 className={styles.chartTitle}>Przechwyty vs straty co 5 min</h3>
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={regainLosesTimeline}>
+                <ComposedChart data={regainLosesTimeline} margin={{ top: 22, right: 8, left: 0, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
                   <XAxis dataKey="minute" />
                   <YAxis allowDecimals={false} />
@@ -431,7 +450,8 @@ export default function StatystykiZespoluRegainsTab({
                   <Legend iconSize={10} />
                   <Bar dataKey="regains" name="Przechwyty" fill={TEAM_BLUE} radius={[4, 4, 0, 0]} />
                   <Bar dataKey="loses" name="Straty" fill={TEAM_RED} radius={[4, 4, 0, 0]} />
-                </BarChart>
+                  {renderChartMatchEventMarkers({ points: regainLosesMarkerPoints })}
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           ) : null}

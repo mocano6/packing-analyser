@@ -2,7 +2,7 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
+import { Bar, CartesianGrid, ComposedChart, Legend, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import AttackDefenseTilt from '@/components/AttackDefenseTilt/AttackDefenseTilt';
 import MatchVideoFloatingPanel from '@/components/MatchVideoFloatingPanel/MatchVideoFloatingPanel';
 import PlayerHeatmapPitch from '@/components/PlayerHeatmapPitch/PlayerHeatmapPitch';
@@ -33,6 +33,11 @@ import {
   getLosesXtValues,
   type LosesMatchHalfFilter,
 } from '@/utils/statystykiZespoluLosesStats';
+import { renderChartMatchEventMarkers } from '@/components/ChartMatchEventMarkers/ChartMatchEventMarkers';
+import {
+  buildChartMatchEvents,
+  buildIntervalMarkerPoints,
+} from '@/utils/statystykiZespoluChartEvents';
 import pageStyles from '@/app/statystyki-zespolu/statystyki-zespolu.module.css';
 import styles from '../StatystykiZespoluXgTab/StatystykiZespoluXgTab.module.css';
 
@@ -124,6 +129,14 @@ export default function StatystykiZespoluLosesTab({
     [filteredByMatchHalf, pitchHalf, pFilters, contextMode, heatmapMode],
   );
   const timeline = useMemo(() => buildLosesTimelineXT(filteredByMatchHalf), [filteredByMatchHalf]);
+  const chartEvents = useMemo(() => {
+    const loseHalf = matchHalf === 'first' ? 'first' : matchHalf === 'second' ? 'second' : 'all';
+    return buildChartMatchEvents(allShots, allPkEntries, matchInfo, selectedTeam, loseHalf);
+  }, [allShots, allPkEntries, matchInfo, selectedTeam, matchHalf]);
+  const timelineMarkerPoints = useMemo(
+    () => buildIntervalMarkerPoints(chartEvents, timeline, { valueKeys: ['loses', 'xtAttack', 'xtDefense'] }),
+    [chartEvents, timeline],
+  );
   const playerRows = useMemo(
     () => buildLosesPlayerRows(filteredByMatchHalf, teamStats.visibleLosesCount, (id) => getPlayerLabel(id, playersIndex)),
     [filteredByMatchHalf, teamStats.visibleLosesCount, playersIndex],
@@ -382,7 +395,7 @@ export default function StatystykiZespoluLosesTab({
           <div className={styles.chartCard}>
             <h3 className={styles.chartTitle}>Straty i xT co 5 min — {teamShort}</h3>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={timeline}>
+              <ComposedChart data={timeline} margin={{ top: 22, right: 8, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
                 <XAxis dataKey="minute" tick={{ fontSize: 11 }} angle={-45} textAnchor="end" height={50} />
                 <YAxis yAxisId="left" allowDecimals={false} />
@@ -392,7 +405,8 @@ export default function StatystykiZespoluLosesTab({
                 <Bar yAxisId="left" dataKey="loses" name="Straty" fill={TEAM_BLUE} radius={[4, 4, 0, 0]} />
                 <Bar yAxisId="right" dataKey="xtAttack" name="xT atak" fill={TEAM_RED} radius={[4, 4, 0, 0]} />
                 <Bar yAxisId="right" dataKey="xtDefense" name="xT obrona" fill="#6b7280" radius={[4, 4, 0, 0]} />
-              </BarChart>
+                {renderChartMatchEventMarkers({ points: timelineMarkerPoints, yAxisId: 'left' })}
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </>

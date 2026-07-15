@@ -28,6 +28,8 @@ import StatystykiZespoluPxtTab from "@/components/StatystykiZespoluPxtTab/Statys
 import StatystykiZespoluRegainsTab from "@/components/StatystykiZespoluRegainsTab/StatystykiZespoluRegainsTab";
 import StatystykiZespoluLosesTab from "@/components/StatystykiZespoluLosesTab/StatystykiZespoluLosesTab";
 import StatystykiZespoluGpsTab from "@/components/StatystykiZespoluGpsTab/StatystykiZespoluGpsTab";
+import PossessionTimelineChart from "@/components/PossessionTimelineChart/PossessionTimelineChart";
+import { getPossessionSegmentsFromMatch } from "@/utils/possessionTimelineChart";
 import { buildPxtHalfSummaryForKpi, getTeamPackingActions } from "@/utils/statystykiZespoluPxtStats";
 import PKEntriesPitch from "@/components/PKEntriesPitch/PKEntriesPitch";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
@@ -7038,6 +7040,7 @@ export default function StatystykiZespoluPage() {
                                 }
                               }}
                               aria-label="Posiadanie i czas martwy"
+                              aria-expanded={kpiPossessionRowExpanded}
                               title={kpiPossessionRowExpanded ? 'Kliknij, aby zwinąć' : 'Kliknij, aby rozwinąć szczegóły posiadania'}
                               style={{ cursor: 'pointer' }}
                             >
@@ -7073,6 +7076,21 @@ export default function StatystykiZespoluPage() {
                                   )}
                                 </span>
                               </div>
+                              {kpiPossessionRowExpanded && !isMultiMatchSelection && selectedMatchInfo ? (
+                                <PossessionTimelineChart
+                                  segments={getPossessionSegmentsFromMatch(selectedMatchInfo.matchData)}
+                                  period={kpiMatchPeriod}
+                                  teamName={selectedTeamName}
+                                  opponentName={opponentName}
+                                  firstHalfStartTime={selectedMatchInfo.firstHalfStartTime}
+                                  secondHalfStartTime={selectedMatchInfo.secondHalfStartTime}
+                                />
+                              ) : null}
+                              {kpiPossessionRowExpanded && isMultiMatchSelection ? (
+                                <p className={styles.kpiPossessionMultiMatchNote}>
+                                  Wykres posiadania w czasie jest dostępny przy wyborze pojedynczego meczu.
+                                </p>
+                              ) : null}
                             </div>
                             {(() => {
                               const findKey = (t: Record<string, any>, keys: string[]) => keys.find(k => Object.prototype.hasOwnProperty.call(t, k));
@@ -9050,6 +9068,7 @@ export default function StatystykiZespoluPage() {
                 {selectedMatches.length > 0 && allPKEntries.length > 0 ? (
                   <StatystykiZespoluPkEntriesTab
                     allPkEntries={allPKEntries}
+                    allShots={allShots}
                     matchInfo={selectedMatchInfo}
                     selectedTeam={selectedTeam}
                     teamName={availableTeams.find((t) => t.id === selectedTeam)?.name || 'Nasz zespół'}
@@ -9128,6 +9147,7 @@ export default function StatystykiZespoluPage() {
                 {selectedMatches.length > 0 && allShots.length > 0 ? (
                   <StatystykiZespoluXgTab
                     allShots={allShots}
+                    allPkEntries={allPKEntries}
                     matchInfo={selectedMatchInfo}
                     selectedTeam={selectedTeam}
                     teamName={availableTeams.find((t) => t.id === selectedTeam)?.name || 'Nasz zespół'}
@@ -10612,6 +10632,8 @@ export default function StatystykiZespoluPage() {
                 ) : allActions.length > 0 ? (
                   <StatystykiZespoluPxtTab
                     allActions={allActions}
+                    allShots={allShots}
+                    allPkEntries={allPKEntries}
                     matchInfo={selectedMatchInfo}
                     selectedTeam={selectedTeam}
                     teamName={availableTeams.find((t) => t.id === selectedTeam)?.name || 'Nasz zespół'}

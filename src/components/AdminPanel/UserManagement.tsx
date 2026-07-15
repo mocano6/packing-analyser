@@ -4,6 +4,13 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { getDB } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, setDoc } from "@/lib/firestoreWithMetrics";
+import {
+  authUserHasPasswordProvider,
+  formatAuthProviderLabels,
+  mergeFirestoreUsersWithAuthUsers,
+  type AdminAuthUserSummary,
+  type UserWithAuthMeta,
+} from "@/lib/adminAuthUserList";
 import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from "firebase/auth";
 import { Team, getTeamsArray } from "@/constants/teamsLoader";
 import { UserData } from "@/hooks/useAuth";
@@ -19,12 +26,9 @@ interface UserManagementProps {
   currentUserIsAdmin: boolean;
 }
 
-interface UserWithId extends UserData {
-  id: string;
-}
-
 const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) => {
-  const [users, setUsers] = useState<UserWithId[]>([]);
+  const [users, setUsers] = useState<UserWithAuthMeta[]>([]);
+  const [authOnlyCount, setAuthOnlyCount] = useState<number>(0);
   const [teams, setTeams] = useState<Team[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -91,7 +95,38 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
     };
   }, [openTeamsDropdownUserId]);
 
-  // Pobierz wszystkich użytkowników
+  const saveUserProfile = async (userId: string, patch: Partial<UserData>) => {
+    const db = getDB();
+    const userRef = doc(db, "users", userId);
+    const current = users.find((user) => user.id === userId);
+
+    if (current?.hasFirestoreProfile === false) {
+      const newUserData: UserData = {
+        email: current.email,
+        allowedTeams: normalizeAllowedTeams(current.allowedTeams),
+        role: current.role,
+        createdAt: current.createdAt ?? new Date(),
+        lastLogin: current.lastLogin ?? null,
+        ...(current.status ? { status: current.status } : {}),
+        ...(current.linkedPlayerId !== undefined ? { linkedPlayerId: current.linkedPlayerId } : {}),
+        ...(current.registrationData ? { registrationData: current.registrationData } : {}),
+        ...patch,
+      };
+      await setDoc(userRef, newUserData).catch(async (error) => {
+        await handleFirestoreError(error, db);
+        throw error;
+      });
+      return newUserData;
+    }
+
+    await updateDoc(userRef, patch).catch(async (error) => {
+      await handleFirestoreError(error, db);
+      throw error;
+    });
+    return patch;
+  };
+
+  // Pobierz użytkowników z Firestore i połącz z kontami Firebase Authentication (np. Google)
   const fetchUsers = async () => {
     if (!currentUserIsAdmin) return;
 
@@ -100,20 +135,53 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
       const db = getDB();
       const usersCollection = collection(db, "users");
       const usersSnapshot = await getDocs(usersCollection);
-      
-      const usersData: UserWithId[] = [];
-      usersSnapshot.forEach(doc => {
-        const userData = doc.data() as UserData;
 
-        usersData.push({
-          id: doc.id,
+      const firestoreUsers: Array<UserData & { id: string }> = [];
+      usersSnapshot.forEach((userDoc) => {
+        const userData = userDoc.data() as UserData;
+        firestoreUsers.push({
+          id: userDoc.id,
           ...userData,
           allowedTeams: normalizeAllowedTeams(userData.allowedTeams),
         });
       });
 
-      
-      setUsers(usersData);
+      let authUsers: AdminAuthUserSummary[] = [];
+      const auth = getAuth();
+      const current = auth.currentUser;
+      if (current) {
+        try {
+          const idToken = await current.getIdToken();
+          const response = await fetch("/api/admin-list-auth-users", {
+            headers: { Authorization: `Bearer ${idToken}` },
+          });
+          if (response.ok) {
+            const payload = (await response.json()) as { users?: AdminAuthUserSummary[] };
+            authUsers = payload.users ?? [];
+          } else {
+            let payload: { error?: string; hint?: string } = {};
+            try {
+              payload = await response.json();
+            } catch {
+              /* body nie-JSON */
+            }
+            console.error("admin-list-auth-users:", response.status, payload);
+            toast.error(
+              payload.hint
+                ? `${payload.error || "Nie udało się pobrać kont Auth"}\n\n${payload.hint}`
+                : payload.error || "Nie udało się pobrać kont z Firebase Authentication — widoczni są tylko użytkownicy z Firestore.",
+              { duration: 12_000 },
+            );
+          }
+        } catch (error) {
+          console.error("Błąd pobierania użytkowników Auth:", error);
+          toast.error("Nie udało się pobrać kont Google — widoczni są tylko użytkownicy z Firestore.");
+        }
+      }
+
+      const mergedUsers = mergeFirestoreUsersWithAuthUsers(firestoreUsers, authUsers);
+      setUsers(mergedUsers);
+      setAuthOnlyCount(mergedUsers.filter((user) => !user.hasFirestoreProfile).length);
     } catch (error) {
       console.error("Błąd podczas pobierania użytkowników:", error);
       toast.error("Błąd podczas pobierania listy użytkowników");
@@ -162,22 +230,15 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
   // Aktualizuj uprawnienia użytkownika do zespołów
   const updateUserTeams = async (userId: string, newTeams: string[]) => {
     try {
-      const db = getDB();
-      const userRef = doc(db, "users", userId);
-      
-      await updateDoc(userRef, {
-        allowedTeams: newTeams,
-      }).catch(async (error) => {
-        await handleFirestoreError(error, db);
-        throw error;
-      });
+      await saveUserProfile(userId, { allowedTeams: newTeams });
 
-      // Aktualizuj lokalny stan
-      setUsers(prev => prev.map(user => 
-        user.id === userId 
-          ? { ...user, allowedTeams: newTeams }
-          : user
-      ));
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === userId
+            ? { ...user, allowedTeams: newTeams, hasFirestoreProfile: true }
+            : user,
+        ),
+      );
 
       toast.success("Zaktualizowano uprawnienia użytkownika");
     } catch (error: unknown) {
@@ -194,22 +255,15 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
   // Zmiana roli użytkownika
   const updateUserRole = async (userId: string, newRole: 'user' | 'admin' | 'coach' | 'player') => {
     try {
-      const db = getDB();
-      const userRef = doc(db, "users", userId);
-      
-      await updateDoc(userRef, {
-        role: newRole
-      }).catch(error => {
-        handleFirestoreError(error, db);
-        throw error;
-      });
+      await saveUserProfile(userId, { role: newRole });
 
-      // Aktualizuj lokalny stan
-      setUsers(prev => prev.map(user => 
-        user.id === userId 
-          ? { ...user, role: newRole }
-          : user
-      ));
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === userId
+            ? { ...user, role: newRole, hasFirestoreProfile: true }
+            : user,
+        ),
+      );
 
       toast.success(`Zmieniono rolę użytkownika na ${newRole}`);
     } catch (error) {
@@ -305,7 +359,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
   };
 
   // Otwórz modal edycji użytkownika
-  const openEditUserModal = (user: UserWithId) => {
+  const openEditUserModal = (user: UserWithAuthMeta) => {
     setEditingUserId(user.id);
     setEditUserEmail(user.email);
     setEditUserRole(user.role);
@@ -329,19 +383,13 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
 
     setIsUpdatingUser(true);
     try {
-      const db = getDB();
-      const userRef = doc(db, "users", editingUserId);
-      
-      const updateData: any = {
+      const updateData: Partial<UserData> = {
         email: editUserEmail,
         role: editUserRole,
-        allowedTeams: editUserTeams
+        allowedTeams: editUserTeams,
       };
 
-      await updateDoc(userRef, updateData).catch(error => {
-        handleFirestoreError(error, db);
-        throw error;
-      });
+      await saveUserProfile(editingUserId, updateData);
 
       let passwordFailed = false;
       if (trimmedPassword.length >= 6) {
@@ -388,11 +436,19 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
       }
 
       // Aktualizuj lokalny stan (Firestore już zapisany)
-      setUsers(prev => prev.map(user => 
-        user.id === editingUserId 
-          ? { ...user, email: editUserEmail, role: editUserRole, allowedTeams: editUserTeams }
-          : user
-      ));
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === editingUserId
+            ? {
+                ...user,
+                email: editUserEmail,
+                role: editUserRole,
+                allowedTeams: editUserTeams,
+                hasFirestoreProfile: true,
+              }
+            : user,
+        ),
+      );
 
       if (passwordFailed) {
         return;
@@ -464,7 +520,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
     return [player.teams].filter(Boolean);
   };
 
-  const handleApprovePlayerAccount = async (user: UserWithId, playerId: string) => {
+  const handleApprovePlayerAccount = async (user: UserWithAuthMeta, playerId: string) => {
     const selectedPlayer = players.find(player => player.id === playerId);
     if (!selectedPlayer) {
       toast.error("Nie znaleziono wybranego zawodnika");
@@ -483,25 +539,29 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
     }
 
     try {
-      const db = getDB();
-      const userRef = doc(db, "users", user.id);
       const allowedTeams = resolvePlayerTeams(selectedPlayer);
 
-      await updateDoc(userRef, {
-        role: 'player',
-        status: 'approved',
+      await saveUserProfile(user.id, {
+        role: "player",
+        status: "approved",
         linkedPlayerId: playerId,
-        allowedTeams
-      }).catch(error => {
-        handleFirestoreError(error, db);
-        throw error;
+        allowedTeams,
       });
 
-      setUsers(prev => prev.map(item =>
-        item.id === user.id
-          ? { ...item, role: 'player', status: 'approved', linkedPlayerId: playerId, allowedTeams }
-          : item
-      ));
+      setUsers((prev) =>
+        prev.map((item) =>
+          item.id === user.id
+            ? {
+                ...item,
+                role: "player",
+                status: "approved",
+                linkedPlayerId: playerId,
+                allowedTeams,
+                hasFirestoreProfile: true,
+              }
+            : item,
+        ),
+      );
 
       setSelectedPlayerByUser(prev => {
         const next = { ...prev };
@@ -565,7 +625,15 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
       await signOut(auth);
 
       // Dodaj do lokalnego stanu
-      setUsers(prev => [...prev, { id: newUserId, ...newUserData }]);
+      setUsers((prev) => [
+        ...prev,
+        {
+          id: newUserId,
+          ...newUserData,
+          hasFirestoreProfile: true,
+          authProviders: ["password"],
+        },
+      ]);
 
       // Resetuj formularz
       setNewUserEmail("");
@@ -672,7 +740,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
       </div>
 
       <div style={{ marginBottom: "15px", padding: "10px", backgroundColor: "#e3f2fd", borderRadius: "4px", fontSize: "14px" }}>
-        <strong>Status:</strong> {users.length} użytkowników, {teams.length} zespołów dostępnych
+        <strong>Status:</strong> {users.length} użytkowników (w tym {authOnlyCount} tylko w Authentication, np. Google), {teams.length} zespołów dostępnych
       </div>
 
       {pendingUsers.length > 0 && (
@@ -848,7 +916,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
           }}>
             <thead>
               <tr style={{ backgroundColor: "#f0f0f0" }}>
-                <th style={{ padding: "6px 8px", border: "1px solid #ddd", textAlign: "left", fontSize: "0.8rem", width: "180px" }}>Email</th>
+                <th style={{ padding: "6px 8px", border: "1px solid #ddd", textAlign: "left", fontSize: "0.8rem", width: "220px" }}>Email / logowanie</th>
                 <th style={{ padding: "6px 8px", border: "1px solid #ddd", textAlign: "left", fontSize: "0.8rem", width: "96px" }}>
                   <button
                     type="button"
@@ -879,10 +947,56 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
               </tr>
             </thead>
             <tbody>
-              {sortedUsers.map(user => (
+              {sortedUsers.map(user => {
+                const canResetPassword =
+                  authUserHasPasswordProvider(user.authProviders) ||
+                  (user.hasFirestoreProfile && user.authProviders.length === 0);
+
+                return (
                 <tr key={user.id}>
-                  <td style={{ padding: "6px 8px", border: "1px solid #ddd", fontSize: "0.85rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={user.email || ""}>
-                    {user.email || 'Brak emaila'}
+                  <td style={{ padding: "6px 8px", border: "1px solid #ddd", fontSize: "0.85rem" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
+                      <span
+                        style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                        title={user.email || ""}
+                      >
+                        {user.email || "Brak emaila"}
+                      </span>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                        {user.authProviders.length > 0 && (
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "1px 6px",
+                              borderRadius: "999px",
+                              backgroundColor: "#e8f5e9",
+                              color: "#2e7d32",
+                              fontSize: "0.7rem",
+                              fontWeight: 600,
+                            }}
+                            title={`Dostawcy logowania: ${formatAuthProviderLabels(user.authProviders)}`}
+                          >
+                            {formatAuthProviderLabels(user.authProviders)}
+                          </span>
+                        )}
+                        {!user.hasFirestoreProfile && (
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "1px 6px",
+                              borderRadius: "999px",
+                              backgroundColor: "#fff3cd",
+                              color: "#856404",
+                              fontSize: "0.7rem",
+                              fontWeight: 600,
+                            }}
+                            title="Konto istnieje w Firebase Authentication, ale nie ma jeszcze dokumentu users/{uid} w Firestore. Pierwsza edycja utworzy profil."
+                          >
+                            Brak profilu Firestore
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </td>
                   <td style={{ padding: "6px 8px", border: "1px solid #ddd" }}>
                     <select
@@ -966,13 +1080,19 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                       </button>
                       <button
                         onClick={() => sendPasswordReset(user.email)}
+                        disabled={!canResetPassword}
+                        title={
+                          canResetPassword
+                            ? "Wyślij email resetujący hasło"
+                            : "Konto loguje się przez Google — brak hasła do resetu"
+                        }
                         style={{
                           padding: "4px 8px",
-                          backgroundColor: "#ffc107",
-                          color: "#212529",
+                          backgroundColor: canResetPassword ? "#ffc107" : "#e9ecef",
+                          color: canResetPassword ? "#212529" : "#6c757d",
                           border: "none",
                           borderRadius: "4px",
-                          cursor: "pointer",
+                          cursor: canResetPassword ? "pointer" : "not-allowed",
                           fontSize: "0.75rem"
                         }}
                       >
@@ -995,7 +1115,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
@@ -1364,7 +1485,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
         <ul style={{ paddingLeft: "20px" }}>
           <li>Kliknij "Dodaj użytkownika" aby utworzyć nowe konto</li>
           <li>Kliknij "Edytuj" aby zmienić email, rolę lub zespoły użytkownika</li>
-          <li>Kliknij "Reset hasła" aby wysłać użytkownikowi email z linkiem resetującym hasło</li>
+          <li>Lista łączy profile Firestore z kontami Firebase Authentication — w tym Google bez dokumentu w Firestore</li>
+          <li>Konta „Brak profilu Firestore” pojawią się po pobraniu z Auth; pierwsza edycja roli lub zespołów utworzy dokument users/&#123;uid&#125;</li>
+          <li>Kliknij "Reset hasła" aby wysłać użytkownikowi email z linkiem resetującym hasło (niedostępne dla kont wyłącznie Google)</li>
           <li>W modalu edycji możesz ustawić nowe hasło (Auth przez API serwera) — albo użyj „Reset hasła”, aby wysłać link e‑mailem</li>
           <li>Zaznacz/odznacz zespoły dla każdego użytkownika, aby nadać mu odpowiednie uprawnienia</li>
           <li>Zmień rolę na "Admin" aby użytkownik mógł zarządzać innymi użytkownikami</li>

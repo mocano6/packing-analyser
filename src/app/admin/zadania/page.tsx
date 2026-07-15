@@ -1,23 +1,134 @@
 "use client";
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useStaffPlanner } from "@/hooks/useStaffPlanner";
+import { useTeams } from "@/hooks/useTeams";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import toast from "react-hot-toast";
 import EisenhowerQuadrantTab from "@/components/EisenhowerQuadrantTab/EisenhowerQuadrantTab";
+import ModelPanel from "@/components/ModelPanel/ModelPanel";
 import StaffPlannerTab from "@/components/StaffPlanner/StaffPlannerTab";
+import TrainingMicrocycleTab from "@/components/TrainingMicrocycleTab/TrainingMicrocycleTab";
+import { useGameModel } from "@/hooks/useGameModel";
+import { usePositionSystem } from "@/hooks/usePositionSystem";
+import { useTrainingDayTitleTemplates } from "@/hooks/useTrainingDayTitleTemplates";
+import { useTrainingMicrocycle } from "@/hooks/useTrainingMicrocycle";
+import {
+  filterTeamsByUserAccess,
+  isTeamIdAccessibleForUser,
+} from "@/lib/teamsForUserAccess";
+import {
+  readAdminZadaniaTab,
+  writeAdminZadaniaTab,
+  type AdminZadaniaTabId,
+} from "@/utils/adminZadaniaTabPreference";
 import styles from "./page.module.css";
 
-type ZadaniaTab = "planner" | "eisenhower";
+type ZadaniaTab = AdminZadaniaTabId;
 
 export default function AdminZadaniaPage() {
   const router = useRouter();
-  const { isAuthenticated, isAdmin, isLoading, user, userRole, logout } = useAuth();
+  const { isAuthenticated, isAdmin, isLoading, user, userRole, userTeams, logout } = useAuth();
+  const { teams, isLoading: teamsLoading } = useTeams();
   const [tab, setTab] = useState<ZadaniaTab>("planner");
+  const [selectedTeam, setSelectedTeam] = useState("");
   const uid = user?.uid ?? null;
+
+  const userTeamAccess = useMemo(
+    () => ({ isAdmin: !!isAdmin, allowedTeamIds: userTeams ?? [] }),
+    [isAdmin, userTeams]
+  );
+
+  const availableTeams = useMemo(
+    () => filterTeamsByUserAccess(teams, userTeamAccess),
+    [teams, userTeamAccess]
+  );
+
+  const selectedTeamId = useMemo(() => {
+    if (selectedTeam && isTeamIdAccessibleForUser(selectedTeam, userTeamAccess)) {
+      return selectedTeam;
+    }
+    return availableTeams[0]?.id ?? "";
+  }, [availableTeams, selectedTeam, userTeamAccess]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("selectedTeam") || "";
+    if (stored && isTeamIdAccessibleForUser(stored, userTeamAccess)) {
+      setSelectedTeam(stored);
+      return;
+    }
+    if (availableTeams.length > 0) {
+      setSelectedTeam(availableTeams[0].id);
+    }
+  }, [availableTeams, userTeamAccess]);
+
+  useEffect(() => {
+    if (selectedTeamId) {
+      localStorage.setItem("selectedTeam", selectedTeamId);
+    }
+  }, [selectedTeamId]);
+
   const { state: plannerState, setPlannerState, loading: plannerLoading } = useStaffPlanner(uid);
+  const {
+    state: gameModelState,
+    setGameModelState,
+    loading: gameModelLoading,
+  } = useGameModel(uid);
+  const {
+    state: positionSystemState,
+    setPositionSystemState,
+    loading: positionSystemLoading,
+  } = usePositionSystem(uid);
+  const {
+    state: microcycleState,
+    setMicrocycleState,
+    loading: microcycleLoading,
+    embeddedDayTitleTemplates,
+    clearEmbeddedDayTitleTemplates,
+  } = useTrainingMicrocycle(selectedTeamId || null, uid);
+  const {
+    state: dayTitleTemplatesState,
+    setDayTitleTemplatesState,
+    loading: dayTitleTemplatesLoading,
+    mergeEmbeddedTemplates,
+  } = useTrainingDayTitleTemplates(uid);
+
+  useEffect(() => {
+    if (microcycleLoading || dayTitleTemplatesLoading) return;
+    if (embeddedDayTitleTemplates.length === 0) return;
+    mergeEmbeddedTemplates(embeddedDayTitleTemplates);
+    clearEmbeddedDayTitleTemplates();
+  }, [
+    microcycleLoading,
+    dayTitleTemplatesLoading,
+    embeddedDayTitleTemplates,
+    mergeEmbeddedTemplates,
+    clearEmbeddedDayTitleTemplates,
+  ]);
+
+  const handleTeamChange = useCallback(
+    (teamId: string) => {
+      if (!isTeamIdAccessibleForUser(teamId, userTeamAccess)) return;
+      setSelectedTeam(teamId);
+    },
+    [userTeamAccess]
+  );
+
+  useLayoutEffect(() => {
+    if (!uid) return;
+    setTab(readAdminZadaniaTab(uid));
+  }, [uid]);
+
+  const selectTab = useCallback(
+    (next: ZadaniaTab) => {
+      setTab(next);
+      writeAdminZadaniaTab(uid, next);
+    },
+    [uid]
+  );
 
   const handleLogout = useCallback(() => {
     if (typeof window !== "undefined" && window.confirm("Czy na pewno chcesz się wylogować?")) {
@@ -74,7 +185,7 @@ export default function AdminZadaniaPage() {
         isAdmin={isAdmin ?? false}
         userRole={userRole ?? undefined}
         linkedPlayerId={null}
-        selectedTeam=""
+        selectedTeam={selectedTeamId}
         onRefreshData={async () => {
           toast.success("Odśwież dane na stronie głównej aplikacji.");
         }}
@@ -93,7 +204,7 @@ export default function AdminZadaniaPage() {
           role="tab"
           aria-selected={tab === "planner"}
           className={`${styles.tab} ${tab === "planner" ? styles.tabActive : ""}`}
-          onClick={() => setTab("planner")}
+          onClick={() => selectTab("planner")}
         >
           Plan tygodnia
         </button>
@@ -103,9 +214,29 @@ export default function AdminZadaniaPage() {
           role="tab"
           aria-selected={tab === "eisenhower"}
           className={`${styles.tab} ${tab === "eisenhower" ? styles.tabActive : ""}`}
-          onClick={() => setTab("eisenhower")}
+          onClick={() => selectTab("eisenhower")}
         >
           Kwadrant Eisenhowera
+        </button>
+        <button
+          type="button"
+          id="tab-model"
+          role="tab"
+          aria-selected={tab === "model"}
+          className={`${styles.tab} ${tab === "model" ? styles.tabActive : ""}`}
+          onClick={() => selectTab("model")}
+        >
+          Model
+        </button>
+        <button
+          type="button"
+          id="tab-microcycle"
+          role="tab"
+          aria-selected={tab === "microcycle"}
+          className={`${styles.tab} ${tab === "microcycle" ? styles.tabActive : ""}`}
+          onClick={() => selectTab("microcycle")}
+        >
+          Mikrocykl
         </button>
       </div>
 
@@ -122,6 +253,38 @@ export default function AdminZadaniaPage() {
       {tab === "eisenhower" && uid && (
         <div role="tabpanel" id="panel-eisenhower" aria-labelledby="tab-eisenhower">
           <EisenhowerQuadrantTab uid={uid} />
+        </div>
+      )}
+
+      {tab === "model" && uid && (
+        <div role="tabpanel" id="panel-model" aria-labelledby="tab-model">
+          <ModelPanel
+            gameModelState={gameModelState}
+            setGameModelState={setGameModelState}
+            gameModelLoading={gameModelLoading}
+            positionSystemState={positionSystemState}
+            setPositionSystemState={setPositionSystemState}
+            positionSystemLoading={positionSystemLoading}
+          />
+        </div>
+      )}
+
+      {tab === "microcycle" && uid && (
+        <div role="tabpanel" id="panel-microcycle" aria-labelledby="tab-microcycle">
+          <TrainingMicrocycleTab
+            microcycleState={microcycleState}
+            setMicrocycleState={setMicrocycleState}
+            microcycleLoading={microcycleLoading || teamsLoading}
+            dayTitleTemplatesState={dayTitleTemplatesState}
+            setDayTitleTemplatesState={setDayTitleTemplatesState}
+            dayTitleTemplatesLoading={dayTitleTemplatesLoading}
+            gameModelState={gameModelState}
+            gameModelLoading={gameModelLoading}
+            selectedTeam={selectedTeamId}
+            onTeamChange={handleTeamChange}
+            teamsCatalog={teams}
+            userTeamAccess={userTeamAccess}
+          />
         </div>
       )}
     </div>

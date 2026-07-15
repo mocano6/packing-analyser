@@ -4,11 +4,11 @@ import React, { useCallback, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Pie,
   PieChart,
   ReferenceLine,
@@ -18,8 +18,9 @@ import {
   YAxis,
 } from 'recharts';
 import MatchVideoFloatingPanel from '@/components/MatchVideoFloatingPanel/MatchVideoFloatingPanel';
+import { renderChartMatchEventMarkers } from '@/components/ChartMatchEventMarkers/ChartMatchEventMarkers';
 import PKEntriesPitch from '@/components/PKEntriesPitch/PKEntriesPitch';
-import type { PKEntry, Player, TeamInfo } from '@/types';
+import type { PKEntry, Player, Shot, TeamInfo } from '@/types';
 import { getVideoTimestampSeconds } from '@/utils/actionVideoSeekSeconds';
 import { hasExternalVideoSource } from '@/utils/externalVideoMatchInfo';
 import { getPlayerLabel } from '@/utils/playerUtils';
@@ -46,6 +47,11 @@ import {
   type WiedzaPkEntryTypeFilter,
   type WiedzaPkOutcomeFilter,
 } from '@/utils/wiedzaPkEntriesFilters';
+import {
+  buildChartMatchEvents,
+  buildCumulativeMarkerPoints,
+  buildIntervalMarkerPoints,
+} from '@/utils/statystykiZespoluChartEvents';
 import pageStyles from '@/app/statystyki-zespolu/statystyki-zespolu.module.css';
 import styles from '../StatystykiZespoluXgTab/StatystykiZespoluXgTab.module.css';
 
@@ -76,6 +82,7 @@ function shortTeamLabel(name: string): string {
 
 type Props = {
   allPkEntries: PKEntry[];
+  allShots?: Shot[];
   matchInfo: TeamInfo;
   selectedTeam: string;
   teamName: string;
@@ -375,6 +382,7 @@ function entryTypeLabel(entryType?: string): string {
 
 export default function StatystykiZespoluPkEntriesTab({
   allPkEntries,
+  allShots = [],
   matchInfo,
   selectedTeam,
   teamName,
@@ -454,6 +462,26 @@ export default function StatystykiZespoluPkEntriesTab({
   }, [intervalData]);
 
   const hasMomentum = momentumData.some((d) => d.teamTotal > 0 || d.oppTotal > 0);
+  const chartEvents = useMemo(
+    () => buildChartMatchEvents(allShots, allPkEntries, matchInfo, selectedTeam, half),
+    [allShots, allPkEntries, matchInfo, selectedTeam, half],
+  );
+  const momentumMarkerPoints = useMemo(
+    () => buildIntervalMarkerPoints(chartEvents, momentumData, {
+      variant: 'signed',
+      teamValueKey: 'teamTotal',
+      oppValueKey: 'oppTotal',
+      valueKeys: ['teamTotal', 'oppTotal'],
+    }),
+    [chartEvents, momentumData],
+  );
+  const cumulativeMarkerPoints = useMemo(
+    () => buildCumulativeMarkerPoints(chartEvents, cumulativeData, {
+      teamValueKey: 'teamEntries',
+      opponentValueKey: 'opponentEntries',
+    }),
+    [chartEvents, cumulativeData],
+  );
 
   const actionGrouped = useMemo(() => mergePkBreakdownRows(teamSummary.byEntryType, opponentSummary.byEntryType), [teamSummary, opponentSummary]);
   const outcomeGrouped = useMemo(() => mergePkBreakdownRows(teamSummary.byOutcome, opponentSummary.byOutcome), [teamSummary, opponentSummary]);
@@ -658,7 +686,7 @@ export default function StatystykiZespoluPkEntriesTab({
             <div className={styles.chartCard}>
               <h3 className={styles.chartTitle}>Skumulowane wejścia w PK</h3>
               <ResponsiveContainer width="100%" height={240}>
-                <AreaChart data={cumulativeData} margin={{ top: 6, right: 16, left: -8, bottom: 0 }}>
+                <ComposedChart data={cumulativeData} margin={{ top: 36, right: 16, left: -8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="pkTeamFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={TEAM_BLUE} stopOpacity={0.28} />
@@ -670,7 +698,15 @@ export default function StatystykiZespoluPkEntriesTab({
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="#eef2f7" />
-                  <XAxis dataKey="minute" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <XAxis
+                    dataKey="minute"
+                    type="number"
+                    domain={['dataMin', 'dataMax']}
+                    allowDecimals={false}
+                    tick={{ fontSize: 10, fill: '#94a3b8' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
                   <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} axisLine={false} tickLine={false} width={34} />
                   <RechartsTooltip
                     content={({ active, payload }) => {
@@ -689,7 +725,8 @@ export default function StatystykiZespoluPkEntriesTab({
                   />
                   <Area type="monotone" dataKey="teamEntries" stroke={TEAM_BLUE} strokeWidth={2.5} fill="url(#pkTeamFill)" name={teamShort} />
                   <Area type="monotone" dataKey="opponentEntries" stroke={TEAM_RED} strokeWidth={2.5} fill="url(#pkOppFill)" name={oppShort} />
-                </AreaChart>
+                  {renderChartMatchEventMarkers({ points: cumulativeMarkerPoints })}
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           ) : null}
@@ -699,7 +736,7 @@ export default function StatystykiZespoluPkEntriesTab({
               <h3 className={styles.chartTitle}>Momentum wejść co 5 minut</h3>
               <p className={styles.chartSubtitle}>Góra: {teamShort} · dół: {oppShort} · kolory = typ wejścia</p>
               <ResponsiveContainer width="100%" height={230}>
-                <BarChart data={momentumData} stackOffset="sign" margin={{ top: 4, right: 8, left: -8, bottom: 18 }}>
+                <ComposedChart data={momentumData} stackOffset="sign" margin={{ top: 36, right: 8, left: -8, bottom: 18 }}>
                   <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="#eef2f7" />
                   <XAxis dataKey="minute" tick={{ fontSize: 9, fill: '#94a3b8' }} angle={-35} textAnchor="end" height={36} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} allowDecimals={false} axisLine={false} tickLine={false} width={28} />
@@ -725,7 +762,8 @@ export default function StatystykiZespoluPkEntriesTab({
                   <Bar dataKey="oppPassNeg" stackId="s" fill={ENTRY_TYPE_COLORS.pass} fillOpacity={0.55} />
                   <Bar dataKey="oppDribbleNeg" stackId="s" fill={ENTRY_TYPE_COLORS.dribble} fillOpacity={0.55} />
                   <Bar dataKey="oppSfgNeg" stackId="s" fill={ENTRY_TYPE_COLORS.sfg} fillOpacity={0.55} radius={[0, 0, 3, 3]} />
-                </BarChart>
+                  {renderChartMatchEventMarkers({ points: momentumMarkerPoints })}
+                </ComposedChart>
               </ResponsiveContainer>
               <div className={styles.miniLegend}>
                 {[['pass', 'Podanie'], ['dribble', 'Drybling'], ['sfg', 'SFG']].map(([k, label]) => (

@@ -10,6 +10,8 @@ import {
   deleteDoc,
 } from "@/lib/firestoreWithMetrics";
 import toast from "react-hot-toast";
+import { GAME_MODEL_TASKS_DOC_ID } from "@/types/gameModel";
+import { TRAINING_MICROCYCLE_TASKS_DOC_ID } from "@/types/trainingMicrocycle";
 import {
   STAFF_PLANNER_TASKS_DOC_ID,
   STAFF_PLANNER_TASKS_DOC_ID_LEGACY,
@@ -76,7 +78,9 @@ export default function EisenhowerQuadrantTab({ uid }: EisenhowerQuadrantTabProp
         .filter(
           (d) =>
             d.id !== STAFF_PLANNER_TASKS_DOC_ID &&
-            d.id !== STAFF_PLANNER_TASKS_DOC_ID_LEGACY
+            d.id !== STAFF_PLANNER_TASKS_DOC_ID_LEGACY &&
+            d.id !== GAME_MODEL_TASKS_DOC_ID &&
+            d.id !== TRAINING_MICROCYCLE_TASKS_DOC_ID
         )
         .map((d) => {
         const data = d.data();
