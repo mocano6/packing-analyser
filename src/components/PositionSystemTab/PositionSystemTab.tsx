@@ -2,7 +2,13 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import type { GameModelNode, GameModelRuleLevel, GameModelRuleTemplate } from "@/types/gameModel";
+import type {
+  GameModelNode,
+  GameModelRuleLevel,
+  GameModelRulePriority,
+  GameModelRuleTemplate,
+} from "@/types/gameModel";
+import { GAME_MODEL_PRIORITY_LABELS } from "@/types/gameModel";
 import type {
   PositionRoleId,
   PositionSystemPhaseId,
@@ -135,15 +141,21 @@ function TemplateEditForm({
   const template = positionTemplateById(templates, templateId);
   const [title, setTitle] = useState(template?.title ?? "");
   const [level, setLevel] = useState<GameModelRuleLevel>(template?.level ?? 0);
+  const [description, setDescription] = useState(template?.description ?? "");
+  const [trigger, setTrigger] = useState(template?.trigger ?? "");
+  const [priority, setPriority] = useState<GameModelRulePriority | "">(template?.priority ?? "");
 
   useEffect(() => {
     if (!template) return;
     setTitle(template.title);
     setLevel(template.level);
+    setDescription(template.description ?? "");
+    setTrigger(template.trigger ?? "");
+    setPriority(template.priority ?? "");
   }, [template]);
 
   const handleSave = () => {
-    onSave(templateId, { title, level });
+    onSave(templateId, { title, level, description, trigger, priority: priority || undefined });
   };
 
   if (!template) return null;
@@ -164,6 +176,27 @@ function TemplateEditForm({
         }}
         autoFocus
       />
+      <label className={styles.editPanelLabel} htmlFor={`pos-edit-desc-${templateId}`}>
+        Definicja (co to znaczy u nas)
+      </label>
+      <textarea
+        id={`pos-edit-desc-${templateId}`}
+        className={styles.textarea}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        rows={2}
+        placeholder="1–3 zdania, jak rozumiemy tę zasadę"
+      />
+      <label className={styles.editPanelLabel} htmlFor={`pos-edit-trigger-${templateId}`}>
+        Trigger / kiedy
+      </label>
+      <input
+        id={`pos-edit-trigger-${templateId}`}
+        className={styles.input}
+        value={trigger}
+        onChange={(e) => setTrigger(e.target.value)}
+        placeholder="Np. strata w środkowej strefie"
+      />
       <label className={styles.editPanelLabel} htmlFor={`pos-edit-level-${templateId}`}>
         Poziom
       </label>
@@ -176,6 +209,19 @@ function TemplateEditForm({
         <option value={0}>Zasada</option>
         <option value={1}>Sub-zasada</option>
         <option value={2}>Sub-sub-zasada</option>
+      </select>
+      <label className={styles.editPanelLabel} htmlFor={`pos-edit-priority-${templateId}`}>
+        Priorytet
+      </label>
+      <select
+        id={`pos-edit-priority-${templateId}`}
+        className={styles.select}
+        value={priority}
+        onChange={(e) => setPriority(e.target.value as GameModelRulePriority | "")}
+      >
+        <option value="">—</option>
+        <option value="key">{GAME_MODEL_PRIORITY_LABELS.key}</option>
+        <option value="support">{GAME_MODEL_PRIORITY_LABELS.support}</option>
       </select>
       <p className={styles.editPanelHint}>
         Rodzica wybierasz przy przeciąganiu na drzewo pozycji — sub-zasada może należeć do wielu

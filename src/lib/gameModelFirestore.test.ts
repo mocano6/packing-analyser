@@ -7,7 +7,16 @@ import {
 import type { GameModelState } from "@/types/gameModel";
 
 const state: GameModelState = {
-  templates: [{ id: "a", title: "Test", level: 0 }],
+  templates: [
+    {
+      id: "a",
+      title: "Test",
+      level: 0,
+      description: "  Definicja u nas  ",
+      trigger: "strata w środkowej strefie",
+      priority: "key",
+    },
+  ],
   nodes: [
     {
       id: "n1",
@@ -23,6 +32,10 @@ const inner = buildSanitizedGameModelState(state);
 assert.ok(Array.isArray(inner.templates));
 assert.equal((inner.templates as unknown[]).length, 1);
 assert.equal((inner.nodes as unknown[]).length, 1);
+const sanitizedTpl = (inner.templates as Record<string, unknown>[])[0];
+assert.equal(sanitizedTpl.description, "Definicja u nas");
+assert.equal(sanitizedTpl.trigger, "strata w środkowej strefie");
+assert.equal(sanitizedTpl.priority, "key");
 
 const doc = buildGameModelTaskDocument(state, 1_700_000_000_000);
 assert.ok(typeof doc.stateJson === "string");
@@ -33,7 +46,22 @@ const migrated = migrateGameModelFromFirestore({
   version: 1,
 });
 assert.equal(migrated.templates[0].title, "Test");
+assert.equal(migrated.templates[0].description, "Definicja u nas");
+assert.equal(migrated.templates[0].trigger, "strata w środkowej strefie");
+assert.equal(migrated.templates[0].priority, "key");
 assert.equal(migrated.nodes[0].phaseId, "defense");
+
+// Pola merytoryczne są opcjonalne — brak/niepoprawny priorytet => undefined.
+const minimal = migrateGameModelFromFirestore({
+  stateJson: JSON.stringify({
+    templates: [{ id: "b", title: "Bez pól", level: 0, priority: "bad" }],
+    nodes: [],
+  }),
+  version: 2,
+});
+assert.equal(minimal.templates[0].description, undefined);
+assert.equal(minimal.templates[0].trigger, undefined);
+assert.equal(minimal.templates[0].priority, undefined);
 
 const legacyAttack = migrateGameModelFromFirestore({
   stateJson: JSON.stringify({

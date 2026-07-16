@@ -12,6 +12,7 @@ import ModelPanel from "@/components/ModelPanel/ModelPanel";
 import StaffPlannerTab from "@/components/StaffPlanner/StaffPlannerTab";
 import TrainingMicrocycleTab from "@/components/TrainingMicrocycleTab/TrainingMicrocycleTab";
 import { useGameModel } from "@/hooks/useGameModel";
+import { useGameModelPacks } from "@/hooks/useGameModelPacks";
 import { usePositionSystem } from "@/hooks/usePositionSystem";
 import { useTrainingDayTitleTemplates } from "@/hooks/useTrainingDayTitleTemplates";
 import { useTrainingMicrocycle } from "@/hooks/useTrainingMicrocycle";
@@ -82,6 +83,11 @@ export default function AdminZadaniaPage() {
     setPositionSystemState,
     loading: positionSystemLoading,
   } = usePositionSystem(uid);
+  const {
+    state: packsState,
+    setPacksState,
+    loading: packsLoading,
+  } = useGameModelPacks(uid);
   const {
     state: microcycleState,
     setMicrocycleState,
@@ -265,6 +271,9 @@ export default function AdminZadaniaPage() {
             positionSystemState={positionSystemState}
             setPositionSystemState={setPositionSystemState}
             positionSystemLoading={positionSystemLoading}
+            packsState={packsState}
+            setPacksState={setPacksState}
+            packsLoading={packsLoading}
           />
         </div>
       )}

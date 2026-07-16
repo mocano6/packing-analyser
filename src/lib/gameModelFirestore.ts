@@ -1,4 +1,8 @@
-import type { GameModelPhaseId, GameModelState } from "@/types/gameModel";
+import type {
+  GameModelPhaseId,
+  GameModelRulePriority,
+  GameModelState,
+} from "@/types/gameModel";
 import { GAME_MODEL_VERSION } from "@/types/gameModel";
 
 const VALID_PHASES = new Set<string>(["defense", "attack", "set_pieces"]);
@@ -6,6 +10,17 @@ const VALID_PHASES = new Set<string>(["defense", "attack", "set_pieces"]);
 function safePhase(v: unknown): GameModelPhaseId | null {
   const s = String(v ?? "");
   return VALID_PHASES.has(s) ? (s as GameModelPhaseId) : null;
+}
+
+/** Priorytet szablonu — zwraca undefined, aby nie zaśmiecać dokumentu. */
+function safePriority(v: unknown): GameModelRulePriority | undefined {
+  return v === "key" || v === "support" ? v : undefined;
+}
+
+/** Normalizuje opcjonalny tekst — pusty/whitespace zwraca undefined. */
+function optionalTrimmed(v: unknown): string | undefined {
+  const s = String(v ?? "").trim();
+  return s.length > 0 ? s : undefined;
 }
 
 function safeLevel(v: unknown): 0 | 1 | 2 {
@@ -33,6 +48,9 @@ export function buildSanitizedGameModelState(state: GameModelState): Record<stri
       id: String(t.id ?? ""),
       title: String(t.title ?? ""),
       level: safeLevel(t.level),
+      description: optionalTrimmed(t.description),
+      trigger: optionalTrimmed(t.trigger),
+      priority: safePriority(t.priority),
     })),
     nodes: state.nodes
       .map((n) => {
@@ -60,6 +78,9 @@ export function migrateGameModelFromFirestore(raw: Record<string, unknown>): Gam
         id: String(t.id ?? ""),
         title: String(t.title ?? ""),
         level: safeLevel(t.level),
+        description: optionalTrimmed(t.description),
+        trigger: optionalTrimmed(t.trigger),
+        priority: safePriority(t.priority),
       }))
     : [];
 

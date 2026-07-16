@@ -53,6 +53,39 @@ const titleOk = validateTemplateLibraryUpdate(templates, nodes, "t1", {
 });
 assert.equal(titleOk.ok, true);
 
+// Pola merytoryczne: patch je stosuje...
+const enriched = applyTemplateLibraryUpdate(templates, "t1", {
+  title: "Pressing",
+  level: 0,
+  description: "  Wysoko i agresywnie  ",
+  trigger: "strata w ataku",
+  priority: "key",
+});
+const enrichedT1 = enriched.find((t) => t.id === "t1");
+assert.equal(enrichedT1?.description, "Wysoko i agresywnie");
+assert.equal(enrichedT1?.trigger, "strata w ataku");
+assert.equal(enrichedT1?.priority, "key");
+
+// ...a patch bez tych pól (np. zmiana poziomu przez drag) je zachowuje.
+const levelOnly = applyTemplateLibraryUpdate(enriched, "t1", {
+  title: "Pressing",
+  level: 0,
+});
+const preservedT1 = levelOnly.find((t) => t.id === "t1");
+assert.equal(preservedT1?.description, "Wysoko i agresywnie");
+assert.equal(preservedT1?.priority, "key");
+
+// Pusty patch pola czyści wartość.
+const cleared = applyTemplateLibraryUpdate(enriched, "t1", {
+  title: "Pressing",
+  level: 0,
+  description: "",
+  priority: undefined,
+});
+const clearedT1 = cleared.find((t) => t.id === "t1");
+assert.equal(clearedT1?.description, undefined);
+assert.equal(clearedT1?.trigger, "strata w ataku");
+
 const deleted = deleteTemplateFromLibrary(templates, nodes, "t2");
 assert.equal(deleted.templates.length, 2);
 assert.equal(deleted.removedNodeCount, 3);

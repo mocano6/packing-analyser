@@ -4,10 +4,16 @@ import React, { useCallback, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import GameModelTab from "@/components/GameModelTab/GameModelTab";
 import PositionSystemTab from "@/components/PositionSystemTab/PositionSystemTab";
-import type { GameModelRuleLevel, GameModelState } from "@/types/gameModel";
+import type {
+  GameModelRuleLevel,
+  GameModelRulePriority,
+  GameModelState,
+} from "@/types/gameModel";
 import {
   GAME_MODEL_LEVEL_LABELS,
+  GAME_MODEL_PRIORITY_LABELS,
 } from "@/types/gameModel";
+import type { GameModelPacksState } from "@/types/gameModelPack";
 import type { PositionRoleId, PositionSystemState } from "@/types/positionSystem";
 import type { GameModelNode } from "@/types/gameModel";
 import type { PositionTaskNode } from "@/types/positionSystem";
@@ -23,6 +29,15 @@ import {
   type TemplateLibraryUpdatePatch,
 } from "@/utils/gameModelTree";
 import {
+  applyGameModelPack,
+  createGameModelPack,
+  findPackByName,
+  packSummary,
+  removeGameModelPack,
+  sortPacksByUpdatedAtDesc,
+  upsertGameModelPack,
+} from "@/utils/gameModelPacks";
+import {
   nodesRemovedByPositionTemplateLevelChange,
   removeAllPositionNodesForTemplate,
   removePositionNodeIds,
@@ -34,6 +49,18 @@ const LIBRARY_DRAG_MIME = "application/json";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function formatPackDate(ms: number): string {
+  try {
+    return new Date(ms).toLocaleDateString("pl-PL", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return "";
+  }
 }
 
 function buildCombinedTemplateUsageCounts(
@@ -54,6 +81,9 @@ export interface ModelPanelProps {
   positionSystemState: PositionSystemState;
   setPositionSystemState: React.Dispatch<React.SetStateAction<PositionSystemState>>;
   positionSystemLoading: boolean;
+  packsState: GameModelPacksState;
+  setPacksState: React.Dispatch<React.SetStateAction<GameModelPacksState>>;
+  packsLoading: boolean;
 }
 
 function TemplateEditForm({
@@ -70,14 +100,29 @@ function TemplateEditForm({
   const template = templateById(templates, templateId);
   const [title, setTitle] = useState(template?.title ?? "");
   const [level, setLevel] = useState<GameModelRuleLevel>(template?.level ?? 0);
+  const [description, setDescription] = useState(template?.description ?? "");
+  const [trigger, setTrigger] = useState(template?.trigger ?? "");
+  const [priority, setPriority] = useState<GameModelRulePriority | "">(template?.priority ?? "");
 
   React.useEffect(() => {
     if (!template) return;
     setTitle(template.title);
     setLevel(template.level);
+    setDescription(template.description ?? "");
+    setTrigger(template.trigger ?? "");
+    setPriority(template.priority ?? "");
   }, [template]);
 
   if (!template) return null;
+
+  const submit = () =>
+    onSave(templateId, {
+      title,
+      level,
+      description,
+      trigger,
+      priority: priority || undefined,
+    });
 
   return (
     <div className={styles.editPanel}>
@@ -90,10 +135,31 @@ function TemplateEditForm({
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") onSave(templateId, { title, level });
+          if (e.key === "Enter") submit();
           if (e.key === "Escape") onCancel();
         }}
         autoFocus
+      />
+      <label className={styles.editPanelLabel} htmlFor={`lib-edit-desc-${templateId}`}>
+        Definicja (co to znaczy u nas)
+      </label>
+      <textarea
+        id={`lib-edit-desc-${templateId}`}
+        className={styles.textarea}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        rows={2}
+        placeholder="1–3 zdania, jak rozumiemy tę zasadę"
+      />
+      <label className={styles.editPanelLabel} htmlFor={`lib-edit-trigger-${templateId}`}>
+        Trigger / kiedy
+      </label>
+      <input
+        id={`lib-edit-trigger-${templateId}`}
+        className={styles.input}
+        value={trigger}
+        onChange={(e) => setTrigger(e.target.value)}
+        placeholder="Np. strata w środkowej strefie"
       />
       <label className={styles.editPanelLabel} htmlFor={`lib-edit-level-${templateId}`}>
         Poziom
@@ -108,6 +174,19 @@ function TemplateEditForm({
         <option value={1}>Sub-zasada</option>
         <option value={2}>Sub-sub-zasada</option>
       </select>
+      <label className={styles.editPanelLabel} htmlFor={`lib-edit-priority-${templateId}`}>
+        Priorytet
+      </label>
+      <select
+        id={`lib-edit-priority-${templateId}`}
+        className={styles.select}
+        value={priority}
+        onChange={(e) => setPriority(e.target.value as GameModelRulePriority | "")}
+      >
+        <option value="">—</option>
+        <option value="key">{GAME_MODEL_PRIORITY_LABELS.key}</option>
+        <option value="support">{GAME_MODEL_PRIORITY_LABELS.support}</option>
+      </select>
       <p className={styles.editPanelHint}>
         Te same zasady przypisujesz do modelu drużyny i do poszczególnych pozycji.
       </p>
@@ -115,7 +194,7 @@ function TemplateEditForm({
         <button
           type="button"
           className={styles.saveButton}
-          onClick={() => onSave(templateId, { title, level })}
+          onClick={submit}
           disabled={!title.trim()}
         >
           Zapisz
@@ -135,9 +214,15 @@ export default function ModelPanel({
   positionSystemState,
   setPositionSystemState,
   positionSystemLoading,
+  packsState,
+  setPacksState,
+  packsLoading,
 }: ModelPanelProps) {
   const [newTitle, setNewTitle] = useState("");
   const [newLevel, setNewLevel] = useState<GameModelRuleLevel>(0);
+  const [newDescription, setNewDescription] = useState("");
+  const [newTrigger, setNewTrigger] = useState("");
+  const [newPriority, setNewPriority] = useState<GameModelRulePriority | "">("");
   const [expandedLibraryLevels, setExpandedLibraryLevels] = useState<Set<GameModelRuleLevel>>(
     () => new Set([0])
   );
@@ -145,8 +230,10 @@ export default function ModelPanel({
   const [dragOverLibraryLevel, setDragOverLibraryLevel] = useState<GameModelRuleLevel | null>(null);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [selectedPositionId, setSelectedPositionId] = useState<PositionRoleId>("GK");
+  const [packName, setPackName] = useState("");
+  const [packsExpanded, setPacksExpanded] = useState(true);
 
-  const loading = gameModelLoading || positionSystemLoading;
+  const loading = gameModelLoading || positionSystemLoading || packsLoading;
 
   const usageCounts = useMemo(
     () =>
@@ -157,6 +244,11 @@ export default function ModelPanel({
   const templatesByLevel = useMemo(
     () => groupTemplatesByLevel(gameModelState.templates),
     [gameModelState.templates]
+  );
+
+  const sortedPacks = useMemo(
+    () => sortPacksByUpdatedAtDesc(packsState.packs),
+    [packsState.packs]
   );
 
   const toggleLibraryLevelExpanded = useCallback((level: GameModelRuleLevel) => {
@@ -181,12 +273,27 @@ export default function ModelPanel({
     const title = newTitle.trim();
     if (!title) return;
     const id = generateId();
+    const description = newDescription.trim();
+    const trigger = newTrigger.trim();
     setGameModelState((prev) => ({
       ...prev,
-      templates: [...prev.templates, { id, title, level: newLevel }],
+      templates: [
+        ...prev.templates,
+        {
+          id,
+          title,
+          level: newLevel,
+          ...(description ? { description } : {}),
+          ...(trigger ? { trigger } : {}),
+          ...(newPriority ? { priority: newPriority } : {}),
+        },
+      ],
     }));
     setNewTitle("");
-  }, [newTitle, newLevel, setGameModelState]);
+    setNewDescription("");
+    setNewTrigger("");
+    setNewPriority("");
+  }, [newTitle, newLevel, newDescription, newTrigger, newPriority, setGameModelState]);
 
   const deleteTemplate = useCallback(
     (templateId: string) => {
@@ -354,6 +461,92 @@ export default function ModelPanel({
     [changeTemplateLevel, handleDragEnd]
   );
 
+  const saveCurrentAsPack = useCallback(() => {
+    const name = packName.trim();
+    if (!name) {
+      toast.error("Podaj nazwę szablonu.");
+      return;
+    }
+    if (
+      gameModelState.templates.length === 0 &&
+      gameModelState.nodes.length === 0 &&
+      positionSystemState.nodes.length === 0
+    ) {
+      toast.error("Nie ma nic do zapisania — dodaj zasady lub przypisania.");
+      return;
+    }
+
+    const existing = findPackByName(packsState.packs, name);
+    if (existing && typeof window !== "undefined") {
+      const confirmed = window.confirm(
+        `Szablon „${existing.name}” już istnieje. Nadpisać go aktualnym modelem i pozycjami?`
+      );
+      if (!confirmed) return;
+    }
+
+    const pack = createGameModelPack({
+      id: existing?.id ?? generateId(),
+      name,
+      gameModel: gameModelState,
+      positionSystem: positionSystemState,
+      now: Date.now(),
+      createdAt: existing?.createdAt,
+    });
+
+    setPacksState((prev) => ({
+      packs: upsertGameModelPack(prev.packs, pack),
+    }));
+    setPackName("");
+    const s = packSummary(pack);
+    toast.success(
+      existing
+        ? `Zaktualizowano szablon „${pack.name}” (${s.templateCount} zasad, ${s.gameNodeCount} w modelu, ${s.positionNodeCount} na pozycjach).`
+        : `Zapisano szablon „${pack.name}” (${s.templateCount} zasad, ${s.gameNodeCount} w modelu, ${s.positionNodeCount} na pozycjach).`
+    );
+  }, [
+    packName,
+    gameModelState,
+    positionSystemState,
+    packsState.packs,
+    setPacksState,
+  ]);
+
+  const loadPack = useCallback(
+    (packId: string) => {
+      const pack = packsState.packs.find((p) => p.id === packId);
+      if (!pack) return;
+      const s = packSummary(pack);
+      if (typeof window !== "undefined") {
+        const confirmed = window.confirm(
+          `Wczytać szablon „${pack.name}”?\n\nZastąpi bieżącą bibliotekę zasad, model drużyny i system pozycji.\n(${s.templateCount} zasad, ${s.gameNodeCount} w modelu, ${s.positionNodeCount} na pozycjach)`
+        );
+        if (!confirmed) return;
+      }
+      const applied = applyGameModelPack(pack);
+      setEditingTemplateId(null);
+      setGameModelState(applied.gameModel);
+      setPositionSystemState(applied.positionSystem);
+      toast.success(`Wczytano szablon „${pack.name}”.`);
+    },
+    [packsState.packs, setGameModelState, setPositionSystemState]
+  );
+
+  const deletePack = useCallback(
+    (packId: string) => {
+      const pack = packsState.packs.find((p) => p.id === packId);
+      if (!pack) return;
+      if (typeof window !== "undefined") {
+        const confirmed = window.confirm(`Usunąć szablon „${pack.name}”?`);
+        if (!confirmed) return;
+      }
+      setPacksState((prev) => ({
+        packs: removeGameModelPack(prev.packs, packId),
+      }));
+      toast.success(`Usunięto szablon „${pack.name}”.`);
+    },
+    [packsState.packs, setPacksState]
+  );
+
   if (loading) {
     return (
       <div className={styles.loadingBox} role="status">
@@ -387,6 +580,30 @@ export default function ModelPanel({
               if (e.key === "Enter") addTemplate();
             }}
           />
+          <label className={styles.srOnly} htmlFor="game-model-rule-description">
+            Definicja zasady
+          </label>
+          <textarea
+            id="game-model-rule-description"
+            className={styles.textarea}
+            value={newDescription}
+            onChange={(e) => setNewDescription(e.target.value)}
+            rows={2}
+            placeholder="Definicja: co to znaczy u nas (opcjonalnie)"
+          />
+          <label className={styles.srOnly} htmlFor="game-model-rule-trigger">
+            Trigger zasady
+          </label>
+          <input
+            id="game-model-rule-trigger"
+            className={styles.input}
+            value={newTrigger}
+            onChange={(e) => setNewTrigger(e.target.value)}
+            placeholder="Trigger / kiedy (opcjonalnie)"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addTemplate();
+            }}
+          />
           <label className={styles.srOnly} htmlFor="game-model-rule-level">
             Poziom zasady
           </label>
@@ -399,6 +616,19 @@ export default function ModelPanel({
             <option value={0}>Zasada</option>
             <option value={1}>Sub-zasada</option>
             <option value={2}>Sub-sub-zasada</option>
+          </select>
+          <label className={styles.srOnly} htmlFor="game-model-rule-priority">
+            Priorytet zasady
+          </label>
+          <select
+            id="game-model-rule-priority"
+            className={styles.select}
+            value={newPriority}
+            onChange={(e) => setNewPriority(e.target.value as GameModelRulePriority | "")}
+          >
+            <option value="">Priorytet: —</option>
+            <option value="key">{GAME_MODEL_PRIORITY_LABELS.key}</option>
+            <option value="support">{GAME_MODEL_PRIORITY_LABELS.support}</option>
           </select>
           <button
             type="button"
@@ -477,6 +707,27 @@ export default function ModelPanel({
                                 >
                                   {template.title}
                                 </button>
+                                {template.priority && (
+                                  <span
+                                    className={`${styles.priorityBadge} ${
+                                      template.priority === "key"
+                                        ? styles.priorityBadgeKey
+                                        : ""
+                                    }`}
+                                    title={`Priorytet: ${GAME_MODEL_PRIORITY_LABELS[template.priority]}`}
+                                  >
+                                    {GAME_MODEL_PRIORITY_LABELS[template.priority]}
+                                  </span>
+                                )}
+                                {template.description && (
+                                  <p className={styles.chipDescription}>{template.description}</p>
+                                )}
+                                {template.trigger && (
+                                  <p className={styles.chipTrigger}>
+                                    <span aria-hidden="true">⚡ </span>
+                                    {template.trigger}
+                                  </p>
+                                )}
                               </div>
                               <div className={styles.chipMeta}>
                                 <span
@@ -532,6 +783,92 @@ export default function ModelPanel({
         {!hasTemplates && (
           <p className={styles.emptyHint}>Brak zasad w bibliotece — dodaj pierwszą powyżej.</p>
         )}
+
+        <section className={styles.packsSection} aria-label="Szablony modelu i pozycji">
+          <button
+            type="button"
+            className={styles.packsSectionHeader}
+            aria-expanded={packsExpanded}
+            aria-controls="model-packs-body"
+            onClick={() => setPacksExpanded((v) => !v)}
+          >
+            <span className={styles.librarySectionChevron} aria-hidden="true">
+              {packsExpanded ? "▼" : "▶"}
+            </span>
+            <h3 className={styles.packsSectionTitle}>Szablony do ponownego użycia</h3>
+          </button>
+          <div
+            id="model-packs-body"
+            className={styles.packsSectionBody}
+            hidden={!packsExpanded}
+          >
+            <p className={styles.packsHint}>
+              Zapisuje bibliotekę zasad, model drużyny i system pozycji — potem możesz wczytać ten
+              sam zestaw dla innego zespołu.
+            </p>
+            <div className={styles.packsSaveForm}>
+              <label className={styles.srOnly} htmlFor="game-model-pack-name">
+                Nazwa szablonu
+              </label>
+              <input
+                id="game-model-pack-name"
+                className={styles.input}
+                value={packName}
+                onChange={(e) => setPackName(e.target.value)}
+                placeholder="Np. Model U17 / pressing"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveCurrentAsPack();
+                }}
+              />
+              <button
+                type="button"
+                className={styles.addButton}
+                onClick={saveCurrentAsPack}
+                disabled={!packName.trim()}
+              >
+                Zapisz szablon
+              </button>
+            </div>
+            {sortedPacks.length === 0 ? (
+              <p className={styles.emptyHint}>Brak zapisanych szablonów.</p>
+            ) : (
+              <ul className={styles.packsList}>
+                {sortedPacks.map((pack) => {
+                  const s = packSummary(pack);
+                  return (
+                    <li key={pack.id} className={styles.packRow}>
+                      <div className={styles.packInfo}>
+                        <span className={styles.packName}>{pack.name}</span>
+                        <span className={styles.packMeta}>
+                          {s.templateCount} zasad · {s.gameNodeCount} w modelu ·{" "}
+                          {s.positionNodeCount} na pozycjach
+                          {pack.updatedAt ? ` · ${formatPackDate(pack.updatedAt)}` : ""}
+                        </span>
+                      </div>
+                      <div className={styles.packActions}>
+                        <button
+                          type="button"
+                          className={styles.packLoadButton}
+                          onClick={() => loadPack(pack.id)}
+                        >
+                          Wczytaj
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.deleteButton}
+                          onClick={() => deletePack(pack.id)}
+                          aria-label={`Usuń szablon ${pack.name}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </section>
       </aside>
 
       <div className={styles.modelPanelMain}>

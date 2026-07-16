@@ -9,9 +9,11 @@ import type {
   GameModelRuleTemplate,
   GameModelState,
 } from "@/types/gameModel";
+import type { GameModelRulePriority } from "@/types/gameModel";
 import {
   GAME_MODEL_LEVEL_LABELS,
   GAME_MODEL_PHASES,
+  GAME_MODEL_PRIORITY_LABELS,
 } from "@/types/gameModel";
 import {
   applyTemplateLibraryUpdateWithCascade,
@@ -108,15 +110,21 @@ function TemplateEditForm({
   const template = templateById(templates, templateId);
   const [title, setTitle] = useState(template?.title ?? "");
   const [level, setLevel] = useState<GameModelRuleLevel>(template?.level ?? 0);
+  const [description, setDescription] = useState(template?.description ?? "");
+  const [trigger, setTrigger] = useState(template?.trigger ?? "");
+  const [priority, setPriority] = useState<GameModelRulePriority | "">(template?.priority ?? "");
 
   useEffect(() => {
     if (!template) return;
     setTitle(template.title);
     setLevel(template.level);
+    setDescription(template.description ?? "");
+    setTrigger(template.trigger ?? "");
+    setPriority(template.priority ?? "");
   }, [template]);
 
   const handleSave = () => {
-    onSave(templateId, { title, level });
+    onSave(templateId, { title, level, description, trigger, priority: priority || undefined });
   };
 
   if (!template) return null;
@@ -137,6 +145,27 @@ function TemplateEditForm({
         }}
         autoFocus
       />
+      <label className={styles.editPanelLabel} htmlFor={`edit-desc-${templateId}`}>
+        Definicja (co to znaczy u nas)
+      </label>
+      <textarea
+        id={`edit-desc-${templateId}`}
+        className={styles.textarea}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        rows={2}
+        placeholder="1–3 zdania, jak rozumiemy tę zasadę"
+      />
+      <label className={styles.editPanelLabel} htmlFor={`edit-trigger-${templateId}`}>
+        Trigger / kiedy
+      </label>
+      <input
+        id={`edit-trigger-${templateId}`}
+        className={styles.input}
+        value={trigger}
+        onChange={(e) => setTrigger(e.target.value)}
+        placeholder="Np. strata w środkowej strefie"
+      />
       <label className={styles.editPanelLabel} htmlFor={`edit-level-${templateId}`}>
         Poziom
       </label>
@@ -149,6 +178,19 @@ function TemplateEditForm({
         <option value={0}>Zasada</option>
         <option value={1}>Sub-zasada</option>
         <option value={2}>Sub-sub-zasada</option>
+      </select>
+      <label className={styles.editPanelLabel} htmlFor={`edit-priority-${templateId}`}>
+        Priorytet
+      </label>
+      <select
+        id={`edit-priority-${templateId}`}
+        className={styles.select}
+        value={priority}
+        onChange={(e) => setPriority(e.target.value as GameModelRulePriority | "")}
+      >
+        <option value="">—</option>
+        <option value="key">{GAME_MODEL_PRIORITY_LABELS.key}</option>
+        <option value="support">{GAME_MODEL_PRIORITY_LABELS.support}</option>
       </select>
       <p className={styles.editPanelHint}>
         Rodzica wybierasz przy przeciąganiu na model — sub-zasada może należeć do wielu zasad.

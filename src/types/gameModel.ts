@@ -16,11 +16,25 @@ export const GAME_MODEL_LEVEL_LABELS: Record<GameModelRuleLevel, string> = {
   2: "Sub-sub-zasada",
 };
 
+/** Priorytet zasady/zachowania — pomaga sztabowi odróżnić rzeczy kluczowe od wspierających. */
+export type GameModelRulePriority = "key" | "support";
+
+export const GAME_MODEL_PRIORITY_LABELS: Record<GameModelRulePriority, string> = {
+  key: "Kluczowa",
+  support: "Wspierająca",
+};
+
 /** Szablon zasady w bibliotece (panel boczny) — bez stałego rodzica; przypisanie w modelu. */
 export interface GameModelRuleTemplate {
   id: string;
   title: string;
   level: GameModelRuleLevel;
+  /** Definicja „co to znaczy u nas” — 1–3 zdania. */
+  description?: string;
+  /** Trigger / kiedy zachowanie ma wystąpić (np. „strata w środkowej strefie”). */
+  trigger?: string;
+  /** Priorytet w modelu gry (domyślnie brak = wspierająca). */
+  priority?: GameModelRulePriority;
 }
 
 /** Węzeł przypisany do fazy w modelu gry. */

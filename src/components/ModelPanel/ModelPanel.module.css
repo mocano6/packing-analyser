@@ -218,6 +218,55 @@
   background: #fff;
 }
 
+.textarea {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  resize: vertical;
+  min-height: 44px;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.priorityBadge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 6px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #475569;
+  background: #e2e8f0;
+  border-radius: 999px;
+}
+
+.priorityBadgeKey {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.chipDescription {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: #475569;
+}
+
+.chipTrigger {
+  margin: 2px 0 0;
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  color: #7c3aed;
+}
+
 .addButton {
   padding: 8px 14px;
   font-size: 0.875rem;
@@ -434,4 +483,126 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.packsSection {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.packsSectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 0;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.packsSectionHeader:hover {
+  opacity: 0.85;
+}
+
+.packsSectionHeader:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.packsSectionTitle {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.packsSectionBody {
+  margin-top: 8px;
+}
+
+.packsHint {
+  margin: 0 0 10px;
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.packsSaveForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.packsSaveForm .input {
+  flex: 1 1 160px;
+  min-width: 140px;
+}
+
+.packsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.packRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.packInfo {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.packName {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #334155;
+  word-break: break-word;
+}
+
+.packMeta {
+  font-size: 0.6875rem;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.packActions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.packLoadButton {
+  padding: 5px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.packLoadButton:hover {
+  background: #dbeafe;
 }

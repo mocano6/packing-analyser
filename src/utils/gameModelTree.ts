@@ -2,6 +2,7 @@ import type {
   GameModelNode,
   GameModelPhaseId,
   GameModelRuleLevel,
+  GameModelRulePriority,
   GameModelRuleTemplate,
 } from "@/types/gameModel";
 
@@ -232,6 +233,10 @@ export function groupTemplatesByLevel(
 export type TemplateLibraryUpdatePatch = {
   title: string;
   level: GameModelRuleLevel;
+  /** Pola merytoryczne — pomijane w patchu (np. przy przeciąganiu poziomu) są zachowywane. */
+  description?: string;
+  trigger?: string;
+  priority?: GameModelRulePriority;
 };
 
 /** Wszystkie węzły modelu w poddrzewie (łącznie z korzeniem). */
@@ -362,9 +367,25 @@ export function applyTemplateLibraryUpdate(
   templateId: string,
   patch: TemplateLibraryUpdatePatch
 ): GameModelRuleTemplate[] {
-  return templates.map((t) =>
-    t.id === templateId ? { ...t, title: patch.title.trim(), level: patch.level } : t
-  );
+  return templates.map((t) => {
+    if (t.id !== templateId) return t;
+    const next: GameModelRuleTemplate = { ...t, title: patch.title.trim(), level: patch.level };
+    if (patch.description !== undefined) {
+      const d = patch.description.trim();
+      if (d) next.description = d;
+      else delete next.description;
+    }
+    if (patch.trigger !== undefined) {
+      const tr = patch.trigger.trim();
+      if (tr) next.trigger = tr;
+      else delete next.trigger;
+    }
+    if (patch.priority !== undefined) {
+      if (patch.priority) next.priority = patch.priority;
+      else delete next.priority;
+    }
+    return next;
+  });
 }
 
 export function applyTemplateLibraryUpdateWithCascade(
