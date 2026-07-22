@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { doc, getDoc, setDoc } from "@/lib/firestoreWithMetrics";
-import { getDB } from "@/lib/firebase";
+import { getDoc, setDoc } from "@/lib/firestoreWithMetrics";
 import type { PositionSystemState } from "@/types/positionSystem";
 import {
   POSITION_SYSTEM_TASKS_DOC_ID,
@@ -12,14 +11,11 @@ import {
   buildPositionSystemTaskDocument,
   migratePositionSystemFromFirestore,
 } from "@/lib/positionSystemFirestore";
+import { teamStaffStateDocRef, userLegacyTasksDocRef } from "@/lib/teamStaffFirestore";
 import toast from "react-hot-toast";
 
 function defaultState(): PositionSystemState {
   return { nodes: [] };
-}
-
-function positionSystemStateDoc(uid: string) {
-  return doc(getDB(), "users", uid, "tasks", POSITION_SYSTEM_TASKS_DOC_ID);
 }
 
 function isAcceptedVersion(v: unknown): boolean {
@@ -28,13 +24,13 @@ function isAcceptedVersion(v: unknown): boolean {
   return n === POSITION_SYSTEM_VERSION || n === 1 || n === 2;
 }
 
-export function usePositionSystem(uid: string | null) {
+export function usePositionSystem(teamId: string | null, uid: string | null) {
   const [state, setState] = useState<PositionSystemState>(defaultState);
   const [loading, setLoading] = useState(true);
   const skipSaveOnce = useRef(false);
 
   useEffect(() => {
-    if (!uid) {
+    if (!teamId || !uid) {
       setState(defaultState());
       setLoading(false);
       return;
@@ -43,15 +39,25 @@ export function usePositionSystem(uid: string | null) {
     (async () => {
       setLoading(true);
       try {
-        const snap = await getDoc(positionSystemStateDoc(uid));
+        const teamRef = teamStaffStateDocRef(teamId, POSITION_SYSTEM_TASKS_DOC_ID);
+        const teamSnap = await getDoc(teamRef);
         if (cancelled) return;
-        if (snap.exists()) {
-          const d = snap.data() as Record<string, unknown>;
+
+        const applyLoaded = (raw: Record<string, unknown>, persistToTeam = false) => {
+          const migrated = migratePositionSystemFromFirestore(raw);
+          skipSaveOnce.current = true;
+          setState(migrated);
+          if (persistToTeam) {
+            return setDoc(teamRef, buildPositionSystemTaskDocument(migrated, Date.now()));
+          }
+          return Promise.resolve();
+        };
+
+        if (teamSnap.exists()) {
+          const d = teamSnap.data() as Record<string, unknown>;
           if (isAcceptedVersion(d.version)) {
             try {
-              const migrated = migratePositionSystemFromFirestore(d);
-              skipSaveOnce.current = true;
-              setState(migrated);
+              await applyLoaded(d, false);
             } catch (parseErr) {
               console.error("Parsowanie systemu pozycji:", parseErr);
               skipSaveOnce.current = true;
@@ -61,10 +67,33 @@ export function usePositionSystem(uid: string | null) {
             skipSaveOnce.current = true;
             setState(defaultState());
           }
-        } else {
-          skipSaveOnce.current = true;
-          setState(defaultState());
+          return;
         }
+
+        const legacySnap = await getDoc(
+          userLegacyTasksDocRef(uid, POSITION_SYSTEM_TASKS_DOC_ID)
+        );
+        if (cancelled) return;
+
+        if (legacySnap.exists()) {
+          const d = legacySnap.data() as Record<string, unknown>;
+          if (isAcceptedVersion(d.version)) {
+            try {
+              await applyLoaded(d, true);
+            } catch (parseErr) {
+              console.error("Migracja systemu pozycji z konta użytkownika:", parseErr);
+              skipSaveOnce.current = true;
+              setState(defaultState());
+            }
+          } else {
+            skipSaveOnce.current = true;
+            setState(defaultState());
+          }
+          return;
+        }
+
+        skipSaveOnce.current = true;
+        setState(defaultState());
       } catch (e) {
         console.error("Błąd ładowania systemu pozycji:", e);
         if (!cancelled) {
@@ -79,26 +108,28 @@ export function usePositionSystem(uid: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [uid]);
+  }, [teamId, uid]);
 
   useEffect(() => {
-    if (!uid || loading) return;
+    if (!teamId || !uid || loading) return;
     if (skipSaveOnce.current) {
       skipSaveOnce.current = false;
       return;
     }
     const t = setTimeout(() => {
       const payload = buildPositionSystemTaskDocument(state, Date.now());
-      setDoc(positionSystemStateDoc(uid), payload).catch((e: unknown) => {
-        console.error("Zapis systemu pozycji:", e);
-        toast.error("Nie udało się zapisać systemu pozycji.", {
-          id: "position-system-save-error",
-          duration: 6000,
-        });
-      });
+      setDoc(teamStaffStateDocRef(teamId, POSITION_SYSTEM_TASKS_DOC_ID), payload).catch(
+        (e: unknown) => {
+          console.error("Zapis systemu pozycji:", e);
+          toast.error("Nie udało się zapisać systemu pozycji.", {
+            id: "position-system-save-error",
+            duration: 6000,
+          });
+        }
+      );
     }, 450);
     return () => clearTimeout(t);
-  }, [state, uid, loading]);
+  }, [state, teamId, uid, loading]);
 
   const setPositionSystemState = useCallback(
     (updater: PositionSystemState | ((prev: PositionSystemState) => PositionSystemState)) => {

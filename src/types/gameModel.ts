@@ -54,5 +54,5 @@ export interface GameModelState {
 
 export const GAME_MODEL_VERSION = 2 as const;
 
-/** Dokument w `users/{uid}/tasks/` — nie pokazuj w kwadrancie Eisenhowera. */
+/** Dokument w `teams/{teamId}/staff/` (legacy: `users/{uid}/tasks/`). Nie pokazuj w Eisenhowerze. */
 export const GAME_MODEL_TASKS_DOC_ID = "gameModelState" as const;

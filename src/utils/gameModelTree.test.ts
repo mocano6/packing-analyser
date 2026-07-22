@@ -16,6 +16,8 @@ import {
   validateNodeMove,
   validateTemplateLibraryUpdate,
   collectDescendantTemplatesForDrop,
+  filterTemplatesByPhase,
+  templatePhaseIds,
   templatesToAssignOnMicrocycleDrop,
   validateTemplatePlacement,
   wouldCreateCycle,
@@ -118,6 +120,21 @@ assert.equal(subDescendants[0].id, "t3");
 const dropList = templatesToAssignOnMicrocycleDrop(templates, nodes, "t1");
 assert.equal(dropList.length, 3);
 assert.equal(dropList[0].id, "t1");
+
+assert.deepEqual(templatePhaseIds(nodes, "t1"), ["defense"]);
+assert.deepEqual(templatePhaseIds(nodes, "t2"), ["defense", "attack"]);
+assert.deepEqual(templatePhaseIds(nodes, "t3"), ["defense"]);
+assert.equal(filterTemplatesByPhase(templates, nodes, "defense").length, 3);
+assert.equal(filterTemplatesByPhase(templates, nodes, "attack").length, 1);
+assert.equal(filterTemplatesByPhase(templates, nodes, "unassigned").length, 0);
+assert.equal(
+  filterTemplatesByPhase(
+    [...templates, { id: "orphan", title: "Orphan", level: 0 }],
+    nodes,
+    "unassigned"
+  ).length,
+  1
+);
 
 const dupPlacement = validateTemplatePlacement(
   nodes,

@@ -1,0 +1,152 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  display: block;
+}
+
+.band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(248, 250, 252, calc(0.72 + var(--band-intensity, 0) * 0.18));
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.band:last-child {
+  border-bottom: none;
+}
+
+.emptyBand {
+  background: rgba(248, 250, 252, 0.55);
+}
+
+.emptyBand .flowTrack {
+  opacity: 0.35;
+}
+
+/* Najaktywniejszy pas — subtelne wyróżnienie kolorem aplikacji, bez badge'y */
+.topBand {
+  z-index: 2;
+  background: rgba(219, 234, 254, calc(0.78 + var(--band-intensity, 0) * 0.16));
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.flowTrack {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  z-index: 0;
+}
+
+.topBand .flowTrack {
+  color: #3b82f6;
+}
+
+.arrows {
+  width: min(48%, 220px);
+  height: 42%;
+  max-height: 18px;
+}
+
+.bandInner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  width: calc(100% - 20px);
+  margin: 0 10px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.topBand .bandInner {
+  border-color: rgba(147, 197, 253, 0.9);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.labelBlock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bandLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  line-height: 1.2;
+}
+
+.topBand .bandLabel {
+  color: #1d4ed8;
+}
+
+.bandLetters {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.metricsBlock {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.metricPrimary {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.topBand .metricPrimary {
+  color: #1d4ed8;
+}
+
+.metricMuted {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+@media (max-width: 720px) {
+  .bandInner {
+    justify-content: center;
+    margin: 0 6px;
+    width: calc(100% - 12px);
+    padding: 2px 6px;
+    gap: 2px 8px;
+  }
+
+  .bandLabel,
+  .metricPrimary {
+    font-size: 11px;
+  }
+
+  .bandLetters,
+  .metricMuted {
+    font-size: 10px;
+  }
+
+  .arrows {
+    width: min(40%, 140px);
+  }
+}

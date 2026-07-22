@@ -21,6 +21,8 @@ export interface PlayerHeatmapPitchProps {
   valueFractionDigits?: number | null;
   /** Krótki opis metryki w tooltipie (np. „PK po 20 s”). */
   valueLabel?: string;
+  /** Nakładka wewnątrz boiska (np. pasy kierunku ataku). */
+  children?: React.ReactNode;
 }
 
 function normalizeZoneKey(s: string): string {
@@ -38,6 +40,7 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
   dimUnhighlighted = false,
   valueFractionDigits = null,
   valueLabel,
+  children,
 }: PlayerHeatmapPitchProps) {
   // Funkcja do pobierania wartości xT dla pozycji z uwzględnieniem odwrócenia
   const getXTValueForPosition = useCallback((visualRow: number, visualCol: number): number => {
@@ -288,6 +291,7 @@ const PlayerHeatmapPitch = memo(function PlayerHeatmapPitch({
           <div className={styles.goalLeft} />
           <div className={styles.goalRight} />
         </div>
+        {children}
       </div>
     </div>
   );

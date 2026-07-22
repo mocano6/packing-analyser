@@ -1,22 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { doc, getDoc, setDoc } from "@/lib/firestoreWithMetrics";
-import { getDB } from "@/lib/firebase";
+import { getDoc, setDoc } from "@/lib/firestoreWithMetrics";
 import type { GameModelState } from "@/types/gameModel";
 import { GAME_MODEL_TASKS_DOC_ID, GAME_MODEL_VERSION } from "@/types/gameModel";
 import {
   buildGameModelTaskDocument,
   migrateGameModelFromFirestore,
 } from "@/lib/gameModelFirestore";
+import { teamStaffStateDocRef, userLegacyTasksDocRef } from "@/lib/teamStaffFirestore";
 import toast from "react-hot-toast";
 
 function defaultState(): GameModelState {
   return { templates: [], nodes: [] };
-}
-
-function gameModelStateDoc(uid: string) {
-  return doc(getDB(), "users", uid, "tasks", GAME_MODEL_TASKS_DOC_ID);
 }
 
 function isAcceptedVersion(v: unknown): boolean {
@@ -25,13 +21,13 @@ function isAcceptedVersion(v: unknown): boolean {
   return n === GAME_MODEL_VERSION || n === 1;
 }
 
-export function useGameModel(uid: string | null) {
+export function useGameModel(teamId: string | null, uid: string | null) {
   const [state, setState] = useState<GameModelState>(defaultState);
   const [loading, setLoading] = useState(true);
   const skipSaveOnce = useRef(false);
 
   useEffect(() => {
-    if (!uid) {
+    if (!teamId || !uid) {
       setState(defaultState());
       setLoading(false);
       return;
@@ -40,15 +36,25 @@ export function useGameModel(uid: string | null) {
     (async () => {
       setLoading(true);
       try {
-        const snap = await getDoc(gameModelStateDoc(uid));
+        const teamRef = teamStaffStateDocRef(teamId, GAME_MODEL_TASKS_DOC_ID);
+        const teamSnap = await getDoc(teamRef);
         if (cancelled) return;
-        if (snap.exists()) {
-          const d = snap.data() as Record<string, unknown>;
+
+        const applyLoaded = (raw: Record<string, unknown>, persistToTeam = false) => {
+          const migrated = migrateGameModelFromFirestore(raw);
+          skipSaveOnce.current = true;
+          setState(migrated);
+          if (persistToTeam) {
+            return setDoc(teamRef, buildGameModelTaskDocument(migrated, Date.now()));
+          }
+          return Promise.resolve();
+        };
+
+        if (teamSnap.exists()) {
+          const d = teamSnap.data() as Record<string, unknown>;
           if (isAcceptedVersion(d.version)) {
             try {
-              const migrated = migrateGameModelFromFirestore(d);
-              skipSaveOnce.current = true;
-              setState(migrated);
+              await applyLoaded(d, false);
             } catch (parseErr) {
               console.error("Parsowanie modelu gry:", parseErr);
               skipSaveOnce.current = true;
@@ -58,10 +64,31 @@ export function useGameModel(uid: string | null) {
             skipSaveOnce.current = true;
             setState(defaultState());
           }
-        } else {
-          skipSaveOnce.current = true;
-          setState(defaultState());
+          return;
         }
+
+        const legacySnap = await getDoc(userLegacyTasksDocRef(uid, GAME_MODEL_TASKS_DOC_ID));
+        if (cancelled) return;
+
+        if (legacySnap.exists()) {
+          const d = legacySnap.data() as Record<string, unknown>;
+          if (isAcceptedVersion(d.version)) {
+            try {
+              await applyLoaded(d, true);
+            } catch (parseErr) {
+              console.error("Migracja modelu gry z konta użytkownika:", parseErr);
+              skipSaveOnce.current = true;
+              setState(defaultState());
+            }
+          } else {
+            skipSaveOnce.current = true;
+            setState(defaultState());
+          }
+          return;
+        }
+
+        skipSaveOnce.current = true;
+        setState(defaultState());
       } catch (e) {
         console.error("Błąd ładowania modelu gry:", e);
         if (!cancelled) {
@@ -76,26 +103,28 @@ export function useGameModel(uid: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [uid]);
+  }, [teamId, uid]);
 
   useEffect(() => {
-    if (!uid || loading) return;
+    if (!teamId || !uid || loading) return;
     if (skipSaveOnce.current) {
       skipSaveOnce.current = false;
       return;
     }
     const t = setTimeout(() => {
       const payload = buildGameModelTaskDocument(state, Date.now());
-      setDoc(gameModelStateDoc(uid), payload).catch((e: unknown) => {
-        console.error("Zapis modelu gry:", e);
-        toast.error("Nie udało się zapisać modelu gry.", {
-          id: "game-model-save-error",
-          duration: 6000,
-        });
-      });
+      setDoc(teamStaffStateDocRef(teamId, GAME_MODEL_TASKS_DOC_ID), payload).catch(
+        (e: unknown) => {
+          console.error("Zapis modelu gry:", e);
+          toast.error("Nie udało się zapisać modelu gry.", {
+            id: "game-model-save-error",
+            duration: 6000,
+          });
+        }
+      );
     }, 450);
     return () => clearTimeout(t);
-  }, [state, uid, loading]);
+  }, [state, teamId, uid, loading]);
 
   const setGameModelState = useCallback(
     (updater: GameModelState | ((prev: GameModelState) => GameModelState)) => {

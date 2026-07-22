@@ -25,7 +25,7 @@ const withAssign = {
 
 const doc = buildTrainingMicrocycleTaskDocument(withAssign, 12345);
 assert.strictEqual(typeof doc.stateJson, "string");
-assert.strictEqual(doc.version, 5);
+assert.strictEqual(doc.version, 6);
 
 const innerDoc = JSON.parse(doc.stateJson as string);
 assert.equal(innerDoc.dayTitleTemplates, undefined);
@@ -80,5 +80,35 @@ const inner = buildSanitizedTrainingMicrocycleState({
   assignments: [{ ...withAssign.assignments[0], dayIndex: Number.NaN as unknown as number }],
 });
 assert.strictEqual((inner.assignments as { dayIndex: number }[])[0].dayIndex, 0);
+
+const withPhase = {
+  ...sample,
+  dayPlans: [
+    {
+      id: "dp-phase",
+      microcycleId: sample.microcycles[0].id,
+      dayIndex: 0,
+      templateId: null,
+      generalFocus: "Dzień obrony",
+      gameMoments: "Pressing",
+      phaseId: "defense" as const,
+    },
+  ],
+};
+const docPhase = buildTrainingMicrocycleTaskDocument(withPhase, 1);
+const migratedPhase = migrateTrainingMicrocycleFromFirestore({
+  stateJson: docPhase.stateJson,
+  version: 6,
+});
+assert.equal(migratedPhase.dayPlans[0].phaseId, "defense");
+
+const migratedV5NoPhase = migrateTrainingMicrocycleFromFirestore({
+  stateJson: JSON.stringify({
+    ...legacyWithDayTitle,
+    dayPlans: [{ ...legacyWithDayTitle.dayPlans[0], phaseId: "bad" }],
+  }),
+  version: 5,
+});
+assert.equal(migratedV5NoPhase.dayPlans[0].phaseId, null);
 
 console.log("trainingMicrocycleFirestore.test.ts: OK");

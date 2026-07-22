@@ -201,6 +201,38 @@ export function filterNodesForPhase(nodes: GameModelNode[], phaseId: GameModelPh
   return nodes.filter((n) => n.phaseId === phaseId);
 }
 
+/** Fazy modelu, w których szablon jest przypisany (unikalne, stała kolejność). */
+export function templatePhaseIds(
+  nodes: GameModelNode[],
+  templateId: string
+): GameModelPhaseId[] {
+  const order: GameModelPhaseId[] = ["defense", "attack", "set_pieces"];
+  const found = new Set<GameModelPhaseId>();
+  for (const n of nodes) {
+    if (n.templateId === templateId) found.add(n.phaseId);
+  }
+  return order.filter((p) => found.has(p));
+}
+
+export type GameModelLibraryPhaseFilter = GameModelPhaseId | "all" | "unassigned";
+
+/** Filtr biblioteki mikrocyklu: faza z drzewa, nieprzypisane albo wszystko. */
+export function filterTemplatesByPhase(
+  templates: GameModelRuleTemplate[],
+  nodes: GameModelNode[],
+  phaseFilter: GameModelLibraryPhaseFilter
+): GameModelRuleTemplate[] {
+  if (phaseFilter === "all") return templates;
+  if (phaseFilter === "unassigned") {
+    const assigned = new Set(nodes.map((n) => n.templateId));
+    return templates.filter((t) => !assigned.has(t.id));
+  }
+  const inPhase = new Set(
+    nodes.filter((n) => n.phaseId === phaseFilter).map((n) => n.templateId)
+  );
+  return templates.filter((t) => inPhase.has(t.id));
+}
+
 export function countTemplateUsage(nodes: GameModelNode[], templateId: string): number {
   return nodes.filter((n) => n.templateId === templateId).length;
 }

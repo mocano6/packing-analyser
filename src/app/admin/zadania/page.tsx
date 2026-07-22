@@ -77,12 +77,12 @@ export default function AdminZadaniaPage() {
     state: gameModelState,
     setGameModelState,
     loading: gameModelLoading,
-  } = useGameModel(uid);
+  } = useGameModel(selectedTeamId || null, uid);
   const {
     state: positionSystemState,
     setPositionSystemState,
     loading: positionSystemLoading,
-  } = usePositionSystem(uid);
+  } = usePositionSystem(selectedTeamId || null, uid);
   const {
     state: packsState,
     setPacksState,
@@ -267,13 +267,17 @@ export default function AdminZadaniaPage() {
           <ModelPanel
             gameModelState={gameModelState}
             setGameModelState={setGameModelState}
-            gameModelLoading={gameModelLoading}
+            gameModelLoading={gameModelLoading || teamsLoading}
             positionSystemState={positionSystemState}
             setPositionSystemState={setPositionSystemState}
             positionSystemLoading={positionSystemLoading}
             packsState={packsState}
             setPacksState={setPacksState}
             packsLoading={packsLoading}
+            selectedTeam={selectedTeamId}
+            onTeamChange={handleTeamChange}
+            teamsCatalog={teams}
+            userTeamAccess={userTeamAccess}
           />
         </div>
       )}

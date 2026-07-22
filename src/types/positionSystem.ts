@@ -47,5 +47,5 @@ export interface PositionSystemState {
 
 export const POSITION_SYSTEM_VERSION = 3 as const;
 
-/** Dokument w `users/{uid}/tasks/` — nie pokazuj w kwadrancie Eisenhowera. */
+/** Dokument w `teams/{teamId}/staff/` (legacy: `users/{uid}/tasks/`). Nie pokazuj w Eisenhowerze. */
 export const POSITION_SYSTEM_TASKS_DOC_ID = "positionSystemState" as const;

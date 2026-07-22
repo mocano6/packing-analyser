@@ -3,6 +3,7 @@
 
 import "../utils/matchDayLabels.test";
 import "../types/staffPlanner.test";
+import "../types/eisenhowerTask.test";
 import "../lib/staffPlannerFirestore.test";
 import "../lib/gameModelFirestore.test";
 import "../lib/gameModelPacksFirestore.test";

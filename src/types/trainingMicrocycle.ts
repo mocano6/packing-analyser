@@ -1,4 +1,4 @@
-import type { GameModelRuleLevel } from "@/types/gameModel";
+import type { GameModelPhaseId, GameModelRuleLevel } from "@/types/gameModel";
 
 export interface TrainingMicrocycleSeason {
   id: string;
@@ -83,6 +83,8 @@ export interface MicrocycleDayPlan {
   templateId: string | null;
   generalFocus: string;
   gameMoments: string;
+  /** Faza modelu gry, wokół której budujemy dzień (opcjonalnie). */
+  phaseId?: GameModelPhaseId | null;
 }
 
 export interface TrainingMicrocycleState {
@@ -101,7 +103,7 @@ export interface TrainingDayTitleTemplatesState {
   templates: TrainingDayTitleTemplate[];
 }
 
-export const TRAINING_MICROCYCLE_VERSION = 5 as const;
+export const TRAINING_MICROCYCLE_VERSION = 6 as const;
 
 /** Dokument w `teams/{teamId}/staff/` — nie pokazuj w kwadrancie Eisenhowera. */
 export const TRAINING_MICROCYCLE_TASKS_DOC_ID = "trainingMicrocycleState" as const;

@@ -20,10 +20,12 @@ import {
 import MatchVideoFloatingPanel from '@/components/MatchVideoFloatingPanel/MatchVideoFloatingPanel';
 import { renderChartMatchEventMarkers } from '@/components/ChartMatchEventMarkers/ChartMatchEventMarkers';
 import PlayerHeatmapPitch from '@/components/PlayerHeatmapPitch/PlayerHeatmapPitch';
+import PxtAttackChannelOverlay from '@/components/PxtAttackChannelOverlay/PxtAttackChannelOverlay';
 import { getVideoTimestampSeconds } from '@/utils/actionVideoSeekSeconds';
 import { hasExternalVideoSource } from '@/utils/externalVideoMatchInfo';
 import type { Action, PKEntry, Player, Shot, TeamInfo } from '@/types';
 import { getPlayerLabel } from '@/utils/playerUtils';
+import { buildPxtAttackChannelStats } from '@/utils/statystykiZespoluPxtAttackChannels';
 import { buildPxtComparisonMetrics, type PxtComparisonMetric } from '@/utils/statystykiZespoluPxtComparison';
 import {
   DEFAULT_PXT_PACKING_FILTERS,
@@ -319,6 +321,7 @@ export default function StatystykiZespoluPxtTab({
   const [role, setRole] = useState<PxtRoleFilter>('sender');
   const [heatmapDirection, setHeatmapDirection] = useState<'from' | 'to'>('from');
   const [heatmapMode, setHeatmapMode] = useState<'pxt' | 'count'>('pxt');
+  const [showAttackChannels, setShowAttackChannels] = useState(false);
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [hasVideoPanel, setHasVideoPanel] = useState(false);
   const [isVideoPanelOpen, setIsVideoPanelOpen] = useState(false);
@@ -435,6 +438,11 @@ export default function StatystykiZespoluPxtTab({
   const heatmapData = useMemo(
     () => buildPxtHeatmapData(teamRaw, role, heatmapDirection, heatmapMode),
     [teamRaw, role, heatmapDirection, heatmapMode],
+  );
+
+  const attackChannelStats = useMemo(
+    () => buildPxtAttackChannelStats(teamRaw),
+    [teamRaw],
   );
 
   const zoneRoleGroups = useMemo(
@@ -924,9 +932,21 @@ export default function StatystykiZespoluPxtTab({
               <ToggleFilterButton active={heatmapMode === 'pxt'} onClick={() => setHeatmapMode('pxt')} variant="metric">PxT</ToggleFilterButton>
               <ToggleFilterButton active={heatmapMode === 'count'} onClick={() => setHeatmapMode('count')} variant="metric">Liczba</ToggleFilterButton>
             </div>
+            <div className={`${pageStyles.xgFilterContainer} ${styles.selectorInline}`}>
+              <ToggleFilterButton
+                active={showAttackChannels}
+                onClick={() => setShowAttackChannels((v) => !v)}
+                variant="metric"
+                title="Nakładka: kierunek ataku (lewa / środek / prawa) wg końca akcji packing"
+              >
+                Kierunek ataku
+              </ToggleFilterButton>
+            </div>
           </div>
           <p className={styles.sectionMeta} style={{ marginBottom: 8 }}>
-            Kliknij strefę na heatmapie — w panelu zobaczysz akcje w podaniu, przyjęciu i dryblingu. Wideo otwiera się po kliknięciu niebieskiej minuty.
+            {showAttackChannels
+              ? 'Nakładka pokazuje sumę PxT/ΔxT oraz % akcji i % PxT w pasach A–B, C–F, G–H (koniec podania/dryblingu). Wyłącz „Kierunek ataku”, aby wrócić do heatmapy stref.'
+              : 'Kliknij strefę na heatmapie — w panelu zobaczysz akcje w podaniu, przyjęciu i dryblingu. Wideo otwiera się po kliknięciu niebieskiej minuty.'}
           </p>
           <div className={styles.mainLayout}>
             <div className={styles.mapPanel}>
@@ -939,7 +959,9 @@ export default function StatystykiZespoluPxtTab({
                   const normalized = typeof zoneName === 'string' ? zoneName.toUpperCase().replace(/\s+/g, '') : String(zoneName);
                   setSelectedZone(normalized === selectedZone ? null : normalized);
                 }}
-              />
+              >
+                {showAttackChannels ? <PxtAttackChannelOverlay channels={attackChannelStats} /> : null}
+              </PlayerHeatmapPitch>
             </div>
             <aside className={styles.shotPanel} aria-live="polite">
               {zoneRoleGroups ? (

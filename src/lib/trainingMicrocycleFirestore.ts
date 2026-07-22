@@ -1,3 +1,4 @@
+import type { GameModelPhaseId } from "@/types/gameModel";
 import type { TrainingDayTitleTemplate, TrainingMicrocycleState } from "@/types/trainingMicrocycle";
 import { TRAINING_MICROCYCLE_VERSION } from "@/types/trainingMicrocycle";
 import { normalizeMatchDaysArray } from "../utils/matchDayLabels";
@@ -7,11 +8,18 @@ import {
 import { normalizeMicrocycleDaySchedules } from "../utils/microcycleDaySchedules";
 import { safeDayIndex } from "./staffPlannerFirestore";
 
+const VALID_DAY_PLAN_PHASES = new Set<string>(["defense", "attack", "set_pieces"]);
+
 function safeLevel(v: unknown): 0 | 1 | 2 {
   const n = typeof v === "number" ? v : Number(v);
   if (n === 1) return 1;
   if (n === 2) return 2;
   return 0;
+}
+
+function safeDayPlanPhaseId(v: unknown): GameModelPhaseId | null {
+  const s = String(v ?? "");
+  return VALID_DAY_PLAN_PHASES.has(s) ? (s as GameModelPhaseId) : null;
 }
 
 function safeUnixMs(n: unknown): number {
@@ -76,6 +84,7 @@ export function buildSanitizedTrainingMicrocycleState(
         p.templateId == null || p.templateId === "" ? null : String(p.templateId),
       generalFocus: String(p.generalFocus ?? ""),
       gameMoments: String(p.gameMoments ?? ""),
+      phaseId: safeDayPlanPhaseId(p.phaseId),
     })),
     trainingCounts,
     activeSeasonId:
@@ -135,6 +144,7 @@ export function migrateTrainingMicrocycleFromFirestore(
           p.templateId == null || p.templateId === "" ? null : String(p.templateId),
         generalFocus: String(p.generalFocus ?? ""),
         gameMoments: String(p.gameMoments ?? ""),
+        phaseId: safeDayPlanPhaseId(p.phaseId),
       }))
     : [];
 

@@ -2,8 +2,16 @@
 
 import React, { useCallback, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import type { GameModelRuleLevel, GameModelState } from "@/types/gameModel";
-import { GAME_MODEL_LEVEL_LABELS } from "@/types/gameModel";
+import type {
+  GameModelPhaseId,
+  GameModelRuleLevel,
+  GameModelState,
+} from "@/types/gameModel";
+import {
+  GAME_MODEL_LEVEL_LABELS,
+  GAME_MODEL_PHASES,
+  GAME_MODEL_PRIORITY_LABELS,
+} from "@/types/gameModel";
 import type {
   MicrocycleDayAssignment,
   MicrocycleDayPlan,
@@ -18,8 +26,11 @@ import {
 } from "@/types/trainingMicrocycle";
 import {
   collectDescendantTemplatesForDrop,
+  filterTemplatesByPhase,
   groupTemplatesByLevel,
+  templatePhaseIds,
   templatesToAssignOnMicrocycleDrop,
+  type GameModelLibraryPhaseFilter,
 } from "@/utils/gameModelTree";
 import {
   addDays,
@@ -180,6 +191,8 @@ export default function TrainingMicrocycleTab({
   const [dragDayTitleTemplateId, setDragDayTitleTemplateId] = useState<string | null>(null);
   const [dragDayTitlePlanId, setDragDayTitlePlanId] = useState<string | null>(null);
   const [dragOverDayTitle, setDragOverDayTitle] = useState<number | null>(null);
+  const [libraryPhaseFilter, setLibraryPhaseFilter] =
+    useState<GameModelLibraryPhaseFilter>("all");
 
   const seasons = useMemo(
     () => sortSeasons(microcycleState.seasons),
@@ -228,10 +241,25 @@ export default function TrainingMicrocycleTab({
     return `${fmt(a)} – ${fmt(b)} · ${a.getFullYear()}`;
   }, [weekDates]);
 
-  const groupedTemplates = useMemo(
-    () => groupTemplatesByLevel(gameModelState.templates),
-    [gameModelState.templates]
+  const filteredTemplates = useMemo(
+    () =>
+      filterTemplatesByPhase(
+        gameModelState.templates,
+        gameModelState.nodes,
+        libraryPhaseFilter
+      ),
+    [gameModelState.templates, gameModelState.nodes, libraryPhaseFilter]
   );
+
+  const groupedTemplates = useMemo(
+    () => groupTemplatesByLevel(filteredTemplates),
+    [filteredTemplates]
+  );
+
+  const templatesById = useMemo(() => {
+    const map = new Map(gameModelState.templates.map((t) => [t.id, t]));
+    return map;
+  }, [gameModelState.templates]);
 
   const cascadeHighlightIds = useMemo(() => {
     if (!cascadeHoverRootId) return new Set<string>();
@@ -452,6 +480,7 @@ export default function TrainingMicrocycleTab({
           templateId: tpl.id,
           generalFocus: tpl.generalFocus,
           gameMoments: tpl.gameMoments,
+          phaseId: null,
         };
         setMicrocycleState((prev) => ({
           ...prev,
@@ -563,6 +592,19 @@ export default function TrainingMicrocycleTab({
         ...prev,
         dayPlans: (prev.dayPlans ?? []).filter((p) => p.id !== planId),
       }));
+    },
+    [setMicrocycleState]
+  );
+
+  const setDayPlanPhase = useCallback(
+    (planId: string, phaseId: GameModelPhaseId | null) => {
+      setMicrocycleState((prev) => ({
+        ...prev,
+        dayPlans: (prev.dayPlans ?? []).map((p) =>
+          p.id === planId ? { ...p, phaseId } : p
+        ),
+      }));
+      if (phaseId) setLibraryPhaseFilter(phaseId);
     },
     [setMicrocycleState]
   );
@@ -854,13 +896,38 @@ export default function TrainingMicrocycleTab({
       >
         <h2 className={styles.sectionTitle}>Elementy modelu gry</h2>
         <p className={styles.libraryHint}>
-          Niebieskie = zasady, zielone = sub-zasady, fioletowe = sub-sub-zasady. Przeciągnij element
-          na dzień w siatce poniżej — razem z potomkami przypisanymi w modelu gry (sub-zasady i
-          sub-sub-zasady). Licznik pokazuje, ile razy dany element był już trenowany.
+          Niebieskie = zasady, zielone = sub-zasady, fioletowe = sub-sub-zasady. Filtr fazy pokazuje
+          elementy z drzewa modelu drużyny. Przeciągnij na dzień — z potomkami z modelu. Licznik =
+          ile razy trenowano.
         </p>
+        <div className={styles.phaseFilter} role="toolbar" aria-label="Filtr fazy modelu">
+          {(
+            [
+              { id: "all", label: "Wszystkie" },
+              ...GAME_MODEL_PHASES.map((p) => ({ id: p.id, label: p.shortLabel })),
+              { id: "unassigned", label: "Poza modelem" },
+            ] as { id: GameModelLibraryPhaseFilter; label: string }[]
+          ).map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              className={`${styles.phaseFilterBtn} ${
+                libraryPhaseFilter === opt.id ? styles.phaseFilterBtnActive : ""
+              }`}
+              aria-pressed={libraryPhaseFilter === opt.id}
+              onClick={() => setLibraryPhaseFilter(opt.id)}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
         {gameModelState.templates.length === 0 ? (
           <p className={styles.emptyLibrary}>
             Brak elementów — dodaj je w zakładce Model, potem wróć tutaj.
+          </p>
+        ) : filteredTemplates.length === 0 ? (
+          <p className={styles.emptyLibrary}>
+            Brak elementów w wybranym filtrze fazy — zmień filtr lub uzupełnij drzewo w Modelu.
           </p>
         ) : (
           <div className={styles.libraryGrid}>
@@ -871,12 +938,15 @@ export default function TrainingMicrocycleTab({
                 data-level={level}
                 aria-label={GAME_MODEL_LEVEL_LABELS[level]}
               >
-                <h3 className={styles.columnTitle}>{GAME_MODEL_LEVEL_LABELS[level]}</h3>
+                <h3 className={styles.columnTitle}>
+                  {GAME_MODEL_LEVEL_LABELS[level]} ({groupedTemplates[level].length})
+                </h3>
                 <div className={styles.chipList}>
                   {groupedTemplates[level].map((tpl) => {
                     const trainCount = microcycleState.trainingCounts[tpl.id] ?? 0;
                     const isCascadeRoot = cascadeHoverRootId === tpl.id;
                     const isCascadeChild = cascadeHighlightIds.has(tpl.id);
+                    const phases = templatePhaseIds(gameModelState.nodes, tpl.id);
                     return (
                       <div
                         key={tpl.id}
@@ -887,14 +957,46 @@ export default function TrainingMicrocycleTab({
                         onDragStart={(e) => handleDragStartTemplate(e, tpl.id)}
                         onDragEnd={handleDragEnd}
                       >
-                        <span className={styles.chipTitle}>{tpl.title}</span>
-                        <span
-                          className={`${styles.trainCount} ${trainCount > 0 ? styles.trainCountActive : ""}`}
-                          title={`Trenowano ${trainCount}×`}
-                          aria-label={`Trenowano ${trainCount} razy`}
-                        >
-                          {trainCount}
-                        </span>
+                        <div className={styles.chipTop}>
+                          <span className={styles.chipTitle}>{tpl.title}</span>
+                          <span
+                            className={`${styles.trainCount} ${trainCount > 0 ? styles.trainCountActive : ""}`}
+                            title={`Trenowano ${trainCount}×`}
+                            aria-label={`Trenowano ${trainCount} razy`}
+                          >
+                            {trainCount}
+                          </span>
+                        </div>
+                        {(tpl.priority || phases.length > 0) && (
+                          <div className={styles.chipBadges}>
+                            {tpl.priority && (
+                              <span
+                                className={`${styles.chipPriority} ${
+                                  tpl.priority === "key" ? styles.chipPriorityKey : ""
+                                }`}
+                              >
+                                {GAME_MODEL_PRIORITY_LABELS[tpl.priority]}
+                              </span>
+                            )}
+                            {phases.map((phaseId) => {
+                              const phase = GAME_MODEL_PHASES.find((p) => p.id === phaseId);
+                              return (
+                                <span key={phaseId} className={styles.chipPhaseBadge} data-phase={phaseId}>
+                                  {phase?.shortLabel ?? phaseId}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {tpl.description && (
+                          <p className={styles.chipDescription}>{tpl.description}</p>
+                        )}
+                        {tpl.trigger && (
+                          <p className={styles.chipTrigger}>
+                            <span aria-hidden="true">⚡ </span>
+                            {tpl.trigger}
+                          </p>
+                        )}
                       </div>
                     );
                   })}
@@ -1064,6 +1166,31 @@ export default function TrainingMicrocycleTab({
                         {dayPlan.gameMoments.trim() && (
                           <p className={styles.dayPlanMoments}>{dayPlan.gameMoments}</p>
                         )}
+                        <label
+                          className={styles.dayPlanPhaseLabel}
+                          onMouseDown={stopHeaderInputPropagation}
+                        >
+                          <span className={styles.srOnly}>Faza modelu gry</span>
+                          <select
+                            className={styles.dayPlanPhaseSelect}
+                            value={dayPlan.phaseId ?? ""}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setDayPlanPhase(
+                                dayPlan.id,
+                                v === "" ? null : (v as GameModelPhaseId)
+                              );
+                            }}
+                            aria-label={`Faza modelu dla: ${dayPlan.generalFocus}`}
+                          >
+                            <option value="">Faza: —</option>
+                            {GAME_MODEL_PHASES.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         <button
                           type="button"
                           className={styles.deleteAssign}
@@ -1114,7 +1241,13 @@ export default function TrainingMicrocycleTab({
                         <p className={styles.dayLevelLabel} data-level={level}>
                           {DAY_LEVEL_SHORT[level]}
                         </p>
-                        {items.map((a) => (
+                        {items.map((a) => {
+                          const live = templatesById.get(a.templateId);
+                          const title = live?.title ?? a.title;
+                          const priority = live?.priority;
+                          const description = live?.description;
+                          const trigger = live?.trigger;
+                          return (
                           <div
                             key={a.id}
                             className={`${styles.assignCard} ${dragAssignmentId === a.id ? styles.assignCardDragging : ""}`}
@@ -1127,7 +1260,25 @@ export default function TrainingMicrocycleTab({
                               <span className={styles.assignLevelTag} data-level={a.level}>
                                 {DAY_LEVEL_SHORT[a.level]}
                               </span>
-                              <p className={styles.assignTitle}>{a.title}</p>
+                              <p className={styles.assignTitle}>{title}</p>
+                              {priority && (
+                                <span
+                                  className={`${styles.chipPriority} ${
+                                    priority === "key" ? styles.chipPriorityKey : ""
+                                  }`}
+                                >
+                                  {GAME_MODEL_PRIORITY_LABELS[priority]}
+                                </span>
+                              )}
+                              {description && (
+                                <p className={styles.assignDescription}>{description}</p>
+                              )}
+                              {trigger && (
+                                <p className={styles.assignTrigger}>
+                                  <span aria-hidden="true">⚡ </span>
+                                  {trigger}
+                                </p>
+                              )}
                             </div>
                             <button
                               type="button"
@@ -1137,7 +1288,8 @@ export default function TrainingMicrocycleTab({
                               Usuń
                             </button>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ))}
                   </div>

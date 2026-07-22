@@ -17,6 +17,9 @@ import type { GameModelPacksState } from "@/types/gameModelPack";
 import type { PositionRoleId, PositionSystemState } from "@/types/positionSystem";
 import type { GameModelNode } from "@/types/gameModel";
 import type { PositionTaskNode } from "@/types/positionSystem";
+import type { Team } from "@/hooks/useTeams";
+import type { UserTeamAccess } from "@/lib/teamsForUserAccess";
+import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import {
   applyTemplateLibraryUpdateWithCascade,
   buildTemplateUsageCounts,
@@ -84,6 +87,10 @@ export interface ModelPanelProps {
   packsState: GameModelPacksState;
   setPacksState: React.Dispatch<React.SetStateAction<GameModelPacksState>>;
   packsLoading: boolean;
+  selectedTeam: string;
+  onTeamChange: (teamId: string) => void;
+  teamsCatalog: Team[];
+  userTeamAccess: UserTeamAccess;
 }
 
 function TemplateEditForm({
@@ -217,6 +224,10 @@ export default function ModelPanel({
   packsState,
   setPacksState,
   packsLoading,
+  selectedTeam,
+  onTeamChange,
+  teamsCatalog,
+  userTeamAccess,
 }: ModelPanelProps) {
   const [newTitle, setNewTitle] = useState("");
   const [newLevel, setNewLevel] = useState<GameModelRuleLevel>(0);
@@ -232,6 +243,7 @@ export default function ModelPanel({
   const [selectedPositionId, setSelectedPositionId] = useState<PositionRoleId>("GK");
   const [packName, setPackName] = useState("");
   const [packsExpanded, setPacksExpanded] = useState(true);
+  const [isTeamsSelectorExpanded, setIsTeamsSelectorExpanded] = useState(false);
 
   const loading = gameModelLoading || positionSystemLoading || packsLoading;
 
@@ -555,9 +567,33 @@ export default function ModelPanel({
     );
   }
 
+  if (!selectedTeam) {
+    return (
+      <div className={styles.loadingBox} role="status">
+        Wybierz zespół, aby edytować model gry i system pozycji.
+      </div>
+    );
+  }
+
   const hasTemplates = gameModelState.templates.length > 0;
 
   return (
+    <div className={styles.modelPanelRoot}>
+      <div className={styles.teamToolbar}>
+        <span className={styles.teamToolbarLabel}>Zespół</span>
+        <TeamsSelector
+          selectedTeam={selectedTeam}
+          onChange={onTeamChange}
+          teamsCatalog={teamsCatalog}
+          userTeamAccess={userTeamAccess}
+          isExpanded={isTeamsSelectorExpanded}
+          onToggle={() => setIsTeamsSelectorExpanded((v) => !v)}
+        />
+        <p className={styles.teamToolbarHint}>
+          Model i pozycje są wspólne dla sztabu wybranego zespołu. Szablony do ponownego użycia
+          zostają na Twoim koncie.
+        </p>
+      </div>
     <div className={styles.modelPanel}>
       <aside className={styles.library} aria-label="Biblioteka zasad zespołowych">
         <h2 className={styles.libraryTitle}>Biblioteka zasad</h2>
@@ -903,6 +939,7 @@ export default function ModelPanel({
           gameModelNodes={gameModelState.nodes}
         />
       </div>
+    </div>
     </div>
   );
 }

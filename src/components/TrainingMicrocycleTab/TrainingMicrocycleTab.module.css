@@ -288,6 +288,39 @@
   color: #64748b;
 }
 
+.phaseFilter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.phaseFilterBtn {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.phaseFilterBtn:hover {
+  background: #e2e8f0;
+}
+
+.phaseFilterBtnActive {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.phaseFilterBtn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
 .libraryGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -349,14 +382,81 @@
 
 .templateChip {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
   padding: 8px 10px;
   background: #fff;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
   font-size: 0.8125rem;
   cursor: grab;
+}
+
+.chipTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chipBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chipPriority {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #475569;
+  background: #e2e8f0;
+  border-radius: 999px;
+}
+
+.chipPriorityKey {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.chipPhaseBadge {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #334155;
+  background: #f1f5f9;
+  border-radius: 999px;
+}
+
+.chipPhaseBadge[data-phase="defense"] {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.chipPhaseBadge[data-phase="attack"] {
+  color: #b45309;
+  background: #ffedd5;
+}
+
+.chipPhaseBadge[data-phase="set_pieces"] {
+  color: #6d28d9;
+  background: #ede9fe;
+}
+
+.chipDescription {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: #475569;
+}
+
+.chipTrigger {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  color: #7c3aed;
 }
 
 .templateChip:active {
@@ -802,6 +902,41 @@
 
 .dayPlanCardDragging {
   opacity: 0.55;
+}
+
+.dayPlanPhaseLabel {
+  display: block;
+  margin-top: 6px;
+}
+
+.dayPlanPhaseSelect {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 0.6875rem;
+  color: #334155;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+}
+
+.dayPlanPhaseSelect:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+}
+
+.assignDescription {
+  margin: 2px 0 0;
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  color: #475569;
+}
+
+.assignTrigger {
+  margin: 2px 0 0;
+  font-size: 0.625rem;
+  line-height: 1.3;
+  color: #7c3aed;
 }
 
 .dayPlanFocus {
