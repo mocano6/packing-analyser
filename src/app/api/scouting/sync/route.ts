@@ -6,7 +6,8 @@ import type { ScoutingConfig } from '@/types/scouting';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 // Sync uruchamia przeglądarkę i może potrwać (reCAPTCHA + wiele meczów).
-export const maxDuration = 600;
+// Hobby plan Vercel: maxDuration 1–300 s.
+export const maxDuration = 300;
 
 const isValidConfig = (c: unknown): c is ScoutingConfig => {
   if (!c || typeof c !== 'object') return false;
