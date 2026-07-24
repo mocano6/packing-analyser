@@ -1,0 +1,10 @@
+---
+description: Lokalny dev bez ręcznego Run — serwer w tle
+alwaysApply: true
+---
+
+# Auto-run lokalnego dev
+
+- Przed pierwszym testem UI sprawdź, czy `npm run dev` już działa w terminalu; jeśli nie — uruchom w tle (`block_until_ms: 0`).
+- Nie proś użytkownika o kliknięcie Run dla poleceń z `.cursor/permissions.json` (testy, lint, git status/diff, npx tsx).
+- Po zmianach w kodzie Next.js wystarczy HMR — nie restartuj dev servera bez potrzeby.

@@ -3,6 +3,8 @@ import type { User as FirebaseUser } from "firebase/auth";
 import { FirebaseError } from "firebase/app";
 import { getAuthClient, getDB } from "@/lib/firebase";
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "@/lib/firestoreWithMetrics";
+import { isAdminRoleFromFirestore } from "@/lib/firestoreAdminRole";
+import { normalizeUserRole, type UserRole } from "@/lib/userRoles";
 import { AuthService, AuthState } from "@/utils/authService";
 import { toast } from "react-hot-toast";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
@@ -28,11 +30,6 @@ async function resolveClaimsAdmin(firebaseUser: FirebaseUser | null | undefined)
   }
 }
 
-/** Zgodnie z firestore.rules (role bez rozróżniania wielkości liter + opcjonalnie JWT admin). */
-function isAdminRoleFromFirestore(role: unknown): boolean {
-  return typeof role === "string" && role.trim().toLowerCase() === "admin";
-}
-
 const USER_DATA_CACHE_TTL_MS = 2 * 60 * 1000; // 2 min — pomijamy getDoc gdy świeży
 const LAST_LOGIN_WRITE_INTERVAL_MS = 5 * 60 * 1000; // zapis lastLogin co najwyżej co 5 min
 
@@ -41,7 +38,7 @@ const lastLoginWriteAt = new Map<string, number>();
 /** Jedno równoległe wywołanie fetchUserData na uid – unika wielu setDoc przy wielu subskrybentach useAuth. */
 const fetchUserDataInFlight = new Map<string, Promise<UserData | null>>();
 
-export type UserRole = 'user' | 'admin' | 'coach' | 'player';
+export type { UserRole };
 export type UserStatus = 'pending' | 'approved';
 
 export interface RegistrationData {
@@ -70,6 +67,8 @@ interface UseAuthReturnType {
   user: any;
   userTeams: string[];
   isAdmin: boolean;
+  /** Rola operator — odczyt weryfikacji meczów i bazy wiedzy (bez panelu admina). */
+  isOperator: boolean;
   userRole: UserRole | null;
   userStatus: UserStatus | null;
   linkedPlayerId: string | null;
@@ -211,6 +210,7 @@ export function useAuth(): UseAuthReturnType {
         ...userData,
         email: userData.email || userEmail || '',
         allowedTeams: normalizeAllowedTeams(userData.allowedTeams),
+        role: normalizeUserRole(userData.role),
         lastLogin: new Date()
       };
       userDataCache.set(uid, { data: result, timestamp: now });
@@ -344,6 +344,7 @@ export function useAuth(): UseAuthReturnType {
     user: authState.user,
     userTeams,
     isAdmin,
+    isOperator: userRole === "operator",
     userRole,
     userStatus,
     linkedPlayerId,

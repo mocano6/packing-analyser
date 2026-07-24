@@ -19,7 +19,7 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   experimental: {
-    serverComponentsExternalPackages: ['@firebase/firestore', '@firebase/auth', '@firebase/storage'],
+    serverComponentsExternalPackages: ['@firebase/firestore', '@firebase/auth', '@firebase/storage', 'playwright'],
   },
   webpack: (config, { isServer }) => {
     // Nie wyłączaj cache w dev — powoduje ChunkLoadError (_next/undefined) przy dynamic importach / HMR.

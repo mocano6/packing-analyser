@@ -14,6 +14,13 @@ import {
 import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from "firebase/auth";
 import { Team, getTeamsArray } from "@/constants/teamsLoader";
 import { UserData } from "@/hooks/useAuth";
+import type { UserRole } from "@/lib/userRoles";
+import {
+  USER_ROLE_OPTIONS,
+  STAFF_ROLE_OPTIONS,
+  buildRoleChangePatch,
+  normalizeUserRole,
+} from "@/lib/userRoles";
 import { Player } from "@/types";
 import { getPlayerFullName } from "@/utils/playerUtils";
 import { getPlayerMatchSuggestions } from "@/utils/playerMatching";
@@ -33,22 +40,23 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
   const [players, setPlayers] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isLoadingPlayers, setIsLoadingPlayers] = useState<boolean>(false);
-  const [editingUser, setEditingUser] = useState<string | null>(null);
   const [showAddUserModal, setShowAddUserModal] = useState<boolean>(false);
   const [newUserEmail, setNewUserEmail] = useState<string>("");
   const [newUserPassword, setNewUserPassword] = useState<string>("");
-  const [newUserRole, setNewUserRole] = useState<'user' | 'admin' | 'coach' | 'player'>('user');
+  const [newUserRole, setNewUserRole] = useState<UserRole>('user');
   const [newUserTeams, setNewUserTeams] = useState<string[]>([]);
   const [isCreatingUser, setIsCreatingUser] = useState<boolean>(false);
   const [showEditUserModal, setShowEditUserModal] = useState<boolean>(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editUserEmail, setEditUserEmail] = useState<string>("");
-  const [editUserRole, setEditUserRole] = useState<'user' | 'admin' | 'coach' | 'player'>('user');
+  const [editUserRole, setEditUserRole] = useState<UserRole>('user');
   const [editUserTeams, setEditUserTeams] = useState<string[]>([]);
   const [newPassword, setNewPassword] = useState<string>("");
   const [isUpdatingUser, setIsUpdatingUser] = useState<boolean>(false);
   const [selectedPlayerByUser, setSelectedPlayerByUser] = useState<Record<string, string>>({});
   const [playerSearchByUser, setPlayerSearchByUser] = useState<Record<string, string>>({});
+  const [pendingStaffRoleByUser, setPendingStaffRoleByUser] = useState<Record<string, UserRole>>({});
+  const [convertingRoleUserId, setConvertingRoleUserId] = useState<string | null>(null);
   const [openTeamsDropdownUserId, setOpenTeamsDropdownUserId] = useState<string | null>(null);
   const [dropdownAnchorRect, setDropdownAnchorRect] = useState<DOMRect | null>(null);
   const [sortByRole, setSortByRole] = useState<'asc' | 'desc' | null>(null);
@@ -143,6 +151,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
           id: userDoc.id,
           ...userData,
           allowedTeams: normalizeAllowedTeams(userData.allowedTeams),
+          role: normalizeUserRole(userData.role),
         });
       });
 
@@ -252,23 +261,74 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
     }
   };
 
-  // Zmiana roli użytkownika
-  const updateUserRole = async (userId: string, newRole: 'user' | 'admin' | 'coach' | 'player') => {
+  // Zmiana roli użytkownika (wyjście z zawodnika czyści status pending)
+  const updateUserRole = async (userId: string, newRole: UserRole) => {
     try {
-      await saveUserProfile(userId, { role: newRole });
+      const patch = buildRoleChangePatch(newRole);
+      await saveUserProfile(userId, patch);
 
       setUsers((prev) =>
         prev.map((user) =>
           user.id === userId
-            ? { ...user, role: newRole, hasFirestoreProfile: true }
+            ? {
+                ...user,
+                ...patch,
+                hasFirestoreProfile: true,
+              }
             : user,
         ),
       );
 
-      toast.success(`Zmieniono rolę użytkownika na ${newRole}`);
+      const roleLabel = USER_ROLE_OPTIONS.find((option) => option.value === newRole)?.label ?? newRole;
+      toast.success(`Zmieniono rolę użytkownika na ${roleLabel}`);
     } catch (error) {
       console.error("Błąd podczas zmiany roli:", error);
       toast.error("Błąd podczas zmiany roli");
+    }
+  };
+
+  /** Oczekujące konto zawodnika → analityk / operator / trener / admin (bez przypisywania gracza). */
+  const handleConvertPendingToStaffRole = async (user: UserWithAuthMeta, newRole: UserRole) => {
+    if (newRole === "player") {
+      toast.error("Wybierz rolę inną niż zawodnik");
+      return;
+    }
+
+    setConvertingRoleUserId(user.id);
+    try {
+      const patch = buildRoleChangePatch(newRole);
+      await saveUserProfile(user.id, patch);
+
+      setUsers((prev) =>
+        prev.map((item) =>
+          item.id === user.id
+            ? {
+                ...item,
+                ...patch,
+                hasFirestoreProfile: true,
+              }
+            : item,
+        ),
+      );
+
+      setPendingStaffRoleByUser((prev) => {
+        const next = { ...prev };
+        delete next[user.id];
+        return next;
+      });
+      setSelectedPlayerByUser((prev) => {
+        const next = { ...prev };
+        delete next[user.id];
+        return next;
+      });
+
+      const roleLabel = USER_ROLE_OPTIONS.find((option) => option.value === newRole)?.label ?? newRole;
+      toast.success(`Konto ustawione jako ${roleLabel} (bez przypisania zawodnika)`);
+    } catch (error) {
+      console.error("Błąd podczas zmiany roli oczekującego konta:", error);
+      toast.error("Błąd podczas zmiany roli konta");
+    } finally {
+      setConvertingRoleUserId(null);
     }
   };
 
@@ -383,9 +443,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
 
     setIsUpdatingUser(true);
     try {
+      const rolePatch = buildRoleChangePatch(editUserRole);
       const updateData: Partial<UserData> = {
         email: editUserEmail,
-        role: editUserRole,
+        ...rolePatch,
         allowedTeams: editUserTeams,
       };
 
@@ -442,7 +503,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
             ? {
                 ...user,
                 email: editUserEmail,
-                role: editUserRole,
+                ...rolePatch,
                 allowedTeams: editUserTeams,
                 hasFirestoreProfile: true,
               }
@@ -685,74 +746,61 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
   }
 
   return (
-    <div style={{ 
-      border: "1px solid #ccc",
-      borderRadius: "8px",
-      padding: "20px",
-      margin: "20px 0",
-      backgroundColor: "#f9f9f9"
-    }}>
-      <h3>Zarządzanie użytkownikami</h3>
-      
-      <div style={{ marginBottom: "15px", display: "flex", gap: "10px" }}>
+    <div>
+      <div style={{ marginBottom: "12px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
         <button
-          onClick={fetchUsers}
+          type="button"
+          onClick={() => {
+            void fetchUsers();
+            void fetchTeamsData();
+            void fetchPlayersData();
+          }}
           disabled={isLoading}
           style={{
-            padding: "10px 15px",
+            padding: "8px 12px",
             backgroundColor: "#4a90e2",
             color: "white",
             border: "none",
-            borderRadius: "4px",
-            cursor: isLoading ? "not-allowed" : "pointer"
+            borderRadius: "6px",
+            cursor: isLoading ? "not-allowed" : "pointer",
+            fontSize: "0.875rem",
           }}
         >
-          {isLoading ? "Ładowanie..." : "Odśwież listę użytkowników"}
+          {isLoading ? "Ładowanie..." : "Odśwież"}
         </button>
         <button
-          onClick={fetchTeamsData}
-          disabled={isLoading}
-          style={{
-            padding: "10px 15px",
-            backgroundColor: "#28a745",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: isLoading ? "not-allowed" : "pointer"
-          }}
-        >
-          Odśwież listę zespołów
-        </button>
-        <button
+          type="button"
           onClick={() => setShowAddUserModal(true)}
           disabled={isLoading || isCreatingUser}
           style={{
-            padding: "10px 15px",
+            padding: "8px 12px",
             backgroundColor: "#17a2b8",
             color: "white",
             border: "none",
-            borderRadius: "4px",
-            cursor: (isLoading || isCreatingUser) ? "not-allowed" : "pointer"
+            borderRadius: "6px",
+            cursor: (isLoading || isCreatingUser) ? "not-allowed" : "pointer",
+            fontSize: "0.875rem",
           }}
         >
           + Dodaj użytkownika
         </button>
-      </div>
-
-      <div style={{ marginBottom: "15px", padding: "10px", backgroundColor: "#e3f2fd", borderRadius: "4px", fontSize: "14px" }}>
-        <strong>Status:</strong> {users.length} użytkowników (w tym {authOnlyCount} tylko w Authentication, np. Google), {teams.length} zespołów dostępnych
+        <span style={{ fontSize: "0.8125rem", color: "#6b7280" }}>
+          {users.length} użytkowników
+          {authOnlyCount > 0 ? ` · ${authOnlyCount} tylko Auth` : ""}
+          {teams.length > 0 ? ` · ${teams.length} zespołów` : ""}
+        </span>
       </div>
 
       {pendingUsers.length > 0 && (
-        <div style={{ marginBottom: "20px", padding: "20px", backgroundColor: "#fefce8", borderRadius: "12px", border: "1px solid #facc15", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-          <h4 style={{ marginTop: 0, marginBottom: "4px", fontSize: "1.1rem", color: "#854d0e" }}>
-            Oczekujące konta zawodników ({pendingUsers.length})
+        <div style={{ marginBottom: "16px", padding: "16px", backgroundColor: "#fefce8", borderRadius: "10px", border: "1px solid #facc15" }}>
+          <h4 style={{ marginTop: 0, marginBottom: "4px", fontSize: "1rem", color: "#854d0e" }}>
+            Oczekujące konta ({pendingUsers.length})
           </h4>
-          <p style={{ marginTop: 0, marginBottom: "16px", fontSize: "0.875rem", color: "#6c757d" }}>
-            Przypisz każde konto do profilu zawodnika z listy. Użyj sugestii lub wyszukaj po imieniu, nazwisku lub roku urodzenia.
+          <p style={{ marginTop: 0, marginBottom: "14px", fontSize: "0.8125rem", color: "#78716c" }}>
+            Przypisz profil zawodnika albo zmień rolę na analityka / operatora (np. konto Google, które nie powinno być zawodnikiem).
           </p>
           {isLoadingPlayers && (
-            <p style={{ marginTop: "6px", color: "#6c757d", fontSize: "0.875rem" }}>Ładowanie listy zawodników...</p>
+            <p style={{ marginTop: "6px", color: "#6c757d", fontSize: "0.8125rem" }}>Ładowanie listy zawodników...</p>
           )}
           {pendingUsers.map(user => {
             const registration = user.registrationData;
@@ -760,6 +808,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
             const selectedPlayerId = selectedPlayerByUser[user.id] || "";
             const searchQuery = (playerSearchByUser[user.id] || "").trim();
             const filteredForSelect = filterPlayersBySearch(sortedPlayers, searchQuery);
+            const staffRole = pendingStaffRoleByUser[user.id] ?? "user";
+            const isConverting = convertingRoleUserId === user.id;
 
             return (
               <div
@@ -767,28 +817,85 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                 style={{
                   backgroundColor: "white",
                   borderRadius: "10px",
-                  padding: "16px",
+                  padding: "14px",
                   border: "1px solid #fde047",
-                  marginBottom: "16px",
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.04)"
+                  marginBottom: "12px",
                 }}
               >
-                <div style={{ marginBottom: "12px", paddingBottom: "12px", borderBottom: "1px solid #fef3c7" }}>
-                  <strong style={{ fontSize: "1rem" }}>{user.email}</strong>
+                <div style={{ marginBottom: "12px", paddingBottom: "10px", borderBottom: "1px solid #fef3c7" }}>
+                  <strong style={{ fontSize: "0.95rem" }}>{user.email}</strong>
                   {registration ? (
-                    <div style={{ fontSize: "0.9rem", color: "#57534e", marginTop: "4px" }}>
+                    <div style={{ fontSize: "0.85rem", color: "#57534e", marginTop: "4px" }}>
                       <span style={{ fontWeight: 600 }}>Dane rejestracyjne:</span> {registration.firstName} {registration.lastName}
                       {registration.birthYear ? `, ur. ${registration.birthYear}` : ""}
                     </div>
                   ) : (
-                    <div style={{ fontSize: "0.9rem", color: "#78716c" }}>Brak danych rejestracyjnych</div>
+                    <div style={{ fontSize: "0.85rem", color: "#78716c" }}>Brak danych rejestracyjnych</div>
                   )}
+                </div>
+
+                <div
+                  style={{
+                    marginBottom: "14px",
+                    padding: "12px",
+                    backgroundColor: "#f0f9ff",
+                    borderRadius: "8px",
+                    border: "1px solid #bae6fd",
+                  }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: "8px", fontSize: "0.875rem", color: "#0c4a6e" }}>
+                    Zmień rolę konta (bez przypisania zawodnika)
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem" }}>
+                      <span style={{ fontWeight: 500 }}>Rola:</span>
+                      <select
+                        value={staffRole}
+                        onChange={(e) =>
+                          setPendingStaffRoleByUser((prev) => ({
+                            ...prev,
+                            [user.id]: e.target.value as UserRole,
+                          }))
+                        }
+                        disabled={isConverting}
+                        aria-label={`Nowa rola dla ${user.email}`}
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: "6px",
+                          border: "1px solid #7dd3fc",
+                          fontSize: "0.85rem",
+                          backgroundColor: "white",
+                        }}
+                      >
+                        {STAFF_ROLE_OPTIONS.map(({ value, label }) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => void handleConvertPendingToStaffRole(user, staffRole)}
+                      disabled={isConverting}
+                      style={{
+                        padding: "8px 14px",
+                        backgroundColor: isConverting ? "#d1d5db" : "#0369a1",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: isConverting ? "not-allowed" : "pointer",
+                        fontWeight: 600,
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      {isConverting ? "Zapisywanie..." : "Ustaw rolę"}
+                    </button>
+                  </div>
                 </div>
 
                 {suggestions.length > 0 && (
                   <div style={{ marginBottom: "12px" }}>
-                    <div style={{ fontWeight: 600, marginBottom: "6px", fontSize: "0.9rem", color: "#374151" }}>
-                      Sugestie dopasowania:
+                    <div style={{ fontWeight: 600, marginBottom: "6px", fontSize: "0.85rem", color: "#374151" }}>
+                      Sugestie dopasowania zawodnika:
                     </div>
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                       {suggestions.map(player => (
@@ -797,12 +904,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                           type="button"
                           onClick={() => setSelectedPlayerByUser(prev => ({ ...prev, [user.id]: player.id }))}
                           style={{
-                            padding: "8px 12px",
+                            padding: "6px 10px",
                             borderRadius: "8px",
                             border: selectedPlayerId === player.id ? "2px solid #16a34a" : "1px solid #e5e7eb",
                             backgroundColor: selectedPlayerId === player.id ? "#dcfce7" : "#f9fafb",
                             cursor: "pointer",
-                            fontSize: "0.875rem",
+                            fontSize: "0.8125rem",
                             fontWeight: selectedPlayerId === player.id ? 600 : 400
                           }}
                         >
@@ -814,8 +921,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                 )}
 
                 <div style={{ marginBottom: "12px" }}>
-                  <label style={{ display: "block", fontWeight: 600, marginBottom: "6px", fontSize: "0.9rem" }}>
-                    Wyszukaj i wybierz zawodnika
+                  <label style={{ display: "block", fontWeight: 600, marginBottom: "6px", fontSize: "0.85rem" }}>
+                    Albo przypisz zawodnika
                   </label>
                   <input
                     type="text"
@@ -824,10 +931,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                     onChange={(e) => setPlayerSearchByUser(prev => ({ ...prev, [user.id]: e.target.value }))}
                     style={{
                       width: "100%",
-                      padding: "10px 12px",
+                      padding: "8px 10px",
                       borderRadius: "8px",
                       border: "1px solid #e5e7eb",
-                      fontSize: "0.9rem",
+                      fontSize: "0.85rem",
                       marginBottom: "8px",
                       boxSizing: "border-box"
                     }}
@@ -837,10 +944,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                     onChange={(e) => setSelectedPlayerByUser(prev => ({ ...prev, [user.id]: e.target.value }))}
                     style={{
                       width: "100%",
-                      padding: "10px 12px",
+                      padding: "8px 10px",
                       borderRadius: "8px",
                       border: "1px solid #e5e7eb",
-                      fontSize: "0.9rem",
+                      fontSize: "0.85rem",
                       boxSizing: "border-box"
                     }}
                   >
@@ -853,20 +960,20 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                   </select>
                 </div>
 
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
                   <button
                     type="button"
                     onClick={() => handleApprovePlayerAccount(user, selectedPlayerId)}
-                    disabled={!selectedPlayerId || isLoadingPlayers}
+                    disabled={!selectedPlayerId || isLoadingPlayers || isConverting}
                     style={{
-                      padding: "10px 18px",
-                      backgroundColor: (!selectedPlayerId || isLoadingPlayers) ? "#d1d5db" : "#16a34a",
+                      padding: "8px 14px",
+                      backgroundColor: (!selectedPlayerId || isLoadingPlayers || isConverting) ? "#d1d5db" : "#16a34a",
                       color: "white",
                       border: "none",
                       borderRadius: "8px",
-                      cursor: (!selectedPlayerId || isLoadingPlayers) ? "not-allowed" : "pointer",
+                      cursor: (!selectedPlayerId || isLoadingPlayers || isConverting) ? "not-allowed" : "pointer",
                       fontWeight: 600,
-                      fontSize: "0.9rem",
+                      fontSize: "0.85rem",
                     }}
                   >
                     Przypisz i zatwierdź
@@ -880,20 +987,20 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                         `Odrzucić rejestrację i trwale usunąć konto ${user.email}? Operacja jest nieodwracalna (Firestore + Authentication).`
                       )
                     }
-                    disabled={isLoadingPlayers}
+                    disabled={isLoadingPlayers || isConverting}
                     style={{
-                      padding: "10px 18px",
-                      backgroundColor: isLoadingPlayers ? "#d1d5db" : "#b91c1c",
+                      padding: "8px 14px",
+                      backgroundColor: (isLoadingPlayers || isConverting) ? "#d1d5db" : "#b91c1c",
                       color: "white",
                       border: "none",
                       borderRadius: "8px",
-                      cursor: isLoadingPlayers ? "not-allowed" : "pointer",
+                      cursor: (isLoadingPlayers || isConverting) ? "not-allowed" : "pointer",
                       fontWeight: 600,
-                      fontSize: "0.9rem",
+                      fontSize: "0.85rem",
                     }}
                     title="Odrzuca rejestrację i usuwa konto z Firestore oraz Firebase Authentication"
                   >
-                    Odrzuć i usuń konto
+                    Odrzuć i usuń
                   </button>
                 </div>
               </div>
@@ -1001,7 +1108,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                   <td style={{ padding: "6px 8px", border: "1px solid #ddd" }}>
                     <select
                       value={user.role}
-                      onChange={(e) => updateUserRole(user.id, e.target.value as 'user' | 'admin' | 'coach' | 'player')}
+                      onChange={(e) => updateUserRole(user.id, e.target.value as UserRole)}
                       style={{
                         padding: "4px 6px",
                         border: "1px solid #ddd",
@@ -1010,10 +1117,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                         width: "100%"
                       }}
                     >
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
-                      <option value="coach">Coach</option>
-                      <option value="player">Player</option>
+                      {USER_ROLE_OPTIONS.map(({ value, label }) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
                     </select>
                   </td>
                   <td style={{ padding: "6px 8px", border: "1px solid #ddd", verticalAlign: "middle", position: "relative" }}>
@@ -1241,7 +1347,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
               </label>
               <select
                 value={newUserRole}
-                onChange={(e) => setNewUserRole(e.target.value as 'user' | 'admin' | 'coach' | 'player')}
+                onChange={(e) => setNewUserRole(e.target.value as UserRole)}
                 style={{
                   width: "100%",
                   padding: "8px",
@@ -1251,10 +1357,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                 }}
                 disabled={isCreatingUser}
               >
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-                <option value="coach">Coach</option>
-                <option value="player">Player</option>
+                {USER_ROLE_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
               </select>
             </div>
 
@@ -1397,7 +1502,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
               </label>
               <select
                 value={editUserRole}
-                onChange={(e) => setEditUserRole(e.target.value as 'user' | 'admin' | 'coach' | 'player')}
+                onChange={(e) => setEditUserRole(e.target.value as UserRole)}
                 style={{
                   width: "100%",
                   padding: "8px",
@@ -1407,10 +1512,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
                 }}
                 disabled={isUpdatingUser}
               >
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-                <option value="coach">Coach</option>
-                <option value="player">Player</option>
+                {USER_ROLE_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
               </select>
             </div>
 
@@ -1480,22 +1584,6 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
         </div>
       )}
 
-      <div style={{ marginTop: "20px", fontSize: "0.9em", color: "#666" }}>
-        <h4>Instrukcje:</h4>
-        <ul style={{ paddingLeft: "20px" }}>
-          <li>Kliknij "Dodaj użytkownika" aby utworzyć nowe konto</li>
-          <li>Kliknij "Edytuj" aby zmienić email, rolę lub zespoły użytkownika</li>
-          <li>Lista łączy profile Firestore z kontami Firebase Authentication — w tym Google bez dokumentu w Firestore</li>
-          <li>Konta „Brak profilu Firestore” pojawią się po pobraniu z Auth; pierwsza edycja roli lub zespołów utworzy dokument users/&#123;uid&#125;</li>
-          <li>Kliknij "Reset hasła" aby wysłać użytkownikowi email z linkiem resetującym hasło (niedostępne dla kont wyłącznie Google)</li>
-          <li>W modalu edycji możesz ustawić nowe hasło (Auth przez API serwera) — albo użyj „Reset hasła”, aby wysłać link e‑mailem</li>
-          <li>Zaznacz/odznacz zespoły dla każdego użytkownika, aby nadać mu odpowiednie uprawnienia</li>
-          <li>Zmień rolę na "Admin" aby użytkownik mógł zarządzać innymi użytkownikami</li>
-          <li>Użytkownicy bez żadnych zespołów nie będą mogli korzystać z aplikacji</li>
-          <li>Usunięcie użytkownika jest nieodwracalne (Authentication + Firestore przez API serwera — wymaga FIREBASE_SERVICE_ACCOUNT_KEY lub GOOGLE_APPLICATION_CREDENTIALS w środowisku Next.js)</li>
-          <li>Oczekujące konta zawodników: „Odrzuć i usuń konto” działa tak samo jak „Usuń” w tabeli</li>
-        </ul>
-      </div>
     </div>
   );
 };

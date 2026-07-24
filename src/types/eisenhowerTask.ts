@@ -1,7 +1,7 @@
 /**
- * Zadania Eisenhowera + backlog produktu (Scrum / Trello).
- * Macierz = zadania aktualne; backlog = Product Backlog.
- * `order` — kolejność w kolumnie (mniejsza = wyżej = wyższy priorytet).
+ * Tablica zadań Kanban (Scrum / Agile / Lean).
+ * Kolumny = status workflow; kwadrant Eisenhowera = tylko priorytet (kolor / etykieta).
+ * `order` — kolejność w kolumnie (mniejsza = wyżej).
  */
 
 export type QuadrantId =
@@ -10,27 +10,29 @@ export type QuadrantId =
   | "urgent-not-important"
   | "not-urgent-not-important";
 
-/** Gdzie leży zadanie: macierz (aktualne) vs backlog produktu. */
+/** Status workflow — odpowiada kolumnie tablicy. */
+export type TaskStatus = "backlog" | "todo" | "in_progress" | "rework" | "done";
+
+/** @deprecated Używaj TaskStatus — zostawione do migracji starych dokumentów. */
 export type TaskLane = "matrix" | "backlog";
 
 export interface EisenhowerTask {
   id: string;
   text: string;
-  /** Priorytet Eisenhowera — zachowywany też w backlogu (kolor / etykieta). */
+  /** Priorytet Eisenhowera — kolor / etykieta na karcie (nie kolumna). */
   quadrant: QuadrantId;
-  /** Macierz = aktualne; backlog = Product Backlog. */
-  lane: TaskLane;
+  /** Kolumna tablicy (workflow). */
+  status: TaskStatus;
   /**
    * Kolejność w kolumnie (jak w Trello / Product Backlog).
-   * Mniejsza wartość = wyżej na liście = wyższy priorytet.
+   * Mniejsza wartość = wyżej na liście.
    */
   order: number;
-  completed: boolean;
   createdAt: number;
 }
 
-/** Identyfikator kolumny tablicy (Trello-like). */
-export type BoardColumnId = "backlog" | QuadrantId;
+/** Identyfikator kolumny tablicy = status. */
+export type BoardColumnId = TaskStatus;
 
 export const QUADRANT_META: {
   id: QuadrantId;
@@ -64,41 +66,58 @@ export const QUADRANT_META: {
   },
 ];
 
-/** Kolumny tablicy: backlog na początku (Scrum), potem kwadranty Eisenhowera. */
+/** Kolumny Kanban: statusy workflow. */
 export const BOARD_COLUMNS: {
   id: BoardColumnId;
   title: string;
   subtitle: string;
-  lane: TaskLane;
-  quadrant: QuadrantId | null;
 }[] = [
   {
     id: "backlog",
-    title: "Backlog produktu",
-    subtitle: "Góra = najwyższy priorytet",
-    lane: "backlog",
-    quadrant: null,
+    title: "Backlog",
+    subtitle: "Góra = wyższy priorytet kolejki",
   },
-  ...QUADRANT_META.map((q) => ({
-    id: q.id as BoardColumnId,
-    title: q.title,
-    subtitle: q.subtitle,
-    lane: "matrix" as TaskLane,
-    quadrant: q.id,
-  })),
+  {
+    id: "todo",
+    title: "Do zrobienia",
+    subtitle: "Gotowe do startu",
+  },
+  {
+    id: "in_progress",
+    title: "W trakcie",
+    subtitle: "Aktualna praca",
+  },
+  {
+    id: "rework",
+    title: "Do poprawy",
+    subtitle: "Poprawki / blokady",
+  },
+  {
+    id: "done",
+    title: "Zrobione",
+    subtitle: "Ukończone",
+  },
 ];
 
 export const DEFAULT_QUADRANT: QuadrantId = "urgent-important";
+export const DEFAULT_TASK_STATUS: TaskStatus = "todo";
+/** @deprecated */
 export const DEFAULT_TASK_LANE: TaskLane = "matrix";
 /** Odstęp między kolejnymi `order` — stabilna renumeracja kolumny. */
 export const ORDER_GAP = 1000;
 
 const QUADRANT_IDS = new Set<string>(QUADRANT_META.map((q) => q.id));
+const STATUS_IDS = new Set<string>(BOARD_COLUMNS.map((c) => c.id));
 
 export function isQuadrantId(value: unknown): value is QuadrantId {
   return typeof value === "string" && QUADRANT_IDS.has(value);
 }
 
+export function isTaskStatus(value: unknown): value is TaskStatus {
+  return typeof value === "string" && STATUS_IDS.has(value);
+}
+
+/** @deprecated */
 export function isTaskLane(value: unknown): value is TaskLane {
   return value === "matrix" || value === "backlog";
 }
@@ -107,31 +126,41 @@ export function quadrantShortLabel(quadrant: QuadrantId): string {
   return QUADRANT_META.find((q) => q.id === quadrant)?.shortLabel ?? quadrant;
 }
 
-export function taskColumnId(task: Pick<EisenhowerTask, "lane" | "quadrant">): BoardColumnId {
-  return task.lane === "backlog" ? "backlog" : task.quadrant;
+export function taskColumnId(task: Pick<EisenhowerTask, "status">): BoardColumnId {
+  return task.status;
 }
 
-export function columnPlacement(columnId: BoardColumnId): {
-  lane: TaskLane;
-  /** Kwadrant kolumny macierzy; dla backlogu — domyślny (nadpisywany zachowaniem koloru). */
-  quadrant: QuadrantId;
-} {
-  if (columnId === "backlog") {
-    return { lane: "backlog", quadrant: DEFAULT_QUADRANT };
-  }
-  return { lane: "matrix", quadrant: columnId };
+/**
+ * Migracja starego modelu (lane + completed + quadrant-as-column)
+ * → status workflow.
+ */
+export function migrateLegacyStatus(data: Record<string, unknown>): TaskStatus {
+  if (isTaskStatus(data.status)) return data.status;
+
+  const completed = !!data.completed;
+  if (completed) return "done";
+
+  if (data.lane === "backlog") return "backlog";
+
+  // Stara macierz: zadania „aktualne” → w trakcie
+  if (data.lane === "matrix") return "in_progress";
+
+  // Dokumenty tylko z quadrant (bez lane) — traktuj jak aktualne
+  if (isQuadrantId(data.quadrant) && data.lane == null) return "in_progress";
+
+  return DEFAULT_TASK_STATUS;
 }
 
 /**
  * Normalizacja dokumentu Firestore → EisenhowerTask.
- * Brak `lane` = macierz; brak `order` = createdAt (kompatybilność wsteczna).
+ * Wspiera stare dokumenty z `lane` / `completed`.
  */
 export function normalizeEisenhowerTask(
   id: string,
   data: Record<string, unknown>
 ): EisenhowerTask {
   const quadrant = isQuadrantId(data.quadrant) ? data.quadrant : DEFAULT_QUADRANT;
-  const lane = isTaskLane(data.lane) ? data.lane : DEFAULT_TASK_LANE;
+  const status = migrateLegacyStatus(data);
   const createdAt = typeof data.createdAt === "number" ? data.createdAt : 0;
   const order =
     typeof data.order === "number" && Number.isFinite(data.order) ? data.order : createdAt;
@@ -139,9 +168,8 @@ export function normalizeEisenhowerTask(
     id,
     text: typeof data.text === "string" ? data.text : "",
     quadrant,
-    lane,
+    status,
     order,
-    completed: !!data.completed,
     createdAt,
   };
 }
@@ -150,24 +178,27 @@ export function normalizeEisenhowerTask(
 export function buildEisenhowerTaskDocument(task: EisenhowerTask): {
   text: string;
   quadrant: QuadrantId;
-  lane: TaskLane;
+  status: TaskStatus;
   order: number;
-  completed: boolean;
   createdAt: number;
+  /** Kompatybilność wsteczna — stare UI mogło czytać completed. */
+  completed: boolean;
+  /** Kompatybilność wsteczna — stare UI mogło czytać lane. */
+  lane: TaskLane;
 } {
   return {
     text: task.text,
     quadrant: task.quadrant,
-    lane: task.lane,
+    status: task.status,
     order: task.order,
-    completed: task.completed,
     createdAt: task.createdAt,
+    completed: task.status === "done",
+    lane: task.status === "backlog" ? "backlog" : "matrix",
   };
 }
 
-/** Sortowanie kolumny: aktywne nad ukończonymi, potem `order`, potem createdAt. */
+/** Sortowanie kolumny: `order`, potem createdAt. */
 export function sortEisenhowerTasks(a: EisenhowerTask, b: EisenhowerTask): number {
-  if (a.completed !== b.completed) return a.completed ? 1 : -1;
   if (a.order !== b.order) return a.order - b.order;
   return a.createdAt - b.createdAt;
 }
@@ -184,10 +215,10 @@ export function groupTasksByColumn(
 ): Record<BoardColumnId, EisenhowerTask[]> {
   const map: Record<BoardColumnId, EisenhowerTask[]> = {
     backlog: [],
-    "urgent-important": [],
-    "important-not-urgent": [],
-    "urgent-not-important": [],
-    "not-urgent-not-important": [],
+    todo: [],
+    in_progress: [],
+    rework: [],
+    done: [],
   };
   for (const t of tasks) {
     map[taskColumnId(t)].push(t);
@@ -206,34 +237,21 @@ export function renumberColumnOrders(ordered: EisenhowerTask[]): EisenhowerTask[
   }));
 }
 
-/**
- * Składa listę kolumny po dropie: aktywne i ukończone osobno.
- * Ukończone zawsze na dole (best practice Done / completed).
- */
+/** Składa listę kolumny po dropie. */
 export function buildColumnOrderAfterMove(
   othersSorted: EisenhowerTask[],
   dragged: EisenhowerTask,
   insertIndex: number
 ): EisenhowerTask[] {
-  const active = othersSorted.filter((t) => !t.completed);
-  const completed = othersSorted.filter((t) => t.completed);
-
-  if (dragged.completed) {
-    const idx = Math.max(0, Math.min(insertIndex - active.length, completed.length));
-    const nextCompleted = [...completed];
-    nextCompleted.splice(idx, 0, dragged);
-    return [...active, ...nextCompleted];
-  }
-
-  const idx = Math.max(0, Math.min(insertIndex, active.length));
-  const nextActive = [...active];
-  nextActive.splice(idx, 0, dragged);
-  return [...nextActive, ...completed];
+  const idx = Math.max(0, Math.min(insertIndex, othersSorted.length));
+  const next = [...othersSorted];
+  next.splice(idx, 0, dragged);
+  return next;
 }
 
 /**
  * Przenosi zadanie do kolumny na pozycję `insertIndex` i renumeruje `order`.
- * Zwraca pełną listę oraz zadania, których dokumenty trzeba zapisać.
+ * Kwadrant (priorytet) nie zmienia się przy dropie.
  */
 export function moveTaskInBoard(
   allTasks: EisenhowerTask[],
@@ -248,8 +266,6 @@ export function moveTaskInBoard(
   const sourceList = tasksInColumn(allTasks, sourceColumn);
   const fromIndex = sourceList.findIndex((t) => t.id === taskId);
 
-  // Przy przeciąganiu w tej samej kolumnie indeks dropu jest względem listy z elementem —
-  // po usunięciu przeciąganego trzeba skorygować, inaczej karta „przeskoczy” o 1.
   let adjustedIndex = insertIndex;
   if (sourceColumn === targetColumn && fromIndex >= 0 && insertIndex > fromIndex) {
     adjustedIndex = insertIndex - 1;
@@ -258,14 +274,9 @@ export function moveTaskInBoard(
     return { tasks: allTasks, changed: [] };
   }
 
-  const placement = columnPlacement(targetColumn);
-  const nextQuadrant =
-    targetColumn === "backlog" ? dragged.quadrant : placement.quadrant;
-
   const relocated: EisenhowerTask = {
     ...dragged,
-    lane: placement.lane,
-    quadrant: nextQuadrant,
+    status: targetColumn,
   };
 
   const others = allTasks
@@ -291,12 +302,7 @@ export function moveTaskInBoard(
   const changed: EisenhowerTask[] = [];
   for (const t of [...renumbered, ...sourceOthers]) {
     const orig = allTasks.find((o) => o.id === t.id);
-    if (
-      !orig ||
-      orig.order !== t.order ||
-      orig.lane !== t.lane ||
-      orig.quadrant !== t.quadrant
-    ) {
+    if (!orig || orig.order !== t.order || orig.status !== t.status) {
       changed.push(t);
     }
   }
@@ -305,11 +311,10 @@ export function moveTaskInBoard(
   return { tasks, changed };
 }
 
-/** Kolejny `order` na końcu aktywnych w kolumnie. */
+/** Kolejny `order` na końcu kolumny. */
 export function nextOrderAtEnd(columnTasks: EisenhowerTask[]): number {
-  const active = columnTasks.filter((t) => !t.completed);
-  if (active.length === 0) return ORDER_GAP;
-  return Math.max(...active.map((t) => t.order)) + ORDER_GAP;
+  if (columnTasks.length === 0) return ORDER_GAP;
+  return Math.max(...columnTasks.map((t) => t.order)) + ORDER_GAP;
 }
 
 /** Indeks wstawienia na podstawie pozycji kursora względem karty. */

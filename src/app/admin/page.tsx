@@ -70,53 +70,35 @@ export default function AdminPage() {
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Użytkownicy</h2>
-        <p className={styles.sectionDesc}>Dostęp do zespołów i role.</p>
         <UserManagement currentUserIsAdmin={isAdmin} />
       </section>
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Zespoły</h2>
-        <p className={styles.sectionDesc}>Dodawanie, edycja i usuwanie zespołów.</p>
         <TeamsManagement currentUserIsAdmin={isAdmin} />
       </section>
 
       <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Zadania</h2>
-        <p className={styles.sectionDesc}>Kwadrant Eisenhowera — zarządzaj zadaniami według pilności i ważności.</p>
-        <Link href="/admin/zadania" className={styles.linkButton}>
-          Otwórz zadania
-        </Link>
-      </section>
-
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Stałe fragmenty</h2>
-        <p className={styles.sectionDesc}>
-          Ustawienia rzutu rożnego i wolnego w ataku — zawodnicy, zadania i strefy na boisku (zapis lokalny).
-        </p>
-        <Link href="/admin/stale-fragmenty" className={styles.linkButton}>
-          Otwórz stałe fragmenty
-        </Link>
-      </section>
-
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>KPI trendów</h2>
-        <p className={styles.sectionDesc}>Definicje i cele KPI wykorzystywane na stronie Trendy.</p>
-        <Link href="/admin/kpi" className={styles.linkButton}>
-          Otwórz konfigurację KPI
-        </Link>
-      </section>
-
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Metryki Firestore</h2>
-        <p className={styles.sectionDesc}>Badge w rogu ekranu pokazuje liczbę odczytów i zapisów do Firestore w sesji. Możesz go ukryć lub pokazać.</p>
-        <button
-          type="button"
-          className={styles.toggleButton}
-          onClick={toggleFirestoreMetricsVisibility}
-          aria-pressed={firestoreMetricsHidden}
-        >
-          {firestoreMetricsHidden ? "Pokaż metryki Firestore" : "Ukryj metryki Firestore"}
-        </button>
+        <h2 className={styles.sectionTitle}>Szybkie linki</h2>
+        <div className={styles.quickLinks}>
+          <Link href="/admin/zadania" className={styles.linkButton}>
+            Zadania
+          </Link>
+          <Link href="/admin/stale-fragmenty" className={styles.linkButton}>
+            Stałe fragmenty
+          </Link>
+          <Link href="/admin/kpi" className={styles.linkButton}>
+            KPI trendów
+          </Link>
+          <button
+            type="button"
+            className={styles.toggleButton}
+            onClick={toggleFirestoreMetricsVisibility}
+            aria-pressed={firestoreMetricsHidden}
+          >
+            {firestoreMetricsHidden ? "Pokaż metryki Firestore" : "Ukryj metryki Firestore"}
+          </button>
+        </div>
       </section>
     </div>
   );

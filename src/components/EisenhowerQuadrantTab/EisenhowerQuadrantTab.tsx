@@ -25,17 +25,18 @@ import {
   BOARD_COLUMNS,
   buildEisenhowerTaskDocument,
   DEFAULT_QUADRANT,
-  DEFAULT_TASK_LANE,
+  DEFAULT_TASK_STATUS,
   groupTasksByColumn,
   insertIndexFromPointer,
   moveTaskInBoard,
   nextOrderAtEnd,
   normalizeEisenhowerTask,
+  QUADRANT_META,
   quadrantShortLabel,
-  taskColumnId,
   type BoardColumnId,
   type EisenhowerTask,
-  type TaskLane,
+  type QuadrantId,
+  type TaskStatus,
 } from "@/types/eisenhowerTask";
 import styles from "@/app/admin/zadania/page.module.css";
 
@@ -70,7 +71,8 @@ export interface EisenhowerQuadrantTabProps {
 export default function EisenhowerQuadrantTab({ uid }: EisenhowerQuadrantTabProps) {
   const [tasks, setTasks] = useState<EisenhowerTask[]>([]);
   const [newText, setNewText] = useState("");
-  const [newLane, setNewLane] = useState<TaskLane>(DEFAULT_TASK_LANE);
+  const [newStatus, setNewStatus] = useState<TaskStatus>(DEFAULT_TASK_STATUS);
+  const [newQuadrant, setNewQuadrant] = useState<QuadrantId>(DEFAULT_QUADRANT);
   const [tasksLoading, setTasksLoading] = useState(true);
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<BoardColumnId | null>(null);
@@ -145,22 +147,19 @@ export default function EisenhowerQuadrantTab({ uid }: EisenhowerQuadrantTabProp
   const addTask = useCallback(() => {
     const trimmed = newText.trim();
     if (!trimmed || !uid) return;
-    const columnId: BoardColumnId =
-      newLane === "backlog" ? "backlog" : DEFAULT_QUADRANT;
-    const order = nextOrderAtEnd(byColumn[columnId]);
+    const order = nextOrderAtEnd(byColumn[newStatus]);
     const task: EisenhowerTask = {
       id: generateId(),
       text: trimmed,
-      quadrant: DEFAULT_QUADRANT,
-      lane: newLane,
+      quadrant: newQuadrant,
+      status: newStatus,
       order,
-      completed: false,
       createdAt: Date.now(),
     };
     setTasks((prev) => [...prev, task]);
     setNewText("");
     persistTask(task);
-  }, [newText, newLane, uid, byColumn, persistTask]);
+  }, [newText, newStatus, newQuadrant, uid, byColumn, persistTask]);
 
   const removeTask = useCallback(
     (id: string) => {
@@ -170,34 +169,36 @@ export default function EisenhowerQuadrantTab({ uid }: EisenhowerQuadrantTabProp
     [removeTaskFromFirestore]
   );
 
-  const toggleCompleted = useCallback(
+  const setTaskQuadrant = useCallback(
+    (id: string, quadrant: QuadrantId) => {
+      setTasks((prev) => {
+        const task = prev.find((t) => t.id === id);
+        if (!task || task.quadrant === quadrant) return prev;
+        const updated = { ...task, quadrant };
+        void persistTask(updated);
+        return prev.map((t) => (t.id === id ? updated : t));
+      });
+    },
+    [persistTask]
+  );
+
+  const toggleDone = useCallback(
     (id: string) => {
       setTasks((prev) => {
         const task = prev.find((t) => t.id === id);
         if (!task) return prev;
-        const toggled = { ...task, completed: !task.completed };
-        const columnId = taskColumnId(toggled);
-        const list = groupTasksByColumn(prev)[columnId];
-        // Ukończone → na dół; odznaczenie → na koniec aktywnych
-        const insertIndex = toggled.completed
-          ? list.length
-          : list.filter((t) => t.id !== id && !t.completed).length;
-        const withToggle = prev.map((t) => (t.id === id ? toggled : t));
-        const { tasks: next, changed } = moveTaskInBoard(
-          withToggle,
-          id,
-          columnId,
-          insertIndex
-        );
+        const targetStatus: TaskStatus = task.status === "done" ? "todo" : "done";
+        const columnTasks = groupTasksByColumn(prev)[targetStatus];
+        const insertIndex = columnTasks.length;
+        const { tasks: next, changed } = moveTaskInBoard(prev, id, targetStatus, insertIndex);
         if (changed.length) {
           void persistMany(changed);
           return next;
         }
-        void persistTask(toggled);
-        return withToggle;
+        return prev;
       });
     },
-    [persistMany, persistTask]
+    [persistMany]
   );
 
   const applyMove = useCallback(
@@ -233,7 +234,6 @@ export default function EisenhowerQuadrantTab({ uid }: EisenhowerQuadrantTabProp
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
       setDragOverColumn(columnId);
-      // Drop na puste miejsce kolumny (nie na kartę) → na koniec
       if ((e.target as HTMLElement).closest?.(`.${styles.taskCard}`)) return;
       setDragOverTaskId(null);
       setPlaceAfter(false);
@@ -271,13 +271,13 @@ export default function EisenhowerQuadrantTab({ uid }: EisenhowerQuadrantTabProp
     [applyMove, byColumn, clearDragState, dragOverTaskId, dragTaskId, placeAfter]
   );
 
-  const hasCompleted = useMemo(() => tasks.some((t) => t.completed), [tasks]);
+  const hasDone = useMemo(() => byColumn.done.length > 0, [byColumn]);
 
-  const removeCompleted = useCallback(() => {
-    const toRemove = tasks.filter((t) => t.completed);
-    setTasks((prev) => prev.filter((t) => !t.completed));
+  const removeDone = useCallback(() => {
+    const toRemove = byColumn.done;
+    setTasks((prev) => prev.filter((t) => t.status !== "done"));
     toRemove.forEach((t) => removeTaskFromFirestore(t.id));
-  }, [tasks, removeTaskFromFirestore]);
+  }, [byColumn.done, removeTaskFromFirestore]);
 
   if (tasksLoading) {
     return (
@@ -292,8 +292,8 @@ export default function EisenhowerQuadrantTab({ uid }: EisenhowerQuadrantTabProp
       <section className={styles.addSection}>
         <h2 className={styles.addTitle}>Dodaj zadanie</h2>
         <p className={styles.addHint}>
-          Tablica jak w Trello: przeciągaj karty między kolumnami i zmieniaj kolejność w kolumnie.
-          W backlogu góra listy = najwyższy priorytet (Product Backlog).
+          Kolumny to etapy pracy (Kanban). Priorytet Eisenhowera to tylko kolor karty — przeciąganie
+          między kolumnami zmienia status, nie priorytet.
         </p>
         <div className={styles.addRow}>
           <input
@@ -307,12 +307,27 @@ export default function EisenhowerQuadrantTab({ uid }: EisenhowerQuadrantTabProp
           />
           <select
             className={styles.select}
-            value={newLane}
-            onChange={(e) => setNewLane(e.target.value as TaskLane)}
-            aria-label="Gdzie dodać zadanie"
+            value={newStatus}
+            onChange={(e) => setNewStatus(e.target.value as TaskStatus)}
+            aria-label="Status początkowy"
           >
-            <option value="matrix">Aktualne — Pilne i ważne</option>
-            <option value="backlog">Backlog produktu</option>
+            {BOARD_COLUMNS.map((col) => (
+              <option key={col.id} value={col.id}>
+                {col.title}
+              </option>
+            ))}
+          </select>
+          <select
+            className={styles.select}
+            value={newQuadrant}
+            onChange={(e) => setNewQuadrant(e.target.value as QuadrantId)}
+            aria-label="Priorytet Eisenhowera"
+          >
+            {QUADRANT_META.map((q) => (
+              <option key={q.id} value={q.id}>
+                {q.shortLabel}
+              </option>
+            ))}
           </select>
           <button
             type="button"
@@ -325,14 +340,10 @@ export default function EisenhowerQuadrantTab({ uid }: EisenhowerQuadrantTabProp
         </div>
       </section>
 
-      {hasCompleted && (
+      {hasDone && (
         <div className={styles.removeRow}>
-          <button
-            type="button"
-            className={styles.removeCompletedButton}
-            onClick={removeCompleted}
-          >
-            Usuń zakończone
+          <button type="button" className={styles.removeCompletedButton} onClick={removeDone}>
+            Usuń zrobione
           </button>
         </div>
       )}
@@ -373,20 +384,23 @@ export default function EisenhowerQuadrantTab({ uid }: EisenhowerQuadrantTabProp
                     dragTaskId &&
                     dragOverColumn === column.id &&
                     dragOverTaskId === task.id;
-                  const rankLabel =
-                    column.id === "backlog" && !task.completed ? `#${index + 1}` : null;
+                  const isDone = task.status === "done";
+                  const rankLabel = column.id === "backlog" ? `#${index + 1}` : null;
                   return (
                     <li
                       key={task.id}
                       className={`${styles.taskCard} ${
                         dragTaskId === task.id ? styles.taskCardDragging : ""
-                      } ${column.id === "backlog" ? styles.taskCardBacklog : ""}`}
+                      }`}
                       data-quadrant={task.quadrant}
                       draggable
                       onDragStart={(e) => handleDragStart(e, task.id)}
                       onDragEnd={handleDragEnd}
                       onDragOver={(e) => handleCardDragOver(e, column.id, task.id)}
-                      onDrop={(e) => handleDropOnColumn(e, column.id)}
+                      onDrop={(e) => {
+                        e.stopPropagation();
+                        handleDropOnColumn(e, column.id);
+                      }}
                     >
                       {showIndicator && !placeAfter && (
                         <div className={styles.dropIndicator} aria-hidden />
@@ -395,13 +409,17 @@ export default function EisenhowerQuadrantTab({ uid }: EisenhowerQuadrantTabProp
                         <span className={styles.dragHandle} aria-hidden title="Przeciągnij">
                           ⋮⋮
                         </span>
-                        <label className={styles.taskLabel}>
+                        <div className={styles.taskLabel}>
                           <input
                             type="checkbox"
-                            checked={task.completed}
-                            onChange={() => toggleCompleted(task.id)}
+                            checked={isDone}
+                            onChange={() => toggleDone(task.id)}
                             className={styles.checkbox}
-                            aria-label={`Zaznacz jako zakończone: ${task.text}`}
+                            aria-label={
+                              isDone
+                                ? `Przywróć do „Do zrobienia”: ${task.text}`
+                                : `Oznacz jako zrobione: ${task.text}`
+                            }
                           />
                           <span className={styles.taskBody}>
                             <span className={styles.taskMetaRow}>
@@ -410,25 +428,33 @@ export default function EisenhowerQuadrantTab({ uid }: EisenhowerQuadrantTabProp
                                   {rankLabel}
                                 </span>
                               )}
-                              {column.id === "backlog" && (
-                                <span
-                                  className={styles.quadrantBadge}
+                              <label className={styles.quadrantSelectWrap}>
+                                <span className={styles.srOnly}>Priorytet Eisenhowera</span>
+                                <select
+                                  className={styles.quadrantSelect}
                                   data-quadrant={task.quadrant}
-                                  title={`Priorytet Eisenhowera: ${quadrantShortLabel(task.quadrant)}`}
+                                  value={task.quadrant}
+                                  onChange={(e) =>
+                                    setTaskQuadrant(task.id, e.target.value as QuadrantId)
+                                  }
+                                  onClick={(e) => e.stopPropagation()}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  title={`Priorytet: ${quadrantShortLabel(task.quadrant)}`}
+                                  aria-label={`Priorytet zadania: ${task.text}`}
                                 >
-                                  {quadrantShortLabel(task.quadrant)}
-                                </span>
-                              )}
+                                  {QUADRANT_META.map((q) => (
+                                    <option key={q.id} value={q.id}>
+                                      {q.shortLabel}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
                             </span>
-                            <span
-                              className={
-                                task.completed ? styles.taskTextCompleted : styles.taskText
-                              }
-                            >
+                            <span className={isDone ? styles.taskTextCompleted : styles.taskText}>
                               {task.text}
                             </span>
                           </span>
-                        </label>
+                        </div>
                         <button
                           type="button"
                           className={styles.deleteTaskButton}

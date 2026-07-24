@@ -10,6 +10,8 @@ import { useAuth } from "@/hooks/useAuth";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { usePresentationMode } from '@/contexts/PresentationContext';
+import { canAccessMatchVerification } from '@/lib/userRoles';
+import { filterTeamsByUserAccess } from '@/lib/teamsForUserAccess';
 import styles from './weryfikacja-meczow.module.css';
 
 interface CategoryStatus {
@@ -49,8 +51,31 @@ export default function WeryfikacjaMeczow() {
   const [chartData, setChartData] = useState<any[]>([]);
   const [isLoadingChart, setIsLoadingChart] = useState(false);
 
-  const { isAuthenticated, isAdmin, isLoading: authLoading, userRole, linkedPlayerId } = useAuth();
+  const { isAuthenticated, isAdmin, isLoading: authLoading, userRole, userTeams, linkedPlayerId } = useAuth();
   const { isPresentationMode } = usePresentationMode();
+  const canAccessPage = canAccessMatchVerification({ isAdmin, userRole });
+
+  const accessibleTeams = useMemo(
+    () =>
+      filterTeamsByUserAccess(Object.values(teams), {
+        isAdmin,
+        allowedTeamIds: userTeams ?? [],
+      }),
+    [teams, isAdmin, userTeams]
+  );
+
+  const allowedTeamIdSet = useMemo(
+    () => new Set(accessibleTeams.map((t) => t.id)),
+    [accessibleTeams]
+  );
+
+  // Operator: jeśli wybrany zespół wypadł z allowedTeams, wróć do „wszystkie”
+  useEffect(() => {
+    if (isAdmin) return;
+    if (selectedTeam !== "all" && !allowedTeamIdSet.has(selectedTeam)) {
+      setSelectedTeam("all");
+    }
+  }, [isAdmin, selectedTeam, allowedTeamIdSet]);
 
   // Zamknij dropdown przy kliknięciu poza nim
   useEffect(() => {
@@ -145,14 +170,19 @@ export default function WeryfikacjaMeczow() {
     };
 
     // Wykonaj fetchMatches tylko jeśli użytkownik jest zalogowany i ma uprawnienia
-    if (isAuthenticated && isAdmin) {
+    if (isAuthenticated && canAccessPage) {
       fetchMatches();
     }
-  }, [isAuthenticated, isAdmin, selectedTeam]);
+  }, [isAuthenticated, canAccessPage, selectedTeam]);
 
   // Filtrowanie i sortowanie
   const filteredAndSortedMatches = useMemo(() => {
     let filtered = matches;
+
+    // Operator: tylko przypisane zespoły (admin widzi wszystkie)
+    if (!isAdmin) {
+      filtered = filtered.filter((match) => allowedTeamIdSet.has(match.team));
+    }
 
     // Filtruj tylko mecze z ostatnich 60 dni
     filtered = filtered.filter(match => match.isWithin60Days);
@@ -186,7 +216,7 @@ export default function WeryfikacjaMeczow() {
 
       return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
     });
-  }, [matches, selectedTeam, sortBy, sortDirection]);
+  }, [matches, selectedTeam, sortBy, sortDirection, isAdmin, allowedTeamIdSet]);
 
   const handleSort = (field: 'date' | 'total' | 'verified') => {
     if (sortBy === field) {
@@ -436,12 +466,12 @@ export default function WeryfikacjaMeczow() {
     );
   }
 
-  if (!isAdmin) {
+  if (!canAccessPage) {
     return (
       <div className={styles.container}>
         <div className={styles.accessDenied}>
           <h2>🔒 Brak uprawnień</h2>
-          <p>Tylko administratorzy mają dostęp do weryfikacji meczów.</p>
+          <p>Tylko administratorzy i operatorzy mają dostęp do weryfikacji meczów.</p>
           <Link href="/analyzer" className={styles.backButton}>
             Powrót do aplikacji
           </Link>
@@ -519,7 +549,7 @@ export default function WeryfikacjaMeczow() {
                 >
                   <span>Wszystkie zespoły</span>
                 </div>
-                {Object.values(teams).map(team => (
+                {accessibleTeams.map(team => (
                   <div 
                     key={team.id}
                     className={`${styles.dropdownItem} ${selectedTeam === team.id ? styles.active : ''}`}

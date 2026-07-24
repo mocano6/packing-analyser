@@ -24,6 +24,8 @@ import {
 import styles from './wiedza.module.css';
 import toast from 'react-hot-toast';
 import SidePanel from '@/components/SidePanel/SidePanel';
+import { canAccessKnowledgeBase } from '@/lib/userRoles';
+import { filterTeamsByUserAccess } from '@/lib/teamsForUserAccess';
 import {
   loadWiedzaAnalyzeFromStorage,
   saveWiedzaAnalyzeToStorage,
@@ -454,8 +456,17 @@ function TeamQualityIndexExplainer({ model }: { model?: TeamQualityIndexModel | 
 }
 
 export default function WiedzaPage() {
-  const { user, isAdmin, userRole, linkedPlayerId, logout } = useAuth();
-  const { teams } = useTeams();
+  const { user, isAdmin, userRole, userTeams, linkedPlayerId, logout } = useAuth();
+  const { teams: allTeams } = useTeams();
+  const teams = useMemo(
+    () =>
+      filterTeamsByUserAccess(allTeams, {
+        isAdmin,
+        allowedTeamIds: userTeams ?? [],
+      }),
+    [allTeams, isAdmin, userTeams]
+  );
+  const canAccessPage = canAccessKnowledgeBase({ isAdmin, userRole });
   const { players } = usePlayersState();
 
   // Initialize dates: to = today, from = 3 months ago
@@ -1361,8 +1372,8 @@ export default function WiedzaPage() {
     [activeTab, regainMapSource, regainMapSelectedZones.length, regainPostMapRestrictToSelection],
   );
 
-  // If not admin, show nothing or access denied
-  if (!user || !isAdmin) {
+  // If not admin/operator, show nothing or access denied
+  if (!user || !canAccessPage) {
     return (
       <>
         <SidePanel 
@@ -1379,7 +1390,7 @@ export default function WiedzaPage() {
           onLogout={logout} 
         />
         <div className={styles.container}>
-          <div className={styles.emptyState}>Brak dostępu. Strona tylko dla administratorów.</div>
+          <div className={styles.emptyState}>Brak dostępu. Strona tylko dla administratorów i operatorów.</div>
         </div>
       </>
     );

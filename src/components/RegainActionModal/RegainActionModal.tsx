@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import styles from "./RegainActionModal.module.css";
 import { Player, Action, TeamInfo } from "@/types";
 import { ACTION_BUTTONS } from "../PointsButtons/constants";
@@ -11,6 +12,11 @@ import { sortPlayersByLastName } from '@/utils/playerUtils';
 import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
 import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
 import { useModalFormHotkeys } from "@/hooks/useModalFormHotkeys";
+import {
+  REGAIN_LOSE_METHODOLOGY_INTRO,
+  REGAIN_LOSE_METHODOLOGY_SECTIONS,
+  REGAIN_LOSE_METHODOLOGY_TITLE,
+} from "@/lib/regainLoseMethodology";
 
 interface RegainActionModalProps {
   isOpen: boolean;
@@ -156,6 +162,10 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
   const [currentSelectedMatch, setCurrentSelectedMatch] = useState<string | null>(null);
   const modalFormRef = useRef<HTMLFormElement | null>(null);
 
+  useEffect(() => {
+    if (!isOpen) setIsMethodologyOpen(false);
+  }, [isOpen]);
+
   const opponentLineLabel = useMemo(
     () => getOpponentLabelForPackingModal(matchInfo),
     [matchInfo],
@@ -164,6 +174,7 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
     ? `Ilu zawodników przeciwnika (${opponentLineLabel}) zostało miniętych w tej sytuacji (0–10).`
     : "Ilu zawodników przeciwnika zostało miniętych w tej sytuacji (0–10).";
   const [controversyNote, setControversyNote] = useState<string>(""); // Notatka dotycząca kontrowersyjnej akcji
+  const [isMethodologyOpen, setIsMethodologyOpen] = useState(false);
 
   const renderCountRow = useCallback(
     (
@@ -841,10 +852,77 @@ const RegainActionModal: React.FC<RegainActionModalProps> = ({
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{isEditMode ? "Edytuj akcję Regain" : "Dodaj akcję Regain"}</h3>
-          <button type="button" className={styles.closeButton} onClick={handleCancel}>
-            ×
-          </button>
+          <div className={styles.headerActions}>
+            <button
+              type="button"
+              className={styles.helpButton}
+              onClick={() => setIsMethodologyOpen(true)}
+              aria-label="Otwórz metodologię Regain / Loses"
+              title="Metodologia Regain / Loses"
+            >
+              ?
+            </button>
+            <button type="button" className={styles.closeButton} onClick={handleCancel} aria-label="Zamknij">
+              ×
+            </button>
+          </div>
         </div>
+
+        {isMethodologyOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              className={styles.methodologyOverlay}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="regain-lose-methodology-title"
+              onClick={() => setIsMethodologyOpen(false)}
+            >
+              <div className={styles.methodologyPanel} onClick={(e) => e.stopPropagation()}>
+                <div className={styles.methodologyHeader}>
+                  <h4 id="regain-lose-methodology-title">{REGAIN_LOSE_METHODOLOGY_TITLE}</h4>
+                  <button
+                    type="button"
+                    className={styles.closeButton}
+                    onClick={() => setIsMethodologyOpen(false)}
+                    aria-label="Zamknij metodologię"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className={styles.methodologyBody}>
+                  <p className={styles.methodologyIntro}>{REGAIN_LOSE_METHODOLOGY_INTRO}</p>
+                  {REGAIN_LOSE_METHODOLOGY_SECTIONS.map((section) => (
+                    <section key={section.id} className={styles.methodologySection}>
+                      <h5 className={styles.methodologySectionTitle}>{section.title}</h5>
+                      {section.paragraphs.map((paragraph, idx) => (
+                        <p key={`${section.id}-p-${idx}`} className={styles.methodologyParagraph}>
+                          {paragraph}
+                        </p>
+                      ))}
+                      {section.bullets && section.bullets.length > 0 && (
+                        <ul className={styles.methodologyList}>
+                          {section.bullets.map((item, idx) => (
+                            <li key={`${section.id}-b-${idx}`}>{item}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
+                  ))}
+                </div>
+                <div className={styles.methodologyFooter}>
+                  <button
+                    type="button"
+                    className={styles.methodologyCloseButton}
+                    onClick={() => setIsMethodologyOpen(false)}
+                  >
+                    Zamknij
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
         
         <form ref={modalFormRef} className={styles.form} onSubmit={handleFormSubmit}>
           {/* Wybór meczu - tylko w trybie edycji */}

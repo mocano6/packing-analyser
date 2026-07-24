@@ -63,6 +63,42 @@
   font-weight: 600;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.helpButton {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1d4ed8;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+.helpButton:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+.helpButton:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
 .closeButton {
   background: none;
   border: none;
@@ -78,6 +114,136 @@
 .closeButton:hover {
   background: rgba(107, 114, 128, 0.1);
   color: #374151;
+}
+
+/* Panel metodologii — fixed na viewport (poza modalem rodzica) */
+.methodologyOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: rgba(15, 23, 42, 0.55);
+  overflow-y: auto;
+  backdrop-filter: blur(3px);
+}
+
+.methodologyPanel {
+  width: min(720px, 96vw);
+  height: fit-content;
+  max-height: none;
+  margin: auto;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 24px 56px rgba(15, 23, 42, 0.28);
+  display: flex;
+  flex-direction: column;
+}
+
+.methodologyHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+  border-radius: 12px 12px 0 0;
+  flex-shrink: 0;
+}
+
+.methodologyHeader h4 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 650;
+  color: #0f172a;
+}
+
+.methodologyBody {
+  padding: 22px 24px;
+  overflow: visible;
+  flex: 0 1 auto;
+}
+
+.methodologyIntro {
+  margin: 0 0 18px;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: #64748b;
+}
+
+.methodologySection {
+  margin-bottom: 20px;
+}
+
+.methodologySection:last-child {
+  margin-bottom: 0;
+}
+
+.methodologySectionTitle {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: #1e293b;
+}
+
+.methodologyParagraph {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #334155;
+}
+
+.methodologyList {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: #334155;
+}
+
+.methodologyList li {
+  margin-bottom: 6px;
+}
+
+.methodologyList li:last-child {
+  margin-bottom: 0;
+}
+
+.methodologyFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 22px;
+  border-top: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.methodologyCloseButton {
+  padding: 10px 18px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #fff;
+  background: #2563eb;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.methodologyCloseButton:hover {
+  background: #1d4ed8;
+}
+
+@media (max-width: 600px) {
+  .methodologyPanel {
+    width: 96vw;
+  }
+
+  .methodologyBody {
+    padding: 16px 18px;
+  }
 }
 
 /* Style dla przełącznika trybu Atak/Obrona */

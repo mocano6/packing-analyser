@@ -222,7 +222,7 @@ export default function AdminZadaniaPage() {
           className={`${styles.tab} ${tab === "eisenhower" ? styles.tabActive : ""}`}
           onClick={() => selectTab("eisenhower")}
         >
-          Kwadrant Eisenhowera
+          Tablica zadań
         </button>
         <button
           type="button"

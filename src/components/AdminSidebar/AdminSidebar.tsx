@@ -7,7 +7,7 @@ import styles from "./AdminSidebar.module.css";
 
 const ADMIN_LINKS = [
   { href: "/admin", label: "Panel administratora", icon: "⚙️" },
-  { href: "/admin/zadania", label: "Zadania (Eisenhower)", icon: "📋" },
+  { href: "/admin/zadania", label: "Zadania", icon: "📋" },
   { href: "/admin/cleanup", label: "Czyszczenie PII", icon: "🧹" },
 ] as const;
 

@@ -19,7 +19,10 @@
     "restore": "node src/scripts/restoreData.js",
     "reset-password": "node src/scripts/resetPassword.js",
     "check:firebase-admin": "node scripts/checkFirebaseAdminKey.js",
-    "setup:local": "node scripts/bootstrapEnvLocal.js"
+    "scouting:warmup": "ts-node -r tsconfig-paths/register --compiler-options '{\"module\":\"CommonJS\"}' scripts/scoutingWarmup.ts",
+    "scouting:chrome-cdp": "bash scripts/scoutingChromeCdp.sh",
+    "setup:local": "node scripts/bootstrapEnvLocal.js",
+    "postinstall": "npx playwright install chromium || true"
   },
   "dependencies": {
     "@nivo/radar": "^0.99.0",
@@ -30,6 +33,7 @@
     "firebase": "^9.23.0",
     "firebase-admin": "^13.6.0",
     "next": "14.1.0",
+    "playwright": "^1.61.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.5.2",

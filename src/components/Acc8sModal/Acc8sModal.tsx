@@ -1,10 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Acc8sEntry, TeamInfo, Player } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
 import { useModalFormHotkeys } from "@/hooks/useModalFormHotkeys";
+import {
+  ACC8S_METHODOLOGY_INTRO,
+  ACC8S_METHODOLOGY_SECTIONS,
+  ACC8S_METHODOLOGY_TITLE,
+} from "@/lib/acc8sMethodology";
 import styles from "./Acc8sModal.module.css";
 
 export interface Acc8sModalProps {
@@ -47,6 +53,7 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
   const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
   const [controversyNote, setControversyNote] = useState<string>(""); // Notatka dotycząca kontrowersyjnej akcji
+  const [isMethodologyOpen, setIsMethodologyOpen] = useState(false);
 
   // Funkcje pomocnicze do konwersji czasu
   const secondsToMMSS = (seconds: number): string => {
@@ -72,6 +79,10 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
     if (isNaN(secs)) return mins * 60; // Jeśli sekundy są niepoprawne, traktuj jako minuty
     return mins * 60 + secs;
   };
+
+  useEffect(() => {
+    if (!isOpen) setIsMethodologyOpen(false);
+  }, [isOpen]);
 
   // Pobieranie czasu z wideo przy otwarciu modalu
   useEffect(() => {
@@ -463,8 +474,80 @@ const Acc8sModal: React.FC<Acc8sModalProps> = ({
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{editingEntry ? "Edytuj akcję 8s ACC" : "Dodaj akcję 8s ACC"}</h3>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <div className={styles.headerActions}>
+            <button
+              type="button"
+              className={styles.helpButton}
+              onClick={() => setIsMethodologyOpen(true)}
+              aria-label="Otwórz metodologię liczenia 8s ACC"
+              title="Metodologia liczenia"
+            >
+              ?
+            </button>
+            <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Zamknij">
+              ×
+            </button>
+          </div>
         </div>
+
+        {isMethodologyOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              className={styles.methodologyOverlay}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="acc8s-methodology-title"
+              onClick={() => setIsMethodologyOpen(false)}
+            >
+              <div
+                className={styles.methodologyPanel}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className={styles.methodologyHeader}>
+                  <h4 id="acc8s-methodology-title">{ACC8S_METHODOLOGY_TITLE}</h4>
+                  <button
+                    type="button"
+                    className={styles.closeButton}
+                    onClick={() => setIsMethodologyOpen(false)}
+                    aria-label="Zamknij metodologię"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className={styles.methodologyBody}>
+                  <p className={styles.methodologyIntro}>{ACC8S_METHODOLOGY_INTRO}</p>
+                  {ACC8S_METHODOLOGY_SECTIONS.map((section) => (
+                    <section key={section.id} className={styles.methodologySection}>
+                      <h5 className={styles.methodologySectionTitle}>{section.title}</h5>
+                      {section.paragraphs.map((paragraph, idx) => (
+                        <p key={`${section.id}-p-${idx}`} className={styles.methodologyParagraph}>
+                          {paragraph}
+                        </p>
+                      ))}
+                      {section.bullets && section.bullets.length > 0 && (
+                        <ul className={styles.methodologyList}>
+                          {section.bullets.map((item, idx) => (
+                            <li key={`${section.id}-b-${idx}`}>{item}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
+                  ))}
+                </div>
+                <div className={styles.methodologyFooter}>
+                  <button
+                    type="button"
+                    className={styles.methodologyCloseButton}
+                    onClick={() => setIsMethodologyOpen(false)}
+                  >
+                    Zamknij
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
 
         <form ref={formRef} onSubmit={handleSubmit} className={styles.form}>
           {/* Przełącznik połowy */}

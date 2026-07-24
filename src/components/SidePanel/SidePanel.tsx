@@ -8,6 +8,7 @@ import ExportButton from '../ExportButton/ExportButton';
 import ImportButton from '../ImportButton/ImportButton';
 import { usePresentationMode } from '@/contexts/PresentationContext';
 import { Player, Action, TeamInfo } from '@/types';
+import type { UserRole } from '@/lib/userRoles';
 import toast from 'react-hot-toast';
 
 interface SidePanelProps {
@@ -15,7 +16,7 @@ interface SidePanelProps {
   actions: Action[];
   matchInfo: TeamInfo | null;
   isAdmin: boolean;
-  userRole?: 'user' | 'admin' | 'coach' | 'player' | null;
+  userRole?: UserRole | null;
   linkedPlayerId?: string | null;
   selectedTeam: string;
   /** Opcjonalnie: pełny dokument meczu (matches/{id}) do eksportu wszystkich tablic akcji */
@@ -44,6 +45,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
   const { isPresentationMode, togglePresentationMode } = usePresentationMode();
   /** Tylko jawna rola `player` — bez `userRole` (undefined) nie zawężamy menu (undefined == null psuło strony bez propsa). */
   const isPlayer = userRole === 'player';
+  const isOperator = userRole === 'operator';
 
   const handleRefreshClick = async () => {
     try {
@@ -143,14 +145,10 @@ const SidePanel: React.FC<SidePanelProps> = ({
             )}
           </div>
 
-          {/* Sekcja Admin (tylko dla adminów) */}
-          {isAdmin && (
+          {/* Sekcja Operator — weryfikacja i baza wiedzy (admin też widzi) */}
+          {(isAdmin || isOperator) && (
             <div className={styles.section}>
-              <h4>⚙️ Administracja</h4>
-              <Link href="/lista-zawodnikow" className={styles.menuItem}>
-                <span className={styles.icon}>📋</span>
-                <span>Lista wszystkich zawodników</span>
-              </Link>
+              <h4>🛠️ Operator</h4>
               <Link href="/weryfikacja-meczow" className={styles.menuItem}>
                 <span className={styles.icon}>🔍</span>
                 <span>Weryfikacja meczów</span>
@@ -158,6 +156,21 @@ const SidePanel: React.FC<SidePanelProps> = ({
               <Link href="/admin/wiedza" className={styles.menuItem}>
                 <span className={styles.icon}>🧠</span>
                 <span>Baza Wiedzy</span>
+              </Link>
+            </div>
+          )}
+
+          {/* Sekcja Admin (tylko dla administratorów systemu) */}
+          {isAdmin && (
+            <div className={styles.section}>
+              <h4>⚙️ Administracja</h4>
+              <Link href="/scouting" className={styles.menuItem}>
+                <span className={styles.icon}>🔎</span>
+                <span>Scouting</span>
+              </Link>
+              <Link href="/lista-zawodnikow" className={styles.menuItem}>
+                <span className={styles.icon}>📋</span>
+                <span>Lista wszystkich zawodników</span>
               </Link>
               <Link href="/admin/statsbomb" className={styles.menuItem}>
                 <span className={styles.icon}>📈</span>
@@ -189,7 +202,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
             </div>
           )}
 
-          {/* Sekcja Narzędzia - tylko dla admin/user (ukryta dla coach i player) */}
+          {/* Sekcja Narzędzia - tylko dla admin/user/operator (ukryta dla coach i player) */}
           {!isPlayer && userRole !== 'coach' && (
             <div className={styles.section}>
               <h4>🔧 Narzędzia</h4>

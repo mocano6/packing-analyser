@@ -81,3 +81,7 @@ Thumbs.db
 # Build files
 public/sw.js
 public/workbox-*.js
+
+# Scouting (lokalny profil przeglądarki i dane — nie commitować)
+.scouting-profile/
+.scouting-data/

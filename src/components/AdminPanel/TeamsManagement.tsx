@@ -301,41 +301,37 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
   }
 
   return (
-    <div style={{ 
-      border: "1px solid #ccc",
-      borderRadius: "8px",
-      padding: "20px",
-      margin: "20px 0",
-      backgroundColor: "#f9f9f9"
-    }}>
-      <h3>Zarządzanie zespołami</h3>
-      
-      <div style={{ marginBottom: "15px", display: "flex", gap: "10px" }}>
+    <div>
+      <div style={{ marginBottom: "12px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
         <button
+          type="button"
           onClick={fetchTeams}
           disabled={isLoading}
           style={{
-            padding: "10px 15px",
+            padding: "8px 12px",
             backgroundColor: "#4a90e2",
             color: "white",
             border: "none",
-            borderRadius: "4px",
-            cursor: isLoading ? "not-allowed" : "pointer"
+            borderRadius: "6px",
+            cursor: isLoading ? "not-allowed" : "pointer",
+            fontSize: "0.875rem",
           }}
         >
-          {isLoading ? "Ładowanie..." : "Odśwież listę zespołów"}
+          {isLoading ? "Ładowanie..." : "Odśwież"}
         </button>
 
         <button
+          type="button"
           onClick={() => setIsAddingTeam(true)}
           disabled={isAddingTeam}
           style={{
-            padding: "10px 15px",
+            padding: "8px 12px",
             backgroundColor: "#28a745",
             color: "white",
             border: "none",
-            borderRadius: "4px",
-            cursor: isAddingTeam ? "not-allowed" : "pointer"
+            borderRadius: "6px",
+            cursor: isAddingTeam ? "not-allowed" : "pointer",
+            fontSize: "0.875rem",
           }}
         >
           Dodaj nowy zespół
@@ -636,24 +632,6 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ currentUserIsAdmin })
         </div>
       )}
 
-      <div style={{
-        marginTop: "15px",
-        padding: "10px",
-        backgroundColor: "#e3f2fd",
-        borderRadius: "4px",
-        fontSize: "14px"
-      }}>
-        <strong>Informacje:</strong>
-        <ul style={{ margin: "5px 0", paddingLeft: "20px" }}>
-          <li>Zespoły systemowe nie mogą być usunięte (oznaczone jako "Systemowy")</li>
-          <li>
-            „Ukryj w aplikacji” ustawia status nieaktywny — zespół znika z list wyboru, dane (mecze, zawodnicy)
-            zostają; możesz przywrócić widoczność przyciskiem „Przywróć widoczność”
-          </li>
-          <li>Usunięcie zespołu (Usuń) to trwałe usunięcie dokumentu z bazy — rozważ najpierw ukrycie</li>
-          <li>Nazwy zespołów muszą być unikalne</li>
-        </ul>
-      </div>
     </div>
   );
 };

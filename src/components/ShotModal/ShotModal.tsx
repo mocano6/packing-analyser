@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Shot, Player, TeamInfo } from "@/types";
 import { buildPlayersIndex, getPlayerLabel, OWN_GOAL_PLAYER_ID } from "@/utils/playerUtils";
 import { isInPenaltyAreaCanonical, isInOpponentPenaltyAreaCanonical } from "@/utils/pitchZones";
@@ -8,6 +9,11 @@ import { getTorvaneySimpleXGPercentRounded } from "@/lib/xg";
 import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
 import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
 import { useModalFormHotkeys } from "@/hooks/useModalFormHotkeys";
+import {
+  SHOT_METHODOLOGY_INTRO,
+  SHOT_METHODOLOGY_SECTIONS,
+  SHOT_METHODOLOGY_TITLE,
+} from "@/lib/shotMethodology";
 import styles from "./ShotModal.module.css";
 
 export interface ShotModalProps {
@@ -102,6 +108,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
   const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
   const [controversyNote, setControversyNote] = useState<string>(""); // Notatka dotycząca kontrowersyjnej akcji
+  const [isMethodologyOpen, setIsMethodologyOpen] = useState(false);
 
   // Funkcje pomocnicze do konwersji czasu
   const secondsToMMSS = (seconds: number): string => {
@@ -136,6 +143,10 @@ const ShotModal: React.FC<ShotModalProps> = ({
   const lastInitOpenRef = useRef(false);
   const lastInitEditingShotIdRef = useRef<string | undefined>(undefined);
   const modalFormRef = useRef<HTMLFormElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) setIsMethodologyOpen(false);
+  }, [isOpen]);
 
   // Pobieranie czasu z wideo przy otwarciu modalu
   useEffect(() => {
@@ -1088,8 +1099,77 @@ const ShotModal: React.FC<ShotModalProps> = ({
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h3>{editingShot ? "Edytuj strzał" : "Dodaj strzał"}</h3>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <div className={styles.headerActions}>
+            <button
+              type="button"
+              className={styles.helpButton}
+              onClick={() => setIsMethodologyOpen(true)}
+              aria-label="Otwórz metodologię strzału"
+              title="Metodologia strzału"
+            >
+              ?
+            </button>
+            <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Zamknij">
+              ×
+            </button>
+          </div>
         </div>
+
+        {isMethodologyOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              className={styles.methodologyOverlay}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="shot-methodology-title"
+              onClick={() => setIsMethodologyOpen(false)}
+            >
+              <div className={styles.methodologyPanel} onClick={(e) => e.stopPropagation()}>
+                <div className={styles.methodologyHeader}>
+                  <h4 id="shot-methodology-title">{SHOT_METHODOLOGY_TITLE}</h4>
+                  <button
+                    type="button"
+                    className={styles.closeButton}
+                    onClick={() => setIsMethodologyOpen(false)}
+                    aria-label="Zamknij metodologię"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className={styles.methodologyBody}>
+                  <p className={styles.methodologyIntro}>{SHOT_METHODOLOGY_INTRO}</p>
+                  {SHOT_METHODOLOGY_SECTIONS.map((section) => (
+                    <section key={section.id} className={styles.methodologySection}>
+                      <h5 className={styles.methodologySectionTitle}>{section.title}</h5>
+                      {section.paragraphs.map((paragraph, idx) => (
+                        <p key={`${section.id}-p-${idx}`} className={styles.methodologyParagraph}>
+                          {paragraph}
+                        </p>
+                      ))}
+                      {section.bullets && section.bullets.length > 0 && (
+                        <ul className={styles.methodologyList}>
+                          {section.bullets.map((item, idx) => (
+                            <li key={`${section.id}-b-${idx}`}>{item}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
+                  ))}
+                </div>
+                <div className={styles.methodologyFooter}>
+                  <button
+                    type="button"
+                    className={styles.methodologyCloseButton}
+                    onClick={() => setIsMethodologyOpen(false)}
+                  >
+                    Zamknij
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
 
         <form ref={modalFormRef} onSubmit={handleSubmit} className={styles.form}>
           {/* xG i dodatkowe pola */}

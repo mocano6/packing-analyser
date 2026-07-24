@@ -4,6 +4,7 @@ import {
   buildEisenhowerTaskDocument,
   groupTasksByColumn,
   insertIndexFromPointer,
+  migrateLegacyStatus,
   moveTaskInBoard,
   nextOrderAtEnd,
   normalizeEisenhowerTask,
@@ -17,22 +18,27 @@ function task(
 ): EisenhowerTask {
   return {
     quadrant: "urgent-important",
-    lane: "matrix",
+    status: "todo",
     order: ORDER_GAP,
-    completed: false,
     createdAt: 100,
     ...partial,
   };
 }
 
-// Normalizacja — brak lane / order
+// Migracja legacy: completed → done
+assert.strictEqual(migrateLegacyStatus({ completed: true, lane: "backlog" }), "done");
+assert.strictEqual(migrateLegacyStatus({ lane: "backlog" }), "backlog");
+assert.strictEqual(migrateLegacyStatus({ lane: "matrix" }), "in_progress");
+assert.strictEqual(migrateLegacyStatus({ status: "rework" }), "rework");
+
+// Normalizacja — brak status / order
 const legacy = normalizeEisenhowerTask("legacy-1", {
   text: "Stare zadanie",
   quadrant: "important-not-urgent",
   completed: true,
   createdAt: 50,
 });
-assert.strictEqual(legacy.lane, "matrix");
+assert.strictEqual(legacy.status, "done");
 assert.strictEqual(legacy.order, 50);
 assert.strictEqual(legacy.quadrant, "important-not-urgent");
 
@@ -43,13 +49,21 @@ const withOrder = normalizeEisenhowerTask("o1", {
   quadrant: "urgent-important",
 });
 assert.strictEqual(withOrder.order, 2500);
-assert.strictEqual(withOrder.lane, "backlog");
+assert.strictEqual(withOrder.status, "backlog");
+
+const matrixLegacy = normalizeEisenhowerTask("m1", {
+  text: "Aktualne",
+  lane: "matrix",
+  quadrant: "urgent-important",
+  createdAt: 10,
+});
+assert.strictEqual(matrixLegacy.status, "in_progress");
 
 const doc = buildEisenhowerTaskDocument(
   task({
     id: "t1",
     text: "Analiza",
-    lane: "backlog",
+    status: "backlog",
     quadrant: "urgent-not-important",
     order: 2000,
   })
@@ -57,37 +71,44 @@ const doc = buildEisenhowerTaskDocument(
 assert.deepStrictEqual(doc, {
   text: "Analiza",
   quadrant: "urgent-not-important",
-  lane: "backlog",
+  status: "backlog",
   order: 2000,
-  completed: false,
   createdAt: 100,
+  completed: false,
+  lane: "backlog",
 });
+
+const doneDoc = buildEisenhowerTaskDocument(
+  task({ id: "d1", text: "Gotowe", status: "done", order: 1000 })
+);
+assert.strictEqual(doneDoc.completed, true);
+assert.strictEqual(doneDoc.lane, "matrix");
 
 assert.strictEqual(quadrantShortLabel("urgent-important"), "Pilne · ważne");
 
-const a = task({ id: "a", text: "A", lane: "backlog", order: 1000 });
+const a = task({ id: "a", text: "A", status: "backlog", order: 1000 });
 const b = task({
   id: "b",
   text: "B",
-  lane: "backlog",
+  status: "backlog",
   order: 2000,
   quadrant: "important-not-urgent",
 });
 const c = task({
   id: "c",
   text: "C",
-  lane: "backlog",
+  status: "backlog",
   order: 3000,
-  completed: true,
 });
-const m = task({ id: "m", text: "M", lane: "matrix", order: 1000 });
+const m = task({ id: "m", text: "M", status: "in_progress", order: 1000 });
 
 const grouped = groupTasksByColumn([a, b, c, m]);
 assert.strictEqual(grouped.backlog.length, 3);
 assert.strictEqual(grouped.backlog[0].id, "a");
 assert.strictEqual(grouped.backlog[1].id, "b");
 assert.strictEqual(grouped.backlog[2].id, "c");
-assert.strictEqual(grouped["urgent-important"].length, 1);
+assert.strictEqual(grouped.in_progress.length, 1);
+assert.strictEqual(grouped.todo.length, 0);
 
 // Wstawienie między karty
 const ordered = buildColumnOrderAfterMove([a, b, c], m, 1);
@@ -96,26 +117,23 @@ assert.deepStrictEqual(
   ["a", "m", "b", "c"]
 );
 
-// Ukończone nie wchodzą między aktywne
-const done = task({ id: "d", text: "D", lane: "backlog", completed: true, order: 1 });
-const orderedDone = buildColumnOrderAfterMove([a, b], done, 0);
-assert.deepStrictEqual(
-  orderedDone.map((t) => t.id),
-  ["a", "b", "d"]
-);
-
 assert.strictEqual(nextOrderAtEnd([a, b]), 2000 + ORDER_GAP);
 assert.strictEqual(insertIndexFromPointer([a, b], "a", false), 0);
 assert.strictEqual(insertIndexFromPointer([a, b], "a", true), 1);
 assert.strictEqual(insertIndexFromPointer([a, b], null, false), 2);
 
-// Przeniesienie z macierzy na początek backlogu
+// Przeniesienie z „w trakcie” na początek backlogu — quadrant bez zmian
 const moved = moveTaskInBoard([a, b, m], "m", "backlog", 0);
 assert.strictEqual(moved.changed.length > 0, true);
 const backlogAfter = groupTasksByColumn(moved.tasks).backlog;
 assert.strictEqual(backlogAfter[0].id, "m");
-assert.strictEqual(backlogAfter[0].lane, "backlog");
+assert.strictEqual(backlogAfter[0].status, "backlog");
+assert.strictEqual(backlogAfter[0].quadrant, "urgent-important");
 assert.ok(backlogAfter[0].order < backlogAfter[1].order);
+
+// Drop do „done”
+const toDone = moveTaskInBoard([a, m], "m", "done", 0);
+assert.strictEqual(groupTasksByColumn(toDone.tasks).done[0].status, "done");
 
 // Zmiana kolejności w backlogu: b przed a
 const reordered = moveTaskInBoard([a, b], "b", "backlog", 0);
