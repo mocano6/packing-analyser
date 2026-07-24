@@ -10,9 +10,11 @@ type ScoutingMetricPool = ReturnType<typeof buildScoutingMetricPool>;
 import type { StatsBombScoutingCriterion } from "./statsBombScoutingProfiles";
 import type { StatsBombScoutingPositionId } from "./statsBombScoutingProfiles";
 import {
-  classifyStatsBombReportPhase,
   STATSBOMB_PLAYER_STRONG_PERCENTILE,
   STATSBOMB_PLAYER_WEAK_PERCENTILE,
+} from "./statsBombPlayerReport";
+import {
+  classifyStatsBombReportPhase,
   type StatsBombReportPhase,
 } from "./statsBombTeamReport";
 
