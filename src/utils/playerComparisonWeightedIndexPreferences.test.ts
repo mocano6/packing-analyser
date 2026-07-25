@@ -98,4 +98,14 @@ assert.deepEqual(legacyPresetWithoutPositions.presets[0]?.selectedPositions, [])
 const afterDelete = deleteWeightedIndexPreset(parsed.presets, parsed.presets[0]!.id);
 assert.equal(afterDelete.length, 0);
 
+const privateDraftWithSharedActiveId = parsePlayerComparisonWeightedIndexStorage(
+  JSON.stringify({
+    presets: [],
+    activePresetId: "shared-preset-id",
+    draftConfigs: [{ metricId: "xg", enabled: true, weight: 100, betterWhen: "higher" }],
+  }),
+);
+assert.equal(privateDraftWithSharedActiveId.presets.length, 0);
+assert.equal(privateDraftWithSharedActiveId.activePresetId, "shared-preset-id");
+
 console.log("playerComparisonWeightedIndexPreferences.test: ok");

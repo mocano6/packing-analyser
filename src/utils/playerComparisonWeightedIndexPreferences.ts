@@ -218,9 +218,11 @@ export function parsePlayerComparisonWeightedIndexStorage(raw: string | null): P
       .map(parsePreset)
       .filter((preset): preset is PlayerComparisonWeightedIndexPreset => preset !== null);
 
+    // activePresetId jest prywatne (ostatnio wczytany pakiet); lista presets może być pusta
+    // w lokalnym blobie, bo pakiety są współdzielone w settings/.
     const activePresetId =
-      typeof parsed.activePresetId === "string" && presets.some((preset) => preset.id === parsed.activePresetId)
-        ? parsed.activePresetId
+      typeof parsed.activePresetId === "string" && parsed.activePresetId.trim().length > 0
+        ? parsed.activePresetId.trim()
         : null;
 
     return { presets, activePresetId, draftConfigs };

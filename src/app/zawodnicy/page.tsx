@@ -28,9 +28,14 @@ import { filterTeamsByUserAccess } from "@/lib/teamsForUserAccess";
 import { getDB } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "@/lib/firestoreWithMetrics";
 import {
+  buildSharedWeightedIndexPresetsDocument,
   buildWeightedIndexFirestoreDocument,
+  readSharedWeightedIndexPresets,
   readWeightedIndexStateJson,
+  resolveSharedWeightedIndexPresets,
   WEIGHTED_INDEX_FIRESTORE_DOC_ID,
+  WEIGHTED_INDEX_SHARED_PRESETS_COLLECTION,
+  WEIGHTED_INDEX_SHARED_PRESETS_DOC_ID,
 } from "@/lib/playerComparisonWeightedIndexStore";
 import {
   PLAYER_COMPARISON_AXIS_METRIC_IDS,
@@ -198,6 +203,14 @@ const defaultKpiTableSortDirection = (metricId: PlayerComparisonMetricId): "asc"
 
 function weightedIndexStateDoc(uid: string) {
   return doc(getDB(), "users", uid, "playerComparisonWeightedIndex", WEIGHTED_INDEX_FIRESTORE_DOC_ID);
+}
+
+function weightedIndexSharedPresetsDoc() {
+  return doc(
+    getDB(),
+    WEIGHTED_INDEX_SHARED_PRESETS_COLLECTION,
+    WEIGHTED_INDEX_SHARED_PRESETS_DOC_ID,
+  );
 }
 
 export default function ZawodnicyPage() {
@@ -415,43 +428,76 @@ export default function ZawodnicyPage() {
     (async () => {
       try {
         const localRaw = window.localStorage.getItem(PLAYER_COMPARISON_WEIGHTED_INDEX_STORAGE_KEY);
-        const localStorage = parsePlayerComparisonWeightedIndexStorage(localRaw);
-        const snapshot = await getDoc(weightedIndexStateDoc(user.uid));
+        const localStorageParsed = parsePlayerComparisonWeightedIndexStorage(localRaw);
+
+        const [privateSnapshot, sharedSnapshot] = await Promise.all([
+          getDoc(weightedIndexStateDoc(user.uid)),
+          getDoc(weightedIndexSharedPresetsDoc()),
+        ]);
         if (cancelled) return;
 
-        if (snapshot.exists()) {
-          const stateJson = readWeightedIndexStateJson(snapshot.data() as Record<string, unknown>);
+        let privateStorage = localStorageParsed;
+        if (privateSnapshot.exists()) {
+          const stateJson = readWeightedIndexStateJson(
+            privateSnapshot.data() as Record<string, unknown>,
+          );
           const remote = stateJson ? parsePlayerComparisonWeightedIndexStorage(stateJson) : null;
           if (remote) {
-            skipWeightedIndexSaveOnce.current = true;
-            setWeightedIndexPresets(remote.presets);
-            setActiveWeightedPresetId(remote.activePresetId);
-            setWeightedIndexConfigs(
-              sanitizeWeightedIndexConfigs(cloneWeightedIndexConfigs(remote.draftConfigs)),
-            );
-            const activePreset = remote.presets.find((preset) => preset.id === remote.activePresetId);
-            setWeightedPresetNameInput(activePreset?.name ?? "");
-            if (activePreset) {
-              setSelectedPositions(activePreset.selectedPositions);
-            }
-            window.localStorage.setItem(
-              PLAYER_COMPARISON_WEIGHTED_INDEX_STORAGE_KEY,
-              serializePlayerComparisonWeightedIndexStorage(remote),
-            );
-            return;
+            privateStorage = remote;
           }
-        }
-
-        if (localStorage.presets.length > 0 || localRaw) {
-          skipWeightedIndexSaveOnce.current = true;
+        } else if (localRaw) {
           await setDoc(
             weightedIndexStateDoc(user.uid),
             buildWeightedIndexFirestoreDocument(
-              serializePlayerComparisonWeightedIndexStorage(localStorage),
+              serializePlayerComparisonWeightedIndexStorage({
+                ...localStorageParsed,
+                presets: [],
+              }),
               Date.now(),
             ),
           );
         }
+
+        const sharedRaw = sharedSnapshot.exists()
+          ? readSharedWeightedIndexPresets(sharedSnapshot.data() as Record<string, unknown>)
+          : null;
+        const resolved = resolveSharedWeightedIndexPresets({
+          isAdmin,
+          sharedPresets: sharedRaw,
+          privatePresets: privateStorage.presets,
+          localPresets: localStorageParsed.presets,
+        });
+
+        if (resolved.shouldWriteShared) {
+          await setDoc(
+            weightedIndexSharedPresetsDoc(),
+            buildSharedWeightedIndexPresetsDocument(resolved.presets, Date.now()),
+          );
+        }
+
+        if (cancelled) return;
+
+        skipWeightedIndexSaveOnce.current = true;
+        setWeightedIndexPresets(resolved.presets);
+        setActiveWeightedPresetId(privateStorage.activePresetId);
+        setWeightedIndexConfigs(
+          sanitizeWeightedIndexConfigs(cloneWeightedIndexConfigs(privateStorage.draftConfigs)),
+        );
+        const activePreset =
+          resolved.presets.find((preset) => preset.id === privateStorage.activePresetId) ?? null;
+        setWeightedPresetNameInput(activePreset?.name ?? "");
+        if (activePreset) {
+          setSelectedPositions(activePreset.selectedPositions);
+        }
+
+        window.localStorage.setItem(
+          PLAYER_COMPARISON_WEIGHTED_INDEX_STORAGE_KEY,
+          serializePlayerComparisonWeightedIndexStorage({
+            presets: [],
+            activePresetId: privateStorage.activePresetId,
+            draftConfigs: privateStorage.draftConfigs,
+          }),
+        );
       } catch (error) {
         console.error("Błąd ładowania pakietów wag z Firebase:", error);
       } finally {
@@ -464,7 +510,7 @@ export default function ZawodnicyPage() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, preferencesLoaded, user?.uid]);
+  }, [isAdmin, isAuthenticated, preferencesLoaded, user?.uid]);
 
   useEffect(() => {
     if (!preferencesLoaded || typeof window === "undefined") return;
@@ -498,8 +544,9 @@ export default function ZawodnicyPage() {
   useEffect(() => {
     if (!preferencesLoaded || typeof window === "undefined") return;
 
+    // Prywatny blob: tylko draft + activePresetId. Lista pakietów jest współdzielona.
     const storage = {
-      presets: weightedIndexPresets,
+      presets: [] as PlayerComparisonWeightedIndexPreset[],
       activePresetId: activeWeightedPresetId,
       draftConfigs: weightedIndexConfigs,
     };
@@ -524,9 +571,8 @@ export default function ZawodnicyPage() {
           Date.now(),
         ),
       ).catch((error: unknown) => {
-        console.error("Błąd zapisu pakietów wag do Firebase:", error);
-        // id → deduplikacja przy debounce'owanym zapisie (bez zalewania toastami)
-        toast.error("Nie udało się zapisać pakietów wag w chmurze. Zmiany są zapisane lokalnie.", {
+        console.error("Błąd zapisu draftu indeksu wagowego do Firebase:", error);
+        toast.error("Nie udało się zapisać ustawień wag w chmurze. Zmiany są zapisane lokalnie.", {
           id: "weighted-index-save-error",
         });
       });
@@ -539,7 +585,6 @@ export default function ZawodnicyPage() {
     preferencesLoaded,
     user?.uid,
     weightedIndexConfigs,
-    weightedIndexPresets,
     weightedIndexRemoteReady,
   ]);
 
@@ -647,6 +692,10 @@ export default function ZawodnicyPage() {
   };
 
   const handleSaveWeightedPreset = () => {
+    if (!isAdmin) {
+      setWeightedPresetMessage("Tylko administrator może zapisywać pakiety.");
+      return;
+    }
     const name = normalizeWeightedIndexPresetName(weightedPresetNameInput);
     if (!isValidWeightedIndexPresetName(name)) {
       setWeightedPresetMessage("Podaj nazwę pakietu (1–48 znaków).");
@@ -665,9 +714,22 @@ export default function ZawodnicyPage() {
     setWeightedPresetMessage(
       existing ? `Zaktualizowano pakiet „${name}”.` : `Zapisano pakiet „${name}”.`,
     );
+    void setDoc(
+      weightedIndexSharedPresetsDoc(),
+      buildSharedWeightedIndexPresetsDocument(presets, Date.now()),
+    ).catch((error: unknown) => {
+      console.error("Błąd zapisu wspólnych pakietów wag:", error);
+      toast.error("Nie udało się zapisać pakietu w chmurze.", {
+        id: "weighted-index-shared-save-error",
+      });
+    });
   };
 
   const handleDeleteWeightedPreset = () => {
+    if (!isAdmin) {
+      setWeightedPresetMessage("Tylko administrator może usuwać pakiety.");
+      return;
+    }
     if (!activeWeightedPresetId) {
       setWeightedPresetMessage("Wybierz pakiet do usunięcia.");
       return;
@@ -678,6 +740,15 @@ export default function ZawodnicyPage() {
     setActiveWeightedPresetId(null);
     setWeightedPresetNameInput("");
     setWeightedPresetMessage(preset ? `Usunięto pakiet „${preset.name}”.` : "Usunięto pakiet.");
+    void setDoc(
+      weightedIndexSharedPresetsDoc(),
+      buildSharedWeightedIndexPresetsDocument(nextPresets, Date.now()),
+    ).catch((error: unknown) => {
+      console.error("Błąd usuwania wspólnego pakietu wag:", error);
+      toast.error("Nie udało się usunąć pakietu w chmurze.", {
+        id: "weighted-index-shared-delete-error",
+      });
+    });
   };
 
   useEffect(() => {
@@ -1221,7 +1292,8 @@ export default function ZawodnicyPage() {
                           Zapisane pakiety wag
                         </h4>
                         <p className={styles.weightedIndexConfigHint}>
-                          Pakiet zapisuje aktualne wagi KPI oraz zaznaczone pozycje z filtra powyżej.
+                          Pakiety są współdzielone dla wszystkich użytkowników. Edycja (zapis / usuwanie) tylko dla
+                          administratora. Wczytanie ustawia wagi KPI oraz zaznaczone pozycje z filtra powyżej.
                         </p>
                         <div className={styles.weightedIndexPresetRow}>
                           <label htmlFor="weighted-preset-select" className={styles.weightedIndexPresetLabel}>
@@ -1249,38 +1321,42 @@ export default function ZawodnicyPage() {
                             ))}
                           </select>
                         </div>
-                        <div className={styles.weightedIndexPresetRow}>
-                          <label htmlFor="weighted-preset-name" className={styles.weightedIndexPresetLabel}>
-                            Nazwa
-                          </label>
-                          <input
-                            id="weighted-preset-name"
-                            type="text"
-                            value={weightedPresetNameInput}
-                            onChange={(event) => setWeightedPresetNameInput(event.target.value)}
-                            placeholder="np. napastnik"
-                            className={styles.input}
-                            maxLength={48}
-                            aria-label="Nazwa pakietu wag"
-                          />
-                        </div>
-                        <div className={styles.weightedIndexPresetActions}>
-                          <button
-                            type="button"
-                            className={styles.secondaryButton}
-                            onClick={handleSaveWeightedPreset}
-                          >
-                            Zapisz pakiet
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.secondaryButtonDanger}
-                            onClick={handleDeleteWeightedPreset}
-                            disabled={!activeWeightedPresetId}
-                          >
-                            Usuń
-                          </button>
-                        </div>
+                        {isAdmin ? (
+                          <>
+                            <div className={styles.weightedIndexPresetRow}>
+                              <label htmlFor="weighted-preset-name" className={styles.weightedIndexPresetLabel}>
+                                Nazwa
+                              </label>
+                              <input
+                                id="weighted-preset-name"
+                                type="text"
+                                value={weightedPresetNameInput}
+                                onChange={(event) => setWeightedPresetNameInput(event.target.value)}
+                                placeholder="np. napastnik"
+                                className={styles.input}
+                                maxLength={48}
+                                aria-label="Nazwa pakietu wag"
+                              />
+                            </div>
+                            <div className={styles.weightedIndexPresetActions}>
+                              <button
+                                type="button"
+                                className={styles.secondaryButton}
+                                onClick={handleSaveWeightedPreset}
+                              >
+                                Zapisz pakiet
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.secondaryButtonDanger}
+                                onClick={handleDeleteWeightedPreset}
+                                disabled={!activeWeightedPresetId}
+                              >
+                                Usuń
+                              </button>
+                            </div>
+                          </>
+                        ) : null}
                         {weightedPresetMessage ? (
                           <p className={styles.weightedIndexPresetMessage} role="status">
                             {weightedPresetMessage}
