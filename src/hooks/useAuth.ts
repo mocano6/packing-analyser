@@ -69,6 +69,8 @@ interface UseAuthReturnType {
   isAdmin: boolean;
   /** Rola operator — odczyt weryfikacji meczów i bazy wiedzy (bez panelu admina). */
   isOperator: boolean;
+  /** Rola scout — porównywarka, statystyki, profil, GPS + podgląd scoutingu. */
+  isScout: boolean;
   userRole: UserRole | null;
   userStatus: UserStatus | null;
   linkedPlayerId: string | null;
@@ -345,6 +347,7 @@ export function useAuth(): UseAuthReturnType {
     userTeams,
     isAdmin,
     isOperator: userRole === "operator",
+    isScout: userRole === "scout",
     userRole,
     userStatus,
     linkedPlayerId,

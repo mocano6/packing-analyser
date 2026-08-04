@@ -13,6 +13,7 @@ import { getDB } from "@/lib/firebase";
 import { doc, runTransaction } from "@/lib/firestoreWithMetrics";
 import { getReceptionBackAllyCountForDisplay } from "@/lib/regainReceptionDisplay";
 import { getLosesBackAllyCountForDisplay } from "@/lib/losesBackAllyDisplay";
+import { clampFirstHalfMinute, clampSecondHalfMinute } from "@/utils/matchTimeLimits";
 
 export interface ActionSectionProps {
   selectedZone: string | number | null;
@@ -353,20 +354,20 @@ const ActionSection = memo(function ActionSection({
         // Druga połowa
         const secondsIntoSecondHalf = currentVideoTime - secondHalfStart;
         const minute = Math.floor(secondsIntoSecondHalf / 60) + 46; // 46 = początek 2. połowy
-        const calculatedMinute = Math.max(46, Math.min(90, minute)); // Ograniczenie do 46-90
+        const calculatedMinute = clampSecondHalfMinute(minute);
         return { minute: calculatedMinute, isSecondHalf: true };
       } else if (firstHalfStart !== undefined && currentVideoTime >= firstHalfStart) {
         // Pierwsza połowa (gdy mamy zdefiniowany firstHalfStart)
         const secondsIntoFirstHalf = currentVideoTime - firstHalfStart;
         const minute = Math.floor(secondsIntoFirstHalf / 60) + 1;
-        const calculatedMinute = Math.max(1, Math.min(45, minute)); // Ograniczenie do 1-45
+        const calculatedMinute = clampFirstHalfMinute(minute);
         return { minute: calculatedMinute, isSecondHalf: false };
       } else if (secondHalfStart !== undefined && currentVideoTime < secondHalfStart) {
         // Pierwsza połowa (gdy nie mamy firstHalfStart, ale mamy secondHalfStart)
         // Zakładamy, że pierwsza połowa zaczyna się od 0 lub od początku nagrania
         // Obliczamy minutę na podstawie czasu wideo (zakładając, że 0 = minuta 0 meczu)
         const minute = Math.floor(currentVideoTime / 60) + 1;
-        const calculatedMinute = Math.max(1, Math.min(45, minute)); // Ograniczenie do 1-45
+        const calculatedMinute = clampFirstHalfMinute(minute);
         return { minute: calculatedMinute, isSecondHalf: false };
       } else if (firstHalfStart !== undefined && currentVideoTime < firstHalfStart) {
         // Przed startem pierwszej połowy (gdy mamy zdefiniowany firstHalfStart)

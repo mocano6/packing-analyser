@@ -66,4 +66,18 @@ assert.deepEqual(
   ["o1", "o2"]
 );
 
+// Transfer: zawodnik już nie ma teamId w teams[], ale jest w playerMinutes meczu
+const transferred = basePlayer("ex1", "otherClub");
+const withTransferred: TeamInfo = {
+  ...emptyMinutes,
+  playerMinutes: [
+    { playerId: "p1", startMinute: 1, endMinute: 90, position: "ST" },
+    { playerId: "ex1", startMinute: 1, endMinute: 45, position: "CM" },
+  ],
+};
+assert.deepEqual(
+  getModalPlayersForMatch([p1, p2, transferred], withTransferred).map((x) => x.id).sort(),
+  ["ex1", "p1"]
+);
+
 console.log("modalMatchPlayersFilter tests: OK");

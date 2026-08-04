@@ -14,6 +14,12 @@ import {
   SHOT_METHODOLOGY_SECTIONS,
   SHOT_METHODOLOGY_TITLE,
 } from "@/lib/shotMethodology";
+import {
+  MAX_MATCH_MINUTE,
+  clampMatchMinute,
+  clampVideoTimeMinutes,
+  formatVideoMinutesAsMMSS,
+} from "@/utils/matchTimeLimits";
 import styles from "./ShotModal.module.css";
 
 export interface ShotModalProps {
@@ -845,10 +851,10 @@ const ShotModal: React.FC<ShotModalProps> = ({
   const handleVideoTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
-    // Kompatybilność wsteczna: pozwól na format MM:SS lub tylko liczby (minuty)
-    const partialPattern = /^([0-9]?[0-9]?)?(:([0-5]?[0-9]?)?)?$/;
-    const fullPattern = /^([0-9]{1,2}):([0-5][0-9])$/;
-    const minutesOnlyPattern = /^[0-9]{1,3}$/; // Stary format: tylko minuty (1-999)
+    // Kompatybilność wsteczna: pozwól na format MM:SS lub tylko liczby (minuty), max 200 min
+    const partialPattern = /^([0-9]{0,3})?(:([0-5]?[0-9]?)?)?$/;
+    const fullPattern = /^([0-9]{1,3}):([0-5][0-9])$/;
+    const minutesOnlyPattern = /^[0-9]{1,3}$/;
     
     if (value === '' || partialPattern.test(value) || fullPattern.test(value) || minutesOnlyPattern.test(value)) {
       setVideoTimeMMSS(value);
@@ -856,17 +862,15 @@ const ShotModal: React.FC<ShotModalProps> = ({
   };
 
   const handleVideoTimeBlur = () => {
-    // Upewnij się, że format jest poprawny
-    const fullPattern = /^([0-9]{1,2}):([0-5][0-9])$/;
+    // Upewnij się, że format jest poprawny (max 200:59)
+    const fullPattern = /^([0-9]{1,3}):([0-5][0-9])$/;
     
     if (!fullPattern.test(videoTimeMMSS)) {
       // Kompatybilność wsteczna: jeśli to tylko liczba (stary format - minuty), konwertuj na MM:SS
       if (!videoTimeMMSS.includes(':') && /^[0-9]{1,3}$/.test(videoTimeMMSS)) {
         const mins = parseInt(videoTimeMMSS, 10);
         if (!isNaN(mins) && mins >= 0) {
-          // Konwertuj minuty na format MM:SS (sekundy = 0)
-          const formatted = `${Math.min(99, mins).toString().padStart(2, '0')}:00`;
-          setVideoTimeMMSS(formatted);
+          setVideoTimeMMSS(formatVideoMinutesAsMMSS(mins, 0));
           return;
         }
       }
@@ -881,13 +885,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         if (isNaN(mins)) mins = 0;
         if (isNaN(secs)) secs = 0;
         
-        // Ograniczenia: minuty 0-99 (dla kompatybilności), sekundy 0-59
-        mins = Math.max(0, Math.min(99, mins));
-        secs = Math.max(0, Math.min(59, secs));
-        
-        // Formatuj z zerami wiodącymi
-        const formatted = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        setVideoTimeMMSS(formatted);
+        setVideoTimeMMSS(formatVideoMinutesAsMMSS(clampVideoTimeMinutes(mins), secs));
         return;
       }
       
@@ -921,6 +919,13 @@ const ShotModal: React.FC<ShotModalProps> = ({
         // Jeśli nie ma żadnej wartości, ustaw domyślną
         setVideoTimeMMSS('00:00');
       }
+    } else {
+      const parts = videoTimeMMSS.split(':');
+      const mins = parseInt(parts[0] || '0', 10);
+      const secs = parseInt(parts[1] || '0', 10);
+      if (!isNaN(mins) && mins > MAX_MATCH_MINUTE) {
+        setVideoTimeMMSS(formatVideoMinutesAsMMSS(mins, isNaN(secs) ? 0 : secs));
+      }
     }
   };
 
@@ -933,7 +938,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     }
 
     // Walidacja i normalizacja formatu czasu wideo przed zapisem (z kompatybilnością wsteczną)
-    const fullPattern = /^([0-9]{1,2}):([0-5][0-9])$/;
+    const fullPattern = /^([0-9]{1,3}):([0-5][0-9])$/;
     const minutesOnlyPattern = /^[0-9]{1,3}$/;
     
     // Normalizuj wartość - konwertuj stary format (tylko minuty) na MM:SS
@@ -942,7 +947,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       // Stary format: tylko minuty - konwertuj na MM:SS
       const mins = parseInt(videoTimeMMSS, 10);
       if (!isNaN(mins) && mins >= 0) {
-        normalizedVideoTime = `${Math.min(99, mins).toString().padStart(2, '0')}:00`;
+        normalizedVideoTime = formatVideoMinutesAsMMSS(mins, 0);
         // Zaktualizuj state dla przyszłości
         setVideoTimeMMSS(normalizedVideoTime);
       }
@@ -957,15 +962,20 @@ const ShotModal: React.FC<ShotModalProps> = ({
         if (isNaN(mins)) mins = 0;
         if (isNaN(secs)) secs = 0;
         
-        mins = Math.max(0, Math.min(99, mins));
-        secs = Math.max(0, Math.min(59, secs));
-        
-        normalizedVideoTime = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        normalizedVideoTime = formatVideoMinutesAsMMSS(mins, secs);
         setVideoTimeMMSS(normalizedVideoTime);
       } else {
         alert("Niepoprawny format czasu wideo. Użyj formatu MM:SS (np. 65:03) lub tylko minuty (np. 65)");
         handleVideoTimeBlur();
         return;
+      }
+    } else {
+      const parts = videoTimeMMSS.split(':');
+      const mins = parseInt(parts[0] || '0', 10);
+      const secs = parseInt(parts[1] || '0', 10);
+      if (!isNaN(mins) && mins > MAX_MATCH_MINUTE) {
+        normalizedVideoTime = formatVideoMinutesAsMMSS(mins, isNaN(secs) ? 0 : secs);
+        setVideoTimeMMSS(normalizedVideoTime);
       }
     }
 
@@ -1088,10 +1098,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       setFormData((prev) => ({ ...prev, minute: 0 }));
       return;
     }
-    const next = formData.isP2Active
-      ? Math.max(46, Math.min(90, raw))
-      : Math.max(1, Math.min(45, raw));
-    setFormData((prev) => ({ ...prev, minute: next }));
+    setFormData((prev) => ({ ...prev, minute: clampMatchMinute(raw, formData.isP2Active) }));
   };
 
   return (
@@ -1940,13 +1947,13 @@ const ShotModal: React.FC<ShotModalProps> = ({
                     onBlur={handleVideoTimeBlur}
                     placeholder="MM:SS"
                     className={styles.videoTimeField}
-                    maxLength={5}
+                    maxLength={6}
                   />
                   <input
                     id="action-minute-input"
                     type="number"
                     min={formData.isP2Active ? 46 : 1}
-                    max={formData.isP2Active ? 90 : 45}
+                    max={formData.isP2Active ? MAX_MATCH_MINUTE : 45}
                     step="1"
                     value={formData.minute || ""}
                     onChange={handleMinuteChange}

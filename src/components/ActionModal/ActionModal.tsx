@@ -16,6 +16,12 @@ import {
   ACTION_METHODOLOGY_SECTIONS,
   ACTION_METHODOLOGY_TITLE,
 } from "@/lib/actionMethodology";
+import {
+  MAX_MATCH_MINUTE,
+  clampMatchMinute,
+  clampVideoTimeMinutes,
+  formatVideoMinutesAsMMSS,
+} from "@/utils/matchTimeLimits";
 
 interface ActionModalProps {
   isOpen: boolean;
@@ -518,19 +524,16 @@ const ActionModal: React.FC<ActionModalProps> = ({
       onMinuteChange(0);
       return;
     }
-    const next = isSecondHalf
-      ? Math.max(46, Math.min(90, raw))
-      : Math.max(1, Math.min(45, raw));
-    onMinuteChange(next);
+    onMinuteChange(clampMatchMinute(raw, isSecondHalf));
   };
 
   const handleVideoTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
-    // Kompatybilność wsteczna: pozwól na format MM:SS lub tylko liczby (minuty)
+    // Kompatybilność wsteczna: pozwól na format MM:SS lub tylko liczby (minuty), max 200 min
     const partialPattern = /^([0-9]{0,3})?(:([0-5]?[0-9]?)?)?$/;
     const fullPattern = /^([0-9]{1,3}):([0-5][0-9])$/;
-    const minutesOnlyPattern = /^[0-9]{1,3}$/; // Stary format: tylko minuty (1-999)
+    const minutesOnlyPattern = /^[0-9]{1,3}$/;
     
     if (value === '' || partialPattern.test(value) || fullPattern.test(value) || minutesOnlyPattern.test(value)) {
       setVideoTimeMMSS(value);
@@ -538,7 +541,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
   };
 
   const handleVideoTimeBlur = () => {
-    // Upewnij się, że format jest poprawny
+    // Upewnij się, że format jest poprawny (max 200:59)
     const fullPattern = /^([0-9]{1,3}):([0-5][0-9])$/;
     
     if (!fullPattern.test(videoTimeMMSS)) {
@@ -546,10 +549,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
       if (!videoTimeMMSS.includes(':') && /^[0-9]{1,3}$/.test(videoTimeMMSS)) {
         const mins = parseInt(videoTimeMMSS, 10);
         if (!isNaN(mins) && mins >= 0) {
-          // Konwertuj minuty na format MM:SS (sekundy = 0)
-          const normalizedMins = Math.min(999, mins);
-          const formatted = `${normalizedMins < 100 ? normalizedMins.toString().padStart(2, '0') : normalizedMins.toString()}:00`;
-          setVideoTimeMMSS(formatted);
+          setVideoTimeMMSS(formatVideoMinutesAsMMSS(mins, 0));
           return;
         }
       }
@@ -564,14 +564,8 @@ const ActionModal: React.FC<ActionModalProps> = ({
         if (isNaN(mins)) mins = 0;
         if (isNaN(secs)) secs = 0;
         
-        // Ograniczenia: minuty 0-999, sekundy 0-59
-        mins = Math.max(0, Math.min(999, mins));
-        secs = Math.max(0, Math.min(59, secs));
-        
-        // Formatuj z zerami wiodącymi
-        const formattedMins = mins < 100 ? mins.toString().padStart(2, '0') : mins.toString();
-        const formatted = `${formattedMins}:${secs.toString().padStart(2, '0')}`;
-        setVideoTimeMMSS(formatted);
+        // Ograniczenia: minuty 0-200, sekundy 0-59
+        setVideoTimeMMSS(formatVideoMinutesAsMMSS(clampVideoTimeMinutes(mins), secs));
         return;
       }
       
@@ -791,8 +785,8 @@ const ActionModal: React.FC<ActionModalProps> = ({
     // W trybie edycji zapisujemy ręcznie ustawioną minutę i połowę, nie nadpisujemy ich czasem wideo.
     if (isEditMode) {
       const nextMinute = isSecondHalf
-        ? Math.max(46, Math.min(90, actionMinute || 46))
-        : Math.max(1, Math.min(45, actionMinute || 1));
+        ? clampMatchMinute(actionMinute || 46, true)
+        : clampMatchMinute(actionMinute || 1, false);
       localStorage.setItem('tempEditedActionMinute', String(nextMinute));
       localStorage.setItem('tempEditedActionIsSecondHalf', isSecondHalf ? 'true' : 'false');
     }
@@ -1341,7 +1335,7 @@ const ActionModal: React.FC<ActionModalProps> = ({
                   id="action-minute-input"
                   type="number"
                   min={isSecondHalf ? 46 : 1}
-                  max={isSecondHalf ? 90 : 45}
+                  max={isSecondHalf ? MAX_MATCH_MINUTE : 45}
                   step="1"
                   value={actionMinute || ""}
                   onChange={handleMinuteChange}

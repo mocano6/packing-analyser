@@ -4,6 +4,7 @@ import type {
 } from "@/types/trainingMicrocycle";
 import { TRAINING_DAY_TITLE_TEMPLATES_VERSION } from "@/types/trainingMicrocycle";
 import { extractDayTitleTemplatesFromMicrocycleRaw } from "@/lib/trainingMicrocycleFirestore";
+import { sanitizeDefaultMatchDayOffset } from "@/utils/dayTitleDefaults";
 
 function safeUnixMs(n: unknown): number {
   const x = typeof n === "number" ? n : Number(n);
@@ -22,6 +23,7 @@ export function sanitizeTrainingDayTitleTemplate(
     id: String(raw.id ?? ""),
     generalFocus: String(raw.generalFocus ?? "").slice(0, 200),
     gameMoments: String(raw.gameMoments ?? "").slice(0, 300),
+    defaultMatchDayOffset: sanitizeDefaultMatchDayOffset(raw.defaultMatchDayOffset),
   };
 }
 
@@ -41,7 +43,9 @@ export function migrateTrainingDayTitleTemplatesFromFirestore(
   }
 
   return {
-    templates: extractDayTitleTemplatesFromMicrocycleRaw(inner),
+    templates: extractDayTitleTemplatesFromMicrocycleRaw(inner).map((t) =>
+      sanitizeTrainingDayTitleTemplate(t as unknown as Record<string, unknown>)
+    ),
   };
 }
 
@@ -53,6 +57,7 @@ export function buildSanitizedTrainingDayTitleTemplatesState(
       id: String(t.id ?? ""),
       generalFocus: String(t.generalFocus ?? "").slice(0, 200),
       gameMoments: String(t.gameMoments ?? "").slice(0, 300),
+      defaultMatchDayOffset: sanitizeDefaultMatchDayOffset(t.defaultMatchDayOffset),
     })),
   };
 }
@@ -66,7 +71,7 @@ export function mergeTrainingDayTitleTemplates(
   for (const tpl of incoming) {
     if (!tpl.id || !tpl.generalFocus.trim()) continue;
     if (!byId.has(tpl.id)) {
-      byId.set(tpl.id, tpl);
+      byId.set(tpl.id, sanitizeTrainingDayTitleTemplate(tpl as unknown as Record<string, unknown>));
     }
   }
   return [...byId.values()];

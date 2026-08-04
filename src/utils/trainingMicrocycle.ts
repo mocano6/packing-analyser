@@ -38,6 +38,25 @@ export function nextMicrocycleNumber(
   return Math.max(...inSeason.map((m) => m.number)) + 1;
 }
 
+/**
+ * Numeruje mikrocykle sezonu kolejno 1…n według daty poniedziałku (potem starego numeru).
+ */
+export function renumberSeasonMicrocycles(
+  microcycles: TrainingMicrocycle[],
+  seasonId: string
+): TrainingMicrocycle[] {
+  const inSeason = [...microcycles.filter((m) => m.seasonId === seasonId)].sort(
+    (a, b) =>
+      a.weekStartIso.localeCompare(b.weekStartIso) || a.number - b.number || a.id.localeCompare(b.id)
+  );
+  const newNumberById = new Map(inSeason.map((m, i) => [m.id, i + 1]));
+  return microcycles.map((m) => {
+    const next = newNumberById.get(m.id);
+    if (next == null || next === m.number) return m;
+    return { ...m, number: next };
+  });
+}
+
 export function applyTrainingCountDelta(
   counts: Record<string, number>,
   templateId: string,
@@ -93,9 +112,20 @@ export function createDefaultTrainingMicrocycleState(now = new Date()): Training
     ],
     assignments: [],
     dayPlans: [],
+    proceduralTasks: [],
     trainingCounts: {},
     activeSeasonId: seasonId,
     activeMicrocycleId: microcycleId,
+    lnpTeamUrl: "",
+    lnpTeamId: null,
+    lnpTeamName: null,
+    lnpFixtures: [],
+    lnpFixturesFetchedAt: null,
+    lnpWatchTeamUrl: "",
+    lnpWatchTeamId: null,
+    lnpWatchTeamName: null,
+    lnpWatchFixtures: [],
+    lnpWatchFixturesFetchedAt: null,
   };
 }
 

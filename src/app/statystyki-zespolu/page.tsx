@@ -43,6 +43,7 @@ import {
 } from "@/utils/kpiDashboardPlayerShares";
 import { filterMatchActionsBySelectedTeam } from "@/utils/filterMatchActionsByTeam";
 import { filterActionsByAnalyzedTeamSquad } from "@/utils/filterActionsByTeamSquad";
+import { getMatchSquadPlayerIds } from "@/utils/setPiecesStorage";
 import {
   count8sCaShotForBreakdown,
   isPkEntryFromRegainSequence,
@@ -929,9 +930,24 @@ export default function StatystykiZespoluPage() {
     return allActions.filter(action => !action.teamId || action.teamId === selectedTeam);
   }, [allActions, selectedTeam]);
 
+  /** Protokół wybranych meczów — także zawodnicy już poza aktualnym teams[] (transfer / nowy sezon). */
+  const selectedMatchParticipantIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const matchId of selectedMatches) {
+      const match = teamMatches.find((m) => m.matchId === matchId);
+      if (!match) continue;
+      for (const id of getMatchSquadPlayerIds(match)) {
+        ids.add(id);
+      }
+    }
+    return ids;
+  }, [selectedMatches, teamMatches]);
+
   const teamRegainActions = useMemo(() => {
     const byTeam = filterMatchActionsBySelectedTeam(allRegainActions, selectedTeam);
-    const bySquad = filterActionsByAnalyzedTeamSquad(byTeam, selectedTeam, players);
+    const bySquad = filterActionsByAnalyzedTeamSquad(byTeam, selectedTeam, players, {
+      matchParticipantIds: selectedMatchParticipantIds,
+    });
     const firstMatchId = selectedMatches[0];
     const selectedMatch = firstMatchId ? teamMatches.find((m) => m.matchId === firstMatchId) : undefined;
     const playerMinutesIds = new Set(
@@ -942,11 +958,13 @@ export default function StatystykiZespoluPage() {
     if (playerMinutesIds.size === 0) return bySquad;
     const byPlayerMinutes = bySquad.filter((a) => Boolean(a.senderId) && playerMinutesIds.has(a.senderId));
     return byPlayerMinutes.length > 0 ? byPlayerMinutes : bySquad;
-  }, [allRegainActions, selectedTeam, players, selectedMatches, teamMatches]);
+  }, [allRegainActions, selectedTeam, players, selectedMatches, teamMatches, selectedMatchParticipantIds]);
 
   const teamLosesActions = useMemo(() => {
     const byTeam = filterMatchActionsBySelectedTeam(allLosesActions, selectedTeam);
-    const bySquad = filterActionsByAnalyzedTeamSquad(byTeam, selectedTeam, players);
+    const bySquad = filterActionsByAnalyzedTeamSquad(byTeam, selectedTeam, players, {
+      matchParticipantIds: selectedMatchParticipantIds,
+    });
     const firstMatchId = selectedMatches[0];
     const selectedMatch = firstMatchId ? teamMatches.find((m) => m.matchId === firstMatchId) : undefined;
     const playerMinutesIds = new Set(
@@ -957,7 +975,7 @@ export default function StatystykiZespoluPage() {
     if (playerMinutesIds.size === 0) return bySquad;
     const byPlayerMinutes = bySquad.filter((a) => Boolean(a.senderId) && playerMinutesIds.has(a.senderId));
     return byPlayerMinutes.length > 0 ? byPlayerMinutes : bySquad;
-  }, [allLosesActions, selectedTeam, players, selectedMatches, teamMatches]);
+  }, [allLosesActions, selectedTeam, players, selectedMatches, teamMatches, selectedMatchParticipantIds]);
 
   const derivedRegainActions = useMemo(() => {
     if (allRegainActions.length > 0) return teamRegainActions;

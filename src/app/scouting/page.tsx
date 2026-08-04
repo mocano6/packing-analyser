@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import SidePanel from '@/components/SidePanel/SidePanel';
 import ScoutingDebugModal from '@/components/ScoutingDebugModal/ScoutingDebugModal';
 import { useAuth } from '@/hooks/useAuth';
+import { canAccessScouting } from '@/lib/userRoles';
 import { appendClientApiLog } from '@/lib/scouting/clientDebug';
 import { resolvePlayerDisplayName } from '@/lib/scouting/playerNames';
 import { accumulatePlayerMatchStat, emptyPlayerMatchAgg, formatPlayerCards } from '@/lib/scouting/playerAgg';
@@ -96,6 +97,9 @@ const fmtMatchDate = (iso: string): string => {
 
 export default function ScoutingPage() {
   const { isAdmin, isLoading: authLoading, userRole, linkedPlayerId, logout } = useAuth();
+  const canAccessPage = canAccessScouting({ isAdmin, userRole });
+  /** Scout: tylko podgląd stanu — bez sync / usuwania / crawl. */
+  const isReadOnly = canAccessPage && !isAdmin;
 
   const [state, setState] = useState<ScoutingState | null>(null);
   const [loadingState, setLoadingState] = useState(true);
@@ -154,8 +158,9 @@ export default function ScoutingPage() {
     })();
   }, []);
 
-  /** Przywróć listę rozgrywek z localStorage (bez ponownego scrapingu). */
+  /** Przywróć listę rozgrywek z localStorage (bez ponownego scrapingu). Tylko admin (sync UI). */
   useEffect(() => {
+    if (isReadOnly || authLoading || !canAccessPage) return;
     const store = loadScoutingCompetitionsStore();
     const initialSex = store?.lastSex ?? 'male';
     setSex(initialSex);
@@ -171,7 +176,7 @@ export default function ScoutingPage() {
       setCompetitionsSavedAt(cached.savedAt);
       void pushCompetitionsToServer(initialSex, cached.seasonId, cached.leagueGroups);
     }
-  }, []);
+  }, [isReadOnly, authLoading, canAccessPage]);
 
   const leagueEntries = useMemo<[string, ScoutingLeagueData][]>(
     () => (state ? Object.entries(state.leagues) : []),
@@ -589,7 +594,7 @@ export default function ScoutingPage() {
     );
   }
 
-  if (!isAdmin) {
+  if (!canAccessPage) {
     return (
       <>
         <SidePanel
@@ -608,7 +613,7 @@ export default function ScoutingPage() {
         <div className={styles.container}>
           <div className={styles.header}>
             <h1>Scouting rozgrywek</h1>
-            <p className={styles.subtitle}>Brak dostępu. Strona tylko dla administratorów.</p>
+            <p className={styles.subtitle}>Brak dostępu. Strona tylko dla administratorów i scoutów.</p>
           </div>
         </div>
       </>
@@ -620,12 +625,14 @@ export default function ScoutingPage() {
       <div className={styles.header}>
         <h1>Scouting rozgrywek</h1>
         <p className={styles.subtitle}>
-          Zbieranie danych o zawodnikach (wiek, minuty, bramki) z wielu lig PZPN. Raz prześledzone ligi są zapisywane
-          i nie są pobierane ponownie (zwłaszcza z zakończonych sezonów).
+          {isReadOnly
+            ? 'Podgląd zebranych danych o zawodnikach (wiek, minuty, bramki) z lig PZPN.'
+            : 'Zbieranie danych o zawodnikach (wiek, minuty, bramki) z wielu lig PZPN. Raz prześledzone ligi są zapisywane i nie są pobierane ponownie (zwłaszcza z zakończonych sezonów).'}
         </p>
       </div>
 
-      {/* Dodawanie ligi */}
+      {/* Dodawanie ligi — tylko admin */}
+      {!isReadOnly && (
       <section className={styles.card}>
         <h2>Synchronizuj ligi sezonu</h2>
         <div className={styles.scopeRow}>
@@ -717,13 +724,16 @@ export default function ScoutingPage() {
           </button>
         )}
       </section>
+      )}
 
+      {!isReadOnly && (
       <ScoutingDebugModal
         isOpen={debugModalOpen}
         onClose={() => setDebugModalOpen(false)}
         logs={debugLogs}
         onClear={() => setDebugLogs([])}
       />
+      )}
 
       {/* Śledzone ligi */}
       <section className={styles.card}>
@@ -731,7 +741,11 @@ export default function ScoutingPage() {
         {loadingState ? (
           <p>Wczytywanie…</p>
         ) : leagueEntries.length === 0 ? (
-          <p className={styles.hint}>Brak śledzonych lig. Dodaj pierwszą ligę powyżej.</p>
+          <p className={styles.hint}>
+            {isReadOnly
+              ? 'Brak śledzonych lig w bazie scoutingu.'
+              : 'Brak śledzonych lig. Dodaj pierwszą ligę powyżej.'}
+          </p>
         ) : (
           <div className={styles.tableWrap}>
             <table className={styles.table}>
@@ -742,7 +756,7 @@ export default function ScoutingPage() {
                   <th>Mecze (ze stat. · WO)</th>
                   <th>Ostatnia aktualizacja</th>
                   <th>Sezon bieżący</th>
-                  <th></th>
+                  {!isReadOnly && <th></th>}
                 </tr>
               </thead>
               <tbody>
@@ -764,6 +778,7 @@ export default function ScoutingPage() {
                       </td>
                       <td>{fmtDate(ld.lastUpdatedAt)}</td>
                       <td>{ld.isCurrentSeason ? 'tak' : 'nie'}</td>
+                      {!isReadOnly && (
                       <td className={styles.actionsCell}>
                         <button
                           className={styles.miniBtn}
@@ -771,7 +786,7 @@ export default function ScoutingPage() {
                           disabled={isSyncing || syncUnnecessary}
                           title={
                             syncUnnecessary
-                              ? 'Komplet — wszystkie mecze rozegrane mają statystyki (walkowery pominięte)'
+                              ? 'Komplet — zdarzenia pobrane dla wszystkich meczów rozegranych (puste składy i walkowery OK)'
                               : ld.isCurrentSeason
                                 ? 'Pobierz nowe mecze'
                                 : 'Sezon zakończony — zwykle nic nowego'
@@ -783,6 +798,7 @@ export default function ScoutingPage() {
                           Usuń
                         </button>
                       </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -845,7 +861,7 @@ export default function ScoutingPage() {
                 <div className={styles.resultCount}>{filteredSortedRows.length} zawodn.</div>
               </div>
 
-              {playersMissingAge > 0 && (
+              {playersMissingAge > 0 && !isReadOnly && (
                 <p className={styles.hint}>
                   Brak wieku u {playersMissingAge} zawodnik(ów) — uruchom synchronizację ligi (profile pobierane partiami,
                   ~120 na rundę).
@@ -853,7 +869,11 @@ export default function ScoutingPage() {
               )}
 
               {playersCount === 0 ? (
-                <p className={styles.hint}>Brak danych zawodników — uruchom synchronizację ligi.</p>
+                <p className={styles.hint}>
+                  {isReadOnly
+                    ? 'Brak danych zawodników w bazie scoutingu.'
+                    : 'Brak danych zawodników — uruchom synchronizację ligi.'}
+                </p>
               ) : (
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>

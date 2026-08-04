@@ -17,6 +17,14 @@ import {
   REGAIN_LOSE_METHODOLOGY_SECTIONS,
   REGAIN_LOSE_METHODOLOGY_TITLE,
 } from "@/lib/regainLoseMethodology";
+import {
+  MAX_MATCH_MINUTE,
+  clampFirstHalfMinute,
+  clampMatchMinute,
+  clampSecondHalfMinute,
+  clampVideoTimeMinutes,
+  formatVideoMinutesAsMMSS,
+} from "@/utils/matchTimeLimits";
 
 interface LosesActionModalProps {
   isOpen: boolean;
@@ -329,18 +337,18 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       if (secondHalfStart !== undefined && videoSeconds >= secondHalfStart) {
         const secondsIntoSecondHalf = videoSeconds - secondHalfStart;
         const minute = Math.floor(secondsIntoSecondHalf / 60) + 46;
-        return Math.max(46, minute);
+        return clampSecondHalfMinute(minute);
       }
 
       if (firstHalfStart !== undefined && videoSeconds >= firstHalfStart) {
         const secondsIntoFirstHalf = videoSeconds - firstHalfStart;
         const minute = Math.floor(secondsIntoFirstHalf / 60) + 1;
-        return Math.max(1, Math.min(45, minute));
+        return clampFirstHalfMinute(minute);
       }
 
       if (secondHalfStart !== undefined && videoSeconds < secondHalfStart) {
         const minute = Math.floor(videoSeconds / 60) + 1;
-        return Math.max(1, Math.min(45, minute));
+        return clampFirstHalfMinute(minute);
       }
 
       // Fallback gdy brak czasów startu połów: MM:SS = czas absolutny w nagraniu,
@@ -349,10 +357,10 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       if (videoSeconds >= DEFAULT_SECOND_HALF_START) {
         const secondsIntoSecondHalf = videoSeconds - DEFAULT_SECOND_HALF_START;
         const minute = Math.floor(secondsIntoSecondHalf / 60) + 46;
-        return Math.max(46, minute);
+        return clampSecondHalfMinute(minute);
       }
       const minute = Math.floor(videoSeconds / 60) + 1;
-      return Math.max(1, Math.min(45, minute));
+      return clampFirstHalfMinute(minute);
     },
     [selectedMatchForTiming?.firstHalfStartTime, selectedMatchForTiming?.secondHalfStartTime]
   );
@@ -666,19 +674,16 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       onMinuteChange(0);
       return;
     }
-    const next = isSecondHalf
-      ? Math.max(46, Math.min(90, raw))
-      : Math.max(1, Math.min(45, raw));
-    onMinuteChange(next);
+    onMinuteChange(clampMatchMinute(raw, isSecondHalf));
   };
 
   const handleVideoTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
-    // Kompatybilność wsteczna: pozwól na format MM:SS lub tylko liczby (minuty)
+    // Kompatybilność wsteczna: pozwól na format MM:SS lub tylko liczby (minuty), max 200 min
     const partialPattern = /^([0-9]{0,3})?(:([0-5]?[0-9]?)?)?$/;
     const fullPattern = /^([0-9]{1,3}):([0-5][0-9])$/;
-    const minutesOnlyPattern = /^[0-9]{1,3}$/; // Stary format: tylko minuty (1-999)
+    const minutesOnlyPattern = /^[0-9]{1,3}$/;
     
     if (value === '' || partialPattern.test(value) || fullPattern.test(value) || minutesOnlyPattern.test(value)) {
       setVideoTimeMMSS(value);
@@ -686,7 +691,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
   };
 
   const handleVideoTimeBlur = () => {
-    // Upewnij się, że format jest poprawny
+    // Upewnij się, że format jest poprawny (max 200:59)
     const fullPattern = /^([0-9]{1,3}):([0-5][0-9])$/;
     
     if (!fullPattern.test(videoTimeMMSS)) {
@@ -694,10 +699,7 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       if (!videoTimeMMSS.includes(':') && /^[0-9]{1,3}$/.test(videoTimeMMSS)) {
         const mins = parseInt(videoTimeMMSS, 10);
         if (!isNaN(mins) && mins >= 0) {
-          // Konwertuj minuty na format MM:SS (sekundy = 0)
-          const normalizedMins = Math.min(999, mins);
-          const formatted = `${normalizedMins < 100 ? normalizedMins.toString().padStart(2, '0') : normalizedMins.toString()}:00`;
-          setVideoTimeMMSS(formatted);
+          setVideoTimeMMSS(formatVideoMinutesAsMMSS(mins, 0));
           return;
         }
       }
@@ -712,14 +714,8 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
         if (isNaN(mins)) mins = 0;
         if (isNaN(secs)) secs = 0;
         
-        // Ograniczenia: minuty 0-999, sekundy 0-59
-        mins = Math.max(0, Math.min(999, mins));
-        secs = Math.max(0, Math.min(59, secs));
-        
-        // Formatuj z zerami wiodącymi
-        const formattedMins = mins < 100 ? mins.toString().padStart(2, '0') : mins.toString();
-        const formatted = `${formattedMins}:${secs.toString().padStart(2, '0')}`;
-        setVideoTimeMMSS(formatted);
+        // Ograniczenia: minuty 0-200, sekundy 0-59
+        setVideoTimeMMSS(formatVideoMinutesAsMMSS(clampVideoTimeMinutes(mins), secs));
         return;
       }
       
@@ -756,6 +752,14 @@ const LosesActionModal: React.FC<LosesActionModalProps> = ({
       } else {
         // Jeśli nie ma żadnej wartości, ustaw domyślną
         setVideoTimeMMSS('00:00');
+      }
+    } else {
+      // Poprawny format — dopnij limit 200 min
+      const parts = videoTimeMMSS.split(':');
+      const mins = parseInt(parts[0] || '0', 10);
+      const secs = parseInt(parts[1] || '0', 10);
+      if (!isNaN(mins) && mins > MAX_MATCH_MINUTE) {
+        setVideoTimeMMSS(formatVideoMinutesAsMMSS(mins, isNaN(secs) ? 0 : secs));
       }
     }
   };
@@ -1471,7 +1475,7 @@ className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${styles.tooltip
                   id="action-minute-input"
                   type="number"
                   min={isSecondHalf ? 46 : 1}
-                  max={isSecondHalf ? 90 : 45}
+                  max={isSecondHalf ? MAX_MATCH_MINUTE : 45}
                   step="1"
                   value={actionMinute || ""}
                   onChange={handleMinuteChange}

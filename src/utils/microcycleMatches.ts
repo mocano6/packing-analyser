@@ -1,12 +1,33 @@
 import type {
   MicrocycleMatch,
   MicrocycleMatchCompetition,
+  MicrocycleMatchSurface,
   MicrocycleMatchVenue,
+  MicrocycleWeatherCondition,
+} from "@/types/trainingMicrocycle";
+import {
+  MICROCYCLE_MATCH_SURFACE_LABELS,
+  MICROCYCLE_WEATHER_CONDITION_LABELS,
 } from "@/types/trainingMicrocycle";
 import { normalizeMatchDaysArray } from "@/utils/matchDayLabels";
 
 const VALID_VENUES = new Set<MicrocycleMatchVenue>(["home", "away"]);
 const VALID_COMPETITIONS = new Set<MicrocycleMatchCompetition>(["friendly", "league", "cup"]);
+const VALID_SURFACES = new Set<MicrocycleMatchSurface>([
+  "natural",
+  "artificial",
+  "hybrid",
+  "indoor",
+]);
+const VALID_WEATHER = new Set<MicrocycleWeatherCondition>([
+  "sunny",
+  "cloudy",
+  "rain",
+  "storm",
+  "snow",
+  "wind",
+  "unknown",
+]);
 
 export function createDefaultMicrocycleMatch(dayIndex = 5): MicrocycleMatch {
   return {
@@ -14,8 +35,12 @@ export function createDefaultMicrocycleMatch(dayIndex = 5): MicrocycleMatch {
     kickoffTime: "18:00",
     opponent: "",
     venue: "home",
+    departureTime: "",
     competition: "league",
     venueAddress: "",
+    surface: null,
+    weatherCondition: null,
+    weatherTempC: null,
   };
 }
 
@@ -60,14 +85,46 @@ function sanitizeKickoffTime(v: unknown): string {
   return sanitizeMicrocycleTime(v, "18:00");
 }
 
+export function sanitizeMicrocycleMatchSurface(v: unknown): MicrocycleMatchSurface | null {
+  if (v == null || v === "") return null;
+  const s = String(v);
+  return VALID_SURFACES.has(s as MicrocycleMatchSurface) ? (s as MicrocycleMatchSurface) : null;
+}
+
+export function sanitizeMicrocycleWeatherCondition(
+  v: unknown
+): MicrocycleWeatherCondition | null {
+  if (v == null || v === "") return null;
+  const s = String(v);
+  return VALID_WEATHER.has(s as MicrocycleWeatherCondition)
+    ? (s as MicrocycleWeatherCondition)
+    : null;
+}
+
+export function sanitizeMicrocycleWeatherTempC(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return null;
+  const rounded = Math.round(n);
+  if (rounded < -30 || rounded > 50) return null;
+  return rounded;
+}
+
 export function sanitizeMicrocycleMatch(raw: Record<string, unknown>): MicrocycleMatch {
+  const venue = safeVenue(raw.venue);
   return {
     dayIndex: safeDayIndex(raw.dayIndex, 5),
     kickoffTime: sanitizeKickoffTime(raw.kickoffTime),
     opponent: String(raw.opponent ?? "").slice(0, 120),
-    venue: safeVenue(raw.venue),
+    venue,
+    // Godzina wyjazdu tylko przy meczu wyjazdowym.
+    departureTime:
+      venue === "away" ? sanitizeMicrocycleOptionalTime(raw.departureTime) : "",
     competition: safeCompetition(raw.competition),
     venueAddress: String(raw.venueAddress ?? "").slice(0, 200),
+    surface: sanitizeMicrocycleMatchSurface(raw.surface),
+    weatherCondition: sanitizeMicrocycleWeatherCondition(raw.weatherCondition),
+    weatherTempC: sanitizeMicrocycleWeatherTempC(raw.weatherTempC),
   };
 }
 
@@ -134,4 +191,20 @@ export function formatMicrocycleMatchSummary(match: MicrocycleMatch): string {
   }
   if (match.venueAddress.trim()) parts.push(match.venueAddress.trim());
   return parts.join(" · ");
+}
+
+export function formatMatchSurfaceLabel(surface: MicrocycleMatchSurface | null | undefined): string {
+  if (!surface) return "—";
+  return MICROCYCLE_MATCH_SURFACE_LABELS[surface] ?? "—";
+}
+
+export function formatMatchWeatherLabel(match: MicrocycleMatch): string {
+  const parts: string[] = [];
+  if (match.weatherCondition) {
+    parts.push(MICROCYCLE_WEATHER_CONDITION_LABELS[match.weatherCondition] ?? "");
+  }
+  if (match.weatherTempC != null) {
+    parts.push(`${match.weatherTempC}°C`);
+  }
+  return parts.filter(Boolean).join(" · ") || "—";
 }

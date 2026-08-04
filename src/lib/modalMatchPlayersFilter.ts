@@ -1,4 +1,5 @@
 import type { Player, TeamInfo } from "@/types";
+import { getMatchSquadPlayerIds } from "@/utils/setPiecesStorage";
 
 interface ModalPlayersFilterOptions {
   requirePlayerMinutes?: boolean;
@@ -10,6 +11,9 @@ interface ModalPlayersFilterOptions {
  * Gdy `playerMinutes` jest puste lub niezaładowane (np. zapis cache do localStorage bez minut) —
  * pokazujemy cały skład `matchInfo.team`, żeby modal nie był pusty do momentu dociągnięcia z Firebase.
  * `requirePlayerMinutes` wyłącza ten fallback dla miejsc, gdzie lista musi być stricte meczowa.
+ *
+ * Zawodnicy z protokołu meczu są uwzględniani nawet gdy już nie mają `matchInfo.team` w teams[]
+ * (transfer / kolejny sezon).
  */
 export function getModalPlayersForMatch(
   players: Player[],
@@ -18,13 +22,16 @@ export function getModalPlayersForMatch(
 ): Player[] {
   if (!matchInfo) return players;
 
-  const teamPlayers = players.filter((p) => p.teams?.includes(matchInfo.team));
+  const matchSquadIds = new Set(getMatchSquadPlayerIds(matchInfo));
+  const teamOrMatchPlayers = players.filter(
+    (p) => p.teams?.includes(matchInfo.team) || matchSquadIds.has(p.id)
+  );
   const pms = matchInfo.playerMinutes;
   if (!pms || pms.length === 0) {
-    return options.requirePlayerMinutes ? [] : teamPlayers;
+    return options.requirePlayerMinutes ? [] : teamOrMatchPlayers;
   }
 
-  return teamPlayers.filter((player) => {
+  return teamOrMatchPlayers.filter((player) => {
     const playerMinutes = pms.find((pm) => pm.playerId === player.id);
     if (!playerMinutes) return false;
 

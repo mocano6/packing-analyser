@@ -6,7 +6,9 @@ import {
   isPlayedMatchState,
   matchNeedsEventFetch,
   matchHasPlayerStats,
+  matchEventsResolved,
   countWalkoverMatches,
+  countMatchesWithEventsResolved,
   isLeagueEventsComplete,
   shouldSkipMatchSync,
 } from './matchStates';
@@ -46,6 +48,19 @@ assert.equal(isPlayedMatchState(WALKOVER_MATCH_STATE), false);
     false,
     'już ze stats i poza oknem → nie fetch'
   );
+  assert.equal(
+    matchNeedsEventFetch(played, {
+      now,
+      existing: { playerStats: [] },
+      lastUpdated: new Date('2026-07-01T00:00:00Z'),
+    }),
+    false,
+    'Rozegrany z pustym składem (events pobrane) → nie fetch ponownie'
+  );
+  assert.equal(matchEventsResolved({ playerStats: [] }), true);
+  assert.equal(matchHasPlayerStats({ playerStats: [] }), false);
+  assert.equal(matchEventsResolved({}), false);
+  assert.equal(matchEventsResolved(null), false);
 }
 
 {
@@ -63,6 +78,22 @@ assert.equal(isPlayedMatchState(WALKOVER_MATCH_STATE), false);
       { matchId: 'd', dateTime: '2026-01-04', state: PLAYED_MATCH_STATE },
     ]),
     false
+  );
+  assert.equal(
+    isLeagueEventsComplete([
+      ...matches,
+      { matchId: 'e', dateTime: '2026-01-05', state: PLAYED_MATCH_STATE, playerStats: [] },
+    ]),
+    true,
+    'pusty skład po fetchu nie blokuje kompletności ligi'
+  );
+  assert.equal(
+    countMatchesWithEventsResolved([
+      { playerStats: [] },
+      { playerStats: [{ x: 1 }] },
+      {},
+    ]),
+    2
   );
   assert.equal(
     shouldSkipMatchSync({ isCurrentSeason: false, matches, playersNeedingProfile: 0 }),

@@ -15,6 +15,7 @@ import { useGameModel } from "@/hooks/useGameModel";
 import { useGameModelPacks } from "@/hooks/useGameModelPacks";
 import { usePositionSystem } from "@/hooks/usePositionSystem";
 import { useTrainingDayTitleTemplates } from "@/hooks/useTrainingDayTitleTemplates";
+import { useTrainingProceduralTaskTemplates } from "@/hooks/useTrainingProceduralTaskTemplates";
 import { useTrainingMicrocycle } from "@/hooks/useTrainingMicrocycle";
 import {
   filterTeamsByUserAccess,
@@ -34,7 +35,14 @@ export default function AdminZadaniaPage() {
   const { isAuthenticated, isAdmin, isLoading, user, userRole, userTeams, logout } = useAuth();
   const { teams, isLoading: teamsLoading } = useTeams();
   const [tab, setTab] = useState<ZadaniaTab>("planner");
-  const [selectedTeam, setSelectedTeam] = useState("");
+  const [selectedTeam, setSelectedTeam] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return localStorage.getItem("selectedTeam") || "";
+    } catch {
+      return "";
+    }
+  });
   const uid = user?.uid ?? null;
 
   const userTeamAccess = useMemo(
@@ -47,30 +55,53 @@ export default function AdminZadaniaPage() {
     [teams, userTeamAccess]
   );
 
+  /** Dopóki auth/teams się ładują, nie podmieniaj zapamiętanego zespołu na „pierwszy z listy”. */
+  const authReady = !isLoading && !teamsLoading;
+
   const selectedTeamId = useMemo(() => {
     if (selectedTeam && isTeamIdAccessibleForUser(selectedTeam, userTeamAccess)) {
       return selectedTeam;
     }
+    // Auth jeszcze niegotowy — zachowaj ID z localStorage / state, żeby nie nadpisać preferencji.
+    if (!authReady && selectedTeam) {
+      return selectedTeam;
+    }
+    if (!authReady) return "";
     return availableTeams[0]?.id ?? "";
-  }, [availableTeams, selectedTeam, userTeamAccess]);
+  }, [availableTeams, selectedTeam, userTeamAccess, authReady]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = localStorage.getItem("selectedTeam") || "";
-    if (stored && isTeamIdAccessibleForUser(stored, userTeamAccess)) {
+    if (!authReady) return;
+    if (availableTeams.length === 0) return;
+
+    if (selectedTeam && availableTeams.some((t) => t.id === selectedTeam)) {
+      return;
+    }
+
+    let stored = "";
+    try {
+      stored = localStorage.getItem("selectedTeam") || "";
+    } catch {
+      stored = "";
+    }
+    if (stored && availableTeams.some((t) => t.id === stored)) {
       setSelectedTeam(stored);
       return;
     }
-    if (availableTeams.length > 0) {
-      setSelectedTeam(availableTeams[0].id);
-    }
-  }, [availableTeams, userTeamAccess]);
+
+    setSelectedTeam(availableTeams[0].id);
+  }, [authReady, availableTeams, selectedTeam]);
 
   useEffect(() => {
-    if (selectedTeamId) {
-      localStorage.setItem("selectedTeam", selectedTeamId);
+    if (!authReady || !selectedTeam) return;
+    if (!isTeamIdAccessibleForUser(selectedTeam, userTeamAccess)) return;
+    if (!availableTeams.some((t) => t.id === selectedTeam)) return;
+    try {
+      localStorage.setItem("selectedTeam", selectedTeam);
+    } catch {
+      /* ignore */
     }
-  }, [selectedTeamId]);
+  }, [authReady, selectedTeam, userTeamAccess, availableTeams]);
 
   const { state: plannerState, setPlannerState, loading: plannerLoading } = useStaffPlanner(uid);
   const {
@@ -101,6 +132,11 @@ export default function AdminZadaniaPage() {
     loading: dayTitleTemplatesLoading,
     mergeEmbeddedTemplates,
   } = useTrainingDayTitleTemplates(uid);
+  const {
+    state: proceduralTaskTemplatesState,
+    setProceduralTaskTemplatesState,
+    loading: proceduralTaskTemplatesLoading,
+  } = useTrainingProceduralTaskTemplates(uid);
 
   useEffect(() => {
     if (microcycleLoading || dayTitleTemplatesLoading) return;
@@ -291,6 +327,9 @@ export default function AdminZadaniaPage() {
             dayTitleTemplatesState={dayTitleTemplatesState}
             setDayTitleTemplatesState={setDayTitleTemplatesState}
             dayTitleTemplatesLoading={dayTitleTemplatesLoading}
+            proceduralTaskTemplatesState={proceduralTaskTemplatesState}
+            setProceduralTaskTemplatesState={setProceduralTaskTemplatesState}
+            proceduralTaskTemplatesLoading={proceduralTaskTemplatesLoading}
             gameModelState={gameModelState}
             gameModelLoading={gameModelLoading}
             selectedTeam={selectedTeamId}

@@ -1,11 +1,20 @@
 import type { GameModelPhaseId } from "@/types/gameModel";
-import type { TrainingDayTitleTemplate, TrainingMicrocycleState } from "@/types/trainingMicrocycle";
+import type {
+  LaczyTeamFixture,
+  TrainingDayTitleTemplate,
+  TrainingMicrocycleState,
+} from "@/types/trainingMicrocycle";
 import { TRAINING_MICROCYCLE_VERSION } from "@/types/trainingMicrocycle";
 import { normalizeMatchDaysArray } from "../utils/matchDayLabels";
 import {
   normalizeMicrocycleMatches,
 } from "../utils/microcycleMatches";
 import { normalizeMicrocycleDaySchedules } from "../utils/microcycleDaySchedules";
+import {
+  normalizeDayLoads,
+  normalizeTrainingBlocks,
+} from "../utils/microcycleTrainingBlocks";
+import { normalizeProceduralTasks } from "../utils/proceduralTaskDefaults";
 import { safeDayIndex } from "./staffPlannerFirestore";
 
 const VALID_DAY_PLAN_PHASES = new Set<string>(["defense", "attack", "set_pieces"]);
@@ -34,6 +43,38 @@ function safeInt(n: unknown, fallback = 0): number {
   return Math.trunc(x);
 }
 
+const MAX_STORED_FIXTURES = 120;
+
+function normalizeLaczyFixtures(raw: unknown): LaczyTeamFixture[] {
+  if (!Array.isArray(raw)) return [];
+  const out: LaczyTeamFixture[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    const matchId = String(rec.matchId ?? "");
+    if (!matchId) continue;
+    out.push({
+      matchId,
+      dateTime: String(rec.dateTime ?? ""),
+      state: String(rec.state ?? ""),
+      playId: String(rec.playId ?? ""),
+      playName: String(rec.playName ?? ""),
+      hostId: String(rec.hostId ?? ""),
+      hostName: String(rec.hostName ?? ""),
+      guestId: String(rec.guestId ?? ""),
+      guestName: String(rec.guestName ?? ""),
+      stadium: rec.stadium == null ? "" : String(rec.stadium),
+      scoreFinal: rec.scoreFinal == null ? null : String(rec.scoreFinal),
+    });
+  }
+  return out.slice(0, MAX_STORED_FIXTURES);
+}
+
+function nullableString(v: unknown): string | null {
+  if (v == null || v === "") return null;
+  return String(v);
+}
+
 export function extractDayTitleTemplatesFromMicrocycleRaw(
   inner: Record<string, unknown>
 ): TrainingDayTitleTemplate[] {
@@ -42,6 +83,10 @@ export function extractDayTitleTemplatesFromMicrocycleRaw(
     id: String(t.id ?? ""),
     generalFocus: String(t.generalFocus ?? ""),
     gameMoments: String(t.gameMoments ?? ""),
+    defaultMatchDayOffset:
+      t.defaultMatchDayOffset === null || t.defaultMatchDayOffset === undefined
+        ? null
+        : Number(t.defaultMatchDayOffset),
   }));
 }
 
@@ -67,6 +112,7 @@ export function buildSanitizedTrainingMicrocycleState(
       weekStartIso: String(m.weekStartIso ?? ""),
       matches: normalizeMicrocycleMatches(m.matches, (m as { matchDays?: number[] }).matchDays),
       daySchedules: normalizeMicrocycleDaySchedules(m.daySchedules),
+      dayLoads: normalizeDayLoads(m.dayLoads),
     })),
     assignments: state.assignments.map((a) => ({
       id: String(a.id ?? ""),
@@ -86,6 +132,8 @@ export function buildSanitizedTrainingMicrocycleState(
       gameMoments: String(p.gameMoments ?? ""),
       phaseId: safeDayPlanPhaseId(p.phaseId),
     })),
+    proceduralTasks: normalizeProceduralTasks(state.proceduralTasks),
+    trainingBlocks: normalizeTrainingBlocks(state.trainingBlocks),
     trainingCounts,
     activeSeasonId:
       state.activeSeasonId == null || state.activeSeasonId === ""
@@ -95,6 +143,16 @@ export function buildSanitizedTrainingMicrocycleState(
       state.activeMicrocycleId == null || state.activeMicrocycleId === ""
         ? null
         : String(state.activeMicrocycleId),
+    lnpTeamUrl: String(state.lnpTeamUrl ?? ""),
+    lnpTeamId: nullableString(state.lnpTeamId),
+    lnpTeamName: nullableString(state.lnpTeamName),
+    lnpFixtures: normalizeLaczyFixtures(state.lnpFixtures),
+    lnpFixturesFetchedAt: nullableString(state.lnpFixturesFetchedAt),
+    lnpWatchTeamUrl: String(state.lnpWatchTeamUrl ?? ""),
+    lnpWatchTeamId: nullableString(state.lnpWatchTeamId),
+    lnpWatchTeamName: nullableString(state.lnpWatchTeamName),
+    lnpWatchFixtures: normalizeLaczyFixtures(state.lnpWatchFixtures),
+    lnpWatchFixturesFetchedAt: nullableString(state.lnpWatchFixturesFetchedAt),
   };
 }
 
@@ -121,6 +179,7 @@ export function migrateTrainingMicrocycleFromFirestore(
         weekStartIso: String(m.weekStartIso ?? ""),
         matches: normalizeMicrocycleMatches(m.matches, m.matchDays),
         daySchedules: normalizeMicrocycleDaySchedules(m.daySchedules),
+        dayLoads: normalizeDayLoads(m.dayLoads),
       }))
     : [];
 
@@ -170,9 +229,21 @@ export function migrateTrainingMicrocycleFromFirestore(
     microcycles,
     assignments,
     dayPlans,
+    proceduralTasks: normalizeProceduralTasks(inner.proceduralTasks),
+    trainingBlocks: normalizeTrainingBlocks(inner.trainingBlocks),
     trainingCounts,
     activeSeasonId,
     activeMicrocycleId,
+    lnpTeamUrl: String(inner.lnpTeamUrl ?? ""),
+    lnpTeamId: nullableString(inner.lnpTeamId),
+    lnpTeamName: nullableString(inner.lnpTeamName),
+    lnpFixtures: normalizeLaczyFixtures(inner.lnpFixtures),
+    lnpFixturesFetchedAt: nullableString(inner.lnpFixturesFetchedAt),
+    lnpWatchTeamUrl: String(inner.lnpWatchTeamUrl ?? ""),
+    lnpWatchTeamId: nullableString(inner.lnpWatchTeamId),
+    lnpWatchTeamName: nullableString(inner.lnpWatchTeamName),
+    lnpWatchFixtures: normalizeLaczyFixtures(inner.lnpWatchFixtures),
+    lnpWatchFixturesFetchedAt: nullableString(inner.lnpWatchFixturesFetchedAt),
   };
 }
 

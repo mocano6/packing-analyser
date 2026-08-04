@@ -424,7 +424,12 @@ export async function runSync(opts: SyncOptions): Promise<ScoutingSyncResult> {
     progressCheckedMatches = capped.length;
     progressNewMatches = newMatches;
     progressUpdatedMatches = updatedMatches;
-    debug.ok('sync', `Checkpoint: zapisano ${merged.length} meczów ligi (${statsByMatchId.size} ze statystykami)`);
+    const withSquad = [...statsByMatchId.values()].filter((s) => Array.isArray(s) && s.length > 0).length;
+    const emptyEvents = statsByMatchId.size - withSquad;
+    debug.ok(
+      'sync',
+      `Checkpoint: zapisano ${merged.length} meczów ligi (${statsByMatchId.size} events: ${withSquad} ze składem, ${emptyEvents} pustych)`
+    );
 
     // Nazwiska ze składów meczowych — od razu w cache (wiek pobieramy osobno z API).
     for (const m of merged) {

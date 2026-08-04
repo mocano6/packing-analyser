@@ -9,6 +9,7 @@ import ImportButton from '../ImportButton/ImportButton';
 import { usePresentationMode } from '@/contexts/PresentationContext';
 import { Player, Action, TeamInfo } from '@/types';
 import type { UserRole } from '@/lib/userRoles';
+import { canAccessScouting, getScoutHomePath } from '@/lib/userRoles';
 import toast from 'react-hot-toast';
 
 interface SidePanelProps {
@@ -46,6 +47,15 @@ const SidePanel: React.FC<SidePanelProps> = ({
   /** Tylko jawna rola `player` — bez `userRole` (undefined) nie zawężamy menu (undefined == null psuło strony bez propsa). */
   const isPlayer = userRole === 'player';
   const isOperator = userRole === 'operator';
+  const isScout = userRole === 'scout';
+  const showScouting = canAccessScouting({ isAdmin, userRole });
+  const homeHref = isPlayer && linkedPlayerId
+    ? `/profile/${linkedPlayerId}`
+    : isPlayer
+      ? '/profile'
+      : isScout
+        ? getScoutHomePath()
+        : '/analyzer';
 
   const handleRefreshClick = async () => {
     try {
@@ -79,7 +89,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
         className={`${styles.panel} ${isOpen ? styles.panelOpen : ''}`}
       >
         <div className={styles.header}>
-          <Link href={isPlayer && linkedPlayerId ? `/profile/${linkedPlayerId}` : isPlayer ? '/profile' : '/analyzer'} className={styles.homeButton}>
+          <Link href={homeHref} className={styles.homeButton}>
             <svg className={styles.homeIcon} width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M8 1L2 6V14H6V10H10V14H14V6L8 1Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
             </svg>
@@ -127,10 +137,12 @@ const SidePanel: React.FC<SidePanelProps> = ({
                   <span className={styles.icon}>📊</span>
                   <span>Statystyki zespołu</span>
                 </Link>
-                <Link href="/trendy" className={styles.menuItem}>
-                  <span className={styles.icon}>📈</span>
-                  <span>Trendy</span>
-                </Link>
+                {!isScout && (
+                  <Link href="/trendy" className={styles.menuItem}>
+                    <span className={styles.icon}>📈</span>
+                    <span>Trendy</span>
+                  </Link>
+                )}
                 <Link href={players.length > 0 ? "/profile" : "/zawodnicy"} className={styles.menuItem}>
                   <span className={styles.icon}>👤</span>
                   <span>Profil zawodnika</span>
@@ -144,6 +156,17 @@ const SidePanel: React.FC<SidePanelProps> = ({
               </>
             )}
           </div>
+
+          {/* Scouting — admin (pełny) + scout (podgląd); poza sekcją Administracja */}
+          {showScouting && (
+            <div className={styles.section}>
+              <h4>🔎 Scouting</h4>
+              <Link href="/scouting" className={styles.menuItem}>
+                <span className={styles.icon}>🔎</span>
+                <span>Scouting</span>
+              </Link>
+            </div>
+          )}
 
           {/* Sekcja Operator — weryfikacja i baza wiedzy (admin też widzi) */}
           {(isAdmin || isOperator) && (
@@ -164,10 +187,6 @@ const SidePanel: React.FC<SidePanelProps> = ({
           {isAdmin && (
             <div className={styles.section}>
               <h4>⚙️ Administracja</h4>
-              <Link href="/scouting" className={styles.menuItem}>
-                <span className={styles.icon}>🔎</span>
-                <span>Scouting</span>
-              </Link>
               <Link href="/lista-zawodnikow" className={styles.menuItem}>
                 <span className={styles.icon}>📋</span>
                 <span>Lista wszystkich zawodników</span>
@@ -202,8 +221,8 @@ const SidePanel: React.FC<SidePanelProps> = ({
             </div>
           )}
 
-          {/* Sekcja Narzędzia - tylko dla admin/user/operator (ukryta dla coach i player) */}
-          {!isPlayer && userRole !== 'coach' && (
+          {/* Sekcja Narzędzia - tylko dla admin/user/operator (ukryta dla coach, scout i player) */}
+          {!isPlayer && userRole !== 'coach' && !isScout && (
             <div className={styles.section}>
               <h4>🔧 Narzędzia</h4>
               <button 
@@ -248,4 +267,4 @@ const SidePanel: React.FC<SidePanelProps> = ({
   );
 };
 
-export default SidePanel; 
+export default SidePanel;
