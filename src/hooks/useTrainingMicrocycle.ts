@@ -28,6 +28,7 @@ function isAcceptedVersion(v: unknown): boolean {
   const n = typeof v === "number" ? v : Number(v);
   return (
     n === TRAINING_MICROCYCLE_VERSION ||
+    n === 10 ||
     n === 9 ||
     n === 8 ||
     n === 7 ||

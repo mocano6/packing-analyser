@@ -8,8 +8,22 @@ import type {
   MotorDominantId,
 } from "@/types/microcycleMotor";
 import { isMotorDominantId } from "@/types/microcycleMotor";
-import { MICROCYCLE_ALERT_THRESHOLDS, presetForOffset } from "@/lib/microcycle/motorModel";
-import { normalizeMatchDaysArray } from "@/utils/matchDayLabels";
+import { MICROCYCLE_ALERT_THRESHOLDS, presetForOffset, sessionPresetForRole } from "@/lib/microcycle/motorModel";
+import { normalizeMatchDaysArray, periodizationOffset } from "@/utils/matchDayLabels";
+import { isRestDay } from "@/utils/microcycleRestDays";
+import {
+  assignSessionRolesToWeek,
+  restDaysForWeekFill,
+} from "@/utils/microcycleSessionRoles";
+
+export const EMPTY_DAY_LOAD_TARGETS: MicrocycleDayLoadTargets = {
+  totalDistancePct: 0,
+  hsrPct: 0,
+  sprintPct: 0,
+  accDecPct: 0,
+  srpe: 0,
+  minutes: 0,
+};
 
 export interface ResolvedDayLoad {
   dayIndex: number;
@@ -37,8 +51,9 @@ function dayLoadEntry(
 }
 
 /**
- * Rozwiązuje obciążenie dnia: preset z offsetu MD + ewentualne nadpisania.
- * Dzień meczowy zawsze dostaje dominantę "match", niezależnie od offsetu.
+ * Rozwiązuje obciążenie dnia: nadpisania użytkownika → rola jednostki w tygodniu
+ * (siła/napięcie/objętość/prędkość) → dopiero potem stary preset MD.
+ * Dzień meczowy zawsze „match”; dzień wolny zawsze zero.
  */
 export function resolveDayLoad(
   microcycle: TrainingMicrocycle,
@@ -48,18 +63,53 @@ export function resolveDayLoad(
   const matchDays = normalizeMatchDaysArray((microcycle.matches ?? []).map((m) => m.dayIndex));
   const primary = matchDays[0] ?? 5;
   const isMatchDay = matchDays.includes(dayIndex);
-  const offset = dayIndex - primary;
-  const preset = presetForOffset(isMatchDay ? 0 : offset);
+  const offset = isMatchDay ? 0 : periodizationOffset(dayIndex, primary);
+  const rest = !isMatchDay && isRestDay(microcycle.restDays, dayIndex);
+
+  if (rest) {
+    return {
+      dayIndex,
+      offset,
+      dominant: "off",
+      targets: { ...EMPTY_DAY_LOAD_TARGETS },
+      customized: false,
+      plannedMinutes: 0,
+      isMatchDay: false,
+    };
+  }
+
   const entry = dayLoadEntry(microcycle.dayLoads, dayIndex);
+  const fillRest = restDaysForWeekFill(matchDays, microcycle.restDays ?? []);
+  const roleAssignment = isMatchDay
+    ? undefined
+    : assignSessionRolesToWeek(matchDays, fillRest).find((a) => a.dayIndex === dayIndex);
+  const rolePreset = roleAssignment
+    ? sessionPresetForRole(roleAssignment.role)
+    : null;
+  /** Dzień poza rotacją 4 jednostek (np. piątek przy pustych restDays) — traktuj jak wolne w obciążeniu. */
+  const outsideRotation =
+    !isMatchDay && !roleAssignment && fillRest.includes(dayIndex) && !entry;
 
-  const dominant: MotorDominantId = isMotorDominantId(entry?.dominant)
-    ? entry.dominant
-    : preset.dominant;
+  const fallback = outsideRotation
+    ? { dominant: "off" as MotorDominantId, targets: EMPTY_DAY_LOAD_TARGETS }
+    : rolePreset
+      ? { dominant: rolePreset.dominant, targets: rolePreset.targets }
+      : presetForOffset(offset);
 
-  const targets: MicrocycleDayLoadTargets = {
-    ...preset.targets,
-    ...(entry?.targets ?? {}),
-  };
+  const dominant: MotorDominantId = isMatchDay
+    ? "match"
+    : isMotorDominantId(entry?.dominant)
+      ? entry.dominant
+      : fallback.dominant;
+
+  const targets: MicrocycleDayLoadTargets = isMatchDay
+    ? { ...presetForOffset(0).targets, ...(entry?.targets ?? {}) }
+    : outsideRotation
+      ? { ...EMPTY_DAY_LOAD_TARGETS }
+      : {
+          ...fallback.targets,
+          ...(entry?.targets ?? {}),
+        };
 
   const dayBlocks = blocks.filter((b) => b.dayIndex === dayIndex);
   const plannedMinutes =
@@ -85,6 +135,68 @@ export function resolveWeekLoads(
   return Array.from({ length: 7 }, (_, dayIndex) =>
     resolveDayLoad(microcycle, dayIndex, blocks)
   );
+}
+
+/** Zrzut rozwiązanego obciążenia jako nadpisanie dnia (do przenoszenia między dniami). */
+export function resolvedLoadToOverride(resolved: ResolvedDayLoad): MicrocycleDayLoad {
+  return {
+    dayIndex: resolved.dayIndex,
+    dominant: resolved.dominant,
+    targets: { ...resolved.targets },
+  };
+}
+
+/**
+ * Przenosi obciążenie dnia (preset + nadpisania) na inny dzień jako pełne nadpisanie.
+ * Źródło wraca do presetu MD; cel dostaje dominantę i cele ze źródła.
+ */
+export function moveResolvedDayLoad(
+  microcycle: TrainingMicrocycle,
+  fromDayIndex: number,
+  toDayIndex: number
+): TrainingMicrocycle {
+  if (fromDayIndex === toDayIndex) return microcycle;
+  if (fromDayIndex < 0 || fromDayIndex > 6 || toDayIndex < 0 || toDayIndex > 6) {
+    return microcycle;
+  }
+  const snapshot = resolvedLoadToOverride(resolveDayLoad(microcycle, fromDayIndex));
+  const without = (microcycle.dayLoads ?? []).filter(
+    (l) => l.dayIndex !== fromDayIndex && l.dayIndex !== toDayIndex
+  );
+  return {
+    ...microcycle,
+    dayLoads: [
+      ...without,
+      {
+        dayIndex: toDayIndex,
+        dominant: snapshot.dominant,
+        targets: snapshot.targets,
+      },
+    ].sort((a, b) => a.dayIndex - b.dayIndex),
+  };
+}
+
+/** Zamienia obciążenia dwóch dni (oba jako pełne nadpisania z aktualnego widoku). */
+export function swapResolvedDayLoads(
+  microcycle: TrainingMicrocycle,
+  dayA: number,
+  dayB: number
+): TrainingMicrocycle {
+  if (dayA === dayB) return microcycle;
+  if (dayA < 0 || dayA > 6 || dayB < 0 || dayB > 6) return microcycle;
+  const loadA = resolvedLoadToOverride(resolveDayLoad(microcycle, dayA));
+  const loadB = resolvedLoadToOverride(resolveDayLoad(microcycle, dayB));
+  const without = (microcycle.dayLoads ?? []).filter(
+    (l) => l.dayIndex !== dayA && l.dayIndex !== dayB
+  );
+  return {
+    ...microcycle,
+    dayLoads: [
+      ...without,
+      { dayIndex: dayB, dominant: loadA.dominant, targets: loadA.targets },
+      { dayIndex: dayA, dominant: loadB.dominant, targets: loadB.targets },
+    ].sort((a, b) => a.dayIndex - b.dayIndex),
+  };
 }
 
 export interface WeeklyLoadSummary {

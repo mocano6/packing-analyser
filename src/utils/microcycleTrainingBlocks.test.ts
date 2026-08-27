@@ -6,6 +6,7 @@ import {
   blocksForDay,
   blocksForMicrocycle,
   createEmptyBlock,
+  moveBlockToDay,
   normalizeDayLoads,
   normalizeTrainingBlocks,
   presetBlocksForDay,
@@ -16,28 +17,44 @@ import {
 } from "./microcycleTrainingBlocks";
 import { createDefaultTrainingMicrocycleState } from "./trainingMicrocycle";
 
-// Bloki z presetu: MD-4 (wtorek przy meczu w sobotę) ma siłę i Nordica
-const md4 = presetBlocksForDay("mc1", 1, [5]);
-assert.ok(md4.length > 0);
-assert.ok(md4.some((b) => b.tags.includes("nordic")));
-assert.ok(md4.some((b) => b.tags.includes("strength_max")));
-assert.ok(md4.every((b) => b.dayIndex === 1 && b.microcycleId === "mc1"));
+// Bloki z presetu: poniedziałek (siła) przy meczu w sobotę
+const mdStrength = presetBlocksForDay("mc1", 0, [5]);
+assert.ok(mdStrength.length > 0);
+assert.ok(mdStrength.some((b) => b.tags.includes("gym")));
+assert.ok(mdStrength.some((b) => b.tags.includes("strength_max")));
+assert.ok(mdStrength.some((b) => b.tags.includes("nordic")));
+assert.ok(mdStrength.every((b) => b.dayIndex === 0 && b.microcycleId === "mc1"));
 assert.deepEqual(
-  md4.map((b) => b.order),
-  md4.map((_, i) => i)
+  mdStrength.map((b) => b.order),
+  mdStrength.map((_, i) => i)
 );
 
-// Dzień wolny (MD-5, poniedziałek) nie dostaje bloków
-assert.equal(presetBlocksForDay("mc1", 0, [5]).length, 0);
-
-// Bloki gry mają wymiary i liczbę graczy z tabeli referencyjnej
-const ssgBlock = md4.find((b) => b.formatId === "3v3");
+const ssgBlock = mdStrength.find((b) => b.formatId === "4v4");
 assert.ok(ssgBlock);
-assert.equal(ssgBlock?.pitchLength, 30);
-assert.equal(ssgBlock?.pitchWidth, 20);
-assert.equal(blockAreaPerPlayer(ssgBlock as MicrocycleTrainingBlock), 100);
+assert.equal(ssgBlock?.pitchLength, 40);
+assert.equal(ssgBlock?.pitchWidth, 30);
+assert.equal(blockAreaPerPlayer(ssgBlock as MicrocycleTrainingBlock), 150);
 
-// Cały tydzień: 7 dni, bloki tylko w dniach z treningiem
+// Niedziela (poza rotacją) — brak bloków; ciężka siła jest w poniedziałek
+assert.equal(presetBlocksForDay("mc1", 6, [5]).length, 0);
+
+// Wtorek — napięcie/moc, bez ciężkiej siły i bez Nordica
+const mdTension = presetBlocksForDay("mc1", 1, [5]);
+assert.ok(mdTension.some((b) => b.tags.includes("power")));
+assert.ok(mdTension.some((b) => b.tags.includes("gym")));
+assert.ok(!mdTension.some((b) => b.tags.includes("strength_max")));
+assert.ok(!mdTension.some((b) => b.tags.includes("nordic")));
+
+// Środa — objętość (nie wolne)
+const mdVolume = presetBlocksForDay("mc1", 2, [5]);
+assert.ok(mdVolume.length > 0);
+assert.ok(mdVolume.some((b) => b.formatId === "11v11"));
+assert.ok(!mdVolume.some((b) => b.tags.includes("strength_max")));
+
+// Piątek (MD-1, wolne w modelu 4 jednostek) nie dostaje bloków
+assert.equal(presetBlocksForDay("mc1", 4, [5]).length, 0);
+
+// Cały tydzień: bloki tylko w pn–czw
 const week = presetBlocksForMicrocycle({
   id: "mc1",
   seasonId: "s1",
@@ -47,8 +64,9 @@ const week = presetBlocksForMicrocycle({
   daySchedules: [],
 });
 assert.ok(week.length > 20);
-assert.equal(week.filter((b) => b.dayIndex === 0).length, 0);
-assert.equal(blocksForDay(week, 2).length, presetBlocksForDay("mc1", 2, [5]).length);
+assert.equal(week.filter((b) => b.dayIndex === 4).length, 0);
+assert.ok(week.filter((b) => b.dayIndex === 0).length > 0);
+assert.equal(blocksForDay(week, 1).length, presetBlocksForDay("mc1", 1, [5]).length);
 
 // Wybór formatu podstawia wymiary, wyczyszczenie je zostawia bez formatu
 const empty = createEmptyBlock("mc1", 3, 0);
@@ -98,7 +116,7 @@ assert.equal(normalized[0].formatId, "6v6");
 assert.equal(normalizeTrainingBlocks("nie tablica").length, 0);
 
 // Filtrowanie po mikrocyklu i sortowanie
-const mixed = [...presetBlocksForDay("mc2", 2, [5]), ...md4];
+const mixed = [...presetBlocksForDay("mc2", 1, [5]), ...mdStrength];
 const onlyMc1 = blocksForMicrocycle(mixed, "mc1");
 assert.ok(onlyMc1.every((b) => b.microcycleId === "mc1"));
 assert.equal(blocksForMicrocycle(mixed, null).length, 0);
@@ -128,10 +146,21 @@ assert.equal(loadsFromFirestore[0].targets?.hsrPct, undefined);
 // Usuwanie mikrocyklu czyści jego bloki
 const state = {
   ...createDefaultTrainingMicrocycleState(),
-  trainingBlocks: [...md4, ...presetBlocksForDay("mc2", 1, [5])],
+  trainingBlocks: [...mdStrength, ...presetBlocksForDay("mc2", 0, [5])],
 };
 const cleaned = removeBlocksForMicrocycle(state, "mc1");
 assert.ok(cleaned.trainingBlocks?.every((b) => b.microcycleId === "mc2"));
 assert.equal(removeBlocksForMicrocycle({ ...state, trainingBlocks: [] }, "mc1").trainingBlocks?.length, 0);
+
+// Przenoszenie bloku między dniami — na koniec listy dnia docelowego
+const a = createEmptyBlock("mc1", 1, 0);
+const b = createEmptyBlock("mc1", 1, 1);
+const c = createEmptyBlock("mc1", 3, 0);
+const moved = moveBlockToDay([a, b, c], a.id, 3);
+assert.equal(moved.find((x) => x.id === a.id)?.dayIndex, 3);
+assert.equal(moved.find((x) => x.id === a.id)?.order, 1);
+assert.equal(moved.find((x) => x.id === b.id)?.dayIndex, 1);
+assert.deepEqual(moveBlockToDay([a, b], a.id, 1), [a, b]); // ten sam dzień
+assert.deepEqual(moveBlockToDay([a, b], "brak", 2), [a, b]); // nieznany id
 
 console.log("microcycleTrainingBlocks.test OK");

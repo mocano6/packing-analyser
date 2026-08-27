@@ -58,6 +58,11 @@ import { sumNonPenaltyXg } from "@/lib/xgNonPenalty";
 import { calculateXgOutcomeProjection } from "@/utils/xgOutcomeProjection";
 import { summarizeCleanShots } from "@/utils/shotLinePlayers";
 import {
+  eventVideoTimestampSec,
+  resolveAcc8sSideTeamId,
+  summarizeXgAfterStartWindows,
+} from "@/utils/statystykiZespoluXgStats";
+import {
   resolveMatchOpponentDisplayName,
   shortTeamDisplayLabel,
 } from "@/lib/matchInfoPackingLabels";
@@ -3555,6 +3560,23 @@ export default function StatystykiZespoluPage() {
                   const teamGoalsOpenPlay = teamGoals - teamGoalsSFG - teamGoalsRegain;
                   const opponentGoalsOpenPlay = opponentGoals - opponentGoalsSFG - opponentGoalsRegain;
 
+                  const acc8sStarts = kpiAllAcc8sEntries
+                    .map((entry: any) => ({
+                      teamId: resolveAcc8sSideTeamId(entry, teamIdInMatch, opponentIdInMatch) || "",
+                      timestamp: eventVideoTimestampSec(entry),
+                    }))
+                    .filter((s) => s.teamId && s.timestamp > 0);
+                  const acc8sWindowShots = [...teamShots, ...opponentShots].map((s: any) => ({
+                    id: s.id,
+                    teamId: resolveShotTeamId(s) || "",
+                    timestamp: eventVideoTimestampSec(s),
+                    xG: Number(s.xG) || 0,
+                    isGoal: Boolean(s.isGoal || s.shotType === "goal"),
+                  }));
+                  const acc8sXgByTeam = summarizeXgAfterStartWindows(acc8sStarts, acc8sWindowShots);
+                  const teamAcc8sXg = acc8sXgByTeam.get(teamIdInMatch) ?? { xg: 0, goals: 0, shots: 0 };
+                  const opponentAcc8sXg = acc8sXgByTeam.get(opponentIdInMatch) ?? { xg: 0, goals: 0, shots: 0 };
+
                   const teamCleanShots = summarizeCleanShots(teamShots);
                   const opponentCleanShots = summarizeCleanShots(opponentShots);
                   const teamXGClean = teamCleanShots.xg;
@@ -5347,7 +5369,13 @@ export default function StatystykiZespoluPage() {
                                     </span>
                                   </div>
                                   <div className={styles.kpiScoreRow}>
-                                    <span className={styles.kpiScoreRowLabel}>Regain</span>
+                                    <span
+                                      className={`${styles.kpiScoreRowLabel} ${styles.tooltipTrigger}`}
+                                      data-tooltip={`Regain (po 8s CA) — xG ze strzałów w ciągu 8 s po przechwycie, bez kolejnego regain w tym oknie.\n\nTo samo okno co KPI 8s CA: od momentu odbioru do strzału.`}
+                                      title="Regain (po 8s CA) — xG ze strzałów w 8 s po przechwycie"
+                                    >
+                                      Regain (po 8s CA)
+                                    </span>
                                     <span className={styles.kpiScoreRowGoals}>
                                       <span style={{ color: TEAM_STATS_GREEN }}>{teamGoalsRegain}</span>
                                       <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
@@ -5362,6 +5390,31 @@ export default function StatystykiZespoluPage() {
                                       {opponentXGRegain.toFixed(2)}{' '}
                                       <span className={styles.kpiScoreRowValuesPct}>
                                         ({opponentXG > 0 ? Math.round(opponentXGRegain / opponentXG * 100) : 0}%)
+                                      </span>
+                                    </span>
+                                  </div>
+                                  <div className={styles.kpiScoreRow}>
+                                    <span
+                                      className={`${styles.kpiScoreRowLabel} ${styles.tooltipTrigger}`}
+                                      data-tooltip={`8s ACC — xG ze strzałów w ciągu 8 s od przekroczenia połowy (pierwszy kontakt po połowie, poprawne 8s ACC).\n\nPokazuje: bramki · suma xG · udział w całkowitym xG (%).`}
+                                      title="8s ACC — xG ze strzałów w 8 s od przekroczenia połowy"
+                                    >
+                                      8s ACC
+                                    </span>
+                                    <span className={styles.kpiScoreRowGoals}>
+                                      <span style={{ color: TEAM_STATS_GREEN }}>{teamAcc8sXg.goals}</span>
+                                      <span style={{ margin: '0 2px', color: '#64748b' }}>:</span>
+                                      <span style={{ color: TEAM_STATS_RED }}>{opponentAcc8sXg.goals}</span>
+                                    </span>
+                                    <span className={styles.kpiScoreRowValues}>
+                                      {teamAcc8sXg.xg.toFixed(2)}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({teamXG > 0 ? Math.round(teamAcc8sXg.xg / teamXG * 100) : 0}%)
+                                      </span>
+                                      {' : '}
+                                      {opponentAcc8sXg.xg.toFixed(2)}{' '}
+                                      <span className={styles.kpiScoreRowValuesPct}>
+                                        ({opponentXG > 0 ? Math.round(opponentAcc8sXg.xg / opponentXG * 100) : 0}%)
                                       </span>
                                     </span>
                                   </div>

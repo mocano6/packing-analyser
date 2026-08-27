@@ -1,5 +1,6 @@
 import assert from "assert";
 import {
+  addMinutesToHhmm,
   getDayScheduleForDay,
   normalizeMicrocycleDaySchedules,
   updateMicrocycleDaySchedule,
@@ -26,5 +27,11 @@ assert.equal(updated[0].startTime, "10:00");
 
 const cleared = updateMicrocycleDaySchedule(updated, 4, { startTime: "", endTime: "" });
 assert.equal(cleared.length, 0);
+
+assert.equal(addMinutesToHhmm("18:00", 90), "19:30");
+assert.equal(addMinutesToHhmm("23:45", 30), "00:15");
+assert.equal(addMinutesToHhmm("09:30", 0), "09:30");
+assert.equal(addMinutesToHhmm("", 60), null);
+assert.equal(addMinutesToHhmm("18:00", -5), null);
 
 console.log("microcycleDaySchedules.test.ts: OK");

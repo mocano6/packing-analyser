@@ -4,6 +4,7 @@ import {
   matchDayLabelForColumn,
   matchDayLabelsForColumn,
   matchDayOffset,
+  periodizationOffset,
   normalizeMatchDaysArray,
   startOfWeekMonday,
   toIsoDateLocal,
@@ -17,6 +18,13 @@ assert.strictEqual(formatMatchDayLabel(-1), "MD-1");
 assert.strictEqual(formatMatchDayLabel(2), "MD+2");
 assert.strictEqual(matchDayLabelForColumn(4, 5), "MD-1");
 assert.strictEqual(matchDayLabelForColumn(5, 5), "MD");
+
+// Mecz w niedzielę: poniedziałek to MD+1, nie MD-6
+assert.strictEqual(matchDayOffset(0, 6), -6);
+assert.strictEqual(periodizationOffset(0, 6), 1);
+assert.strictEqual(matchDayLabelForColumn(0, 6), "MD+1");
+assert.strictEqual(matchDayLabelForColumn(1, 6), "MD-5");
+assert.strictEqual(periodizationOffset(6, 5), 1);
 
 const mon = startOfWeekMonday(new Date(2026, 3, 8));
 assert.strictEqual(mon.getDay(), 1);

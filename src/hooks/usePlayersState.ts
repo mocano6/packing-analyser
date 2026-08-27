@@ -820,6 +820,97 @@ export function usePlayersState() {
     setEditingPlayerData(null);
   }, []);
 
+  /** Dodawanie wielu zawodników (import ŁNP) — bez flagi isSaving pojedynczego zapisu. */
+  const handleSavePlayersBatch = useCallback(
+    async (
+      playersToAdd: Omit<Player, "id">[]
+    ): Promise<{ saved: number; errors: string[] }> => {
+      const errors: string[] = [];
+      const created: Player[] = [];
+      if (playersToAdd.length === 0) {
+        return { saved: 0, errors };
+      }
+      if (!getDB()) {
+        return { saved: 0, errors: ["Firebase nie jest zainicjalizowane"] };
+      }
+
+      const authUser = getAuthClient().currentUser;
+      const token = authUser ? await authUser.getIdToken() : null;
+
+      for (const playerData of playersToAdd) {
+        const name = (playerData.name || `${playerData.firstName} ${playerData.lastName}`).trim();
+        if (!name) {
+          errors.push("Pominięto zawodnika bez imienia i nazwiska.");
+          continue;
+        }
+        const createPayload = Object.fromEntries(
+          Object.entries({
+            ...playerData,
+            name,
+            teams: Array.isArray(playerData.teams)
+              ? playerData.teams
+              : [playerData.teams].filter(Boolean),
+          }).filter(([, value]) => value !== undefined)
+        );
+
+        try {
+          let newPlayerId: string | null = null;
+          if (token) {
+            const res = await fetch("/api/players-save", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                action: "create",
+                data: createPayload,
+              }),
+            });
+            const payload = (await res.json().catch(() => ({}))) as {
+              error?: string;
+              code?: string;
+              success?: boolean;
+              playerId?: string;
+            };
+            if (res.ok && payload.success && typeof payload.playerId === "string") {
+              newPlayerId = payload.playerId;
+            } else if (!(res.status === 503 && payload.code === "admin-config-missing")) {
+              throw new Error(
+                typeof payload.error === "string" && payload.error
+                  ? payload.error
+                  : `Zapis nie powiódł się (${res.status}).`
+              );
+            }
+          }
+          if (newPlayerId === null) {
+            const playerRef = await addDoc(collection(getDB(), "players"), createPayload);
+            newPlayerId = playerRef.id;
+          }
+          created.push({
+            id: newPlayerId,
+            ...playerData,
+            name,
+          });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : "Błąd zapisu.";
+          errors.push(`${name}: ${message}`);
+        }
+      }
+
+      if (created.length > 0) {
+        invalidateCache(CACHE_KEYS.PLAYERS_LIST);
+        const next = [...playersRef.current, ...created];
+        playersRef.current = next;
+        setPlayers(next);
+        cachedPlayersRef.current = { data: next, ts: Date.now() };
+      }
+
+      return { saved: created.length, errors };
+    },
+    []
+  );
+
   return {
     players,
     isModalOpen,
@@ -833,6 +924,7 @@ export function usePlayersState() {
     handleEditPlayer,
     closeModal,
     refetchPlayers,
+    handleSavePlayersBatch,
     migratePlayersFromTeamsToPlayers // Eksport funkcji migracji dla ręcznego użycia
   };
 } 

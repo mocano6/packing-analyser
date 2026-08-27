@@ -6,6 +6,7 @@ import type { StaffPlannerState } from "@/types/staffPlanner";
 import {
   DEFAULT_STAFF_TASK_CATEGORY_ID,
   STAFF_TASK_CATEGORIES,
+  nextCoachColor,
 } from "@/types/staffPlanner";
 import {
   addDays,
@@ -17,17 +18,6 @@ import {
   weekdayShortPl,
 } from "@/utils/matchDayLabels";
 import styles from "./StaffPlannerTab.module.css";
-
-const COACH_COLOR_PRESETS = [
-  "#2563eb",
-  "#dc2626",
-  "#16a34a",
-  "#ca8a04",
-  "#9333ea",
-  "#ea580c",
-  "#0891b2",
-  "#db2777",
-];
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -120,7 +110,7 @@ export default function StaffPlannerTab({ state, setPlannerState, loading }: Sta
   const addCoach = useCallback(() => {
     const name = newCoachName.trim();
     if (!name) return;
-    const color = COACH_COLOR_PRESETS[state.coaches.length % COACH_COLOR_PRESETS.length];
+    const color = nextCoachColor(state.coaches.length);
     const id = generateId();
     setPlannerState((prev) => ({
       ...prev,

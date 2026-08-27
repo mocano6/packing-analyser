@@ -113,6 +113,7 @@ export function createDefaultTrainingMicrocycleState(now = new Date()): Training
     assignments: [],
     dayPlans: [],
     proceduralTasks: [],
+    exercises: [],
     trainingCounts: {},
     activeSeasonId: seasonId,
     activeMicrocycleId: microcycleId,

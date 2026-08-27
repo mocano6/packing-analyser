@@ -2,9 +2,11 @@ import assert from "assert";
 import type { Player, TeamInfo } from "@/types";
 import {
   buildPlayerComparisonRows,
+  formatPlayerComparisonGroupSurplusParen,
   formatPlayerComparisonRawSurplusParen,
   getMetricLeader,
   getPlayerComparisonAxisDisplay,
+  getPlayerComparisonGroupCellTones,
   getPlayerComparisonPairCellTone,
   getPlayerComparisonRawAmountSide,
   normalizePlayerComparisonRadarScore,
@@ -321,7 +323,8 @@ assert.ok(Math.abs(p2.raw.losesXtAttack - 0.22) < 1e-9);
 assert.ok(Math.abs(p2.raw.losesXtDefense - 0.08) < 1e-9);
 assert.ok(Math.abs((p2.raw.pxtDribble ?? 0) - 0.5) < 1e-9);
 assert.ok(Math.abs((p2.raw.xtDribble ?? 0) - 0.1) < 1e-9);
-assert.equal(p2.raw.phaseP3Sender, 1);
+assert.equal(p2.raw.phaseP3Sender, 0);
+assert.equal(p2.raw.phaseP3Dribble, 1);
 assert.equal(p2.raw.phaseP3Receiver, 0);
 assert.equal(p2.raw.defenseShotLine, 1);
 assert.equal(p2.raw.defenseShotBlockXg, 0);
@@ -338,15 +341,18 @@ assert.equal(p2.eventStats.defenseShotLine?.successful, 1);
 assert.equal(resolvePlayerComparisonMetricId("pxt", "receiver"), "pxtReceiver");
 assert.equal(resolvePlayerComparisonMetricId("pkEntries", "dribble"), "pkEntriesDribble");
 assert.equal(resolvePlayerComparisonMetricId("phaseP1", "receiver"), "phaseP1Receiver");
+assert.equal(resolvePlayerComparisonMetricId("phaseP1", "dribble"), "phaseP1Dribble");
 assert.equal(supportsComparisonMetricRole("phaseP1"), true);
-assert.equal(supportsComparisonMetricDribbleRole("phaseP1"), false);
+assert.equal(supportsComparisonMetricDribbleRole("phaseP1"), true);
 assert.equal(supportsComparisonMetricDribbleRole("pxt"), true);
 assert.equal(supportsComparisonMetricRole("xg"), false);
 assert.strictEqual(resolveComparisonAxisValueId("packing", "receiver"), "packing");
-assert.strictEqual(resolveComparisonAxisValueId("phaseP2", "dribble"), "phaseP2Sender");
+assert.strictEqual(resolveComparisonAxisValueId("phaseP2", "dribble"), "phaseP2Dribble");
 assert.equal(resolvePlayerComparisonMetricId("xg", "dribble"), "xg");
 
 assert.equal(getPlayerComparisonAxisDisplay("phaseP1", "sender").radarAxis, "P1 pod.");
+assert.equal(getPlayerComparisonAxisDisplay("phaseP1", "dribble").compareTable, "P1 (drybling)");
+assert.equal(getPlayerComparisonAxisDisplay("phaseP1", "dribble").radarAxis, "P1 dr.");
 assert.equal(getPlayerComparisonAxisDisplay("phaseP3", "receiver").compareTable, "P3 (przyjęcie)");
 assert.equal(getPlayerComparisonAxisDisplay("packing", "receiver").radarAxis, "Packing");
 
@@ -380,6 +386,27 @@ assert.strictEqual(formatPlayerComparisonRawSurplusParen("packing", 5.2, 4, "pl-
 assert.strictEqual(formatPlayerComparisonRawSurplusParen("goals", 5, 2, "pl-PL"), "(+3)");
 assert.strictEqual(formatPlayerComparisonRawSurplusParen("goals", 2, 2, "pl-PL"), null);
 assert.strictEqual(formatPlayerComparisonRawSurplusParen("goals", Number.NaN, 1, "pl-PL"), null);
+
+assert.deepEqual(getPlayerComparisonGroupCellTones([10, 7, 4], "higher", "goals"), [
+  "better",
+  "neutral",
+  "worse",
+]);
+assert.deepEqual(getPlayerComparisonGroupCellTones([10, 4, 1], "lower", "loses"), [
+  "worse",
+  "neutral",
+  "better",
+]);
+assert.deepEqual(getPlayerComparisonGroupCellTones([3, 3, 3], "higher", "goals"), [
+  "even",
+  "even",
+  "even",
+]);
+assert.strictEqual(
+  formatPlayerComparisonGroupSurplusParen("goals", 8, [5, 3], "pl-PL"),
+  "(+3)",
+);
+assert.strictEqual(formatPlayerComparisonGroupSurplusParen("goals", 5, [8, 3], "pl-PL"), null);
 
 const phaseMatch: TeamInfo = {
   matchId: "m-phase",
@@ -417,6 +444,7 @@ const p2Part = rParticipation.rows.find((r) => r.playerId === "p2");
 assert.ok(p1Part && p2Part);
 assert.equal(p1Part.raw.phaseP1Sender, 1);
 assert.equal(p1Part.raw.phaseP1Receiver, 0);
+assert.equal(p1Part.raw.phaseP1Dribble, 0);
 assert.equal(p2Part.raw.phaseP1Receiver, 1);
 assert.equal(p2Part.raw.phaseP1Sender, 0);
 assert.ok(p1Part.raw.packing > 0);

@@ -65,10 +65,13 @@ export type PlayerComparisonMetricId =
   | "losesXtDefense"
   | "phaseP1Sender"
   | "phaseP1Receiver"
+  | "phaseP1Dribble"
   | "phaseP2Sender"
   | "phaseP2Receiver"
+  | "phaseP2Dribble"
   | "phaseP3Sender"
   | "phaseP3Receiver"
+  | "phaseP3Dribble"
   | "defenseShotLine"
   | "defenseShotBlockXg";
 
@@ -138,7 +141,7 @@ export const PLAYER_COMPARISON_FAMILY_OPTIONS: { id: PlayerComparisonMetricFamil
   { id: "losesXtDefense", label: "xT strat (obrona)" },
 ];
 
-/** Oś spider / karty liderów; metryki faz P1–P3 pokazują liczbę wystąpień wg przełącznika podanie/przyjęcie. */
+/** Oś spider / karty liderów; metryki faz P1–P3 pokazują liczbę wystąpień wg przełącznika podanie/przyjęcie/drybling. */
 export const PLAYER_COMPARISON_AXIS_METRIC_IDS: readonly PlayerComparisonMetricFamily[] = [
   "packing",
   "pxt",
@@ -182,9 +185,16 @@ export function supportsComparisonMetricRole(family: PlayerComparisonMetricFamil
   );
 }
 
-/** Rola „drybling” ma sens tylko dla PXT, xT i wejść PK — nie dla liczników faz P1–P3. */
+/** Rola „drybling” ma sens dla PXT, xT, wejść PK oraz liczników faz P1–P3. */
 export function supportsComparisonMetricDribbleRole(family: PlayerComparisonMetricFamily): boolean {
-  return family === "pxt" || family === "xt" || family === "pkEntries";
+  return (
+    family === "pxt" ||
+    family === "xt" ||
+    family === "pkEntries" ||
+    family === "phaseP1" ||
+    family === "phaseP2" ||
+    family === "phaseP3"
+  );
 }
 
 export function resolvePlayerComparisonMetricId(
@@ -207,24 +217,30 @@ export function resolvePlayerComparisonMetricId(
     return "pkEntriesDribble";
   }
   if (family === "phaseP1") {
-    return role === "receiver" ? "phaseP1Receiver" : "phaseP1Sender";
+    if (role === "receiver") return "phaseP1Receiver";
+    if (role === "dribble") return "phaseP1Dribble";
+    return "phaseP1Sender";
   }
   if (family === "phaseP2") {
-    return role === "receiver" ? "phaseP2Receiver" : "phaseP2Sender";
+    if (role === "receiver") return "phaseP2Receiver";
+    if (role === "dribble") return "phaseP2Dribble";
+    return "phaseP2Sender";
   }
   if (family === "phaseP3") {
-    return role === "receiver" ? "phaseP3Receiver" : "phaseP3Sender";
+    if (role === "receiver") return "phaseP3Receiver";
+    if (role === "dribble") return "phaseP3Dribble";
+    return "phaseP3Sender";
   }
   return family;
 }
 
-/** Dla osi spider / kart KPI: metryka z wartością w `row.values` (fazy P1–P3 zależą od roli podanie/przyjęcie). */
+/** Dla osi spider / kart KPI: metryka z wartością w `row.values` (fazy P1–P3 zależą od roli). */
 export function resolveComparisonAxisValueId(
   axisFamily: PlayerComparisonMetricFamily,
   metricRole: PlayerComparisonMetricRole,
 ): PlayerComparisonMetricId {
   if (familyIsPhaseParticipation(axisFamily)) {
-    return resolvePlayerComparisonMetricId(axisFamily, metricRole === "receiver" ? "receiver" : "sender");
+    return resolvePlayerComparisonMetricId(axisFamily, metricRole);
   }
   return axisFamily as PlayerComparisonMetricId;
 }
@@ -236,6 +252,9 @@ function familyIsPhaseParticipation(family: PlayerComparisonMetricFamily): boole
 function phaseAxisRoleLabels(metricRole: PlayerComparisonMetricRole): { longRole: string; shortRole: string } {
   if (metricRole === "receiver") {
     return { longRole: "przyjęcie", shortRole: "prz." };
+  }
+  if (metricRole === "dribble") {
+    return { longRole: "drybling", shortRole: "dr." };
   }
   return { longRole: "podanie", shortRole: "pod." };
 }
@@ -373,10 +392,13 @@ export const PLAYER_COMPARISON_METRICS: PlayerComparisonMetricDefinition[] = [
   },
   { id: "phaseP1Sender", label: "P1 (podanie)", shortLabel: "P1 pod.", direction: "higher", fractionDigits: 0 },
   { id: "phaseP1Receiver", label: "P1 (przyjęcie)", shortLabel: "P1 prz.", direction: "higher", fractionDigits: 0 },
+  { id: "phaseP1Dribble", label: "P1 (drybling)", shortLabel: "P1 dr.", direction: "higher", fractionDigits: 0 },
   { id: "phaseP2Sender", label: "P2 (podanie)", shortLabel: "P2 pod.", direction: "higher", fractionDigits: 0 },
   { id: "phaseP2Receiver", label: "P2 (przyjęcie)", shortLabel: "P2 prz.", direction: "higher", fractionDigits: 0 },
+  { id: "phaseP2Dribble", label: "P2 (drybling)", shortLabel: "P2 dr.", direction: "higher", fractionDigits: 0 },
   { id: "phaseP3Sender", label: "P3 (podanie)", shortLabel: "P3 pod.", direction: "higher", fractionDigits: 0 },
   { id: "phaseP3Receiver", label: "P3 (przyjęcie)", shortLabel: "P3 prz.", direction: "higher", fractionDigits: 0 },
+  { id: "phaseP3Dribble", label: "P3 (drybling)", shortLabel: "P3 dr.", direction: "higher", fractionDigits: 0 },
   {
     id: "defenseShotLine",
     label: "Na linii strzału (obrona)",
@@ -393,7 +415,7 @@ export const PLAYER_COMPARISON_METRICS: PlayerComparisonMetricDefinition[] = [
   },
 ];
 
-/** Etykiety osi / kart — dla faz P1–P3 zależą od wybranej roli (podanie vs przyjęcie). */
+/** Etykiety osi / kart — dla faz P1–P3 zależą od wybranej roli (podanie / przyjęcie / drybling). */
 export function getPlayerComparisonAxisDisplay(
   axisId: PlayerComparisonMetricFamily,
   metricRole: PlayerComparisonMetricRole,
@@ -502,6 +524,35 @@ export function getPlayerComparisonPairCellTone(
     : { primary: "better", secondary: "worse" };
 }
 
+/** Ton komórki w porównaniu wielu zawodników — najlepszy / najsłabszy w grupie. */
+export function getPlayerComparisonGroupCellTones(
+  values: number[],
+  direction: "higher" | "lower",
+  metricId: PlayerComparisonMetricId,
+): PlayerComparisonPairCellTone[] {
+  const rounded = values.map((value) =>
+    Number.isFinite(value) ? roundPlayerComparisonMetricForDisplay(metricId, value) : Number.NaN,
+  );
+  const finite = rounded.filter((value) => Number.isFinite(value));
+  if (finite.length === 0) return values.map(() => "neutral");
+  if (finite.length === 1) {
+    return rounded.map((value) => (Number.isFinite(value) ? "even" : "neutral"));
+  }
+  const min = Math.min(...finite);
+  const max = Math.max(...finite);
+  if (min === max) {
+    return rounded.map((value) => (Number.isFinite(value) ? "even" : "neutral"));
+  }
+  const best = direction === "higher" ? max : min;
+  const worst = direction === "higher" ? min : max;
+  return rounded.map((value) => {
+    if (!Number.isFinite(value)) return "neutral";
+    if (value === best) return "better";
+    if (value === worst) return "worse";
+    return "neutral";
+  });
+}
+
 export type PlayerComparisonRawAmountSide = "primaryMore" | "secondaryMore" | "even" | "neutral";
 
 /** Który zawodnik ma wyższą wartość surową (niezależnie od tego, czy to dobrze). */
@@ -544,6 +595,18 @@ export function formatPlayerComparisonRawSurplusParen(
     maximumFractionDigits: digits,
   });
   return `(+${formatted})`;
+}
+
+/** Nadwyżka względem najwyższej wartości pozostałych zawodników w grupie. */
+export function formatPlayerComparisonGroupSurplusParen(
+  metricId: PlayerComparisonMetricId,
+  ownValue: number,
+  otherValues: number[],
+  locale = "pl-PL",
+): string | null {
+  const finiteOthers = otherValues.filter((value) => Number.isFinite(value));
+  if (finiteOthers.length === 0) return null;
+  return formatPlayerComparisonRawSurplusParen(metricId, ownValue, Math.max(...finiteOthers), locale);
 }
 
 export type PlayerComparisonRankingSelectOption = { value: string; label: string };
@@ -621,10 +684,13 @@ const emptyMetrics = (): PlayerComparisonRawMetrics => ({
   losesXtDefense: 0,
   phaseP1Sender: 0,
   phaseP1Receiver: 0,
+  phaseP1Dribble: 0,
   phaseP2Sender: 0,
   phaseP2Receiver: 0,
+  phaseP2Dribble: 0,
   phaseP3Sender: 0,
   phaseP3Receiver: 0,
+  phaseP3Dribble: 0,
   defenseShotLine: 0,
   defenseShotBlockXg: 0,
 });
@@ -758,25 +824,28 @@ const isTeamAction = (action: Action, match: TeamInfo): boolean =>
 const isDribblePackingAction = (action: Action): boolean =>
   String(action.actionType ?? "").toLowerCase() === "dribble";
 
-/** Liczba wystąpień zawodnika w danej fazie (P1–P3) jako podający / przyjmujący; drybling tylko u nadawcy. */
+/** Liczba wystąpień zawodnika w danej fazie (P1–P3): podanie, przyjęcie albo drybling. */
 const bumpPhasePackingParticipation = (
   rowsByPlayerId: Map<string, PlayerComparisonRow>,
   action: Action,
 ): void => {
   const isDribble = isDribblePackingAction(action);
-  const triples: [keyof Action, PlayerComparisonMetricId, PlayerComparisonMetricId][] = [
-    ["isP1", "phaseP1Sender", "phaseP1Receiver"],
-    ["isP2", "phaseP2Sender", "phaseP2Receiver"],
-    ["isP3", "phaseP3Sender", "phaseP3Receiver"],
+  const triples: [keyof Action, PlayerComparisonMetricId, PlayerComparisonMetricId, PlayerComparisonMetricId][] = [
+    ["isP1", "phaseP1Sender", "phaseP1Receiver", "phaseP1Dribble"],
+    ["isP2", "phaseP2Sender", "phaseP2Receiver", "phaseP2Dribble"],
+    ["isP3", "phaseP3Sender", "phaseP3Receiver", "phaseP3Dribble"],
   ];
-  for (const [flag, senderMetric, receiverMetric] of triples) {
+  for (const [flag, senderMetric, receiverMetric, dribbleMetric] of triples) {
     if (action[flag] !== true) continue;
+    if (isDribble) {
+      addValue(rowsByPlayerId, action.senderId, dribbleMetric, 1);
+      bumpEventCountForPlayer(rowsByPlayerId, action.senderId, dribbleMetric);
+      continue;
+    }
     addValue(rowsByPlayerId, action.senderId, senderMetric, 1);
     bumpEventCountForPlayer(rowsByPlayerId, action.senderId, senderMetric);
-    if (!isDribble) {
-      addValue(rowsByPlayerId, action.receiverId, receiverMetric, 1);
-      bumpEventCountForPlayer(rowsByPlayerId, action.receiverId, receiverMetric);
-    }
+    addValue(rowsByPlayerId, action.receiverId, receiverMetric, 1);
+    bumpEventCountForPlayer(rowsByPlayerId, action.receiverId, receiverMetric);
   }
 };
 
@@ -890,10 +959,13 @@ const normalizeValues = (
     losesXtDefense: raw.losesXtDefense * factor,
     phaseP1Sender: raw.phaseP1Sender * factor,
     phaseP1Receiver: raw.phaseP1Receiver * factor,
+    phaseP1Dribble: raw.phaseP1Dribble * factor,
     phaseP2Sender: raw.phaseP2Sender * factor,
     phaseP2Receiver: raw.phaseP2Receiver * factor,
+    phaseP2Dribble: raw.phaseP2Dribble * factor,
     phaseP3Sender: raw.phaseP3Sender * factor,
     phaseP3Receiver: raw.phaseP3Receiver * factor,
+    phaseP3Dribble: raw.phaseP3Dribble * factor,
     defenseShotLine: raw.defenseShotLine * factor,
     defenseShotBlockXg: raw.defenseShotBlockXg * factor,
   };

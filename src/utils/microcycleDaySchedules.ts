@@ -39,6 +39,22 @@ export function updateMicrocycleDaySchedule(
   return [...without, next].sort((a, b) => a.dayIndex - b.dayIndex);
 }
 
+/** Dodaje minuty do godziny HH:MM. Wynik w zakresie doby (zawija po 24 h). */
+export function addMinutesToHhmm(
+  hhmm: string,
+  minutes: number
+): string | null {
+  const start = sanitizeMicrocycleOptionalTime(hhmm);
+  if (!start) return null;
+  if (!Number.isFinite(minutes) || minutes < 0) return null;
+  const [h, m] = start.split(":").map(Number);
+  const total = h * 60 + m + Math.round(minutes);
+  const wrapped = ((total % (24 * 60)) + 24 * 60) % (24 * 60);
+  const hh = Math.floor(wrapped / 60);
+  const mm = wrapped % 60;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
 export function normalizeMicrocycleDaySchedules(raw: unknown): MicrocycleDaySchedule[] {
   if (!Array.isArray(raw)) return [];
   const byDay = new Map<number, MicrocycleDaySchedule>();

@@ -6,6 +6,17 @@ export function matchDayOffset(dayIndex: number, matchDayIndex: number): number 
   return dayIndex - matchDayIndex;
 }
 
+/**
+ * Offset periodyzacyjny w tygodniu pn–nd.
+ * Poniedziałek po meczu w niedzielę to MD+1 (regeneracja po poprzedniej niedzieli),
+ * nie MD-6 — inaczej preset siłowy MD+1 nigdy nie ląduje w tym mikrocyklu.
+ */
+export function periodizationOffset(dayIndex: number, matchDayIndex: number): number {
+  const raw = matchDayOffset(dayIndex, matchDayIndex);
+  if (raw === -6) return 1;
+  return raw;
+}
+
 export function formatMatchDayLabel(offset: number): string {
   if (offset === 0) return "MD";
   if (offset < 0) return `MD${offset}`;
@@ -13,7 +24,7 @@ export function formatMatchDayLabel(offset: number): string {
 }
 
 export function matchDayLabelForColumn(dayIndex: number, matchDayIndex: number): string {
-  return formatMatchDayLabel(matchDayOffset(dayIndex, matchDayIndex));
+  return formatMatchDayLabel(periodizationOffset(dayIndex, matchDayIndex));
 }
 
 /** 1–2 unikalne dni 0–6, posortowane (wcześniejszy mecz pierwszy). */

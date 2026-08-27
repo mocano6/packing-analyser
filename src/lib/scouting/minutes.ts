@@ -49,35 +49,65 @@ const isRedCard = (type?: string): boolean => {
 
 const isOwnGoal = (type?: string): boolean => (type || '').toLowerCase().includes('own');
 
+export interface PlayerPlayInterval {
+  isStarter: boolean;
+  startMinute: number;
+  endMinute: number;
+  minutesPlayed: number;
+  subInMinute: number | null;
+  subOutMinute: number | null;
+}
+
+/** Przedział gry (Od/Do) ze składu, zmian i czerwonej kartki. */
+export function computePlayerPlayInterval(p: RawSquadPlayer): PlayerPlayInterval {
+  const subs = p.substitutions || [];
+  const subInMinute = parseMinute(subs.find((s) => (s.type || '').toLowerCase() === 'in')?.minute);
+  const subOutMinute = parseMinute(subs.find((s) => (s.type || '').toLowerCase() === 'out')?.minute);
+  const isStarter = (p.type || '').toLowerCase() === 'starter';
+  const redMinute = parseMinute(p.cards?.find((c) => isRedCard(c.type))?.minute);
+
+  if (isStarter) {
+    const startMinute = 0;
+    let endMinute = subOutMinute ?? REGULAR_TIME;
+    if (redMinute != null) endMinute = Math.min(endMinute, redMinute);
+    return {
+      isStarter,
+      startMinute,
+      endMinute,
+      minutesPlayed: Math.max(0, endMinute - startMinute),
+      subInMinute,
+      subOutMinute,
+    };
+  }
+  if (subInMinute != null) {
+    const startMinute = subInMinute;
+    let endMinute = subOutMinute ?? REGULAR_TIME;
+    if (redMinute != null) endMinute = Math.min(endMinute, redMinute);
+    return {
+      isStarter,
+      startMinute,
+      endMinute,
+      minutesPlayed: Math.max(0, endMinute - startMinute),
+      subInMinute,
+      subOutMinute,
+    };
+  }
+  return {
+    isStarter,
+    startMinute: 0,
+    endMinute: 0,
+    minutesPlayed: 0,
+    subInMinute,
+    subOutMinute,
+  };
+}
+
 /** Wylicza statystyki jednego zawodnika (minuty, bramki, kartki). */
 export function computePlayerStat(
   p: RawSquadPlayer,
   team: ScoutingTeamRef
 ): ScoutingPlayerMatchStat {
-  const subs = p.substitutions || [];
-  const subIn = parseMinute(subs.find((s) => (s.type || '').toLowerCase() === 'in')?.minute);
-  const subOut = parseMinute(subs.find((s) => (s.type || '').toLowerCase() === 'out')?.minute);
-  const isStarter = (p.type || '').toLowerCase() === 'starter';
-
-  // Czerwona kartka kończy udział zawodnika w meczu.
-  const redMinute = parseMinute(p.cards?.find((c) => isRedCard(c.type))?.minute);
-
-  let minutesPlayed = 0;
-  if (isStarter) {
-    const start = 0;
-    let end = subOut ?? REGULAR_TIME;
-    if (redMinute != null) end = Math.min(end, redMinute);
-    minutesPlayed = Math.max(0, end - start);
-  } else if (subIn != null) {
-    const start = subIn;
-    let end = subOut ?? REGULAR_TIME;
-    if (redMinute != null) end = Math.min(end, redMinute);
-    minutesPlayed = Math.max(0, end - start);
-  } else {
-    // niewykorzystany rezerwowy
-    minutesPlayed = 0;
-  }
-
+  const interval = computePlayerPlayInterval(p);
   const goalsAll = p.goals || [];
   const scored = goalsAll.filter((g) => !isOwnGoal(g.type));
   const own = goalsAll.filter((g) => isOwnGoal(g.type));
@@ -92,15 +122,15 @@ export function computePlayerStat(
     number: p.number ?? null,
     teamId: team.id,
     teamName: team.name,
-    isStarter,
-    minutesPlayed,
+    isStarter: interval.isStarter,
+    minutesPlayed: interval.minutesPlayed,
     goals: scored.length,
     goalMinutes: scored.map((g) => parseMinute(g.minute)).filter((m): m is number => m != null),
     ownGoals: own.length,
     yellowCards: yellow,
     redCards: red,
-    subInMinute: subIn,
-    subOutMinute: subOut,
+    subInMinute: interval.subInMinute,
+    subOutMinute: interval.subOutMinute,
   };
 }
 

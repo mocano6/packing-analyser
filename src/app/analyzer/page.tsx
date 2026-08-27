@@ -69,6 +69,7 @@ import {
   isPossessionCounterEnabledStoredValue,
 } from "@/utils/possessionCounterPreference";
 import PlayerModal from "@/components/PlayerModal/PlayerModal";
+import ImportLnpPlayersModal from "@/components/ImportLnpPlayersModal/ImportLnpPlayersModal";
 import PlayerMinutesModal from "@/components/PlayerMinutesModal/PlayerMinutesModal";
 import TeamFormationBoard from "@/components/TeamFormationBoard/TeamFormationBoard";
 import MatchInfoModal from "@/components/MatchInfoModal/MatchInfoModal";
@@ -440,6 +441,7 @@ export default function Page() {
   };
 
   const [isPlayersGridExpanded, setIsPlayersGridExpanded] = useState<boolean>(false);
+  const [isLnpImportOpen, setIsLnpImportOpen] = useState(false);
   const [playersGridView, setPlayersGridView] = useState<"list" | "systems">("list");
   const [showRegainLosesPopup, setShowRegainLosesPopup] = useState<boolean>(false);
   const [pendingZoneSelection, setPendingZoneSelection] = useState<{zoneId: number, xT?: number} | null>(null);
@@ -664,6 +666,7 @@ export default function Page() {
     setIsModalOpen,
     handleDeletePlayer,
     handleSavePlayer,
+    handleSavePlayersBatch,
     handleEditPlayer,
     closeModal,
     refetchPlayers,
@@ -4323,14 +4326,25 @@ export default function Page() {
               </div>
               <div className={styles.playersGridHeaderActions}>
                 {!isPlayer && (
-                  <button
-                    className={styles.addPlayerButton}
-                    onClick={() => setIsModalOpen(true)}
-                    aria-label="Dodaj nowego zawodnika"
-                    title="Dodaj nowego zawodnika"
-                  >
-                    +
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className={styles.importLnpButton}
+                      onClick={() => setIsLnpImportOpen(true)}
+                      aria-label="Pobierz zawodników z Łączy Nas Piłka"
+                      title="Pobierz zawodników z Łączy Nas Piłka"
+                    >
+                      ŁNP
+                    </button>
+                    <button
+                      className={styles.addPlayerButton}
+                      onClick={() => setIsModalOpen(true)}
+                      aria-label="Dodaj nowego zawodnika"
+                      title="Dodaj nowego zawodnika"
+                    >
+                      +
+                    </button>
+                  </>
                 )}
                 <button
                   className={styles.closePlayersGridButton}
@@ -6527,6 +6541,23 @@ export default function Page() {
           currentTeam={selectedTeam}
           allTeams={availableTeams}
           existingPlayers={players}
+        />
+
+        <ImportLnpPlayersModal
+          isOpen={isLnpImportOpen}
+          onClose={() => setIsLnpImportOpen(false)}
+          currentTeam={selectedTeam}
+          existingPlayers={players}
+          onConfirm={async (playersToAdd) => {
+            const result = await handleSavePlayersBatch(playersToAdd);
+            if (result.saved > 0) {
+              toast.success(`Dodano ${result.saved} zawodnik(ów) z ŁNP.`);
+            }
+            if (result.errors.length > 0) {
+              toast.error(result.errors.slice(0, 3).join(" "));
+            }
+            return result;
+          }}
         />
 
         {/* Modal dla nowego meczu */}

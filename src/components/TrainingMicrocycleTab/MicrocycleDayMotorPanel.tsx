@@ -1,32 +1,61 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import type { MicrocycleTrainingBlock } from "@/types/trainingMicrocycle";
 import type {
   MicrocycleDayLoadTargets,
   MotorDominantId,
+  MotorSessionRole,
   MotorTagId,
 } from "@/types/microcycleMotor";
 import {
+  GYM_SESSION_CHARACTER_BY_ID,
   MICROCYCLE_LOAD_METRICS,
   MOTOR_DOMINANTS,
   MOTOR_DOMINANT_BY_ID,
   MOTOR_TAGS,
   MOTOR_TAG_BY_ID,
 } from "@/types/microcycleMotor";
-import { SSG_FORMATS, presetForOffset } from "@/lib/microcycle/motorModel";
+import {
+  FULL_PITCH_LENGTH_M,
+  FULL_PITCH_WIDTH_M,
+  SSG_FORMATS,
+  pitchAreaPctOfFull,
+  presetForOffset,
+  sessionPresetForRole,
+} from "@/lib/microcycle/motorModel";
 import type { ResolvedDayLoad } from "@/utils/microcycleLoad";
 import { blockAreaPerPlayer } from "@/utils/microcycleTrainingBlocks";
 import styles from "./TrainingMicrocycleTab.module.css";
 
+/** Dominanta z modelu ról → podpowiedź treści jednostki (nie stary offset MD). */
+const ROLE_BY_DOMINANT: Partial<Record<MotorDominantId, MotorSessionRole>> = {
+  recovery: "strength",
+  tension: "tension",
+  duration: "volume",
+  velocity: "speed",
+  activation: "activation",
+};
+
+function guidelinePreset(load: ResolvedDayLoad) {
+  if (load.isMatchDay) return presetForOffset(0);
+  if (load.dominant === "off") return presetForOffset(-3);
+  const role = ROLE_BY_DOMINANT[load.dominant];
+  return role ? sessionPresetForRole(role) : presetForOffset(load.offset);
+}
+
 export interface MicrocycleDayMotorPanelProps {
   load: ResolvedDayLoad;
   blocks: MicrocycleTrainingBlock[];
-  /** Widok 7-dniowy — tylko podgląd, bez edytora bloków. */
+  /** Widok 7-dniowy — zwinięte wiersze, edycja po kliknięciu. */
   compact: boolean;
   /** Sekcja Trening zwinięta — tylko skrót (dominanta / sRPE / min / bloki). */
   collapsed?: boolean;
   disabled: boolean;
+  /** Id aktualnie przeciąganego bloku (podświetlenie). */
+  draggingBlockId?: string | null;
+  /** Etykiety dni 0–6 do selecta „Przenieś do…”. */
+  dayLabels?: string[];
   onDominantChange: (dayIndex: number, dominant: MotorDominantId | null) => void;
   onTargetChange: (
     dayIndex: number,
@@ -35,11 +64,17 @@ export interface MicrocycleDayMotorPanelProps {
   ) => void;
   onResetDay: (dayIndex: number) => void;
   onFillFromPreset: (dayIndex: number) => void;
-  onAddBlock: (dayIndex: number) => void;
+  onSaveDayAsPreset?: (dayIndex: number) => void;
+  onAddBlock: (dayIndex: number) => string | null | void;
   onUpdateBlock: (blockId: string, patch: Partial<MicrocycleTrainingBlock>) => void;
   onSetBlockFormat: (blockId: string, formatId: string | null) => void;
   onDeleteBlock: (blockId: string) => void;
   onMoveBlock: (blockId: string, direction: -1 | 1) => void;
+  onMoveBlockToDay?: (blockId: string, targetDayIndex: number) => void;
+  /** Przenieś samo obciążenie dnia (dominantę + cele) na inny dzień. */
+  onMoveLoadToDay?: (fromDayIndex: number, targetDayIndex: number) => void;
+  onBlockDragStart?: (e: React.DragEvent, blockId: string) => void;
+  onBlockDragEnd?: () => void;
 }
 
 function TagChips({
@@ -85,24 +120,70 @@ function TagChips({
   );
 }
 
+function BlockAreaBadge({
+  area,
+  length,
+  width,
+  areaOff,
+  rangeHint,
+  compact,
+}: {
+  area: number;
+  length: number | null;
+  width: number | null;
+  areaOff: boolean;
+  rangeHint: string | null;
+  compact: boolean;
+}) {
+  const pct = pitchAreaPctOfFull(length, width);
+  const titleParts = [`${area} m²/gracz`];
+  if (length && width && pct != null) {
+    titleParts.push(
+      `boisko ${length}×${width} m = ${pct}% pełnego (${FULL_PITCH_LENGTH_M}×${FULL_PITCH_WIDTH_M})`
+    );
+  }
+  if (rangeHint) titleParts.push(rangeHint);
+
+  return (
+    <span
+      className={`${styles.blockArea} ${areaOff ? styles.blockAreaOff : ""}`}
+      title={titleParts.join(" — ")}
+    >
+      {compact ? `${area} m²` : `${area} m²/gracz`}
+      {pct != null && (
+        <span className={styles.blockAreaPct}>{compact ? ` · ${pct}%` : ` · ${pct}% pełnego`}</span>
+      )}
+    </span>
+  );
+}
+
 export default function MicrocycleDayMotorPanel({
   load,
   blocks,
   compact,
   collapsed = false,
   disabled,
+  draggingBlockId = null,
+  dayLabels,
   onDominantChange,
   onTargetChange,
   onResetDay,
   onFillFromPreset,
+  onSaveDayAsPreset,
   onAddBlock,
   onUpdateBlock,
   onSetBlockFormat,
   onDeleteBlock,
   onMoveBlock,
+  onMoveBlockToDay,
+  onMoveLoadToDay,
+  onBlockDragStart,
+  onBlockDragEnd,
 }: MicrocycleDayMotorPanelProps) {
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const closeBlockEditor = () => setEditingBlockId(null);
   const dominant = MOTOR_DOMINANT_BY_ID[load.dominant];
-  const preset = presetForOffset(load.isMatchDay ? 0 : load.offset);
+  const preset = guidelinePreset(load);
   const minutes = load.plannedMinutes ?? load.targets.minutes;
   const showModelMinutes =
     load.plannedMinutes != null && Math.abs(load.plannedMinutes - load.targets.minutes) > 5;
@@ -130,6 +211,32 @@ export default function MicrocycleDayMotorPanel({
           <span className={styles.motorBlocksHint} title="Liczba bloków treningowych">
             {blocks.length} {blocks.length === 1 ? "blok" : "bloków"}
           </span>
+          {onMoveLoadToDay && dayLabels && !disabled && (
+            <label className={styles.loadMoveLabel}>
+              <span className={styles.srOnly}>Przenieś obciążenie dnia na inny dzień</span>
+              <select
+                className={styles.loadMoveSelect}
+                value=""
+                aria-label="Przenieś obciążenie na inny dzień"
+                title="Przenieś obciążenie (dominantę i cele) na inny dzień"
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === "") return;
+                  onMoveLoadToDay(load.dayIndex, Number(raw));
+                  e.target.value = "";
+                }}
+              >
+                <option value="">→</option>
+                {dayLabels.map((label, di) =>
+                  di === load.dayIndex ? null : (
+                    <option key={di} value={di}>
+                      {label}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
+          )}
         </div>
       </div>
     );
@@ -145,6 +252,16 @@ export default function MicrocycleDayMotorPanel({
         >
           {dominant.shortLabel}
         </span>
+        {preset.gymCharacter !== "none" && (
+          <span
+            className={styles.sessionGymChip}
+            style={{ color: "#c2410c", borderColor: "#fdba74" }}
+            title={GYM_SESSION_CHARACTER_BY_ID[preset.gymCharacter].label}
+          >
+            {GYM_SESSION_CHARACTER_BY_ID[preset.gymCharacter].shortLabel}{" "}
+            {GYM_SESSION_CHARACTER_BY_ID[preset.gymCharacter].typicalMinutes}′
+          </span>
+        )}
         <span className={styles.motorSrpe} title="Planowane sRPE (RPE × minuty)">
           {load.targets.srpe} AU
         </span>
@@ -171,6 +288,33 @@ export default function MicrocycleDayMotorPanel({
           >
             reset
           </button>
+        )}
+        {onMoveLoadToDay && dayLabels && (
+          <label className={styles.loadMoveLabel}>
+            <span className={styles.srOnly}>Przenieś obciążenie dnia na inny dzień</span>
+            <select
+              className={styles.loadMoveSelect}
+              value=""
+              disabled={disabled}
+              aria-label="Przenieś obciążenie na inny dzień"
+              title="Przenieś obciążenie (dominantę i cele) na inny dzień"
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === "") return;
+                onMoveLoadToDay(load.dayIndex, Number(raw));
+                e.target.value = "";
+              }}
+            >
+              <option value="">→ obciąż.</option>
+              {dayLabels.map((label, di) =>
+                di === load.dayIndex ? null : (
+                  <option key={di} value={di}>
+                    {label}
+                  </option>
+                )
+              )}
+            </select>
+          </label>
         )}
       </div>
 
@@ -269,31 +413,134 @@ export default function MicrocycleDayMotorPanel({
               dominantRange != null &&
               (area < dominantRange.min || area > dominantRange.max);
 
-            if (compact) {
+            if (compact && editingBlockId !== block.id) {
               return (
-                <div key={block.id} className={styles.blockRowCompact}>
+                <div
+                  key={block.id}
+                  className={`${styles.blockRowCompact} ${
+                    draggingBlockId === block.id ? styles.blockRowDragging : ""
+                  }`}
+                  onClick={(e) => {
+                    if (disabled) return;
+                    const target = e.target as HTMLElement;
+                    if (target.closest("button") || target.closest("[data-drag-handle]")) return;
+                    setEditingBlockId(block.id);
+                  }}
+                  title="Kliknij, aby edytować. Przeciągnij za ⠿."
+                >
+                  <span
+                    className={styles.blockDragHandle}
+                    data-drag-handle
+                    draggable={!disabled && !!onBlockDragStart}
+                    onDragStart={
+                      onBlockDragStart
+                        ? (e) => {
+                            e.stopPropagation();
+                            onBlockDragStart(e, block.id);
+                          }
+                        : undefined
+                    }
+                    onDragEnd={onBlockDragEnd}
+                    aria-hidden
+                  >
+                    ⠿
+                  </span>
                   <span className={styles.blockMinutes}>{block.minutes}′</span>
                   <span className={styles.blockName}>{block.name}</span>
                   {area != null && (
-                    <span
-                      className={`${styles.blockArea} ${areaOff ? styles.blockAreaOff : ""}`}
-                      title={
+                    <BlockAreaBadge
+                      area={area}
+                      length={block.pitchLength}
+                      width={block.pitchWidth}
+                      areaOff={areaOff}
+                      rangeHint={
                         areaOff && dominantRange
-                          ? `${area} m²/gracz — dominanta wymaga ${dominantRange.min}–${dominantRange.max}`
-                          : `${area} m²/gracz`
+                          ? `dominanta wymaga ${dominantRange.min}–${dominantRange.max} m²/gracz`
+                          : null
                       }
-                    >
-                      {area} m²
-                    </span>
+                      compact
+                    />
                   )}
                   <TagChips tags={block.tags} />
+                  <span className={styles.blockRowCompactTools}>
+                    <button
+                      type="button"
+                      className={styles.blockIconBtn}
+                      draggable={false}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingBlockId(block.id);
+                      }}
+                      disabled={disabled}
+                      aria-label={`Edytuj blok: ${block.name}`}
+                      title="Edytuj blok"
+                    >
+                      ✎
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.blockIconBtn} ${styles.blockRowCompactDelete}`}
+                      draggable={false}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteBlock(block.id);
+                      }}
+                      disabled={disabled}
+                      aria-label={`Usuń blok: ${block.name}`}
+                      title="Usuń blok"
+                    >
+                      ✕
+                    </button>
+                  </span>
                 </div>
               );
             }
 
             return (
-              <div key={block.id} className={styles.blockRow}>
+              <div
+                key={block.id}
+                className={`${styles.blockRow} ${compact ? styles.blockRowCompactEdit : ""} ${
+                  draggingBlockId === block.id ? styles.blockRowDragging : ""
+                }`}
+                onKeyDown={
+                  compact
+                    ? (e) => {
+                        if (e.nativeEvent.isComposing) return;
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          closeBlockEditor();
+                          return;
+                        }
+                        if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") {
+                          e.preventDefault();
+                          closeBlockEditor();
+                        }
+                      }
+                    : undefined
+                }
+              >
                 <div className={styles.blockRowTop}>
+                  <span
+                    className={styles.blockDragHandle}
+                    draggable={!disabled && !!onBlockDragStart}
+                    onDragStart={
+                      onBlockDragStart
+                        ? (e) => {
+                            e.stopPropagation();
+                            onBlockDragStart(e, block.id);
+                          }
+                        : undefined
+                    }
+                    onDragEnd={onBlockDragEnd}
+                    title="Przeciągnij do innego dnia"
+                    aria-label={`Przeciągnij blok: ${block.name}`}
+                    role="button"
+                    tabIndex={disabled ? -1 : 0}
+                  >
+                    ⠿
+                  </span>
                   <input
                     type="text"
                     className={styles.blockNameInput}
@@ -302,6 +549,7 @@ export default function MicrocycleDayMotorPanel({
                     placeholder="Nazwa bloku"
                     aria-label={`Nazwa bloku ${i + 1}`}
                     disabled={disabled}
+                    autoFocus={compact}
                   />
                   <input
                     type="number"
@@ -331,10 +579,39 @@ export default function MicrocycleDayMotorPanel({
                   >
                     ↓
                   </button>
+                  {onMoveBlockToDay && dayLabels && (
+                    <label className={styles.blockMoveDayLabel}>
+                      <span className={styles.srOnly}>Przenieś blok do dnia</span>
+                      <select
+                        className={styles.blockMoveDaySelect}
+                        value=""
+                        disabled={disabled}
+                        aria-label={`Przenieś blok „${block.name}” do innego dnia`}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          if (raw === "") return;
+                          onMoveBlockToDay(block.id, Number(raw));
+                          e.target.value = "";
+                        }}
+                      >
+                        <option value="">→ dzień</option>
+                        {dayLabels.map((label, di) =>
+                          di === load.dayIndex ? null : (
+                            <option key={di} value={di}>
+                              {label}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+                  )}
                   <button
                     type="button"
                     className={styles.blockIconBtn}
-                    onClick={() => onDeleteBlock(block.id)}
+                    onClick={() => {
+                      if (editingBlockId === block.id) setEditingBlockId(null);
+                      onDeleteBlock(block.id);
+                    }}
                     disabled={disabled}
                     aria-label={`Usuń blok: ${block.name}`}
                   >
@@ -406,16 +683,18 @@ export default function MicrocycleDayMotorPanel({
                     disabled={disabled}
                   />
                   {area != null && (
-                    <span
-                      className={`${styles.blockArea} ${areaOff ? styles.blockAreaOff : ""}`}
-                      title={
+                    <BlockAreaBadge
+                      area={area}
+                      length={block.pitchLength}
+                      width={block.pitchWidth}
+                      areaOff={areaOff}
+                      rangeHint={
                         areaOff && dominantRange
                           ? `Dominanta „${dominant.label}" wymaga ${dominantRange.min}–${dominantRange.max} m²/gracz`
                           : "Powierzchnia na gracza bez bramkarzy"
                       }
-                    >
-                      {area} m²/gracz
-                    </span>
+                      compact={false}
+                    />
                   )}
                 </div>
 
@@ -430,6 +709,19 @@ export default function MicrocycleDayMotorPanel({
                     })
                   }
                 />
+                {compact && (
+                  <button
+                    type="button"
+                    className={styles.blockConfirmBtn}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      closeBlockEditor();
+                    }}
+                    onClick={closeBlockEditor}
+                  >
+                    Zatwierdź
+                  </button>
+                )}
               </div>
             );
           })
@@ -440,16 +732,33 @@ export default function MicrocycleDayMotorPanel({
         <button
           type="button"
           className={styles.smallBtn}
-          onClick={() => onFillFromPreset(load.dayIndex)}
+          onClick={() => {
+            setEditingBlockId(null);
+            onFillFromPreset(load.dayIndex);
+          }}
           disabled={disabled || preset.blocks.length === 0}
           title="Wstaw bloki z modelu dla tego dnia"
         >
           Z presetu
         </button>
+        {onSaveDayAsPreset && (
+          <button
+            type="button"
+            className={styles.smallBtn}
+            onClick={() => onSaveDayAsPreset(load.dayIndex)}
+            disabled={disabled || blocks.length === 0}
+            title="Zapisz aktualne bloki dnia jako preset MD"
+          >
+            Zapisz jako preset
+          </button>
+        )}
         <button
           type="button"
           className={styles.smallBtn}
-          onClick={() => onAddBlock(load.dayIndex)}
+          onClick={() => {
+            const id = onAddBlock(load.dayIndex);
+            if (typeof id === "string" && id) setEditingBlockId(id);
+          }}
           disabled={disabled}
         >
           + Blok

@@ -25,6 +25,7 @@ assert.equal(sanitizeDayTitleMatchDayOffset(-1), -1);
 assert.equal(dayIndexFromMatchDayOffset(5, -1), 4); // So → Pt
 assert.equal(dayIndexFromMatchDayOffset(5, -2), 3);
 assert.equal(dayIndexFromMatchDayOffset(1, -3), null); // poza tygodniem
+assert.equal(dayIndexFromMatchDayOffset(6, 1), 0); // Nd → MD+1 w poniedziałek
 
 {
   const locked = resolveDayTitleDisplay(true, {

@@ -1,0 +1,274 @@
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+.pickerHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pickerHeading {
+  min-width: 0;
+}
+
+.pickerTitle {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 650;
+  color: #0f172a;
+}
+
+.pickerHint {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.pickerCount {
+  margin: 0;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  font-size: 13px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.pickerCount strong {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.selectedStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.selectedChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 4px 8px 4px 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #ffffff;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.selectedChip:hover {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+
+.selectedChip:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.selectedDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.selectedName {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedNumber {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
+}
+
+.selectedEmpty {
+  margin: 0;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.group {
+  display: grid;
+  grid-template-columns: 7.25rem minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.group:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.groupTitle {
+  margin: 0;
+  padding-top: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748b;
+  line-height: 1.2;
+}
+
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.card {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.card:hover {
+  border-color: #94a3b8;
+}
+
+.card:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.cardSelected {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.cardDisabled {
+  opacity: 0.45;
+}
+
+.cardColor {
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 999px;
+}
+
+.cardNumber {
+  min-width: 1.5em;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.cardName {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 11rem;
+}
+
+.cardMeta {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #64748b;
+}
+
+.pickerEmbedded {
+  border: none;
+  border-radius: 0;
+  border-right: 1px solid #e2e8f0;
+  background: transparent;
+  height: 100%;
+  max-height: none;
+  overflow: auto;
+}
+
+.pickerEmbedded .group {
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+}
+
+.pickerEmbedded .cardName {
+  max-width: 8.5rem;
+}
+
+@media (max-width: 640px) {
+  .group {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .groupTitle {
+    padding-top: 0;
+  }
+
+  .card {
+    flex: 1 1 calc(50% - 6px);
+    min-width: calc(50% - 6px);
+  }
+
+  .cardName {
+    max-width: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .pickerEmbedded {
+    border-right: none;
+    border-bottom: 1px solid #e2e8f0;
+    max-height: 280px;
+  }
+}

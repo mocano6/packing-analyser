@@ -10,10 +10,15 @@ import {
   areaPerPlayer,
   findSsgFormat,
   presetForOffset,
+  sessionPresetForRole,
   type MotorPresetBlock,
 } from "@/lib/microcycle/motorModel";
 import { generateMicrocycleId } from "@/utils/trainingMicrocycle";
 import { normalizeMatchDaysArray } from "@/utils/matchDayLabels";
+import {
+  assignSessionRolesToWeek,
+  restDaysForWeekFill,
+} from "@/utils/microcycleSessionRoles";
 
 const MAX_BLOCK_MINUTES = 240;
 
@@ -68,6 +73,26 @@ export function blocksForDay(
   return blocks.filter((b) => b.dayIndex === dayIndex).sort((a, b) => a.order - b.order);
 }
 
+/**
+ * Przenosi blok do innego dnia (na koniec listy dnia docelowego).
+ * Ta sama doba → bez zmian. Nieznany id / zły dayIndex → bez zmian.
+ */
+export function moveBlockToDay(
+  blocks: MicrocycleTrainingBlock[],
+  blockId: string,
+  targetDayIndex: number
+): MicrocycleTrainingBlock[] {
+  const day = safeDayIndex(targetDayIndex);
+  const target = blocks.find((b) => b.id === blockId);
+  if (!target || target.dayIndex === day) return blocks;
+  const destOrder = blocks.filter(
+    (b) => b.microcycleId === target.microcycleId && b.dayIndex === day
+  ).length;
+  return blocks.map((b) =>
+    b.id === blockId ? { ...b, dayIndex: day, order: destOrder } : b
+  );
+}
+
 function blockFromPreset(
   presetBlock: MotorPresetBlock,
   microcycleId: string,
@@ -91,26 +116,39 @@ function blockFromPreset(
   };
 }
 
-/** Bloki z presetu dla jednego dnia (offset liczony od głównego meczu). */
+/**
+ * Bloki z presetu roli jednostki (siła → napięcie → objętość → prędkość).
+ * Dzień wolny / poza rotacją → pusta lista. Mecz → bloki dnia meczowego.
+ */
 export function presetBlocksForDay(
   microcycleId: string,
   dayIndex: number,
-  matchDays: number[]
+  matchDays: number[],
+  restDays: number[] = []
 ): MicrocycleTrainingBlock[] {
   const days = normalizeMatchDaysArray(matchDays);
-  const primary = days[0] ?? 5;
-  const isMatchDay = days.includes(dayIndex);
-  const preset = presetForOffset(isMatchDay ? 0 : dayIndex - primary);
-  return preset.blocks.map((b, i) => blockFromPreset(b, microcycleId, dayIndex, i));
+  if (days.includes(dayIndex)) {
+    return presetForOffset(0).blocks.map((b, i) =>
+      blockFromPreset(b, microcycleId, dayIndex, i)
+    );
+  }
+  const fillRest = restDaysForWeekFill(days, restDays);
+  if (fillRest.includes(dayIndex)) return [];
+  const role = assignSessionRolesToWeek(days, fillRest).find((a) => a.dayIndex === dayIndex)?.role;
+  if (!role) return [];
+  return sessionPresetForRole(role).blocks.map((b, i) =>
+    blockFromPreset(b, microcycleId, dayIndex, i)
+  );
 }
 
-/** Bloki z presetów dla całego tygodnia. */
+/** Bloki z presetów rolowych dla całego tygodnia. */
 export function presetBlocksForMicrocycle(
   microcycle: TrainingMicrocycle
 ): MicrocycleTrainingBlock[] {
   const matchDays = (microcycle.matches ?? []).map((m) => m.dayIndex);
+  const restDays = microcycle.restDays ?? [];
   return Array.from({ length: 7 }, (_, dayIndex) =>
-    presetBlocksForDay(microcycle.id, dayIndex, matchDays)
+    presetBlocksForDay(microcycle.id, dayIndex, matchDays, restDays)
   ).flat();
 }
 

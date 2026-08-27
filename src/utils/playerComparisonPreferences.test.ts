@@ -70,10 +70,10 @@ const invalidFamily = parsePlayerComparisonPreferences(
 assert.strictEqual(invalidFamily.comparisonMetricFamily, "pxt");
 assert.strictEqual(invalidFamily.comparisonMetricRole, "sender");
 
-const phaseDribbleCoerced = parsePlayerComparisonPreferences(
+const phaseDribbleKept = parsePlayerComparisonPreferences(
   JSON.stringify({ comparisonMetricFamily: "phaseP1", comparisonMetricRole: "dribble" }),
 );
-assert.strictEqual(phaseDribbleCoerced.comparisonMetricFamily, "phaseP1");
-assert.strictEqual(phaseDribbleCoerced.comparisonMetricRole, "sender");
+assert.strictEqual(phaseDribbleKept.comparisonMetricFamily, "phaseP1");
+assert.strictEqual(phaseDribbleKept.comparisonMetricRole, "dribble");
 
 console.log("playerComparisonPreferences.test: OK");

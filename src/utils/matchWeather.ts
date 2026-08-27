@@ -91,6 +91,29 @@ export function pickHourlyIndex(
   kickoffIso: string
 ): number {
   if (times.length === 0) return -1;
+  const warsawKey = kickoffAsWarsawHourKey(kickoffIso);
+  if (warsawKey) {
+    // Open-Meteo z timezone=Europe/Warsaw zwraca "YYYY-MM-DDTHH:MM" w czasie Warszawy.
+    const exact = times.findIndex((t) => t.slice(0, 13) === warsawKey.slice(0, 13));
+    if (exact >= 0) return exact;
+
+    const target = warsawHourKeyToMinutes(warsawKey);
+    if (target != null) {
+      let best = 0;
+      let bestDiff = Infinity;
+      for (let i = 0; i < times.length; i++) {
+        const mins = warsawHourKeyToMinutes(times[i]);
+        if (mins == null) continue;
+        const diff = Math.abs(mins - target);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          best = i;
+        }
+      }
+      return best;
+    }
+  }
+
   const target = new Date(kickoffIso).getTime();
   if (!Number.isFinite(target)) return 0;
   let best = 0;
@@ -105,4 +128,35 @@ export function pickHourlyIndex(
     }
   }
   return best;
+}
+
+/** Godzina kickoffu w Europe/Warsaw jako klucz "YYYY-MM-DDTHH:00". */
+export function kickoffAsWarsawHourKey(kickoffIso: string): string | null {
+  const d = new Date(kickoffIso);
+  if (!Number.isFinite(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Warsaw",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const hour = get("hour") === "24" ? "00" : get("hour");
+  return `${get("year")}-${get("month")}-${get("day")}T${hour}:00`;
+}
+
+/** Minuty od epoki kalendarzowej (YYYY-MM-DDTHH:MM) — do porównania godzin wall-clock. */
+export function warsawHourKeyToMinutes(key: string): number | null {
+  const m = key.trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return null;
+  return (
+    Number(m[1]) * 525_600 +
+    Number(m[2]) * 43_200 +
+    Number(m[3]) * 1_440 +
+    Number(m[4]) * 60 +
+    Number(m[5])
+  );
 }

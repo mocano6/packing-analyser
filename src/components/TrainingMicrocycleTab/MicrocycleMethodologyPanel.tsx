@@ -1,18 +1,39 @@
 "use client";
 
-import React, { useCallback, useState } from "react";
-import { MOTOR_DOMINANTS } from "@/types/microcycleMotor";
+import React, { useCallback, useMemo, useState } from "react";
+import { MOTOR_DOMINANT_BY_ID, MOTOR_DOMINANTS } from "@/types/microcycleMotor";
 import {
-  MICROCYCLE_ALERT_THRESHOLDS,
-  MICROCYCLE_PRINCIPLES,
   MOTOR_DAY_PRESETS,
   PITCH_MANIPULATION_RULES,
-  SSG_FORMATS,
+  methodologyPrincipleCatalog,
 } from "@/lib/microcycle/motorModel";
+import {
+  AMATEUR_MODEL_EXCEPTIONS,
+  AMATEUR_SATURDAY_SHIFT,
+  AMATEUR_SESSION_PLACEMENT,
+  groupAmateurPlacementByDay,
+} from "@/lib/microcycle/microcycleDayPrinciples";
 import { formatMatchDayLabel } from "@/utils/matchDayLabels";
 import styles from "./TrainingMicrocycleTab.module.css";
 
 const STORAGE_KEY = "microcycle_methodology_open";
+const VIEW_STORAGE_KEY = "microcycle_methodology_view";
+
+type MethodologyViewId = "week" | "when" | "exceptions" | "rules";
+
+const VIEW_OPTIONS: { id: MethodologyViewId; label: string }[] = [
+  { id: "week", label: "Tydzień" },
+  { id: "when", label: "Co kiedy" },
+  { id: "exceptions", label: "Wyjątki" },
+  { id: "rules", label: "Zasady" },
+];
+
+function parseMethodologyView(raw: string | null): MethodologyViewId {
+  if (raw === "week" || raw === "when" || raw === "exceptions" || raw === "rules") {
+    return raw;
+  }
+  return "week";
+}
 
 export default function MicrocycleMethodologyPanel() {
   const [open, setOpen] = useState(() => {
@@ -21,6 +42,14 @@ export default function MicrocycleMethodologyPanel() {
       return window.localStorage.getItem(STORAGE_KEY) === "1";
     } catch {
       return false;
+    }
+  });
+  const [view, setView] = useState<MethodologyViewId>(() => {
+    if (typeof window === "undefined") return "week";
+    try {
+      return parseMethodologyView(window.localStorage.getItem(VIEW_STORAGE_KEY));
+    } catch {
+      return "week";
     }
   });
 
@@ -36,7 +65,23 @@ export default function MicrocycleMethodologyPanel() {
     });
   }, []);
 
-  const t = MICROCYCLE_ALERT_THRESHOLDS;
+  const selectView = useCallback((next: MethodologyViewId) => {
+    setView(next);
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const weekDays = useMemo(
+    () => [...MOTOR_DAY_PRESETS].sort((a, b) => a.offset - b.offset),
+    []
+  );
+  const placementByDay = useMemo(
+    () => groupAmateurPlacementByDay(AMATEUR_SESSION_PLACEMENT),
+    []
+  );
 
   return (
     <section
@@ -56,9 +101,7 @@ export default function MicrocycleMethodologyPanel() {
             {open ? "▾" : "▸"}
           </span>
           <span className={styles.dayTitlesToggleTitle}>Metodyka</span>
-          <span className={styles.dayTitlesCountBadge}>
-            dominanty · boiska · progi · zasady
-          </span>
+          <span className={styles.dayTitlesCountBadge}>ściągawka tygodnia</span>
         </span>
         <span className={styles.dayTitlesToggleHint}>{open ? "Zwiń" : "Rozwiń"}</span>
       </button>
@@ -70,164 +113,163 @@ export default function MicrocycleMethodologyPanel() {
         role="region"
         aria-labelledby="microcycle-methodology-toggle"
       >
-        <p className={styles.dayTitlesHint}>
-          Periodyzacja Taktyczna (Frade) połączona z modelem obciążeniowym GPS. Obciążenie rośnie do
-          środka tygodnia i spada przed meczem: MD-3 to szczyt objętości, MD-2 szczyt intensywności,
-          MD-1 tylko aktywacja.
+        <p className={styles.methodologyGlance}>
+          Siłownia → transfer 10–15′ → boisko. Szczyt obciążenia najdalej od meczu, potem schodzisz.
         </p>
 
-        <h3 className={styles.methodologyHeading}>Dominanty wysiłkowe</h3>
-        <div className={styles.methodologyTableWrap}>
-          <table className={styles.methodologyTable}>
-            <thead>
-              <tr>
-                <th>Dominanta</th>
-                <th>Co obciąża</th>
-                <th>m²/gracz</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MOTOR_DOMINANTS.map((d) => (
-                <tr key={d.id}>
-                  <td>
+        <div
+          className={`${styles.viewSwitcher} ${styles.methodologyTabs}`}
+          role="tablist"
+          aria-label="Widok metodyki"
+        >
+          {VIEW_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              role="tab"
+              id={`methodology-tab-${opt.id}`}
+              aria-selected={view === opt.id}
+              aria-controls={`methodology-panel-${opt.id}`}
+              className={`${styles.viewSwitcherBtn} ${
+                view === opt.id ? styles.viewSwitcherBtnActive : ""
+              }`}
+              onClick={() => selectView(opt.id)}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {view === "week" && (
+          <div
+            id="methodology-panel-week"
+            role="tabpanel"
+            aria-labelledby="methodology-tab-week"
+            className={styles.methodologyView}
+          >
+            <div className={styles.methodologyWeekStrip}>
+              {weekDays.map((p) => {
+                const dominant = MOTOR_DOMINANT_BY_ID[p.dominant];
+                return (
+                  <article
+                    key={p.offset}
+                    className={styles.methodologyWeekCard}
+                    style={{ borderTopColor: dominant?.color ?? "#94a3b8" }}
+                  >
+                    <p className={styles.methodologyWeekMd}>
+                      {formatMatchDayLabel(p.offset)}
+                    </p>
                     <span
                       className={styles.motorDominantChip}
-                      style={{ borderColor: d.color, color: d.color }}
+                      style={{
+                        borderColor: dominant?.color,
+                        color: dominant?.color,
+                      }}
                     >
-                      {d.shortLabel}
+                      {dominant?.shortLabel ?? p.dominant}
                     </span>
-                  </td>
-                  <td>{d.loadFocus}</td>
-                  <td>
-                    {d.areaPerPlayer
-                      ? `${d.areaPerPlayer.min}–${d.areaPerPlayer.max}`
-                      : "—"}
-                  </td>
-                </tr>
+                    <p className={styles.methodologyWeekMeta}>
+                      {p.targets.minutes}′ · {p.targets.srpe} AU
+                    </p>
+                    <p className={styles.methodologyWeekLoad}>
+                      D {p.targets.totalDistancePct}% · HSR {p.targets.hsrPct}% · Sp{" "}
+                      {p.targets.sprintPct}%
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+            <ul className={styles.methodologyLegend} aria-label="Dominanty">
+              {MOTOR_DOMINANTS.filter((d) => d.id !== "off").map((d) => (
+                <li key={d.id} title={d.loadFocus}>
+                  <span
+                    className={styles.methodologyLegendDot}
+                    style={{ background: d.color }}
+                    aria-hidden
+                  />
+                  {d.shortLabel}
+                </li>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </ul>
+          </div>
+        )}
 
-        <h3 className={styles.methodologyHeading}>Dni mikrocyklu (% obciążenia meczowego)</h3>
-        <div className={styles.methodologyTableWrap}>
-          <table className={styles.methodologyTable}>
-            <thead>
-              <tr>
-                <th>Dzień</th>
-                <th>Dominanta</th>
-                <th>Dyst.</th>
-                <th>HSR</th>
-                <th>Sprint</th>
-                <th>Acc/Dec</th>
-                <th>sRPE</th>
-                <th>Czas</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...MOTOR_DAY_PRESETS]
-                .sort((a, b) => a.offset - b.offset)
-                .map((p) => (
-                  <tr key={p.offset}>
-                    <td>
-                      <strong>{formatMatchDayLabel(p.offset)}</strong>
-                    </td>
-                    <td>{p.title}</td>
-                    <td>{p.targets.totalDistancePct}%</td>
-                    <td>{p.targets.hsrPct}%</td>
-                    <td>{p.targets.sprintPct}%</td>
-                    <td>{p.targets.accDecPct}%</td>
-                    <td>{p.targets.srpe} AU</td>
-                    <td>{p.targets.minutes}′</td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-
-        <h3 className={styles.methodologyHeading}>Dobór boiska</h3>
-        <div className={styles.methodologyTableWrap}>
-          <table className={styles.methodologyTable}>
-            <thead>
-              <tr>
-                <th>Format</th>
-                <th>Wymiary</th>
-                <th>m²/gracz</th>
-                <th>Efekt fizjologiczny</th>
-                <th>Efekt taktyczny</th>
-                <th>Dzień</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SSG_FORMATS.map((f) => (
-                <tr key={f.id}>
-                  <td>
-                    <strong>{f.label}</strong>
-                  </td>
-                  <td>
-                    {f.length}×{f.width}
-                  </td>
-                  <td>{f.areaPerPlayer}</td>
-                  <td>{f.physiological}</td>
-                  <td>{f.tactical}</td>
-                  <td>{f.recommendedOffsets.map(formatMatchDayLabel).join(", ")}</td>
-                </tr>
+        {view === "when" && (
+          <div
+            id="methodology-panel-when"
+            role="tabpanel"
+            aria-labelledby="methodology-tab-when"
+            className={styles.methodologyView}
+          >
+            <div className={styles.methodologyWhenGrid}>
+              {placementByDay.map((group) => (
+                <article key={group.day} className={styles.methodologyWhenCard}>
+                  <h3 className={styles.methodologyWhenDay}>{group.day}</h3>
+                  <ul>
+                    {group.topics.map((topic) => (
+                      <li key={topic}>{topic}</li>
+                    ))}
+                  </ul>
+                </article>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </div>
+        )}
 
-        <h3 className={styles.methodologyHeading}>Manipulacja obciążeniem</h3>
-        <ul className={styles.methodologyList}>
-          {PITCH_MANIPULATION_RULES.map((r) => (
-            <li key={r.rule}>
-              <strong>{r.rule}</strong> — {r.effect}
-            </li>
-          ))}
-        </ul>
+        {view === "exceptions" && (
+          <div
+            id="methodology-panel-exceptions"
+            role="tabpanel"
+            aria-labelledby="methodology-tab-exceptions"
+            className={styles.methodologyView}
+          >
+            <h3 className={styles.methodologyHeading}>Mecz w sobotę</h3>
+            <ol className={styles.methodologySatStrip}>
+              {AMATEUR_SATURDAY_SHIFT.map((row) => (
+                <li key={row.weekday} title={row.note}>
+                  <strong>{row.weekday}</strong>
+                  <span>{row.role}</span>
+                </li>
+              ))}
+            </ol>
+            <h3 className={styles.methodologyHeading}>Kiedy zejść z modelu</h3>
+            <ul className={styles.methodologyExceptionList}>
+              {AMATEUR_MODEL_EXCEPTIONS.map((row) => (
+                <li key={row.situation}>
+                  <strong>{row.situation}</strong>
+                  <span>{row.change}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
-        <h3 className={styles.methodologyHeading}>Progi alarmowe</h3>
-        <ul className={styles.methodologyList}>
-          <li>
-            ACWR poza <strong>{t.acwrMin}–{t.acwrMax}</strong> — ostrzeżenie, powyżej{" "}
-            <strong>{t.acwrCriticalMax}</strong> strefa ryzyka.
-          </li>
-          <li>
-            Skok obciążenia tygodniowego powyżej <strong>{t.weeklyJumpPctMax}%</strong>.
-          </li>
-          <li>
-            Monotonia Fostera powyżej <strong>{t.monotonyMax.toFixed(1)}</strong>, strain powyżej{" "}
-            <strong>{t.strainMax} AU</strong>.
-          </li>
-          <li>
-            Dzień ciężki od <strong>{t.heavyDaySrpe} AU</strong> — nigdy dwa pod rząd.
-          </li>
-          <li>
-            MD-1 maksymalnie <strong>{t.md1MaxMinutes} min</strong>.
-          </li>
-          <li>
-            Sprint ≥90% Vmax minimum <strong>{t.minSprintExposures}×</strong> w mikrocyklu, Nordic{" "}
-            <strong>{t.minNordicSessions}–{t.maxNordicSessions}×</strong>, siła{" "}
-            <strong>{t.minStrengthSessions}–{t.maxStrengthSessions}×</strong>.
-          </li>
-          <li>
-            Deload co <strong>{t.deloadEveryWeeks}</strong> mikrocykle, do{" "}
-            <strong>{t.deloadMaxPctOfPrevious}%</strong> poprzedniego tygodnia.
-          </li>
-        </ul>
-
-        <h3 className={styles.methodologyHeading}>Dziesięć zasad</h3>
-        <ol className={styles.methodologyList}>
-          {MICROCYCLE_PRINCIPLES.map((p) => (
-            <li key={p}>{p}</li>
-          ))}
-        </ol>
-
-        <p className={styles.methodologySources}>
-          Źródła: Frade (Periodização Táctica), Buchheit i Lacome (monitoring obciążenia),
-          Martín-García i in. 2018 (JSCR), Malone / Owen / Gabbett (HSR i ryzyko urazu),
-          Van Dyk i in. 2019 (meta-analiza Nordic), Sarmento i in. (SSG), Bangsbo, Tamarit.
-        </p>
+        {view === "rules" && (
+          <div
+            id="methodology-panel-rules"
+            role="tabpanel"
+            aria-labelledby="methodology-tab-rules"
+            className={styles.methodologyView}
+          >
+            <ol className={styles.methodologyRules}>
+              {methodologyPrincipleCatalog().map((p) => (
+                <li key={p.id}>
+                  <strong>{p.shortLabel}</strong>
+                  <span>{p.text}</span>
+                </li>
+              ))}
+            </ol>
+            <h3 className={styles.methodologyHeading}>Boisko</h3>
+            <ul className={styles.methodologyPitchRules}>
+              {PITCH_MANIPULATION_RULES.map((r) => (
+                <li key={r.rule}>
+                  <strong>{r.rule}</strong>
+                  <span>{r.effect}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </section>
   );

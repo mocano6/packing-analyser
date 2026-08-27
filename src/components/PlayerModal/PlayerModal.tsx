@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Player } from "@/types";
+import { POSITIONS } from "@/constants/positions";
 import { TEAMS } from "@/constants/teams";
 import { Team } from "@/constants/teamsLoader";
 import styles from "./PlayerModal.module.css";
@@ -45,32 +46,6 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
     number?: string;
     general?: string;
   }>({});
-
-  const positions = [
-    { value: "GK", label: "Bramkarz (GK)" },
-    { value: "CB", label: "Środkowy obrońca (CB)" },
-    { value: "RB", label: "Prawy obrońca (RB)" },
-    { value: "LB", label: "Lewy obrońca (LB)" },
-    { value: "DM", label: "Defensywny pomocnik (DM)" },
-    { value: "CM", label: "Środkowy pomocnik (CM)" },
-    { value: "AM", label: "Ofensywny pomocnik (AM)" },
-    { value: "LW", label: "Lewy skrzydłowy (LW)" },
-    { value: "RW", label: "Prawy skrzydłowy (RW)" },
-    { value: "ST", label: "Napastnik (ST)" },
-  ];
-
-  // Mapowanie starych pozycji na nowe (dla kompatybilności wstecznej)
-  const mapOldPositionToNew = (position: string): string => {
-    const mapping: { [key: string]: string } = {
-      'LS': 'LW',  // Left Side -> Left Wing
-      'RS': 'RW',  // Right Side -> Right Wing
-      'CF': 'ST',  // Center Forward -> Striker
-      'CAM': 'AM', // Central Attacking Midfielder -> Attacking Midfielder
-      'CDM': 'DM', // Central Defensive Midfielder -> Defensive Midfielder
-    };
-    
-    return mapping[position] || position;
-  };
 
   // Funkcja walidacji duplikatów
   const validateForDuplicates = (playerData: Omit<Player, "id">): string[] => {
@@ -359,7 +334,7 @@ const PlayerModal: React.FC<PlayerModalProps> = ({
               className={styles.formSelect}
             >
               <option value="">Wybierz pozycję</option>
-              {positions.map(pos => (
+              {POSITIONS.map(pos => (
                 <option key={pos.value} value={pos.value}>{pos.label}</option>
               ))}
             </select>

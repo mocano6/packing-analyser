@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { parseMinute, computePlayerStat, computeMatchPlayerStats, type RawSquadPlayer } from './minutes';
+import { parseMinute, computePlayerStat, computePlayerPlayInterval, computeMatchPlayerStats, type RawSquadPlayer } from './minutes';
 import type { ScoutingTeamRef } from '@/types/scouting';
 
 const team: ScoutingTeamRef = { id: 'T1', name: 'Team One' };
@@ -29,6 +29,14 @@ const full = computePlayerStat(base({ id: 'a' }), team);
 assert.strictEqual(full.minutesPlayed, 90);
 assert.strictEqual(full.isStarter, true);
 assert.strictEqual(full.goals, 0);
+assert.deepStrictEqual(computePlayerPlayInterval(base({ id: 'a' })), {
+  isStarter: true,
+  startMinute: 0,
+  endMinute: 90,
+  minutesPlayed: 90,
+  subInMinute: null,
+  subOutMinute: null,
+});
 
 // Starter zdjęty w 60' -> 60 min
 const subbedOut = computePlayerStat(base({ id: 'b', substitutions: [{ type: 'Out', minute: "60'" }] }), team);

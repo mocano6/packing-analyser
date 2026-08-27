@@ -9,12 +9,12 @@ import SidePanel from "@/components/SidePanel/SidePanel";
 import toast from "react-hot-toast";
 import EisenhowerQuadrantTab from "@/components/EisenhowerQuadrantTab/EisenhowerQuadrantTab";
 import ModelPanel from "@/components/ModelPanel/ModelPanel";
-import StaffPlannerTab from "@/components/StaffPlanner/StaffPlannerTab";
 import TrainingMicrocycleTab from "@/components/TrainingMicrocycleTab/TrainingMicrocycleTab";
 import { useGameModel } from "@/hooks/useGameModel";
 import { useGameModelPacks } from "@/hooks/useGameModelPacks";
 import { usePositionSystem } from "@/hooks/usePositionSystem";
 import { useTrainingDayTitleTemplates } from "@/hooks/useTrainingDayTitleTemplates";
+import { useTrainingDaySessionTemplates } from "@/hooks/useTrainingDaySessionTemplates";
 import { useTrainingProceduralTaskTemplates } from "@/hooks/useTrainingProceduralTaskTemplates";
 import { useTrainingMicrocycle } from "@/hooks/useTrainingMicrocycle";
 import {
@@ -34,7 +34,7 @@ export default function AdminZadaniaPage() {
   const router = useRouter();
   const { isAuthenticated, isAdmin, isLoading, user, userRole, userTeams, logout } = useAuth();
   const { teams, isLoading: teamsLoading } = useTeams();
-  const [tab, setTab] = useState<ZadaniaTab>("planner");
+  const [tab, setTab] = useState<ZadaniaTab>("microcycle");
   const [selectedTeam, setSelectedTeam] = useState(() => {
     if (typeof window === "undefined") return "";
     try {
@@ -128,7 +128,6 @@ export default function AdminZadaniaPage() {
   } = useTrainingMicrocycle(selectedTeamId || null, uid);
   const {
     state: dayTitleTemplatesState,
-    setDayTitleTemplatesState,
     loading: dayTitleTemplatesLoading,
     mergeEmbeddedTemplates,
   } = useTrainingDayTitleTemplates(uid);
@@ -137,7 +136,11 @@ export default function AdminZadaniaPage() {
     setProceduralTaskTemplatesState,
     loading: proceduralTaskTemplatesLoading,
   } = useTrainingProceduralTaskTemplates(uid);
-
+  const {
+    state: daySessionTemplatesState,
+    setDaySessionTemplatesState,
+    loading: daySessionTemplatesLoading,
+  } = useTrainingDaySessionTemplates(uid);
   useEffect(() => {
     if (microcycleLoading || dayTitleTemplatesLoading) return;
     if (embeddedDayTitleTemplates.length === 0) return;
@@ -242,16 +245,6 @@ export default function AdminZadaniaPage() {
       <div className={styles.tabBar} role="tablist" aria-label="Widok zadań">
         <button
           type="button"
-          id="tab-planner"
-          role="tab"
-          aria-selected={tab === "planner"}
-          className={`${styles.tab} ${tab === "planner" ? styles.tabActive : ""}`}
-          onClick={() => selectTab("planner")}
-        >
-          Plan tygodnia
-        </button>
-        <button
-          type="button"
           id="tab-eisenhower"
           role="tab"
           aria-selected={tab === "eisenhower"}
@@ -281,16 +274,6 @@ export default function AdminZadaniaPage() {
           Mikrocykl
         </button>
       </div>
-
-      {tab === "planner" && uid && (
-        <div role="tabpanel" id="panel-planner" aria-labelledby="tab-planner">
-          <StaffPlannerTab
-            state={plannerState}
-            setPlannerState={setPlannerState}
-            loading={plannerLoading}
-          />
-        </div>
-      )}
 
       {tab === "eisenhower" && uid && (
         <div role="tabpanel" id="panel-eisenhower" aria-labelledby="tab-eisenhower">
@@ -325,11 +308,16 @@ export default function AdminZadaniaPage() {
             setMicrocycleState={setMicrocycleState}
             microcycleLoading={microcycleLoading || teamsLoading}
             dayTitleTemplatesState={dayTitleTemplatesState}
-            setDayTitleTemplatesState={setDayTitleTemplatesState}
             dayTitleTemplatesLoading={dayTitleTemplatesLoading}
             proceduralTaskTemplatesState={proceduralTaskTemplatesState}
             setProceduralTaskTemplatesState={setProceduralTaskTemplatesState}
             proceduralTaskTemplatesLoading={proceduralTaskTemplatesLoading}
+            daySessionTemplatesState={daySessionTemplatesState}
+            setDaySessionTemplatesState={setDaySessionTemplatesState}
+            daySessionTemplatesLoading={daySessionTemplatesLoading}
+            plannerState={plannerState}
+            setPlannerState={setPlannerState}
+            plannerLoading={plannerLoading}
             gameModelState={gameModelState}
             gameModelLoading={gameModelLoading}
             selectedTeam={selectedTeamId}

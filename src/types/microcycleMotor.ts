@@ -94,6 +94,154 @@ export const MOTOR_DOMINANT_BY_ID: Record<MotorDominantId, MotorDominant> =
     {} as Record<MotorDominantId, MotorDominant>
   );
 
+/**
+ * Rola jednostki w mikrocyklu. Wynika z odległości od meczu i kolejności jednostek,
+ * a nie z etykiety MD — ten sam offset gra inną rolę przy meczu w sobotę i w niedzielę.
+ */
+export type MotorSessionRole = "strength" | "tension" | "volume" | "speed" | "activation";
+
+export interface MotorSessionRoleDef {
+  id: MotorSessionRole;
+  label: string;
+  shortLabel: string;
+  /** Kolejność od jednostki najdalszej od meczu do najbliższej. */
+  order: number;
+  /** Minimalna liczba dni do meczu, przy której rola jest bezpieczna. */
+  minDaysToMatch: number;
+  dominant: MotorDominantId;
+  color: string;
+}
+
+export const MOTOR_SESSION_ROLES: MotorSessionRoleDef[] = [
+  {
+    id: "strength",
+    label: "Siła + technika — najdalej od meczu",
+    shortLabel: "SIŁA",
+    order: 1,
+    minDaysToMatch: 4,
+    dominant: "recovery",
+    color: "#0ea5e9",
+  },
+  {
+    id: "tension",
+    label: "Napięcie i moc — małe formaty",
+    shortLabel: "NAPIĘCIE",
+    order: 2,
+    minDaysToMatch: 3,
+    dominant: "tension",
+    color: "#f97316",
+  },
+  {
+    id: "volume",
+    label: "Objętość — szczyt dystansu i HSR",
+    shortLabel: "OBJĘTOŚĆ",
+    order: 3,
+    minDaysToMatch: 3,
+    dominant: "duration",
+    color: "#16a34a",
+  },
+  {
+    id: "speed",
+    label: "Prędkość — sprint, przejścia, SFG",
+    shortLabel: "PRĘDKOŚĆ",
+    order: 4,
+    minDaysToMatch: 2,
+    dominant: "velocity",
+    color: "#ef4444",
+  },
+  {
+    id: "activation",
+    label: "Aktywacja — dzień przed meczem",
+    shortLabel: "AKTYWACJA",
+    order: 5,
+    minDaysToMatch: 1,
+    dominant: "activation",
+    color: "#a855f7",
+  },
+];
+
+export const MOTOR_SESSION_ROLE_BY_ID: Record<MotorSessionRole, MotorSessionRoleDef> =
+  MOTOR_SESSION_ROLES.reduce(
+    (acc, r) => {
+      acc[r.id] = r;
+      return acc;
+    },
+    {} as Record<MotorSessionRole, MotorSessionRoleDef>
+  );
+
+/** Rotacja czterech jednostek treningowych tygodnia — od najdalszej do najbliższej meczowi. */
+export const MOTOR_CORE_SESSION_ROLES: MotorSessionRole[] = [
+  "strength",
+  "tension",
+  "volume",
+  "speed",
+];
+
+const MOTOR_SESSION_ROLE_IDS = new Set<string>(MOTOR_SESSION_ROLES.map((r) => r.id));
+
+export function isMotorSessionRole(v: unknown): v is MotorSessionRole {
+  return typeof v === "string" && MOTOR_SESSION_ROLE_IDS.has(v);
+}
+
+/** Charakter bloku siłowego otwierającego jednostkę. */
+export type GymSessionCharacter = "heavy" | "power" | "minimal" | "priming" | "none";
+
+export interface GymSessionCharacterDef {
+  id: GymSessionCharacter;
+  label: string;
+  shortLabel: string;
+  /** Typowy czas siłowni w minutach. */
+  typicalMinutes: string;
+}
+
+export const GYM_SESSION_CHARACTERS: GymSessionCharacterDef[] = [
+  {
+    id: "heavy",
+    label: "Ciężki — dolna + prewencja (główna sesja tygodnia)",
+    shortLabel: "CIĘŻKI",
+    typicalMinutes: "45–50",
+  },
+  {
+    id: "power",
+    label: "Moc + góra ciała",
+    shortLabel: "MOC",
+    typicalMinutes: "30–35",
+  },
+  {
+    id: "minimal",
+    label: "Minimalny — core, mobilność, górna lekko",
+    shortLabel: "MIN",
+    typicalMinutes: "10–12",
+  },
+  {
+    id: "priming",
+    label: "Priming — krótki, wybuchowy, bez zmęczenia",
+    shortLabel: "PRIMING",
+    typicalMinutes: "12–15",
+  },
+  {
+    id: "none",
+    label: "Bez siłowni",
+    shortLabel: "—",
+    typicalMinutes: "0",
+  },
+];
+
+export const GYM_SESSION_CHARACTER_BY_ID: Record<GymSessionCharacter, GymSessionCharacterDef> =
+  GYM_SESSION_CHARACTERS.reduce(
+    (acc, d) => {
+      acc[d.id] = d;
+      return acc;
+    },
+    {} as Record<GymSessionCharacter, GymSessionCharacterDef>
+  );
+
+const GYM_CHARACTER_IDS = new Set<string>(GYM_SESSION_CHARACTERS.map((d) => d.id));
+
+export function isGymSessionCharacter(v: unknown): v is GymSessionCharacter {
+  return typeof v === "string" && GYM_CHARACTER_IDS.has(v);
+}
+
 /** Tagi bloków treningowych — na nich opierają się reguły bezpieczeństwa. */
 export type MotorTagId =
   | "sprint_max"
@@ -109,7 +257,11 @@ export type MotorTagId =
   | "mobility"
   | "video"
   | "recovery"
-  | "compensation";
+  | "compensation"
+  | "gym"
+  | "transfer"
+  | "power"
+  | "priming";
 
 export interface MotorTag {
   id: MotorTagId;
@@ -132,6 +284,10 @@ export const MOTOR_TAGS: MotorTag[] = [
   { id: "video", label: "Analiza wideo / odprawa", shortLabel: "WIDEO" },
   { id: "recovery", label: "Regeneracja", shortLabel: "REGEN" },
   { id: "compensation", label: "Jednostka kompensacyjna", shortLabel: "KOMPENSACJA" },
+  { id: "gym", label: "Siłownia (otwarcie jednostki)", shortLabel: "SIŁOWNIA" },
+  { id: "transfer", label: "Transfer siłownia → boisko (10–15 min)", shortLabel: "TRANSFER" },
+  { id: "power", label: "Moc / plyometria", shortLabel: "MOC" },
+  { id: "priming", label: "Priming / PAPE", shortLabel: "PAPE" },
 ];
 
 export const MOTOR_TAG_BY_ID: Record<MotorTagId, MotorTag> = MOTOR_TAGS.reduce(

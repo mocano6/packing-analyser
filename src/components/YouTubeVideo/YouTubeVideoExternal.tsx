@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import YouTube, { YouTubeProps } from "react-youtube";
 import { TeamInfo } from "@/types";
+import { extractYouTubeId } from "@/utils/youtubeVideoId";
 import styles from "./YouTubeVideo.module.css";
 
 interface YouTubeVideoExternalProps {
@@ -20,22 +21,6 @@ const YouTubeVideoExternal: React.FC<YouTubeVideoExternalProps> = ({
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
-
-  // Funkcja do wyciągnięcia YouTube Video ID z URL
-  const extractYouTubeId = (url: string): string | null => {
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-      /youtube\.com\/v\/([^&\n?#]+)/,
-    ];
-    
-    for (const pattern of patterns) {
-      const match = url.match(pattern);
-      if (match && match[1]) {
-        return match[1];
-      }
-    }
-    return null;
-  };
 
   // Nasłuchiwanie wiadomości z głównego okna
   useEffect(() => {

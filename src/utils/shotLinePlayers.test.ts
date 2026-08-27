@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import {
+  ATTACK_LINE_PLAYERS_COUNT_OPTIONS,
   getShotLinePlayersCount,
   isCleanShot,
   isShotGoal,
   summarizeCleanShots,
+  toggleAttackLinePlayersCount,
 } from "./shotLinePlayers";
 import { Shot } from "../types";
 
@@ -42,6 +44,13 @@ const defenseWithLine: Shot = {
   id: "d2",
   linePlayers: ["p1", "p2"],
 };
+
+assert.deepEqual([...ATTACK_LINE_PLAYERS_COUNT_OPTIONS], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+assert.equal(toggleAttackLinePlayersCount(0, 3), 3);
+assert.equal(toggleAttackLinePlayersCount(3, 3), 0);
+assert.equal(toggleAttackLinePlayersCount(3, 7), 7);
+assert.equal(toggleAttackLinePlayersCount(2, 0), 2);
+assert.equal(toggleAttackLinePlayersCount(2, 11), 2);
 
 assert.equal(getShotLinePlayersCount(attackClean), 0);
 assert.equal(getShotLinePlayersCount(attackBlocked), 2);

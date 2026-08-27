@@ -37,24 +37,60 @@ export function collectWeatherQueries(
   const out: WeatherQueryItem[] = [];
   for (const mc of state.microcycles) {
     mc.matches.forEach((match, matchIndex) => {
-      const address = match.venueAddress.trim();
-      if (!address) return;
-      const kickoffIso = kickoffIsoFromMicrocycleDay(
-        mc.weekStartIso,
-        match.dayIndex,
-        match.kickoffTime
-      );
-      if (!kickoffIso || !isWithinForecastHorizon(kickoffIso, now)) return;
-      out.push({
-        id: `${mc.id}:${matchIndex}`,
-        microcycleId: mc.id,
-        matchIndex,
-        venueAddress: address,
-        kickoffIso,
-      });
+      const q = buildWeatherQueryForMatch(mc.id, mc.weekStartIso, match, matchIndex, now);
+      if (q) out.push(q);
     });
   }
   return out.slice(0, 24);
+}
+
+/**
+ * Jedno zapytanie pogodowe na mecz — godzina kickoffu z karty MD.
+ * null = brak adresu albo poza horyzontem Open-Meteo (~10 dni).
+ */
+export function buildWeatherQueryForMatch(
+  microcycleId: string,
+  weekStartIso: string,
+  match: MicrocycleMatch,
+  matchIndex: number,
+  now = new Date()
+): WeatherQueryItem | null {
+  const address = match.venueAddress.trim();
+  if (!address) return null;
+  const kickoffIso = kickoffIsoFromMicrocycleDay(
+    weekStartIso,
+    match.dayIndex,
+    match.kickoffTime
+  );
+  if (!kickoffIso || !isWithinForecastHorizon(kickoffIso, now)) return null;
+  return {
+    id: `${microcycleId}:${matchIndex}`,
+    microcycleId,
+    matchIndex,
+    venueAddress: address,
+    kickoffIso,
+  };
+}
+
+/** Dlaczego nie da się pobrać pogody — komunikat dla UI. */
+export function weatherFetchBlockReason(
+  weekStartIso: string,
+  match: MicrocycleMatch,
+  now = new Date()
+): string | null {
+  if (!match.venueAddress.trim()) {
+    return "Uzupełnij adres stadionu, żeby pobrać pogodę.";
+  }
+  const kickoffIso = kickoffIsoFromMicrocycleDay(
+    weekStartIso,
+    match.dayIndex,
+    match.kickoffTime
+  );
+  if (!kickoffIso) return "Brak poprawnej godziny meczu.";
+  if (!isWithinForecastHorizon(kickoffIso, now)) {
+    return "Prognoza dostępna ok. 10 dni przed meczem.";
+  }
+  return null;
 }
 
 export function applyWeatherResultsToState(

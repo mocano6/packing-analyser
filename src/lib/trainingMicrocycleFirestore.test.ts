@@ -25,7 +25,7 @@ const withAssign = {
 
 const doc = buildTrainingMicrocycleTaskDocument(withAssign, 12345);
 assert.strictEqual(typeof doc.stateJson, "string");
-assert.strictEqual(doc.version, 10);
+assert.strictEqual(doc.version, 11);
 
 const innerDoc = JSON.parse(doc.stateJson as string);
 assert.equal(innerDoc.dayTitleTemplates, undefined);
@@ -148,6 +148,17 @@ assert.deepEqual(migratedMotor.trainingBlocks?.[0].tags, ["ssg", "acceleration"]
 assert.equal(migratedMotor.microcycles[0].dayLoads?.[0].dominant, "velocity");
 assert.equal(migratedMotor.microcycles[0].dayLoads?.[0].targets?.srpe, 480);
 
+const withRest = {
+  ...sample,
+  microcycles: [{ ...sample.microcycles[0], restDays: [2, 2, 9] }],
+};
+const restDoc = buildTrainingMicrocycleTaskDocument(withRest, 1);
+const migratedRest = migrateTrainingMicrocycleFromFirestore({
+  stateJson: restDoc.stateJson,
+  version: 10,
+});
+assert.deepEqual(migratedRest.microcycles[0].restDays, [2]);
+
 // Terminarz ŁNP nie może ginąć przy zapisie (regresja: pola lnp* były pomijane)
 const withFixtures = {
   ...sample,
@@ -206,7 +217,7 @@ const withWatch = {
   ],
 };
 const docWatch = buildTrainingMicrocycleTaskDocument(withWatch, 1);
-assert.strictEqual(docWatch.version, 10);
+assert.strictEqual(docWatch.version, 11);
 const migratedWatch = migrateTrainingMicrocycleFromFirestore({
   stateJson: docWatch.stateJson,
   version: 10,
@@ -257,7 +268,7 @@ const withProcedural = {
   ],
 };
 const docV9 = buildTrainingMicrocycleTaskDocument(withProcedural, 1);
-assert.strictEqual(docV9.version, 10);
+assert.strictEqual(docV9.version, 11);
 const migratedV9 = migrateTrainingMicrocycleFromFirestore({
   stateJson: docV9.stateJson,
   version: 9,

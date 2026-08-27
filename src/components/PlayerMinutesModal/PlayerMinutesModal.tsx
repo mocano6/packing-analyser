@@ -1,11 +1,20 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { PlayerMinutesModalProps, PlayerMinutes } from "@/types";
 import styles from "./PlayerMinutesModal.module.css";
 import { POSITIONS, getDefaultPosition } from "@/constants/positions";
 import { TEAMS } from "@/constants/teams";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
+import { parseLaczyMatchIdFromUrl } from "@/utils/laczyTeamUrl";
+import {
+  applyLnpMinutesToRoster,
+  pickLnpMatchSquadSide,
+  squadForSide,
+  type LnpMatchMinutesPayload,
+} from "@/utils/lnpMatchMinutes";
+
+const lnpMatchUrlStorageKey = (matchId: string) => `player_minutes_lnp_match_url_${matchId}`;
 
 const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
   isOpen,
@@ -18,7 +27,12 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
   const [playerMinutes, setPlayerMinutes] = useState<PlayerMinutes[]>([]);
   const [initialized, setInitialized] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [lnpMatchUrl, setLnpMatchUrl] = useState("");
+  const [isFetchingLnp, setIsFetchingLnp] = useState(false);
+  const [lnpError, setLnpError] = useState<string | null>(null);
+  const [lnpInfo, setLnpInfo] = useState<string | null>(null);
   const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
+  const matchStorageId = match.matchId || `${match.team}_${match.date}_${match.opponent}`;
 
   // Funkcja do pobierania nazwy zespołu na podstawie identyfikatora
   const getTeamName = (teamId: string) => {
@@ -31,6 +45,9 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
   useEffect(() => {
     if (!isOpen) {
       setInitialized(false);
+      setLnpError(null);
+      setLnpInfo(null);
+      setIsFetchingLnp(false);
       return;
     }
 
@@ -73,6 +90,86 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
       setInitialized(true);
     }
   }, [isOpen, players, currentPlayerMinutes, match.team, initialized]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const saved =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(lnpMatchUrlStorageKey(matchStorageId)) || ""
+        : "";
+    setLnpMatchUrl(saved);
+  }, [isOpen, matchStorageId]);
+
+  const handleFetchLnpMinutes = useCallback(async () => {
+    const matchId = parseLaczyMatchIdFromUrl(lnpMatchUrl);
+    if (!matchId) {
+      setLnpError("Wklej link do meczu ŁNP (…/rozgrywki/mecz/…) albo UUID.");
+      setLnpInfo(null);
+      return;
+    }
+    setIsFetchingLnp(true);
+    setLnpError(null);
+    setLnpInfo(null);
+    try {
+      const res = await fetch("/api/microcycle/match-minutes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: lnpMatchUrl.trim() }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        error?: string;
+        payload?: LnpMatchMinutesPayload | null;
+      };
+      if (!res.ok || !data.ok || !data.payload) {
+        setLnpError(data.error || data.message || "Nie udało się pobrać minut z ŁNP.");
+        return;
+      }
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(lnpMatchUrlStorageKey(matchStorageId), lnpMatchUrl.trim());
+      }
+      const teamPlayers = players.filter(
+        (player) => player.teams && player.teams.includes(match.team)
+      );
+      const side = pickLnpMatchSquadSide(data.payload, teamPlayers, {
+        isHome: match.isHome,
+        opponent: match.opponent,
+      });
+      const applied = applyLnpMinutesToRoster(
+        playerMinutes,
+        teamPlayers,
+        squadForSide(data.payload, side)
+      );
+      setPlayerMinutes(applied.next);
+      const sideLabel = side === "host" ? data.payload.hostName : data.payload.guestName;
+      if (applied.matched === 0) {
+        setLnpError(
+          `Nie udało się dopasować składu ${sideLabel} do kadry LOOKBALL (sprawdź imiona i nazwiska).`
+        );
+        return;
+      }
+      const unmatched =
+        applied.unmatchedLnpNames.length > 0
+          ? ` Nie dopasowano: ${applied.unmatchedLnpNames.slice(0, 6).join(", ")}${
+              applied.unmatchedLnpNames.length > 6 ? "…" : ""
+            }.`
+          : "";
+      setLnpInfo(`Dopasowano ${applied.matched} zawodnik(ów) ze składu ${sideLabel}.${unmatched}`);
+    } catch (e) {
+      setLnpError(e instanceof Error ? e.message : "Błąd sieci podczas pobierania minut z ŁNP.");
+    } finally {
+      setIsFetchingLnp(false);
+    }
+  }, [
+    lnpMatchUrl,
+    matchStorageId,
+    players,
+    match.team,
+    match.isHome,
+    match.opponent,
+    playerMinutes,
+  ]);
 
   // Aktualizacja minut konkretnego zawodnika
   const handleMinuteChange = (
@@ -181,8 +278,8 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
       return acc;
     }, {} as Record<string, typeof teamPlayers>);
     
-    // Kolejność pozycji: GK, CB, DM, Skrzydłowi (LW/RW), AM, ST
-    const positionOrder = ['GK', 'CB', 'DM', 'Skrzydłowi', 'AM', 'ST'];
+    // Kolejność pozycji: jak przy dodawaniu zawodnika (LW/RW razem jako skrzydłowi)
+    const positionOrder = ['GK', 'CB', 'RB', 'LB', 'DM', 'CM', 'Skrzydłowi', 'AM', 'ST'];
     
     // Sortuj pozycje według określonej kolejności
     const sortedPositions = Object.keys(byPosition).sort((a, b) => {
@@ -229,7 +326,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
   }, [players, match.team]);
 
   return (
-    <div className={styles.modalOverlay} onClick={isSaving ? undefined : onClose}>
+    <div className={styles.modalOverlay} onClick={isSaving || isFetchingLnp ? undefined : onClose}>
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalHeader}>
           <div>
@@ -237,7 +334,7 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
               Minuty zawodników: {getTeamName(match.team)} vs {match.opponent}
             </h2>
             <p className={styles.modalSubtitle}>
-              Wpisz czas rozpoczęcia i zakończenia gry zawodników (w minutach).
+              Wpisz czas rozpoczęcia i zakończenia gry albo pobierz skład z Łączy Nas Piłka.
             </p>
           </div>
           <button
@@ -246,13 +343,53 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
             onClick={onClose}
             aria-label="Zamknij"
             title="Zamknij"
-            disabled={isSaving}
+            disabled={isSaving || isFetchingLnp}
           >
             ×
           </button>
         </div>
         
         <form className={styles.modalForm} onSubmit={handleSubmit}>
+          <div className={styles.lnpFetchBar}>
+            <label className={styles.lnpFetchLabel} htmlFor="lnp-match-url">
+              Mecz ŁNP
+            </label>
+            <input
+              id="lnp-match-url"
+              type="text"
+              className={styles.lnpUrlInput}
+              value={lnpMatchUrl}
+              onChange={(e) => setLnpMatchUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!isFetchingLnp && !isSaving) void handleFetchLnpMinutes();
+                }
+              }}
+              placeholder="https://www.laczynaspilka.pl/rozgrywki/mecz/…"
+              disabled={isFetchingLnp || isSaving}
+              aria-label="Link do meczu z Łączy Nas Piłka"
+            />
+            <button
+              type="button"
+              className={styles.lnpFetchButton}
+              onClick={() => void handleFetchLnpMinutes()}
+              disabled={isFetchingLnp || isSaving}
+              aria-busy={isFetchingLnp}
+            >
+              {isFetchingLnp ? "Pobieranie…" : "Pobierz z ŁNP"}
+            </button>
+          </div>
+          {lnpError ? (
+            <p className={styles.lnpError} role="alert">
+              {lnpError}
+            </p>
+          ) : null}
+          {lnpInfo ? (
+            <p className={styles.lnpInfo} role="status">
+              {lnpInfo}
+            </p>
+          ) : null}
           <div className={styles.tableHeader}>
             <div className={styles.headerCell}>Zawodnik</div>
             <div className={styles.headerCell}>Pozycja</div>
@@ -376,11 +513,11 @@ const PlayerMinutesModal: React.FC<PlayerMinutesModalProps> = ({
               type="button"
               className={styles.cancelButton}
               onClick={onClose}
-              disabled={isSaving}
+              disabled={isSaving || isFetchingLnp}
             >
               Anuluj
             </button>
-            <button type="submit" className={styles.saveButton} disabled={isSaving}>
+            <button type="submit" className={styles.saveButton} disabled={isSaving || isFetchingLnp}>
               {isSaving ? "Zapisywanie…" : "Zapisz"}
             </button>
           </div>

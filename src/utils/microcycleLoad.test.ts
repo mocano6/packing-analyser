@@ -4,9 +4,11 @@ import { createDefaultMicrocycleMatch } from "./microcycleMatches";
 import {
   computeAcwr,
   isHeavyDay,
+  moveResolvedDayLoad,
   primaryMatchDayIndex,
   resolveDayLoad,
   resolveWeekLoads,
+  swapResolvedDayLoads,
   summarizeWeeklyLoad,
   weekOverWeekChangePct,
 } from "./microcycleLoad";
@@ -24,16 +26,25 @@ function microcycle(overrides: Partial<TrainingMicrocycle> = {}): TrainingMicroc
   };
 }
 
-// Mecz w sobotę → wtorek to MD-4, środa MD-3, czwartek MD-2, piątek MD-1
+// Mecz w sobotę → role: pn siła, wt napięcie, śr objętość, cz prędkość; pt+nd wolne
 const base = microcycle();
 assert.equal(primaryMatchDayIndex(base), 5);
+assert.equal(resolveDayLoad(base, 0).offset, -5);
+assert.equal(resolveDayLoad(base, 0).dominant, "recovery");
 assert.equal(resolveDayLoad(base, 1).offset, -4);
 assert.equal(resolveDayLoad(base, 1).dominant, "tension");
 assert.equal(resolveDayLoad(base, 2).dominant, "duration");
 assert.equal(resolveDayLoad(base, 3).dominant, "velocity");
-assert.equal(resolveDayLoad(base, 4).dominant, "activation");
-assert.equal(resolveDayLoad(base, 0).dominant, "off");
-assert.equal(resolveDayLoad(base, 6).dominant, "recovery");
+assert.equal(resolveDayLoad(base, 4).dominant, "off");
+assert.equal(resolveDayLoad(base, 6).dominant, "off");
+
+// Dzień oznaczony jako wolny ma sRPE 0 — nawet gdy model MD przewiduje obciążenie
+const restedFri = microcycle({ restDays: [4, 6] });
+assert.equal(resolveDayLoad(restedFri, 4).dominant, "off");
+assert.equal(resolveDayLoad(restedFri, 4).targets.srpe, 0);
+assert.equal(resolveDayLoad(restedFri, 4).plannedMinutes, 0);
+assert.equal(resolveDayLoad(restedFri, 6).targets.srpe, 0);
+assert.equal(resolveDayLoad(restedFri, 0).targets.srpe, 500);
 
 // Dzień meczowy zawsze dostaje dominantę "match"
 const matchDay = resolveDayLoad(base, 5);
@@ -43,15 +54,15 @@ assert.equal(matchDay.targets.totalDistancePct, 100);
 
 // Nadpisanie dominanty i pojedynczego celu
 const overridden = microcycle({
-  dayLoads: [{ dayIndex: 2, dominant: "velocity", targets: { srpe: 400 } }],
+  dayLoads: [{ dayIndex: 1, dominant: "velocity", targets: { srpe: 400 } }],
 });
-const wed = resolveDayLoad(overridden, 2);
-assert.equal(wed.dominant, "velocity");
-assert.equal(wed.targets.srpe, 400);
-assert.equal(wed.customized, true);
-// Cele niepodane zostają z presetu MD-3
-assert.equal(wed.targets.totalDistancePct, 125);
-assert.equal(resolveDayLoad(overridden, 1).customized, false);
+const tue = resolveDayLoad(overridden, 1);
+assert.equal(tue.dominant, "velocity");
+assert.equal(tue.targets.srpe, 400);
+assert.equal(tue.customized, true);
+// Cele niepodane zostają z presetu roli (napięcie we wtorek)
+assert.equal(tue.targets.totalDistancePct, 80);
+assert.equal(resolveDayLoad(overridden, 0).customized, false);
 
 // Minuty z bloków mają priorytet nad presetem
 const blocks = presetBlocksForDay("mc1", 1, [5]);
@@ -71,10 +82,10 @@ assert.equal(summary.totalSrpe, loads.reduce((s, l) => s + l.targets.srpe, 0));
 assert.equal(summary.trainingSrpe, summary.totalSrpe - 850);
 assert.ok(summary.monotony != null && summary.monotony > 0);
 assert.ok(summary.strain != null && summary.strain > summary.totalSrpe);
-// Dzień wolny nie liczy się jako aktywny
-assert.equal(summary.activeDays, 6);
+// Pn–czw + mecz — pt/nd poza rotacją = 0 AU
+assert.equal(summary.activeDays, 5);
 
-// Ciężki dzień: MD-3 tak, MD-1 nie
+// Ciężki dzień: środa (objętość) tak, piątek (wolne) nie
 assert.equal(isHeavyDay(resolveDayLoad(base, 2)), true);
 assert.equal(isHeavyDay(resolveDayLoad(base, 4)), false);
 
@@ -99,5 +110,28 @@ assert.equal(computeAcwr(0, []).ratio, null);
 assert.equal(weekOverWeekChangePct(1100, 1000), 10);
 assert.equal(weekOverWeekChangePct(1000, undefined), null);
 assert.equal(weekOverWeekChangePct(1000, 0), null);
+
+// Przeniesienie obciążenia: czwartek (velocity) → środa staje się velocity (nadpisanie)
+{
+  const from = resolveDayLoad(base, 3);
+  assert.equal(from.dominant, "velocity");
+  const moved = moveResolvedDayLoad(base, 3, 2);
+  const atTarget = resolveDayLoad(moved, 2);
+  assert.equal(atTarget.dominant, "velocity");
+  assert.equal(atTarget.targets.srpe, from.targets.srpe);
+  assert.equal(atTarget.customized, true);
+  assert.equal(resolveDayLoad(moved, 3).dominant, "velocity");
+  assert.equal(resolveDayLoad(moved, 3).customized, false);
+}
+
+// Swap obciążenia między dniami
+{
+  const a = resolveDayLoad(base, 1);
+  const b = resolveDayLoad(base, 2);
+  const swapped = swapResolvedDayLoads(base, 1, 2);
+  assert.equal(resolveDayLoad(swapped, 1).dominant, b.dominant);
+  assert.equal(resolveDayLoad(swapped, 2).dominant, a.dominant);
+  assert.equal(resolveDayLoad(swapped, 1).targets.srpe, b.targets.srpe);
+}
 
 console.log("microcycleLoad.test OK");

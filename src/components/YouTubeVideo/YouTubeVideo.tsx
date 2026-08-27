@@ -5,6 +5,7 @@ import YouTube, { YouTubeProps } from "react-youtube";
 import { TeamInfo } from "@/types";
 import toast from "react-hot-toast";
 import { hasExternalVideoSource, saveExternalVideoMatchInfo } from "@/utils/externalVideoMatchInfo";
+import { extractYouTubeId } from "@/utils/youtubeVideoId";
 import styles from "./YouTubeVideo.module.css";
 
 interface YouTubeVideoProps {
@@ -39,22 +40,6 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
   const [isExternalWindowOpen, setIsExternalWindowOpen] = useState<boolean>(false);
   const [isFullscreenInternal, setIsFullscreenInternal] = useState<boolean>(false);
   const isFullscreen = isFullscreenProp !== undefined ? isFullscreenProp : isFullscreenInternal;
-
-  // Funkcja do wyciągnięcia YouTube Video ID z URL
-  const extractYouTubeId = (url: string): string | null => {
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-      /youtube\.com\/v\/([^&\n?#]+)/,
-    ];
-    
-    for (const pattern of patterns) {
-      const match = url.match(pattern);
-      if (match && match[1]) {
-        return match[1];
-      }
-    }
-    return null;
-  };
 
   // Udostępnij funkcję getCurrentTime przez ref
   useImperativeHandle(ref, () => ({

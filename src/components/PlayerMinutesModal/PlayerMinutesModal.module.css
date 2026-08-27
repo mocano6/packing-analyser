@@ -95,6 +95,80 @@
   overflow: hidden;
 }
 
+.lnpFetchBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 6px;
+  flex-shrink: 0;
+}
+
+.lnpFetchLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.lnpUrlInput {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.lnpUrlInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.lnpFetchButton {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.lnpFetchButton:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.lnpFetchButton:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.lnpError,
+.lnpInfo {
+  margin: 0 16px 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.lnpError {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.lnpInfo {
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
 .modalHeader {
   display: flex;
   justify-content: space-between;
@@ -412,4 +486,18 @@
 
 .statusSelect option[value="inny_zespol"] {
   color: #9c27b0;
+}
+
+@media (max-width: 640px) {
+  .lnpFetchBar {
+    flex-wrap: wrap;
+  }
+
+  .lnpUrlInput {
+    flex: 1 1 100%;
+  }
+
+  .lnpFetchButton {
+    width: 100%;
+  }
 }

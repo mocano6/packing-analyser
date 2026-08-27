@@ -427,11 +427,11 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
                 type="text"
                 value={formData.videoUrl || ""}
                 onChange={handleChange}
-                placeholder="https://www.youtube.com/watch?v=... lub https://youtu.be/..."
+                placeholder="https://www.youtube.com/watch?v=... lub https://youtube.com/live/..."
                 className={styles.formInput}
               />
               <small className={styles.helpText}>
-                Obsługiwane formaty: youtube.com/watch?v=..., youtu.be/..., youtube.com/embed/...
+                Obsługiwane formaty: youtube.com/watch?v=..., youtu.be/..., youtube.com/live/..., youtube.com/embed/...
               </small>
             </div>
 

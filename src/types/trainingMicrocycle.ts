@@ -1,7 +1,9 @@
 import type { GameModelPhaseId, GameModelRuleLevel } from "@/types/gameModel";
 import type {
+  GymSessionCharacter,
   MicrocycleDayLoadTargets,
   MotorDominantId,
+  MotorSessionRole,
   MotorTagId,
 } from "@/types/microcycleMotor";
 
@@ -132,6 +134,8 @@ export interface TrainingMicrocycle {
   daySchedules: MicrocycleDaySchedule[];
   /** Odstępstwa od presetów motorycznych (sparse). */
   dayLoads?: MicrocycleDayLoad[];
+  /** Dni oznaczone jako wolne (0 = pn … 6 = nd) — bez treści w kolumnie. */
+  restDays?: number[];
 }
 
 export interface MicrocycleDayAssignment {
@@ -181,6 +185,8 @@ export interface TrainingProceduralTaskTemplate {
    * -5 = MD-5, -1 = MD-1, 0 = MD, null = bez domyślnego dnia.
    */
   defaultMatchDayOffset?: number | null;
+  /** Domyślny trener (kolor zadania) ze sztabu. */
+  defaultCoachId?: string | null;
 }
 
 /** Instancja zadania procesowego w konkretnym mikrocyklu. */
@@ -193,6 +199,47 @@ export interface MicrocycleProceduralTask {
   title: string;
   notes?: string;
   done: boolean;
+  /** Trener odpowiedzialny (kolor w siatce). */
+  coachId?: string | null;
+}
+
+export type TrainingExerciseKind = "gym" | "prevention";
+
+export const TRAINING_EXERCISE_KIND_LABELS: Record<TrainingExerciseKind, string> = {
+  gym: "Siłownia",
+  prevention: "Prewencja",
+};
+
+/** Szablon ćwiczenia tygodniowego (siłownia / prewencja) — biblioteka per użytkownik. */
+export interface TrainingExerciseTemplate {
+  id: string;
+  name: string;
+  kind: TrainingExerciseKind;
+  minutes: number;
+  notes?: string;
+  /**
+   * Ćwiczenie szczególnie ważne na sztucznej nawierzchni
+   * (kostka, przywodziciele, łydki) — auto-wstawiane, gdy mecz jest na sztucznym.
+   */
+  artificialTurfFocus: boolean;
+  /** Offset MD: -5 … +1, null = tylko ręcznie. */
+  defaultMatchDayOffset?: number | null;
+}
+
+/** Instancja ćwiczenia w dniu mikrocyklu. */
+export interface MicrocycleDayExercise {
+  id: string;
+  microcycleId: string;
+  /** 0 = pn … 6 = nd */
+  dayIndex: number;
+  templateId: string | null;
+  name: string;
+  kind: TrainingExerciseKind;
+  minutes: number;
+  notes?: string;
+  artificialTurfFocus: boolean;
+  done: boolean;
+  order: number;
 }
 
 /** Mecz z terminarza ŁNP (zapisany przy zespole). */
@@ -219,6 +266,8 @@ export interface TrainingMicrocycleState {
   proceduralTasks?: MicrocycleProceduralTask[];
   /** Bloki treningowe wszystkich mikrocykli (filtrowane po microcycleId). */
   trainingBlocks?: MicrocycleTrainingBlock[];
+  /** Ćwiczenia siłowni/prewencji we wszystkich mikrocyklach. */
+  exercises?: MicrocycleDayExercise[];
   /** Łączna liczba treningów danego elementu modelu (po templateId). */
   trainingCounts: Record<string, number>;
   activeSeasonId: string | null;
@@ -252,7 +301,50 @@ export interface TrainingProceduralTaskTemplatesState {
   templates: TrainingProceduralTaskTemplate[];
 }
 
-export const TRAINING_MICROCYCLE_VERSION = 10 as const;
+/** Blok w presecie dnia (bez id instancji — id nadaje się przy wstawianiu do mikrocyklu). */
+export interface TrainingDaySessionBlockDraft {
+  name: string;
+  minutes: number;
+  tags: MotorTagId[];
+  formatId?: string | null;
+  notes?: string;
+}
+
+/**
+ * Szablon jednostki treningowej przypisany do dnia MD.
+ * Biblioteka per użytkownik — edytowalna, przeciągana na dni mikrocyklu.
+ */
+export interface TrainingDaySessionTemplate {
+  id: string;
+  name: string;
+  /**
+   * Rola jednostki — podstawowy mechanizm rozpisywania tygodnia.
+   * null = preset dodatkowy, wstawiany tylko ręcznie.
+   */
+  role: MotorSessionRole | null;
+  /** Offset MD: -5 … +1. Ręczne przypięcie do dnia; ma priorytet nad rolą. */
+  matchDayOffset: number | null;
+  gymCharacter: GymSessionCharacter;
+  dominant: MotorDominantId;
+  motorGoal: string;
+  tacticalGoal: string;
+  targets: MicrocycleDayLoadTargets;
+  blocks: TrainingDaySessionBlockDraft[];
+  notes?: string;
+  /** Identyfikator seedu — da się przywrócić bez kasowania własnych presetów. */
+  seedKey?: string;
+}
+
+export interface TrainingDaySessionTemplatesState {
+  templates: TrainingDaySessionTemplate[];
+}
+
+/** Biblioteka presetów ćwiczeń siłowni/prewencji — per użytkownik. */
+export interface TrainingExerciseTemplatesState {
+  templates: TrainingExerciseTemplate[];
+}
+
+export const TRAINING_MICROCYCLE_VERSION = 11 as const;
 
 /** Dokument w `teams/{teamId}/staff/` — nie pokazuj w kwadrancie Eisenhowera. */
 export const TRAINING_MICROCYCLE_TASKS_DOC_ID = "trainingMicrocycleState" as const;
@@ -267,3 +359,13 @@ export const TRAINING_PROCEDURAL_TASK_TEMPLATES_DOC_ID =
   "trainingProceduralTaskTemplatesState" as const;
 
 export const TRAINING_PROCEDURAL_TASK_TEMPLATES_VERSION = 1 as const;
+
+/** Dokument w `users/{uid}/tasks/` — biblioteka presetów jednostek MD. */
+export const TRAINING_DAY_SESSION_TEMPLATES_DOC_ID = "trainingDaySessionTemplatesState" as const;
+
+export const TRAINING_DAY_SESSION_TEMPLATES_VERSION = 1 as const;
+
+/** Dokument w `users/{uid}/tasks/` — biblioteka ćwiczeń siłownia/prewencja. */
+export const TRAINING_EXERCISE_TEMPLATES_DOC_ID = "trainingExerciseTemplatesState" as const;
+
+export const TRAINING_EXERCISE_TEMPLATES_VERSION = 1 as const;

@@ -20,6 +20,10 @@ import {
   clampVideoTimeMinutes,
   formatVideoMinutesAsMMSS,
 } from "@/utils/matchTimeLimits";
+import {
+  ATTACK_LINE_PLAYERS_COUNT_OPTIONS,
+  toggleAttackLinePlayersCount,
+} from "@/utils/shotLinePlayers";
 import styles from "./ShotModal.module.css";
 
 export interface ShotModalProps {
@@ -1208,21 +1212,6 @@ const ShotModal: React.FC<ShotModalProps> = ({
                   PK
                 </button>
               )}
-              {formData.teamContext === "attack" && (
-                <div className={styles.linePlayersCountInput}>
-                  <label htmlFor="line-players-count">Zawodnik na linii strzału:</label>
-                  <input
-                    type="number"
-                    id="line-players-count"
-                    step="1"
-                    min="0"
-                    max="11"
-                    value={formData.linePlayersCount}
-                    onChange={(e) => setFormData({...formData, linePlayersCount: parseInt(e.target.value) || 0})}
-                    className={styles.input}
-                  />
-                </div>
-              )}
               <div className={styles.pkPlayersCountInput}>
                 <div className={styles.pkToggle}>
                   <button
@@ -1605,6 +1594,45 @@ const ShotModal: React.FC<ShotModalProps> = ({
               </button>
             </div>
           </div>
+
+          {formData.teamContext === "attack" && (
+            <div className={styles.fieldGroup}>
+              <label id="line-players-count-label">Zawodnik na linii strzału:</label>
+              <div
+                className={styles.linePlayersCountTiles}
+                role="group"
+                aria-labelledby="line-players-count-label"
+              >
+                {ATTACK_LINE_PLAYERS_COUNT_OPTIONS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className={`${styles.linePlayersCountTile} ${
+                      formData.linePlayersCount === n ? styles.linePlayersCountTileActive : ""
+                    }`}
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        linePlayersCount: toggleAttackLinePlayersCount(
+                          formData.linePlayersCount,
+                          n,
+                        ),
+                      })
+                    }
+                    aria-pressed={formData.linePlayersCount === n}
+                    aria-label={`${n} zawodników na linii strzału`}
+                    title={
+                      formData.linePlayersCount === n
+                        ? "Kliknij ponownie, aby wyzerować"
+                        : `Ustaw ${n}`
+                    }
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Asystent / ostatnie podanie – przy każdym typie strzału */}
           {formData.teamContext === "attack" && (

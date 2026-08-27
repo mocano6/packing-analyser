@@ -6,8 +6,8 @@ import { Player, TeamInfo } from '@/types';
  * Sprawdza czy aktywny jest tryb prezentacji (maskowania danych)
  */
 export const isPresentationMode = (): boolean => {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem('presentationMode') === 'true';
+  if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
+    return localStorage.getItem("presentationMode") === "true";
   }
   return false;
 };

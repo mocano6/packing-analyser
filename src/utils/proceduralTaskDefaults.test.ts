@@ -10,7 +10,12 @@ import {
   normalizeProceduralTasks,
   proceduralTasksForDay,
   proceduralTasksFromDefaults,
+  setProceduralTemplateDefaultCoachId,
   setProceduralTemplateDefaultMatchDayOffset,
+  applyCoachIdToProceduralTasks,
+  clearCoachFromProceduralTemplates,
+  clearCoachFromProceduralTasks,
+  sanitizeOptionalCoachId,
 } from "./proceduralTaskDefaults";
 
 const seed = createSeedProceduralTaskTemplates();
@@ -69,6 +74,22 @@ assert.equal(
 const nextTpl = setProceduralTemplateDefaultMatchDayOffset(templates, "c", null);
 assert.equal(nextTpl.find((t) => t.id === "c")?.defaultMatchDayOffset, null);
 
+const withCoach = setProceduralTemplateDefaultCoachId(templates, "a", "coach-1");
+assert.equal(withCoach.find((t) => t.id === "a")?.defaultCoachId, "coach-1");
+assert.equal(sanitizeOptionalCoachId(""), null);
+assert.equal(sanitizeOptionalCoachId("  c1  "), "c1");
+
+const fromCoach = proceduralTasksFromDefaults("mc1", 5, withCoach);
+assert.equal(fromCoach.find((t) => t.templateId === "a")?.coachId, "coach-1");
+
+const applied = applyCoachIdToProceduralTasks(fromCoach, "a", "coach-2");
+assert.equal(applied.find((t) => t.templateId === "a")?.coachId, "coach-2");
+
+const clearedTpl = clearCoachFromProceduralTemplates(withCoach, "coach-1");
+assert.equal(clearedTpl.find((t) => t.id === "a")?.defaultCoachId, null);
+const clearedTasks = clearCoachFromProceduralTasks(applied, "coach-2");
+assert.equal(clearedTasks.find((t) => t.templateId === "a")?.coachId, null);
+
 const dayList = proceduralTasksForDay(state.proceduralTasks, mcId, 5);
 assert.ok(dayList.every((t) => t.dayIndex === 5));
 
@@ -80,10 +101,12 @@ const normalized = normalizeProceduralTasks([
     templateId: "a",
     title: "Test",
     done: true,
+    coachId: "c1",
   },
   { id: "", title: "bad" },
 ]);
 assert.equal(normalized.length, 1);
 assert.equal(normalized[0].done, true);
+assert.equal(normalized[0].coachId, "c1");
 
 console.log("proceduralTaskDefaults.test.ts: OK");

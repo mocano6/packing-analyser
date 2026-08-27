@@ -6,11 +6,14 @@ import {
   buildTeamSideStats,
   buildXg5MinChartData,
   buildSideShotsSummary,
+  eventVideoTimestampSec,
   filterShotsByCategory,
   filterShotsByHalf,
   filterShotsForMap,
   getDefenseShotsFaced,
+  resolveAcc8sSideTeamId,
   summarizeGoalkeeperSaves,
+  summarizeXgAfterStartWindows,
   resolveShotTeamIdForSelectedTeam,
   XG_PER_SHOT_KPI,
 } from "./statystykiZespoluXgStats";
@@ -166,5 +169,36 @@ const intervals = buildXg5MinChartData([homeShot, awayShot, penaltyShot], match,
 assert.equal(intervals.length, 19);
 assert.ok(intervals.some((p) => p.teamXG > 0));
 assert.ok(intervals.some((p) => p.opponentXG > 0));
+
+assert.equal(eventVideoTimestampSec({ videoTimestampRaw: 120 }), 120);
+assert.equal(eventVideoTimestampSec({ videoTimestamp: 80 }), 80);
+assert.equal(eventVideoTimestampSec({}), 0);
+assert.equal(resolveAcc8sSideTeamId({ teamContext: "attack" }, "home", "away"), "home");
+assert.equal(resolveAcc8sSideTeamId({ teamContext: "defense" }, "home", "away"), "away");
+assert.equal(resolveAcc8sSideTeamId({ teamId: "away", teamContext: "attack" }, "home", "away"), "away");
+
+{
+  const windows = summarizeXgAfterStartWindows(
+    [
+      { teamId: "home", timestamp: 100 },
+      { teamId: "home", timestamp: 104 },
+      { teamId: "away", timestamp: 200 },
+    ],
+    [
+      { id: "s1", teamId: "home", timestamp: 107, xG: 0.3, isGoal: true },
+      { id: "s2", teamId: "home", timestamp: 113, xG: 0.2, isGoal: false },
+      { id: "s3", teamId: "away", timestamp: 205, xG: 0.15, isGoal: false },
+      { id: "s4", teamId: "home", timestamp: 100, xG: 0.9, isGoal: false },
+    ],
+  );
+  const home = windows.get("home");
+  const away = windows.get("away");
+  assert.ok(home);
+  assert.ok(away);
+  assert.equal(home.shots, 1);
+  assert.equal(home.goals, 1);
+  assert.equal(home.xg, 0.3);
+  assert.equal(away.xg, 0.15);
+}
 
 console.log("statystykiZespoluXgStats.test.ts — OK");

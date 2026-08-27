@@ -4,6 +4,22 @@ export interface StaffPlannerCoach {
   color: string;
 }
 
+export const COACH_COLOR_PRESETS = [
+  "#2563eb",
+  "#dc2626",
+  "#16a34a",
+  "#ca8a04",
+  "#9333ea",
+  "#ea580c",
+  "#0891b2",
+  "#db2777",
+] as const;
+
+export function nextCoachColor(coachCount: number): string {
+  const n = Number.isFinite(coachCount) ? Math.max(0, Math.trunc(coachCount)) : 0;
+  return COACH_COLOR_PRESETS[n % COACH_COLOR_PRESETS.length];
+}
+
 /** Kategorie zadań sztabu — id stabilne (zapis w Firestore). */
 export const STAFF_TASK_CATEGORIES = [
   { id: "motoryka", label: "Motoryka" },

@@ -4,7 +4,10 @@ import type {
 } from "@/types/trainingMicrocycle";
 import { TRAINING_PROCEDURAL_TASK_TEMPLATES_VERSION } from "@/types/trainingMicrocycle";
 import { sanitizeDefaultMatchDayOffset } from "@/utils/dayTitleDefaults";
-import { createSeedProceduralTaskTemplates } from "@/utils/proceduralTaskDefaults";
+import {
+  createSeedProceduralTaskTemplates,
+  sanitizeOptionalCoachId,
+} from "@/utils/proceduralTaskDefaults";
 
 function safeUnixMs(n: unknown): number {
   const x = typeof n === "number" ? n : Number(n);
@@ -26,6 +29,7 @@ export function sanitizeTrainingProceduralTaskTemplate(
     title: String(raw.title ?? "").slice(0, 200),
     notes: String(raw.notes ?? "").slice(0, 400),
     defaultMatchDayOffset: sanitizeDefaultMatchDayOffset(raw.defaultMatchDayOffset),
+    defaultCoachId: sanitizeOptionalCoachId(raw.defaultCoachId),
   };
 }
 
@@ -56,6 +60,7 @@ export function buildSanitizedTrainingProceduralTaskTemplatesState(
       title: String(t.title ?? "").slice(0, 200),
       notes: String(t.notes ?? "").slice(0, 400),
       defaultMatchDayOffset: sanitizeDefaultMatchDayOffset(t.defaultMatchDayOffset),
+      defaultCoachId: sanitizeOptionalCoachId(t.defaultCoachId),
     })),
   };
 }

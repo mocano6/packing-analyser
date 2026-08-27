@@ -1,8 +1,8 @@
-export type AdminZadaniaTabId = "planner" | "eisenhower" | "model" | "microcycle";
+export type AdminZadaniaTabId = "eisenhower" | "model" | "microcycle";
 
 export const ADMIN_ZADANIA_TAB_STORAGE_PREFIX = "adminZadania_activeTab" as const;
 
-export const DEFAULT_ADMIN_ZADANIA_TAB: AdminZadaniaTabId = "planner";
+export const DEFAULT_ADMIN_ZADANIA_TAB: AdminZadaniaTabId = "microcycle";
 
 export function adminZadaniaTabStorageKey(uid?: string | null): string {
   if (uid && uid.trim().length > 0) {
@@ -12,7 +12,8 @@ export function adminZadaniaTabStorageKey(uid?: string | null): string {
 }
 
 export function parseAdminZadaniaTab(raw: unknown): AdminZadaniaTabId | null {
-  if (raw === "planner" || raw === "eisenhower" || raw === "model" || raw === "microcycle") return raw;
+  if (raw === "planner") return "microcycle";
+  if (raw === "eisenhower" || raw === "model" || raw === "microcycle") return raw;
   return null;
 }
 

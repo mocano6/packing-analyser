@@ -640,33 +640,51 @@
   margin-top: 0.25rem;
 }
 
-.linePlayersCountInput {
+.linePlayersCountTiles {
   display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
   align-items: center;
-  gap: 6px;
-  margin-top: 0.25rem;
+  background-color: #f3f4f6;
+  padding: 4px;
+  border-radius: 6px;
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 34px;
 }
 
-.linePlayersCountInput label {
-  font-weight: 500;
-  color: #374151;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.linePlayersCountInput input {
-  width: 50px;
-  padding: 6px 10px;
-  border: 1px solid #d1d5db;
+.linePlayersCountTile {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
   border-radius: 4px;
+  background-color: transparent;
+  color: #6b7280;
+  font-weight: 700;
   font-size: 12px;
-  text-align: center;
-  transition: border-color 0.2s;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.linePlayersCountInput input:focus {
-  outline: none;
-  border-color: #3b82f6;
+.linePlayersCountTile:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.linePlayersCountTile:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.linePlayersCountTileActive {
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.2);
 }
 
 .pkPlayersCountInput {
@@ -1403,6 +1421,10 @@
 
   .xgInput input {
     width: 100px;
+  }
+
+  .linePlayersCountTiles {
+    width: 100%;
   }
 
   .playersGrid {

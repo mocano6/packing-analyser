@@ -2,39 +2,112 @@
 
 import React, { useMemo, useState } from "react";
 import type {
-  MicrocycleRuleSeverity,
+  MethodologyCheckStatus,
+  MethodologyPrincipleCheck,
   MicrocycleViolation,
 } from "@/lib/microcycle/microcycleRules";
-import { countBySeverity } from "@/lib/microcycle/microcycleRules";
+import {
+  extraMethodologyViolations,
+  methodologyPrincipleChecks,
+} from "@/lib/microcycle/microcycleRules";
 import { weekdayShortPl } from "@/utils/matchDayLabels";
 import styles from "./TrainingMicrocycleTab.module.css";
 
-const SEVERITY_LABELS: Record<MicrocycleRuleSeverity, string> = {
-  critical: "Złamana zasada",
-  warning: "Ostrzeżenie",
-  info: "Informacja",
+const STATUS_MARK: Record<MethodologyCheckStatus, string> = {
+  ok: "✓",
+  warn: "!",
+  fail: "✕",
+  skip: "–",
+};
+
+const STATUS_LABEL: Record<MethodologyCheckStatus, string> = {
+  ok: "Zgodne",
+  warn: "Ostrzeżenie",
+  fail: "Złamana",
+  skip: "Po blokach",
 };
 
 export interface MicrocycleRulesBarProps {
   violations: MicrocycleViolation[];
+  hasBlocks: boolean;
   /** Klik w naruszenie przenosi widok na dzień. */
   onFocusDay?: (dayIndex: number) => void;
 }
 
+function PrincipleDetails({
+  items,
+  onFocusDay,
+}: {
+  items: MicrocycleViolation[];
+  onFocusDay?: (dayIndex: number) => void;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <ul className={styles.rulesPrincipleDetails}>
+      {items.map((v, i) => (
+        <li key={`${v.ruleId}-${i}`}>
+          <span className={styles.rulesItemMessage}>{v.message}</span>
+          {v.hint && <span className={styles.rulesItemHint}>{v.hint}</span>}
+          {v.dayIndex != null && onFocusDay && (
+            <button
+              type="button"
+              className={styles.smallBtn}
+              onClick={() => onFocusDay(v.dayIndex as number)}
+            >
+              Pokaż {weekdayShortPl(v.dayIndex)}
+            </button>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PrincipleRow({
+  check,
+  onFocusDay,
+}: {
+  check: MethodologyPrincipleCheck;
+  onFocusDay?: (dayIndex: number) => void;
+}) {
+  return (
+    <li className={styles.rulesPrinciple} data-status={check.status}>
+      <span className={styles.rulesPrincipleHead}>
+        <span className={styles.rulesMark} data-status={check.status} aria-hidden>
+          {STATUS_MARK[check.status]}
+        </span>
+        <span className={styles.rulesPrincipleLabel}>{check.shortLabel}</span>
+        <span className={styles.rulesPrincipleStatus}>{STATUS_LABEL[check.status]}</span>
+      </span>
+      <PrincipleDetails items={check.items} onFocusDay={onFocusDay} />
+    </li>
+  );
+}
+
 export default function MicrocycleRulesBar({
   violations,
+  hasBlocks,
   onFocusDay,
 }: MicrocycleRulesBarProps) {
   const [open, setOpen] = useState(true);
-  const counts = useMemo(() => countBySeverity(violations), [violations]);
-  const blocking = counts.critical + counts.warning;
+  const checks = useMemo(
+    () => methodologyPrincipleChecks(violations, { hasBlocks }),
+    [violations, hasBlocks]
+  );
+  const extras = useMemo(() => extraMethodologyViolations(violations), [violations]);
+  const failed = checks.filter((c) => c.status === "fail").length;
+  const warned =
+    checks.filter((c) => c.status === "warn").length +
+    extras.filter((v) => v.severity !== "info").length;
+  const skipped = checks.filter((c) => c.status === "skip").length;
+  const blocking = failed + warned;
 
   return (
     <section
       className={`${styles.rulesBar} ${
-        counts.critical > 0
+        failed > 0
           ? styles.rulesBarCritical
-          : counts.warning > 0
+          : warned > 0
             ? styles.rulesBarWarning
             : styles.rulesBarClean
       }`}
@@ -52,21 +125,21 @@ export default function MicrocycleRulesBar({
             {open ? "▾" : "▸"}
           </span>
           <span className={styles.rulesTitle}>
-            {blocking === 0 ? "Mikrocykl zgodny z modelem" : "Kontrola zasad"}
+            {blocking === 0 ? "Mikrocykl zgodny z metodyką" : "Kontrola zasad"}
           </span>
-          {counts.critical > 0 && (
+          {failed > 0 && (
             <span className={`${styles.rulesBadge} ${styles.rulesBadgeCritical}`}>
-              {counts.critical} złamane
+              {failed} złamane
             </span>
           )}
-          {counts.warning > 0 && (
+          {warned > 0 && (
             <span className={`${styles.rulesBadge} ${styles.rulesBadgeWarning}`}>
-              {counts.warning} ostrzeżeń
+              {warned} ostrzeżeń
             </span>
           )}
-          {counts.info > 0 && (
+          {skipped > 0 && blocking === 0 && (
             <span className={`${styles.rulesBadge} ${styles.rulesBadgeInfo}`}>
-              {counts.info} info
+              {skipped} po blokach
             </span>
           )}
         </span>
@@ -74,44 +147,34 @@ export default function MicrocycleRulesBar({
       </button>
 
       {open && (
-        <ul className={styles.rulesList} id="microcycle-rules-list">
-          {violations.length === 0 && (
-            <li className={styles.rulesItem}>
-              <span className={styles.rulesItemBody}>
-                <span className={styles.rulesItemTitle}>Brak naruszeń</span>
-                <span className={styles.rulesItemMessage}>
-                  Kształt tygodnia, ekspozycja na sprint i dobór boisk zgadzają się z modelem.
-                </span>
-              </span>
+        <ol className={styles.rulesList} id="microcycle-rules-list">
+          {checks.map((check) => (
+            <PrincipleRow key={check.id} check={check} onFocusDay={onFocusDay} />
+          ))}
+          {extras.length > 0 && (
+            <li className={styles.rulesExtras}>
+              <span className={styles.rulesExtrasTitle}>Wyjątki</span>
+              <ul className={styles.rulesPrincipleDetails}>
+                {extras.map((v, i) => (
+                  <li key={`${v.ruleId}-${i}`}>
+                    <span className={styles.rulesItemTitle}>{v.title}</span>
+                    <span className={styles.rulesItemMessage}>{v.message}</span>
+                    {v.hint && <span className={styles.rulesItemHint}>{v.hint}</span>}
+                    {v.dayIndex != null && onFocusDay && (
+                      <button
+                        type="button"
+                        className={styles.smallBtn}
+                        onClick={() => onFocusDay(v.dayIndex as number)}
+                      >
+                        Pokaż {weekdayShortPl(v.dayIndex)}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </li>
           )}
-          {violations.map((v, i) => (
-            <li key={`${v.ruleId}-${i}`} className={styles.rulesItem} data-severity={v.severity}>
-              <span className={styles.rulesItemSeverity} data-severity={v.severity}>
-                {SEVERITY_LABELS[v.severity]}
-              </span>
-              <span className={styles.rulesItemBody}>
-                <span className={styles.rulesItemTitle}>
-                  {v.title}
-                  {v.dayIndex != null && (
-                    <span className={styles.rulesItemDay}>{weekdayShortPl(v.dayIndex)}</span>
-                  )}
-                </span>
-                <span className={styles.rulesItemMessage}>{v.message}</span>
-                {v.hint && <span className={styles.rulesItemHint}>{v.hint}</span>}
-              </span>
-              {v.dayIndex != null && onFocusDay && (
-                <button
-                  type="button"
-                  className={styles.smallBtn}
-                  onClick={() => onFocusDay(v.dayIndex as number)}
-                >
-                  Pokaż dzień
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+        </ol>
       )}
     </section>
   );

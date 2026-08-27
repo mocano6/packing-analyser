@@ -3,15 +3,15 @@ import type {
   TrainingMicrocycle,
 } from "@/types/trainingMicrocycle";
 import type { MotorTagId } from "@/types/microcycleMotor";
-import { MOTOR_DOMINANT_BY_ID } from "@/types/microcycleMotor";
-import { MICROCYCLE_ALERT_THRESHOLDS } from "@/lib/microcycle/motorModel";
-import { blockAreaPerPlayer } from "@/utils/microcycleTrainingBlocks";
 import {
-  computeAcwr,
+  MICROCYCLE_ALERT_THRESHOLDS,
+  methodologyPrincipleCatalog,
+  type MicrocycleControlPrincipleId,
+} from "@/lib/microcycle/motorModel";
+import {
   isHeavyDay,
   resolveWeekLoads,
   summarizeWeeklyLoad,
-  weekOverWeekChangePct,
   type ResolvedDayLoad,
 } from "@/utils/microcycleLoad";
 import { formatMatchDayLabel, weekdayShortPl } from "@/utils/matchDayLabels";
@@ -20,6 +20,8 @@ export type MicrocycleRuleSeverity = "critical" | "warning" | "info";
 
 export interface MicrocycleViolation {
   ruleId: string;
+  /** Zasada ze ściągawki metodyki — null = wyjątek poza listą 10. */
+  principleId: MicrocycleControlPrincipleId | null;
   severity: MicrocycleRuleSeverity;
   /** Krótka nazwa złamanej zasady. */
   title: string;
@@ -29,6 +31,49 @@ export interface MicrocycleViolation {
   hint?: string;
   /** Dzień, którego dotyczy (0 = pn), null = cały mikrocykl. */
   dayIndex: number | null;
+}
+
+export type MethodologyCheckStatus = "ok" | "warn" | "fail" | "skip";
+
+export interface MethodologyPrincipleCheck {
+  id: MicrocycleControlPrincipleId;
+  shortLabel: string;
+  text: string;
+  status: MethodologyCheckStatus;
+  items: MicrocycleViolation[];
+}
+
+const BLOCK_BASED_PRINCIPLES = new Set<MicrocycleControlPrincipleId>([
+  "gym_first",
+  "nordic_timing",
+  "sprint_week",
+  "split_groups",
+  "gym_serves_match",
+]);
+
+export function extraMethodologyViolations(
+  violations: MicrocycleViolation[]
+): MicrocycleViolation[] {
+  return violations.filter((v) => v.principleId == null);
+}
+
+export function methodologyPrincipleChecks(
+  violations: MicrocycleViolation[],
+  options: { hasBlocks: boolean }
+): MethodologyPrincipleCheck[] {
+  return methodologyPrincipleCatalog().map((p) => {
+    const items = violations.filter((v) => v.principleId === p.id);
+    let status: MethodologyCheckStatus;
+    if (items.length === 0) {
+      status =
+        !options.hasBlocks && BLOCK_BASED_PRINCIPLES.has(p.id) ? "skip" : "ok";
+    } else if (items.some((v) => v.severity === "critical")) {
+      status = "fail";
+    } else {
+      status = "warn";
+    }
+    return { ...p, status, items };
+  });
 }
 
 export interface MicrocycleRuleContext {
@@ -62,24 +107,33 @@ function dayMinutes(load: ResolvedDayLoad): number {
   return load.plannedMinutes ?? load.targets.minutes;
 }
 
+function volumeLoad(loads: ResolvedDayLoad[]): ResolvedDayLoad | undefined {
+  const duration = trainingDays(loads).find((l) => l.dominant === "duration");
+  if (duration && duration.targets.srpe > 0) return duration;
+  const md3 = byOffset(loads, -3);
+  if (md3 && md3.targets.srpe > 0) return md3;
+  return undefined;
+}
+
 function checkDayOrdering(loads: ResolvedDayLoad[]): MicrocycleViolation[] {
   const out: MicrocycleViolation[] = [];
   const training = trainingDays(loads);
   if (training.length < 2) return out;
 
-  const md3 = byOffset(loads, -3);
-  if (md3) {
-    const heavier = training.filter((l) => l.targets.srpe > md3.targets.srpe);
+  const volume = volumeLoad(loads);
+  if (volume) {
+    const heavier = training.filter((l) => l.targets.srpe > volume.targets.srpe);
     if (heavier.length > 0) {
       out.push({
-        ruleId: "md3_heaviest",
+        ruleId: "volume_heaviest",
+        principleId: "load_shape",
         severity: "critical",
-        title: "MD-3 musi być najcięższym dniem",
-        message: `Cięższy niż MD-3 (${md3.targets.srpe} AU) jest: ${heavier
+        title: "Dzień objętości musi być najcięższy",
+        message: `Cięższy niż ${dayLabel(volume)} (${volume.targets.srpe} AU) jest: ${heavier
           .map((l) => `${dayLabel(l)} ${l.targets.srpe} AU`)
           .join(", ")}.`,
-        hint: "Przenieś objętość na MD-3 albo obniż sRPE pozostałych dni.",
-        dayIndex: md3.dayIndex,
+        hint: "Przenieś objętość na dzień trwania albo obniż sRPE pozostałych dni.",
+        dayIndex: volume.dayIndex,
       });
     }
   }
@@ -91,6 +145,7 @@ function checkDayOrdering(loads: ResolvedDayLoad[]): MicrocycleViolation[] {
     if (lighter.length > 0) {
       out.push({
         ruleId: "md1_lightest",
+        principleId: "load_shape",
         severity: "critical",
         title: "MD-1 musi być najlżejszym dniem treningowym",
         message: `MD-1 ma ${md1.targets.srpe} AU, a lżejsze są: ${lighter
@@ -104,6 +159,7 @@ function checkDayOrdering(loads: ResolvedDayLoad[]): MicrocycleViolation[] {
     if (minutes > MICROCYCLE_ALERT_THRESHOLDS.md1MaxMinutes) {
       out.push({
         ruleId: "md1_duration",
+        principleId: "nothing_new_md1",
         severity: "warning",
         title: "MD-1 zbyt długi",
         message: `Zaplanowano ${minutes} min, limit to ${MICROCYCLE_ALERT_THRESHOLDS.md1MaxMinutes} min.`,
@@ -120,6 +176,7 @@ function checkDayOrdering(loads: ResolvedDayLoad[]): MicrocycleViolation[] {
     if (isHeavyDay(a) && isHeavyDay(b)) {
       out.push({
         ruleId: "no_two_heavy_in_row",
+        principleId: "no_two_heavy",
         severity: "warning",
         title: "Dwa ciężkie dni pod rząd",
         message: `${dayLabel(a)} ${a.targets.srpe} AU i ${dayLabel(b)} ${b.targets.srpe} AU — oba powyżej ${MICROCYCLE_ALERT_THRESHOLDS.heavyDaySrpe} AU.`,
@@ -143,6 +200,7 @@ function checkTagExposure(
   if (sprintDays < t.minSprintExposures) {
     out.push({
       ruleId: "sprint_exposure",
+      principleId: "sprint_week",
       severity: "critical",
       title: "Brak ekspozycji na sprint maksymalny",
       message: "W mikrocyklu nie ma bloku z tagiem sprintu ≥90% Vmax.",
@@ -151,19 +209,20 @@ function checkTagExposure(
     });
   }
 
-  const md4 = byOffset(loads, -4);
-  if (md4) {
-    const md4Sprint = blocks.some(
-      (b) => b.dayIndex === md4.dayIndex && b.tags.includes("sprint_max")
+  const tension = trainingDays(loads).find((l) => l.dominant === "tension") ?? byOffset(loads, -5);
+  if (tension) {
+    const tensionSprint = blocks.some(
+      (b) => b.dayIndex === tension.dayIndex && b.tags.includes("sprint_max")
     );
-    if (md4Sprint) {
+    if (tensionSprint) {
       out.push({
-        ruleId: "sprint_on_md4",
+        ruleId: "sprint_on_tension",
+        principleId: "sprint_week",
         severity: "warning",
-        title: "Sprint maksymalny na MD-4",
-        message: "MD-4 to dzień napięcia — mięśnie są jeszcze w fazie remodelingu po meczu.",
-        hint: "Przenieś sprinty na MD-2, na MD-4 zostaw akceleracje i hamowania.",
-        dayIndex: md4.dayIndex,
+        title: "Sprint maksymalny na dniu napięcia / mocy",
+        message: "MD-5 to dzień mocy i małych formatów — sprint ≥90% Vmax zostaw na MD-2.",
+        hint: "Na dniu mocy zostaw akceleracje; max sprint 72 h+ po ciężkiej siłowni, w MD-2.",
+        dayIndex: tension.dayIndex,
       });
     }
   }
@@ -172,11 +231,12 @@ function checkTagExposure(
   if (nordicDays < t.minNordicSessions) {
     out.push({
       ruleId: "nordic_exposure",
+      principleId: "nordic_timing",
       severity: "warning",
       title: "Brak Nordic Hamstring",
       message: "Nordic nie występuje w żadnym dniu mikrocyklu.",
       hint: `Zaplanuj ${t.minNordicSessions}–${t.maxNordicSessions}× w tygodniu — redukcja urazów hamstringów o 50–70%.`,
-      dayIndex: byOffset(loads, -4)?.dayIndex ?? null,
+      dayIndex: byOffset(loads, 1)?.dayIndex ?? byOffset(loads, -4)?.dayIndex ?? null,
     });
   }
 
@@ -184,153 +244,217 @@ function checkTagExposure(
   if (strengthDays < t.minStrengthSessions) {
     out.push({
       ruleId: "strength_exposure",
+      principleId: "gym_serves_match",
       severity: "warning",
       title: "Brak siły maksymalnej",
       message: "W mikrocyklu nie ma bloku siłowego.",
-      hint: `Utrzymaj ${t.minStrengthSessions}–${t.maxStrengthSessions}× w tygodniu, inaczej strata siły w sezonie 5–10%.`,
-      dayIndex: byOffset(loads, -4)?.dayIndex ?? null,
-    });
-  } else if (strengthDays > t.maxStrengthSessions) {
-    out.push({
-      ruleId: "strength_volume",
-      severity: "info",
-      title: "Dużo dni z siłą maksymalną",
-      message: `Siła występuje w ${strengthDays} dniach — model przewiduje ${t.maxStrengthSessions}.`,
-      dayIndex: null,
+      hint: `Utrzymaj ${t.minStrengthSessions}–${t.maxStrengthSessions}× w tygodniu — siłownia ma podnosić jakość dnia meczu.`,
+      dayIndex: byOffset(loads, 1)?.dayIndex ?? null,
     });
   }
 
   return out;
 }
 
-function checkPitchDensity(
+const PITCH_TAGS: MotorTagId[] = [
+  "ssg",
+  "positional",
+  "transitions",
+  "sprint_max",
+  "acceleration",
+  "rsa",
+  "compensation",
+];
+
+function isGymBlock(block: MicrocycleTrainingBlock): boolean {
+  return block.tags.includes("gym");
+}
+
+function isPitchBlock(block: MicrocycleTrainingBlock): boolean {
+  if (isGymBlock(block) || block.tags.includes("transfer")) return false;
+  return PITCH_TAGS.some((tag) => block.tags.includes(tag));
+}
+
+function checkGymStructure(
   loads: ResolvedDayLoad[],
   blocks: MicrocycleTrainingBlock[]
 ): MicrocycleViolation[] {
   const out: MicrocycleViolation[] = [];
+  const t = MICROCYCLE_ALERT_THRESHOLDS;
+
   for (const load of loads) {
-    const range = MOTOR_DOMINANT_BY_ID[load.dominant]?.areaPerPlayer;
-    if (!range) continue;
-    for (const block of blocks.filter((b) => b.dayIndex === load.dayIndex)) {
-      const area = blockAreaPerPlayer(block);
-      if (area == null) continue;
-      if (area < range.min || area > range.max) {
-        const dominantLabel = MOTOR_DOMINANT_BY_ID[load.dominant].label.toLowerCase();
+    const dayBlocks = blocks
+      .filter((b) => b.dayIndex === load.dayIndex)
+      .sort((a, b) => a.order - b.order);
+    if (dayBlocks.length === 0) continue;
+
+    const gymBlocks = dayBlocks.filter(isGymBlock);
+    const pitchBlocks = dayBlocks.filter(isPitchBlock);
+    const transferBlocks = dayBlocks.filter((b) => b.tags.includes("transfer"));
+    const gymMin = gymBlocks.reduce((s, b) => s + b.minutes, 0);
+
+    if (gymBlocks.length > 0 && pitchBlocks.length > 0) {
+      const firstGym = gymBlocks[0].order;
+      const firstPitch = pitchBlocks[0].order;
+      if (firstGym > firstPitch) {
         out.push({
-          ruleId: "pitch_density_mismatch",
+          ruleId: "gym_after_pitch",
+          principleId: "gym_first",
           severity: "warning",
-          title: "Boisko niezgodne z dominantą dnia",
-          message: `${dayLabel(load)} — „${block.name}" ma ${area} m²/gracz, a dominanta „${dominantLabel}" wymaga ${range.min}–${range.max} m²/gracz.`,
-          hint:
-            area > range.max
-              ? "Zwęź boisko albo dodaj graczy — większa gęstość daje więcej akcji i hamowań."
-              : "Powiększ boisko albo zdejmij graczy — potrzebujesz przestrzeni na bieg i sprint.",
+          title: "Siłownia po boisku",
+          message: `${dayLabel(load)} — blok siłowy stoi za pracą na murawie.`,
+          hint: "Kolejność: siłownia → transfer 10–15' → boisko. Po piłce technika przysiadu się rozpada.",
           dayIndex: load.dayIndex,
         });
       }
     }
+
+    if (gymMin >= t.gymTransferMinMinutes && transferBlocks.length === 0) {
+      out.push({
+        ruleId: "gym_transfer_missing",
+        principleId: "gym_first",
+        severity: "warning",
+        title: "Brak okna transferowego po siłowni",
+        message: `${dayLabel(load)} — ${gymMin} min siłowni bez bloku transferu.`,
+        hint: "Wstaw 10–15 min: woda, przejście, mobilność dynamiczna. Inaczej pierwsze 10 min na murawie jest martwe.",
+        dayIndex: load.dayIndex,
+      });
+    }
+
+    const hasNordic = dayBlocks.some((b) => b.tags.includes("nordic"));
+    if (hasNordic && (load.offset === -1 || load.offset === -2)) {
+      out.push({
+        ruleId: "nordic_too_close",
+        principleId: "nordic_timing",
+        severity: "critical",
+        title: "Nordic za blisko meczu",
+        message: `${dayLabel(load)} — Nordic wymaga min. 72 h przed meczem (DOMS 24–72 h).`,
+        hint: "Nordic tylko w dniu siłowym (≥72 h przed meczem). Nigdy w MD-2 ani MD-1.",
+        dayIndex: load.dayIndex,
+      });
+    }
+
+    const hasHeavy = dayBlocks.some((b) => b.tags.includes("strength_max"));
+    if (hasHeavy && load.dominant === "duration") {
+      out.push({
+        ruleId: "heavy_on_volume",
+        principleId: "no_heavy_before_volume",
+        severity: "warning",
+        title: "Ciężka siła w dniu objętości",
+        message: `${dayLabel(load)} — przysiad / RDL przed 8v8 i 11v11 zjada ekonomię biegu.`,
+        hint: "W dniu objętości zostaw 10–12 min core i mobilności. Ciężką dolną część przenieś na dzień siłowy (najdalej od meczu).",
+        dayIndex: load.dayIndex,
+      });
+    }
+
+    if (load.offset === -1 && gymBlocks.length > 0) {
+      out.push({
+        ruleId: "gym_on_md1",
+        principleId: "nothing_new_md1",
+        severity: "warning",
+        title: "Siłownia w ostatnich 24 h",
+        message: `${dayLabel(load)} — zero siłowni przed meczem.`,
+        hint: "Zostaw aktywację i priming. Siłownia ma podnosić jakość dnia meczu, nie obciążać nóg.",
+        dayIndex: load.dayIndex,
+      });
+    }
+
+    if (hasHeavy && (load.offset === -1 || load.offset === -2)) {
+      out.push({
+        ruleId: "heavy_legs_near_match",
+        principleId: "gym_serves_match",
+        severity: "warning",
+        title: "Ciężkie nogi zbyt blisko meczu",
+        message: `${dayLabel(load)} — siła maksymalna w MD-2/MD-1 zostawia nogi na meczu.`,
+        hint: "Ciężką dolną część przenieś na MD+1 — najdalej od meczu.",
+        dayIndex: load.dayIndex,
+      });
+    }
   }
+
+  for (let i = 0; i < 6; i += 1) {
+    const today = loads[i];
+    const tomorrow = loads[i + 1];
+    if (!today || !tomorrow || tomorrow.dominant !== "duration") continue;
+    const heavyToday = blocks.some(
+      (b) => b.dayIndex === today.dayIndex && b.tags.includes("strength_max")
+    );
+    if (heavyToday) {
+      out.push({
+        ruleId: "heavy_before_volume",
+        principleId: "no_heavy_before_volume",
+        severity: "warning",
+        title: "Ciężka dolna część ciała przed dniem objętości",
+        message: `${dayLabel(today)} ma siłę maksymalną, a ${dayLabel(tomorrow)} to dzień największego dystansu.`,
+        hint: "Zostaw moc/skoki; przysiad i RDL trzymaj w dniu siłowym, nie tuż przed objętością.",
+        dayIndex: today.dayIndex,
+      });
+    }
+  }
+
   return out;
 }
 
-function checkWeeklyLoad(
+function hasSplitGroupsSignal(
+  blocks: MicrocycleTrainingBlock[],
+  dayIndex: number
+): boolean {
+  return blocks.some((b) => {
+    if (b.dayIndex !== dayIndex) return false;
+    if (b.tags.includes("compensation")) return true;
+    const text = `${b.name} ${b.notes ?? ""}`;
+    return /niegraj/i.test(text) || /grając/i.test(text);
+  });
+}
+
+function checkSplitGroups(
+  loads: ResolvedDayLoad[],
+  blocks: MicrocycleTrainingBlock[]
+): MicrocycleViolation[] {
+  const recovery =
+    byOffset(loads, 1) ?? trainingDays(loads).find((l) => l.dominant === "recovery");
+  if (!recovery) return [];
+  const dayBlocks = blocks.filter((b) => b.dayIndex === recovery.dayIndex);
+  if (dayBlocks.length === 0) return [];
+  if (!dayBlocks.some(isGymBlock)) return [];
+  if (hasSplitGroupsSignal(blocks, recovery.dayIndex)) return [];
+  return [
+    {
+      ruleId: "split_groups_missing",
+      principleId: "split_groups",
+      severity: "warning",
+      title: "Brak rozdzielenia grup w MD+1",
+      message: `${dayLabel(recovery)} — siłownia bez oznaczenia grający / niegrający.`,
+      hint: "Grających: 3 serie (−30%). Niegrających: pełna siła + blok kompensacyjny. Przesuń start o 45 min.",
+      dayIndex: recovery.dayIndex,
+    },
+  ];
+}
+
+function checkDeload(
   microcycle: TrainingMicrocycle,
   loads: ResolvedDayLoad[],
   previousWeeklySrpe: number[]
 ): MicrocycleViolation[] {
-  const out: MicrocycleViolation[] = [];
   const t = MICROCYCLE_ALERT_THRESHOLDS;
-  const summary = summarizeWeeklyLoad(loads);
-
-  const acwr = computeAcwr(summary.totalSrpe, previousWeeklySrpe);
-  if (acwr.ratio == null || !acwr.reliable) {
-    out.push({
-      ruleId: "acwr_history",
-      severity: "info",
-      title: "ACWR bez pełnej historii",
-      message: `Do wyliczenia potrzebne są 4 tygodnie, mamy ${acwr.weeksOfHistory + 1}.`,
-      hint: "Wskaźnik będzie wiarygodny po kolejnych mikrocyklach.",
-      dayIndex: null,
-    });
-  } else {
-    const ratio = acwr.ratio;
-    const rounded = ratio.toFixed(2);
-    if (ratio > t.acwrCriticalMax || ratio < t.acwrMin) {
-      out.push({
-        ruleId: "acwr_range",
-        severity: "critical",
-        title: "ACWR w strefie ryzyka",
-        message: `ACWR = ${rounded} (bezpieczny zakres ${t.acwrMin}–${t.acwrMax}).`,
-        hint:
-          ratio < t.acwrMin
-            ? "Za mały bodziec względem historii — podnieś objętość MD-3."
-            : "Skok obciążenia zbyt duży — obetnij objętość w tym tygodniu.",
-        dayIndex: null,
-      });
-    } else if (ratio > t.acwrMax) {
-      out.push({
-        ruleId: "acwr_range",
-        severity: "warning",
-        title: "ACWR powyżej zalecanego zakresu",
-        message: `ACWR = ${rounded} (zalecane ${t.acwrMin}–${t.acwrMax}).`,
-        hint: "Rozważ obniżenie objętości albo wcześniejszy deload.",
-        dayIndex: null,
-      });
-    }
-  }
-
-  const jump = weekOverWeekChangePct(summary.totalSrpe, previousWeeklySrpe[0]);
-  if (jump != null && jump > t.weeklyJumpPctMax) {
-    out.push({
-      ruleId: "weekly_jump",
-      severity: "warning",
-      title: "Zbyt duży skok obciążenia tygodniowego",
-      message: `Wzrost o ${Math.round(jump)}% względem poprzedniego mikrocyklu (limit ${t.weeklyJumpPctMax}%).`,
-      hint: "Rozłóż wzrost na dwa tygodnie.",
-      dayIndex: null,
-    });
-  }
-
-  if (summary.monotony != null && summary.monotony > t.monotonyMax) {
-    out.push({
-      ruleId: "monotony",
-      severity: "warning",
-      title: "Wysoka monotonia obciążenia",
-      message: `Monotonia ${summary.monotony.toFixed(2)} (limit ${t.monotonyMax.toFixed(1)}).`,
-      hint: "Zróżnicuj dni — wyraźniej rozjedź MD-3 i MD-1.",
-      dayIndex: null,
-    });
-  }
-
-  if (summary.strain != null && summary.strain > t.strainMax) {
-    out.push({
-      ruleId: "strain",
-      severity: "warning",
-      title: "Strain powyżej progu",
-      message: `Strain ${Math.round(summary.strain)} AU (limit ${t.strainMax}).`,
-      hint: "Obniż obciążenie lub zwiększ zróżnicowanie dni.",
-      dayIndex: null,
-    });
-  }
-
   const isDeloadWeek =
     microcycle.number > 0 && microcycle.number % t.deloadEveryWeeks === 0;
   const previous = previousWeeklySrpe[0];
-  if (isDeloadWeek && previous && previous > 0) {
-    const pctOfPrevious = (summary.totalSrpe / previous) * 100;
-    if (pctOfPrevious > t.deloadMaxPctOfPrevious) {
-      out.push({
-        ruleId: "deload_due",
-        severity: "warning",
-        title: "Zaplanuj deload",
-        message: `Mikrocykl ${microcycle.number} to co ${t.deloadEveryWeeks}. tydzień, a obciążenie to ${Math.round(pctOfPrevious)}% poprzedniego.`,
-        hint: `Zejdź do ${t.deloadMaxPctOfPrevious}% lub niżej — deload co ${t.deloadEveryWeeks} tygodnie, bezwarunkowo.`,
-        dayIndex: null,
-      });
-    }
-  }
-
-  return out;
+  if (!isDeloadWeek || !previous || previous <= 0) return [];
+  const summary = summarizeWeeklyLoad(loads);
+  const pctOfPrevious = (summary.totalSrpe / previous) * 100;
+  if (pctOfPrevious <= t.deloadMaxPctOfPrevious) return [];
+  return [
+    {
+      ruleId: "deload_due",
+      principleId: "deload",
+      severity: "warning",
+      title: "Zaplanuj deload",
+      message: `Mikrocykl ${microcycle.number} to co ${t.deloadEveryWeeks}. tydzień, a obciążenie to ${Math.round(pctOfPrevious)}% poprzedniego.`,
+      hint: `Zejdź do ${t.deloadMaxPctOfPrevious}% lub niżej — deload co ${t.deloadEveryWeeks} tygodnie, bezwarunkowo.`,
+      dayIndex: null,
+    },
+  ];
 }
 
 function checkTwoMatchWeek(
@@ -344,6 +468,7 @@ function checkTwoMatchWeek(
   return [
     {
       ruleId: "two_matches_development",
+      principleId: null,
       severity: "warning",
       title: "Trening rozwojowy w tygodniu z dwoma meczami",
       message: `Ciężkie dni: ${heavy.map(dayLabel).join(", ")}.`,
@@ -366,23 +491,15 @@ export function evaluateMicrocycleRules(ctx: MicrocycleRuleContext): MicrocycleV
 
   const violations: MicrocycleViolation[] = [
     ...checkDayOrdering(loads),
-    ...checkWeeklyLoad(microcycle, loads, previousWeeklySrpe),
+    ...checkDeload(microcycle, loads, previousWeeklySrpe),
     ...checkTwoMatchWeek(microcycle, loads),
   ];
 
-  if (blocks.length === 0) {
-    violations.push({
-      ruleId: "no_blocks",
-      severity: "info",
-      title: "Brak rozpisanych bloków",
-      message: "Reguły dotyczące sprintu, siły i boisk włączą się po dodaniu bloków treningowych.",
-      hint: "Użyj przycisku „Z presetu” w dniu, aby wstawić bloki z modelu.",
-      dayIndex: null,
-    });
-  } else {
+  if (blocks.length > 0) {
     violations.push(
       ...checkTagExposure(loads, blocks),
-      ...checkPitchDensity(loads, blocks)
+      ...checkGymStructure(loads, blocks),
+      ...checkSplitGroups(loads, blocks)
     );
   }
 

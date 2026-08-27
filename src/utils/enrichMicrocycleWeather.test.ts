@@ -2,8 +2,10 @@ import assert from "assert";
 import { createDefaultTrainingMicrocycleState } from "@/utils/trainingMicrocycle";
 import {
   applyWeatherResultsToState,
+  buildWeatherQueryForMatch,
   collectWeatherQueries,
   syncFixtureDetailsOntoMicrocycles,
+  weatherFetchBlockReason,
 } from "./enrichMicrocycleWeather";
 import type { LaczyTeamFixture } from "@/types/trainingMicrocycle";
 
@@ -20,7 +22,7 @@ const withAddress = {
         {
           ...base.microcycles[0].matches[0],
           dayIndex: 5,
-          kickoffTime: "18:00",
+          kickoffTime: "11:00",
           venueAddress: "Wołomińska 3, 05-250 Radzymin",
         },
       ],
@@ -32,6 +34,42 @@ const queries = collectWeatherQueries(withAddress, new Date("2026-08-01T12:00:00
 assert.equal(queries.length, 1);
 assert.equal(queries[0].microcycleId, mcId);
 assert.ok(queries[0].venueAddress.includes("Radzymin"));
+assert.ok(queries[0].kickoffIso.includes("T") || queries[0].kickoffIso.length > 10);
+
+const single = buildWeatherQueryForMatch(
+  mcId,
+  "2026-08-03",
+  withAddress.microcycles[0].matches[0],
+  0,
+  new Date("2026-08-01T12:00:00")
+);
+assert.ok(single);
+assert.equal(single!.id, `${mcId}:0`);
+assert.equal(single!.venueAddress, "Wołomińska 3, 05-250 Radzymin");
+
+assert.equal(
+  weatherFetchBlockReason("2026-08-03", {
+    ...withAddress.microcycles[0].matches[0],
+    venueAddress: "",
+  }),
+  "Uzupełnij adres stadionu, żeby pobrać pogodę."
+);
+assert.equal(
+  weatherFetchBlockReason(
+    "2026-08-03",
+    withAddress.microcycles[0].matches[0],
+    new Date("2026-07-01T12:00:00")
+  ),
+  "Prognoza dostępna ok. 10 dni przed meczem."
+);
+assert.equal(
+  weatherFetchBlockReason(
+    "2026-08-03",
+    withAddress.microcycles[0].matches[0],
+    new Date("2026-08-01T12:00:00")
+  ),
+  null
+);
 
 const far = collectWeatherQueries(withAddress, new Date("2026-07-01T12:00:00"));
 assert.equal(far.length, 0);

@@ -9,6 +9,12 @@ import {
 } from "@/utils/dayTitleDefaults";
 import { generateMicrocycleId } from "@/utils/trainingMicrocycle";
 
+export function sanitizeOptionalCoachId(raw: unknown): string | null {
+  if (raw == null || raw === "") return null;
+  const s = String(raw).trim().slice(0, 80);
+  return s.length > 0 ? s : null;
+}
+
 /** Seed startowy biblioteki zadań procesowych. */
 export function createSeedProceduralTaskTemplates(): TrainingProceduralTaskTemplate[] {
   return [
@@ -51,6 +57,42 @@ export function setProceduralTemplateDefaultMatchDayOffset(
   );
 }
 
+export function setProceduralTemplateDefaultCoachId(
+  templates: TrainingProceduralTaskTemplate[],
+  templateId: string,
+  coachId: string | null
+): TrainingProceduralTaskTemplate[] {
+  const next = sanitizeOptionalCoachId(coachId);
+  return templates.map((t) => (t.id === templateId ? { ...t, defaultCoachId: next } : t));
+}
+
+export function applyCoachIdToProceduralTasks(
+  tasks: MicrocycleProceduralTask[] | undefined,
+  templateId: string,
+  coachId: string | null
+): MicrocycleProceduralTask[] {
+  const next = sanitizeOptionalCoachId(coachId);
+  return (tasks ?? []).map((t) => (t.templateId === templateId ? { ...t, coachId: next } : t));
+}
+
+export function clearCoachFromProceduralTemplates(
+  templates: TrainingProceduralTaskTemplate[],
+  coachId: string
+): TrainingProceduralTaskTemplate[] {
+  if (!coachId) return templates;
+  return templates.map((t) =>
+    t.defaultCoachId === coachId ? { ...t, defaultCoachId: null } : t
+  );
+}
+
+export function clearCoachFromProceduralTasks(
+  tasks: MicrocycleProceduralTask[] | undefined,
+  coachId: string
+): MicrocycleProceduralTask[] {
+  if (!coachId) return tasks ?? [];
+  return (tasks ?? []).map((t) => (t.coachId === coachId ? { ...t, coachId: null } : t));
+}
+
 /** Buduje instancje zadań z szablonów mających stałe przypisanie MD (wiele na dzień OK). */
 export function proceduralTasksFromDefaults(
   microcycleId: string,
@@ -78,6 +120,7 @@ export function proceduralTasksFromDefaults(
       title: tpl.title,
       notes: tpl.notes ?? "",
       done: previousDoneByTemplateId.get(tpl.id) ?? false,
+      coachId: sanitizeOptionalCoachId(tpl.defaultCoachId),
     });
   }
   return out;
@@ -155,6 +198,7 @@ export function sanitizeProceduralTask(
     title,
     notes: String(raw.notes ?? "").slice(0, 400),
     done: raw.done === true,
+    coachId: sanitizeOptionalCoachId(raw.coachId),
   };
 }
 

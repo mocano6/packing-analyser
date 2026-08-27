@@ -3852,10 +3852,10 @@
   border-top: 1px solid #e2e8f0;
 }
 
-/* Siatka tylko dla szczegółów xG (Otwarta gra, SFG, Regain) */
+/* Siatka tylko dla szczegółów xG (Otwarta gra, SFG, Regain, 8s ACC) */
 .kpiScoreGoalsDetailsXg .kpiScoreRow {
   display: grid;
-  grid-template-columns: minmax(90px, auto) 52px 1fr;
+  grid-template-columns: minmax(128px, auto) 52px 1fr;
   gap: 12px;
   align-items: center;
   padding: 6px 8px;

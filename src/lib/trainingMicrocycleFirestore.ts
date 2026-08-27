@@ -10,11 +10,13 @@ import {
   normalizeMicrocycleMatches,
 } from "../utils/microcycleMatches";
 import { normalizeMicrocycleDaySchedules } from "../utils/microcycleDaySchedules";
+import { normalizeRestDays } from "../utils/microcycleRestDays";
 import {
   normalizeDayLoads,
   normalizeTrainingBlocks,
 } from "../utils/microcycleTrainingBlocks";
 import { normalizeProceduralTasks } from "../utils/proceduralTaskDefaults";
+import { normalizeMicrocycleExercises } from "../utils/microcycleExercises";
 import { safeDayIndex } from "./staffPlannerFirestore";
 
 const VALID_DAY_PLAN_PHASES = new Set<string>(["defense", "attack", "set_pieces"]);
@@ -113,6 +115,7 @@ export function buildSanitizedTrainingMicrocycleState(
       matches: normalizeMicrocycleMatches(m.matches, (m as { matchDays?: number[] }).matchDays),
       daySchedules: normalizeMicrocycleDaySchedules(m.daySchedules),
       dayLoads: normalizeDayLoads(m.dayLoads),
+      restDays: normalizeRestDays(m.restDays),
     })),
     assignments: state.assignments.map((a) => ({
       id: String(a.id ?? ""),
@@ -134,6 +137,7 @@ export function buildSanitizedTrainingMicrocycleState(
     })),
     proceduralTasks: normalizeProceduralTasks(state.proceduralTasks),
     trainingBlocks: normalizeTrainingBlocks(state.trainingBlocks),
+    exercises: normalizeMicrocycleExercises(state.exercises),
     trainingCounts,
     activeSeasonId:
       state.activeSeasonId == null || state.activeSeasonId === ""
@@ -180,6 +184,7 @@ export function migrateTrainingMicrocycleFromFirestore(
         matches: normalizeMicrocycleMatches(m.matches, m.matchDays),
         daySchedules: normalizeMicrocycleDaySchedules(m.daySchedules),
         dayLoads: normalizeDayLoads(m.dayLoads),
+        restDays: normalizeRestDays(m.restDays),
       }))
     : [];
 
@@ -231,6 +236,7 @@ export function migrateTrainingMicrocycleFromFirestore(
     dayPlans,
     proceduralTasks: normalizeProceduralTasks(inner.proceduralTasks),
     trainingBlocks: normalizeTrainingBlocks(inner.trainingBlocks),
+    exercises: normalizeMicrocycleExercises(inner.exercises),
     trainingCounts,
     activeSeasonId,
     activeMicrocycleId,

@@ -3,7 +3,7 @@ import type {
   TrainingDayTitleTemplate,
   TrainingMicrocycleState,
 } from "@/types/trainingMicrocycle";
-import { formatMatchDayLabel } from "@/utils/matchDayLabels";
+import { formatMatchDayLabel, periodizationOffset } from "@/utils/matchDayLabels";
 import { generateMicrocycleId } from "@/utils/trainingMicrocycle";
 
 /** Typowe offsety względem dnia meczu (MD-5 … MD+1). */
@@ -62,15 +62,17 @@ export function dayIndexFromMatchDayOffset(
   offset: number
 ): number | null {
   const dayIndex = primaryMatchDayIndex + offset;
-  if (dayIndex < 0 || dayIndex > 6) return null;
-  return dayIndex;
+  if (dayIndex >= 0 && dayIndex <= 6) return dayIndex;
+  // MD+1 po meczu w niedzielę → poniedziałek tego samego mikrocyklu
+  if (offset === 1 && primaryMatchDayIndex === 6) return 0;
+  return null;
 }
 
 export function matchDayOffsetFromDayIndex(
   primaryMatchDayIndex: number,
   dayIndex: number
 ): number {
-  return dayIndex - primaryMatchDayIndex;
+  return periodizationOffset(dayIndex, primaryMatchDayIndex);
 }
 
 export function formatDefaultMdLabel(offset: number | null | undefined): string {

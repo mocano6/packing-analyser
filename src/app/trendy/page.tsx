@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useTeams } from "@/hooks/useTeams";
@@ -33,6 +33,19 @@ import {
   getTeamP3CountForMatch,
 } from "@/utils/trendyKpis";
 import { getTrendyKpiPlayerContributions } from "@/utils/trendyKpiPlayerContributions";
+import {
+  filterIncludedMatches,
+  formatTrendyIncludedMatchCount,
+  getTrendyMatchId,
+  isTrendyMatchIncluded,
+  toggleExcludedMatchId,
+} from "@/utils/trendyMatchSelection";
+import {
+  formatKpiAverageVsTargetLabel,
+  formatTrendyKpiHitMissLabel,
+  summarizeKpiVsTarget,
+  TrendyKpiTargetSummary,
+} from "@/utils/trendyKpiSummary";
 import { getPlayerFullName } from "@/utils/playerUtils";
 import { calculateXgOutcomeProjection } from "@/utils/xgOutcomeProjection";
 import { Shot, TeamInfo } from "@/types";
@@ -140,6 +153,24 @@ function XptsTrendChartPlot({ data }: { data: XptsTrendPoint[] }) {
   );
 }
 
+function KpiHeaderMeta({ summary }: { summary: TrendyKpiTargetSummary }) {
+  if (summary.matchCount === 0) {
+    return <span className={styles.kpiMeta}>—</span>;
+  }
+
+  const hitMissLine = formatTrendyKpiHitMissLabel(summary.hitCount, summary.missCount);
+
+  return (
+    <span className={styles.kpiMeta} aria-label={`Cel ${hitMissLine}`}>
+      <span>
+        <span className={summary.hitCount > 0 ? styles.kpiMetaHit : undefined}>osiągnięty {summary.hitCount}×</span>
+        {" · "}
+        <span className={summary.missCount > 0 ? styles.kpiMetaMiss : undefined}>nie {summary.missCount}×</span>
+      </span>
+    </span>
+  );
+}
+
 function formatTrendyPlayerContributionCell(kpiId: string, value: number, unit: TrendyKpiUnit): string {
   if (!Number.isFinite(value)) return "—";
   const asInt = new Set([
@@ -177,12 +208,38 @@ export default function TrendyPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [matches, setMatches] = useState<TeamInfo[]>([]);
+  const [excludedMatchIds, setExcludedMatchIds] = useState<Set<string>>(new Set());
   const [kpiDefinitions, setKpiDefinitions] = useState<TrendyKpiDefinition[]>(DEFAULT_TRENDY_KPI_DEFINITIONS);
   const [expandedKpis, setExpandedKpis] = useState<Record<string, boolean>>({});
   const [kpiPlayersModal, setKpiPlayersModal] = useState<{ kpiId: string; label: string; unit: TrendyKpiUnit } | null>(
     null,
   );
   const [kpiMapModal, setKpiMapModal] = useState<{ kind: TrendyKpiMapModalKind; title: string } | null>(null);
+
+  const includedMatches = useMemo(
+    () => filterIncludedMatches(matches, excludedMatchIds),
+    [matches, excludedMatchIds],
+  );
+
+  const includedMatchCountLabel = useMemo(
+    () => formatTrendyIncludedMatchCount(includedMatches.length, matches.length),
+    [includedMatches.length, matches.length],
+  );
+
+  const toggleMatchIncluded = useCallback((matchId: string) => {
+    setExcludedMatchIds((prev) => toggleExcludedMatchId(prev, matchId));
+  }, []);
+
+  const setAllMatchesIncluded = useCallback(
+    (included: boolean) => {
+      if (included) {
+        setExcludedMatchIds(new Set());
+        return;
+      }
+      setExcludedMatchIds(new Set(matches.map((match, index) => getTrendyMatchId(match, index))));
+    },
+    [matches],
+  );
 
   const resolveTrendyPlayerName = useMemo(() => {
     const map = new Map<string, string>();
@@ -193,15 +250,15 @@ export default function TrendyPage() {
   }, [players]);
 
   const kpiPlayersModalData = useMemo(() => {
-    if (!kpiPlayersModal || matches.length === 0) return null;
-    return getTrendyKpiPlayerContributions(matches, kpiPlayersModal.kpiId, resolveTrendyPlayerName);
-  }, [kpiPlayersModal, matches, resolveTrendyPlayerName]);
+    if (!kpiPlayersModal || includedMatches.length === 0) return null;
+    return getTrendyKpiPlayerContributions(includedMatches, kpiPlayersModal.kpiId, resolveTrendyPlayerName);
+  }, [kpiPlayersModal, includedMatches, resolveTrendyPlayerName]);
 
-  const trendyMapShots = useMemo(() => collectMapShotsFromMatches(matches), [matches]);
-  const trendyMapPkEntries = useMemo(() => collectMapPkEntriesFromMatches(matches), [matches]);
-  const trendyRegainsOppHalfHeatmap = useMemo(() => buildRegainsOppHalfHeatmap(matches), [matches]);
-  const trendyRegainsOppHalfCount = useMemo(() => countRegainsOppHalfFromMatches(matches), [matches]);
-  const trendyRegainLosesTilt = useMemo(() => buildTrendyRegainLosesTiltSummary(matches), [matches]);
+  const trendyMapShots = useMemo(() => collectMapShotsFromMatches(includedMatches), [includedMatches]);
+  const trendyMapPkEntries = useMemo(() => collectMapPkEntriesFromMatches(includedMatches), [includedMatches]);
+  const trendyRegainsOppHalfHeatmap = useMemo(() => buildRegainsOppHalfHeatmap(includedMatches), [includedMatches]);
+  const trendyRegainsOppHalfCount = useMemo(() => countRegainsOppHalfFromMatches(includedMatches), [includedMatches]);
+  const trendyRegainLosesTilt = useMemo(() => buildTrendyRegainLosesTiltSummary(includedMatches), [includedMatches]);
 
   useEffect(() => {
     if (!kpiPlayersModal) return;
@@ -305,6 +362,7 @@ export default function TrendyPage() {
     setIsLoading(true);
     setLoadError(null);
     setMatches([]);
+    setExcludedMatchIds(new Set());
 
     try {
       // Po obu polach (team + teamId) — legacy mecze z samym teamId też trafiają do trendów.
@@ -351,7 +409,7 @@ export default function TrendyPage() {
 
     return activeKpis.map((kpi) => {
       if (kpi.id === "xg_for") {
-        const data = matches.map((match, idx) => {
+        const data = includedMatches.map((match, idx) => {
           const label = getMatchLabel(match, idx);
           const team = calculateTrendyKpiValue(match, "xg_for");
           const opponent = getOpponentXGForMatch(match);
@@ -359,27 +417,39 @@ export default function TrendyPage() {
           const opponentGoals = getOpponentGoalsForMatch(match);
           return { label, team, opponent, teamGoals, opponentGoals };
         });
-        const latestTeamValue = data.length > 0 ? data[data.length - 1].team : 0;
-        const delta = latestTeamValue - kpi.target;
-        const meetsTarget = kpi.direction === "higher" ? latestTeamValue >= kpi.target : latestTeamValue <= kpi.target;
-        return { kpi, data, latestValue: latestTeamValue, delta, meetsTarget, kind: "xg" as const };
+        return {
+          kpi,
+          data,
+          summary: summarizeKpiVsTarget(
+            data.map((point) => point.team),
+            kpi.target,
+            kpi.direction,
+          ),
+          kind: "xg" as const,
+        };
       }
 
       if (kpi.id === "shots_for") {
-        const data = matches.map((match, idx) => {
+        const data = includedMatches.map((match, idx) => {
           const label = getMatchLabel(match, idx);
           const teamShots = (match.shots ?? []).filter((shot) => shot.teamContext === "attack").length;
           const opponentShots = (match.shots ?? []).filter((shot) => shot.teamContext === "defense").length;
           return { label, team: teamShots, opponent: opponentShots };
         });
-        const latestTeamValue = data.length > 0 ? data[data.length - 1].team ?? 0 : 0;
-        const delta = latestTeamValue - kpi.target;
-        const meetsTarget = kpi.direction === "higher" ? latestTeamValue >= kpi.target : latestTeamValue <= kpi.target;
-        return { kpi, data, latestValue: latestTeamValue, delta, meetsTarget, kind: "shots" as const };
+        return {
+          kpi,
+          data,
+          summary: summarizeKpiVsTarget(
+            data.map((point) => point.team),
+            kpi.target,
+            kpi.direction,
+          ),
+          kind: "shots" as const,
+        };
       }
 
       if (kpi.id === "pk_for") {
-        const data = matches.map((match, idx) => {
+        const data = includedMatches.map((match, idx) => {
           const label = getMatchLabel(match, idx);
           const allPk = match.pkEntries ?? [];
           const teamPk = allPk.filter((entry) => (entry.teamContext ?? "attack") === "attack").length;
@@ -393,57 +463,21 @@ export default function TrendyPage() {
 
           return { label, team: teamPk, opponent: opponentPk, teamPkGoals, opponentPkGoals };
         });
-        const latestTeamValue = data.length > 0 ? data[data.length - 1].team ?? 0 : 0;
-        const delta = latestTeamValue - kpi.target;
-        const meetsTarget = kpi.direction === "higher" ? latestTeamValue >= kpi.target : latestTeamValue <= kpi.target;
         const pkOpponentTarget = pkOpponentDef?.target;
-        const completedCount =
-          typeof pkOpponentTarget === "number"
-            ? data.filter(
-                (point) =>
-                  typeof point.team === "number" &&
-                  typeof point.opponent === "number" &&
-                  point.team >= kpi.target &&
-                  point.opponent <= pkOpponentTarget
-              ).length
-            : data.filter((point) => typeof point.team === "number" && point.team >= kpi.target).length;
-        const totalCount = data.length;
-        const completedPct = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
-
-        const realizedPoints =
-          typeof pkOpponentTarget === "number"
-            ? data.filter(
-                (point) =>
-                  typeof point.team === "number" &&
-                  typeof point.opponent === "number" &&
-                  point.team >= kpi.target &&
-                  point.opponent <= pkOpponentTarget,
-              )
-            : data.filter((point) => typeof point.team === "number" && point.team >= kpi.target);
-
-        const avgExecutionPct =
-          realizedPoints.length > 0
-            ? realizedPoints.reduce((sum, point) => {
-                const v = typeof point.team === "number" ? point.team : 0;
-                const pct = (v / kpi.target) * 100;
-                return sum + Math.min(100, pct);
-              }, 0) / realizedPoints.length
-            : undefined;
         return {
           kpi,
           data,
-          latestValue: latestTeamValue,
-          delta,
-          meetsTarget,
+          summary: summarizeKpiVsTarget(
+            data.map((point) => point.team),
+            kpi.target,
+            kpi.direction,
+          ),
           kind: "pk" as const,
           pkOpponentTarget,
-          completedCount,
-          completedPct,
-          avgExecutionPct,
         };
       }
       if (kpi.id === "possession_pct") {
-        const data: PossessionTrendPoint[] = matches.map((match, idx) => {
+        const data: PossessionTrendPoint[] = includedMatches.map((match, idx) => {
           const label = getMatchLabel(match, idx);
           const team = getTeamPossessionPct(match);
           const dead = getDeadTimePct(match);
@@ -461,74 +495,53 @@ export default function TrendyPage() {
             deadMinutes: deadMin > 0 ? deadMin : undefined,
           };
         });
-        const latestTeamValue = data.length > 0 ? data[data.length - 1].team : 0;
-        const delta = latestTeamValue - kpi.target;
-        const meetsTarget = kpi.direction === "higher" ? latestTeamValue >= kpi.target : latestTeamValue <= kpi.target;
-        return { kpi, data, latestValue: latestTeamValue, delta, meetsTarget, kind: "possession" as const };
+        return {
+          kpi,
+          data,
+          summary: summarizeKpiVsTarget(
+            data.map((point) => point.team),
+            kpi.target,
+            kpi.direction,
+          ),
+          kind: "possession" as const,
+        };
       }
 
       if (kpi.id === "pxt_p2p3") {
-        const data: P2P3TrendPoint[] = matches.map((match, idx) => {
+        const data: P2P3TrendPoint[] = includedMatches.map((match, idx) => {
           const label = getMatchLabel(match, idx);
           const p2 = getTeamP2CountForMatch(match);
           const p3 = getTeamP3CountForMatch(match);
           return { label, p2, p3 };
         });
-        const latest = data.length > 0 ? data[data.length - 1] : { p2: 0, p3: 0, label: "" };
-        const latestValue = latest.p2 + latest.p3;
-        const delta = latestValue - kpi.target;
-        const meetsTarget = kpi.direction === "higher" ? latestValue >= kpi.target : latestValue <= kpi.target;
-        return { kpi, data, latestValue, delta, meetsTarget, kind: "p2p3" as const };
+        return {
+          kpi,
+          data,
+          summary: summarizeKpiVsTarget(
+            data.map((point) => point.p2 + point.p3),
+            kpi.target,
+            kpi.direction,
+          ),
+          kind: "p2p3" as const,
+        };
       }
 
-      const data = matches.map((match, idx) => ({
+      const data = includedMatches.map((match, idx) => ({
         label: getMatchLabel(match, idx),
         value: calculateTrendyKpiValue(match, kpi.id),
       }));
-      const latestValue = data.length > 0 ? data[data.length - 1].value : 0;
-      const delta = latestValue - kpi.target;
-      const meetsTarget = kpi.direction === "higher" ? latestValue >= kpi.target : latestValue <= kpi.target;
-
-      let completedCount: number | undefined;
-      let completedPct: number | undefined;
-      let avgExecutionPct: number | undefined;
-      if (
-        kpi.id === "regains_opp_half" ||
-        kpi.id === "loses_pm_area" ||
-        kpi.id === "acc8s_pct" ||
-        kpi.id === "regains_pp_8s_ca_pct" ||
-        kpi.id === "xg_per_shot" ||
-        kpi.id === "one_touch_pct" ||
-        kpi.id === "counterpress_5s_pct"
-      ) {
-        const totalCount = data.length;
-        completedCount =
-          kpi.direction === "higher"
-            ? data.filter((point) => typeof point.value === "number" && point.value >= kpi.target).length
-            : data.filter((point) => typeof point.value === "number" && point.value <= kpi.target).length;
-        completedPct = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
-
-        const realizedValues =
-          kpi.direction === "higher"
-            ? data
-                .map((p) => p.value)
-                .filter((v): v is number => typeof v === "number" && v >= kpi.target)
-            : data
-                .map((p) => p.value)
-                .filter((v): v is number => typeof v === "number" && v <= kpi.target);
-
-        avgExecutionPct =
-          realizedValues.length > 0
-            ? realizedValues.reduce((sum, v) => {
-                const ratio = kpi.direction === "higher" ? v / kpi.target : kpi.target / v;
-                return sum + Math.min(100, ratio * 100);
-              }, 0) / realizedValues.length
-            : undefined;
-      }
-
-      return { kpi, data, latestValue, delta, meetsTarget, kind: "single" as const, completedCount, completedPct, avgExecutionPct };
+      return {
+        kpi,
+        data,
+        summary: summarizeKpiVsTarget(
+          data.map((point) => point.value),
+          kpi.target,
+          kpi.direction,
+        ),
+        kind: "single" as const,
+      };
     });
-  }, [kpiDefinitions, matches, isPresentationMode]);
+  }, [kpiDefinitions, includedMatches, isPresentationMode]);
 
   // KPI zrealizowane w danym meczu (model 8 KPI jak w statystyce/radar)
   const kpiCompletionIds = [
@@ -583,12 +596,46 @@ export default function TrendyPage() {
     });
   }, [matches, kpiDefinitions, isPresentationMode]);
 
-  const latestKpiCompletion =
-    kpiCompletionPerMatch.length > 0 ? kpiCompletionPerMatch[kpiCompletionPerMatch.length - 1] : null;
+  const includedKpiCompletionPerMatch = useMemo(
+    () =>
+      matches
+        .map((match, idx) => ({
+          id: getTrendyMatchId(match, idx),
+          completion: kpiCompletionPerMatch[idx],
+        }))
+        .filter((row) => row.completion && isTrendyMatchIncluded(excludedMatchIds, row.id))
+        .map((row) => row.completion),
+    [matches, kpiCompletionPerMatch, excludedMatchIds],
+  );
+
+  const kpiCompletionSummary = useMemo(() => {
+    if (includedKpiCompletionPerMatch.length === 0) return null;
+    const n = includedKpiCompletionPerMatch.length;
+    const avgMetCount =
+      includedKpiCompletionPerMatch.reduce((sum, point) => sum + point.metCount, 0) / n;
+    const avgMetPct = includedKpiCompletionPerMatch.reduce((sum, point) => sum + point.metPct, 0) / n;
+    const avgExecutionPct =
+      includedKpiCompletionPerMatch.reduce((sum, point) => sum + point.avgExecutionPct, 0) / n;
+    const targetMetCount = kpiCompletionTotal / 2;
+    const vsTarget = summarizeKpiVsTarget(
+      includedKpiCompletionPerMatch.map((point) => point.metCount),
+      targetMetCount,
+      "higher",
+    );
+    return {
+      avgMetCount,
+      avgMetPct,
+      avgExecutionPct,
+      deltaPct: avgMetPct - 50,
+      hitCount: vsTarget.hitCount,
+      missCount: vsTarget.missCount,
+      meetsTargetOnAverage: vsTarget.meetsTargetOnAverage,
+    };
+  }, [includedKpiCompletionPerMatch]);
 
   // Dane do wykresu łączonego xG · PK · PxT (tylko nasz zespół)
   const xgPkPxtChartData = useMemo(() => {
-    return matches.map((match, idx) => {
+    return includedMatches.map((match, idx) => {
       const label = isPresentationMode ? `Mecz ${idx + 1}` : `${match.opponent || "Mecz"} (${match.date || idx + 1})`;
       const xg = calculateTrendyKpiValue(match, "xg_for");
       const pk = calculateTrendyKpiValue(match, "pk_for");
@@ -599,13 +646,13 @@ export default function TrendyPage() {
         teamGoals > opponentGoals ? "win" : teamGoals === opponentGoals ? "draw" : "loss";
       return { label, xg, pk, pxt, teamGoals, opponentGoals, resultType };
     });
-  }, [matches, isPresentationMode]);
+  }, [includedMatches, isPresentationMode]);
 
   const xptsTrendData = useMemo<XptsTrendPoint[]>(() => {
     let actualCumulative = 0;
     let expectedCumulative = 0;
 
-    return matches.map((match, idx) => {
+    return includedMatches.map((match, idx) => {
       const label = getMatchLabel(match, idx);
       const teamGoals = getTeamGoalsForMatch(match);
       const opponentGoals = getOpponentGoalsForMatch(match);
@@ -624,13 +671,29 @@ export default function TrendyPage() {
         expectedCumulative,
       };
     });
-  }, [matches, isPresentationMode]);
+  }, [includedMatches, isPresentationMode]);
 
   const xptsTrendTotals = useMemo(() => {
     if (xptsTrendData.length === 0) return null;
     const actual = xptsTrendData.reduce((sum, point) => sum + point.actualPoints, 0);
     const expected = xptsTrendData.reduce((sum, point) => sum + point.expectedPoints, 0);
-    return { actual, expected, delta: actual - expected };
+    const n = xptsTrendData.length;
+    const vsModel = summarizeKpiVsTarget(
+      xptsTrendData.map((point) => point.actualPoints - point.expectedPoints),
+      0,
+      "higher",
+    );
+    return {
+      actual,
+      expected,
+      delta: actual - expected,
+      avgActual: actual / n,
+      avgExpected: expected / n,
+      avgDelta: (actual - expected) / n,
+      hitCount: vsModel.hitCount,
+      missCount: vsModel.missCount,
+      meetsTargetOnAverage: vsModel.meetsTargetOnAverage,
+    };
   }, [xptsTrendData]);
 
   // Korelacja Pearsona między xG, PK, PxT
@@ -650,12 +713,12 @@ export default function TrendyPage() {
   }, [xgPkPxtChartData]);
 
   const kpiCompletionChartData = useMemo(() => {
-    const points = kpiCompletionPerMatch
+    const points = includedKpiCompletionPerMatch
       .map((p, idx) => ({ x: idx, y: p.metCount }))
       .filter((p) => Number.isFinite(p.y));
 
     if (points.length < 2) {
-      return kpiCompletionPerMatch.map((p) => ({ ...p, metCountTrend: null as number | null }));
+      return includedKpiCompletionPerMatch.map((p) => ({ ...p, metCountTrend: null as number | null }));
     }
 
     const n = points.length;
@@ -665,21 +728,21 @@ export default function TrendyPage() {
     const sumXX = points.reduce((sum, p) => sum + p.x * p.x, 0);
     const denom = n * sumXX - sumX * sumX;
     if (denom === 0) {
-      return kpiCompletionPerMatch.map((p) => ({ ...p, metCountTrend: null as number | null }));
+      return includedKpiCompletionPerMatch.map((p) => ({ ...p, metCountTrend: null as number | null }));
     }
 
     const slope = (n * sumXY - sumX * sumY) / denom;
     const intercept = (sumY - slope * sumX) / n;
 
-    return kpiCompletionPerMatch.map((p, idx) => ({
+    return includedKpiCompletionPerMatch.map((p, idx) => ({
       ...p,
       metCountTrend: intercept + slope * idx,
     }));
-  }, [kpiCompletionPerMatch]);
+  }, [includedKpiCompletionPerMatch]);
 
   // Radar ze średnim wykonaniem 8 oryginalnych KPI (jak w statystyki-zespolu)
   const radarData = useMemo(() => {
-    if (matches.length === 0) return [];
+    if (includedMatches.length === 0) return [];
 
     const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
     const scoreHigherIsBetter = (actual: number, target: number): number => {
@@ -706,7 +769,7 @@ export default function TrendyPage() {
     return radarKpis.map(({ id, metric, direction, unit }, idx) => {
       const def = kpiDefinitions.find((k) => k.id === id);
       const target = def?.target ?? 0;
-      const values = matches.map((m) => calculateTrendyKpiValue(m, id)).filter((v) => Number.isFinite(v));
+      const values = includedMatches.map((m) => calculateTrendyKpiValue(m, id)).filter((v) => Number.isFinite(v));
       const avgValue = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
       const score =
         direction === "higher"
@@ -723,7 +786,7 @@ export default function TrendyPage() {
         kpiLabel: def ? `KPI ${direction === "higher" ? "≥" : "≤"} ${formatKpiValue(target, unit)}` : "",
       };
     });
-  }, [matches, kpiDefinitions, isPresentationMode]);
+  }, [includedMatches, kpiDefinitions, isPresentationMode]);
 
   if (authLoading) {
     return <div className={styles.centered}>Ładowanie...</div>;
@@ -783,13 +846,17 @@ export default function TrendyPage() {
 
       {matches.length > 0 && (
         <>
-          {radarData.length > 0 && (
-            <div className={styles.radarSection}>
+          <div className={styles.radarSection}>
               <div className={styles.radarCard}>
                 <h4 className={styles.radarTitle}>Ocena modelu gry</h4>
-                <p className={styles.radarSubtitle}>Średnie wykonanie 8 KPI w wybranym okresie</p>
+                <p className={styles.radarSubtitle}>
+                  {includedMatches.length === matches.length
+                    ? "Średnie wykonanie 8 KPI w wybranym okresie"
+                    : `Średnie wykonanie 8 KPI · ${includedMatches.length} z ${matches.length} meczów`}
+                </p>
                 <div className={styles.radarLayout}>
                   <div className={styles.radarWrapper}>
+                  {radarData.length > 0 ? (
                   <ResponsiveRadar
                     data={radarData}
                     keys={["KPI", "Wartość"]}
@@ -915,29 +982,56 @@ export default function TrendyPage() {
                       },
                     }}
                   />
+                  ) : (
+                    <p className={styles.radarEmpty}>Włącz przynajmniej jeden mecz, aby policzyć średnie KPI.</p>
+                  )}
                 </div>
                 <div className={styles.radarRightPanel}>
                   <div className={styles.matchResultsList}>
                     <div className={styles.matchResultsHeader}>
                       <span className={styles.matchCountBadge}>
-                        <span className={styles.matchCountNumber}>{matches.length}</span>
+                        <span className={styles.matchCountNumber}>{includedMatchCountLabel.numberLabel}</span>
                         <span className={styles.matchCountLabel}>
-                          {matches.length === 1 ? "mecz" : matches.length < 5 ? "mecze" : "meczów"}
+                          {includedMatchCountLabel.noun}
                         </span>
                       </span>
                       <span className={styles.matchResultsTitle}>Wyniki meczów</span>
                       <span className={styles.matchResultsKpiHint}>
                         KPI (X/{kpiCompletionTotal})
                       </span>
+                      {excludedMatchIds.size > 0 ? (
+                        <button
+                          type="button"
+                          className={styles.matchResultsResetButton}
+                          onClick={() => setAllMatchesIncluded(true)}
+                        >
+                          Włącz wszystkie
+                        </button>
+                      ) : null}
                     </div>
                     <div className={styles.matchResultsTable}>
                       <div className={styles.matchResultHeaderRow}>
+                        <span className={styles.matchResultColInclude}>
+                          <input
+                            type="checkbox"
+                            className={styles.matchResultIncludeCheckbox}
+                            checked={excludedMatchIds.size === 0}
+                            ref={(el) => {
+                              if (el) el.indeterminate = excludedMatchIds.size > 0 && includedMatches.length > 0;
+                            }}
+                            onChange={() => setAllMatchesIncluded(excludedMatchIds.size > 0)}
+                            aria-label="Uwzględnij wszystkie mecze w kalkulacji"
+                            title="Uwzględnij wszystkie mecze w kalkulacji"
+                          />
+                        </span>
                         <span className={styles.matchResultColDate}>Data</span>
                         <span className={styles.matchResultColOpponent}>Przeciwnik</span>
                         <span className={styles.matchResultColScore}>Wynik</span>
                         <span className={styles.matchResultColKpi}>KPI</span>
                       </div>
                       {matches.map((match, idx) => {
+                        const matchId = getTrendyMatchId(match, idx);
+                        const included = isTrendyMatchIncluded(excludedMatchIds, matchId);
                         const teamGoals = getTeamGoalsForMatch(match);
                         const opponentGoals = getOpponentGoalsForMatch(match);
                         const kpiCompletion = kpiCompletionPerMatch[idx];
@@ -963,20 +1057,43 @@ export default function TrendyPage() {
                           : `Mecz ${idx + 1}`;
                         const isWin = teamGoals > opponentGoals;
                         const isDraw = teamGoals === opponentGoals;
-                        const isLoss = teamGoals < opponentGoals;
                         const resultClass = isWin
                           ? styles.matchResultRowWin
                           : isDraw
                             ? styles.matchResultRowDraw
                             : styles.matchResultRowLoss;
+                        const opponentLabel = isPresentationMode ? "Przeciwnik" : (match.opponent || "Przeciwnik");
                         return (
                           <div
-                            key={match.matchId ?? idx}
-                            className={`${styles.matchResultRow} ${resultClass}`}
+                            key={matchId}
+                            role="button"
+                            tabIndex={0}
+                            aria-pressed={included}
+                            aria-label={`${included ? "Wyłącz" : "Włącz"} mecz ${opponentLabel} (${dateLabel}) w kalkulacji`}
+                            className={`${styles.matchResultRow} ${resultClass} ${included ? "" : styles.matchResultRowExcluded}`}
+                            onClick={() => toggleMatchIncluded(matchId)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                toggleMatchIncluded(matchId);
+                              }
+                            }}
                           >
+                            <span
+                              className={styles.matchResultColInclude}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <input
+                                type="checkbox"
+                                className={styles.matchResultIncludeCheckbox}
+                                checked={included}
+                                onChange={() => toggleMatchIncluded(matchId)}
+                                aria-label={`Uwzględnij mecz ${opponentLabel} (${dateLabel}) w kalkulacji`}
+                              />
+                            </span>
                             <span className={styles.matchResultColDate}>{dateLabel}</span>
                             <span className={styles.matchResultColOpponent}>
-                              {isPresentationMode ? "Przeciwnik" : (match.opponent || "Przeciwnik")}
+                              {opponentLabel}
                             </span>
                             <span className={styles.matchResultColScore}>
                               {teamGoals} : {opponentGoals}
@@ -998,12 +1115,11 @@ export default function TrendyPage() {
                 </div>
               </div>
             </div>
-          )}
 
           <div className={styles.kpiList}>
-          {kpiRows.map(({ kpi, data, latestValue, delta, meetsTarget, kind, pkOpponentTarget, completedCount, completedPct }) => {
+          {kpiRows.map(({ kpi, data, summary, kind, pkOpponentTarget }) => {
             const isOpen = expandedKpis[kpi.id] ?? false;
-            const showXptsCard = kpi.id === "xg_for" && matches.length > 0;
+            const showXptsCard = kpi.id === "xg_for" && includedMatches.length > 0;
             const xptsExpanded = expandedKpis[XPTS_TREND_EXPAND_KEY] ?? false;
             return (
               <React.Fragment key={kpi.id}>
@@ -1025,34 +1141,11 @@ export default function TrendyPage() {
                         {trendyRegainLosesTilt.loses.total} na całym boisku ·{" "}
                         {formatTrendyTiltVerdictShort(trendyRegainLosesTilt.loses)}
                       </span>
-                    ) : kpi.id === "pk_for" && typeof completedCount === "number" ? (
-                      <span className={`${styles.kpiMeta} ${meetsTarget ? styles.good : styles.bad}`}>
-                        {formatKpiValue(latestValue, kpi.unit)} ({delta >= 0 ? "+" : ""}
-                        {formatKpiValue(delta, kpi.unit)}) — KPI w zakresie w {completedCount}/{data.length} meczach (
-                        {(completedPct ?? 0).toFixed(0)}%)
-                      </span>
-                    ) : (kpi.id === "regains_opp_half" ||
-                        kpi.id === "loses_pm_area" ||
-                        kpi.id === "acc8s_pct" ||
-                        kpi.id === "regains_pp_8s_ca_pct" ||
-                        kpi.id === "xg_per_shot" ||
-                        kpi.id === "one_touch_pct" ||
-                        kpi.id === "counterpress_5s_pct") &&
-                      typeof completedCount === "number" &&
-                      typeof completedPct === "number" ? (
-                      <span className={`${styles.kpiMeta} ${meetsTarget ? styles.good : styles.bad}`}>
-                        {formatKpiValue(latestValue, kpi.unit)} ({delta >= 0 ? "+" : ""}
-                        {formatKpiValue(delta, kpi.unit)}) — KPI w zakresie w {completedCount}/{data.length} meczach (
-                        {completedPct.toFixed(0)}%)
-                      </span>
                     ) : (
-                      <span className={`${styles.kpiMeta} ${meetsTarget ? styles.good : styles.bad}`}>
-                        {formatKpiValue(latestValue, kpi.unit)} ({delta >= 0 ? "+" : ""}
-                        {formatKpiValue(delta, kpi.unit)})
-                      </span>
+                      <KpiHeaderMeta summary={summary} />
                     )}
                   </button>
-                  {matches.length > 0 &&
+                  {includedMatches.length > 0 &&
                     (kpi.id === "xg_for" ||
                       kpi.id === "shots_for" ||
                       kpi.id === "pk_for" ||
@@ -1142,7 +1235,7 @@ export default function TrendyPage() {
                       )}
                     </div>
                   )}
-                  {matches.length > 0 &&
+                  {includedMatches.length > 0 &&
                     ![
                       "xg_for",
                       "shots_for",
@@ -1258,11 +1351,22 @@ export default function TrendyPage() {
                     >
                       <span className={styles.kpiTitle}>xPts</span>
                       <span
-                        className={`${styles.kpiMeta} ${xptsTrendTotals.delta >= 0 ? styles.good : styles.bad}`}
+                        className={`${styles.kpiMeta} ${xptsTrendTotals.meetsTargetOnAverage ? styles.good : styles.bad}`}
+                        aria-label={`Średnio ${xptsTrendTotals.avgExpected.toFixed(2)} xPts, średnio ${xptsTrendTotals.avgActual.toFixed(2)} punktów, ${formatKpiAverageVsTargetLabel(xptsTrendTotals.avgDelta, "number", "modelu")}, target ${formatTrendyKpiHitMissLabel(xptsTrendTotals.hitCount, xptsTrendTotals.missCount)}`}
                       >
-                        {xptsTrendTotals.expected.toFixed(2)} xPts · {xptsTrendTotals.actual.toFixed(0)} pkt (
-                        {xptsTrendTotals.delta >= 0 ? "+" : ""}
-                        {xptsTrendTotals.delta.toFixed(2)})
+                        <span className={styles.kpiMetaPrimary}>
+                          śr. {xptsTrendTotals.avgExpected.toFixed(2)} xPts · śr. {xptsTrendTotals.avgActual.toFixed(2)} pkt ·{" "}
+                          {formatKpiAverageVsTargetLabel(xptsTrendTotals.avgDelta, "number", "modelu")}
+                        </span>
+                        <span className={styles.kpiMetaHits}>
+                          <span className={xptsTrendTotals.hitCount > 0 ? styles.kpiMetaHit : undefined}>
+                            osiągnięty {xptsTrendTotals.hitCount}×
+                          </span>
+                          {" · "}
+                          <span className={xptsTrendTotals.missCount > 0 ? styles.kpiMetaMiss : undefined}>
+                            nie {xptsTrendTotals.missCount}×
+                          </span>
+                        </span>
                       </span>
                     </button>
                   </div>
@@ -1277,7 +1381,7 @@ export default function TrendyPage() {
             );
           })}
 
-          {matches.length > 0 && latestKpiCompletion && (
+          {includedMatches.length > 0 && kpiCompletionSummary && (
             <div key="kpi_zrealizowane" className={styles.kpiCard}>
               <button
                 type="button"
@@ -1287,9 +1391,25 @@ export default function TrendyPage() {
                 }
               >
                 <span className={styles.kpiTitle}>KPI zrealizowane</span>
-                <span className={styles.kpiMeta}>
-                  {latestKpiCompletion.metPct.toFixed(1)}% ({latestKpiCompletion.metCount} / {kpiCompletionTotal} KPI) · śr. wykonanie:{" "}
-                  {latestKpiCompletion.avgExecutionPct.toFixed(0)}%
+                <span
+                  className={`${styles.kpiMeta} ${kpiCompletionSummary.meetsTargetOnAverage ? styles.good : styles.bad}`}
+                  aria-label={`Średnio ${kpiCompletionSummary.avgMetPct.toFixed(1)} procent, ${kpiCompletionSummary.avgMetCount.toFixed(1)} z ${kpiCompletionTotal} KPI, ${formatKpiAverageVsTargetLabel(kpiCompletionSummary.deltaPct, "percent")}, target ${formatTrendyKpiHitMissLabel(kpiCompletionSummary.hitCount, kpiCompletionSummary.missCount)}`}
+                >
+                  <span className={styles.kpiMetaPrimary}>
+                    śr. {kpiCompletionSummary.avgMetPct.toFixed(1)}% ({kpiCompletionSummary.avgMetCount.toFixed(1)} / {kpiCompletionTotal} KPI) ·{" "}
+                    {formatKpiAverageVsTargetLabel(kpiCompletionSummary.deltaPct, "percent")}
+                  </span>
+                  <span className={styles.kpiMetaHits}>
+                    <span className={kpiCompletionSummary.hitCount > 0 ? styles.kpiMetaHit : undefined}>
+                      osiągnięty {kpiCompletionSummary.hitCount}×
+                    </span>
+                    {" · "}
+                    <span className={kpiCompletionSummary.missCount > 0 ? styles.kpiMetaMiss : undefined}>
+                      nie {kpiCompletionSummary.missCount}×
+                    </span>
+                    {" · "}
+                    śr. wykonanie: {kpiCompletionSummary.avgExecutionPct.toFixed(0)}%
+                  </span>
                 </span>
               </button>
               {(expandedKpis.kpi_zrealizowane ?? false) && (
@@ -1384,7 +1504,7 @@ export default function TrendyPage() {
             </div>
           )}
 
-          {matches.length > 0 && xgPkPxtChartData.length > 0 && (
+          {includedMatches.length > 0 && xgPkPxtChartData.length > 0 && (
             <div key="kpi_xg_pk_pxt" className={styles.kpiCard}>
               <button
                 type="button"
@@ -1654,7 +1774,7 @@ export default function TrendyPage() {
         <TrendyKpiMapModal
           kind={kpiMapModal.kind}
           title={kpiMapModal.title}
-          matchCount={matches.length}
+          matchCount={includedMatches.length}
           teamId={selectedTeam}
           teamName={selectedTeamName}
           shots={trendyMapShots}
@@ -1683,7 +1803,7 @@ export default function TrendyPage() {
               <h2 id="trendy-kpi-players-modal-title" className={styles.playersModalTitle}>
                 Wkład zawodników — {kpiPlayersModal.label}
                 <span style={{ display: "block", fontWeight: 500, fontSize: 13, color: "#64748b", marginTop: 6 }}>
-                  Zakres: {matches.length} meczów (po filtrach)
+                  Zakres: {includedMatches.length} meczów (po filtrach)
                 </span>
               </h2>
               <button

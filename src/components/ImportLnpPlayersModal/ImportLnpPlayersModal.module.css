@@ -1,0 +1,242 @@
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10003;
+  backdrop-filter: blur(4px);
+  padding: 16px;
+}
+
+.modalContent {
+  background-color: white;
+  padding: 20px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 640px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modalTitle {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.closeButton {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  color: #6b7280;
+  border: none;
+  font-size: 24px;
+  font-weight: 300;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.closeButton:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.hint {
+  margin: 0 0 12px;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.fetchRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.urlInput {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.urlInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.fetchButton,
+.confirmButton,
+.cancelButton {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.fetchButton,
+.confirmButton {
+  background: #2563eb;
+  color: white;
+}
+
+.fetchButton:hover,
+.confirmButton:hover {
+  background: #1d4ed8;
+}
+
+.fetchButton:disabled,
+.confirmButton:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.cancelButton {
+  background: #fff;
+  color: #374151;
+  border-color: #d1d5db;
+}
+
+.error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.meta {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+  max-height: 48vh;
+  padding-right: 4px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 140px 76px 36px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.rowDuplicate {
+  opacity: 0.72;
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.numberInput,
+.yearInput,
+.positionSelect {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  background: white;
+}
+
+.nameBlock {
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.duplicateHint {
+  font-size: 11px;
+  color: #c2410c;
+  margin-top: 2px;
+}
+
+.removeButton {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.removeButton:hover {
+  background: #fecaca;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+@media (max-width: 640px) {
+  .fetchRow {
+    flex-direction: column;
+  }
+
+  .row {
+    grid-template-columns: 52px minmax(0, 1fr) 36px;
+    grid-template-rows: auto auto;
+  }
+
+  .positionSelect {
+    grid-column: 1 / 3;
+  }
+
+  .yearInput {
+    display: none;
+  }
+}

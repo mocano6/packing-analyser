@@ -18,6 +18,7 @@ import {
 import SidePanel from "@/components/SidePanel/SidePanel";
 import TeamsMultiSelectorModal from "@/components/TeamsMultiSelectorModal/TeamsMultiSelectorModal";
 import PlayerComparisonRankingToolbar from "@/components/PlayerComparisonRankingToolbar/PlayerComparisonRankingToolbar";
+import PlayerComparisonRosterPicker from "@/components/PlayerComparisonRosterPicker/PlayerComparisonRosterPicker";
 import type { Team as TeamCatalogEntry } from "@/constants/teamsLoader";
 import { usePresentationMode } from "@/contexts/PresentationContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -42,8 +43,8 @@ import {
   PLAYER_COMPARISON_METRICS,
   buildPlayerComparisonRankingSelectOptions,
   getPlayerComparisonAxisDisplay,
-  getPlayerComparisonPairCellTone,
-  formatPlayerComparisonRawSurplusParen,
+  getPlayerComparisonGroupCellTones,
+  formatPlayerComparisonGroupSurplusParen,
   normalizePlayerComparisonRadarScore,
   resolveComparisonAxisValueId,
   resolvePlayerComparisonMetricId,
@@ -54,6 +55,13 @@ import {
   type PlayerComparisonPairCellTone,
   type PlayerComparisonRow,
 } from "@/utils/playerComparisonMetrics";
+import {
+  PLAYER_COMPARISON_SELECT_MAX,
+  PLAYER_COMPARISON_SERIES_COLORS,
+  sanitizeComparisonPlayerIds,
+  toggleComparisonPlayerId,
+  uniquePlayerComparisonLabels,
+} from "@/utils/playerComparisonSelection";
 import { getDefaultPlayerComparisonDateRange } from "@/utils/playerComparisonDateDefaults";
 import {
   PLAYER_COMPARISON_PREFERENCES_STORAGE_KEY,
@@ -100,9 +108,6 @@ import {
   type PlayerComparisonWeightedIndexPreset,
 } from "@/utils/playerComparisonWeightedIndexPreferences";
 import styles from "./zawodnicy.module.css";
-
-/** Kolory serii A/B — spider + oznaczenia przy selectach. */
-const COMPARISON_PLAYER_COLORS = ["#2563eb", "#16a34a"] as const;
 
 /** Kolory segmentów wykresu indeksu wagowego (kolejność = aktywne KPI). */
 const WEIGHTED_INDEX_CHART_COLORS = [
@@ -183,8 +188,8 @@ const comparePairToneClass = (tone: PlayerComparisonPairCellTone): string | unde
 };
 
 const comparePairToneTitle = (tone: PlayerComparisonPairCellTone): string | undefined => {
-  if (tone === "better") return "Lepszy wynik niż drugi zawodnik w tej kategorii";
-  if (tone === "worse") return "Słabszy wynik niż drugi zawodnik w tej kategorii";
+  if (tone === "better") return "Najlepszy wynik w zaznaczonej grupie";
+  if (tone === "worse") return "Najsłabszy wynik w zaznaczonej grupie";
   if (tone === "even") return "Identyczna wartość";
   return undefined;
 };
@@ -251,8 +256,7 @@ export default function ZawodnicyPage() {
     column: "kpi",
     direction: defaultKpiTableSortDirection(resolvePlayerComparisonMetricId("pxt", "sender")),
   }));
-  const [primaryPlayerId, setPrimaryPlayerId] = useState("");
-  const [secondaryPlayerId, setSecondaryPlayerId] = useState("");
+  const [selectedComparisonIds, setSelectedComparisonIds] = useState<string[]>([]);
   const [comparisonActivity, setComparisonActivity] = useState<ComparisonActivity>("pair");
   const [weightedIndexConfigs, setWeightedIndexConfigs] = useState<PlayerComparisonWeightedMetricConfig[]>(() =>
     buildDefaultWeightedIndexConfigs(),
@@ -758,19 +762,8 @@ export default function ZawodnicyPage() {
   }, [weightedPresetMessage]);
 
   useEffect(() => {
-    if (sortedSelectRows.length === 0) {
-      setPrimaryPlayerId("");
-      setSecondaryPlayerId("");
-      return;
-    }
-    const firstId = sortedSelectRows[0].playerId;
-    setPrimaryPlayerId((current) =>
-      sortedSelectRows.some((row) => row.playerId === current) ? current : firstId,
-    );
-    setSecondaryPlayerId((current) => {
-      if (sortedSelectRows.some((row) => row.playerId === current) && current !== firstId) return current;
-      return sortedSelectRows[1]?.playerId ?? firstId;
-    });
+    const availableIds = sortedSelectRows.map((row) => row.playerId);
+    setSelectedComparisonIds((current) => sanitizeComparisonPlayerIds(current, availableIds));
   }, [sortedSelectRows]);
 
   const loadedTeamNames = useMemo(() => {
@@ -788,25 +781,55 @@ export default function ZawodnicyPage() {
     [activeMetricId, isPresentationMode, maskName, sortedRows],
   );
 
-  const primaryPlayer = sortedSelectRows.find((row) => row.playerId === primaryPlayerId) ?? null;
-  const secondaryPlayer = sortedSelectRows.find((row) => row.playerId === secondaryPlayerId) ?? null;
+  const selectedComparisonPlayers = useMemo(() => {
+    const byId = new Map(sortedSelectRows.map((row) => [row.playerId, row]));
+    return selectedComparisonIds
+      .map((id) => byId.get(id))
+      .filter((row): row is PlayerComparisonRow => Boolean(row));
+  }, [selectedComparisonIds, sortedSelectRows]);
+
+  const comparisonLabelsById = useMemo(
+    () => uniquePlayerComparisonLabels(selectedComparisonPlayers, maskName),
+    [isPresentationMode, maskName, selectedComparisonPlayers],
+  );
+
   const radarData = useMemo(() => {
-    if (!primaryPlayer || !secondaryPlayer) return [];
-    const primaryLabel = maskName(primaryPlayer.playerName);
-    const secondaryLabel = maskName(secondaryPlayer.playerName);
+    if (selectedComparisonPlayers.length < 2) return [];
     return PLAYER_COMPARISON_AXIS_METRIC_IDS.map((axisId) => {
       const valueId = resolveComparisonAxisValueId(axisId, metricRole);
       const { radarAxis } = getPlayerComparisonAxisDisplay(axisId, metricRole);
-      return {
-        metric: radarAxis,
-        [primaryLabel]: normalizePlayerComparisonRadarScore(eligibleRows, primaryPlayer, valueId),
-        [secondaryLabel]: normalizePlayerComparisonRadarScore(eligibleRows, secondaryPlayer, valueId),
-      };
+      const point: Record<string, string | number> = { metric: radarAxis };
+      for (const player of selectedComparisonPlayers) {
+        const label = comparisonLabelsById.get(player.playerId) ?? maskName(player.playerName);
+        point[label] = normalizePlayerComparisonRadarScore(eligibleRows, player, valueId);
+      }
+      return point;
     });
-  }, [eligibleRows, isPresentationMode, maskName, metricRole, primaryPlayer, secondaryPlayer]);
+  }, [
+    comparisonLabelsById,
+    eligibleRows,
+    maskName,
+    metricRole,
+    selectedComparisonPlayers,
+  ]);
 
-  const primaryComparisonLabel = primaryPlayer ? maskName(primaryPlayer.playerName) : "";
-  const secondaryComparisonLabel = secondaryPlayer ? maskName(secondaryPlayer.playerName) : "";
+  const radarKeys = useMemo(
+    () =>
+      selectedComparisonPlayers.map(
+        (player) => comparisonLabelsById.get(player.playerId) ?? maskName(player.playerName),
+      ),
+    [comparisonLabelsById, maskName, selectedComparisonPlayers],
+  );
+
+  const handleToggleComparisonPlayer = (playerId: string) => {
+    setSelectedComparisonIds((current) => {
+      const next = toggleComparisonPlayerId(current, playerId, PLAYER_COMPARISON_SELECT_MAX);
+      if (next === current && !current.includes(playerId)) {
+        toast.error(`Możesz porównać maksymalnie ${PLAYER_COMPARISON_SELECT_MAX} zawodników.`);
+      }
+      return next;
+    });
+  };
 
   const rankingToolbarProps = useMemo(
     () => ({
@@ -1062,7 +1085,7 @@ export default function ZawodnicyPage() {
                   <PlayerComparisonRankingToolbar idPrefix="ranking" {...rankingToolbarProps} />
                   <p className={styles.rankingClientHint}>
                     Per 90 / suma, pozycje oraz progi minut i meczów działają na już pobranych danych — bez ponownego
-                    ładowania. Te filtry wpływają na wykres rankingu, porównanie 1:1 i indeks wagowy poniżej.
+                    ładowania. Te filtry wpływają na wykres rankingu, porównanie zawodników i indeks wagowy poniżej.
                   </p>
                 </div>
 
@@ -1070,9 +1093,9 @@ export default function ZawodnicyPage() {
                   <div>
                     <h2 className={styles.panelTitle}>Porównanie zawodników</h2>
                     <p className={styles.panelSubtitle}>
-                      Wybierz czynność: klasyczne porównanie 1:1 ze spider mapą albo indeks wagowy z własnymi KPI i
-                      procentami. W indeksie wagowym metryki wielorolowe (Packing, PXT, xT, PK, P1–P3) są osobno dla
-                      podania, przyjęcia i dryblingu — bez zależności od suwaka roli w rankingu.
+                      Zaznacz 2–6 zawodników poniżej — trafią do tabeli i na spider. Albo przełącz na indeks wagowy
+                      z własnymi KPI i procentami. W indeksie wagowym metryki wielorolowe (Packing, PXT, xT, PK,
+                      P1–P3) są osobno dla podania, przyjęcia i dryblingu — bez zależności od suwaka roli w rankingu.
                     </p>
                   </div>
                   <div className={styles.comparisonActivityToggle} role="group" aria-label="Tryb porównania zawodników">
@@ -1082,7 +1105,7 @@ export default function ZawodnicyPage() {
                       onClick={() => setComparisonActivity("pair")}
                       aria-pressed={comparisonActivity === "pair"}
                     >
-                      Porównanie 1:1
+                      Porównanie
                     </button>
                     <button
                       type="button"
@@ -1112,27 +1135,36 @@ export default function ZawodnicyPage() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                  <div className={styles.comparisonLayout}>
-                    {primaryPlayer && secondaryPlayer ? (
+                  <div className={styles.comparisonWorkspace}>
+                  <div className={styles.comparisonStage}>
+                  <PlayerComparisonRosterPicker
+                    rows={sortedSelectRows}
+                    selectedIds={selectedComparisonIds}
+                    onToggle={handleToggleComparisonPlayer}
+                    maskName={maskName}
+                    embedded
+                  />
+                    <section className={styles.radarPanel} aria-label="Spider mapa porównania">
+                    {selectedComparisonPlayers.length >= 2 ? (
                       <div className={styles.radarWrapper}>
                         <ResponsiveRadar
                           data={radarData}
-                          keys={[primaryComparisonLabel, secondaryComparisonLabel]}
+                          keys={radarKeys}
                           indexBy="metric"
                           maxValue={100}
-                          margin={{ top: 48, right: 64, bottom: 48, left: 64 }}
+                          margin={{ top: 40, right: 56, bottom: 40, left: 56 }}
                           curve="linearClosed"
                           borderWidth={2}
                           borderColor={{ from: "color" }}
                           gridLevels={5}
                           gridShape="circular"
-                          gridLabelOffset={18}
+                          gridLabelOffset={14}
                           enableDots
                           dotSize={6}
                           dotBorderWidth={2}
                           dotBorderColor={{ from: "color" }}
-                          colors={[...COMPARISON_PLAYER_COLORS]}
-                          fillOpacity={0.15}
+                          colors={[...PLAYER_COMPARISON_SERIES_COLORS]}
+                          fillOpacity={selectedComparisonPlayers.length > 3 ? 0.08 : 0.15}
                           blendMode="multiply"
                           motionConfig="wobbly"
                           sliceTooltip={({ index }) => {
@@ -1145,129 +1177,113 @@ export default function ZawodnicyPage() {
                             return (
                               <div className={styles.radarTooltip}>
                                 <strong>{disp.compareTable}</strong>
-                                <span>
-                                  {primaryComparisonLabel}: {formatMetricValue(valueId, primaryPlayer.values[valueId])}
-                                </span>
-                                <span>
-                                  {secondaryComparisonLabel}: {formatMetricValue(valueId, secondaryPlayer.values[valueId])}
-                                </span>
+                                {selectedComparisonPlayers.map((player) => {
+                                  const label =
+                                    comparisonLabelsById.get(player.playerId) ?? maskName(player.playerName);
+                                  return (
+                                    <span key={player.playerId}>
+                                      {label}: {formatMetricValue(valueId, player.values[valueId])}
+                                    </span>
+                                  );
+                                })}
                               </div>
                             );
                           }}
                         />
                       </div>
-                    ) : null}
+                    ) : (
+                      <p className={styles.emptyInline}>Zaznacz co najmniej dwóch zawodników, aby zobaczyć spider mapę.</p>
+                    )}
+                    </section>
+                  </div>
+                    <div className={styles.compareTableBlock}>
+                    <p className={styles.compareTableCaption}>
+                      Pierwszy wiersz: rozegrane minuty w wybranym zakresie. Zielone tło — najlepszy wynik w grupie;
+                      czerwone — najsłabszy. Przy najwyższej wartości surowej nadwyżka w nawiasie względem kolejnego, np. (+0,15).
+                    </p>
                     <div className={styles.compareTableWrapper}>
                       <table className={`${styles.playersTable} ${styles.comparePairTable}`}>
-                        <caption className={styles.compareTableCaption}>
-                          Pierwszy wiersz: rozegrane minuty w wybranym zakresie. Zielone tło — lepszy wynik KPI; czerwone — słabszy. Przy wyższej wartości surowej w parze nadwyżka w nawiasie, np. (+0,15).
-                        </caption>
                         <thead>
                           <tr>
                             <th scope="col">KPI</th>
-                            <th scope="col">
-                              <div className={styles.compareTableThPlayer}>
-                                <div className={styles.compareTableThPlayerRow}>
-                                  <span
-                                    className={styles.playerColorDot}
-                                    style={{ backgroundColor: COMPARISON_PLAYER_COLORS[0] }}
-                                    title="Kolor serii zawodnika A na spider mapie"
-                                    aria-hidden
-                                  />
-                                  <select
-                                    value={primaryPlayerId}
-                                    onChange={(event) => setPrimaryPlayerId(event.target.value)}
-                                    className={`${styles.select} ${styles.compareTableHeadSelect}`}
-                                    aria-label="Zawodnik A (pierwsza kolumna porównania)"
-                                  >
-                                    {sortedSelectRows.map((row) => (
-                                      <option key={row.playerId} value={row.playerId}>
-                                        {maskName(row.playerName)}
-                                      </option>
-                                    ))}
-                                  </select>
+                            {selectedComparisonPlayers.map((player, index) => (
+                              <th key={player.playerId} scope="col">
+                                <div className={styles.compareTableThPlayer}>
+                                  <div className={styles.compareTableThPlayerRow}>
+                                    <span
+                                      className={styles.playerColorDot}
+                                      style={{
+                                        backgroundColor:
+                                          PLAYER_COMPARISON_SERIES_COLORS[index % PLAYER_COMPARISON_SERIES_COLORS.length],
+                                      }}
+                                      title="Kolor serii na spider mapie"
+                                      aria-hidden
+                                    />
+                                    <span className={styles.compareTableHeadName}>
+                                      {comparisonLabelsById.get(player.playerId) ?? maskName(player.playerName)}
+                                    </span>
+                                  </div>
                                 </div>
-                              </div>
-                            </th>
-                            <th scope="col">
-                              <div className={styles.compareTableThPlayer}>
-                                <div className={styles.compareTableThPlayerRow}>
-                                  <span
-                                    className={styles.playerColorDot}
-                                    style={{ backgroundColor: COMPARISON_PLAYER_COLORS[1] }}
-                                    title="Kolor serii zawodnika B na spider mapie"
-                                    aria-hidden
-                                  />
-                                  <select
-                                    value={secondaryPlayerId}
-                                    onChange={(event) => setSecondaryPlayerId(event.target.value)}
-                                    className={`${styles.select} ${styles.compareTableHeadSelect}`}
-                                    aria-label="Zawodnik B (druga kolumna porównania)"
-                                  >
-                                    {sortedSelectRows.map((row) => (
-                                      <option key={row.playerId} value={row.playerId}>
-                                        {maskName(row.playerName)}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-                            </th>
+                              </th>
+                            ))}
                           </tr>
                         </thead>
-                        {primaryPlayer && secondaryPlayer ? (
+                        {selectedComparisonPlayers.length >= 2 ? (
                           <tbody>
                             <tr className={styles.compareMinutesRow}>
                               <td>Rozegrane minuty</td>
-                              <td className={styles.compareValueCell}>{formatComparisonMinutes(primaryPlayer.minutes)}</td>
-                              <td className={styles.compareValueCell}>{formatComparisonMinutes(secondaryPlayer.minutes)}</td>
+                              {selectedComparisonPlayers.map((player) => (
+                                <td key={player.playerId} className={styles.compareValueCell}>
+                                  {formatComparisonMinutes(player.minutes)}
+                                </td>
+                              ))}
                             </tr>
                             {PLAYER_COMPARISON_AXIS_METRIC_IDS.map((axisId) => {
                               const valueId = resolveComparisonAxisValueId(axisId, metricRole);
                               const { compareTable } = getPlayerComparisonAxisDisplay(axisId, metricRole);
                               const direction = metricById.get(valueId)?.direction ?? "higher";
-                              const pv = primaryPlayer.values[valueId];
-                              const sv = secondaryPlayer.values[valueId];
-                              const tone = getPlayerComparisonPairCellTone(pv, sv, direction, valueId);
-                              const pSurplus = formatPlayerComparisonRawSurplusParen(valueId, pv, sv);
-                              const sSurplus = formatPlayerComparisonRawSurplusParen(valueId, sv, pv);
-                              const pToneClass = comparePairToneClass(tone.primary);
-                              const sToneClass = comparePairToneClass(tone.secondary);
+                              const values = selectedComparisonPlayers.map((player) => player.values[valueId]);
+                              const tones = getPlayerComparisonGroupCellTones(values, direction, valueId);
                               return (
                                 <tr key={`${axisId}-${metricRole}`}>
                                   <td>{compareTable}</td>
-                                  <td
-                                    className={[styles.compareValueCell, pToneClass].filter(Boolean).join(" ")}
-                                    title={comparePairToneTitle(tone.primary)}
-                                  >
-                                    <span className={styles.compareValueLine}>
-                                      <span className={styles.compareValueMain}>{formatMetricValue(valueId, pv)}</span>
-                                      {pSurplus ? (
-                                        <span className={styles.compareValueDelta} title="Nadwyżka względem drugiego zawodnika">
-                                          {pSurplus}
+                                  {selectedComparisonPlayers.map((player, index) => {
+                                    const value = player.values[valueId];
+                                    const surplus = formatPlayerComparisonGroupSurplusParen(
+                                      valueId,
+                                      value,
+                                      values.filter((_, otherIndex) => otherIndex !== index),
+                                    );
+                                    const toneClass = comparePairToneClass(tones[index]);
+                                    return (
+                                      <td
+                                        key={player.playerId}
+                                        className={[styles.compareValueCell, toneClass].filter(Boolean).join(" ")}
+                                        title={comparePairToneTitle(tones[index])}
+                                      >
+                                        <span className={styles.compareValueLine}>
+                                          <span className={styles.compareValueMain}>
+                                            {formatMetricValue(valueId, value)}
+                                          </span>
+                                          {surplus ? (
+                                            <span
+                                              className={styles.compareValueDelta}
+                                              title="Nadwyżka względem najwyższej wartości pozostałych"
+                                            >
+                                              {surplus}
+                                            </span>
+                                          ) : null}
                                         </span>
-                                      ) : null}
-                                    </span>
-                                  </td>
-                                  <td
-                                    className={[styles.compareValueCell, sToneClass].filter(Boolean).join(" ")}
-                                    title={comparePairToneTitle(tone.secondary)}
-                                  >
-                                    <span className={styles.compareValueLine}>
-                                      <span className={styles.compareValueMain}>{formatMetricValue(valueId, sv)}</span>
-                                      {sSurplus ? (
-                                        <span className={styles.compareValueDelta} title="Nadwyżka względem drugiego zawodnika">
-                                          {sSurplus}
-                                        </span>
-                                      ) : null}
-                                    </span>
-                                  </td>
+                                      </td>
+                                    );
+                                  })}
                                 </tr>
                               );
                             })}
                           </tbody>
                         ) : null}
                       </table>
+                    </div>
                     </div>
                   </div>
                   </>

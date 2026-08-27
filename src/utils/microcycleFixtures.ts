@@ -164,6 +164,7 @@ export function removeMicrocycleFromState(
     dayPlans,
     proceduralTasks,
     trainingBlocks: (state.trainingBlocks ?? []).filter((b) => b.microcycleId !== microcycleId),
+    exercises: (state.exercises ?? []).filter((e) => e.microcycleId !== microcycleId),
     trainingCounts,
     activeMicrocycleId,
   };
@@ -308,6 +309,228 @@ export function fixturesInWeekByDay(
   return out.sort(
     (a, b) => a.dayIndex - b.dayIndex || a.fixture.dateTime.localeCompare(b.fixture.dateTime)
   );
+}
+
+export function isFixtureHomeForTeam(fixture: LaczyTeamFixture, ourTeamId: string): boolean {
+  return fixture.hostId.toLowerCase() === ourTeamId.toLowerCase();
+}
+
+/** Data kalendarzowa meczu (YYYY-MM-DD, czas lokalny). */
+export function fixtureIsoDate(fixture: LaczyTeamFixture): string | null {
+  const dt = new Date(fixture.dateTime);
+  if (Number.isNaN(dt.getTime())) return null;
+  return toIsoDateLocal(startOfDay(dt));
+}
+
+export function groupFixturesByIsoDate(
+  fixtures: LaczyTeamFixture[]
+): Map<string, LaczyTeamFixture[]> {
+  const map = new Map<string, LaczyTeamFixture[]>();
+  for (const f of fixtures) {
+    const iso = fixtureIsoDate(f);
+    if (!iso) continue;
+    const list = map.get(iso) ?? [];
+    list.push(f);
+    map.set(iso, list);
+  }
+  for (const list of map.values()) {
+    list.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+  }
+  return map;
+}
+
+export type MonthCalendarCell = {
+  iso: string;
+  inMonth: boolean;
+  /** 0 = pn … 6 = nd */
+  weekdayIndex: number;
+  dayOfMonth: number;
+};
+
+/** Siatka miesiąca od poniedziałku (pełne tygodnie). */
+export function buildMonthCalendarCells(year: number, monthIndex: number): MonthCalendarCell[] {
+  const first = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+  const start = startOfWeekMonday(first);
+  const last = new Date(year, monthIndex + 1, 0, 0, 0, 0, 0);
+  const end = addDays(startOfWeekMonday(last), 6);
+  const cells: MonthCalendarCell[] = [];
+  for (let d = new Date(start); d.getTime() <= end.getTime(); d = addDays(d, 1)) {
+    const jsDay = d.getDay();
+    const weekdayIndex = jsDay === 0 ? 6 : jsDay - 1;
+    cells.push({
+      iso: toIsoDateLocal(d),
+      inMonth: d.getMonth() === monthIndex,
+      weekdayIndex,
+      dayOfMonth: d.getDate(),
+    });
+  }
+  return cells;
+}
+
+export function monthFromIso(iso: string): { year: number; monthIndex: number } {
+  const d = parseIsoDateLocal(iso);
+  return { year: d.getFullYear(), monthIndex: d.getMonth() };
+}
+
+export function shiftCalendarMonth(
+  year: number,
+  monthIndex: number,
+  delta: number
+): { year: number; monthIndex: number } {
+  const d = new Date(year, monthIndex + delta, 1);
+  return { year: d.getFullYear(), monthIndex: d.getMonth() };
+}
+
+export function weekStartIsoFromDateIso(iso: string): string {
+  return toIsoDateLocal(startOfWeekMonday(parseIsoDateLocal(iso)));
+}
+
+export function isIsoInWeek(iso: string, weekStartIso: string): boolean {
+  if (!iso || !weekStartIso) return false;
+  const t = parseIsoDateLocal(iso).getTime();
+  const start = parseIsoDateLocal(weekStartIso).getTime();
+  const end = addDays(parseIsoDateLocal(weekStartIso), 7).getTime();
+  return t >= start && t < end;
+}
+
+export type FixtureCalendarChip = {
+  isHome: boolean;
+  /** Skrót do kalendarza: D = dom, W = wyjazd. */
+  venueShort: "D" | "W";
+  venueLabel: "Dom" | "Wyjazd";
+  timeLabel: string;
+  opponent: string;
+  /** Pełna etykieta, np. „Dom 18:00 Rywale FC”. */
+  label: string;
+};
+
+export function fixtureCalendarChip(
+  fixture: LaczyTeamFixture,
+  ourTeamId: string
+): FixtureCalendarChip {
+  const isHome = Boolean(ourTeamId) && isFixtureHomeForTeam(fixture, ourTeamId);
+  const opponent = ourTeamId
+    ? isHome
+      ? fixture.guestName
+      : fixture.hostName
+    : `${fixture.hostName} – ${fixture.guestName}`;
+  const dt = new Date(fixture.dateTime);
+  const timeLabel = Number.isNaN(dt.getTime())
+    ? ""
+    : `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+  const venueLabel: "Dom" | "Wyjazd" = isHome ? "Dom" : "Wyjazd";
+  const parts = ourTeamId
+    ? [venueLabel, timeLabel, opponent]
+    : [timeLabel, opponent];
+  return {
+    isHome,
+    venueShort: isHome ? "D" : "W",
+    venueLabel,
+    timeLabel,
+    opponent,
+    label: parts.filter(Boolean).join(" "),
+  };
+}
+
+export function formatFixtureChipLabel(fixture: LaczyTeamFixture, ourTeamId: string): string {
+  return fixtureCalendarChip(fixture, ourTeamId).label;
+}
+
+function fixtureDrivenFingerprint(m: MicrocycleMatch): string {
+  return [m.dayIndex, m.kickoffTime, m.opponent, m.venue, m.competition, m.venueAddress].join(
+    "\0"
+  );
+}
+
+/**
+ * Wstawia mecze ŁNP z tygodnia mikrocyklu (pn–nd) — maks. 2.
+ * Pogoda / wyjazd / nawierzchnia z ręcznej edycji zostają.
+ */
+export function applyFixturesInWeekToMicrocycle(
+  mc: TrainingMicrocycle,
+  fixtures: LaczyTeamFixture[],
+  ourTeamId: string
+): TrainingMicrocycle {
+  if (!ourTeamId || fixtures.length === 0) return mc;
+  const hits = fixturesInWeekByDay(fixtures, mc.weekStartIso);
+  if (hits.length === 0) return mc;
+  const incoming = hits.slice(0, 2).map((h) => fixtureToMicrocycleMatch(h.fixture, ourTeamId));
+  const existingByDay = new Map(mc.matches.map((m) => [m.dayIndex, m]));
+  const matches = incoming.map((m) => {
+    const prev = existingByDay.get(m.dayIndex);
+    if (!prev) return m;
+    return sanitizeMicrocycleMatch({
+      ...m,
+      departureTime: prev.departureTime,
+      surface: prev.surface,
+      weatherCondition: prev.weatherCondition,
+      weatherTempC: prev.weatherTempC,
+    });
+  });
+  const same =
+    mc.matches.length === matches.length &&
+    mc.matches.every(
+      (m, i) => fixtureDrivenFingerprint(m) === fixtureDrivenFingerprint(matches[i])
+    );
+  if (same) return mc;
+  return { ...mc, matches };
+}
+
+/** Uzupełnia mecze we wszystkich istniejących mikrocyklach wg ich zakresu dat. */
+export function applyFixturesToExistingMicrocycles(
+  state: TrainingMicrocycleState,
+  fixtures: LaczyTeamFixture[],
+  ourTeamId: string,
+  seasonId?: string | null
+): TrainingMicrocycleState {
+  if (!ourTeamId || fixtures.length === 0) return state;
+  let changed = false;
+  const microcycles = state.microcycles.map((mc) => {
+    if (seasonId && mc.seasonId !== seasonId) return mc;
+    const next = applyFixturesInWeekToMicrocycle(mc, fixtures, ourTeamId);
+    if (next !== mc) changed = true;
+    return next;
+  });
+  return changed ? { ...state, microcycles } : state;
+}
+
+export function applyFixturesToMicrocycleById(
+  state: TrainingMicrocycleState,
+  microcycleId: string,
+  fixtures: LaczyTeamFixture[],
+  ourTeamId: string
+): TrainingMicrocycleState {
+  if (!microcycleId) return state;
+  let changed = false;
+  const microcycles = state.microcycles.map((mc) => {
+    if (mc.id !== microcycleId) return mc;
+    const next = applyFixturesInWeekToMicrocycle(mc, fixtures, ourTeamId);
+    if (next !== mc) changed = true;
+    return next;
+  });
+  return changed ? { ...state, microcycles } : state;
+}
+
+export function setMicrocycleWeekAndApplyFixtures(
+  state: TrainingMicrocycleState,
+  microcycleId: string,
+  weekStartIso: string,
+  fixtures: LaczyTeamFixture[],
+  ourTeamId: string
+): TrainingMicrocycleState {
+  const current = state.microcycles.find((m) => m.id === microcycleId);
+  if (!current) return state;
+  const weekChanged = current.weekStartIso !== weekStartIso;
+  const withWeek = weekChanged
+    ? {
+        ...state,
+        microcycles: state.microcycles.map((m) =>
+          m.id === microcycleId ? { ...m, weekStartIso } : m
+        ),
+      }
+    : state;
+  const applied = applyFixturesToMicrocycleById(withWeek, microcycleId, fixtures, ourTeamId);
+  return applied;
 }
 
 /** Eksport pomocniczy do testów tygodnia. */

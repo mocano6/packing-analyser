@@ -2,8 +2,14 @@ import assert from "assert";
 import type { MicrocycleTrainingBlock, TrainingMicrocycle } from "@/types/trainingMicrocycle";
 import { createDefaultMicrocycleMatch } from "@/utils/microcycleMatches";
 import { presetBlocksForMicrocycle } from "@/utils/microcycleTrainingBlocks";
-import { countBySeverity, evaluateMicrocycleRules } from "./microcycleRules";
+import { countBySeverity, evaluateMicrocycleRules, methodologyPrincipleChecks } from "./microcycleRules";
 import { summarizeWeeklyLoad, resolveWeekLoads } from "@/utils/microcycleLoad";
+import {
+  applySessionTemplatesToWeek,
+  createSeedDaySessionTemplates,
+} from "@/utils/daySessionTemplates";
+import { createDefaultTrainingMicrocycleState } from "@/utils/trainingMicrocycle";
+import { methodologyPrincipleCatalog } from "./motorModel";
 
 function microcycle(overrides: Partial<TrainingMicrocycle> = {}): TrainingMicrocycle {
   return {
@@ -33,7 +39,7 @@ const clean = evaluateMicrocycleRules({
   previousWeeklySrpe: history,
 });
 const cleanIds = ruleIds(clean);
-assert.ok(!cleanIds.includes("md3_heaviest"), `MD-3 zgłoszone: ${cleanIds.join(", ")}`);
+assert.ok(!cleanIds.includes("volume_heaviest"), `Objętość zgłoszona: ${cleanIds.join(", ")}`);
 assert.ok(!cleanIds.includes("md1_lightest"));
 assert.ok(!cleanIds.includes("sprint_exposure"));
 assert.ok(!cleanIds.includes("nordic_exposure"));
@@ -41,43 +47,120 @@ assert.ok(!cleanIds.includes("strength_exposure"));
 assert.ok(!cleanIds.includes("acwr_range"));
 assert.ok(!cleanIds.includes("weekly_jump"));
 assert.equal(countBySeverity(clean).critical, 0);
-// Model referencyjny nie może łamać własnych zasad: MD-4 i MD-3 stoją obok siebie,
-// a MD-1 z presetu musi mieścić się w limicie czasu
+// Model referencyjny nie może łamać własnych zasad: pn–czw role nie dają dwóch ciężkich pod rząd
 assert.ok(
   !cleanIds.includes("no_two_heavy_in_row"),
-  `Preset MD-4/MD-3 uznany za dwa ciężkie dni: ${cleanIds.join(", ")}`
+  `Preset ról uznany za dwa ciężkie dni: ${cleanIds.join(", ")}`
 );
 assert.ok(
   !cleanIds.includes("md1_duration"),
   `Preset MD-1 przekracza limit czasu: ${cleanIds.join(", ")}`
 );
-assert.ok(!cleanIds.includes("pitch_density_mismatch"), `Boiska z presetu niezgodne: ${cleanIds.join(", ")}`);
+assert.ok(!cleanIds.includes("gym_after_pitch"), `Siłownia po boisku: ${cleanIds.join(", ")}`);
+assert.ok(!cleanIds.includes("nordic_too_close"));
+assert.ok(!cleanIds.includes("split_groups_missing"), `Brak rozdzielenia grup: ${cleanIds.join(", ")}`);
+assert.ok(!cleanIds.includes("heavy_legs_near_match"));
+assert.ok(!cleanIds.includes("gym_on_md1"));
+const cleanChecks = methodologyPrincipleChecks(clean, { hasBlocks: true });
+assert.equal(cleanChecks.length, 10);
+assert.ok(
+  cleanChecks.every((c) => c.status === "ok"),
+  `Preset nie przechodzi metodyki: ${cleanChecks
+    .filter((c) => c.status !== "ok")
+    .map((c) => `${c.id}=${c.status}`)
+    .join(", ")}`
+);
 
-// --- Brak bloków: reguły tagowe wyłączone, zamiast fałszywych alarmów info ---
+// --- Tydzień z presetów rolowych (mecz w sobotę, treningi pn–czw) nie łamie zasad ---
+const roleWeekState = applySessionTemplatesToWeek(
+  {
+    ...createDefaultTrainingMicrocycleState(),
+    microcycles: [microcycle({ restDays: [4, 6], dayLoads: [] })],
+    activeMicrocycleId: "mc1",
+    trainingBlocks: [],
+  },
+  "mc1",
+  [5],
+  createSeedDaySessionTemplates()
+);
+const roleMicrocycle = roleWeekState.state.microcycles[0];
+const roleBlocks = roleWeekState.state.trainingBlocks ?? [];
+const roleSrpe = summarizeWeeklyLoad(resolveWeekLoads(roleMicrocycle, roleBlocks)).totalSrpe;
+const roleWeek = evaluateMicrocycleRules({
+  microcycle: roleMicrocycle,
+  blocks: roleBlocks,
+  previousWeeklySrpe: [roleSrpe, roleSrpe, roleSrpe],
+});
+const roleWeekIds = ruleIds(roleWeek);
+assert.equal(
+  countBySeverity(roleWeek).critical,
+  0,
+  `Zestaw czterech jednostek łamie zasadę krytyczną: ${roleWeekIds.join(", ")}`
+);
+for (const ruleId of [
+  "volume_heaviest",
+  "md1_lightest",
+  "md1_duration",
+  "no_two_heavy_in_row",
+  "gym_after_pitch",
+  "gym_transfer_missing",
+  "gym_too_long",
+  "nordic_too_close",
+  "heavy_on_volume",
+  "heavy_before_volume",
+  "sprint_exposure",
+  "nordic_exposure",
+  "strength_exposure",
+]) {
+  assert.ok(
+    !roleWeekIds.includes(ruleId),
+    `Zestaw czterech jednostek zgłasza ${ruleId}: ${roleWeekIds.join(", ")}`
+  );
+}
+
+const roleWeekOpen = applySessionTemplatesToWeek(
+  {
+    ...createDefaultTrainingMicrocycleState(),
+    microcycles: [microcycle({ restDays: [], dayLoads: [] })],
+    activeMicrocycleId: "mc1",
+    trainingBlocks: [],
+  },
+  "mc1",
+  [5],
+  createSeedDaySessionTemplates()
+);
+assert.equal(roleWeekOpen.applied, 4);
+assert.deepEqual(roleWeekOpen.state.microcycles[0].restDays, [4, 6]);
+
+// --- Brak bloków: zasady sprintu/siły w skip, bez fałszywych alarmów ---
 const noBlocks = evaluateMicrocycleRules({
   microcycle: base,
   blocks: [],
   previousWeeklySrpe: history,
 });
-assert.ok(ruleIds(noBlocks).includes("no_blocks"));
 assert.ok(!ruleIds(noBlocks).includes("sprint_exposure"));
-assert.ok(!ruleIds(noBlocks).includes("pitch_density_mismatch"));
+assert.ok(!ruleIds(noBlocks).includes("no_blocks"));
+const noBlockChecks = methodologyPrincipleChecks(noBlocks, { hasBlocks: false });
+assert.ok(noBlockChecks.find((c) => c.id === "sprint_week")?.status === "skip");
+assert.ok(noBlockChecks.find((c) => c.id === "gym_first")?.status === "skip");
+assert.ok(noBlockChecks.find((c) => c.id === "load_shape")?.status === "ok");
 
-// --- MD-3 nie jest najcięższy ---
-const md3TooLight = evaluateMicrocycleRules({
+// --- Dzień objętości nie jest najcięższy (środa przy meczu w sobotę) ---
+const volumeTooLight = evaluateMicrocycleRules({
   microcycle: microcycle({
     dayLoads: [
       { dayIndex: 2, dominant: null, targets: { srpe: 300 } },
-      { dayIndex: 1, dominant: null, targets: { srpe: 700 } },
+      { dayIndex: 0, dominant: null, targets: { srpe: 700 } },
     ],
   }),
   blocks: presetBlocks,
   previousWeeklySrpe: history,
 });
-const md3Violation = md3TooLight.find((v) => v.ruleId === "md3_heaviest");
-assert.ok(md3Violation, "Brak wykrycia zbyt lekkiego MD-3");
-assert.equal(md3Violation?.severity, "critical");
-assert.equal(md3Violation?.dayIndex, 2);
+const volumeViolation = volumeTooLight.find((v) => v.ruleId === "volume_heaviest");
+assert.ok(volumeViolation, "Brak wykrycia zbyt lekkiego dnia objętości");
+assert.equal(volumeViolation?.severity, "critical");
+assert.equal(volumeViolation?.principleId, "load_shape");
+assert.equal(volumeViolation?.dayIndex, 2);
 
 // --- MD-1 cięższy niż inne dni treningowe ---
 const md1TooHeavy = evaluateMicrocycleRules({
@@ -89,7 +172,7 @@ const md1TooHeavy = evaluateMicrocycleRules({
 });
 assert.ok(ruleIds(md1TooHeavy).includes("md1_lightest"));
 
-// Czas MD-1 liczy się z bloków, nie z modelu — dodatkowy blok przekracza limit
+// Czas MD-1 liczy się z bloków, nie z modelu — długi blok przekracza limit
 const md1TooLong = evaluateMicrocycleRules({
   microcycle: base,
   blocks: [
@@ -100,7 +183,7 @@ const md1TooLong = evaluateMicrocycleRules({
       dayIndex: 4,
       order: 9,
       name: "Dodatkowa taktyka",
-      minutes: 25,
+      minutes: 90,
       formatId: null,
       pitchLength: null,
       pitchWidth: null,
@@ -130,8 +213,8 @@ assert.ok(ruleIds(md1TargetTooLong).includes("md1_duration"));
 const backToBack = evaluateMicrocycleRules({
   microcycle: microcycle({
     dayLoads: [
-      { dayIndex: 1, dominant: null, targets: { srpe: 700 } },
-      { dayIndex: 2, dominant: null, targets: { srpe: 750 } },
+      { dayIndex: 0, dominant: null, targets: { srpe: 700 } },
+      { dayIndex: 1, dominant: null, targets: { srpe: 750 } },
     ],
   }),
   blocks: presetBlocks,
@@ -144,7 +227,7 @@ const barebones: MicrocycleTrainingBlock[] = [
   {
     id: "b1",
     microcycleId: "mc1",
-    dayIndex: 2,
+    dayIndex: 1,
     order: 0,
     name: "Gra 10v10",
     minutes: 30,
@@ -169,13 +252,13 @@ assert.equal(missing.find((v) => v.ruleId === "sprint_exposure")?.severity, "cri
 // Podpowiedź kieruje na MD-2 (czwartek przy meczu w sobotę)
 assert.equal(missing.find((v) => v.ruleId === "sprint_exposure")?.dayIndex, 3);
 
-// --- Sprint maksymalny na MD-4 jest ostrzeżeniem ---
-const sprintOnMd4 = evaluateMicrocycleRules({
+// --- Sprint maksymalny na dniu napięcia (wtorek) jest ostrzeżeniem ---
+const sprintOnTension = evaluateMicrocycleRules({
   microcycle: base,
   blocks: [
     ...presetBlocks,
     {
-      id: "sprint-md4",
+      id: "sprint-tension",
       microcycleId: "mc1",
       dayIndex: 1,
       order: 9,
@@ -191,53 +274,88 @@ const sprintOnMd4 = evaluateMicrocycleRules({
   ],
   previousWeeklySrpe: history,
 });
-assert.ok(ruleIds(sprintOnMd4).includes("sprint_on_md4"));
+assert.ok(ruleIds(sprintOnTension).includes("sprint_on_tension"));
 
-// --- Boisko niezgodne z dominantą: duże pole na dniu napięcia (MD-4) ---
-const wrongPitch = evaluateMicrocycleRules({
+// --- Nordic w MD-2 jest krytyczny ---
+const nordicFriday = evaluateMicrocycleRules({
   microcycle: base,
   blocks: [
+    ...presetBlocks,
     {
-      id: "b2",
+      id: "nordic-md2",
       microcycleId: "mc1",
-      dayIndex: 1,
-      order: 0,
-      name: "Gra 10v10",
-      minutes: 30,
-      formatId: "10v10",
-      pitchLength: 80,
-      pitchWidth: 64,
-      playersPerSide: 10,
-      tags: ["ssg", "sprint_max", "nordic", "strength_max"],
+      dayIndex: 3,
+      order: 9,
+      name: "Nordic 3× 6",
+      minutes: 8,
+      formatId: null,
+      pitchLength: null,
+      pitchWidth: null,
+      playersPerSide: null,
+      tags: ["nordic"],
       notes: "",
     },
   ],
   previousWeeklySrpe: history,
 });
-const pitchViolation = wrongPitch.find((v) => v.ruleId === "pitch_density_mismatch");
-assert.ok(pitchViolation, "Brak wykrycia zbyt dużego boiska na MD-4");
-assert.equal(pitchViolation?.dayIndex, 1);
-assert.ok(pitchViolation?.message.includes("256 m²/gracz"));
+assert.ok(ruleIds(nordicFriday).includes("nordic_too_close"));
+assert.equal(
+  nordicFriday.find((v) => v.ruleId === "nordic_too_close")?.principleId,
+  "nordic_timing"
+);
 
-// --- ACWR: skok obciążenia po lekkich tygodniach ---
-const acwrSpike = evaluateMicrocycleRules({
+// --- Siłownia w MD+1 bez rozdzielenia grup ---
+const noSplit = evaluateMicrocycleRules({
   microcycle: base,
-  blocks: presetBlocks,
-  previousWeeklySrpe: [800, 800, 800],
+  blocks: [
+    ...presetBlocks.filter((b) => b.dayIndex !== 6),
+    {
+      id: "gym-md1plus",
+      microcycleId: "mc1",
+      dayIndex: 6,
+      order: 0,
+      name: "Siłownia ciężka",
+      minutes: 50,
+      formatId: null,
+      pitchLength: null,
+      pitchWidth: null,
+      playersPerSide: null,
+      tags: ["gym", "strength_max"],
+      notes: "",
+    },
+  ],
+  previousWeeklySrpe: history,
 });
-const acwrViolation = acwrSpike.find((v) => v.ruleId === "acwr_range");
-assert.ok(acwrViolation, "Brak wykrycia wysokiego ACWR");
-assert.equal(acwrViolation?.severity, "critical");
-assert.ok(ruleIds(acwrSpike).includes("weekly_jump"));
+assert.ok(ruleIds(noSplit).includes("split_groups_missing"));
+assert.equal(
+  methodologyPrincipleChecks(noSplit, { hasBlocks: true }).find((c) => c.id === "split_groups")
+    ?.status,
+  "warn"
+);
 
-// --- Za mało historii: info, nie alarm ---
-const shortHistory = evaluateMicrocycleRules({
+// --- Ciężka siła w MD-2 łamie „siłownia pod mecz” ---
+const heavyNearMatch = evaluateMicrocycleRules({
   microcycle: base,
-  blocks: presetBlocks,
-  previousWeeklySrpe: [],
+  blocks: [
+    ...presetBlocks,
+    {
+      id: "heavy-md2",
+      microcycleId: "mc1",
+      dayIndex: 3,
+      order: 9,
+      name: "Przysiad 5×5",
+      minutes: 25,
+      formatId: null,
+      pitchLength: null,
+      pitchWidth: null,
+      playersPerSide: null,
+      tags: ["gym", "strength_max"],
+      notes: "",
+    },
+  ],
+  previousWeeklySrpe: history,
 });
-assert.ok(ruleIds(shortHistory).includes("acwr_history"));
-assert.ok(!ruleIds(shortHistory).includes("acwr_range"));
+assert.ok(ruleIds(heavyNearMatch).includes("heavy_legs_near_match"));
 
 // --- Deload w 4. mikrocyklu ---
 const noDeload = evaluateMicrocycleRules({
@@ -251,10 +369,12 @@ const withDeload = evaluateMicrocycleRules({
   microcycle: microcycle({
     number: 4,
     dayLoads: [
+      { dayIndex: 0, dominant: null, targets: { srpe: 200 } },
       { dayIndex: 1, dominant: null, targets: { srpe: 300 } },
-      { dayIndex: 2, dominant: null, targets: { srpe: 350 } },
+      { dayIndex: 2, dominant: null, targets: { srpe: 280 } },
       { dayIndex: 3, dominant: null, targets: { srpe: 250 } },
       { dayIndex: 4, dominant: null, targets: { srpe: 150 } },
+      { dayIndex: 6, dominant: null, targets: { srpe: 120 } },
     ],
   }),
   blocks: presetBlocks,
@@ -275,6 +395,10 @@ const twoMatches = evaluateMicrocycleRules({
   previousWeeklySrpe: history,
 });
 assert.ok(ruleIds(twoMatches).includes("two_matches_development"));
+assert.equal(
+  twoMatches.find((v) => v.ruleId === "two_matches_development")?.principleId,
+  null
+);
 
 // --- Krytyczne zawsze na początku listy ---
 const sorted = evaluateMicrocycleRules({

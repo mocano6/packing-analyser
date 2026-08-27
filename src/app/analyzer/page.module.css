@@ -504,6 +504,33 @@
   transform: scale(0.95);
 }
 
+.importLnpButton {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #0f766e;
+  color: white;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.35);
+}
+
+.importLnpButton:hover {
+  background: #0d9488;
+  transform: scale(1.05);
+}
+
+.importLnpButton:active {
+  transform: scale(0.96);
+}
+
 .closePlayersGridButton {
   width: 32px;
   height: 32px;

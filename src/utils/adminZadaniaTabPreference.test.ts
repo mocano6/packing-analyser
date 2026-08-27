@@ -8,6 +8,7 @@ import {
 
 assert.equal(parseAdminZadaniaTab("model"), "model");
 assert.equal(parseAdminZadaniaTab("microcycle"), "microcycle");
+assert.equal(parseAdminZadaniaTab("planner"), "microcycle");
 assert.equal(parseAdminZadaniaTab("invalid"), null);
 
 assert.equal(adminZadaniaTabStorageKey("user-1"), "adminZadania_activeTab_user-1");
@@ -31,6 +32,6 @@ const store = new Map<string, string>();
 
 writeAdminZadaniaTab("user-abc", "eisenhower");
 assert.equal(readAdminZadaniaTab("user-abc"), "eisenhower");
-assert.equal(readAdminZadaniaTab("other-user"), "planner");
+assert.equal(readAdminZadaniaTab("other-user"), "microcycle");
 
 console.log("adminZadaniaTabPreference.test.ts: OK");

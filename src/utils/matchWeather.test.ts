@@ -3,6 +3,7 @@ import {
   applyWindOverride,
   geocodeQueryCandidates,
   isWithinForecastHorizon,
+  kickoffAsWarsawHourKey,
   kickoffIsoFromMicrocycleDay,
   pickHourlyIndex,
   wmoCodeToCondition,
@@ -31,10 +32,19 @@ const candidates = geocodeQueryCandidates("Wołomińska 3 , 05-250 Radzymin");
 assert.ok(candidates.some((c) => c.includes("Radzymin")));
 assert.ok(candidates[0].includes("Wołomińska"));
 
+// Godzina meczu 11:00 w Warszawie — dokładne trafienie w slot Open-Meteo
+const kickoff11 = "2026-08-09T09:00:00.000Z"; // CEST = UTC+2 → 11:00 Warszawa
+assert.equal(kickoffAsWarsawHourKey(kickoff11), "2026-08-09T11:00");
+const idxExact = pickHourlyIndex(
+  ["2026-08-09T10:00", "2026-08-09T11:00", "2026-08-09T12:00"],
+  kickoff11
+);
+assert.equal(idxExact, 1);
+
 const idx = pickHourlyIndex(
   ["2026-08-08T16:00", "2026-08-08T17:00", "2026-08-08T18:00"],
-  "2026-08-08T17:10:00.000Z"
+  "2026-08-08T15:10:00.000Z" // 17:10 CEST
 );
-assert.ok(idx >= 0 && idx <= 2);
+assert.equal(idx, 1);
 
 console.log("matchWeather.test.ts: OK");

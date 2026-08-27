@@ -6,6 +6,91 @@ import { buildWiedzaShotsSummary, type WiedzaShotBreakdownRow, type WiedzaShotsS
 
 export const XG_PER_SHOT_KPI = 0.15;
 
+/** Okno 8s CA / 8s ACC: strzał po starcie sekwencji, do 8 s. */
+export const XG_SEQUENCE_WINDOW_SECONDS = 8;
+
+export function eventVideoTimestampSec(event: {
+  videoTimestampRaw?: number | null;
+  videoTimestamp?: number | null;
+}): number {
+  const raw = event.videoTimestampRaw;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) return raw;
+  const v = event.videoTimestamp;
+  if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+  return 0;
+}
+
+/** Drużyna, która przyspieszała: atak = nasz zespół, obrona = przeciwnik. */
+export function resolveAcc8sSideTeamId(
+  entry: { teamId?: string; teamContext?: string },
+  teamId: string,
+  opponentId: string,
+): string | null {
+  const id = typeof entry.teamId === "string" ? entry.teamId.trim() : "";
+  if (id) return id;
+  if (entry.teamContext === "attack") return teamId;
+  if (entry.teamContext === "defense") return opponentId;
+  return null;
+}
+
+export type XgWindowTotals = {
+  xg: number;
+  goals: number;
+  shots: number;
+};
+
+/**
+ * Suma xG / goli / strzałów w oknie po starcie (regain albo 8s ACC).
+ * Ten sam strzał liczony raz; okna jednej drużyny nie nachodzą (do następnego startu).
+ */
+export function summarizeXgAfterStartWindows(
+  starts: Array<{ teamId: string; timestamp: number }>,
+  shots: Array<{
+    id?: string;
+    teamId: string;
+    timestamp: number;
+    xG: number;
+    isGoal: boolean;
+  }>,
+  windowSeconds = XG_SEQUENCE_WINDOW_SECONDS,
+): Map<string, XgWindowTotals> {
+  const byTeam = new Map<string, XgWindowTotals>();
+  const counted = new Set<string>();
+  const startsByTeam = new Map<string, number[]>();
+
+  for (const start of starts) {
+    if (!start.teamId || !(start.timestamp > 0)) continue;
+    const list = startsByTeam.get(start.teamId) ?? [];
+    list.push(start.timestamp);
+    startsByTeam.set(start.teamId, list);
+  }
+
+  for (const [teamId, timestamps] of startsByTeam) {
+    timestamps.sort((a, b) => a - b);
+    let xg = 0;
+    let goals = 0;
+    let shotCount = 0;
+    for (let i = 0; i < timestamps.length; i++) {
+      const start = timestamps[i];
+      const nextStart = i + 1 < timestamps.length ? timestamps[i + 1] : Number.POSITIVE_INFINITY;
+      const end = Math.min(start + windowSeconds, nextStart);
+      for (const shot of shots) {
+        if (shot.teamId !== teamId) continue;
+        if (!(shot.timestamp > start) || shot.timestamp > end) continue;
+        const key = shot.id?.trim() || `${shot.teamId}:${shot.timestamp}:${shot.xG}`;
+        if (counted.has(key)) continue;
+        counted.add(key);
+        xg += Number.isFinite(shot.xG) ? shot.xG : 0;
+        if (shot.isGoal) goals += 1;
+        shotCount += 1;
+      }
+    }
+    byTeam.set(teamId, { xg, goals, shots: shotCount });
+  }
+
+  return byTeam;
+}
+
 export type XgHalfFilter = "all" | "first" | "second";
 export type XgCategoryFilter = "all" | "sfg" | "open_play";
 

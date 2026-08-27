@@ -22,6 +22,21 @@ const migrated = migrateTrainingProceduralTaskTemplatesFromFirestore({
 assert.equal(migrated.templates.length, seeded.templates.length);
 assert.ok(migrated.templates.every((t) => t.title.trim()));
 
+const withCoach = migrateTrainingProceduralTaskTemplatesFromFirestore({
+  stateJson: JSON.stringify({
+    templates: [
+      {
+        id: "t1",
+        title: "Protokół",
+        notes: "",
+        defaultMatchDayOffset: -1,
+        defaultCoachId: "c1",
+      },
+    ],
+  }),
+});
+assert.equal(withCoach.templates[0]?.defaultCoachId, "c1");
+
 const fromEmpty = migrateTrainingProceduralTaskTemplatesFromFirestore({
   stateJson: JSON.stringify({ templates: [] }),
 });

@@ -1,14 +1,27 @@
 import assert from "assert";
-import { parseLaczyTeamIdFromUrl, buildLaczyTeamPageUrl } from "./laczyTeamUrl";
+import { parseLaczyTeamIdFromUrl, buildLaczyTeamPageUrl, parseLaczyMatchIdFromUrl } from "./laczyTeamUrl";
 import {
   applyFixtureToActiveMicrocycle,
+  applyFixturesInWeekToMicrocycle,
+  applyFixturesToExistingMicrocycles,
+  buildMonthCalendarCells,
+  fixtureCalendarChip,
+  fixtureIsoDate,
+  formatFixtureChipLabel,
   fixtureToMicrocycleMatch,
   fixturesInWeekByDay,
+  groupFixturesByIsoDate,
   inferCompetitionFromPlayName,
+  isIsoInWeek,
+  isFixtureHomeForTeam,
   mergeLaczyFixtures,
+  monthFromIso,
   removeMicrocycleFromState,
+  setMicrocycleWeekAndApplyFixtures,
+  shiftCalendarMonth,
   sortFixturesForDisplay,
   upsertMicrocyclesFromFixtures,
+  weekStartIsoFromDateIso,
   weekStartIsoFromFixture,
   type LaczyTeamFixture,
 } from "./microcycleFixtures";
@@ -22,6 +35,18 @@ assert.equal(
 );
 assert.equal(parseLaczyTeamIdFromUrl("4b125148-f622-4b9c-88f9-4a83fd8b7b3b"), "4b125148-f622-4b9c-88f9-4a83fd8b7b3b");
 assert.equal(parseLaczyTeamIdFromUrl("https://example.com/foo"), null);
+assert.equal(
+  parseLaczyTeamIdFromUrl(
+    "https://www.laczynaspilka.pl/rozgrywki/mecz/2b77df3e-73c4-4961-bcd7-72b0e6174a1f"
+  ),
+  null
+);
+assert.equal(
+  parseLaczyMatchIdFromUrl(
+    "https://www.laczynaspilka.pl/rozgrywki/mecz/2b77df3e-73c4-4961-bcd7-72b0e6174a1f"
+  ),
+  "2b77df3e-73c4-4961-bcd7-72b0e6174a1f"
+);
 assert.ok(
   buildLaczyTeamPageUrl("4b125148-f622-4b9c-88f9-4a83fd8b7b3b").includes(
     "/druzyna/4b125148-f622-4b9c-88f9-4a83fd8b7b3b"
@@ -216,6 +241,122 @@ assert.equal(away.opponent, "Rywale FC");
   assert.equal(hits[0].dayIndex, 5);
   assert.equal(hits[0].fixture.matchId, "watch-sat");
   assert.equal(fixturesInWeekByDay([watch], "2026-08-10").length, 0);
+}
+
+{
+  assert.equal(fixtureIsoDate(fixture), "2026-07-25");
+  assert.equal(isFixtureHomeForTeam(fixture, "our-team"), true);
+  assert.equal(formatFixtureChipLabel(fixture, "our-team"), "Dom 18:00 Rywale FC");
+  const homeChip = fixtureCalendarChip(fixture, "our-team");
+  assert.equal(homeChip.isHome, true);
+  assert.equal(homeChip.venueShort, "D");
+  assert.equal(homeChip.venueLabel, "Dom");
+  const awayChip = formatFixtureChipLabel(
+    { ...fixture, hostId: "opp", guestId: "our-team", hostName: "Rywale FC", guestName: "My" },
+    "our-team"
+  );
+  assert.equal(awayChip, "Wyjazd 18:00 Rywale FC");
+  const awayInfo = fixtureCalendarChip(
+    { ...fixture, hostId: "opp", guestId: "our-team", hostName: "Rywale FC", guestName: "My" },
+    "our-team"
+  );
+  assert.equal(awayInfo.isHome, false);
+  assert.equal(awayInfo.venueShort, "W");
+  const byDay = groupFixturesByIsoDate([fixture, { ...fixture, matchId: "m2", dateTime: "2026-07-25T12:00:00" }]);
+  assert.equal(byDay.get("2026-07-25")?.length, 2);
+  assert.equal(weekStartIsoFromDateIso("2026-07-25"), "2026-07-20");
+  assert.equal(isIsoInWeek("2026-07-25", "2026-07-20"), true);
+  assert.equal(isIsoInWeek("2026-07-19", "2026-07-20"), false);
+  assert.deepEqual(monthFromIso("2026-08-19"), { year: 2026, monthIndex: 7 });
+  assert.deepEqual(shiftCalendarMonth(2026, 0, -1), { year: 2025, monthIndex: 11 });
+}
+
+{
+  // sierpień 2026: 1. to sobota → siatka od pn 27.07 do nd 06.09
+  const cells = buildMonthCalendarCells(2026, 7);
+  assert.equal(cells[0].iso, "2026-07-27");
+  assert.equal(cells[0].inMonth, false);
+  assert.equal(cells[0].weekdayIndex, 0);
+  const aug1 = cells.find((c) => c.iso === "2026-08-01");
+  assert.ok(aug1);
+  assert.equal(aug1?.inMonth, true);
+  assert.equal(aug1?.weekdayIndex, 5);
+  assert.equal(cells[cells.length - 1].iso, "2026-09-06");
+  assert.equal(cells.length % 7, 0);
+}
+
+{
+  const state = createDefaultTrainingMicrocycleState(new Date("2026-07-13T12:00:00"));
+  const mc = state.microcycles[0];
+  mc.weekStartIso = "2026-07-20";
+  mc.matches = [
+    {
+      dayIndex: 5,
+      kickoffTime: "18:00",
+      opponent: "",
+      venue: "home",
+      departureTime: "",
+      competition: "league",
+      venueAddress: "",
+      surface: null,
+      weatherCondition: "rain",
+      weatherTempC: 12,
+    },
+  ];
+  const nextMc = applyFixturesInWeekToMicrocycle(mc, [fixture], "our-team");
+  assert.equal(nextMc.matches[0].opponent, "Rywale FC");
+  assert.equal(nextMc.matches[0].venueAddress, "Stadion X");
+  assert.equal(nextMc.matches[0].weatherCondition, "rain", "pogoda z edycji zostaje");
+  assert.equal(nextMc.matches[0].weatherTempC, 12);
+  assert.equal(applyFixturesInWeekToMicrocycle(nextMc, [fixture], "our-team"), nextMc);
+}
+
+{
+  const state = createDefaultTrainingMicrocycleState(new Date("2026-07-13T12:00:00"));
+  state.microcycles[0] = { ...state.microcycles[0], weekStartIso: "2026-07-20" };
+  const otherId = generateMicrocycleId();
+  state.microcycles.push({
+    id: otherId,
+    seasonId: state.seasons[0].id,
+    number: 2,
+    weekStartIso: "2026-08-10",
+    matches: [
+      {
+        dayIndex: 5,
+        kickoffTime: "18:00",
+        opponent: "",
+        venue: "home",
+        departureTime: "",
+        competition: "league",
+        venueAddress: "",
+        surface: null,
+        weatherCondition: null,
+        weatherTempC: null,
+      },
+    ],
+    daySchedules: [],
+  });
+  const next = applyFixturesToExistingMicrocycles(state, [fixture], "our-team");
+  const week20 = next.microcycles.find((m) => m.weekStartIso === "2026-07-20");
+  const week10 = next.microcycles.find((m) => m.weekStartIso === "2026-08-10");
+  assert.equal(week20?.matches[0].opponent, "Rywale FC");
+  assert.equal(week10?.matches[0].opponent, "", "inny tydzień bez zmian");
+}
+
+{
+  const state = createDefaultTrainingMicrocycleState(new Date("2026-07-13T12:00:00"));
+  const id = state.microcycles[0].id;
+  const moved = setMicrocycleWeekAndApplyFixtures(
+    state,
+    id,
+    "2026-07-20",
+    [fixture],
+    "our-team"
+  );
+  const mc = moved.microcycles[0];
+  assert.equal(mc.weekStartIso, "2026-07-20");
+  assert.equal(mc.matches[0].opponent, "Rywale FC");
+  assert.equal(mc.matches[0].dayIndex, 5);
 }
 
 console.log("laczyTeamUrl + microcycleFixtures tests: OK");
