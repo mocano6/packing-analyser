@@ -6,6 +6,7 @@ import {
   matchDayOffset,
   periodizationOffset,
   normalizeMatchDaysArray,
+  uniqueMatchDaysInOrder,
   startOfWeekMonday,
   toIsoDateLocal,
   addDays,
@@ -39,9 +40,16 @@ assert.strictEqual(toIsoDateLocal(addDays(parsed, 6)), "2026-04-12");
 
 assert.deepStrictEqual(normalizeMatchDaysArray([5, 2, 2]), [2, 5]);
 assert.deepStrictEqual(normalizeMatchDaysArray([]), [5]);
+assert.deepStrictEqual(uniqueMatchDaysInOrder([5, 2, 2]), [5, 2]);
+assert.deepStrictEqual(uniqueMatchDaysInOrder([]), [5]);
 assert.deepStrictEqual(
   matchDayLabelsForColumn(2, [2, 5]),
   ["MD", "MD-3"]
+);
+// Mecz 1 = sobota, Mecz 2 = środa → etykiety w kolejności meczów, nie dni
+assert.deepStrictEqual(
+  matchDayLabelsForColumn(2, [5, 2]),
+  ["MD-3", "MD"]
 );
 
 console.log("matchDayLabels.test: OK");

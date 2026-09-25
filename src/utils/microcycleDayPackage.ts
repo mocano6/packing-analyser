@@ -5,6 +5,7 @@ import type {
   TrainingMicrocycle,
   TrainingMicrocycleState,
 } from "@/types/trainingMicrocycle";
+import { uniqueAssignmentsPerDayAdjustingCounts } from "@/utils/trainingMicrocycle";
 import { moveResolvedDayLoad, swapResolvedDayLoads } from "@/utils/microcycleLoad";
 import { isRestDay, moveRestDay, swapRestDays } from "@/utils/microcycleRestDays";
 
@@ -225,9 +226,12 @@ export function moveDaySectionContent(
   }
 
   if (moveCele) {
+    const moved = moveScopedDayIndex(next.assignments, microcycleId, from, to);
+    const unique = uniqueAssignmentsPerDayAdjustingCounts(moved, next.trainingCounts);
     next = {
       ...next,
-      assignments: moveScopedDayIndex(next.assignments, microcycleId, from, to),
+      assignments: unique.assignments,
+      trainingCounts: unique.trainingCounts,
     };
   }
 
@@ -308,9 +312,12 @@ export function swapMicrocycleDayContent(
     };
   });
 
+  const uniqueCele = uniqueAssignmentsPerDayAdjustingCounts(assignments, state.trainingCounts);
+
   return {
     ...state,
-    assignments,
+    assignments: uniqueCele.assignments,
+    trainingCounts: uniqueCele.trainingCounts,
     proceduralTasks,
     exercises,
     trainingBlocks,

@@ -1688,7 +1688,7 @@ export default function WiedzaPage() {
                 korelacje Pearsona z metrykami z{" "}
                 <code className={styles.inlineCode}>wiedzaWeightsMetrics.ts</code>, posortowane od najsilniejszych. Kolory:
                 zielono <em>r</em> ≥ 0,4, czerwono <em>r</em> ≤ −0,4. Nagłówki: niebieski — MY, bursztynowy — OPP, fioletowy —
-                W/R/P. {selectedTeams.length} klubów, {fetchedMatches.length} meczów.
+                Punkty / W/R/P. {selectedTeams.length} klubów, {fetchedMatches.length} meczów.
               </p>
               <WiedzaGoalsXgWeights matches={matchesForCorrelation} compact hideHint />
             </div>

@@ -83,7 +83,7 @@ const assignment = (id: string, dayIndex: number): MicrocycleDayAssignment => ({
   id,
   microcycleId: "mc1",
   dayIndex,
-  templateId: "t1",
+  templateId: id,
   title: id,
   level: 0,
 });
@@ -229,6 +229,26 @@ const exercise = (id: string, dayIndex: number): MicrocycleDayExercise => ({
   const next = moveDaySectionContent(state, "mc1", "cele", 1, 4);
   assert.equal(next.assignments.filter((a) => a.dayIndex === 1).length, 0);
   assert.equal(next.assignments.filter((a) => a.dayIndex === 4).length, 3);
+}
+
+// moveDaySectionContent — ta sama zasada na obu dniach zostaje jedną kopią
+{
+  const shared = (id: string, dayIndex: number): MicrocycleDayAssignment => ({
+    id,
+    microcycleId: "mc1",
+    dayIndex,
+    templateId: "pressing",
+    title: "Pressing",
+    level: 0,
+  });
+  const state = baseState({
+    assignments: [shared("from", 1), shared("on-target", 4)],
+    trainingCounts: { pressing: 2 },
+  });
+  const next = moveDaySectionContent(state, "mc1", "cele", 1, 4);
+  assert.equal(next.assignments.filter((a) => a.templateId === "pressing").length, 1);
+  assert.equal(next.assignments[0].dayIndex, 4);
+  assert.equal(next.trainingCounts.pressing, 1);
 }
 
 // moveDaySectionContent — trening: bloki + schedule + rozwiązane obciążenie

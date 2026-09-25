@@ -7,6 +7,7 @@ import {
   getOpponentXgPerShot,
   getOpponentXGForMatch,
   getTeamGoalsForMatch,
+  getTeamMatchPointsForMatch,
   getTeamMatchWinIndicatorForMatch,
   getTeamMatchDrawIndicatorForMatch,
   getTeamMatchLossIndicatorForMatch,
@@ -188,6 +189,12 @@ export function getWiedzaWeightsMetricsFull(): WiedzaWeightsMetric[] {
       axisSide: "outcome",
     },
     {
+      id: "w_match_points",
+      label: "Punkty",
+      getValue: getTeamMatchPointsForMatch,
+      axisSide: "outcome",
+    },
+    {
       id: "w_gd_per_match",
       label: "GD/mecz",
       getValue: (match) => getTeamGoalsForMatch(match) - getOpponentGoalsForMatch(match),
@@ -252,10 +259,13 @@ export function buildWiedzaWeightsCorrelation(
   const metrics = getWiedzaWeightsMetricsFull();
   if (matches.length < minSamples || metrics.length === 0) return null;
   const columns = metrics.map((m) => matches.map((x) => m.getValue(x)));
-  /** Musi być zgodne z kolejnością trzech pierwszych wpisów w `out` powyżej (Wygrana, Remis, Przegrana). */
+  /**
+   * 0 jest ważną obserwacją wyniku: W/R/P (1/0) oraz Punkty (3/1/0 — porażka = 0 pkt).
+   * Indeksy zgodne z kolejnością pierwszych wpisów w `out` powyżej.
+   */
   const matrix = buildPearsonCorrelationMatrix(columns, minSamples, {
     omitZeroValues: true,
-    binaryIndicatorColumnIndices: new Set([0, 1, 2]),
+    binaryIndicatorColumnIndices: new Set([0, 1, 2, 3]),
   });
   return { metrics, matrix };
 }

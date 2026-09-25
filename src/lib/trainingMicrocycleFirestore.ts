@@ -7,6 +7,9 @@ import type {
 import { TRAINING_MICROCYCLE_VERSION } from "@/types/trainingMicrocycle";
 import { normalizeMatchDaysArray } from "../utils/matchDayLabels";
 import {
+  uniqueAssignmentsPerDayAdjustingCounts,
+} from "../utils/trainingMicrocycle";
+import {
   normalizeMicrocycleMatches,
 } from "../utils/microcycleMatches";
 import { normalizeMicrocycleDaySchedules } from "../utils/microcycleDaySchedules";
@@ -16,6 +19,7 @@ import {
   normalizeTrainingBlocks,
 } from "../utils/microcycleTrainingBlocks";
 import { normalizeProceduralTasks } from "../utils/proceduralTaskDefaults";
+import { normalizeMatchProtocols } from "../utils/matchProtocol";
 import { normalizeMicrocycleExercises } from "../utils/microcycleExercises";
 import { safeDayIndex } from "./staffPlannerFirestore";
 
@@ -95,11 +99,22 @@ export function extractDayTitleTemplatesFromMicrocycleRaw(
 export function buildSanitizedTrainingMicrocycleState(
   state: TrainingMicrocycleState
 ): Record<string, unknown> {
-  const trainingCounts: Record<string, number> = {};
+  const rawCounts: Record<string, number> = {};
   for (const [key, val] of Object.entries(state.trainingCounts ?? {})) {
     const n = safeInt(val, 0);
-    if (n > 0) trainingCounts[String(key)] = n;
+    if (n > 0) rawCounts[String(key)] = n;
   }
+  const uniqueCele = uniqueAssignmentsPerDayAdjustingCounts(
+    state.assignments.map((a) => ({
+      id: String(a.id ?? ""),
+      microcycleId: String(a.microcycleId ?? ""),
+      dayIndex: safeDayIndex(a.dayIndex),
+      templateId: String(a.templateId ?? ""),
+      title: String(a.title ?? ""),
+      level: safeLevel(a.level),
+    })),
+    rawCounts
+  );
 
   return {
     seasons: state.seasons.map((s) => ({
@@ -117,14 +132,7 @@ export function buildSanitizedTrainingMicrocycleState(
       dayLoads: normalizeDayLoads(m.dayLoads),
       restDays: normalizeRestDays(m.restDays),
     })),
-    assignments: state.assignments.map((a) => ({
-      id: String(a.id ?? ""),
-      microcycleId: String(a.microcycleId ?? ""),
-      dayIndex: safeDayIndex(a.dayIndex),
-      templateId: String(a.templateId ?? ""),
-      title: String(a.title ?? ""),
-      level: safeLevel(a.level),
-    })),
+    assignments: uniqueCele.assignments,
     dayPlans: (state.dayPlans ?? []).map((p) => ({
       id: String(p.id ?? ""),
       microcycleId: String(p.microcycleId ?? ""),
@@ -136,9 +144,10 @@ export function buildSanitizedTrainingMicrocycleState(
       phaseId: safeDayPlanPhaseId(p.phaseId),
     })),
     proceduralTasks: normalizeProceduralTasks(state.proceduralTasks),
+    matchProtocols: normalizeMatchProtocols(state.matchProtocols),
     trainingBlocks: normalizeTrainingBlocks(state.trainingBlocks),
     exercises: normalizeMicrocycleExercises(state.exercises),
-    trainingCounts,
+    trainingCounts: uniqueCele.trainingCounts,
     activeSeasonId:
       state.activeSeasonId == null || state.activeSeasonId === ""
         ? null
@@ -220,6 +229,8 @@ export function migrateTrainingMicrocycleFromFirestore(
     }
   }
 
+  const uniqueCele = uniqueAssignmentsPerDayAdjustingCounts(assignments, trainingCounts);
+
   const activeSeasonId =
     inner.activeSeasonId == null || inner.activeSeasonId === ""
       ? seasons[0]?.id ?? null
@@ -232,12 +243,13 @@ export function migrateTrainingMicrocycleFromFirestore(
   return {
     seasons,
     microcycles,
-    assignments,
+    assignments: uniqueCele.assignments,
     dayPlans,
     proceduralTasks: normalizeProceduralTasks(inner.proceduralTasks),
+    matchProtocols: normalizeMatchProtocols(inner.matchProtocols),
     trainingBlocks: normalizeTrainingBlocks(inner.trainingBlocks),
     exercises: normalizeMicrocycleExercises(inner.exercises),
-    trainingCounts,
+    trainingCounts: uniqueCele.trainingCounts,
     activeSeasonId,
     activeMicrocycleId,
     lnpTeamUrl: String(inner.lnpTeamUrl ?? ""),

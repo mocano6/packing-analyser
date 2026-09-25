@@ -1296,6 +1296,44 @@ export function useMatchInfo() {
     [isOfflineMode, matchInfo]
   );
 
+  const patchSelectedMatchLocal = useCallback(
+    (
+      matchId: string,
+      patch: {
+        firstHalfStartTime?: number | null;
+        secondHalfStartTime?: number | null;
+        matchData?: Partial<NonNullable<TeamInfo["matchData"]>>;
+      }
+    ) => {
+      const apply = (match: TeamInfo): TeamInfo => {
+        if (match.matchId !== matchId) return match;
+        const next: TeamInfo = {
+          ...match,
+          lastUpdated: new Date().toISOString(),
+          matchData: patch.matchData
+            ? { ...(match.matchData ?? {}), ...patch.matchData }
+            : match.matchData,
+        };
+        if (patch.firstHalfStartTime === null) delete next.firstHalfStartTime;
+        else if (typeof patch.firstHalfStartTime === "number") next.firstHalfStartTime = patch.firstHalfStartTime;
+        if (patch.secondHalfStartTime === null) delete next.secondHalfStartTime;
+        else if (typeof patch.secondHalfStartTime === "number") next.secondHalfStartTime = patch.secondHalfStartTime;
+        return next;
+      };
+
+      const updatedCacheData = localCacheRef.current.data.map(apply);
+      localCacheRef.current = {
+        ...localCacheRef.current,
+        data: updatedCacheData,
+        timestamp: new Date().getTime(),
+      };
+      saveLocalCache();
+      setAllMatches((prev) => prev.map(apply));
+      setMatchInfo((prev) => (prev && prev.matchId === matchId ? apply(prev) : prev));
+    },
+    []
+  );
+
   return {
     matchInfo,
     allMatches,
@@ -1310,6 +1348,7 @@ export function useMatchInfo() {
     handleDeleteMatch,
     handleSavePlayerMinutes,
     handleUpdateMatchData,
+    patchSelectedMatchLocal,
     fetchMatches,
     forceRefreshFromFirebase
   };

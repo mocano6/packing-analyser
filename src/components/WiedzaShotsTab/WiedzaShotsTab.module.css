@@ -185,6 +185,21 @@
   color: #1f2937;
 }
 
+.chartSubtitle {
+  margin: -4px 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+}
+
+.summaryCardHint {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
+}
+
 .breakdownTableWrap {
   overflow-x: auto;
   border: 1px solid #e5e7eb;

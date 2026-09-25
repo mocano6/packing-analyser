@@ -9,7 +9,7 @@ import {
   MICROCYCLE_MATCH_SURFACE_LABELS,
   MICROCYCLE_WEATHER_CONDITION_LABELS,
 } from "@/types/trainingMicrocycle";
-import { normalizeMatchDaysArray } from "@/utils/matchDayLabels";
+import { normalizeMatchDaysArray, uniqueMatchDaysInOrder } from "@/utils/matchDayLabels";
 
 const VALID_VENUES = new Set<MicrocycleMatchVenue>(["home", "away"]);
 const VALID_COMPETITIONS = new Set<MicrocycleMatchCompetition>(["friendly", "league", "cup"]);
@@ -134,10 +134,16 @@ export function normalizeMicrocycleMatches(
   legacyMatchDays?: unknown
 ): MicrocycleMatch[] {
   if (Array.isArray(matchesRaw) && matchesRaw.length > 0) {
-    return (matchesRaw as Record<string, unknown>[])
-      .map(sanitizeMicrocycleMatch)
-      .sort((a, b) => a.dayIndex - b.dayIndex)
-      .slice(0, 2);
+    const seen = new Set<number>();
+    const out: MicrocycleMatch[] = [];
+    for (const raw of matchesRaw as Record<string, unknown>[]) {
+      const match = sanitizeMicrocycleMatch(raw);
+      if (seen.has(match.dayIndex)) continue;
+      seen.add(match.dayIndex);
+      out.push(match);
+      if (out.length === 2) break;
+    }
+    return out.length > 0 ? out : [createDefaultMicrocycleMatch(5)];
   }
   const days = normalizeMatchDaysArray(
     Array.isArray(legacyMatchDays) ? (legacyMatchDays as number[]) : [5]
@@ -146,7 +152,7 @@ export function normalizeMicrocycleMatches(
 }
 
 export function matchDaysFromMatches(matches: MicrocycleMatch[]): number[] {
-  return normalizeMatchDaysArray(matches.map((m) => m.dayIndex));
+  return uniqueMatchDaysInOrder(matches.map((m) => m.dayIndex));
 }
 
 export function updateMicrocycleMatchAt(
@@ -158,14 +164,12 @@ export function updateMicrocycleMatchAt(
   while (next.length <= index) {
     next.push(createDefaultMicrocycleMatch(next.length === 0 ? 5 : 6));
   }
-  next[index] = sanitizeMicrocycleMatch({ ...next[index], ...patch });
-  if (index === 1 && patch.dayIndex === undefined && next.length === 2) {
-    // keep
+  const updated = sanitizeMicrocycleMatch({ ...next[index], ...patch });
+  if (index === 1 && next[0] && updated.dayIndex === next[0].dayIndex) {
+    return next.slice(0, 2);
   }
-  return next
-    .slice(0, 2)
-    .sort((a, b) => a.dayIndex - b.dayIndex)
-    .slice(0, 2);
+  next[index] = updated;
+  return next.slice(0, 2);
 }
 
 export function setSecondMicrocycleMatch(
@@ -178,7 +182,14 @@ export function setSecondMicrocycleMatch(
   const second = matches[1]
     ? { ...matches[1], dayIndex }
     : createDefaultMicrocycleMatch(dayIndex);
-  return [first, second].sort((a, b) => a.dayIndex - b.dayIndex);
+  return [first, second];
+}
+
+/** Pierwszy wolny dzień na Mecz 2 — środa, potem pozostałe poza dniem Meczu 1. */
+export function pickSecondMatchDay(firstDayIndex: number): number {
+  const first = safeDayIndex(firstDayIndex, 5);
+  const preferred = [2, 1, 3, 0, 4, 6, 5];
+  return preferred.find((d) => d !== first) ?? (first === 2 ? 5 : 2);
 }
 
 export function formatMicrocycleMatchSummary(match: MicrocycleMatch): string {

@@ -89,16 +89,16 @@ function readTeamName(side: unknown): string {
 }
 
 function readEventItems(value: unknown): RawEventItem[] {
-  return asArray(value)
-    .map((item) => {
-      const rec = asRecord(item);
-      if (!rec) return null;
-      const type = readString(rec.type);
-      const minute = readString(rec.minute) || readString(rec.time);
-      if (!type && !minute) return null;
-      return { type: type || undefined, minute: minute || undefined };
-    })
-    .filter((item): item is RawEventItem => item != null);
+  const out: RawEventItem[] = [];
+  for (const item of asArray(value)) {
+    const rec = asRecord(item);
+    if (!rec) continue;
+    const type = readString(rec.type);
+    const minute = readString(rec.minute) || readString(rec.time);
+    if (!type && !minute) continue;
+    out.push({ type: type || undefined, minute: minute || undefined });
+  }
+  return out;
 }
 
 function readSquadType(src: Record<string, unknown>, raw: Record<string, unknown>): string {

@@ -1,8 +1,8 @@
 // Pobieranie kadry drużyny z API ŁNP (TYLKO SERWER — wymaga Chrome/reCAPTCHA).
 
 import { LaczyCrawler, SCOUTING_AUTH_HELP } from "@/lib/scouting/crawler";
+import { withLaczyCrawlerLock } from "@/lib/scouting/crawlerLock";
 import { ScoutingDebugLogger } from "@/lib/scouting/debugLog";
-import { buildLaczyTeamPlayersPageUrl } from "@/utils/laczyTeamUrl";
 import {
   extractLnpTeamPlayers,
   type LnpImportedPlayer,
@@ -30,12 +30,14 @@ function teamNameOf(data: RawTeamEnvelope | null | undefined): string | undefine
 }
 
 export async function fetchTeamPlayersFromLaczy(teamId: string): Promise<FetchTeamPlayersResult> {
+  return withLaczyCrawlerLock(() => fetchTeamPlayersFromLaczyUnlocked(teamId));
+}
+
+async function fetchTeamPlayersFromLaczyUnlocked(teamId: string): Promise<FetchTeamPlayersResult> {
   const debug = new ScoutingDebugLogger("fetchTeamPlayers", { teamId });
   const errors: string[] = [];
-  const teamPage = buildLaczyTeamPlayersPageUrl(teamId);
   const crawler = new LaczyCrawler({
     debugLog: debug,
-    initialRozgrywkiUrlCandidates: [teamPage, "https://www.laczynaspilka.pl/rozgrywki"],
   });
 
   try {

@@ -1,4 +1,5 @@
 import { Shot } from "@/types";
+import { isIn1TZoneCanonical, isInOpponent1TZoneCanonical } from "./pitchZones";
 import { getShotXgForMapFilter } from "./trendyMapFilters";
 import { isSfgCategoryShot } from "./matchXgSplits";
 
@@ -9,6 +10,8 @@ export type WiedzaShotTypeKey = Shot["shotType"];
 export type WiedzaShotBodyPartKey = "foot" | "foot_left" | "foot_right" | "head" | "other" | "unknown";
 
 export type WiedzaXgBucketKey = "0-0.05" | "0.05-0.1" | "0.1-0.2" | "0.2-0.35" | "0.35+";
+
+export type WiedzaShotZone1TKey = "zone_1t" | "outside_1t";
 
 export type WiedzaShotBreakdownRow = {
   key: string;
@@ -30,10 +33,14 @@ export type WiedzaShotsSummary = {
   onTargetPct: number;
   blockedPct: number;
   offTargetPct: number;
+  shots1T: number;
+  shots1TPct: number;
+  xg1T: number;
   byActionCategory: WiedzaShotBreakdownRow[];
   byShotType: WiedzaShotBreakdownRow[];
   byBodyPart: WiedzaShotBreakdownRow[];
   byXgBucket: WiedzaShotBreakdownRow[];
+  byZone1T: WiedzaShotBreakdownRow[];
 };
 
 const ACTION_CATEGORY_LABELS: Record<WiedzaShotActionCategory, string> = {
@@ -67,6 +74,11 @@ const XG_BUCKET_LABELS: Record<WiedzaXgBucketKey, string> = {
   "0.35+": "0,35+",
 };
 
+const ZONE_1T_LABELS: Record<WiedzaShotZone1TKey, string> = {
+  zone_1t: "Strefa 1T",
+  outside_1t: "Poza 1T",
+};
+
 export function classifyWiedzaShotActionCategory(shot: Shot): WiedzaShotActionCategory {
   if (isSfgCategoryShot(shot)) return "sfg";
   if (shot.actionType === "counter") return "counter";
@@ -80,6 +92,17 @@ export function classifyWiedzaShotBodyPart(shot: Shot): WiedzaShotBodyPartKey {
     return bp;
   }
   return "unknown";
+}
+
+/** Strefa 1T względem drużyny strzelającej: atak = prawa, obrona = lewa. */
+export function isWiedzaShotIn1TZone(shot: Shot): boolean {
+  return (shot.teamContext ?? "attack") === "defense"
+    ? isInOpponent1TZoneCanonical(shot)
+    : isIn1TZoneCanonical(shot);
+}
+
+export function classifyWiedzaShotZone1T(shot: Shot): WiedzaShotZone1TKey {
+  return isWiedzaShotIn1TZone(shot) ? "zone_1t" : "outside_1t";
 }
 
 export function classifyWiedzaXgBucket(xg: number): WiedzaXgBucketKey {
@@ -152,6 +175,9 @@ export function buildWiedzaShotsSummary(shots: Shot[]): WiedzaShotsSummary {
   const byType = new Map<string, MutableAgg>();
   const byBody = new Map<string, MutableAgg>();
   const byBucket = new Map<string, MutableAgg>();
+  const byZone = new Map<string, MutableAgg>();
+  let shots1T = 0;
+  let xg1T = 0;
 
   for (const shot of shots) {
     const xg = getShotXgForMapFilter(shot);
@@ -162,10 +188,17 @@ export function buildWiedzaShotsSummary(shots: Shot[]): WiedzaShotsSummary {
     if (shot.shotType === "blocked") blocked += 1;
     if (shot.shotType === "off_target") offTarget += 1;
 
+    const zoneKey = classifyWiedzaShotZone1T(shot);
+    if (zoneKey === "zone_1t") {
+      shots1T += 1;
+      xg1T += xg;
+    }
+
     bumpAgg(byAction, classifyWiedzaShotActionCategory(shot), xg, goal ? 1 : 0);
     bumpAgg(byType, shot.shotType, xg, goal ? 1 : 0);
     bumpAgg(byBody, classifyWiedzaShotBodyPart(shot), xg, goal ? 1 : 0);
     bumpAgg(byBucket, classifyWiedzaXgBucket(xg), xg, goal ? 1 : 0);
+    bumpAgg(byZone, zoneKey, xg, goal ? 1 : 0);
   }
 
   const pct = (n: number) => (totalShots > 0 ? (n / totalShots) * 100 : 0);
@@ -179,6 +212,9 @@ export function buildWiedzaShotsSummary(shots: Shot[]): WiedzaShotsSummary {
     onTargetPct: pct(onTarget),
     blockedPct: pct(blocked),
     offTargetPct: pct(offTarget),
+    shots1T,
+    shots1TPct: pct(shots1T),
+    xg1T,
     byActionCategory: rowsFromAgg(
       byAction,
       ACTION_CATEGORY_LABELS,
@@ -203,5 +239,8 @@ export function buildWiedzaShotsSummary(shots: Shot[]): WiedzaShotsSummary {
       ["0-0.05", "0.05-0.1", "0.1-0.2", "0.2-0.35", "0.35+"],
       totalShots,
     ).filter((row) => row.count > 0),
+    byZone1T: rowsFromAgg(byZone, ZONE_1T_LABELS, ["zone_1t", "outside_1t"], totalShots).filter(
+      (row) => row.count > 0,
+    ),
   };
 }

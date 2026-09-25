@@ -597,10 +597,9 @@ export default function StatystykiZespoluXgTab({
       setHasVideoPanel(true);
       setIsVideoPanelOpen(true);
       setVideoSeekRequestId((id) => id + 1);
-      setVideoSeekTargetSeconds(null);
-      window.requestAnimationFrame(() => {
-        setVideoSeekTargetSeconds(videoSec);
-      });
+      // Czas musi być znany w tym samym renderze co montowanie playera,
+      // inaczej iframe startuje od 0 i pierwszy seek jest ignorowany.
+      setVideoSeekTargetSeconds(videoSec);
       return true;
     },
     [matchInfo],

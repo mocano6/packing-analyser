@@ -1,7 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { MicrocycleTrainingBlock } from "@/types/trainingMicrocycle";
+import {
+  compressBlockImage,
+  imageBlobFromClipboardData,
+  readBlobAsDataUrl,
+  readClipboardImageBlob,
+} from "@/utils/microcycleBlockImage";
 import type {
   MicrocycleDayLoadTargets,
   MotorDominantId,
@@ -44,6 +51,107 @@ function guidelinePreset(load: ResolvedDayLoad) {
   return role ? sessionPresetForRole(role) : presetForOffset(load.offset);
 }
 
+function useTrainingBlockImagePaste(
+  disabled: boolean,
+  editingBlockId: string | null,
+  onUpdateBlock: (blockId: string, patch: Partial<MicrocycleTrainingBlock>) => void
+) {
+  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
+  const [busyBlockId, setBusyBlockId] = useState<string | null>(null);
+  const [error, setError] = useState<{ blockId: string; message: string } | null>(null);
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
+
+  const hoveredRef = useRef<string | null>(null);
+  const editingRef = useRef<string | null>(null);
+  const disabledRef = useRef(disabled);
+  const busyRef = useRef<string | null>(null);
+  hoveredRef.current = hoveredBlockId;
+  editingRef.current = editingBlockId;
+  disabledRef.current = disabled;
+  busyRef.current = busyBlockId;
+
+  const attachBlob = useCallback(
+    async (blockId: string, blob: Blob) => {
+      setBusyBlockId(blockId);
+      setError(null);
+      try {
+        const dataUrl = await readBlobAsDataUrl(blob);
+        const compressed = await compressBlockImage(dataUrl);
+        onUpdateBlock(blockId, { imageUrl: compressed });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Nie udało się wkleić grafiki";
+        setError({ blockId, message });
+      } finally {
+        setBusyBlockId(null);
+      }
+    },
+    [onUpdateBlock]
+  );
+  const attachRef = useRef(attachBlob);
+  attachRef.current = attachBlob;
+
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (disabledRef.current) return;
+      const targetId = hoveredRef.current ?? editingRef.current;
+      if (!targetId || busyRef.current) return;
+      const blob = imageBlobFromClipboardData(e.clipboardData);
+      if (!blob) return;
+      e.preventDefault();
+      void attachRef.current(targetId, blob);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setLightbox(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox]);
+
+  const pasteFromClipboardApi = useCallback(
+    async (blockId: string) => {
+      setError(null);
+      try {
+        const blob = await readClipboardImageBlob();
+        if (!blob) {
+          setError({
+            blockId,
+            message: "W schowku nie ma obrazka. Skopiuj grafikę i wklej (Ctrl+V).",
+          });
+          return;
+        }
+        await attachBlob(blockId, blob);
+      } catch {
+        setError({
+          blockId,
+          message: "Nie udało się odczytać schowka. Najedź kafelek i wklej Ctrl+V / Cmd+V.",
+        });
+      }
+    },
+    [attachBlob]
+  );
+
+  return {
+    setHoveredBlockId,
+    busyBlockId,
+    error,
+    lightbox,
+    setLightbox,
+    pasteFromClipboardApi,
+    removeImage: (blockId: string) => {
+      onUpdateBlock(blockId, { imageUrl: "" });
+      setError(null);
+    },
+  };
+}
+
 export interface MicrocycleDayMotorPanelProps {
   load: ResolvedDayLoad;
   blocks: MicrocycleTrainingBlock[];
@@ -71,8 +179,6 @@ export interface MicrocycleDayMotorPanelProps {
   onDeleteBlock: (blockId: string) => void;
   onMoveBlock: (blockId: string, direction: -1 | 1) => void;
   onMoveBlockToDay?: (blockId: string, targetDayIndex: number) => void;
-  /** Przenieś samo obciążenie dnia (dominantę + cele) na inny dzień. */
-  onMoveLoadToDay?: (fromDayIndex: number, targetDayIndex: number) => void;
   onBlockDragStart?: (e: React.DragEvent, blockId: string) => void;
   onBlockDragEnd?: () => void;
 }
@@ -176,12 +282,20 @@ export default function MicrocycleDayMotorPanel({
   onDeleteBlock,
   onMoveBlock,
   onMoveBlockToDay,
-  onMoveLoadToDay,
   onBlockDragStart,
   onBlockDragEnd,
 }: MicrocycleDayMotorPanelProps) {
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const closeBlockEditor = () => setEditingBlockId(null);
+  const {
+    setHoveredBlockId,
+    busyBlockId,
+    error: imageError,
+    lightbox,
+    setLightbox,
+    pasteFromClipboardApi,
+    removeImage,
+  } = useTrainingBlockImagePaste(disabled, editingBlockId, onUpdateBlock);
   const dominant = MOTOR_DOMINANT_BY_ID[load.dominant];
   const preset = guidelinePreset(load);
   const minutes = load.plannedMinutes ?? load.targets.minutes;
@@ -211,32 +325,6 @@ export default function MicrocycleDayMotorPanel({
           <span className={styles.motorBlocksHint} title="Liczba bloków treningowych">
             {blocks.length} {blocks.length === 1 ? "blok" : "bloków"}
           </span>
-          {onMoveLoadToDay && dayLabels && !disabled && (
-            <label className={styles.loadMoveLabel}>
-              <span className={styles.srOnly}>Przenieś obciążenie dnia na inny dzień</span>
-              <select
-                className={styles.loadMoveSelect}
-                value=""
-                aria-label="Przenieś obciążenie na inny dzień"
-                title="Przenieś obciążenie (dominantę i cele) na inny dzień"
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  if (raw === "") return;
-                  onMoveLoadToDay(load.dayIndex, Number(raw));
-                  e.target.value = "";
-                }}
-              >
-                <option value="">→</option>
-                {dayLabels.map((label, di) =>
-                  di === load.dayIndex ? null : (
-                    <option key={di} value={di}>
-                      {label}
-                    </option>
-                  )
-                )}
-              </select>
-            </label>
-          )}
         </div>
       </div>
     );
@@ -288,33 +376,6 @@ export default function MicrocycleDayMotorPanel({
           >
             reset
           </button>
-        )}
-        {onMoveLoadToDay && dayLabels && (
-          <label className={styles.loadMoveLabel}>
-            <span className={styles.srOnly}>Przenieś obciążenie dnia na inny dzień</span>
-            <select
-              className={styles.loadMoveSelect}
-              value=""
-              disabled={disabled}
-              aria-label="Przenieś obciążenie na inny dzień"
-              title="Przenieś obciążenie (dominantę i cele) na inny dzień"
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (raw === "") return;
-                onMoveLoadToDay(load.dayIndex, Number(raw));
-                e.target.value = "";
-              }}
-            >
-              <option value="">→ obciąż.</option>
-              {dayLabels.map((label, di) =>
-                di === load.dayIndex ? null : (
-                  <option key={di} value={di}>
-                    {label}
-                  </option>
-                )
-              )}
-            </select>
-          </label>
         )}
       </div>
 
@@ -419,14 +480,23 @@ export default function MicrocycleDayMotorPanel({
                   key={block.id}
                   className={`${styles.blockRowCompact} ${
                     draggingBlockId === block.id ? styles.blockRowDragging : ""
+                  } ${block.imageUrl ? styles.blockRowCompactHasImage : ""} ${
+                    busyBlockId === block.id ? styles.blockRowCompactPasting : ""
                   }`}
+                  tabIndex={disabled ? -1 : 0}
+                  onMouseEnter={() => setHoveredBlockId(block.id)}
+                  onMouseLeave={() =>
+                    setHoveredBlockId((current) => (current === block.id ? null : current))
+                  }
                   onClick={(e) => {
                     if (disabled) return;
                     const target = e.target as HTMLElement;
                     if (target.closest("button") || target.closest("[data-drag-handle]")) return;
                     setEditingBlockId(block.id);
                   }}
-                  title="Kliknij, aby edytować. Przeciągnij za ⠿."
+                  title="Kliknij, aby edytować. Przeciągnij za ⠿. Wklej grafikę: Ctrl+V / Cmd+V."
+                  role="group"
+                  aria-label={`Blok: ${block.name}. Wklej grafikę: Ctrl+V.`}
                 >
                   <span
                     className={styles.blockDragHandle}
@@ -470,6 +540,21 @@ export default function MicrocycleDayMotorPanel({
                       onMouseDown={(e) => e.stopPropagation()}
                       onClick={(e) => {
                         e.stopPropagation();
+                        void pasteFromClipboardApi(block.id);
+                      }}
+                      disabled={disabled || busyBlockId === block.id}
+                      aria-label={`Wklej grafikę do bloku: ${block.name}`}
+                      title="Wklej grafikę ze schowka (Ctrl+V)"
+                    >
+                      {busyBlockId === block.id ? "…" : "🖼"}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.blockIconBtn}
+                      draggable={false}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setEditingBlockId(block.id);
                       }}
                       disabled={disabled}
@@ -494,6 +579,26 @@ export default function MicrocycleDayMotorPanel({
                       ✕
                     </button>
                   </span>
+                  {block.imageUrl ? (
+                    <button
+                      type="button"
+                      className={styles.blockThumbBtn}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLightbox({ url: block.imageUrl as string, name: block.name });
+                      }}
+                      aria-label={`Podgląd grafiki: ${block.name}`}
+                      title="Podgląd grafiki"
+                    >
+                      <img src={block.imageUrl} alt="" className={styles.blockThumbImg} />
+                    </button>
+                  ) : null}
+                  {imageError?.blockId === block.id && (
+                    <p className={styles.blockImageError} role="alert">
+                      {imageError.message}
+                    </p>
+                  )}
                 </div>
               );
             }
@@ -504,12 +609,20 @@ export default function MicrocycleDayMotorPanel({
                 className={`${styles.blockRow} ${compact ? styles.blockRowCompactEdit : ""} ${
                   draggingBlockId === block.id ? styles.blockRowDragging : ""
                 }`}
+                onMouseEnter={() => setHoveredBlockId(block.id)}
+                onMouseLeave={() =>
+                  setHoveredBlockId((current) => (current === block.id ? null : current))
+                }
                 onKeyDown={
                   compact
                     ? (e) => {
                         if (e.nativeEvent.isComposing) return;
                         if (e.key === "Escape") {
                           e.preventDefault();
+                          if (lightbox) {
+                            setLightbox(null);
+                            return;
+                          }
                           closeBlockEditor();
                           return;
                         }
@@ -594,7 +707,7 @@ export default function MicrocycleDayMotorPanel({
                           e.target.value = "";
                         }}
                       >
-                        <option value="">→ dzień</option>
+                        <option value="">Do dnia…</option>
                         {dayLabels.map((label, di) =>
                           di === load.dayIndex ? null : (
                             <option key={di} value={di}>
@@ -709,6 +822,58 @@ export default function MicrocycleDayMotorPanel({
                     })
                   }
                 />
+                <div className={styles.blockImageEdit}>
+                  {block.imageUrl ? (
+                    <>
+                      <button
+                        type="button"
+                        className={styles.blockThumbBtn}
+                        onClick={() =>
+                          setLightbox({ url: block.imageUrl as string, name: block.name })
+                        }
+                        aria-label={`Podgląd grafiki: ${block.name}`}
+                        title="Podgląd grafiki"
+                      >
+                        <img src={block.imageUrl} alt="" className={styles.blockThumbImg} />
+                      </button>
+                      <div className={styles.blockImageEditActions}>
+                        <button
+                          type="button"
+                          className={styles.smallBtn}
+                          onClick={() => void pasteFromClipboardApi(block.id)}
+                          disabled={disabled || busyBlockId === block.id}
+                        >
+                          {busyBlockId === block.id ? "Wklejanie…" : "Wklej inną"}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.smallBtn}
+                          onClick={() => removeImage(block.id)}
+                          disabled={disabled}
+                        >
+                          Usuń grafikę
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.blockImagePasteZone}
+                      onClick={() => void pasteFromClipboardApi(block.id)}
+                      disabled={disabled || busyBlockId === block.id}
+                      title="Skopiuj grafikę i kliknij albo wklej Ctrl+V / Cmd+V"
+                    >
+                      {busyBlockId === block.id
+                        ? "Wklejanie grafiki…"
+                        : "Wklej grafikę ze schowka (Ctrl+V)"}
+                    </button>
+                  )}
+                  {imageError?.blockId === block.id && (
+                    <p className={styles.blockImageError} role="alert">
+                      {imageError.message}
+                    </p>
+                  )}
+                </div>
                 {compact && (
                   <button
                     type="button"
@@ -764,6 +929,32 @@ export default function MicrocycleDayMotorPanel({
           + Blok
         </button>
       </div>
+      {lightbox &&
+        createPortal(
+          <div
+            className={styles.blockImageLightbox}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Grafika: ${lightbox.name}`}
+            onClick={() => setLightbox(null)}
+          >
+            <img
+              src={lightbox.url}
+              alt={lightbox.name}
+              className={styles.blockImageLightboxImg}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              type="button"
+              className={styles.blockImageLightboxClose}
+              onClick={() => setLightbox(null)}
+              aria-label="Zamknij podgląd grafiki"
+            >
+              Zamknij
+            </button>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

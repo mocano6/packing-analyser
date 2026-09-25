@@ -87,7 +87,15 @@ function BreakdownTable({
 }
 
 function pieDataFromRows(rows: WiedzaShotBreakdownRow[]) {
-  return rows.map((row) => ({ name: row.label, value: row.count, pct: row.pct }));
+  return rows.map((row) => ({ name: row.label, value: row.count, pct: row.pct, key: row.key }));
+}
+
+function polishShotCountLabel(count: number): string {
+  if (count === 1) return 'strzał';
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'strzały';
+  return 'strzałów';
 }
 
 export default function WiedzaShotsTab({ matches, players, teams }: Props) {
@@ -124,6 +132,7 @@ export default function WiedzaShotsTab({ matches, players, teams }: Props) {
   );
 
   const actionPieData = useMemo(() => pieDataFromRows(summary.byActionCategory), [summary.byActionCategory]);
+  const zone1TPieData = useMemo(() => pieDataFromRows(summary.byZone1T), [summary.byZone1T]);
   const shotTypeBarData = useMemo(() => pieDataFromRows(summary.byShotType), [summary.byShotType]);
   const xgBucketBarData = useMemo(() => pieDataFromRows(summary.byXgBucket), [summary.byXgBucket]);
 
@@ -170,6 +179,14 @@ export default function WiedzaShotsTab({ matches, players, teams }: Props) {
         <div className={wiedzaStyles.summaryCard}>
           <span className={wiedzaStyles.summaryCardLabel}>Strzały (po filtrach)</span>
           <span className={wiedzaStyles.summaryCardValue}>{summary.totalShots}</span>
+        </div>
+        <div className={wiedzaStyles.summaryCard}>
+          <span className={wiedzaStyles.summaryCardLabel}>Strefa 1T</span>
+          <span className={wiedzaStyles.summaryCardValue}>{summary.shots1TPct.toFixed(1)}%</span>
+          <span className={styles.summaryCardHint}>
+            {summary.shots1T} {polishShotCountLabel(summary.shots1T)}
+            {summary.xg1T > 0 ? ` • Σ xG ${summary.xg1T.toFixed(2)}` : ''}
+          </span>
         </div>
         <div className={wiedzaStyles.summaryCard}>
           <span className={wiedzaStyles.summaryCardLabel}>Σ xG</span>
@@ -263,6 +280,39 @@ export default function WiedzaShotsTab({ matches, players, teams }: Props) {
           </div>
         ) : null}
 
+        {zone1TPieData.length > 0 ? (
+          <div className={styles.chartCard}>
+            <h3 className={styles.chartTitle}>Strefa 1T (% strzałów)</h3>
+            <p className={styles.chartSubtitle} aria-live="polite">
+              {summary.shots1T} {polishShotCountLabel(summary.shots1T)} ({summary.shots1TPct.toFixed(1)}%)
+            </p>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={zone1TPieData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={78}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                >
+                  {zone1TPieData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.key === 'zone_1t' ? '#2563eb' : '#94a3b8'} />
+                  ))}
+                </Pie>
+                <RechartsTooltip
+                  formatter={(value: number, _name, item) => {
+                    const pct = item?.payload?.pct;
+                    return [`${value} (${typeof pct === 'number' ? pct.toFixed(1) : '—'}%)`, 'Strzały'];
+                  }}
+                />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        ) : null}
+
         {shotTypeBarData.length > 0 ? (
           <div className={styles.chartCard}>
             <h3 className={styles.chartTitle}>Typ strzału</h3>
@@ -311,6 +361,11 @@ export default function WiedzaShotsTab({ matches, players, teams }: Props) {
           title="Szczegóły — rodzaj akcji"
           rows={summary.byActionCategory}
           ariaLabel="Tabela strzałów według rodzaju akcji"
+        />
+        <BreakdownTable
+          title="Szczegóły — strefa 1T"
+          rows={summary.byZone1T}
+          ariaLabel="Tabela strzałów ze strefy 1T i poza nią"
         />
         <BreakdownTable
           title="Szczegóły — typ strzału"

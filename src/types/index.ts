@@ -224,9 +224,13 @@ export interface Shot {
   penaltyCausePlayerId?: string;
   linePlayersCount?: number; // Liczba zawodników na linii strzału (atak)
   pkPlayersCount?: number; // Liczba zawodników w polu karnym (nie wpływa na xG)
-  isContact1?: boolean; // Liczba kontaktów: 1T
-  isContact2?: boolean; // Liczba kontaktów: 2T
-  isContact3Plus?: boolean; // Liczba kontaktów: 3T+
+  isContact1?: boolean; // Liczba kontaktów całej akcji: 1T
+  isContact2?: boolean; // Liczba kontaktów całej akcji: 2T
+  isContact3Plus?: boolean; // Liczba kontaktów całej akcji: 3T+
+  /** Kontakty tylko po wejściu w strefę 1T (razem ze strzałem). Wzajemnie wykluczające się. */
+  isZone1TContact1?: boolean;
+  isZone1TContact2?: boolean;
+  isZone1TContact3Plus?: boolean;
   assistantId?: string; // ID asystenta (tylko dla goli)
   /** @deprecated PII - nie zapisywać poza players */
   assistantName?: string; // Nazwa asystenta (tylko dla goli)

@@ -27,6 +27,16 @@ export function isRestDay(restDays: number[] | undefined, dayIndex: number): boo
   return (restDays ?? []).includes(day);
 }
 
+/** Dzień wolny bez meczu — nie przyjmuje treści treningowej. */
+export function isBlockedRestDay(
+  restDays: number[] | undefined,
+  dayIndex: number,
+  matchDays: number[]
+): boolean {
+  if (matchDays.includes(dayIndex)) return false;
+  return isRestDay(restDays, dayIndex);
+}
+
 /**
  * Pi, so, nd — wolne, chyba że wypada mecz.
  * Daje dokładnie cztery dni treningowe przy meczu w sobotę albo niedzielę.

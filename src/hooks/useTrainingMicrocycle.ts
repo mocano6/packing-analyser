@@ -54,11 +54,17 @@ export function useTrainingMicrocycle(teamId: string | null, uid: string | null)
     TrainingDayTitleTemplate[]
   >([]);
   const skipSaveOnce = useRef(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     if (!teamId || !uid) {
       setState(defaultState());
       setEmbeddedDayTitleTemplates([]);
+      setIsDirty(false);
       setLoading(false);
       return;
     }
@@ -79,6 +85,7 @@ export function useTrainingMicrocycle(teamId: string | null, uid: string | null)
           }
           const migrated = migrateTrainingMicrocycleFromFirestore(raw);
           skipSaveOnce.current = true;
+          setIsDirty(false);
           setState(migrated);
           if (persistToTeam) {
             return setDoc(
@@ -149,30 +156,61 @@ export function useTrainingMicrocycle(teamId: string | null, uid: string | null)
     };
   }, [teamId, uid]);
 
+  const persist = useCallback(
+    async (source: "auto" | "manual") => {
+      if (!teamId || !uid) return false;
+      setSaving(true);
+      try {
+        const payload = buildTrainingMicrocycleTaskDocument(stateRef.current, Date.now());
+        await setDoc(teamStaffStateDocRef(teamId, TRAINING_MICROCYCLE_TASKS_DOC_ID), payload);
+        setIsDirty(false);
+        if (source === "manual") {
+          toast.success("Zapisano mikrocykl.", { id: "training-microcycle-saved" });
+        }
+        return true;
+      } catch (e: unknown) {
+        console.error("Zapis mikrocykli:", e);
+        toast.error("Nie udało się zapisać mikrocykli treningowych.", {
+          id: "training-microcycle-save-error",
+          duration: 6000,
+        });
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [teamId, uid]
+  );
+
+  const saveNow = useCallback(async () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    return persist("manual");
+  }, [persist]);
+
   useEffect(() => {
-    if (!teamId || !uid || loading) return;
+    if (!teamId || !uid || loading || !isDirty) return;
     if (skipSaveOnce.current) {
       skipSaveOnce.current = false;
       return;
     }
-    const t = setTimeout(() => {
-      const payload = buildTrainingMicrocycleTaskDocument(state, Date.now());
-      setDoc(teamStaffStateDocRef(teamId, TRAINING_MICROCYCLE_TASKS_DOC_ID), payload).catch(
-        (e: unknown) => {
-          console.error("Zapis mikrocykli:", e);
-          toast.error("Nie udało się zapisać mikrocykli treningowych.", {
-            id: "training-microcycle-save-error",
-            duration: 6000,
-          });
-        }
-      );
+    saveTimeoutRef.current = setTimeout(() => {
+      void persist("auto");
     }, 450);
-    return () => clearTimeout(t);
-  }, [state, teamId, uid, loading]);
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+    };
+  }, [state, teamId, uid, loading, isDirty, persist]);
 
   const setMicrocycleState = useCallback(
     (updater: TrainingMicrocycleState | ((prev: TrainingMicrocycleState) => TrainingMicrocycleState)) => {
       setState(updater);
+      setIsDirty(true);
     },
     []
   );
@@ -185,6 +223,9 @@ export function useTrainingMicrocycle(teamId: string | null, uid: string | null)
     state,
     setMicrocycleState,
     loading,
+    saving,
+    isDirty,
+    saveNow,
     embeddedDayTitleTemplates,
     clearEmbeddedDayTitleTemplates,
   };

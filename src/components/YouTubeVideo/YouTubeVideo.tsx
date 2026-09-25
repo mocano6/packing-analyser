@@ -1,11 +1,17 @@
 "use client";
 
-import React, { useRef, useImperativeHandle, forwardRef, useState, useEffect, useCallback } from "react";
+import React, { useRef, useImperativeHandle, forwardRef, useState } from "react";
 import YouTube, { YouTubeProps } from "react-youtube";
 import { TeamInfo } from "@/types";
 import toast from "react-hot-toast";
 import { hasExternalVideoSource, saveExternalVideoMatchInfo } from "@/utils/externalVideoMatchInfo";
 import { extractYouTubeId } from "@/utils/youtubeVideoId";
+import {
+  canSeekYoutubePlayer,
+  isVideoSeekLanded,
+  readYoutubePlayerTime,
+  resolveYoutubeEmbedStart,
+} from "@/utils/youtubeSeek";
 import styles from "./YouTubeVideo.module.css";
 
 interface YouTubeVideoProps {
@@ -14,7 +20,10 @@ interface YouTubeVideoProps {
   onToggleVisibility?: () => void;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
-  /** Po załadowaniu iframe lub przy zmianie — przewiń do tej sekundy (np. pierwsze otwarcie panelu z profilu). */
+  /**
+   * Sekunda startu. Przy pierwszym zamontowaniu playera trafia do playerVars.start,
+   * żeby iframe nie wstał od 0. Kolejne kliknięcia idą przez seekTo.
+   */
   seekTargetSeconds?: number | null;
   onSeekTargetConsumed?: () => void;
 }
@@ -36,6 +45,13 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
   const playerRef = useRef<any>(null);
   const onSeekTargetConsumedRef = useRef(onSeekTargetConsumed);
   onSeekTargetConsumedRef.current = onSeekTargetConsumed;
+  /** Ostatni żądany moment — nie czyścimy go, gdy rodzic na chwilę wyzeruje prop. */
+  const pendingSeekRef = useRef<number | null>(null);
+  const requestedSeekRef = useRef<number | null>(null);
+  const seekAttemptRef = useRef(0);
+  const playerReadyRef = useRef(false);
+  const frozenEmbedStartRef = useRef<number | undefined>(undefined);
+  const videoIdRef = useRef<string | null>(null);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [isExternalWindowOpen, setIsExternalWindowOpen] = useState<boolean>(false);
   const [isFullscreenInternal, setIsFullscreenInternal] = useState<boolean>(false);
@@ -55,63 +71,113 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
       return 0;
     },
     seekTo: async (seconds: number): Promise<void> => {
-      if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
-        try {
-          // seekTo w YouTube IFrame API jest synchroniczne, nie zwraca Promise
-          playerRef.current.seekTo(seconds, true); // true = allowSeekAhead
-        } catch (error) {
-          console.warn('Nie udało się przewinąć YouTube playera do czasu:', seconds, error);
-        }
-      } else {
-        console.warn('YouTubeVideo.seekTo - playerRef.current nie jest gotowy:', playerRef.current);
-        // Jeśli player nie jest gotowy, spróbuj ponownie po krótkim czasie
-        setTimeout(() => {
-          if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
-            try {
-              playerRef.current.seekTo(seconds, true);
-            } catch (error) {
-              console.warn('Nie udało się przewinąć YouTube playera do czasu (retry):', seconds, error);
-            }
-          }
-        }, 500);
+      if (!Number.isFinite(seconds) || seconds < 0) {
+        throw new Error("youtube-seek-invalid");
       }
+      if (pendingSeekRef.current !== seconds) {
+        seekAttemptRef.current = 0;
+      }
+      pendingSeekRef.current = seconds;
+      requestedSeekRef.current = seconds;
+
+      const player = playerRef.current;
+      if (!player || typeof player.seekTo !== "function" || typeof player.getCurrentTime !== "function") {
+        throw new Error("youtube-player-not-ready");
+      }
+      if (pendingSeekRef.current !== seconds) {
+        throw new Error("youtube-seek-superseded");
+      }
+
+      const state = typeof player.getPlayerState === "function" ? Number(player.getPlayerState()) : -1;
+      // Przed cue/play YouTube ignoruje seekTo i zostaje na 00:00. Nie wołaj API,
+      // dopóki player nie wejdzie w stan, w którym przewinięcie zostaje.
+      if (!canSeekYoutubePlayer(state)) {
+        throw new Error("youtube-player-unstarted");
+      }
+
+      const current = await readYoutubePlayerTime(player);
+      if (pendingSeekRef.current !== seconds) {
+        throw new Error("youtube-seek-superseded");
+      }
+      if (isVideoSeekLanded(current, seconds)) {
+        pendingSeekRef.current = null;
+        onSeekTargetConsumedRef.current?.();
+        return;
+      }
+
+      player.seekTo(seconds, true);
+      throw new Error("youtube-seek-pending");
     }
   }));
 
   const videoUrl = matchInfo?.videoUrl || "";
   const videoId = extractYouTubeId(videoUrl);
 
-  useEffect(() => {
+  if (videoIdRef.current !== videoId) {
+    videoIdRef.current = videoId;
     playerRef.current = null;
-  }, [videoId]);
+    playerReadyRef.current = false;
+    frozenEmbedStartRef.current = undefined;
+    pendingSeekRef.current = null;
+    requestedSeekRef.current = null;
+    seekAttemptRef.current = 0;
+  }
 
-  const applySeekTargetToPlayer = useCallback((target: number, player: { seekTo: (s: number, a: boolean) => void }) => {
-    try {
-      player.seekTo(target, true);
-      onSeekTargetConsumedRef.current?.();
-    } catch (error) {
-      console.warn("YouTubeVideo: seekTargetSeconds", error);
-    }
-  }, []);
+  if (
+    seekTargetSeconds != null &&
+    Number.isFinite(seekTargetSeconds) &&
+    requestedSeekRef.current !== seekTargetSeconds
+  ) {
+    requestedSeekRef.current = seekTargetSeconds;
+    pendingSeekRef.current = seekTargetSeconds;
+    seekAttemptRef.current = 0;
+  }
 
-  useEffect(() => {
-    if (seekTargetSeconds === null || !Number.isFinite(seekTargetSeconds)) return;
-    const p = playerRef.current;
-    if (!p || typeof p.seekTo !== "function") return;
-    applySeekTargetToPlayer(seekTargetSeconds, p);
-  }, [seekTargetSeconds, videoId, applySeekTargetToPlayer]);
+  const embedStart = resolveYoutubeEmbedStart({
+    playerReady: playerReadyRef.current,
+    seekTargetSeconds:
+      seekTargetSeconds != null && Number.isFinite(seekTargetSeconds) ? seekTargetSeconds : null,
+    frozenStart: frozenEmbedStartRef.current,
+  });
+  if (!playerReadyRef.current && embedStart !== undefined) {
+    frozenEmbedStartRef.current = embedStart;
+  }
 
   const onReady: YouTubeProps["onReady"] = (event) => {
     try {
       playerRef.current = event.target;
+      playerReadyRef.current = true;
       setPlayerError(null);
-      if (seekTargetSeconds !== null && Number.isFinite(seekTargetSeconds)) {
-        applySeekTargetToPlayer(seekTargetSeconds, event.target);
-      }
+      // Nie seekuj w onReady. Przy stanie unstarted YouTube i tak puszcza film od 0
+      // i nadpisuje wcześniejszy seek. Start jest w playerVars; korekta idzie w onStateChange.
     } catch (error) {
       console.error("Błąd podczas inicjalizacji playera:", error);
       setPlayerError("Błąd inicjalizacji playera");
     }
+  };
+
+  const onStateChange: YouTubeProps["onStateChange"] = (event) => {
+    const target = pendingSeekRef.current;
+    if (target == null || !canSeekYoutubePlayer(event.data)) return;
+    const player = event.target;
+    if (!player || typeof player.seekTo !== "function" || typeof player.getCurrentTime !== "function") return;
+
+    void (async () => {
+      try {
+        const current = await readYoutubePlayerTime(player);
+        if (pendingSeekRef.current !== target) return;
+        if (isVideoSeekLanded(current, target)) {
+          pendingSeekRef.current = null;
+          onSeekTargetConsumedRef.current?.();
+          return;
+        }
+        if (seekAttemptRef.current >= 6) return;
+        seekAttemptRef.current += 1;
+        player.seekTo(target, true);
+      } catch (error) {
+        console.warn("YouTubeVideo: korekta czasu po starcie playera", error);
+      }
+    })();
   };
 
   const onPlayerError: YouTubeProps['onError'] = (event) => {
@@ -229,6 +295,7 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
       showinfo: 0,
       modestbranding: 1,
       enablejsapi: 1,
+      ...(embedStart !== undefined ? { start: embedStart } : {}),
     },
   };
 
@@ -280,6 +347,7 @@ const YouTubeVideo = forwardRef<YouTubeVideoRef, YouTubeVideoProps>(({
             videoId={videoId}
             opts={opts}
             onReady={onReady}
+            onStateChange={onStateChange}
             onError={onPlayerError}
             className={styles.youtubePlayer}
           />

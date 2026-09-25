@@ -50,7 +50,7 @@ export function useTrainingProceduralTaskTemplates(uid: string | null) {
           if (isAcceptedVersion(d.version)) {
             try {
               const migrated = migrateTrainingProceduralTaskTemplatesFromFirestore(d);
-              if (migrated.templates.length > 0) {
+              if (migrated.templates.length > 0 || migrated.matchProtocol) {
                 skipSaveOnce.current = true;
                 setState(migrated);
               } else {

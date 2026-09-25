@@ -61,17 +61,20 @@ export default function MatchVideoFloatingPanel({
     postSeekToExternalWindow(target);
 
     const attemptSeek = async () => {
-      for (let i = 0; i < 20; i += 1) {
+      // Iframe potrafi wstać kilka sekund. seekTo odrzuca obietnicę, dopóki
+      // player nie przyjmie przewinięcia — inaczej pierwszy klik zostaje na 00:00.
+      for (let i = 0; i < 50; i += 1) {
         if (cancelled) return;
         const player = youtubeVideoRef.current;
         if (player) {
           try {
             await player.seekTo(target);
+            if (cancelled) return;
             onSeekConsumedRef.current();
             postSeekToExternalWindow(target);
             return;
           } catch {
-            /* player jeszcze niegotowy */
+            /* player jeszcze niegotowy albo czas jeszcze nie doszedł */
           }
         }
         await new Promise((resolve) => window.setTimeout(resolve, 200));
@@ -135,6 +138,7 @@ export default function MatchVideoFloatingPanel({
           isVisible
           isFullscreen={false}
           seekTargetSeconds={seekTargetSeconds}
+          onSeekTargetConsumed={onSeekTargetConsumed}
         />
       </div>
       <button

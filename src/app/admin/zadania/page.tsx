@@ -10,6 +10,7 @@ import toast from "react-hot-toast";
 import EisenhowerQuadrantTab from "@/components/EisenhowerQuadrantTab/EisenhowerQuadrantTab";
 import ModelPanel from "@/components/ModelPanel/ModelPanel";
 import TrainingMicrocycleTab from "@/components/TrainingMicrocycleTab/TrainingMicrocycleTab";
+import PlayerLoadTab from "@/components/PlayerLoadTab/PlayerLoadTab";
 import { useGameModel } from "@/hooks/useGameModel";
 import { useGameModelPacks } from "@/hooks/useGameModelPacks";
 import { usePositionSystem } from "@/hooks/usePositionSystem";
@@ -123,6 +124,9 @@ export default function AdminZadaniaPage() {
     state: microcycleState,
     setMicrocycleState,
     loading: microcycleLoading,
+    saving: microcycleSaving,
+    isDirty: microcycleDirty,
+    saveNow: saveMicrocycleNow,
     embeddedDayTitleTemplates,
     clearEmbeddedDayTitleTemplates,
   } = useTrainingMicrocycle(selectedTeamId || null, uid);
@@ -273,6 +277,16 @@ export default function AdminZadaniaPage() {
         >
           Mikrocykl
         </button>
+        <button
+          type="button"
+          id="tab-load"
+          role="tab"
+          aria-selected={tab === "load"}
+          className={`${styles.tab} ${tab === "load" ? styles.tabActive : ""}`}
+          onClick={() => selectTab("load")}
+        >
+          Obciążenia
+        </button>
       </div>
 
       {tab === "eisenhower" && uid && (
@@ -301,12 +315,30 @@ export default function AdminZadaniaPage() {
         </div>
       )}
 
+      {tab === "load" && uid && (
+        <div role="tabpanel" id="panel-load" aria-labelledby="tab-load">
+          <PlayerLoadTab
+            uid={uid}
+            selectedTeam={selectedTeamId}
+            onTeamChange={handleTeamChange}
+            teamsCatalog={teams}
+            userTeamAccess={userTeamAccess}
+            microcycleState={microcycleState}
+            setMicrocycleState={setMicrocycleState}
+            microcycleLoading={microcycleLoading || teamsLoading}
+          />
+        </div>
+      )}
+
       {tab === "microcycle" && uid && (
         <div role="tabpanel" id="panel-microcycle" aria-labelledby="tab-microcycle">
           <TrainingMicrocycleTab
             microcycleState={microcycleState}
             setMicrocycleState={setMicrocycleState}
             microcycleLoading={microcycleLoading || teamsLoading}
+            microcycleSaving={microcycleSaving}
+            microcycleDirty={microcycleDirty}
+            onSaveMicrocycle={() => void saveMicrocycleNow()}
             dayTitleTemplatesState={dayTitleTemplatesState}
             dayTitleTemplatesLoading={dayTitleTemplatesLoading}
             proceduralTaskTemplatesState={proceduralTaskTemplatesState}

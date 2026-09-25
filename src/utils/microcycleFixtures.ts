@@ -23,6 +23,15 @@ export function isFixtureInPast(fixture: LaczyTeamFixture, now = new Date()): bo
   return t < now.getTime();
 }
 
+function fixtureLooksPlayed(f: LaczyTeamFixture): boolean {
+  if (f.scoreFinal && String(f.scoreFinal).trim()) return true;
+  return /played|rozegr/i.test(String(f.state ?? ""));
+}
+
+function shouldRefreshPastFixture(prev: LaczyTeamFixture, incoming: LaczyTeamFixture): boolean {
+  return fixtureLooksPlayed(incoming) && !fixtureLooksPlayed(prev);
+}
+
 /**
  * Scalanie terminarza przy odświeżeniu:
  * - mecze przeszłe z bazy zostają bez zmian,
@@ -48,7 +57,11 @@ export function mergeLaczyFixtures(
   const incomingUpcomingIds = new Set<string>();
   for (const f of incoming) {
     if (isFixtureInPast(f, now)) {
-      if (!byId.has(f.matchId)) byId.set(f.matchId, f);
+      const prev = byId.get(f.matchId);
+      // Nowy przeszły, awans z „planowanego”, albo wreszcie jest wynik — wpuść z API.
+      if (!prev || !isFixtureInPast(prev, now) || shouldRefreshPastFixture(prev, f)) {
+        byId.set(f.matchId, f);
+      }
       continue;
     }
     incomingUpcomingIds.add(f.matchId);
@@ -151,6 +164,9 @@ export function removeMicrocycleFromState(
   const proceduralTasks = (state.proceduralTasks ?? []).filter(
     (t) => t.microcycleId !== microcycleId
   );
+  const matchProtocols = (state.matchProtocols ?? []).filter(
+    (p) => p.microcycleId !== microcycleId
+  );
   const inSeason = microcyclesForSeason(microcycles, target.seasonId);
   const activeMicrocycleId =
     state.activeMicrocycleId === microcycleId
@@ -163,6 +179,7 @@ export function removeMicrocycleFromState(
     assignments,
     dayPlans,
     proceduralTasks,
+    matchProtocols,
     trainingBlocks: (state.trainingBlocks ?? []).filter((b) => b.microcycleId !== microcycleId),
     exercises: (state.exercises ?? []).filter((e) => e.microcycleId !== microcycleId),
     trainingCounts,
@@ -339,6 +356,75 @@ export function groupFixturesByIsoDate(
   return map;
 }
 
+/** Data kalendarzowa dnia mikrocyklu (pn=0 … nd=6 względem weekStartIso). */
+export function isoDateFromWeekAndDayIndex(
+  weekStartIso: string,
+  dayIndex: number
+): string | null {
+  if (!weekStartIso || !/^\d{4}-\d{2}-\d{2}$/.test(weekStartIso)) return null;
+  const di = Math.trunc(Number(dayIndex));
+  if (!Number.isFinite(di) || di < 0 || di > 6) return null;
+  return toIsoDateLocal(addDays(parseIsoDateLocal(weekStartIso), di));
+}
+
+export type CalendarManualChip = {
+  iso: string;
+  isHome: boolean;
+  venueShort: "D" | "W";
+  venueLabel: "Dom" | "Wyjazd";
+  timeLabel: string;
+  opponent: string;
+  label: string;
+};
+
+/**
+ * Domyślny sobotni placeholder (pusty przeciwnik) — nie zaśmieca kalendarza.
+ * Drugi mecz, inny dzień tygodnia albo wpisany rywal = pokazujemy.
+ */
+function isCalendarPlaceholderMatch(matches: MicrocycleMatch[], m: MicrocycleMatch): boolean {
+  return (
+    matches.length === 1 &&
+    m.dayIndex === 5 &&
+    m.venue === "home" &&
+    !m.opponent.trim()
+  );
+}
+
+/**
+ * Mecze z mikrocykli (także dodane ręcznie) do chipów kalendarza.
+ * Dni już zajęte przez mecz ŁNP pomijamy — tam zostaje chip z linku.
+ */
+export function groupManualCalendarChipsByIsoDate(
+  microcycles: Pick<TrainingMicrocycle, "weekStartIso" | "matches">[],
+  occupiedIsoDates: ReadonlySet<string>
+): Map<string, CalendarManualChip[]> {
+  const map = new Map<string, CalendarManualChip[]>();
+  for (const mc of microcycles) {
+    for (const m of mc.matches) {
+      const iso = isoDateFromWeekAndDayIndex(mc.weekStartIso, m.dayIndex);
+      if (!iso || occupiedIsoDates.has(iso)) continue;
+      if (isCalendarPlaceholderMatch(mc.matches, m)) continue;
+      const isHome = m.venue === "home";
+      const opponent = m.opponent.trim() || "Mecz";
+      const timeLabel = m.kickoffTime || "";
+      const venueLabel: "Dom" | "Wyjazd" = isHome ? "Dom" : "Wyjazd";
+      const chip: CalendarManualChip = {
+        iso,
+        isHome,
+        venueShort: isHome ? "D" : "W",
+        venueLabel,
+        timeLabel,
+        opponent,
+        label: [venueLabel, timeLabel, opponent].filter(Boolean).join(" "),
+      };
+      const list = map.get(iso) ?? [];
+      list.push(chip);
+      map.set(iso, list);
+    }
+  }
+  return map;
+}
+
 export type MonthCalendarCell = {
   iso: string;
   inMonth: boolean;
@@ -456,7 +542,8 @@ export function applyFixturesInWeekToMicrocycle(
   if (hits.length === 0) return mc;
   const incoming = hits.slice(0, 2).map((h) => fixtureToMicrocycleMatch(h.fixture, ourTeamId));
   const existingByDay = new Map(mc.matches.map((m) => [m.dayIndex, m]));
-  const matches = incoming.map((m) => {
+  const incomingDays = new Set(incoming.map((m) => m.dayIndex));
+  const mergedIncoming = incoming.map((m) => {
     const prev = existingByDay.get(m.dayIndex);
     if (!prev) return m;
     return sanitizeMicrocycleMatch({
@@ -467,6 +554,9 @@ export function applyFixturesInWeekToMicrocycle(
       weatherTempC: prev.weatherTempC,
     });
   });
+  // Ręcznie dodany drugi mecz (dzień spoza ŁNP) zostaje — ŁNP nie wycina go przy odświeżeniu.
+  const userExtras = mc.matches.filter((m) => !incomingDays.has(m.dayIndex));
+  const matches = [...mergedIncoming, ...userExtras].slice(0, 2);
   const same =
     mc.matches.length === matches.length &&
     mc.matches.every(

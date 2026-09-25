@@ -12,9 +12,11 @@ import {
   GAME_MODEL_PRIORITY_LABELS,
 } from "@/types/gameModel";
 import type {
+  MatchProtocolTemplate,
   MicrocycleDayAssignment,
   MicrocycleDaySchedule,
   MicrocycleMatch,
+  MicrocycleMatchProtocol,
   MicrocycleTrainingBlock,
   TrainingDaySessionTemplatesState,
   TrainingDayTitleTemplate,
@@ -49,9 +51,8 @@ import {
   safeBlockMinutes,
   setDayLoadOverride,
 } from "@/utils/microcycleTrainingBlocks";
-import { moveDaySectionContent } from "@/utils/microcycleDayPackage";
-import type { MicrocycleDaySectionKind } from "@/utils/microcycleDayPackage";
-import { isRestDay, setRestDay } from "@/utils/microcycleRestDays";
+import { dayHasMovableContent, moveMicrocycleDayContent } from "@/utils/microcycleDayPackage";
+import { isBlockedRestDay, isRestDay, setRestDay } from "@/utils/microcycleRestDays";
 import {
   applyDaySessionTemplateToState,
   applySessionTemplatesToWeek,
@@ -84,19 +85,24 @@ import {
   weekdayShortPl,
 } from "@/utils/matchDayLabels";
 import {
-  applyTrainingCountDelta,
+  assignTemplatesToMicrocycleDay,
   assignmentsForMicrocycle,
   defaultSeasonName,
   generateMicrocycleId,
   microcyclesForSeason,
+  moveAssignmentToDay,
   nextMicrocycleNumber,
   sortSeasons,
+  templateIdsOnMicrocycleDay,
+  uniqueAssignmentsPerDay,
+  removeTemplateFromMicrocycleDay,
 } from "@/utils/trainingMicrocycle";
 import {
   createDefaultMicrocycleMatch,
   formatMatchSurfaceLabel,
   formatMatchWeatherLabel,
   matchDaysFromMatches,
+  pickSecondMatchDay,
   setSecondMicrocycleMatch,
   updateMicrocycleMatchAt,
 } from "@/utils/microcycleMatches";
@@ -122,15 +128,30 @@ import {
   setMicrocycleWeekAndApplyFixtures,
   upsertMicrocyclesFromFixtures,
   fixturesInWeekByDay,
+  isoDateFromWeekAndDayIndex,
   type LaczyTeamFixture,
 } from "@/utils/microcycleFixtures";
+import {
+  applyMatchProtocolToAllMicrocycles,
+  clearCoachFromMatchProtocol,
+  clearCoachFromMatchProtocolInstances,
+  matchProtocolsForDay,
+  mergeMatchProtocolForMicrocycle,
+  mergeMatchProtocolIntoState,
+  protocolDoneCounts,
+  protocolTimeRangeLabel,
+  toggleProtocolSubtaskDone,
+} from "@/utils/matchProtocol";
+import MatchProtocolEditorModal from "./MatchProtocolEditorModal";
+import MatchProtocolTimelineModal from "./MatchProtocolTimelineModal";
+import protocolStyles from "./MatchProtocol.module.css";
 import {
   DAY_TITLE_DEFAULT_MD_OFFSETS,
   formatDefaultMdLabel,
   matchDayOffsetFromDayIndex,
   mergeDefaultDayPlansIntoState,
 } from "@/utils/dayTitleDefaults";
-import { parseLaczyTeamIdFromUrl } from "@/utils/laczyTeamUrl";
+import { parseLaczyTeamIdFromUrl, writeStoredLnpTeamUrl, readStoredLnpTeamUrl } from "@/utils/laczyTeamUrl";
 import {
   applyWeatherResultsToState,
   buildWeatherQueryForMatch,
@@ -142,8 +163,11 @@ import type { Team } from "@/constants/teamsLoader";
 import type { UserTeamAccess } from "@/lib/teamsForUserAccess";
 import type { StaffPlannerState } from "@/types/staffPlanner";
 import { nextCoachColor } from "@/types/staffPlanner";
+import {
+  microcycleSaveButtonLabel,
+  resolveMicrocycleSaveStatus,
+} from "@/utils/microcycleSaveUi";
 
-const lnpUrlStorageKey = (teamId: string) => `microcycle_lnp_team_url_${teamId}`;
 const lnpWatchUrlStorageKey = (teamId: string) => `microcycle_lnp_watch_url_${teamId}`;
 
 type GridViewDays = 1 | 3 | 7;
@@ -171,6 +195,7 @@ function applyLnpFixturesWithDefaults(
   ourTeamId: string,
   dayTitleTemplates: TrainingDayTitleTemplate[],
   proceduralTemplates: TrainingProceduralTaskTemplate[],
+  matchProtocol: MatchProtocolTemplate | null | undefined,
   microcycleId?: string | null
 ): TrainingMicrocycleState {
   if (!ourTeamId || fixtures.length === 0) return state;
@@ -185,6 +210,7 @@ function applyLnpFixturesWithDefaults(
     if (microcycleId && mc.id !== microcycleId) continue;
     const before = state.microcycles.find((m) => m.id === mc.id);
     if (!before || before.matches === mc.matches) continue;
+    next = mergeMatchProtocolIntoState(next, mc.id, mc.matches, matchProtocol ?? null);
     const newDay = mc.matches[0]?.dayIndex ?? 5;
     if (prevDayById.get(mc.id) !== newDay) {
       next = mergeDefaultDayPlansIntoState(next, mc.id, newDay, dayTitleTemplates);
@@ -320,9 +346,6 @@ function DayColumnSection({
   onDragOver,
   onDragLeave,
   onDrop,
-  dayLabels,
-  onMoveSectionToDay,
-  blockedDayIndexes,
   children,
 }: {
   kind: DaySectionKind;
@@ -336,10 +359,6 @@ function DayColumnSection({
   onDragOver?: (e: React.DragEvent) => void;
   onDragLeave?: () => void;
   onDrop?: (e: React.DragEvent) => void;
-  dayLabels?: string[];
-  onMoveSectionToDay?: (targetDayIndex: number) => void;
-  /** Dni wolne — nie pokazuj jako celu przeniesienia. */
-  blockedDayIndexes?: number[];
   children: React.ReactNode;
 }) {
   const panelId = `day-${dayIndex}-section-${kind}-panel`;
@@ -369,34 +388,6 @@ function DayColumnSection({
           <span className={styles.daySectionTitle}>{title}</span>
           <span className={styles.daySectionBadge}>{badge}</span>
         </button>
-        {onMoveSectionToDay && dayLabels && (
-          <label className={styles.sectionMoveLabel}>
-            <span className={styles.srOnly}>Przenieś całą sekcję „{title}” na inny dzień</span>
-            <select
-              className={styles.sectionMoveSelect}
-              value=""
-              aria-label={`Przenieś sekcję ${title} na inny dzień`}
-              title={`Przenieś całą grupę „${title}” na inny dzień`}
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (raw === "") return;
-                onMoveSectionToDay(Number(raw));
-                e.target.value = "";
-              }}
-            >
-              <option value="">→</option>
-              {dayLabels.map((label, di) =>
-                di === dayIndex || blockedDayIndexes?.includes(di) ? null : (
-                  <option key={di} value={di}>
-                    {label}
-                  </option>
-                )
-              )}
-            </select>
-          </label>
-        )}
       </div>
       <div
         id={panelId}
@@ -406,6 +397,53 @@ function DayColumnSection({
         aria-labelledby={toggleId}
       >
         {children}
+      </div>
+    </div>
+  );
+}
+
+function LibraryAddToDayBar({
+  templateTitle,
+  dayLabels,
+  blockedDays,
+  disabled,
+  onAdd,
+}: {
+  templateTitle: string;
+  dayLabels: string[];
+  blockedDays: Set<number>;
+  disabled: boolean;
+  onAdd: (dayIndex: number) => void;
+}) {
+  return (
+    <div className={styles.chipAddRow} data-no-drag="1">
+      <span className={styles.chipAddLabel}>Dodaj</span>
+      <div
+        className={styles.chipAddDays}
+        role="group"
+        aria-label={`Dodaj ${templateTitle} na dzień mikrocyklu`}
+      >
+        {dayLabels.map((label, dayIndex) => {
+          const blocked = blockedDays.has(dayIndex);
+          const title = disabled
+            ? "Wybierz mikrocykl"
+            : blocked
+              ? `Dzień wolny — ${label}`
+              : `Dodaj „${templateTitle}” na ${label} (z potomkami z modelu)`;
+          return (
+            <button
+              key={dayIndex}
+              type="button"
+              className={styles.chipAddDayBtn}
+              disabled={disabled || blocked}
+              title={title}
+              aria-label={title}
+              onClick={() => onAdd(dayIndex)}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -423,7 +461,7 @@ function groupAssignmentsByLevel(
   list: MicrocycleDayAssignment[]
 ): { level: GameModelRuleLevel; items: MicrocycleDayAssignment[] }[] {
   const groups: Record<GameModelRuleLevel, MicrocycleDayAssignment[]> = { 0: [], 1: [], 2: [] };
-  for (const a of list) {
+  for (const a of uniqueAssignmentsPerDay(list)) {
     if (a.level >= 0 && a.level <= 2) groups[a.level].push(a);
   }
   return LIBRARY_LEVELS.filter((level) => groups[level].length > 0).map((level) => ({
@@ -461,6 +499,9 @@ export interface TrainingMicrocycleTabProps {
   microcycleState: TrainingMicrocycleState;
   setMicrocycleState: React.Dispatch<React.SetStateAction<TrainingMicrocycleState>>;
   microcycleLoading: boolean;
+  microcycleSaving?: boolean;
+  microcycleDirty?: boolean;
+  onSaveMicrocycle?: () => void;
   dayTitleTemplatesState: TrainingDayTitleTemplatesState;
   dayTitleTemplatesLoading: boolean;
   proceduralTaskTemplatesState: TrainingProceduralTaskTemplatesState;
@@ -488,6 +529,9 @@ export default function TrainingMicrocycleTab({
   microcycleState,
   setMicrocycleState,
   microcycleLoading,
+  microcycleSaving = false,
+  microcycleDirty = false,
+  onSaveMicrocycle,
   dayTitleTemplatesState,
   dayTitleTemplatesLoading,
   proceduralTaskTemplatesState,
@@ -508,6 +552,7 @@ export default function TrainingMicrocycleTab({
 }: TrainingMicrocycleTabProps) {
   const dayTitleTemplates = dayTitleTemplatesState.templates;
   const proceduralTemplates = proceduralTaskTemplatesState.templates;
+  const matchProtocol = proceduralTaskTemplatesState.matchProtocol ?? null;
   const daySessionTemplates = daySessionTemplatesState.templates;
   const [isTeamsSelectorExpanded, setIsTeamsSelectorExpanded] = useState(false);
   const [dragTemplateId, setDragTemplateId] = useState<string | null>(null);
@@ -526,6 +571,14 @@ export default function TrainingMicrocycleTab({
   const [dragOverTrainingDay, setDragOverTrainingDay] = useState<number | null>(null);
   const didApplyProceduralDefaultsRef = useRef(false);
   const didAutoApplyLnpRef = useRef<string | null>(null);
+  const lnpApplyTemplatesRef = useRef({
+    dayTitleTemplates,
+    proceduralTemplates,
+    matchProtocol,
+  });
+  lnpApplyTemplatesRef.current = { dayTitleTemplates, proceduralTemplates, matchProtocol };
+  const [protocolEditorOpen, setProtocolEditorOpen] = useState(false);
+  const [openProtocolId, setOpenProtocolId] = useState<string | null>(null);
   const [libraryPhaseFilter, setLibraryPhaseFilter] =
     useState<GameModelLibraryPhaseFilter>("all");
   const [lnpTeamUrl, setLnpTeamUrl] = useState("");
@@ -658,17 +711,20 @@ export default function TrainingMicrocycleTab({
   }, []);
 
   useEffect(() => {
+    if (!selectedTeam) {
+      const fromState = (microcycleState.lnpTeamUrl || "").trim();
+      if (fromState) setLnpTeamUrl(fromState);
+      return;
+    }
+    const stored = readStoredLnpTeamUrl(selectedTeam);
+    if (parseLaczyTeamIdFromUrl(stored)) {
+      setLnpTeamUrl(stored);
+      return;
+    }
     const fromState = (microcycleState.lnpTeamUrl || "").trim();
     if (fromState) {
       setLnpTeamUrl(fromState);
-      return;
-    }
-    if (!selectedTeam || typeof window === "undefined") return;
-    try {
-      const saved = window.localStorage.getItem(lnpUrlStorageKey(selectedTeam));
-      if (saved) setLnpTeamUrl(saved);
-    } catch {
-      /* ignore */
+      writeStoredLnpTeamUrl(selectedTeam, fromState);
     }
   }, [selectedTeam, microcycleState.lnpTeamUrl]);
 
@@ -732,16 +788,20 @@ export default function TrainingMicrocycleTab({
     }
     if (didApplyProceduralDefaultsRef.current) return;
     const hasDefaults = proceduralTemplates.some((t) => t.defaultMatchDayOffset != null);
-    if (!hasDefaults) return;
+    if (!hasDefaults && !matchProtocol) return;
     didApplyProceduralDefaultsRef.current = true;
-    setMicrocycleState((prev) =>
-      mergeDefaultProceduralTasksIntoState(
-        prev,
-        activeMicrocycleId,
-        firstMatchDay,
-        proceduralTemplates
-      )
-    );
+    setMicrocycleState((prev) => {
+      let next = prev;
+      if (hasDefaults) {
+        next = mergeDefaultProceduralTasksIntoState(
+          next,
+          activeMicrocycleId,
+          firstMatchDay,
+          proceduralTemplates
+        );
+      }
+      return mergeMatchProtocolForMicrocycle(next, activeMicrocycleId, matchProtocol);
+    });
   }, [
     microcycleLoading,
     dayTitleTemplatesLoading,
@@ -749,6 +809,7 @@ export default function TrainingMicrocycleTab({
     activeMicrocycleId,
     firstMatchDay,
     proceduralTemplates,
+    matchProtocol,
     setMicrocycleState,
   ]);
 
@@ -780,6 +841,9 @@ export default function TrainingMicrocycleTab({
       });
     return parts.length > 0 ? parts.join(" · ") : "Brak przeciwnika";
   }, [matches]);
+
+  const saveStatus = resolveMicrocycleSaveStatus(microcycleSaving, microcycleDirty);
+  const saveLabel = microcycleSaveButtonLabel(saveStatus);
 
   const activeBlocks = useMemo(
     () => blocksForMicrocycle(microcycleState.trainingBlocks, activeMicrocycleId),
@@ -1030,15 +1094,18 @@ export default function TrainingMicrocycleTab({
     (blockId: string, patch: Partial<MicrocycleTrainingBlock>) => {
       setMicrocycleState((prev) => ({
         ...prev,
-        trainingBlocks: (prev.trainingBlocks ?? []).map((b) =>
-          b.id === blockId
-            ? {
-                ...b,
-                ...patch,
-                minutes: patch.minutes !== undefined ? safeBlockMinutes(patch.minutes) : b.minutes,
-              }
-            : b
-        ),
+        trainingBlocks: (prev.trainingBlocks ?? []).map((b) => {
+          if (b.id !== blockId) return b;
+          const next: MicrocycleTrainingBlock = {
+            ...b,
+            ...patch,
+            minutes: patch.minutes !== undefined ? safeBlockMinutes(patch.minutes) : b.minutes,
+          };
+          if (patch.imageUrl === "") {
+            delete next.imageUrl;
+          }
+          return next;
+        }),
       }));
     },
     [setMicrocycleState]
@@ -1129,33 +1196,18 @@ export default function TrainingMicrocycleTab({
     [activeMicrocycleId, matchDays, setMicrocycleState]
   );
 
-  const moveSectionToDay = useCallback(
-    (section: MicrocycleDaySectionKind, fromDayIndex: number, toDayIndex: number) => {
+  const moveDayToDay = useCallback(
+    (fromDayIndex: number, toDayIndex: number) => {
       if (!activeMicrocycleId || fromDayIndex === toDayIndex) return;
       if (isRestDay(activeMicrocycle?.restDays, toDayIndex) && !matchDays.includes(toDayIndex)) {
         toast.error("Nie przenoś treści na dzień wolny.");
         return;
       }
       setMicrocycleState((prev) =>
-        moveDaySectionContent(
-          prev,
-          activeMicrocycleId,
-          section,
-          fromDayIndex,
-          toDayIndex,
-          matchDays
-        )
+        moveMicrocycleDayContent(prev, activeMicrocycleId, fromDayIndex, toDayIndex, matchDays)
       );
-      const labels: Record<MicrocycleDaySectionKind, string> = {
-        zadania: "Zadania",
-        trening: "Trening",
-        cele: "Cele treningowe",
-        cwiczenia: "Ćwiczenia",
-        trening_cele: "Trening + cele",
-        obciazenie: "Obciążenie",
-      };
       toast.success(
-        `${labels[section]}: ${weekdayShortPl(fromDayIndex)} → ${weekdayShortPl(toDayIndex)}`
+        `Dzień przeniesiony: ${weekdayShortPl(fromDayIndex)} → ${weekdayShortPl(toDayIndex)}`
       );
     },
     [activeMicrocycleId, activeMicrocycle?.restDays, matchDays, setMicrocycleState]
@@ -1195,7 +1247,9 @@ export default function TrainingMicrocycleTab({
   const assignmentsThisMicrocycle = useMemo(
     () =>
       activeMicrocycleId
-        ? assignmentsForMicrocycle(microcycleState.assignments, activeMicrocycleId)
+        ? uniqueAssignmentsPerDay(
+            assignmentsForMicrocycle(microcycleState.assignments, activeMicrocycleId)
+          )
         : [],
     [microcycleState.assignments, activeMicrocycleId]
   );
@@ -1273,13 +1327,14 @@ export default function TrainingMicrocycleTab({
             teamId,
             dayTitleTemplates,
             proceduralTemplates,
+            matchProtocol,
             microcycleId
           );
         }
         return next;
       });
     },
-    [setMicrocycleState, dayTitleTemplates, proceduralTemplates]
+    [setMicrocycleState, dayTitleTemplates, proceduralTemplates, matchProtocol]
   );
 
   const addSeason = useCallback(() => {
@@ -1317,6 +1372,7 @@ export default function TrainingMicrocycleTab({
           lnpTeamId,
           dayTitleTemplates,
           proceduralTemplates,
+          matchProtocol,
           microcycleId
         );
       }
@@ -1335,10 +1391,11 @@ export default function TrainingMicrocycleTab({
         matchDay,
         proceduralTemplates
       );
+      next = mergeMatchProtocolForMicrocycle(next, microcycleId, matchProtocol);
       return next;
     });
     setNewSeasonName("");
-  }, [newSeasonName, setMicrocycleState, dayTitleTemplates, proceduralTemplates]);
+  }, [newSeasonName, setMicrocycleState, dayTitleTemplates, proceduralTemplates, matchProtocol]);
 
   const addMicrocycle = useCallback(() => {
     if (!activeSeasonId) return;
@@ -1377,6 +1434,7 @@ export default function TrainingMicrocycleTab({
           lnpTeamId,
           dayTitleTemplates,
           proceduralTemplates,
+          matchProtocol,
           id
         );
       }
@@ -1391,9 +1449,10 @@ export default function TrainingMicrocycleTab({
         matchDay,
         proceduralTemplates
       );
+      next = mergeMatchProtocolForMicrocycle(next, id, matchProtocol);
       return next;
     });
-  }, [activeSeasonId, setMicrocycleState, dayTitleTemplates, proceduralTemplates]);
+  }, [activeSeasonId, setMicrocycleState, dayTitleTemplates, proceduralTemplates, matchProtocol]);
 
   const removeActiveMicrocycle = useCallback(() => {
     if (!activeMicrocycleId) return;
@@ -1530,7 +1589,7 @@ export default function TrainingMicrocycleTab({
     try {
       if (selectedTeam) {
         try {
-          window.localStorage.setItem(lnpUrlStorageKey(selectedTeam), lnpTeamUrl.trim());
+          writeStoredLnpTeamUrl(selectedTeam, lnpTeamUrl.trim());
         } catch {
           /* ignore */
         }
@@ -1572,7 +1631,8 @@ export default function TrainingMicrocycleTab({
           mergedFixtures,
           resolvedTeamId,
           dayTitleTemplates,
-          proceduralTemplates
+          proceduralTemplates,
+          matchProtocol
         );
         snapshot = next;
         return next;
@@ -1603,6 +1663,7 @@ export default function TrainingMicrocycleTab({
     refreshMatchWeather,
     dayTitleTemplates,
     proceduralTemplates,
+    matchProtocol,
   ]);
 
   /** Podgląd terminarza innego zespołu — tylko mecze, bez syncu mikrocykli. */
@@ -1701,6 +1762,7 @@ export default function TrainingMicrocycleTab({
           matchDay,
           proceduralTemplates
         );
+        next = mergeMatchProtocolForMicrocycle(next, mc.id, matchProtocol);
       }
       snapshot = next;
       return next;
@@ -1718,6 +1780,7 @@ export default function TrainingMicrocycleTab({
     setMicrocycleState,
     dayTitleTemplates,
     proceduralTemplates,
+    matchProtocol,
     refreshMatchWeather,
   ]);
 
@@ -1778,10 +1841,10 @@ export default function TrainingMicrocycleTab({
             proceduralTemplates
           );
         }
-        return next;
+        return mergeMatchProtocolForMicrocycle(next, activeMicrocycleId, matchProtocol);
       });
     },
-    [activeMicrocycleId, setMicrocycleState, dayTitleTemplates, proceduralTemplates]
+    [activeMicrocycleId, setMicrocycleState, dayTitleTemplates, proceduralTemplates, matchProtocol]
   );
 
   const selectWeekFromCalendar = useCallback(
@@ -1801,13 +1864,16 @@ export default function TrainingMicrocycleTab({
     const key = `${fixturesFetchedAt ?? "local"}|${fixturesTeamId}|${activeSeasonId ?? ""}`;
     if (didAutoApplyLnpRef.current === key) return;
     didAutoApplyLnpRef.current = key;
+    const { dayTitleTemplates: titles, proceduralTemplates: tasks, matchProtocol: protocol } =
+      lnpApplyTemplatesRef.current;
     setMicrocycleState((prev) =>
       applyLnpFixturesWithDefaults(
         prev,
         prev.lnpFixtures ?? fixtures,
         prev.lnpTeamId ?? fixturesTeamId,
-        dayTitleTemplates,
-        proceduralTemplates
+        titles,
+        tasks,
+        protocol
       )
     );
   }, [
@@ -1816,8 +1882,6 @@ export default function TrainingMicrocycleTab({
     fixturesTeamId,
     fixturesFetchedAt,
     activeSeasonId,
-    dayTitleTemplates,
-    proceduralTemplates,
     setMicrocycleState,
   ]);
 
@@ -1851,7 +1915,7 @@ export default function TrainingMicrocycleTab({
             proceduralTemplates
           );
         }
-        return next;
+        return mergeMatchProtocolForMicrocycle(next, activeMicrocycleId, matchProtocol);
       });
     },
     [
@@ -1860,19 +1924,39 @@ export default function TrainingMicrocycleTab({
       setMicrocycleState,
       dayTitleTemplates,
       proceduralTemplates,
+      matchProtocol,
     ]
   );
 
   const setSecondMatchDay = useCallback(
     (val: string) => {
-      if (!activeMicrocycle) return;
-      const next = setSecondMicrocycleMatch(
-        activeMicrocycle.matches,
-        val === "" ? null : Number(val)
-      );
-      updateActiveMicrocycle({ matches: next });
+      if (!activeMicrocycleId) return;
+      const dayIndex = val === "" ? null : Number(val);
+      setMicrocycleState((prev) => {
+        const mc = prev.microcycles.find((m) => m.id === activeMicrocycleId);
+        if (!mc) return prev;
+        const nextMatches = setSecondMicrocycleMatch(mc.matches, dayIndex);
+        if (
+          nextMatches.length === mc.matches.length &&
+          nextMatches.every((m, i) => m === mc.matches[i])
+        ) {
+          return prev;
+        }
+        const withMatches: TrainingMicrocycleState = {
+          ...prev,
+          microcycles: prev.microcycles.map((m) =>
+            m.id === activeMicrocycleId ? { ...m, matches: nextMatches } : m
+          ),
+        };
+        return mergeMatchProtocolIntoState(
+          withMatches,
+          activeMicrocycleId,
+          nextMatches,
+          matchProtocol
+        );
+      });
     },
-    [activeMicrocycle, updateActiveMicrocycle]
+    [activeMicrocycleId, setMicrocycleState, matchProtocol]
   );
 
   const updateDaySchedule = useCallback(
@@ -1904,16 +1988,81 @@ export default function TrainingMicrocycleTab({
     commitActiveWeek(toIsoDateLocal(startOfWeekMonday(new Date())));
   }, [commitActiveWeek]);
 
+  const libraryDayLabels = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => weekdayShortPl(i)),
+    []
+  );
+
+  const libraryBlockedDays = useMemo(() => {
+    const blocked = new Set<number>();
+    for (let i = 0; i < 7; i++) {
+      if (isBlockedRestDay(activeMicrocycle?.restDays, i, matchDays)) blocked.add(i);
+    }
+    return blocked;
+  }, [activeMicrocycle?.restDays, matchDays]);
+
+  const assignGameModelToDay = useCallback(
+    (templateId: string, dayIndex: number) => {
+      if (!activeMicrocycleId) {
+        toast.error("Wybierz mikrocykl.");
+        return;
+      }
+      if (isBlockedRestDay(activeMicrocycle?.restDays, dayIndex, matchDays)) {
+        toast.error("Dzień wolny — odznacz WOLNE, żeby dodać treść.");
+        return;
+      }
+      const templatesToAdd = templatesToAssignOnMicrocycleDrop(
+        gameModelState.templates,
+        gameModelState.nodes,
+        templateId
+      );
+      if (templatesToAdd.length === 0) {
+        toast.error("Nie znaleziono elementu w bibliotece modelu.");
+        return;
+      }
+      const already = templateIdsOnMicrocycleDay(
+        microcycleState.assignments,
+        activeMicrocycleId,
+        dayIndex
+      );
+      const fresh = templatesToAdd.filter((tpl) => !already.has(tpl.id));
+      if (fresh.length === 0) {
+        toast("Te zasady są już na tym dniu.");
+        return;
+      }
+      setMicrocycleState((prev) =>
+        assignTemplatesToMicrocycleDay(prev, {
+          microcycleId: activeMicrocycleId,
+          dayIndex,
+          templates: templatesToAdd,
+        })
+      );
+      const extra = fresh.length - 1;
+      const dayLabel = weekdayShortPl(dayIndex);
+      toast.success(
+        extra > 0
+          ? `„${templatesToAdd[0].title}” +${extra} → ${dayLabel}`
+          : `„${fresh[0].title}” → ${dayLabel}`
+      );
+    },
+    [
+      activeMicrocycleId,
+      activeMicrocycle?.restDays,
+      matchDays,
+      gameModelState.templates,
+      gameModelState.nodes,
+      microcycleState.assignments,
+      setMicrocycleState,
+    ]
+  );
+
   const dropOnDay = useCallback(
     (dayIndex: number, raw: string) => {
       if (!activeMicrocycleId) return;
       const payload = parseDragPayload(raw);
       if (!payload) return;
 
-      const dropOnMatchDay = matchDays.includes(dayIndex);
-      const dropOnRestDay =
-        !dropOnMatchDay && isRestDay(activeMicrocycle?.restDays, dayIndex);
-      if (dropOnRestDay) {
+      if (isBlockedRestDay(activeMicrocycle?.restDays, dayIndex, matchDays)) {
         toast.error("Dzień wolny — odznacz WOLNE, żeby dodać treść.");
         return;
       }
@@ -1927,7 +2076,7 @@ export default function TrainingMicrocycleTab({
           tpl.id,
           offset
         );
-        setProceduralTaskTemplatesState({ templates: nextTemplates });
+        setProceduralTaskTemplatesState((prev) => ({ ...prev, templates: nextTemplates }));
         setMicrocycleState((prev) =>
           mergeDefaultProceduralTasksIntoState(
             prev,
@@ -1946,44 +2095,12 @@ export default function TrainingMicrocycleTab({
       }
 
       if (payload.kind === "gameModelTemplate") {
-        const templatesToAdd = templatesToAssignOnMicrocycleDrop(
-          gameModelState.templates,
-          gameModelState.nodes,
-          payload.templateId
-        );
-        if (templatesToAdd.length === 0) {
-          toast.error("Nie znaleziono elementu w bibliotece modelu.");
-          return;
-        }
-        const newAssignments = templatesToAdd.map((tpl) => ({
-          id: generateMicrocycleId(),
-          microcycleId: activeMicrocycleId,
-          dayIndex,
-          templateId: tpl.id,
-          title: tpl.title,
-          level: tpl.level,
-        }));
-        setMicrocycleState((prev) => {
-          let trainingCounts = prev.trainingCounts;
-          for (const tpl of templatesToAdd) {
-            trainingCounts = applyTrainingCountDelta(trainingCounts, tpl.id, 1);
-          }
-          return {
-            ...prev,
-            assignments: [...prev.assignments, ...newAssignments],
-            trainingCounts,
-          };
-        });
+        assignGameModelToDay(payload.templateId, dayIndex);
         return;
       }
 
       if (payload.kind === "microcycleAssignment") {
-        setMicrocycleState((prev) => ({
-          ...prev,
-          assignments: prev.assignments.map((a) =>
-            a.id === payload.assignmentId ? { ...a, dayIndex } : a
-          ),
-        }));
+        setMicrocycleState((prev) => moveAssignmentToDay(prev, payload.assignmentId, dayIndex));
         return;
       }
 
@@ -2001,10 +2118,9 @@ export default function TrainingMicrocycleTab({
       activeMicrocycle?.restDays,
       firstMatchDay,
       matchDays,
-      gameModelState.templates,
-      gameModelState.nodes,
       proceduralTemplates,
       applySessionToDay,
+      assignGameModelToDay,
       setMicrocycleState,
       setProceduralTaskTemplatesState,
     ]
@@ -2018,7 +2134,7 @@ export default function TrainingMicrocycleTab({
         templateId,
         offset
       );
-      setProceduralTaskTemplatesState({ templates: nextTemplates });
+      setProceduralTaskTemplatesState((prev) => ({ ...prev, templates: nextTemplates }));
       if (!activeMicrocycleId) return;
       setMicrocycleState((prev) =>
         mergeDefaultProceduralTasksIntoState(
@@ -2079,7 +2195,7 @@ export default function TrainingMicrocycleTab({
         templateId,
         coachId
       );
-      setProceduralTaskTemplatesState({ templates: nextTemplates });
+      setProceduralTaskTemplatesState((prev) => ({ ...prev, templates: nextTemplates }));
       setMicrocycleState((prev) => ({
         ...prev,
         proceduralTasks: applyCoachIdToProceduralTasks(
@@ -2125,11 +2241,14 @@ export default function TrainingMicrocycleTab({
         };
       });
       setProceduralTaskTemplatesState((prev) => ({
+        ...prev,
         templates: clearCoachFromProceduralTemplates(prev.templates, id),
+        matchProtocol: clearCoachFromMatchProtocol(prev.matchProtocol, id),
       }));
       setMicrocycleState((prev) => ({
         ...prev,
         proceduralTasks: clearCoachFromProceduralTasks(prev.proceduralTasks, id),
+        matchProtocols: clearCoachFromMatchProtocolInstances(prev.matchProtocols, id),
       }));
       if (newProceduralCoachId === id) setNewProceduralCoachId("");
     },
@@ -2179,22 +2298,62 @@ export default function TrainingMicrocycleTab({
     [setMicrocycleState]
   );
 
+  const saveMatchProtocol = useCallback(
+    (protocol: MatchProtocolTemplate) => {
+      setProceduralTaskTemplatesState((prev) => ({ ...prev, matchProtocol: protocol }));
+      setMicrocycleState((prev) => applyMatchProtocolToAllMicrocycles(prev, protocol));
+      setProtocolEditorOpen(false);
+      toast.success("Zapisano protokół meczowy.");
+    },
+    [setProceduralTaskTemplatesState, setMicrocycleState]
+  );
+
+  const deleteMatchProtocol = useCallback(() => {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm("Usunąć protokół meczowy ze wszystkich mikrocykli?")
+    ) {
+      return;
+    }
+    setProceduralTaskTemplatesState((prev) => ({ ...prev, matchProtocol: null }));
+    setMicrocycleState((prev) => applyMatchProtocolToAllMicrocycles(prev, null));
+    setProtocolEditorOpen(false);
+    setOpenProtocolId(null);
+    toast.success("Usunięto protokół meczowy.");
+  }, [setProceduralTaskTemplatesState, setMicrocycleState]);
+
+  const toggleProtocolSubtask = useCallback(
+    (protocolId: string, subtaskId: string) => {
+      setMicrocycleState((prev) => ({
+        ...prev,
+        matchProtocols: toggleProtocolSubtaskDone(prev.matchProtocols, protocolId, subtaskId),
+      }));
+    },
+    [setMicrocycleState]
+  );
+
+  const openProtocolInstance = useMemo((): MicrocycleMatchProtocol | null => {
+    if (!openProtocolId || !activeMicrocycleId) return null;
+    return (
+      (microcycleState.matchProtocols ?? []).find(
+        (p) => p.id === openProtocolId && p.microcycleId === activeMicrocycleId
+      ) ?? null
+    );
+  }, [openProtocolId, activeMicrocycleId, microcycleState.matchProtocols]);
+
   const deleteAssignment = useCallback(
     (assignmentId: string) => {
-      setMicrocycleState((prev) => {
-        const target = prev.assignments.find((a) => a.id === assignmentId);
-        if (!target) return prev;
-        return {
-          ...prev,
-          assignments: prev.assignments.filter((a) => a.id !== assignmentId),
-          trainingCounts: applyTrainingCountDelta(prev.trainingCounts, target.templateId, -1),
-        };
-      });
+      setMicrocycleState((prev) => removeTemplateFromMicrocycleDay(prev, assignmentId));
     },
     [setMicrocycleState]
   );
 
   const handleDragStartTemplate = useCallback((e: React.DragEvent, templateId: string) => {
+    const target = e.target as HTMLElement | null;
+    if (target?.closest("[data-no-drag]")) {
+      e.preventDefault();
+      return;
+    }
     setDragTemplateId(templateId);
     setCascadeHoverRootId(templateId);
     const p: DragPayload = { kind: "gameModelTemplate", templateId };
@@ -2280,26 +2439,37 @@ export default function TrainingMicrocycleTab({
         className={`${styles.toolbarSection} ${toolbarOpen ? "" : styles.toolbarSectionCollapsed}`}
         aria-label="Ustawienia mikrocyklu"
       >
-        <button
-          type="button"
-          className={styles.dayTitlesToggle}
-          onClick={toggleToolbarOpen}
-          aria-expanded={toolbarOpen}
-          aria-controls="microcycle-toolbar-panel"
-          id="microcycle-toolbar-toggle"
-        >
-          <span className={styles.dayTitlesToggleLeft}>
-            <span className={styles.dayTitlesChevron} aria-hidden>
-              {toolbarOpen ? "▾" : "▸"}
+        <div className={styles.toolbarSectionHead}>
+          <button
+            type="button"
+            className={styles.dayTitlesToggle}
+            onClick={toggleToolbarOpen}
+            aria-expanded={toolbarOpen}
+            aria-controls="microcycle-toolbar-panel"
+            id="microcycle-toolbar-toggle"
+          >
+            <span className={styles.dayTitlesToggleLeft}>
+              <span className={styles.dayTitlesChevron} aria-hidden>
+                {toolbarOpen ? "▾" : "▸"}
+              </span>
+              <span className={styles.dayTitlesToggleTitle}>Ustawienia mikrocyklu</span>
+              <span className={styles.dayTitlesCountBadge}>
+                M{activeMicrocycle?.number ?? "—"}
+                {fixtures.length > 0 ? ` · ${fixtures.length} mecze` : ""}
+              </span>
             </span>
-            <span className={styles.dayTitlesToggleTitle}>Ustawienia mikrocyklu</span>
-            <span className={styles.dayTitlesCountBadge}>
-              M{activeMicrocycle?.number ?? "—"}
-              {fixtures.length > 0 ? ` · ${fixtures.length} mecze` : ""}
-            </span>
-          </span>
-          <span className={styles.dayTitlesToggleHint}>{toolbarOpen ? "Zwiń" : "Rozwiń"}</span>
-        </button>
+            <span className={styles.dayTitlesToggleHint}>{toolbarOpen ? "Zwiń" : "Rozwiń"}</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.saveBtn} ${microcycleDirty ? styles.saveBtnDirty : ""}`}
+            onClick={() => onSaveMicrocycle?.()}
+            disabled={microcycleLoading || microcycleSaving || !onSaveMicrocycle}
+            aria-label="Zapisz mikrocykl"
+          >
+            {saveLabel}
+          </button>
+        </div>
 
         {!toolbarOpen && (
           <div className={styles.toolbarCollapsedPreview} aria-hidden>
@@ -2428,10 +2598,21 @@ export default function TrainingMicrocycleTab({
         </div>
 
         <div className={`${styles.toolbarGroup} ${styles.toolbarGroupWide}`}>
-          <span className={styles.toolbarLabel}>Mecze w tygodniu (MD)</span>
+          <div className={styles.toolbarLabelRow}>
+            <span className={styles.toolbarLabel}>Mecze w tygodniu (MD)</span>
+            <button
+              type="button"
+              className={`${styles.saveBtn} ${styles.saveBtnCompact} ${microcycleDirty ? styles.saveBtnDirty : ""}`}
+              onClick={() => onSaveMicrocycle?.()}
+              disabled={microcycleLoading || microcycleSaving || !onSaveMicrocycle}
+              aria-label="Zapisz mikrocykl i mecze"
+            >
+              {saveLabel}
+            </button>
+          </div>
           <div className={styles.matchPanel}>
             {[firstMatch, secondMatch].filter((m): m is MicrocycleMatch => m != null).map((match, i) => (
-              <div key={i} className={styles.matchDetailRow}>
+              <div key={`mecz-${i}`} className={styles.matchDetailRow}>
                 <span className={styles.matchDetailLabel}>Mecz {i + 1}</span>
                 <select
                   className={styles.select}
@@ -2630,20 +2811,15 @@ export default function TrainingMicrocycleTab({
             {!secondMatch && (
               <div className={styles.matchDetailRow}>
                 <span className={styles.matchDetailLabel}>Mecz 2</span>
-                <select
-                  className={styles.select}
-                  value=""
-                  onChange={(e) => setSecondMatchDay(e.target.value)}
-                  aria-label="Dodaj drugi mecz w tygodniu"
+                <button
+                  type="button"
+                  className={styles.addBtn}
+                  onClick={() => setSecondMatchDay(String(pickSecondMatchDay(firstMatchDay)))}
                   disabled={!activeMicrocycleId}
+                  aria-label="Dodaj drugi mecz w tygodniu"
                 >
-                  <option value="">Brak drugiego meczu</option>
-                  {["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"].map((label, idx) => (
-                    <option key={`add-2-${label}`} value={idx} disabled={idx === firstMatchDay}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                  + Dodaj drugi mecz
+                </button>
               </div>
             )}
           </div>
@@ -2657,7 +2833,11 @@ export default function TrainingMicrocycleTab({
               className={styles.lnpUrlInput}
               placeholder="https://www.laczynaspilka.pl/rozgrywki/druzyna/…?tab=tab-mecz"
               value={lnpTeamUrl}
-              onChange={(e) => setLnpTeamUrl(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setLnpTeamUrl(v);
+                if (selectedTeam) writeStoredLnpTeamUrl(selectedTeam, v);
+              }}
               aria-label="Link do drużyny Łączy Nas Piłka"
               disabled={fixturesLoading}
             />
@@ -2751,6 +2931,7 @@ export default function TrainingMicrocycleTab({
             watchFixtures={watchFixtures}
             watchTeamId={watchFixturesTeamId}
             watchTeamName={watchFixturesTeamName}
+            microcycles={seasonMicrocycles}
             onSelectWeek={selectWeekFromCalendar}
           />
         </div>
@@ -2877,11 +3058,26 @@ export default function TrainingMicrocycleTab({
                     dayIndex
                   )
                 : [];
+              const dayProtocols = activeMicrocycleId
+                ? matchProtocolsForDay(
+                    microcycleState.matchProtocols,
+                    activeMicrocycleId,
+                    dayIndex
+                  )
+                : [];
               const dayBlocks = blocksForDay(activeBlocks, dayIndex);
               const dayLoad = weekLoads[dayIndex];
               const tasksDone = dayProceduralTasks.filter((t) => t.done).length;
+              const protocolProgress = dayProtocols.reduce(
+                (acc, p) => {
+                  const c = protocolDoneCounts(p);
+                  return { done: acc.done + c.done, total: acc.total + c.total };
+                },
+                { done: 0, total: 0 }
+              );
               const zadaniaOpen =
-                sectionPrefs.zadania ?? dayProceduralTasks.length > 0;
+                sectionPrefs.zadania ??
+                (dayProceduralTasks.length > 0 || dayProtocols.length > 0);
               const treningOpen = sectionPrefs.trening ?? viewDays !== 7;
               const celeOpen = sectionPrefs.cele ?? true;
               const weekDayLabels = Array.from({ length: 7 }, (_, i) => weekdayShortPl(i));
@@ -2889,6 +3085,10 @@ export default function TrainingMicrocycleTab({
                 (i) => !matchDays.includes(i) && isRestDay(activeMicrocycle?.restDays, i)
               );
               const isRest = !isMatchDay && isRestDay(activeMicrocycle?.restDays, dayIndex);
+              const canMoveDay =
+                !!activeMicrocycleId &&
+                !isRest &&
+                dayHasMovableContent(microcycleState, activeMicrocycleId, dayIndex);
               const sessionMinutes = dayBlocks.reduce(
                 (sum, b) => sum + (Number.isFinite(b.minutes) ? b.minutes : 0),
                 0
@@ -2899,8 +3099,8 @@ export default function TrainingMicrocycleTab({
                   : "—";
               const matchVenue = matchesOnDay[0]?.venue ?? null;
               const zadaniaBadge =
-                dayProceduralTasks.length > 0
-                  ? `${tasksDone}/${dayProceduralTasks.length}`
+                dayProceduralTasks.length + protocolProgress.total > 0
+                  ? `${tasksDone + protocolProgress.done}/${dayProceduralTasks.length + protocolProgress.total}`
                   : "0";
               const endFromBlocks =
                 sessionMinutes > 0
@@ -3005,6 +3205,35 @@ export default function TrainingMicrocycleTab({
                           </span>
                         )}
                       </div>
+                    )}
+                    {canMoveDay && (
+                      <label className={styles.dayMoveLabel} onMouseDown={stopHeaderInputPropagation}>
+                        <span className={styles.srOnly}>
+                          Przenieś cały dzień {weekdayShortPl(dayIndex)} na inny dzień
+                        </span>
+                        <select
+                          className={styles.dayMoveSelect}
+                          value=""
+                          aria-label={`Przenieś ${weekdayShortPl(dayIndex)} na inny dzień`}
+                          title="Przenieś zadania, trening i cele na inny dzień"
+                          onClick={stopHeaderInputPropagation}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw === "") return;
+                            moveDayToDay(dayIndex, Number(raw));
+                            e.target.value = "";
+                          }}
+                        >
+                          <option value="">Przenieś dzień…</option>
+                          {weekDayLabels.map((label, di) =>
+                            di === dayIndex || restDayIndexes.includes(di) ? null : (
+                              <option key={di} value={di}>
+                                {label}
+                              </option>
+                            )
+                          )}
+                        </select>
+                      </label>
                     )}
                   </div>
 
@@ -3112,10 +3341,28 @@ export default function TrainingMicrocycleTab({
                       badge={zadaniaBadge}
                       open={zadaniaOpen}
                       onToggle={() => setSectionOpen("zadania", !zadaniaOpen)}
-                      dayLabels={weekDayLabels}
-                      blockedDayIndexes={restDayIndexes}
-                      onMoveSectionToDay={(to) => moveSectionToDay("zadania", dayIndex, to)}
                     >
+                      {dayProtocols.map((protocol) => {
+                        const match = matches[protocol.matchIndex] ?? matchesOnDay[0];
+                        const kickoff = match?.kickoffTime || "18:00";
+                        const counts = protocolDoneCounts(protocol);
+                        const range = match ? protocolTimeRangeLabel(protocol, kickoff) : "";
+                        return (
+                          <button
+                            key={protocol.id}
+                            type="button"
+                            className={protocolStyles.card}
+                            onClick={() => setOpenProtocolId(protocol.id)}
+                            aria-label={`${protocol.title}, ${counts.done} z ${counts.total}${range ? `, ${range}` : ""}`}
+                          >
+                            <span className={protocolStyles.cardTitle}>{protocol.title}</span>
+                            <span className={protocolStyles.cardMeta}>
+                              {counts.done}/{counts.total}
+                              {range ? ` · ${range}` : ""}
+                            </span>
+                          </button>
+                        );
+                      })}
                       {dayProceduralTasks.length > 0 ? (
                         <ul
                           className={styles.proceduralDayList}
@@ -3162,9 +3409,10 @@ export default function TrainingMicrocycleTab({
                             );
                           })}
                         </ul>
-                      ) : (
+                      ) : null}
+                      {dayProtocols.length === 0 && dayProceduralTasks.length === 0 ? (
                         <p className={styles.daySectionHint}>Brak zadań procesowych</p>
-                      )}
+                      ) : null}
                     </DayColumnSection>
 
                     <DayColumnSection
@@ -3175,9 +3423,6 @@ export default function TrainingMicrocycleTab({
                       open={treningOpen}
                       onToggle={() => setSectionOpen("trening", !treningOpen)}
                       keepBodyVisible
-                      dayLabels={weekDayLabels}
-                      blockedDayIndexes={restDayIndexes}
-                      onMoveSectionToDay={(to) => moveSectionToDay("trening", dayIndex, to)}
                       dropActive={
                         dragOverTrainingDay === dayIndex &&
                         (dragBlockId != null || dragDaySessionTemplateId != null)
@@ -3228,7 +3473,6 @@ export default function TrainingMicrocycleTab({
                           onDeleteBlock={deleteBlock}
                           onMoveBlock={moveBlock}
                           onMoveBlockToDay={moveBlockBetweenDays}
-                          onMoveLoadToDay={(from, to) => moveSectionToDay("obciazenie", from, to)}
                           onBlockDragStart={handleDragStartTrainingBlock}
                           onBlockDragEnd={handleDragEnd}
                         />
@@ -3244,9 +3488,6 @@ export default function TrainingMicrocycleTab({
                       badge={String(list.length)}
                       open={celeOpen}
                       onToggle={() => setSectionOpen("cele", !celeOpen)}
-                      dayLabels={weekDayLabels}
-                      blockedDayIndexes={restDayIndexes}
-                      onMoveSectionToDay={(to) => moveSectionToDay("cele", dayIndex, to)}
                     >
                       <div
                         className={styles.dayBody}
@@ -3397,8 +3638,8 @@ export default function TrainingMicrocycleTab({
         >
         <p className={styles.libraryHint}>
           Niebieskie = zasady, zielone = sub-zasady, fioletowe = sub-sub-zasady. Filtr fazy pokazuje
-          elementy z drzewa modelu drużyny. Przeciągnij na dzień — z potomkami z modelu. Licznik =
-          ile razy trenowano.
+          elementy z drzewa modelu drużyny. Dodaj na dzień przyciskiem Pn–Nd albo przeciągnij — z
+          potomkami z modelu, bez powtórek na tym samym dniu. Licznik = ile razy trenowano.
         </p>
         <div className={styles.phaseFilter} role="toolbar" aria-label="Filtr fazy modelu">
           {(
@@ -3450,13 +3691,17 @@ export default function TrainingMicrocycleTab({
                     return (
                       <div
                         key={tpl.id}
-                        className={`${styles.templateChip} ${dragTemplateId === tpl.id ? styles.templateChipDragging : ""} ${isCascadeRoot ? styles.templateChipHovered : ""} ${isCascadeChild ? styles.templateChipCascade : ""}`}
+                        className={`${styles.templateChipWrap} ${isCascadeRoot ? styles.templateChipHovered : ""} ${isCascadeChild ? styles.templateChipCascade : ""}`}
                         data-level={level}
-                        draggable
                         onMouseEnter={() => setCascadeHoverRootId(tpl.id)}
-                        onDragStart={(e) => handleDragStartTemplate(e, tpl.id)}
-                        onDragEnd={handleDragEnd}
                       >
+                        <div
+                          className={`${styles.templateChip} ${dragTemplateId === tpl.id ? styles.templateChipDragging : ""}`}
+                          data-level={level}
+                          draggable
+                          onDragStart={(e) => handleDragStartTemplate(e, tpl.id)}
+                          onDragEnd={handleDragEnd}
+                        >
                         <div className={styles.chipTop}>
                           <span className={styles.chipTitle}>{tpl.title}</span>
                           <span
@@ -3498,6 +3743,14 @@ export default function TrainingMicrocycleTab({
                           </p>
                         )}
                       </div>
+                        <LibraryAddToDayBar
+                          templateTitle={tpl.title}
+                          dayLabels={libraryDayLabels}
+                          blockedDays={libraryBlockedDays}
+                          disabled={!activeMicrocycleId}
+                          onAdd={(dayIndex) => assignGameModelToDay(tpl.id, dayIndex)}
+                        />
+                      </div>
                     );
                   })}
                 </div>
@@ -3538,6 +3791,7 @@ export default function TrainingMicrocycleTab({
             <span className={styles.dayTitlesToggleTitle}>Zadania procesowe</span>
             <span className={styles.dayTitlesCountBadge}>
               {proceduralTemplates.length}
+              {matchProtocol ? " · protokół" : ""}
               {proceduralAssignedCount > 0 ? ` · ${proceduralAssignedCount} MD` : ""}
               {coaches.length > 0 ? ` · ${coaches.length} tren.` : ""}
             </span>
@@ -3627,9 +3881,47 @@ export default function TrainingMicrocycleTab({
               </button>
             </div>
           </div>
+          {matchProtocol ? (
+            <div className={protocolStyles.libraryCard}>
+              <div className={protocolStyles.libraryCardText}>
+                <p className={protocolStyles.libraryCardTitle}>{matchProtocol.title}</p>
+                <p className={protocolStyles.libraryCardMeta}>
+                  {matchProtocol.subtasks.length} podzadań · czasy od godziny meczu
+                </p>
+              </div>
+              <div className={protocolStyles.libraryActions}>
+                <button
+                  type="button"
+                  className={styles.smallBtn}
+                  onClick={() => setProtocolEditorOpen(true)}
+                >
+                  Edytuj protokół
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className={protocolStyles.libraryCard}>
+              <div className={protocolStyles.libraryCardText}>
+                <p className={protocolStyles.libraryCardTitle}>Protokół meczowy</p>
+                <p className={protocolStyles.libraryCardMeta}>
+                  Jedno zadanie z podzadaniami — godziny liczone od kickoffu.
+                </p>
+              </div>
+              <div className={protocolStyles.libraryActions}>
+                <button
+                  type="button"
+                  className={styles.addBtn}
+                  onClick={() => setProtocolEditorOpen(true)}
+                >
+                  Dodaj protokół
+                </button>
+              </div>
+            </div>
+          )}
           <p className={styles.proceduralHint}>
-            Przypisz zadania do MD i trenera (lista lub przeciągnięcie na dzień). Nowe mikrocykle
-            dostaną je automatycznie.
+            Przypisz zadania do MD i trenera (lista lub przeciągnięcie na dzień). Protokół meczowy
+            to osobne zadanie z podzadaniami — godziny liczone od kickoffu. Nowe mikrocykle dostaną
+            je automatycznie.
           </p>
           <div className={styles.proceduralTemplateTable} role="list">
             {proceduralTemplates.length === 0 && (
@@ -3750,6 +4042,41 @@ export default function TrainingMicrocycleTab({
 
       <MicrocycleMethodologyPanel />
       </>
+      )}
+      {protocolEditorOpen && (
+        <MatchProtocolEditorModal
+          initial={matchProtocol}
+          coaches={coaches}
+          onSave={saveMatchProtocol}
+          onDelete={matchProtocol ? deleteMatchProtocol : undefined}
+          onClose={() => setProtocolEditorOpen(false)}
+        />
+      )}
+      {openProtocolInstance && (
+        <MatchProtocolTimelineModal
+          protocol={openProtocolInstance}
+          match={
+            matches[openProtocolInstance.matchIndex] ??
+            matches.find((m) => m.dayIndex === openProtocolInstance.dayIndex) ??
+            firstMatch
+          }
+          matchDateIso={
+            isoDateFromWeekAndDayIndex(weekStartIso, openProtocolInstance.dayIndex) ?? weekStartIso
+          }
+          matchDateLabel={
+            weekDates[openProtocolInstance.dayIndex]
+              ? weekDates[openProtocolInstance.dayIndex].toLocaleDateString("pl-PL", {
+                  day: "numeric",
+                  month: "numeric",
+                })
+              : ""
+          }
+          coaches={coaches}
+          onToggleSubtask={(subtaskId) =>
+            toggleProtocolSubtask(openProtocolInstance.id, subtaskId)
+          }
+          onClose={() => setOpenProtocolId(null)}
+        />
       )}
     </div>
   );

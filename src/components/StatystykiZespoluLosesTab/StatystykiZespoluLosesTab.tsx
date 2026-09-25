@@ -167,8 +167,7 @@ export default function StatystykiZespoluLosesTab({
     setHasVideoPanel(true);
     setIsVideoPanelOpen(true);
     setVideoSeekRequestId((id) => id + 1);
-    setVideoSeekTargetSeconds(null);
-    window.requestAnimationFrame(() => setVideoSeekTargetSeconds(videoSec));
+    setVideoSeekTargetSeconds(videoSec);
     return true;
   }, [matchInfo]);
 

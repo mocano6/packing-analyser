@@ -72,6 +72,156 @@ export function applyTrainingCountDelta(
   return { ...counts, [templateId]: next };
 }
 
+function assignmentDayKey(
+  assignment: Pick<MicrocycleDayAssignment, "microcycleId" | "dayIndex" | "templateId">
+): string {
+  return `${assignment.microcycleId}|${assignment.dayIndex}|${assignment.templateId}`;
+}
+
+/**
+ * Na jednym dniu mikrocyklu każda zasada / sub-zasada / sub-sub-zasada tylko raz
+ * (współdzielone potomki z kilku rodziców nie dublują się na kafelku).
+ */
+export function uniqueAssignmentsPerDay(
+  assignments: MicrocycleDayAssignment[]
+): MicrocycleDayAssignment[] {
+  const seen = new Set<string>();
+  const out: MicrocycleDayAssignment[] = [];
+  for (const assignment of assignments) {
+    const key = assignment.templateId
+      ? assignmentDayKey(assignment)
+      : `id:${assignment.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(assignment);
+  }
+  return out;
+}
+
+export function uniqueAssignmentsPerDayAdjustingCounts(
+  assignments: MicrocycleDayAssignment[],
+  trainingCounts: Record<string, number>
+): { assignments: MicrocycleDayAssignment[]; trainingCounts: Record<string, number> } {
+  const unique = uniqueAssignmentsPerDay(assignments);
+  if (unique.length === assignments.length) {
+    return { assignments: unique, trainingCounts };
+  }
+  const keptIds = new Set(unique.map((a) => a.id));
+  let counts = trainingCounts;
+  for (const assignment of assignments) {
+    if (keptIds.has(assignment.id)) continue;
+    counts = applyTrainingCountDelta(counts, assignment.templateId, -1);
+  }
+  return { assignments: unique, trainingCounts: counts };
+}
+
+export function templateIdsOnMicrocycleDay(
+  assignments: MicrocycleDayAssignment[],
+  microcycleId: string,
+  dayIndex: number
+): Set<string> {
+  const ids = new Set<string>();
+  for (const assignment of assignments) {
+    if (assignment.microcycleId !== microcycleId || assignment.dayIndex !== dayIndex) continue;
+    if (assignment.templateId) ids.add(assignment.templateId);
+  }
+  return ids;
+}
+
+/** Przenosi cel na inny dzień; jeśli ta zasada już tam jest — zostaje jedna kopia. */
+export function moveAssignmentToDay(
+  state: TrainingMicrocycleState,
+  assignmentId: string,
+  dayIndex: number
+): TrainingMicrocycleState {
+  const moving = state.assignments.find((a) => a.id === assignmentId);
+  if (!moving || moving.dayIndex === dayIndex) return state;
+  const clash = state.assignments.some(
+    (a) =>
+      a.id !== moving.id &&
+      a.microcycleId === moving.microcycleId &&
+      a.dayIndex === dayIndex &&
+      a.templateId === moving.templateId
+  );
+  if (clash) {
+    return {
+      ...state,
+      assignments: state.assignments.filter((a) => a.id !== moving.id),
+      trainingCounts: applyTrainingCountDelta(state.trainingCounts, moving.templateId, -1),
+    };
+  }
+  return {
+    ...state,
+    assignments: state.assignments.map((a) =>
+      a.id === assignmentId ? { ...a, dayIndex } : a
+    ),
+  };
+}
+
+export function removeTemplateFromMicrocycleDay(
+  state: TrainingMicrocycleState,
+  assignmentId: string
+): TrainingMicrocycleState {
+  const target = state.assignments.find((a) => a.id === assignmentId);
+  if (!target) return state;
+  const toRemove = state.assignments.filter(
+    (a) =>
+      a.microcycleId === target.microcycleId &&
+      a.dayIndex === target.dayIndex &&
+      a.templateId === target.templateId
+  );
+  if (toRemove.length === 0) return state;
+  const removeIds = new Set(toRemove.map((a) => a.id));
+  let trainingCounts = state.trainingCounts;
+  for (const assignment of toRemove) {
+    trainingCounts = applyTrainingCountDelta(trainingCounts, assignment.templateId, -1);
+  }
+  return {
+    ...state,
+    assignments: state.assignments.filter((a) => !removeIds.has(a.id)),
+    trainingCounts,
+  };
+}
+
+export function assignTemplatesToMicrocycleDay(
+  state: TrainingMicrocycleState,
+  params: {
+    microcycleId: string;
+    dayIndex: number;
+    templates: Array<{ id: string; title: string; level: MicrocycleDayAssignment["level"] }>;
+    generateId?: () => string;
+  }
+): TrainingMicrocycleState {
+  const { microcycleId, dayIndex, templates, generateId = generateMicrocycleId } = params;
+  if (templates.length === 0) return state;
+  const already = templateIdsOnMicrocycleDay(state.assignments, microcycleId, dayIndex);
+  const seenIncoming = new Set<string>();
+  const toAdd: typeof templates = [];
+  for (const tpl of templates) {
+    if (!tpl.id || seenIncoming.has(tpl.id) || already.has(tpl.id)) continue;
+    seenIncoming.add(tpl.id);
+    toAdd.push(tpl);
+  }
+  if (toAdd.length === 0) return state;
+  const newAssignments: MicrocycleDayAssignment[] = toAdd.map((tpl) => ({
+    id: generateId(),
+    microcycleId,
+    dayIndex,
+    templateId: tpl.id,
+    title: tpl.title,
+    level: tpl.level,
+  }));
+  let trainingCounts = state.trainingCounts;
+  for (const tpl of toAdd) {
+    trainingCounts = applyTrainingCountDelta(trainingCounts, tpl.id, 1);
+  }
+  return {
+    ...state,
+    assignments: [...state.assignments, ...newAssignments],
+    trainingCounts,
+  };
+}
+
 export function assignmentsForMicrocycle(
   assignments: MicrocycleDayAssignment[],
   microcycleId: string
@@ -113,6 +263,7 @@ export function createDefaultTrainingMicrocycleState(now = new Date()): Training
     assignments: [],
     dayPlans: [],
     proceduralTasks: [],
+    matchProtocols: [],
     exercises: [],
     trainingCounts: {},
     activeSeasonId: seasonId,

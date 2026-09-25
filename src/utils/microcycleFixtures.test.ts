@@ -1,5 +1,5 @@
 import assert from "assert";
-import { parseLaczyTeamIdFromUrl, buildLaczyTeamPageUrl, parseLaczyMatchIdFromUrl } from "./laczyTeamUrl";
+import { parseLaczyTeamIdFromUrl, buildLaczyTeamPageUrl, parseLaczyMatchIdFromUrl, resolveLnpTeamPageUrl } from "./laczyTeamUrl";
 import {
   applyFixtureToActiveMicrocycle,
   applyFixturesInWeekToMicrocycle,
@@ -11,6 +11,8 @@ import {
   fixtureToMicrocycleMatch,
   fixturesInWeekByDay,
   groupFixturesByIsoDate,
+  groupManualCalendarChipsByIsoDate,
+  isoDateFromWeekAndDayIndex,
   inferCompetitionFromPlayName,
   isIsoInWeek,
   isFixtureHomeForTeam,
@@ -51,6 +53,29 @@ assert.ok(
   buildLaczyTeamPageUrl("4b125148-f622-4b9c-88f9-4a83fd8b7b3b").includes(
     "/druzyna/4b125148-f622-4b9c-88f9-4a83fd8b7b3b"
   )
+);
+assert.equal(
+  resolveLnpTeamPageUrl({
+    lnpTeamUrl: "https://www.laczynaspilka.pl/rozgrywki/druzyna/4b125148-f622-4b9c-88f9-4a83fd8b7b3b?tab=tab-mecz",
+    lnpTeamId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  }),
+  "https://www.laczynaspilka.pl/rozgrywki/druzyna/4b125148-f622-4b9c-88f9-4a83fd8b7b3b?tab=tab-mecz"
+);
+assert.equal(
+  resolveLnpTeamPageUrl({
+    lnpTeamUrl: "https://www.laczynaspilka.pl/rozgrywki/druzyna/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee?tab=tab-mecz",
+    storedUrl:
+      "https://www.laczynaspilka.pl/rozgrywki/druzyna/4b125148-f622-4b9c-88f9-4a83fd8b7b3b?tab=tab-mecz",
+  }),
+  "https://www.laczynaspilka.pl/rozgrywki/druzyna/4b125148-f622-4b9c-88f9-4a83fd8b7b3b?tab=tab-mecz",
+  "pole Mikrocyklu (storage) wygrywa ze starym URL w stanie"
+);
+assert.equal(
+  resolveLnpTeamPageUrl({
+    lnpTeamUrl: "https://www.laczynaspilka.pl/rozgrywki/druzyna/4b125148-f622-4b9c-88f9-4a83fd8b7b3b?tab=tab-mecz",
+    storedUrl: "",
+  }),
+  "https://www.laczynaspilka.pl/rozgrywki/druzyna/4b125148-f622-4b9c-88f9-4a83fd8b7b3b?tab=tab-mecz"
 );
 
 assert.equal(inferCompetitionFromPlayName("Puchar Polski"), "cup");
@@ -212,6 +237,45 @@ assert.equal(away.opponent, "Rywale FC");
 }
 
 {
+  const now = new Date("2026-09-15T12:00:00");
+  const wasUpcoming: LaczyTeamFixture = {
+    ...fixture,
+    matchId: "just-played",
+    dateTime: "2026-09-15T17:00:00",
+    state: "Planowany",
+    scoreFinal: null,
+  };
+  const nowPlayed: LaczyTeamFixture = {
+    ...wasUpcoming,
+    dateTime: "2026-09-13T15:00:00",
+    state: "Rozegrany",
+    scoreFinal: "2:1",
+    guestName: "Nowy rywal",
+  };
+  const promoted = mergeLaczyFixtures([wasUpcoming], [nowPlayed], now);
+  assert.equal(promoted.find((m) => m.matchId === "just-played")?.scoreFinal, "2:1");
+  assert.equal(promoted.find((m) => m.matchId === "just-played")?.dateTime, "2026-09-13T15:00:00");
+}
+
+{
+  const now = new Date("2026-09-15T12:00:00");
+  const stalePast: LaczyTeamFixture = {
+    ...fixture,
+    matchId: "stale-past",
+    dateTime: "2026-09-13T15:00:00",
+    state: "Planowany",
+    scoreFinal: null,
+  };
+  const nowPlayed: LaczyTeamFixture = {
+    ...stalePast,
+    state: "Rozegrany",
+    scoreFinal: "2:1",
+  };
+  const refreshed = mergeLaczyFixtures([stalePast], [nowPlayed], now);
+  assert.equal(refreshed.find((m) => m.matchId === "stale-past")?.scoreFinal, "2:1");
+}
+
+{
   // Pierwsze pobranie — bierz wszystko
   const now = new Date("2026-07-01T12:00:00");
   const all = mergeLaczyFixtures(
@@ -312,6 +376,46 @@ assert.equal(away.opponent, "Rywale FC");
 }
 
 {
+  // Ręczny drugi mecz (środa) nie znika, gdy ŁNP ma tylko sobotę
+  const stateTwo = createDefaultTrainingMicrocycleState(new Date("2026-07-13T12:00:00"));
+  const mcTwo = {
+    ...stateTwo.microcycles[0],
+    weekStartIso: "2026-07-20",
+    matches: [
+      {
+        dayIndex: 5,
+        kickoffTime: "18:00",
+        opponent: "",
+        venue: "home" as const,
+        departureTime: "",
+        competition: "league" as const,
+        venueAddress: "",
+        surface: null,
+        weatherCondition: "rain" as const,
+        weatherTempC: 12,
+      },
+      {
+        dayIndex: 2,
+        kickoffTime: "18:00",
+        opponent: "Puchar",
+        venue: "home" as const,
+        departureTime: "",
+        competition: "cup" as const,
+        venueAddress: "",
+        surface: null,
+        weatherCondition: null,
+        weatherTempC: null,
+      },
+    ],
+  };
+  const kept = applyFixturesInWeekToMicrocycle(mcTwo, [fixture], "our-team");
+  assert.equal(kept.matches.length, 2);
+  assert.equal(kept.matches[0].opponent, "Rywale FC");
+  assert.equal(kept.matches[1].dayIndex, 2);
+  assert.equal(kept.matches[1].opponent, "Puchar");
+}
+
+{
   const state = createDefaultTrainingMicrocycleState(new Date("2026-07-13T12:00:00"));
   state.microcycles[0] = { ...state.microcycles[0], weekStartIso: "2026-07-20" };
   const otherId = generateMicrocycleId();
@@ -357,6 +461,68 @@ assert.equal(away.opponent, "Rywale FC");
   assert.equal(mc.weekStartIso, "2026-07-20");
   assert.equal(mc.matches[0].opponent, "Rywale FC");
   assert.equal(mc.matches[0].dayIndex, 5);
+}
+
+{
+  assert.equal(isoDateFromWeekAndDayIndex("2026-08-24", 0), "2026-08-24");
+  assert.equal(isoDateFromWeekAndDayIndex("2026-08-24", 2), "2026-08-26");
+  assert.equal(isoDateFromWeekAndDayIndex("2026-08-24", 5), "2026-08-29");
+  assert.equal(isoDateFromWeekAndDayIndex("2026-08-24", 7), null);
+  assert.equal(isoDateFromWeekAndDayIndex("", 2), null);
+}
+
+{
+  const emptySat = {
+    weekStartIso: "2026-08-24",
+    matches: [
+      {
+        dayIndex: 5,
+        kickoffTime: "18:00",
+        opponent: "",
+        venue: "home" as const,
+        departureTime: "",
+        competition: "league" as const,
+        venueAddress: "",
+        surface: null,
+        weatherCondition: null,
+        weatherTempC: null,
+      },
+    ],
+  };
+  const placeholder = groupManualCalendarChipsByIsoDate([emptySat], new Set());
+  assert.equal(placeholder.size, 0, "pusty sobotni placeholder nie idzie na kalendarz");
+
+  const withOpponent = {
+    ...emptySat,
+    matches: [{ ...emptySat.matches[0], opponent: "MKS Polonia" }],
+  };
+  const shown = groupManualCalendarChipsByIsoDate([withOpponent], new Set());
+  assert.equal(shown.get("2026-08-29")?.[0]?.opponent, "MKS Polonia");
+
+  const occupied = groupManualCalendarChipsByIsoDate(
+    [withOpponent],
+    new Set(["2026-08-29"])
+  );
+  assert.equal(occupied.size, 0, "dzień z meczem ŁNP bez duplikatu ręcznego");
+
+  const twoMatches = {
+    weekStartIso: "2026-08-24",
+    matches: [
+      { ...emptySat.matches[0], opponent: "MKS Polonia" },
+      {
+        ...emptySat.matches[0],
+        dayIndex: 2,
+        opponent: "",
+        venue: "away" as const,
+      },
+    ],
+  };
+  const extra = groupManualCalendarChipsByIsoDate([twoMatches], new Set(["2026-08-29"]));
+  assert.equal(extra.size, 1);
+  const wed = extra.get("2026-08-26")?.[0];
+  assert.equal(wed?.isHome, false);
+  assert.equal(wed?.opponent, "Mecz");
+  assert.equal(wed?.venueShort, "W");
 }
 
 console.log("laczyTeamUrl + microcycleFixtures tests: OK");

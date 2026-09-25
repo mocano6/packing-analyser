@@ -84,4 +84,5 @@ public/workbox-*.js
 
 # Scouting (lokalny profil przeglądarki i dane — nie commitować)
 .scouting-profile/
+.scouting-auth-dead-at
 .scouting-data/

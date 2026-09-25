@@ -1,6 +1,7 @@
 import { Action, PKEntry, Shot, TeamInfo } from "@/types";
 import { zoneNameToIndex } from "../constants/xtValues";
 import { isIn1TZoneCanonical } from "./pitchZones";
+import { isOneContactIn1TZone } from "./shotZone1TContacts";
 import { calculateXgOutcomeProjection } from "./xgOutcomeProjection";
 
 export type TrendyKpiDirection = "higher" | "lower";
@@ -419,8 +420,8 @@ const get8sAccPct = (match: TeamInfo): number => {
 const getOneTouchPct = (match: TeamInfo): number => {
   const shots = getTeamShots(match).filter((shot) => isIn1TZoneCanonical(shot));
   if (shots.length === 0) return 0;
-  // spójnie z logiką ze "Statystyki zespołu": liczymy tylko gdy isContact1 === true
-  const oneTouchShots = shots.filter((shot) => shot.isContact1 === true).length;
+  // Jeden kontakt w strefie 1T. Stare strzały bez nowego oznaczenia zostają na isContact1.
+  const oneTouchShots = shots.filter((shot) => isOneContactIn1TZone(shot)).length;
   return (oneTouchShots / shots.length) * 100;
 };
 

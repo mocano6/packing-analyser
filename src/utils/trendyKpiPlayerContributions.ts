@@ -4,6 +4,7 @@
 
 import type { Acc8sEntry, Action, PKEntry, Shot, TeamInfo } from "@/types";
 import { isIn1TZoneCanonical } from "./pitchZones";
+import { isOneContactIn1TZone } from "./shotZone1TContacts";
 import { isLoseInPmAreaZone, isRegainInOpponentHalfZone } from "./trendyKpis";
 
 const toNumber = (value: unknown): number => {
@@ -373,7 +374,7 @@ export function getTrendyKpiPlayerContributions(
         const shots = (match.shots ?? []).filter(isAttackShot).filter((shot) => isIn1TZoneCanonical(shot));
         for (const shot of shots) {
           addCount(eligibleMap, shot.playerId, 1);
-          if (shot.isContact1 === true) addCount(oneTouchMap, shot.playerId, 1);
+          if (isOneContactIn1TZone(shot)) addCount(oneTouchMap, shot.playerId, 1);
         }
       }
       let totalEligible = 0;

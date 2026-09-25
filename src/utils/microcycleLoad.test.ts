@@ -52,6 +52,20 @@ assert.equal(matchDay.dominant, "match");
 assert.equal(matchDay.isMatchDay, true);
 assert.equal(matchDay.targets.totalDistancePct, 100);
 
+// Drugi mecz w środę nie zmienia głównego MD (sobota = Mecz 1)
+{
+  const two = microcycle({
+    matches: [
+      { ...createDefaultMicrocycleMatch(5), opponent: "Legia" },
+      createDefaultMicrocycleMatch(2),
+    ],
+  });
+  assert.equal(primaryMatchDayIndex(two), 5);
+  assert.equal(resolveDayLoad(two, 0).offset, -5);
+  assert.equal(resolveDayLoad(two, 2).isMatchDay, true);
+  assert.equal(resolveDayLoad(two, 5).isMatchDay, true);
+}
+
 // Nadpisanie dominanty i pojedynczego celu
 const overridden = microcycle({
   dayLoads: [{ dayIndex: 1, dominant: "velocity", targets: { srpe: 400 } }],

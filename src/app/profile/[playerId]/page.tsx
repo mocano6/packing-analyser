@@ -18,6 +18,7 @@ import {
 } from "@/lib/matchDocumentCache";
 import Link from "next/link";
 import { buildPlayersIndex, getPlayerLabel } from "@/utils/playerUtils";
+import { zone1TContactLabel } from "@/utils/shotZone1TContacts";
 import { losesAttackZoneRawForMap, regainAttackZoneRawForMap } from "@/utils/kpiRegainLosesZoneRaw";
 import { getVideoTimestampSeconds } from "@/utils/actionVideoSeekSeconds";
 import { hasExternalVideoSource } from "@/utils/externalVideoMatchInfo";
@@ -320,10 +321,7 @@ export default function PlayerDetailsPage() {
       setProfileVideoMatch(match);
       setIsProfileVideoOpen(true);
       setProfileVideoSeekRequestId((id) => id + 1);
-      setProfileVideoSeekTargetSeconds(null);
-      window.requestAnimationFrame(() => {
-        setProfileVideoSeekTargetSeconds(sec);
-      });
+      setProfileVideoSeekTargetSeconds(sec);
     },
     [filteredMatchesBySeason],
   );
@@ -4663,6 +4661,7 @@ export default function PlayerDetailsPage() {
                               }
                               const contacts =
                                 selectedShot.isContact1 ? "1T" : selectedShot.isContact2 ? "2T" : selectedShot.isContact3Plus ? "3T+" : null;
+                              const zoneContacts = zone1TContactLabel(selectedShot);
                               const detailParts = [
                                 `Wynik: ${status}`,
                                 selectedShot.xGOT !== undefined ? `xG OT: ${selectedShot.xGOT.toFixed(2)}` : null,
@@ -4674,6 +4673,7 @@ export default function PlayerDetailsPage() {
                                   : null,
                                 at ? `Typ: ${typeLabel}` : null,
                                 contacts ? `Kontakty: ${contacts}` : null,
+                                zoneContacts ? `W strefie 1T: ${zoneContacts}` : null,
                                 selectedShot.playersOnLine !== undefined
                                   ? `Zawodnicy na linii: ${selectedShot.playersOnLine}`
                                   : null,
@@ -4834,7 +4834,13 @@ export default function PlayerDetailsPage() {
                               pkEntries={pkEntriesFilteredForView}
                               playersIndex={playersIndex}
                               selectedEntryId={undefined}
-                              onEntryClick={(entry) => setSelectedPKEntryIdForView(entry.id)}
+                              onEntryClick={(entry) => {
+                                setSelectedPKEntryIdForView(entry.id);
+                                void seekProfileVideoAtMatchSeconds(
+                                  entry.matchId,
+                                  getVideoTimestampSeconds(entry),
+                                );
+                              }}
                               hideTeamLogos
                               hideFlipButton
                               hideInstructions

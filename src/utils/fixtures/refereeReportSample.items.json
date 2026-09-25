@@ -1,0 +1,2802 @@
+[
+  {
+    "str": "Mazowiecki Związek Piłki Nożnej",
+    "x": 256.95,
+    "y": 58.03,
+    "width": 154.89,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "02-707 Warszawa Puławska 111A 50, tel. 228275874, fax. 228274979",
+    "x": 178.24,
+    "y": 72.21,
+    "width": 312.23,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "e-mail: mazowiecki@zpn.pl",
+    "x": 273.81,
+    "y": 86.38,
+    "width": 121.25,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "SPRAWOZDANIE SĘDZIEGO",
+    "x": 133.63,
+    "y": 130.75,
+    "width": 327.67,
+    "height": 26.81,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Puchar Polski \"DONGFEENG Mazowiecki ZPN - Warszawa\"",
+    "x": 163.5,
+    "y": 174.23,
+    "width": 268.06,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Zawody pomiędzy",
+    "x": 30.36,
+    "y": 206.9,
+    "width": 88.81,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "zespołami:",
+    "x": 30.36,
+    "y": 218.4,
+    "width": 51.64,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "KS Orły Klembów - Świt II Nowy Dwór Mazowiecki",
+    "x": 172.09,
+    "y": 208.51,
+    "width": 222.65,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Stroje (kolor) gospodarze: żółty",
+    "x": 30.36,
+    "y": 231.23,
+    "width": 138.31,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Stroje (kolor) goście: biały",
+    "x": 271.33,
+    "y": 231.23,
+    "width": 114.97,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Miejsce zawodów: Kwiatowa 2 , 05-205 Klembów",
+    "x": 30.36,
+    "y": 245.4,
+    "width": 218.3,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Data zawodów: 2026-09-02   o godz: 18:00",
+    "x": 30.36,
+    "y": 259.58,
+    "width": 191.11,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Sędzia:",
+    "x": 30.36,
+    "y": 273.75,
+    "width": 33.33,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Sędzia - techniczny:",
+    "x": 30.36,
+    "y": 316.27,
+    "width": 89.43,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Sędzia - asystent 2:",
+    "x": 30.36,
+    "y": 302.1,
+    "width": 87.75,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Sędzia - asystent 1:",
+    "x": 30.36,
+    "y": 287.92,
+    "width": 87.75,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "z KS ZPN MAZOWIECKI",
+    "x": 359.18,
+    "y": 273.75,
+    "width": 110.98,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "SOŁOWIŃSKI OLEK",
+    "x": 228.56,
+    "y": 273.75,
+    "width": 92.69,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "z KS",
+    "x": 359.18,
+    "y": 287.92,
+    "width": 23.86,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "z KS",
+    "x": 359.18,
+    "y": 302.1,
+    "width": 23.86,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "z KS",
+    "x": 359.18,
+    "y": 316.27,
+    "width": 23.86,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1 : 3",
+    "x": 265.24,
+    "y": 344.64,
+    "width": 19.43,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "dla Świt II Nowy Dwór Mazowiecki",
+    "x": 359.18,
+    "y": 344.64,
+    "width": 151.6,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Rezultat:",
+    "x": 30.39,
+    "y": 344.64,
+    "width": 39.43,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1 : 1",
+    "x": 265.24,
+    "y": 358.82,
+    "width": 19.43,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Remis",
+    "x": 359.18,
+    "y": 358.82,
+    "width": 28.33,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Rezultat do 1 przerwy:",
+    "x": 30.39,
+    "y": 358.82,
+    "width": 99.42,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Godzina rozpoczęcia zawodów:",
+    "x": 30.36,
+    "y": 373.84,
+    "width": 140.57,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "18:00",
+    "x": 180.62,
+    "y": 373.84,
+    "width": 25.01,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Obsługa medyczna:",
+    "x": 30.39,
+    "y": 330.47,
+    "width": 88.34,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "KAROL KUBUJ",
+    "x": 240.22,
+    "y": 330.47,
+    "width": 69.4,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Pozwolenie nr: KPPE/7W/2025/OSP 35/9",
+    "x": 359.18,
+    "y": 329.67,
+    "width": 183.81,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Doliczony czas gry:",
+    "x": 30.39,
+    "y": 388.0,
+    "width": 86.1,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1 połowa: 0",
+    "x": 121.1,
+    "y": 388.0,
+    "width": 51.11,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "2 połowa: 1",
+    "x": 251.49,
+    "y": 388.0,
+    "width": 51.11,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1 połowa dogrywki:",
+    "x": 121.1,
+    "y": 402.19,
+    "width": 87.77,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "2 połowa dogrywki:",
+    "x": 251.49,
+    "y": 402.19,
+    "width": 87.77,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "2. Adnotacje sędziego",
+    "x": 30.39,
+    "y": 571.3,
+    "width": 104.92,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1. Strzelcy bramek",
+    "x": 30.39,
+    "y": 429.17,
+    "width": 87.76,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Numer",
+    "x": 42.62,
+    "y": 460.87,
+    "width": 29.49,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "zawodnika",
+    "x": 34.85,
+    "y": 471.22,
+    "width": 42.52,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Imię i nazwisko",
+    "x": 125.32,
+    "y": 466.05,
+    "width": 60.98,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Zespół",
+    "x": 282.7,
+    "y": 466.05,
+    "width": 27.0,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Minuta",
+    "x": 378.2,
+    "y": 466.05,
+    "width": 27.0,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Wynik",
+    "x": 432.86,
+    "y": 466.05,
+    "width": 24.49,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Rodzaj strzelonej",
+    "x": 484.65,
+    "y": 445.35,
+    "width": 71.5,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "bramki",
+    "x": 505.67,
+    "y": 455.7,
+    "width": 27.0,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(A - standardowa, B -",
+    "x": 476.66,
+    "y": 466.05,
+    "width": 87.45,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "samobójcza, C - z",
+    "x": 483.17,
+    "y": 476.39,
+    "width": 74.47,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "rzutu karnego)",
+    "x": 490.15,
+    "y": 486.74,
+    "width": 58.01,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "84",
+    "x": 51.11,
+    "y": 501.01,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Grzegorz Przybysz",
+    "x": 85.89,
+    "y": 501.01,
+    "width": 75.99,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "KS Orły Klembów",
+    "x": 229.8,
+    "y": 501.01,
+    "width": 70.46,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "41'",
+    "x": 385.84,
+    "y": 501.01,
+    "width": 11.72,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1 - 0",
+    "x": 436.65,
+    "y": 501.01,
+    "width": 17.99,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "A",
+    "x": 516.17,
+    "y": 501.01,
+    "width": 5.99,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "18",
+    "x": 51.11,
+    "y": 515.18,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Michał Kucharczyk",
+    "x": 85.89,
+    "y": 515.18,
+    "width": 75.0,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Świt II Nowy Dwór Mazowiecki",
+    "x": 229.8,
+    "y": 515.18,
+    "width": 121.94,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "44'",
+    "x": 385.84,
+    "y": 515.18,
+    "width": 11.72,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1 - 1",
+    "x": 436.65,
+    "y": 515.18,
+    "width": 17.99,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "A",
+    "x": 516.17,
+    "y": 515.18,
+    "width": 5.99,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "18",
+    "x": 51.11,
+    "y": 529.36,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Michał Kucharczyk",
+    "x": 85.89,
+    "y": 529.36,
+    "width": 75.0,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Świt II Nowy Dwór Mazowiecki",
+    "x": 229.8,
+    "y": 529.36,
+    "width": 121.94,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "70'",
+    "x": 385.84,
+    "y": 529.36,
+    "width": 11.72,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1 - 2",
+    "x": 436.65,
+    "y": 529.36,
+    "width": 17.99,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "C",
+    "x": 515.92,
+    "y": 529.36,
+    "width": 6.5,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "2",
+    "x": 53.62,
+    "y": 543.53,
+    "width": 5.0,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "DAWID DUCZMAN",
+    "x": 85.89,
+    "y": 543.53,
+    "width": 77.44,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Świt II Nowy Dwór Mazowiecki",
+    "x": 229.8,
+    "y": 543.53,
+    "width": 121.94,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "83'",
+    "x": 385.84,
+    "y": 543.53,
+    "width": 11.72,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1 - 3",
+    "x": 436.65,
+    "y": 543.53,
+    "width": 17.99,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "A",
+    "x": 516.17,
+    "y": 543.53,
+    "width": 5.99,
+    "height": 10.05,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1",
+    "x": 502.64,
+    "y": 29.69,
+    "width": 5.56,
+    "height": 11.17,
+    "page": 1,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Oznaczenie czasu:",
+    "x": 30.36,
+    "y": 43.86,
+    "width": 88.86,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1' (1 połowa pomiędzy 0-1 min.)",
+    "x": 30.36,
+    "y": 58.03,
+    "width": 141.33,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "45' (1 połowa)",
+    "x": 30.36,
+    "y": 72.19,
+    "width": 62.46,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "45' + 1 (doliczony czas w 1 połowie = 45-46 min.)",
+    "x": 30.36,
+    "y": 86.38,
+    "width": 217.97,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "46' (2 połowa, pierwsza minuta)",
+    "x": 285.48,
+    "y": 58.03,
+    "width": 140.22,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "90' (2 połowa pomiędzy 89-90 min.)",
+    "x": 285.48,
+    "y": 72.19,
+    "width": 158.01,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "90' + 2 (doliczony czas w 2 połowie = 91-92 min.)",
+    "x": 285.48,
+    "y": 86.38,
+    "width": 217.97,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "91' (dogrywka, 1 połowa, pierwsza minuta)",
+    "x": 285.48,
+    "y": 100.55,
+    "width": 188.55,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "4. Wykluczenia",
+    "x": 30.36,
+    "y": 297.5,
+    "width": 71.07,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Numer",
+    "x": 38.58,
+    "y": 310.34,
+    "width": 29.49,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "zawodnika",
+    "x": 30.81,
+    "y": 320.69,
+    "width": 42.52,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Imię i nazwisko",
+    "x": 100.72,
+    "y": 315.51,
+    "width": 60.98,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Zespół",
+    "x": 227.07,
+    "y": 315.51,
+    "width": 27.0,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Minuta",
+    "x": 306.75,
+    "y": 315.51,
+    "width": 27.0,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Krótki i przecyzyjny opis przewinienia",
+    "x": 382.27,
+    "y": 315.51,
+    "width": 148.48,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "5. Arkusz dodatkowy",
+    "x": 30.36,
+    "y": 352.86,
+    "width": 99.38,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "3. Napomnienia",
+    "x": 30.36,
+    "y": 128.9,
+    "width": 73.83,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Numer",
+    "x": 38.52,
+    "y": 141.73,
+    "width": 29.49,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "zawodnika",
+    "x": 30.76,
+    "y": 152.08,
+    "width": 42.52,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Imię i nazwisko",
+    "x": 100.6,
+    "y": 146.91,
+    "width": 60.98,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Zespół",
+    "x": 226.94,
+    "y": 146.91,
+    "width": 27.0,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Minuta",
+    "x": 306.64,
+    "y": 146.91,
+    "width": 27.0,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Krótki i precyzyjny opis przewinienia",
+    "x": 384.36,
+    "y": 146.91,
+    "width": 143.98,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "6",
+    "x": 49.52,
+    "y": 174.79,
+    "width": 5.0,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "JAN MIERZEJEWSKI",
+    "x": 77.73,
+    "y": 174.79,
+    "width": 86.91,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Świt II Nowy Dwór",
+    "x": 188.53,
+    "y": 169.61,
+    "width": 75.44,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Mazowiecki",
+    "x": 188.53,
+    "y": 179.96,
+    "width": 46.5,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "47'",
+    "x": 314.28,
+    "y": 174.79,
+    "width": 11.72,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Przerwanie przeciwnikom możliwości kontynuowania",
+    "x": 347.92,
+    "y": 164.44,
+    "width": 212.99,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "korzystnej akcji poprzez złapanie przeciwnika za",
+    "x": 347.92,
+    "y": 174.79,
+    "width": 195.5,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "koszulkę.",
+    "x": 347.92,
+    "y": 185.13,
+    "width": 37.5,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "48",
+    "x": 47.01,
+    "y": 209.85,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Jarosław Przybysz",
+    "x": 77.73,
+    "y": 209.85,
+    "width": 74.49,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "KS Orły Klembów",
+    "x": 188.53,
+    "y": 209.85,
+    "width": 70.46,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "64'",
+    "x": 314.28,
+    "y": 209.85,
+    "width": 11.72,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Przerwanie przeciwnikom możliwości kontynuowania",
+    "x": 347.92,
+    "y": 199.5,
+    "width": 212.99,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "korzystnej akcji poprzez złapanie przeciwnika za",
+    "x": 347.92,
+    "y": 209.85,
+    "width": 195.5,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "koszulkę.",
+    "x": 347.92,
+    "y": 220.2,
+    "width": 37.5,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "2",
+    "x": 49.52,
+    "y": 239.74,
+    "width": 5.0,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "DAWID DUCZMAN",
+    "x": 77.73,
+    "y": 239.74,
+    "width": 77.44,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Świt II Nowy Dwór",
+    "x": 188.53,
+    "y": 234.57,
+    "width": 75.44,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Mazowiecki",
+    "x": 188.53,
+    "y": 244.92,
+    "width": 46.5,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "74'",
+    "x": 314.28,
+    "y": 239.74,
+    "width": 11.72,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Nierozważny atak nogami na nogi przeciwnika.",
+    "x": 347.92,
+    "y": 239.74,
+    "width": 187.0,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "10",
+    "x": 47.01,
+    "y": 264.46,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "PAWEŁ BULA",
+    "x": 77.73,
+    "y": 264.46,
+    "width": 57.46,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "KS Orły Klembów",
+    "x": 188.53,
+    "y": 264.46,
+    "width": 70.46,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "83'",
+    "x": 314.28,
+    "y": 264.46,
+    "width": 11.72,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Okazywanie niezadowolenia z decyzji sędziego",
+    "x": 347.92,
+    "y": 259.28,
+    "width": 191.52,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "słowami: „…”",
+    "x": 347.92,
+    "y": 269.63,
+    "width": 52.48,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "7. Napomnienia osób funkcyjnych",
+    "x": 30.36,
+    "y": 422.23,
+    "width": 161.53,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Imię i nazwisko",
+    "x": 100.6,
+    "y": 436.98,
+    "width": 60.98,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Zespół",
+    "x": 226.94,
+    "y": 436.98,
+    "width": 27.0,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Minuta",
+    "x": 306.64,
+    "y": 436.98,
+    "width": 27.0,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Krótki i precyzyjny opis przewinienia",
+    "x": 384.36,
+    "y": 436.98,
+    "width": 143.98,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "8. Wykluczenia osób funkcyjnych",
+    "x": 30.36,
+    "y": 478.92,
+    "width": 158.77,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Imię i nazwisko",
+    "x": 100.66,
+    "y": 493.67,
+    "width": 60.98,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Zespół",
+    "x": 227.0,
+    "y": 493.67,
+    "width": 27.0,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Minuta",
+    "x": 306.69,
+    "y": 493.67,
+    "width": 27.0,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Krótki i precyzyjny opis przewinienia",
+    "x": 384.42,
+    "y": 493.67,
+    "width": 143.98,
+    "height": 10.05,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "2",
+    "x": 502.64,
+    "y": 29.69,
+    "width": 5.56,
+    "height": 11.17,
+    "page": 2,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1",
+    "x": 38.92,
+    "y": 65.69,
+    "width": 5.0,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "DAWID GRZYBOWSKI (Br.)",
+    "x": 56.52,
+    "y": 63.35,
+    "width": 113.36,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2009-03-12) (M)",
+    "x": 56.52,
+    "y": 73.7,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "2",
+    "x": 38.92,
+    "y": 94.04,
+    "width": 5.0,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "SEBASTIAN RADZKI (Kpt.)",
+    "x": 56.52,
+    "y": 91.7,
+    "width": 110.38,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 1997-01-11)",
+    "x": 56.52,
+    "y": 102.05,
+    "width": 57.78,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "3",
+    "x": 38.92,
+    "y": 122.39,
+    "width": 5.0,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Adam Matejak",
+    "x": 56.52,
+    "y": 120.05,
+    "width": 57.49,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 1992-02-21)",
+    "x": 56.52,
+    "y": 130.4,
+    "width": 57.78,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "4",
+    "x": 38.92,
+    "y": 150.73,
+    "width": 5.0,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Paweł Czerski",
+    "x": 56.52,
+    "y": 148.39,
+    "width": 56.99,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 1994-06-07)",
+    "x": 56.52,
+    "y": 158.74,
+    "width": 57.78,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "78'- nr. 35",
+    "x": 225.03,
+    "y": 149.89,
+    "width": 35.74,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "6",
+    "x": 38.92,
+    "y": 179.08,
+    "width": 5.0,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Sebastian Skorupka",
+    "x": 56.52,
+    "y": 176.74,
+    "width": 80.51,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2001-05-18)",
+    "x": 56.52,
+    "y": 187.09,
+    "width": 57.78,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "15",
+    "x": 36.41,
+    "y": 207.43,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "BARTŁOMIEJ BAJKOWSKI",
+    "x": 56.52,
+    "y": 205.09,
+    "width": 111.39,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2003-01-28)",
+    "x": 56.52,
+    "y": 215.44,
+    "width": 57.78,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "60'- nr. 10",
+    "x": 225.03,
+    "y": 206.58,
+    "width": 35.74,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "17",
+    "x": 36.41,
+    "y": 235.77,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "SZYMON KLEPACKI",
+    "x": 56.52,
+    "y": 233.43,
+    "width": 84.92,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 1998-06-24)",
+    "x": 56.52,
+    "y": 243.78,
+    "width": 57.78,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "20",
+    "x": 36.41,
+    "y": 264.12,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "BARTOSZ WOŹNIAK",
+    "x": 56.52,
+    "y": 261.78,
+    "width": 86.9,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2006-04-29) (M)",
+    "x": 56.52,
+    "y": 272.13,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "22",
+    "x": 36.41,
+    "y": 292.47,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "BARTŁOMIEJ KUREK",
+    "x": 56.52,
+    "y": 290.13,
+    "width": 89.93,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2007-10-08) (M)",
+    "x": 56.52,
+    "y": 300.47,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "46' (W przerwie)- nr.",
+    "x": 206.8,
+    "y": 289.14,
+    "width": 74.37,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "21",
+    "x": 238.46,
+    "y": 298.33,
+    "width": 8.9,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "48",
+    "x": 36.41,
+    "y": 320.81,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Jarosław Przybysz",
+    "x": 56.52,
+    "y": 318.47,
+    "width": 74.49,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 1984-12-12)",
+    "x": 56.52,
+    "y": 328.82,
+    "width": 57.78,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "64'",
+    "x": 237.7,
+    "y": 319.97,
+    "width": 10.42,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "84",
+    "x": 36.41,
+    "y": 354.83,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Grzegorz Przybysz",
+    "x": 56.52,
+    "y": 346.82,
+    "width": 75.99,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 1984-01-01)",
+    "x": 56.52,
+    "y": 357.17,
+    "width": 57.78,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "41'",
+    "x": 237.7,
+    "y": 348.32,
+    "width": 10.42,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "46' (W przerwie)- nr. 7",
+    "x": 203.47,
+    "y": 365.32,
+    "width": 78.82,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "KS Orły Klembów",
+    "x": 112.62,
+    "y": 42.71,
+    "width": 100.58,
+    "height": 13.4,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1",
+    "x": 308.21,
+    "y": 65.69,
+    "width": 5.0,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "KAROL WIAK (Br.)",
+    "x": 325.81,
+    "y": 63.35,
+    "width": 75.92,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2009-03-31) (M)",
+    "x": 325.84,
+    "y": 73.7,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "2",
+    "x": 308.21,
+    "y": 99.71,
+    "width": 5.0,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "DAWID DUCZMAN",
+    "x": 325.81,
+    "y": 91.7,
+    "width": 77.44,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2008-10-09) (M)",
+    "x": 325.84,
+    "y": 102.05,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "74'",
+    "x": 506.99,
+    "y": 93.2,
+    "width": 10.42,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "83'",
+    "x": 506.99,
+    "y": 110.21,
+    "width": 10.42,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "6",
+    "x": 308.21,
+    "y": 139.39,
+    "width": 5.0,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "JAN MIERZEJEWSKI",
+    "x": 325.81,
+    "y": 131.39,
+    "width": 86.91,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2008-09-12) (M)",
+    "x": 325.84,
+    "y": 141.73,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "47'",
+    "x": 506.99,
+    "y": 132.88,
+    "width": 10.42,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "55'- nr. 17",
+    "x": 494.32,
+    "y": 149.89,
+    "width": 35.74,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "9",
+    "x": 308.21,
+    "y": 173.41,
+    "width": 5.0,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "MIKOŁAJ STEIGMANN",
+    "x": 325.81,
+    "y": 171.07,
+    "width": 94.42,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2010-06-07) (M)",
+    "x": 325.84,
+    "y": 181.42,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "10",
+    "x": 305.7,
+    "y": 201.76,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "MARCEL ZYSKA",
+    "x": 325.81,
+    "y": 199.42,
+    "width": 69.44,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2008-12-07) (M)",
+    "x": 325.84,
+    "y": 209.77,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "63'- nr. 13",
+    "x": 494.32,
+    "y": 200.91,
+    "width": 35.74,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "11",
+    "x": 305.7,
+    "y": 230.1,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Aleksander Omiotek",
+    "x": 325.81,
+    "y": 227.76,
+    "width": 80.99,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2009-05-04) (M)",
+    "x": 325.84,
+    "y": 238.11,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "14",
+    "x": 305.7,
+    "y": 258.45,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "FILIP OSTAŁKIEWICZ",
+    "x": 325.81,
+    "y": 256.11,
+    "width": 90.89,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2009-08-13) (M)",
+    "x": 325.84,
+    "y": 266.46,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "15",
+    "x": 305.7,
+    "y": 286.8,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "ALEKSANDER KRĘCISZ",
+    "x": 325.81,
+    "y": 284.46,
+    "width": 101.92,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2009-06-04) (M)",
+    "x": 325.84,
+    "y": 294.81,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "18",
+    "x": 305.7,
+    "y": 320.81,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Michał Kucharczyk (Kpt.)",
+    "x": 325.81,
+    "y": 312.8,
+    "width": 99.47,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 1991-03-20)",
+    "x": 325.84,
+    "y": 323.15,
+    "width": 57.78,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "44'",
+    "x": 506.99,
+    "y": 314.3,
+    "width": 10.42,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "70'",
+    "x": 506.99,
+    "y": 331.31,
+    "width": 10.42,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "20",
+    "x": 305.7,
+    "y": 354.83,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Jakub Kunisz",
+    "x": 325.81,
+    "y": 352.49,
+    "width": 53.5,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2009-03-05) (M)",
+    "x": 325.84,
+    "y": 362.84,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "46' (W przerwie)- nr.",
+    "x": 476.09,
+    "y": 351.5,
+    "width": 74.37,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "77",
+    "x": 507.76,
+    "y": 360.7,
+    "width": 8.9,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "21",
+    "x": 305.7,
+    "y": 383.17,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "MICHAŁ SAZONOWICZ",
+    "x": 325.81,
+    "y": 380.83,
+    "width": 97.41,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2009-03-31) (M)",
+    "x": 325.84,
+    "y": 391.18,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Świt II Nowy Dwór Mazowiecki",
+    "x": 345.91,
+    "y": 42.71,
+    "width": 172.51,
+    "height": 13.4,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "7",
+    "x": 38.98,
+    "y": 434.2,
+    "width": 5.0,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Eryk Rakowski",
+    "x": 56.58,
+    "y": 431.86,
+    "width": 58.99,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 1996-02-19)",
+    "x": 56.58,
+    "y": 442.21,
+    "width": 57.78,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "46' (W przerwie)- nr.",
+    "x": 206.86,
+    "y": 430.87,
+    "width": 74.37,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "84",
+    "x": 238.52,
+    "y": 440.07,
+    "width": 8.9,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "10",
+    "x": 36.47,
+    "y": 468.21,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "PAWEŁ BULA",
+    "x": 56.58,
+    "y": 460.2,
+    "width": 57.46,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 1981-04-28)",
+    "x": 56.58,
+    "y": 470.55,
+    "width": 57.78,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "60'- nr. 15",
+    "x": 225.09,
+    "y": 461.7,
+    "width": 35.74,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "83'",
+    "x": 237.76,
+    "y": 478.71,
+    "width": 10.42,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "21",
+    "x": 36.47,
+    "y": 502.23,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "EMIL GOŁYSKI",
+    "x": 56.58,
+    "y": 499.89,
+    "width": 62.95,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 1999-07-06)",
+    "x": 56.58,
+    "y": 510.24,
+    "width": 57.78,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "46' (W przerwie)- nr.",
+    "x": 206.86,
+    "y": 498.9,
+    "width": 74.37,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "22",
+    "x": 238.52,
+    "y": 508.1,
+    "width": 8.9,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "35",
+    "x": 36.47,
+    "y": 530.58,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Grzegorz Sandomirski",
+    "x": 56.58,
+    "y": 528.24,
+    "width": 88.99,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 1984-07-22)",
+    "x": 56.58,
+    "y": 538.59,
+    "width": 57.78,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "78'- nr. 4",
+    "x": 227.31,
+    "y": 529.73,
+    "width": 31.29,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "12",
+    "x": 305.75,
+    "y": 434.2,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "MAURYCY CZAJKA",
+    "x": 325.84,
+    "y": 431.86,
+    "width": 81.94,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2010-12-15) (M)",
+    "x": 325.84,
+    "y": 442.21,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "13",
+    "x": 305.75,
+    "y": 462.54,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Jakub Utko",
+    "x": 325.84,
+    "y": 460.2,
+    "width": 45.0,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2009-06-23) (M)",
+    "x": 325.84,
+    "y": 470.55,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "63'- nr. 10",
+    "x": 494.32,
+    "y": 461.7,
+    "width": 35.74,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "17",
+    "x": 305.75,
+    "y": 490.89,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "SZYMON FRYC",
+    "x": 325.84,
+    "y": 488.55,
+    "width": 65.44,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2006-09-15) (M)",
+    "x": 325.84,
+    "y": 498.9,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "55'- nr. 6",
+    "x": 496.54,
+    "y": 490.05,
+    "width": 31.29,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "77",
+    "x": 305.75,
+    "y": 519.24,
+    "width": 10.01,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Filip Dwojak",
+    "x": 325.84,
+    "y": 516.9,
+    "width": 48.48,
+    "height": 10.05,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(ur. 2010-05-06) (M)",
+    "x": 325.84,
+    "y": 527.25,
+    "width": 71.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "46' (W przerwie)- nr.",
+    "x": 476.09,
+    "y": 515.91,
+    "width": 74.37,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "20",
+    "x": 507.76,
+    "y": 525.11,
+    "width": 8.9,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "SKŁAD REZERWOWY",
+    "x": 30.42,
+    "y": 412.36,
+    "width": 104.34,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1.",
+    "x": 35.32,
+    "y": 584.1,
+    "width": 8.33,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Bieńkowski Wojciech",
+    "x": 67.35,
+    "y": 572.6,
+    "width": 93.32,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "(Trener, nr lic 000008083",
+    "x": 57.88,
+    "y": 584.1,
+    "width": 114.99,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "UEFA B 31.12.2028)",
+    "x": 67.89,
+    "y": 595.6,
+    "width": 92.19,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "2.",
+    "x": 35.32,
+    "y": 618.6,
+    "width": 8.33,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Stańczak Piotr(Asystent",
+    "x": 60.96,
+    "y": 607.1,
+    "width": 108.84,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "trenera, nr lic A00043967",
+    "x": 57.88,
+    "y": 618.6,
+    "width": 114.99,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "AnimatorPN 31.12.2028)",
+    "x": 59.0,
+    "y": 630.1,
+    "width": 109.99,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "1.",
+    "x": 304.61,
+    "y": 584.1,
+    "width": 8.33,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Ferszt Łukasz(Trener, nr lic",
+    "x": 321.93,
+    "y": 572.6,
+    "width": 124.39,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "000007389 UEFA A",
+    "x": 338.31,
+    "y": 584.1,
+    "width": 91.65,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "31.12.2027)",
+    "x": 356.09,
+    "y": 595.6,
+    "width": 53.35,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "OSOBY FUNKCYJNE",
+    "x": 30.36,
+    "y": 559.77,
+    "width": 99.93,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Wejście",
+    "x": 44.53,
+    "y": 660.18,
+    "width": 27.99,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Zejście",
+    "x": 92.72,
+    "y": 660.18,
+    "width": 25.33,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Zmiana",
+    "x": 138.08,
+    "y": 660.2,
+    "width": 26.66,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Bramka",
+    "x": 44.53,
+    "y": 674.37,
+    "width": 27.55,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Bramka samobójcza",
+    "x": 91.67,
+    "y": 674.38,
+    "width": 72.45,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Bramka z rzutu karnego",
+    "x": 183.43,
+    "y": 674.09,
+    "width": 84.88,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Żółta kartka",
+    "x": 183.43,
+    "y": 660.18,
+    "width": 41.76,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Czerwona kartka",
+    "x": 251.46,
+    "y": 660.2,
+    "width": 60.0,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Czerwona kartka - następstwo żółtej",
+    "x": 330.83,
+    "y": 660.2,
+    "width": 128.42,
+    "height": 8.94,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "Legenda:",
+    "x": 30.36,
+    "y": 644.86,
+    "width": 41.69,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  },
+  {
+    "str": "3",
+    "x": 502.64,
+    "y": 29.68,
+    "width": 5.56,
+    "height": 11.17,
+    "page": 3,
+    "pageWidth": 595.28,
+    "pageHeight": 841.89
+  }
+]

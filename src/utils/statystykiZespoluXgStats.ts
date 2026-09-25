@@ -1,5 +1,6 @@
 import { Shot, TeamInfo } from "@/types";
 import { isIn1TZoneCanonical, isInOpponent1TZoneCanonical } from "@/utils/pitchZones";
+import { isOneContactIn1TZone } from "@/utils/shotZone1TContacts";
 import { isSfgCategoryShot } from "@/utils/matchXgSplits";
 import { getShotLinePlayersCount, summarizeCleanShots, isCleanShot } from "@/utils/shotLinePlayers";
 import { buildWiedzaShotsSummary, type WiedzaShotBreakdownRow, type WiedzaShotsSummary } from "@/utils/wiedzaShotsSummary";
@@ -462,7 +463,7 @@ export function buildTeamSideStats(
   const shots1T = side === "team"
     ? sideShots.filter(isIn1TZoneCanonical)
     : sideShots.filter(isInOpponent1TZoneCanonical);
-  const shots1TContact1 = shots1T.filter((s) => s.isContact1 === true).length;
+  const shots1TContact1 = shots1T.filter((s) => isOneContactIn1TZone(s)).length;
 
   const lineTotal = sideShots.reduce((sum, s) => sum + getShotLinePlayersCount(s), 0);
   const possessionMin = getPossessionMinutes(matchInfo, selectedTeam, half, side);

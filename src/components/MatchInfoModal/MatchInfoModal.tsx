@@ -1,7 +1,7 @@
 // src/components/MatchInfoModal/MatchInfoModal.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { TeamInfo } from "@/types";
 import { TEAMS } from "@/constants/teams";
 import { Team } from "@/constants/teamsLoader";
@@ -19,6 +19,7 @@ import {
   findSuggestedOpponentLogoFromMatches,
   normalizeOpponentNameForLogoLookup,
 } from "@/utils/findSuggestedOpponentLogoFromMatches";
+import type { MatchClockChangePreview, MatchHalfStarts } from "@/utils/recalculateMatchClock";
 
 interface MatchInfoModalProps {
   isOpen: boolean;
@@ -28,6 +29,15 @@ interface MatchInfoModalProps {
    * dopiero po sukcesie. Zwrócenie null/false traktujemy jako nieudany zapis (modal zostaje otwarty).
    */
   onSave: (matchInfo: TeamInfo) => void | Promise<unknown>;
+  /**
+   * Podgląd zmian minut i połówek, bez zapisu. Modal pokazuje tę listę zanim cokolwiek zapisze.
+   */
+  onPreviewRecalculateEventTimes?: (timing: MatchHalfStarts) => Promise<MatchClockChangePreview | null | false>;
+  /**
+   * Osobno od zapisu formularza: zapisuje wpisane starty połów i przelicza minuty zdarzeń meczu.
+   * Wołane dopiero po akceptacji listy zmian.
+   */
+  onRecalculateEventTimes?: (timing: MatchHalfStarts) => Promise<{ updatedEvents: number; updatedSegments: number; skippedWithoutVideoTime: number } | null | false>;
   currentInfo: TeamInfo | null;
   /** Pełny katalog zespołów; dostęp ogranicza userTeamAccess. */
   teamsCatalog: Team[];
@@ -103,6 +113,8 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  onPreviewRecalculateEventTimes,
+  onRecalculateEventTimes,
   currentInfo,
   teamsCatalog,
   userTeamAccess,
@@ -115,6 +127,12 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
 
   /** Trwa zapis meczu — blokuje przyciski i utrzymuje modal otwarty do zakończenia. */
   const [isSaving, setIsSaving] = useState(false);
+  const [isRecalculating, setIsRecalculating] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [changePreview, setChangePreview] = useState<MatchClockChangePreview | null>(null);
+  const [previewTiming, setPreviewTiming] = useState<MatchHalfStarts | null>(null);
+  const previewDialogRef = useRef<HTMLDivElement>(null);
+  const isBusy = isSaving || isRecalculating || isPreviewLoading;
 
   /** Po „Usuń logo” nie wstawiamy ponownie automatycznie, dopóki nazwa się nie zmieni lub użytkownik nie kliknie przycisku. */
   const [dismissedLogoForNormalizedOpponent, setDismissedLogoForNormalizedOpponent] = useState<string | null>(
@@ -174,6 +192,12 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
   }, [currentInfo, isOpen, teamsCatalog, userTeamAccess, selectedTeam]);
 
   useEffect(() => {
+    if (isOpen) return;
+    setChangePreview(null);
+    setPreviewTiming(null);
+  }, [isOpen]);
+
+  useEffect(() => {
     if (!isOpen) return;
     setDismissedLogoForNormalizedOpponent(null);
   }, [isOpen, currentInfo?.matchId]);
@@ -217,7 +241,7 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSaving) return;
+    if (isBusy) return;
     
     // Kopiujemy obiekt, aby uniknąć modyfikacji oryginalnego obiektu
     const infoToSave = { ...formData };
@@ -284,12 +308,116 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
     }
   };
 
+  const readHalfStartsFromForm = () => {
+    const firstHalfSeconds = minutesAndSecondsToSeconds(
+      firstHalfTime.minutes,
+      halfSecondsFromRaw(firstHalfTime.secondsStr)
+    );
+    const secondHalfSeconds = minutesAndSecondsToSeconds(
+      secondHalfTime.minutes,
+      halfSecondsFromRaw(secondHalfTime.secondsStr)
+    );
+    return {
+      firstHalfStartTime: firstHalfSeconds > 0 ? firstHalfSeconds : undefined,
+      secondHalfStartTime: secondHalfSeconds > 0 ? secondHalfSeconds : undefined,
+    };
+  };
+
+  const formatHalfStartLabel = (totalSeconds?: number) => {
+    if (totalSeconds === undefined) return "brak";
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  const closeChangePreview = () => {
+    if (isRecalculating) return;
+    setChangePreview(null);
+    setPreviewTiming(null);
+  };
+
+  const handleShowChangePreview = async () => {
+    if (!onPreviewRecalculateEventTimes || !onRecalculateEventTimes || !currentInfo?.matchId || isBusy) return;
+    const timing = readHalfStartsFromForm();
+    if (timing.firstHalfStartTime === undefined && timing.secondHalfStartTime === undefined) {
+      alert("Wpisz czas startu przynajmniej jednej połowy.");
+      return;
+    }
+    if (
+      timing.firstHalfStartTime !== undefined &&
+      timing.secondHalfStartTime !== undefined &&
+      timing.secondHalfStartTime <= timing.firstHalfStartTime
+    ) {
+      alert("Start II połowy musi być później na nagraniu niż start I połowy.");
+      return;
+    }
+
+    setIsPreviewLoading(true);
+    try {
+      const preview = await onPreviewRecalculateEventTimes(timing);
+      if (preview === null || preview === false) {
+        throw new Error("Nie udało się przygotować listy zmian.");
+      }
+      setPreviewTiming(timing);
+      setChangePreview(preview);
+    } catch (error) {
+      console.error("Błąd podczas podglądu przeliczenia czasów:", error);
+      const message = error instanceof Error ? error.message : "Spróbuj ponownie.";
+      alert(`Nie udało się przygotować listy zmian. ${message}`);
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  const handleApplyChangePreview = async () => {
+    if (!onRecalculateEventTimes || !previewTiming || isRecalculating) return;
+    setIsRecalculating(true);
+    try {
+      const result = await onRecalculateEventTimes(previewTiming);
+      if (result === null || result === false) {
+        throw new Error("Przeliczenie nie powiodło się.");
+      }
+      setChangePreview(null);
+      setPreviewTiming(null);
+    } catch (error) {
+      console.error("Błąd podczas przeliczania czasów zdarzeń:", error);
+      const message = error instanceof Error ? error.message : "Spróbuj ponownie.";
+      alert(`Nie udało się przeliczyć czasów zdarzeń. ${message}`);
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!changePreview) return;
+    previewDialogRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        closeChangePreview();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [changePreview, isRecalculating]);
+
+  const canRecalculate =
+    Boolean(currentInfo?.matchId && onRecalculateEventTimes && onPreviewRecalculateEventTimes) &&
+    (firstHalfTime.minutes > 0 ||
+      halfSecondsFromRaw(firstHalfTime.secondsStr) > 0 ||
+      secondHalfTime.minutes > 0 ||
+      halfSecondsFromRaw(secondHalfTime.secondsStr) > 0);
+
   if (!isOpen) return null;
 
+  const possessionChangeCount = changePreview?.rows.filter((row) => row.id.startsWith("possession:")).length ?? 0;
+  const eventChangeCount = (changePreview?.rows.length ?? 0) - possessionChangeCount;
+
   return (
-    <div className={styles.modal} onClick={isSaving ? undefined : onClose}>
+    <>
+    <div className={styles.modal} onClick={isBusy ? undefined : onClose}>
       <div
-        className={`${styles.modalContent}${isSaving ? ` ${styles.savingInProgress}` : ""}`}
+        className={`${styles.modalContent}${isBusy ? ` ${styles.savingInProgress}` : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
         <h2>{currentInfo ? "Edytuj mecz" : "Dodaj nowy mecz"}</h2>
@@ -529,6 +657,22 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
                   </div>
                 </div>
               </div>
+              {currentInfo?.matchId && onRecalculateEventTimes && onPreviewRecalculateEventTimes && (
+                <div className={styles.recalcRow}>
+                  <button
+                    type="button"
+                    className={styles.recalcButton}
+                    onClick={() => void handleShowChangePreview()}
+                    disabled={isBusy || !canRecalculate}
+                    aria-describedby="recalculate-event-times-help"
+                  >
+                    {isPreviewLoading ? "Sprawdzanie…" : "Przelicz czasy zdarzeń"}
+                  </button>
+                  <small id="recalculate-event-times-help" className={styles.helpText}>
+                    Najpierw pokaże listę zdarzeń, które zmienią minutę lub połówkę. Zapis następuje dopiero po akceptacji.
+                  </small>
+                </div>
+              )}
             </div>
 
             <div className={styles.formGroup}>
@@ -560,18 +704,112 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
               type="button"
               className={styles.cancelButton}
               onClick={onClose}
-              disabled={isSaving}
+              disabled={isBusy}
             >
               Anuluj
             </button>
-            <button type="submit" className={styles.saveButton} disabled={isSaving}>
+            <button type="submit" className={styles.saveButton} disabled={isBusy}>
               {isSaving ? "Zapisywanie…" : currentInfo ? "Zapisz zmiany" : "Dodaj mecz"}
             </button>
           </div>
         </form>
       </div>
     </div>
+    {changePreview && previewTiming && (
+      <div className={styles.previewOverlay} onClick={closeChangePreview}>
+        <div
+          ref={previewDialogRef}
+          className={styles.previewCard}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="recalc-preview-title"
+          tabIndex={-1}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <h3 id="recalc-preview-title">Te czasy się zmienią</h3>
+          <p className={styles.previewLead}>
+            Start I połowy: {formatHalfStartLabel(previewTiming.firstHalfStartTime)}. Start II połowy:{" "}
+            {formatHalfStartLabel(previewTiming.secondHalfStartTime)}. Czas na nagraniu zostaje bez zmian.
+          </p>
+          {changePreview.rows.length === 0 ? (
+            <p className={styles.previewLead}>
+              Żadne zdarzenie nie zmieni minuty ani połówki. Akceptacja zapisze tylko nowe starty połów.
+            </p>
+          ) : (
+            <>
+              <p className={styles.previewLead}>
+                {[
+                  eventChangeCount > 0
+                    ? countNoun(eventChangeCount, "zdarzenie", "zdarzenia", "zdarzeń")
+                    : null,
+                  possessionChangeCount > 0
+                    ? countNoun(
+                        possessionChangeCount,
+                        "segment posiadania",
+                        "segmenty posiadania",
+                        "segmentów posiadania"
+                      )
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" i ")}
+                .
+              </p>
+              <ul className={styles.previewList}>
+                {changePreview.rows.map((row) => (
+                  <li key={row.id} className={styles.previewItem}>
+                    <span className={styles.previewKind}>{row.kind}</span>
+                    <span className={styles.previewChange}>
+                      <span>{row.before}</span>
+                      <span aria-hidden="true">→</span>
+                      <span>{row.after}</span>
+                    </span>
+                    {row.detail ? <span className={styles.previewDetail}>{row.detail}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {changePreview.skippedWithoutVideoTime > 0 && (
+            <p className={styles.previewLead}>
+              Pominięte, bo nie mają czasu nagrania: {changePreview.skippedWithoutVideoTime}.
+            </p>
+          )}
+          <div className={styles.previewActions}>
+            <button
+              type="button"
+              className={styles.cancelButton}
+              onClick={closeChangePreview}
+              disabled={isRecalculating}
+            >
+              Anuluj
+            </button>
+            <button
+              type="button"
+              className={styles.saveButton}
+              onClick={() => void handleApplyChangePreview()}
+              disabled={isRecalculating}
+            >
+              {isRecalculating
+                ? "Zapisywanie…"
+                : changePreview.rows.length === 0
+                  ? "Zapisz starty połów"
+                  : "Zmień czasy"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
+
+function countNoun(count: number, one: string, few: string, many: string): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (count === 1) return `1 ${one}`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} ${few}`;
+  return `${count} ${many}`;
+}
 
 export default MatchInfoModal;

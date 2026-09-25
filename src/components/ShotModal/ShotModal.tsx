@@ -5,6 +5,13 @@ import { createPortal } from "react-dom";
 import { Shot, Player, TeamInfo } from "@/types";
 import { buildPlayersIndex, getPlayerLabel, OWN_GOAL_PLAYER_ID } from "@/utils/playerUtils";
 import { isInPenaltyAreaCanonical, isInOpponentPenaltyAreaCanonical } from "@/utils/pitchZones";
+import {
+  emptyZone1TContactFlags,
+  isShotInFinishing1TZone,
+  showsZone1TContactPicker,
+  toggleZone1TContact,
+  zone1TContactFlagsFromShot,
+} from "@/utils/shotZone1TContacts";
 import { getTorvaneySimpleXGPercentRounded } from "@/lib/xg";
 import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
 import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
@@ -82,6 +89,9 @@ const ShotModal: React.FC<ShotModalProps> = ({
     isContact1: false,
     isContact2: false,
     isContact3Plus: false,
+    isZone1TContact1: false,
+    isZone1TContact2: false,
+    isZone1TContact3Plus: false,
     assistantId: "",
     isControversial: false,
     previousShotId: "",
@@ -114,6 +124,11 @@ const ShotModal: React.FC<ShotModalProps> = ({
       ? isInOpponentPenaltyAreaCanonical(shotCoords)
       : isInPenaltyAreaCanonical(shotCoords);
   }, [formData.teamContext, shotCoords]);
+  const isShotIn1TZone = useMemo(
+    () => isShotInFinishing1TZone({ ...shotCoords, teamContext: formData.teamContext }),
+    [formData.teamContext, shotCoords]
+  );
+  const showZone1TContacts = showsZone1TContactPicker(formData, isShotIn1TZone);
   const playersIndex = useMemo(() => buildPlayersIndex(players), [players]);
   const [videoTimeMMSS, setVideoTimeMMSS] = useState<string>("00:00"); // Czas wideo w formacie MM:SS
   const [currentMatchMinute, setCurrentMatchMinute] = useState<number | null>(null); // Aktualna minuta meczu
@@ -439,6 +454,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         isContact1: editingShot.isContact1 || false,
         isContact2: editingShot.isContact2 || false,
         isContact3Plus: editingShot.isContact3Plus || false,
+        ...zone1TContactFlagsFromShot(editingShot),
         assistantId: (editingShot as any)?.assistantId || "",
         isControversial: editingShot.isControversial || false,
         previousShotId: editingShot.previousShotId || "",
@@ -482,6 +498,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         isContact1: false,
         isContact2: false,
         isContact3Plus: false,
+        ...zone1TContactFlagsFromShot(null),
         assistantId: "",
         isControversial: false,
         previousShotId: "",
@@ -1052,6 +1069,13 @@ const ShotModal: React.FC<ShotModalProps> = ({
       isContact1: formData.isContact1,
       isContact2: formData.isContact2,
       isContact3Plus: formData.isContact3Plus,
+      ...(showZone1TContacts
+        ? {
+            isZone1TContact1: formData.isZone1TContact1,
+            isZone1TContact2: formData.isZone1TContact2,
+            isZone1TContact3Plus: formData.isContact2 ? false : formData.isZone1TContact3Plus,
+          }
+        : emptyZone1TContactFlags()),
       assistantId: formData.assistantId || undefined,
       isControversial: formData.isControversial,
       controversyNote: formData.isControversial && controversyNote.trim() ? controversyNote.trim() : undefined,
@@ -1697,9 +1721,11 @@ const ShotModal: React.FC<ShotModalProps> = ({
             </div>
           )}
 
-          {/* Liczba kontaktów */}
+          {/* Liczba kontaktów całej akcji */}
           <div className={styles.fieldGroup}>
-            <label>Liczba kontaktów:</label>
+            <label title="Kontakty całej akcji, od przyjęcia do strzału. Prowadzenie poza strefą 1T też się liczy.">
+              Liczba kontaktów:
+            </label>
             <div className={styles.actionTypeSelector}>
               <button
                 type="button"
@@ -1715,6 +1741,8 @@ const ShotModal: React.FC<ShotModalProps> = ({
                       // Wyłącz inne opcje kontaktów gdy włączamy 1T
                       isContact2: newIsContact1 ? false : prev.isContact2,
                       isContact3Plus: newIsContact1 ? false : prev.isContact3Plus,
+                      // Przy 1T w strefie też jest jeden kontakt — osobne oznaczenie odpada.
+                      ...(newIsContact1 ? emptyZone1TContactFlags() : {}),
                     };
                   });
                 }}
@@ -1737,6 +1765,10 @@ const ShotModal: React.FC<ShotModalProps> = ({
                       // Wyłącz inne opcje kontaktów gdy włączamy 2T
                       isContact1: newIsContact2 ? false : prev.isContact1,
                       isContact3Plus: newIsContact2 ? false : prev.isContact3Plus,
+                      // Dwa kontakty całej akcji nie mieszczą 3+ w strefie.
+                      ...(newIsContact2
+                        ? { isZone1TContact3Plus: false }
+                        : emptyZone1TContactFlags()),
                     };
                   });
                 }}
@@ -1759,6 +1791,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
                       // Wyłącz inne opcje kontaktów gdy włączamy 3T+
                       isContact1: newIsContact3Plus ? false : prev.isContact1,
                       isContact2: newIsContact3Plus ? false : prev.isContact2,
+                      ...(newIsContact3Plus ? {} : emptyZone1TContactFlags()),
                     };
                   });
                 }}
@@ -1769,6 +1802,52 @@ const ShotModal: React.FC<ShotModalProps> = ({
               </button>
             </div>
           </div>
+
+          {showZone1TContacts && (
+            <div className={styles.fieldGroup}>
+              <label title="Licz tylko kontakty po wejściu w strefę 1T, razem ze strzałem. Prowadzenie poza strefą się nie liczy.">
+                W strefie 1T:
+              </label>
+              <div className={styles.actionTypeSelector}>
+                {(
+                  [
+                    ["1", "1 kontakt w strefie 1T"],
+                    ["2", "2 kontakty w strefie 1T"],
+                    ...(formData.isContact2
+                      ? []
+                      : [["3plus", "3 lub więcej kontaktów w strefie 1T"] as const]),
+                  ] as const
+                ).map(([key, title]) => {
+                  const active =
+                    key === "1"
+                      ? formData.isZone1TContact1
+                      : key === "2"
+                        ? formData.isZone1TContact2
+                        : formData.isZone1TContact3Plus;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`${styles.actionTypeButton} ${active ? styles.active : ""}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setFormData((prev) => ({
+                          ...prev,
+                          ...toggleZone1TContact(prev, key),
+                        }));
+                      }}
+                      title={title}
+                      aria-label={title}
+                      aria-pressed={active}
+                    >
+                      {key === "3plus" ? "3+" : key}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className={styles.fieldGroup}>
             <label>Część ciała:</label>

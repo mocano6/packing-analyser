@@ -1,25 +1,25 @@
-// Pobieranie terminarza drużyny z API ŁNP (TYLKO SERWER — wymaga Chrome/reCAPTCHA).
+// Pobieranie terminarza drużyny z ŁNP (TYLKO SERWER).
+//
+// 1) Harvest: otwieramy stronę drużyny i zbieramy JSON, który SPA sama pobiera
+//    po swojej reCAPTCHA — bez mintowania własnego tokenu.
+// 2) Fallback: klasyczna ścieżka Bearer (gdy SPA nie doładowała zakładki meczów).
 
-import { LaczyCrawler, SCOUTING_AUTH_HELP } from "@/lib/scouting/crawler";
+import {
+  LaczyCrawler,
+  SCOUTING_AUTH_HELP,
+  SCOUTING_HARVEST_AUTH_HELP,
+} from "@/lib/scouting/crawler";
+import { withLaczyCrawlerLock } from "@/lib/scouting/crawlerLock";
 import { ScoutingDebugLogger } from "@/lib/scouting/debugLog";
 import type { LaczyTeamFixture } from "@/types/trainingMicrocycle";
 import { buildLaczyTeamPageUrl } from "@/utils/laczyTeamUrl";
-
-interface RawTeamSide {
-  id?: string;
-  name?: string;
-}
-
-interface RawTeamMatch {
-  matchId?: string;
-  id?: string;
-  dateTime?: string;
-  state?: string;
-  stadium?: string;
-  host?: RawTeamSide;
-  guest?: RawTeamSide;
-  scores?: { final?: string; fullTime?: string };
-}
+import {
+  asLaczyList,
+  harvestHasCompleteMatchLists,
+  mapRawLaczyMatch,
+  parseHarvestedLaczyFixtures,
+  type RawLaczyTeamMatch,
+} from "@/utils/laczyFixturesHarvest";
 
 interface RawPlayDictEntry {
   id?: string;
@@ -41,9 +41,7 @@ export interface FetchTeamFixturesResult {
   debugLog?: ReturnType<ScoutingDebugLogger["finish"]>;
 }
 
-function asArray<T>(data: unknown): T[] {
-  return Array.isArray(data) ? (data as T[]) : [];
-}
+const asArray = asLaczyList;
 
 function playIdOf(entry: RawPlayDictEntry): string | null {
   const id = entry.playId || entry.id;
@@ -54,69 +52,122 @@ function playNameOf(entry: RawPlayDictEntry): string {
   return String(entry.name || entry.title || entry.seasonName || "Rozgrywki").slice(0, 160);
 }
 
-function mapRawMatch(
-  raw: RawTeamMatch,
-  playId: string,
-  playName: string
-): LaczyTeamFixture | null {
-  const matchId = raw.matchId || raw.id;
-  if (!matchId || !raw.dateTime) return null;
-  const hostId = raw.host?.id || "";
-  const guestId = raw.guest?.id || "";
-  if (!hostId && !guestId) return null;
-  return {
-    matchId,
-    dateTime: raw.dateTime,
-    state: raw.state || "",
-    playId,
-    playName,
-    hostId,
-    hostName: raw.host?.name || "Gospodarz",
-    guestId,
-    guestName: raw.guest?.name || "Gość",
-    stadium: raw.stadium,
-    scoreFinal: raw.scores?.final ?? raw.scores?.fullTime ?? null,
-  };
+export async function fetchTeamFixturesFromLaczy(teamId: string): Promise<FetchTeamFixturesResult> {
+  return withLaczyCrawlerLock(() => fetchTeamFixturesFromLaczyUnlocked(teamId));
 }
 
-export async function fetchTeamFixturesFromLaczy(teamId: string): Promise<FetchTeamFixturesResult> {
+type PartialResult = Omit<FetchTeamFixturesResult, "debugLog"> & { complete?: boolean };
+
+function unionFixtures(base: LaczyTeamFixture[], overlay: LaczyTeamFixture[]): LaczyTeamFixture[] {
+  const byId = new Map<string, LaczyTeamFixture>();
+  for (const f of base) if (f.matchId) byId.set(f.matchId, f);
+  for (const f of overlay) if (f.matchId) byId.set(f.matchId, f);
+  return [...byId.values()].sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+}
+
+async function fetchTeamFixturesFromLaczyUnlocked(teamId: string): Promise<FetchTeamFixturesResult> {
   const debug = new ScoutingDebugLogger("fetchTeamFixtures", { teamId });
   const errors: string[] = [];
-  const teamPage = buildLaczyTeamPageUrl(teamId);
+
+  const harvested = await harvestFixtures(teamId, debug, errors);
+  // Zawsze dociągamy API: harvest bywa „kompletny” po pierwszej parze list
+  // (np. stara liga) i gubi świeżo rozegrany mecz w innych rozgrywkach.
+  const viaApi = await fetchFixturesViaApi(teamId, debug, errors);
+  if (harvested?.ok && viaApi.ok) {
+    const fixtures = unionFixtures(harvested.fixtures, viaApi.fixtures);
+    return {
+      ok: true,
+      message: `Pobrano ${fixtures.length} mecz(y) ze strony i API.`,
+      teamId,
+      teamName: viaApi.teamName || harvested.teamName,
+      fixtures,
+      plays: viaApi.plays.length > 0 ? viaApi.plays : harvested.plays,
+      errors: [...harvested.errors, ...viaApi.errors],
+      debugLog: debug.finish(),
+    };
+  }
+  if (viaApi.ok) return { ...viaApi, debugLog: debug.finish() };
+  if (harvested) return { ...harvested, debugLog: debug.finish() };
+  return { ...viaApi, debugLog: debug.finish() };
+}
+
+/** Zwraca wynik tylko gdy strona drużyny faktycznie oddała listy meczów. */
+async function harvestFixtures(
+  teamId: string,
+  debug: ScoutingDebugLogger,
+  errors: string[]
+): Promise<PartialResult | null> {
   const crawler = new LaczyCrawler({
     debugLog: debug,
-    initialRozgrywkiUrlCandidates: [teamPage, "https://www.laczynaspilka.pl/rozgrywki"],
+    landingUrl: "about:blank",
+    neverReuseCdp: true,
+    disableAutoReset: true,
   });
+
+  try {
+    const hits = await crawler.openHarvest(buildLaczyTeamPageUrl(teamId), teamId);
+    const parsed = parseHarvestedLaczyFixtures(teamId, hits);
+    const complete = harvestHasCompleteMatchLists(hits, teamId);
+
+    if (parsed.fixtures.length > 0) {
+      if (!complete) {
+        debug.warn("navigate", "Harvest bez listy rozegranych — dociągnięcie API");
+      }
+      return {
+        ok: true,
+        complete,
+        message: `Pobrano ${parsed.fixtures.length} mecz(y) ze strony drużyny.`,
+        teamId,
+        teamName: parsed.teamName,
+        fixtures: parsed.fixtures,
+        plays: parsed.plays,
+        errors,
+      };
+    }
+
+    if (parsed.matchListStatusOk) {
+      return {
+        ok: complete,
+        complete,
+        message: "Brak meczów w terminarzu tej drużyny.",
+        teamId,
+        teamName: parsed.teamName,
+        fixtures: [],
+        plays: parsed.plays,
+        errors,
+      };
+    }
+
+    debug.warn("navigate", "Harvest bez list meczów — próbuję ścieżki API");
+    return null;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Błąd harvestu terminarza.";
+    debug.warn("navigate", `Harvest nieudany: ${message}`);
+    return null;
+  } finally {
+    await crawler.close();
+  }
+}
+
+async function fetchFixturesViaApi(
+  teamId: string,
+  debug: ScoutingDebugLogger,
+  errors: string[]
+): Promise<PartialResult> {
+  const crawler = new LaczyCrawler({ debugLog: debug });
 
   try {
     await crawler.open();
 
     const teamRes = await crawler.fetchOne<{ id?: string; name?: string }>(`teams/${teamId}`);
-    if (!teamRes || teamRes.status === 0 || teamRes.status === 401 || teamRes.status === 403) {
-      const msg = teamRes?.error || SCOUTING_AUTH_HELP;
-      return {
-        ok: false,
-        message: msg,
-        teamId,
-        fixtures: [],
-        plays: [],
-        errors: [msg],
-        debugLog: debug.finish(),
-      };
+    const teamAuthFailed =
+      !teamRes || teamRes.status === 0 || teamRes.status === 401 || teamRes.status === 403;
+    if (teamAuthFailed) {
+      const msg = teamRes?.error || SCOUTING_HARVEST_AUTH_HELP;
+      errors.push(msg);
+      return { ok: false, message: msg, teamId, fixtures: [], plays: [], errors };
     }
-    if (teamRes.status !== 200 || !teamRes.data) {
-      const msg = `Nie udało się pobrać drużyny (status ${teamRes.status}).`;
-      return {
-        ok: false,
-        message: msg,
-        teamId,
-        fixtures: [],
-        plays: [],
-        errors: [msg],
-        debugLog: debug.finish(),
-      };
-    }
-    const teamName = teamRes.data.name || undefined;
+    const teamName = teamRes.data?.name || undefined;
 
     const dictRes = await crawler.fetchOne<RawPlayDictEntry[]>(
       `teams/${teamId}/play-dictionaries`
@@ -131,20 +182,11 @@ export async function fetchTeamFixturesFromLaczy(teamId: string): Promise<FetchT
       const msg = auth
         ? dictRes?.error || SCOUTING_AUTH_HELP
         : `Brak słownika rozgrywek drużyny (status ${dictRes?.status ?? "brak"}).`;
-      return {
-        ok: false,
-        message: msg,
-        teamId,
-        teamName,
-        fixtures: [],
-        plays: [],
-        errors: [msg],
-        debugLog: debug.finish(),
-      };
+      errors.push(msg);
+      return { ok: false, message: msg, teamId, teamName, fixtures: [], plays: [], errors };
     }
 
-    const playsRaw = asArray<RawPlayDictEntry>(dictRes.data);
-    const plays = playsRaw
+    const plays = asArray<RawPlayDictEntry>(dictRes.data)
       .map((p) => {
         const id = playIdOf(p);
         return id ? { id, name: playNameOf(p), isCurrent: !!p.isCurrent } : null;
@@ -164,23 +206,19 @@ export async function fetchTeamFixturesFromLaczy(teamId: string): Promise<FetchT
         break;
       }
       const [playedRes, upcomingRes] = await Promise.all([
-        crawler.fetchOne<RawTeamMatch[]>(
-          `teams/${teamId}/plays/${play.id}/played-matches`
-        ),
-        crawler.fetchOne<RawTeamMatch[]>(
+        crawler.fetchOne<RawLaczyTeamMatch[]>(`teams/${teamId}/plays/${play.id}/played-matches`),
+        crawler.fetchOne<RawLaczyTeamMatch[]>(
           `teams/${teamId}/plays/${play.id}/not-played-matches`
         ),
       ]);
 
       for (const res of [playedRes, upcomingRes]) {
         if (!res || res.status !== 200) {
-          errors.push(
-            `Rozgrywki „${play.name}”: mecze status ${res?.status ?? "brak"}`
-          );
+          errors.push(`Rozgrywki „${play.name}”: mecze status ${res?.status ?? "brak"}`);
           continue;
         }
-        for (const raw of asArray<RawTeamMatch>(res.data)) {
-          const mapped = mapRawMatch(raw, play.id, play.name);
+        for (const raw of asArray<RawLaczyTeamMatch>(res.data)) {
+          const mapped = mapRawLaczyMatch(raw, play.id, play.name);
           if (!mapped || seen.has(mapped.matchId)) continue;
           seen.add(mapped.matchId);
           fixtures.push(mapped);
@@ -201,20 +239,11 @@ export async function fetchTeamFixturesFromLaczy(teamId: string): Promise<FetchT
       fixtures,
       plays: plays.map(({ id, name }) => ({ id, name })),
       errors,
-      debugLog: debug.finish(),
     };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Błąd pobierania terminarza.";
     debug.error("sync", message);
-    return {
-      ok: false,
-      message,
-      teamId,
-      fixtures: [],
-      plays: [],
-      errors: [message],
-      debugLog: debug.finish(),
-    };
+    return { ok: false, message, teamId, fixtures: [], plays: [], errors: [...errors, message] };
   } finally {
     await crawler.close();
   }

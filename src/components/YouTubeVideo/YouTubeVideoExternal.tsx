@@ -4,6 +4,12 @@ import React, { useEffect, useRef, useState } from "react";
 import YouTube, { YouTubeProps } from "react-youtube";
 import { TeamInfo } from "@/types";
 import { extractYouTubeId } from "@/utils/youtubeVideoId";
+import {
+  canSeekYoutubePlayer,
+  isVideoSeekLanded,
+  readYoutubePlayerTime,
+  youtubeEmbedStartSeconds,
+} from "@/utils/youtubeSeek";
 import styles from "./YouTubeVideo.module.css";
 
 interface YouTubeVideoExternalProps {
@@ -19,8 +25,42 @@ const YouTubeVideoExternal: React.FC<YouTubeVideoExternalProps> = ({
 }) => {
   const playerRef = useRef<any>(null);
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingSeekRef = useRef<number | null>(null);
+  const videoIdRef = useRef<string | null>(null);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
+
+  const applyPendingSeek = (player: {
+    seekTo?: (seconds: number, allowSeekAhead: boolean) => void;
+    getCurrentTime?: () => number | Promise<number>;
+    getPlayerState?: () => number;
+    cueVideoById?: (opts: { videoId: string; startSeconds: number }) => void;
+  }) => {
+    const target = pendingSeekRef.current;
+    if (target == null) return;
+    const state = typeof player.getPlayerState === "function" ? Number(player.getPlayerState()) : -1;
+    if (!canSeekYoutubePlayer(state)) {
+      const id = videoIdRef.current;
+      if (id && typeof player.cueVideoById === "function") {
+        player.cueVideoById({ videoId: id, startSeconds: youtubeEmbedStartSeconds(target) });
+      }
+      return;
+    }
+    if (typeof player.getCurrentTime !== "function" || typeof player.seekTo !== "function") return;
+    void (async () => {
+      try {
+        const current = await readYoutubePlayerTime(player as { getCurrentTime: () => number | Promise<number> });
+        if (pendingSeekRef.current !== target) return;
+        if (isVideoSeekLanded(current, target)) {
+          pendingSeekRef.current = null;
+          return;
+        }
+        player.seekTo?.(target, true);
+      } catch (error) {
+        console.warn("Nie udało się przewinąć wideo do czasu:", target, error);
+      }
+    })();
+  };
 
   // Nasłuchiwanie wiadomości z głównego okna
   useEffect(() => {
@@ -33,14 +73,13 @@ const YouTubeVideoExternal: React.FC<YouTubeVideoExternalProps> = ({
       
       if (isFromMainWindow) {
         if (event.data.type === 'SEEK_TO_TIME') {
-          if (playerRef.current && isPlayerReady) {
-            try {
-              await playerRef.current.seekTo(event.data.time, true);
-            } catch (error) {
-              console.warn('Nie udało się przewinąć wideo do czasu:', event.data.time, error);
-            }
-          } else {
-            console.warn('YouTubeVideoExternal - player niegotowy (playerRef:', playerRef.current, 'isPlayerReady:', isPlayerReady, ')');
+          const time = Number(event.data.time);
+          if (!Number.isFinite(time)) return;
+          // Wiadomość często wpada, zanim iframe jest gotowy. Trzymamy ją
+          // i aplikujemy w onReady / onStateChange — inaczej okno startuje od 0.
+          pendingSeekRef.current = time;
+          if (playerRef.current) {
+            applyPendingSeek(playerRef.current);
           }
         } else if (event.data.type === 'GET_CURRENT_TIME') {
           if (playerRef.current && isPlayerReady) {
@@ -124,12 +163,14 @@ const YouTubeVideoExternal: React.FC<YouTubeVideoExternalProps> = ({
 
   const videoUrl = matchInfo?.videoUrl || "";
   const videoId = extractYouTubeId(videoUrl);
+  videoIdRef.current = videoId;
 
   const onPlayerReady: YouTubeProps['onReady'] = (event) => {
     try {
       playerRef.current = event.target;
       setIsPlayerReady(true);
       setPlayerError(null);
+      applyPendingSeek(event.target);
     } catch (error) {
       console.error('Błąd podczas inicjalizacji playera:', error);
       setPlayerError('Błąd inicjalizacji playera');
@@ -148,6 +189,9 @@ const YouTubeVideoExternal: React.FC<YouTubeVideoExternalProps> = ({
   const onPlayerStateChange: YouTubeProps['onStateChange'] = (event) => {
     // YouTube player states: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (video cued)
     const playerState = event.data;
+    if (pendingSeekRef.current != null && canSeekYoutubePlayer(playerState)) {
+      applyPendingSeek(event.target);
+    }
     // Wysyłaj stan playera do głównego okna
     if (window.opener) {
       window.opener.postMessage({

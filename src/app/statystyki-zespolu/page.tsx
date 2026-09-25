@@ -20,6 +20,7 @@ import SeasonSelector from "@/components/SeasonSelector/SeasonSelector";
 import TeamsSelector from "@/components/TeamsSelector/TeamsSelector";
 import { getCurrentSeason, filterMatchesBySeason, getAvailableSeasonsFromMatches } from "@/utils/seasonUtils";
 import { isIn1TZoneCanonical, isInOpponent1TZoneCanonical } from "@/utils/pitchZones";
+import { isOneContactIn1TZone } from "@/utils/shotZone1TContacts";
 import PlayerHeatmapPitch from "@/components/PlayerHeatmapPitch/PlayerHeatmapPitch";
 import XGPitch from "@/components/XGPitch/XGPitch";
 import StatystykiZespoluXgTab from "@/components/StatystykiZespoluXgTab/StatystykiZespoluXgTab";
@@ -28,6 +29,7 @@ import StatystykiZespoluPxtTab from "@/components/StatystykiZespoluPxtTab/Statys
 import StatystykiZespoluRegainsTab from "@/components/StatystykiZespoluRegainsTab/StatystykiZespoluRegainsTab";
 import StatystykiZespoluLosesTab from "@/components/StatystykiZespoluLosesTab/StatystykiZespoluLosesTab";
 import StatystykiZespoluGpsTab from "@/components/StatystykiZespoluGpsTab/StatystykiZespoluGpsTab";
+import StatystykiZespoluWyscoutTab from "@/components/StatystykiZespoluWyscoutTab/StatystykiZespoluWyscoutTab";
 import PossessionTimelineChart from "@/components/PossessionTimelineChart/PossessionTimelineChart";
 import { getPossessionSegmentsFromMatch } from "@/utils/possessionTimelineChart";
 import { buildPxtHalfSummaryForKpi, getTeamPackingActions } from "@/utils/statystykiZespoluPxtStats";
@@ -51,6 +53,10 @@ import {
 } from "@/utils/kpiRegainSequenceFlags";
 import SidePanel from "@/components/SidePanel/SidePanel";
 import YouTubeVideo, { YouTubeVideoRef } from "@/components/YouTubeVideo/YouTubeVideo";
+import MatchVideoFloatingPanel from "@/components/MatchVideoFloatingPanel/MatchVideoFloatingPanel";
+import { getVideoTimestampSeconds } from "@/utils/actionVideoSeekSeconds";
+import { hasExternalVideoSource } from "@/utils/externalVideoMatchInfo";
+import toast from "react-hot-toast";
 import { usePresentationMode } from "@/contexts/PresentationContext";
 import { getPkEntryKpiBreakdownCounts, isPkSfgEntry } from "@/lib/pkEntryKpiBreakdown";
 import { filterTeamsByUserAccess } from "@/lib/teamsForUserAccess";
@@ -185,13 +191,13 @@ export default function StatystykiZespoluPage() {
   const [isRefreshingData, setIsRefreshingData] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [expandedCategory, setExpandedCategory] = useState<
-    'kpi' | 'pxt' | 'xg' | 'pkEntries' | 'regains' | 'loses' | 'gps' | null
+    'kpi' | 'pxt' | 'xg' | 'pkEntries' | 'regains' | 'loses' | 'gps' | 'wyscout' | null
   >(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('statystykiZespolu_expandedCategory');
       if (saved === 'trendy') return 'kpi';
-      if (saved && ['kpi', 'pxt', 'xg', 'pkEntries', 'regains', 'loses', 'gps'].includes(saved)) {
-        return saved as 'kpi' | 'pxt' | 'xg' | 'pkEntries' | 'regains' | 'loses' | 'gps';
+      if (saved && ['kpi', 'pxt', 'xg', 'pkEntries', 'regains', 'loses', 'gps', 'wyscout'].includes(saved)) {
+        return saved as 'kpi' | 'pxt' | 'xg' | 'pkEntries' | 'regains' | 'loses' | 'gps' | 'wyscout';
       }
       return 'kpi';
     }
@@ -299,6 +305,9 @@ export default function StatystykiZespoluPage() {
   const [gpsMatchDayLoading, setGpsMatchDayLoading] = useState(false);
   const [xgMapModalOpen, setXgMapModalOpen] = useState(false);
   const [pkMapModalOpen, setPkMapModalOpen] = useState(false);
+  const [pkModalVideoOpen, setPkModalVideoOpen] = useState(false);
+  const [pkModalSeekSeconds, setPkModalSeekSeconds] = useState<number | null>(null);
+  const [pkModalSeekRequestId, setPkModalSeekRequestId] = useState(0);
   const [matchSelectOpen, setMatchSelectOpen] = useState(false);
   const matchSelectRef = useRef<HTMLDivElement>(null);
   const lastTeamWithMatchesRef = useRef<string>("");
@@ -3414,6 +3423,13 @@ export default function StatystykiZespoluPage() {
               >
                 <span className={styles.categoryName}>GPS</span>
               </button>
+              <button
+                type="button"
+                className={`${styles.categoryItem} ${expandedCategory === 'wyscout' ? styles.active : ''}`}
+                onClick={() => setExpandedCategory('wyscout')}
+              >
+                <span className={styles.categoryName}>Wyscout</span>
+              </button>
       </div>
 
             {/* Szczegóły poniżej */}
@@ -3738,7 +3754,7 @@ export default function StatystykiZespoluPage() {
                   // Oblicz % strzałów z 1T w strefie 1T (KANONICZNIE, niezależnie od obrotu UI)
                   const teamShots1T = teamShots.filter(isIn1TZoneCanonical);
                   const teamShots1TCount = teamShots1T.length;
-                  const teamShots1TContact1 = teamShots1T.filter(shot => shot.isContact1 === true).length;
+                  const teamShots1TContact1 = teamShots1T.filter(shot => isOneContactIn1TZone(shot)).length;
                   const team1TContact1Percentage = teamShots1TCount > 0 ? (teamShots1TContact1 / teamShots1TCount) * 100 : 0;
                   
                   // Wejścia w PK przeciwnika (teamContext === 'defense')
@@ -7709,7 +7725,7 @@ export default function StatystykiZespoluPage() {
                       const playerData = playerShotsMap.get(shot.playerId)!;
                       playerData.shots.push(shot);
                       playerData.totalXG += shot.xG || 0;
-                      if (shot.isContact1 === true) {
+                      if (isOneContactIn1TZone(shot)) {
                         playerData.contact1Count++;
                       }
                     }
@@ -7807,7 +7823,7 @@ export default function StatystykiZespoluPage() {
                                 const seconds = Math.floor(time % 60);
                                   const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
                                 const isGoal = shot.shotType === 'goal' || shot.isGoal === true;
-                                const isContact1 = shot.isContact1 === true;
+                                const isContact1 = isOneContactIn1TZone(shot);
                                 
                                 return (
                                   <button
@@ -7829,7 +7845,7 @@ export default function StatystykiZespoluPage() {
                                       fontWeight: '500',
                                       position: 'relative'
                                     }}
-                                    title={`${isGoal ? 'GOL • ' : ''}${isContact1 ? '1T • ' : ''}xG: ${(shot.xG || 0).toFixed(2)} • Minuta: ${shot.minute}'`}
+                                    title={`${isGoal ? 'GOL • ' : ''}${isContact1 ? '1 w strefie • ' : ''}xG: ${(shot.xG || 0).toFixed(2)} • Minuta: ${shot.minute}'`}
                                   >
                                     {timeString}
                                   </button>
@@ -8727,14 +8743,14 @@ export default function StatystykiZespoluPage() {
                     }
                     
                     const kpi1TPercentage = 85;
-                    // Skuteczne to te z isContact1 === true (1T)
+                    // Skuteczne: jeden kontakt w strefie 1T (stare strzały bez oznaczenia: isContact1)
                     entriesWithTime = teamShots1TFiltered
                       .map((shot: any) => ({
                         item: shot,
                         time: shot.videoTimestamp !== undefined && shot.videoTimestamp !== null
                           ? shot.videoTimestamp
                           : shot.videoTimestampRaw,
-                        isSuccessful: shot.isContact1 === true,
+                        isSuccessful: isOneContactIn1TZone(shot),
                         isGoal: shot.shotType === 'goal' || shot.isGoal === true
                       }))
                       .sort((a, b) => a.time - b.time);
@@ -9209,6 +9225,17 @@ export default function StatystykiZespoluPage() {
                   matchInfo={selectedMatchInfo}
                   teamName={availableTeams.find((t) => t.id === selectedTeam)?.name || 'Nasz zespół'}
                   isLoading={gpsMatchDayLoading}
+                />
+              </div>
+            )}
+            {expandedCategory === 'wyscout' && selectedMatchInfo && (
+              <div className={styles.detailsPanel}>
+                <h3>Wyscout</h3>
+                <StatystykiZespoluWyscoutTab
+                  lookballTeamId={selectedTeam}
+                  lookballTeamName={availableTeams.find((t) => t.id === selectedTeam)?.name || 'Nasz zespół'}
+                  matchDate={selectedMatchInfo.date}
+                  opponentName={matchOpponentDisplayName}
                 />
               </div>
             )}
@@ -10776,6 +10803,20 @@ export default function StatystykiZespoluPage() {
       )}
 
       {/* Modal – mapa wejść w PK */}
+      {pkMapModalOpen && selectedMatchInfo && pkModalVideoOpen ? (
+        <MatchVideoFloatingPanel
+          matchInfo={selectedMatchInfo}
+          title={`${selectedMatchInfo.teamName || "Zespół"} vs ${selectedMatchInfo.opponent || "przeciwnik"}`}
+          isOpen={pkModalVideoOpen}
+          seekTargetSeconds={pkModalSeekSeconds}
+          seekRequestId={pkModalSeekRequestId}
+          onSeekTargetConsumed={() => setPkModalSeekSeconds(null)}
+          onClose={() => {
+            setPkModalSeekSeconds(null);
+            setPkModalVideoOpen(false);
+          }}
+        />
+      ) : null}
       {pkMapModalOpen && selectedMatchInfo && (
         <div className={styles.mapsModalOverlay} onClick={() => setPkMapModalOpen(false)}>
           <div className={styles.mapsModalContent} onClick={(e) => e.stopPropagation()}>
@@ -10785,7 +10826,20 @@ export default function StatystykiZespoluPage() {
                   <PKEntriesPitch
                     pkEntries={pkEntriesForTeam}
                     playersIndex={playersIndex}
-                    onEntryClick={() => {}}
+                    onEntryClick={(entry) => {
+                      const videoSec = getVideoTimestampSeconds(entry);
+                      if (!hasExternalVideoSource(selectedMatchInfo)) {
+                        toast.error("Brak wideo dla tego meczu.");
+                        return;
+                      }
+                      if (videoSec === null) {
+                        toast.error("Brak znacznika czasu wideo dla tego wejścia.");
+                        return;
+                      }
+                      setPkModalVideoOpen(true);
+                      setPkModalSeekRequestId((id) => id + 1);
+                      setPkModalSeekSeconds(videoSec);
+                    }}
                     selectedEntryId={undefined}
                     matchInfo={selectedMatchInfo}
                     allTeams={availableTeams}

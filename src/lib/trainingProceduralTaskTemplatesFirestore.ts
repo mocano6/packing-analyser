@@ -8,6 +8,7 @@ import {
   createSeedProceduralTaskTemplates,
   sanitizeOptionalCoachId,
 } from "@/utils/proceduralTaskDefaults";
+import { sanitizeMatchProtocolTemplate } from "@/utils/matchProtocol";
 
 function safeUnixMs(n: unknown): number {
   const x = typeof n === "number" ? n : Number(n);
@@ -18,7 +19,7 @@ function safeUnixMs(n: unknown): number {
 export function defaultTrainingProceduralTaskTemplatesState(
   seed = false
 ): TrainingProceduralTaskTemplatesState {
-  return { templates: seed ? createSeedProceduralTaskTemplates() : [] };
+  return { templates: seed ? createSeedProceduralTaskTemplates() : [], matchProtocol: null };
 }
 
 export function sanitizeTrainingProceduralTaskTemplate(
@@ -45,6 +46,7 @@ export function migrateTrainingProceduralTaskTemplatesFromFirestore(
       templates: (inner.templates as Record<string, unknown>[])
         .map(sanitizeTrainingProceduralTaskTemplate)
         .filter((t) => t.id && t.title.trim()),
+      matchProtocol: sanitizeMatchProtocolTemplate(inner.matchProtocol),
     };
   }
 
@@ -62,6 +64,7 @@ export function buildSanitizedTrainingProceduralTaskTemplatesState(
       defaultMatchDayOffset: sanitizeDefaultMatchDayOffset(t.defaultMatchDayOffset),
       defaultCoachId: sanitizeOptionalCoachId(t.defaultCoachId),
     })),
+    matchProtocol: sanitizeMatchProtocolTemplate(state.matchProtocol) ?? null,
   };
 }
 

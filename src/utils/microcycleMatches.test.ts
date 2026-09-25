@@ -9,6 +9,9 @@ import {
   sanitizeMicrocycleMatchSurface,
   sanitizeMicrocycleWeatherCondition,
   sanitizeMicrocycleWeatherTempC,
+  pickSecondMatchDay,
+  setSecondMicrocycleMatch,
+  updateMicrocycleMatchAt,
 } from "./microcycleMatches";
 
 const legacy = normalizeMicrocycleMatches(undefined, [5, 2]);
@@ -79,5 +82,35 @@ assert.equal(
   }),
   "Słonecznie · 22°C"
 );
+
+// Drugi mecz wcześniejszy w tygodniu nie zamienia Mecz 1 z Meczem 2
+{
+  const saturday = {
+    ...createDefaultMicrocycleMatch(5),
+    opponent: "Legia",
+    kickoffTime: "20:30",
+    venue: "away" as const,
+  };
+  const withSecond = setSecondMicrocycleMatch([saturday], 2);
+  assert.equal(withSecond.length, 2);
+  assert.equal(withSecond[0].opponent, "Legia");
+  assert.equal(withSecond[0].dayIndex, 5);
+  assert.equal(withSecond[1].dayIndex, 2);
+  assert.deepEqual(matchDaysFromMatches(withSecond), [5, 2]);
+
+  const loaded = normalizeMicrocycleMatches(withSecond);
+  assert.equal(loaded[0].opponent, "Legia");
+  assert.equal(loaded[0].dayIndex, 5);
+  assert.equal(loaded[1].dayIndex, 2);
+
+  const patched = updateMicrocycleMatchAt(withSecond, 1, { opponent: "Puchar" });
+  assert.equal(patched[0].opponent, "Legia");
+  assert.equal(patched[1].opponent, "Puchar");
+  assert.equal(patched[0].dayIndex, 5);
+}
+
+assert.equal(pickSecondMatchDay(5), 2);
+assert.equal(pickSecondMatchDay(2), 1);
+assert.notEqual(pickSecondMatchDay(0), 0);
 
 console.log("microcycleMatches.test.ts: OK");

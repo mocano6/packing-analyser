@@ -39,8 +39,11 @@ export interface ResolvedDayLoad {
 }
 
 export function primaryMatchDayIndex(microcycle: TrainingMicrocycle | null | undefined): number {
-  const days = normalizeMatchDaysArray((microcycle?.matches ?? []).map((m) => m.dayIndex));
-  return days[0] ?? 5;
+  const first = microcycle?.matches?.[0]?.dayIndex;
+  if (typeof first === "number" && Number.isInteger(first) && first >= 0 && first <= 6) {
+    return first;
+  }
+  return 5;
 }
 
 function dayLoadEntry(
@@ -61,7 +64,7 @@ export function resolveDayLoad(
   blocks: MicrocycleTrainingBlock[] = []
 ): ResolvedDayLoad {
   const matchDays = normalizeMatchDaysArray((microcycle.matches ?? []).map((m) => m.dayIndex));
-  const primary = matchDays[0] ?? 5;
+  const primary = primaryMatchDayIndex(microcycle);
   const isMatchDay = matchDays.includes(dayIndex);
   const offset = isMatchDay ? 0 : periodizationOffset(dayIndex, primary);
   const rest = !isMatchDay && isRestDay(microcycle.restDays, dayIndex);

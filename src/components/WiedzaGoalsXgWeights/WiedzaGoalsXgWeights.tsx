@@ -31,7 +31,7 @@ export default function WiedzaGoalsXgWeights({
   compact = false,
   hideHint = false,
 }: WiedzaGoalsXgWeightsProps) {
-  const [referenceMetricId, setReferenceMetricId] = useState("w_gd_per_match");
+  const [referenceMetricId, setReferenceMetricId] = useState("w_match_points");
   const data = useMemo(() => buildWiedzaWeightsCorrelation(matches, 3), [matches]);
 
   /** Stan synchronizowany z listą metryk po zmianie próby. */
@@ -75,7 +75,7 @@ export default function WiedzaGoalsXgWeights({
           Wybierz jedną metrykę referencyjną, a tabela pokaże wszystkie jej korelacje dodatnie i ujemne posortowane od najsilniejszych.
           Kliknij wiersz korelacji, aby ustawić tę metrykę jako referencyjną.
           <strong>Kolory:</strong> r ≥ 0,4 zielono, r ≤ −0,4 czerwono.{" "}
-          <strong>Nagłówki:</strong> niebieski — nasz zespół (MY), bursztynowy — przeciwnik (OPP), fioletowy — wynik (W/R/P). Metryki źródłowe:{" "}
+          <strong>Nagłówki:</strong> niebieski — nasz zespół (MY), bursztynowy — przeciwnik (OPP), fioletowy — wynik (Punkty, W/R/P). Metryki źródłowe:{" "}
           <code style={{ fontSize: "12px" }}>wiedzaWeightsMetrics.ts</code>.
           {scopeHint ? ` ${scopeHint}` : ""}
         </p>

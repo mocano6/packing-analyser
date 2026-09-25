@@ -30,6 +30,7 @@ import ImportButton from "@/components/ImportButton/ImportButton";
 import { initializeTeams, checkTeamsCollection } from "@/utils/initializeTeams";
 import { useAuth } from "@/hooks/useAuth";
 import toast from 'react-hot-toast';
+import { getVideoTimestampSeconds } from "@/utils/actionVideoSeekSeconds";
 import {
   collection,
   doc,
@@ -61,6 +62,8 @@ import {
   sanitizePossessionSegments,
   upsertPossessionSegments,
 } from "@/lib/possessionSegmentsUpsert";
+import { loadMatchClockChangePreview, persistRecalculatedMatchClock } from "@/lib/persistRecalculatedMatchClock";
+import { reassignPossessionSegmentHalves } from "@/utils/recalculateMatchClock";
 import pitchHeaderStyles from "@/components/PitchHeader/PitchHeader.module.css";
 import PossessionCounterToggle from "@/components/PossessionCounterToggle/PossessionCounterToggle";
 import {
@@ -683,6 +686,7 @@ export default function Page() {
     handleDeleteMatch,
     handleSavePlayerMinutes,
     handleUpdateMatchData,
+    patchSelectedMatchLocal,
     fetchMatches,
     forceRefreshFromFirebase,
     isOfflineMode
@@ -2781,6 +2785,73 @@ export default function Page() {
       alert("Wystąpił błąd przy zapisywaniu meczu. Spróbuj ponownie.");
       return null;
     }
+  };
+
+  const handlePreviewRecalculateEventTimes = async (timing: {
+    firstHalfStartTime?: number;
+    secondHalfStartTime?: number;
+  }) => {
+    const matchId = matchInfo?.matchId;
+    if (!matchId) return null;
+    const preview = await loadMatchClockChangePreview(matchId, timing);
+    return {
+      ...preview,
+      rows: preview.rows.map((row) => {
+        if (!row.playerId) return row;
+        const player = players.find((item) => item.id === row.playerId);
+        if (!player) return row;
+        const name = getPlayerFullName(player);
+        return {
+          ...row,
+          detail: row.detail ? `${name} · ${row.detail}` : name,
+        };
+      }),
+    };
+  };
+
+  const handleRecalculateEventTimes = async (timing: {
+    firstHalfStartTime?: number;
+    secondHalfStartTime?: number;
+  }) => {
+    const matchId = matchInfo?.matchId;
+    if (!matchId) return null;
+    const result = await persistRecalculatedMatchClock(matchId, timing);
+    const nextDraft = reassignPossessionSegmentHalves(
+      possessionDraftSegmentsRef.current,
+      timing.secondHalfStartTime
+    );
+    if (typeof window !== "undefined" && possessionDraftSegmentsRef.current.length > 0) {
+      localStorage.setItem(`possession_draft_segments_${matchId}`, JSON.stringify(nextDraft));
+    }
+    setPossessionDraftSegments(nextDraft);
+    const savedSegments = sanitizePossessionSegments(result.possessionSegments ?? []);
+    if (savedSegments.length > 0) {
+      possessionBaseSecRef.current = possessionSegmentsToNormalizedCounters(savedSegments);
+    }
+    setPossessionSec(
+      addPossessionCounters(
+        possessionBaseSecRef.current,
+        possessionSegmentsToNormalizedCounters(nextDraft)
+      )
+    );
+    patchSelectedMatchLocal(matchId, {
+      firstHalfStartTime: timing.firstHalfStartTime ?? null,
+      secondHalfStartTime: timing.secondHalfStartTime ?? null,
+      matchData: {
+        ...(savedSegments.length > 0 ? { possessionSegments: savedSegments } : {}),
+        ...(result.possession ? { possession: result.possession } : {}),
+      },
+    });
+    await loadActionsForMatch(matchId);
+    await Promise.all([refetchShots(), refetchPKEntries(), refetchAcc8sEntries()]);
+    const skipped =
+      result.skippedWithoutVideoTime > 0
+        ? ` Pominięto ${result.skippedWithoutVideoTime} bez czasu wideo.`
+        : "";
+    toast.success(
+      `Przeliczono ${result.updatedEvents} zdarzeń i ${result.updatedSegments} segmentów posiadania.${skipped}`
+    );
+    return result;
   };
 
   // Obsługa zapisywania edytowanego meczu
@@ -5249,6 +5320,10 @@ export default function Page() {
                 editingEntry: entry,
               });
               setIsPKEntryModalOpen(true);
+              const videoSec = getVideoTimestampSeconds(entry);
+              if (videoSec !== null) {
+                void seekActiveVideo(videoSec);
+              }
             }}
             selectedEntryId={selectedPKEntryId}
             matchInfo={matchInfo || undefined}
@@ -6577,6 +6652,8 @@ export default function Page() {
           isOpen={isMatchModalOpen}
           onClose={closeEditMatchModal}
           onSave={handleSaveEditedMatch}
+          onPreviewRecalculateEventTimes={handlePreviewRecalculateEventTimes}
+          onRecalculateEventTimes={handleRecalculateEventTimes}
           currentInfo={matchInfo}
           teamsCatalog={availableTeams}
           userTeamAccess={userTeamAccess}

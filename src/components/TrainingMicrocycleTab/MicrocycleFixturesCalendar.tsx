@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import type { LaczyTeamFixture } from "@/types/trainingMicrocycle";
+import type { LaczyTeamFixture, TrainingMicrocycle } from "@/types/trainingMicrocycle";
 import { toIsoDateLocal } from "@/utils/matchDayLabels";
 import {
   buildMonthCalendarCells,
   fixtureCalendarChip,
+  fixtureIsoDate,
   formatFixtureChipLabel,
   groupFixturesByIsoDate,
+  groupManualCalendarChipsByIsoDate,
   isIsoInWeek,
   monthFromIso,
   shiftCalendarMonth,
@@ -45,6 +47,8 @@ export type MicrocycleFixturesCalendarProps = {
   watchFixtures: LaczyTeamFixture[];
   watchTeamId: string | null;
   watchTeamName: string | null;
+  /** Mikrocykle sezonu — terminy dodane ręcznie też widać na kalendarzu. */
+  microcycles?: Pick<TrainingMicrocycle, "weekStartIso" | "matches">[];
   onSelectWeek: (weekStartIso: string) => void;
 };
 
@@ -56,6 +60,7 @@ export default function MicrocycleFixturesCalendar({
   watchFixtures,
   watchTeamId,
   watchTeamName,
+  microcycles = [],
   onSelectWeek,
 }: MicrocycleFixturesCalendarProps) {
   const [{ year, monthIndex }, setMonth] = useState(() => monthFromIso(weekStartIso));
@@ -73,16 +78,24 @@ export default function MicrocycleFixturesCalendar({
   );
   const ownByDay = useMemo(() => groupFixturesByIsoDate(ownFixtures), [ownFixtures]);
   const watchByDay = useMemo(() => groupFixturesByIsoDate(watchFixtures), [watchFixtures]);
+  const manualByDay = useMemo(() => {
+    const occupied = new Set<string>();
+    for (const f of ownFixtures) {
+      const iso = fixtureIsoDate(f);
+      if (iso) occupied.add(iso);
+    }
+    return groupManualCalendarChipsByIsoDate(microcycles, occupied);
+  }, [microcycles, ownFixtures]);
   const todayIso = toIsoDateLocal(new Date());
 
   const goMonth = (delta: number) => {
     setMonth((prev) => shiftCalendarMonth(prev.year, prev.monthIndex, delta));
   };
 
-  const hasAny = ownFixtures.length > 0 || watchFixtures.length > 0;
+  const hasAny = ownFixtures.length > 0 || watchFixtures.length > 0 || manualByDay.size > 0;
 
   return (
-    <div className={styles.lnpCalendar} role="region" aria-label="Kalendarz meczów ŁNP">
+    <div className={styles.lnpCalendar} role="region" aria-label="Kalendarz meczów">
       <div className={styles.lnpCalendarNav}>
         <button
           type="button"
@@ -111,7 +124,7 @@ export default function MicrocycleFixturesCalendar({
       </div>
       <p className={styles.lnpCalendarHint}>
         Mecze z linku ŁNP wpadają same do mikrocyklu, którego tydzień (zaznaczony)
-        pokrywa się z datą meczu.
+        pokrywa się z datą meczu. Terminy dodane ręcznie też widać na kalendarzu.
       </p>
       <div className={styles.lnpCalendarGrid} role="grid" aria-label={formatMonthHeadingPl(year, monthIndex)}>
         {WEEKDAY_HEADERS.map((label) => (
@@ -122,17 +135,21 @@ export default function MicrocycleFixturesCalendar({
         {cells.map((cell) => {
           const own = ownByDay.get(cell.iso) ?? [];
           const watch = watchByDay.get(cell.iso) ?? [];
+          const manual = manualByDay.get(cell.iso) ?? [];
           const inWeek = isIsoInWeek(cell.iso, weekStartIso);
           const isToday = cell.iso === todayIso;
           const weekStart = weekStartIsoFromDateIso(cell.iso);
           const ownChips = ownTeamId
             ? own.map((f) => fixtureCalendarChip(f, ownTeamId))
             : [];
-          const hasOwnHome = ownChips.some((c) => c.isHome);
-          const hasOwnAway = ownChips.some((c) => !c.isHome);
+          const hasOwnHome = ownChips.some((c) => c.isHome) || manual.some((c) => c.isHome);
+          const hasOwnAway = ownChips.some((c) => !c.isHome) || manual.some((c) => !c.isHome);
           const labelParts = [String(cell.dayOfMonth)];
           if (own.length > 0 && ownTeamId) {
             labelParts.push(own.map((f) => formatFixtureChipLabel(f, ownTeamId)).join(", "));
+          }
+          if (manual.length > 0) {
+            labelParts.push(manual.map((c) => c.label).join(", "));
           }
           if (watch.length > 0 && watchTeamId) {
             labelParts.push(
@@ -152,7 +169,9 @@ export default function MicrocycleFixturesCalendar({
                 hasOwnHome && !hasOwnAway ? styles.lnpCalendarCellHome : "",
                 hasOwnAway && !hasOwnHome ? styles.lnpCalendarCellAway : "",
                 hasOwnHome && hasOwnAway ? styles.lnpCalendarCellOwn : "",
-                watch.length > 0 && own.length === 0 ? styles.lnpCalendarCellWatch : "",
+                watch.length > 0 && own.length === 0 && manual.length === 0
+                  ? styles.lnpCalendarCellWatch
+                  : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -192,6 +211,21 @@ export default function MicrocycleFixturesCalendar({
                   </span>
                 );
               })}
+              {manual.map((chip, i) => (
+                <span
+                  key={`m-${cell.iso}-${i}`}
+                  className={`${styles.lnpCalendarChip} ${styles.lnpCalendarChipManual} ${
+                    chip.isHome ? styles.lnpCalendarChipHome : styles.lnpCalendarChipAway
+                  }`}
+                >
+                  <span className={styles.lnpCalendarVenue} aria-hidden>
+                    {chip.venueShort}
+                  </span>
+                  <span className={styles.lnpCalendarChipText}>
+                    {[chip.timeLabel, chip.opponent].filter(Boolean).join(" ")}
+                  </span>
+                </span>
+              ))}
               {watch.map((f) => {
                 const chip = watchTeamId ? fixtureCalendarChip(f, watchTeamId) : null;
                 return (
@@ -251,6 +285,13 @@ export default function MicrocycleFixturesCalendar({
         {ownTeamName && (
           <span className={styles.lnpCalendarLegendItem}>
             <span className={styles.lnpCalendarLegendTeam}>{ownTeamName}</span>
+          </span>
+        )}
+        {manualByDay.size > 0 && (
+          <span className={styles.lnpCalendarLegendItem}>
+            <span className={`${styles.lnpCalendarChip} ${styles.lnpCalendarChipManual} ${styles.lnpCalendarChipHome}`}>
+              Ręczny
+            </span>
           </span>
         )}
         <span className={styles.lnpCalendarLegendWeek}>Tydzień mikrocyklu</span>

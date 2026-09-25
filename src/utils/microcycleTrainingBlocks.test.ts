@@ -71,6 +71,7 @@ assert.equal(blocksForDay(week, 1).length, presetBlocksForDay("mc1", 1, [5]).len
 // Wybór formatu podstawia wymiary, wyczyszczenie je zostawia bez formatu
 const empty = createEmptyBlock("mc1", 3, 0);
 assert.equal(empty.formatId, null);
+assert.equal(empty.imageUrl, undefined);
 assert.equal(blockAreaPerPlayer(empty), null);
 const with7v7 = applyFormatToBlock(empty, "7v7");
 assert.equal(with7v7.pitchLength, 60);
@@ -113,7 +114,33 @@ assert.equal(normalized.length, 1);
 assert.equal(normalized[0].dayIndex, 0); // 9 poza zakresem → 0
 assert.deepEqual(normalized[0].tags, ["ssg", "nordic"]);
 assert.equal(normalized[0].formatId, "6v6");
+assert.equal(normalized[0].imageUrl, undefined);
 assert.equal(normalizeTrainingBlocks("nie tablica").length, 0);
+
+const TINY_PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const withImage = normalizeTrainingBlocks([
+  {
+    id: "img1",
+    microcycleId: "mc1",
+    dayIndex: 1,
+    name: "Z grafiką",
+    minutes: 10,
+    notes: "",
+    tags: [],
+    imageUrl: TINY_PNG,
+  },
+  {
+    id: "img2",
+    microcycleId: "mc1",
+    dayIndex: 1,
+    name: "Zła grafika",
+    minutes: 10,
+    imageUrl: "https://example.com/x.png",
+  },
+]);
+assert.equal(withImage[0].imageUrl, TINY_PNG);
+assert.equal(withImage[1].imageUrl, undefined);
 
 // Filtrowanie po mikrocyklu i sortowanie
 const mixed = [...presetBlocksForDay("mc2", 1, [5]), ...mdStrength];

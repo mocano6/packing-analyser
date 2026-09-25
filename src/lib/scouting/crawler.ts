@@ -1,8 +1,9 @@
 // Crawler API rozgrywek laczynaspilka.pl (TYLKO SERWER).
 //
 // Prosta ścieżka (domyślna):
-//  1) sync sam otwiera zwykły Chrome (nie Playwright) z profilem .scouting-profile,
-//  2) podłącza się przez CDP i przechwytuje token reCAPTCHA z /rozgrywki,
+//  1) sync / mikrocykl otwiera zwykły Chrome (nie Playwright) z profilem .scouting-profile,
+//  2) podłącza się przez CDP i przechwytuje token reCAPTCHA z gołego /rozgrywki
+//     (deep-link drużyny/meczu częściej kończy na SPA /404 i pali sesję),
 //  3) KAŻDA paczka żądań dostaje ŚWIEŻY token i od razu go zużywa (Bearer ~2 s),
 //  4) małe bursty + pauza między paczkami; przy 403 raz auto-reset .scouting-profile.
 //
@@ -18,16 +19,27 @@ import http from 'http';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { ScoutingDebugLogger } from './debugLog';
 import { dismissCookieConsent } from './cookieConsent';
+import { ROZGRYWKI_HOME_URL } from './rozgrywkiUrl';
+import {
+  isRozgrywkiHomePath,
+  isSpa404Url,
+  normalizeTokenMintUrlCandidates,
+  shouldMarkAuthDeadOnSpa404,
+  shouldReuseExistingCdpPage,
+} from './tokenMintUrl';
+import type { HarvestedApiHit } from '@/utils/laczyFixturesHarvest';
+import { harvestHasCompleteMatchLists, harvestHasMatchLists, isLaczyCompetitionApiUrl } from '@/utils/laczyFixturesHarvest';
+import { clearAuthCooldown, markAuthCooldown, readAuthCooldownMessage } from './authCooldown';
 import {
   isBearerStillFresh,
   TOKEN_MAX_AGE_MS,
   DEFAULT_BURST_SIZE,
 } from './syncLimits';
 
-const API_BASE = 'https://competition-api-pro.laczynaspilka.pl/api/bus/competition/v1/';
-const ROZGRYWKI_URL = 'https://www.laczynaspilka.pl/rozgrywki';
+// Host z appConfig.urls.apiCompetition w bundlu SPA. Stary `competition-api-pro`
+// odpowiada już tylko 401 — stąd kaskada 401 → remint → 403 na Authorize.
+const API_BASE = 'https://competition-api-pro2.laczynaspilka.pl/api/bus/competition/v1/';
 const PROFILE_DIR = path.join(process.cwd(), '.scouting-profile');
-const SITE_ORIGIN = 'https://www.laczynaspilka.pl';
 const DEFAULT_CDP_PORT = 9333;
 
 /** Ile czekamy na token po załadowaniu strony (reCAPTCHA bywa opóźniona). */
@@ -55,9 +67,6 @@ const CHROME_CANDIDATES = [
   'chromium',
   'chromium-browser',
 ];
-
-/** Czy aktualny URL to wewnętrzna strona 404 SPA (nie HTTP 404). */
-const isSpa404Url = (url: string): boolean => /\/rozgrywki\/404(?:\?|#|$)/.test(url);
 
 const findChromeBinary = (): string | null => {
   for (const c of CHROME_CANDIDATES) {
@@ -116,10 +125,49 @@ const waitForCdp = (port: number, timeoutMs = 20000): Promise<void> =>
     tryOnce();
   });
 
+/** Czeka aż port CDP przestanie odpowiadać (po pkill, zanim odpalimy nowy Chrome). */
+const waitForCdpDown = (port: number, timeoutMs = 8000): Promise<void> =>
+  new Promise((resolve) => {
+    const started = Date.now();
+    const tryOnce = (): void => {
+      const req = http.get(`http://127.0.0.1:${port}/json/version`, (res) => {
+        res.resume();
+        retry();
+      });
+      req.on('error', () => resolve());
+      req.setTimeout(400, () => {
+        req.destroy();
+        retry();
+      });
+    };
+    const retry = (): void => {
+      if (Date.now() - started > timeoutMs) {
+        resolve();
+        return;
+      }
+      setTimeout(tryOnce, 250);
+    };
+    tryOnce();
+  });
+
+const killScoutingChromeProcesses = (): void => {
+  try {
+    execSync('pkill -f "user-data-dir=.*scouting-profile" 2>/dev/null || true', { stdio: 'ignore' });
+  } catch {
+    /* ignore */
+  }
+};
+
 /** Komunikat gdy reCAPTCHA/API odrzuca automatyzację (po nieudanym auto-resetcie). */
 export const SCOUTING_AUTH_HELP =
   'API odrzuciło reCAPTCHA (403) / strona na /404 — auto-reset profilu Chrome też nie pomógł. ' +
-  'Poczekaj 1–2 minuty i kliknij Sync ponownie. W ostateczności: rm -rf .scouting-profile && npm run scouting:warmup.';
+  'Poczekaj 1–2 minuty i spróbuj ponownie (Odśwież dane / Odśwież podgląd / Sync). ' +
+  'W ostateczności: rm -rf .scouting-profile && npm run scouting:warmup.';
+
+export const SCOUTING_HARVEST_AUTH_HELP =
+  'ŁNP odrzuciło reCAPTCHA przy wczytywaniu strony drużyny (403/404). ' +
+  'Poczekaj 2 minuty i kliknij Odśwież dane / Odśwież podgląd RAZ — bez auto-resetu, bez własnego tokenu. ' +
+  'Każde kolejne kliknięcie pogarsza blokadę.';
 
 export interface BurstResult<T = unknown> {
   status: number;
@@ -137,6 +185,12 @@ export interface CrawlerOptions {
   initialRozgrywkiUrl?: string;
   /** Zapasowe URL kotwicy (zwykle tylko /rozgrywki). */
   initialRozgrywkiUrlCandidates?: string[];
+  /** Pierwszy URL okna Chrome (harvest terminarza: about:blank). */
+  landingUrl?: string;
+  /** Nie podłączaj się do istniejącego Chrome — zawsze świeża sesja. */
+  neverReuseCdp?: boolean;
+  /** Nie kasuj profilu po 403 (harvest strony drużyny). */
+  disableAutoReset?: boolean;
 }
 
 export class LaczyCrawler {
@@ -144,8 +198,8 @@ export class LaczyCrawler {
   private cdpBrowser: Browser | null = null;
   private page: Page | null = null;
   private bearer: string | null = null;
-  private rozgrywkiUrl = ROZGRYWKI_URL;
-  private rozgrywkiUrlCandidates: string[] = [ROZGRYWKI_URL];
+  private rozgrywkiUrl = ROZGRYWKI_HOME_URL;
+  private rozgrywkiUrlCandidates: string[] = [ROZGRYWKI_HOME_URL];
   private cdpMode = false;
   /** Czy to my uruchomiliśmy Chrome (wtedy zamykamy go w close()). */
   private ownsChromeProcess = false;
@@ -162,14 +216,22 @@ export class LaczyCrawler {
   private listenedPages = new WeakSet<Page>();
   private consentAbsentLogged = false;
   private consentDone = false;
+  private harvestedHits: HarvestedApiHit[] = [];
+  private harvestListening = false;
   private readonly headless: boolean;
   private readonly burstSize: number;
   private readonly debug: ScoutingDebugLogger | null;
+  private readonly landingUrl: string;
+  private readonly neverReuseCdp: boolean;
+  private readonly disableAutoReset: boolean;
 
   constructor(opts: CrawlerOptions = {}) {
     this.headless = opts.headless ?? process.env.SCOUTING_HEADLESS === 'true';
     this.burstSize = opts.burstSize ?? DEFAULT_BURST_SIZE;
     this.debug = opts.debugLog ?? null;
+    this.landingUrl = opts.landingUrl?.trim() || ROZGRYWKI_HOME_URL;
+    this.neverReuseCdp = opts.neverReuseCdp === true;
+    this.disableAutoReset = opts.disableAutoReset === true;
     if (opts.initialRozgrywkiUrlCandidates?.length) {
       this.setRozgrywkiUrlCandidates(opts.initialRozgrywkiUrlCandidates);
     } else if (opts.initialRozgrywkiUrl) {
@@ -182,20 +244,22 @@ export class LaczyCrawler {
   }
 
   setRozgrywkiUrl(url: string): void {
-    if (url.startsWith(`${SITE_ORIGIN}/rozgrywki`)) {
-      this.rozgrywkiUrl = url;
-      this.rozgrywkiUrlCandidates = [url, ...this.rozgrywkiUrlCandidates.filter((u) => u !== url)];
-    }
+    this.setRozgrywkiUrlCandidates([url, ...this.rozgrywkiUrlCandidates]);
   }
 
   setRozgrywkiUrlCandidates(urls: string[]): void {
-    const valid = urls.filter((u) => u.startsWith(`${SITE_ORIGIN}/rozgrywki`));
-    if (!valid.length) return;
+    const valid = normalizeTokenMintUrlCandidates(urls);
     this.rozgrywkiUrlCandidates = valid;
     this.rozgrywkiUrl = valid[0];
   }
 
   async open(): Promise<void> {
+    const cooldown = readAuthCooldownMessage();
+    if (cooldown) {
+      this.authDead = true;
+      this.lastAuthDeadDetail = cooldown;
+      throw new Error(cooldown);
+    }
     const cdpUrl = process.env.SCOUTING_CDP_URL?.trim();
     if (!cdpUrl) {
       if (process.env.SCOUTING_RESET_PROFILE === '1') {
@@ -223,6 +287,7 @@ export class LaczyCrawler {
     const pages = this.ctx.pages();
     for (const p of pages) this.attachTokenListener(p);
     this.page =
+      pages.find((p) => isRozgrywkiHomePath(p.url()) && !isSpa404Url(p.url())) ||
       pages.find((p) => /laczynaspilka\.pl\/rozgrywki/i.test(p.url()) && !isSpa404Url(p.url())) ||
       pages.find((p) => /laczynaspilka\.pl/i.test(p.url())) ||
       pages[0] ||
@@ -230,6 +295,20 @@ export class LaczyCrawler {
     this.attachTokenListener(this.page);
     this.page.setDefaultNavigationTimeout(90000);
     this.debug?.ok('browser', label, { detail: cdpUrl });
+  }
+
+  private async disconnectCdpOnly(): Promise<void> {
+    if (this.cdpBrowser) {
+      try {
+        await this.cdpBrowser.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.cdpBrowser = null;
+    this.ctx = null;
+    this.page = null;
+    this.cdpMode = false;
   }
 
   /**
@@ -251,15 +330,25 @@ export class LaczyCrawler {
     const cdpUrl = `http://127.0.0.1:${port}`;
     fs.mkdirSync(PROFILE_DIR, { recursive: true });
 
-    // Jeśli ktoś już trzyma CDP na tym porcie z naszym profilem — użyj go.
-    try {
-      await waitForCdp(port, 800);
-      await this.attachToCdp(cdpUrl, 'Połączono z już działającym Chrome (CDP)');
-      this.ownsChromeProcess = false;
-      return true;
-    } catch {
-      /* startujemy własny */
+    if (!this.neverReuseCdp) {
+      try {
+        await waitForCdp(port, 800);
+        await this.attachToCdp(cdpUrl, 'Połączono z już działającym Chrome (CDP)');
+        const url = this.page?.url() || '';
+        if (shouldReuseExistingCdpPage(url)) {
+          this.ownsChromeProcess = false;
+          this.debug?.ok('browser', 'Reuse Chrome na /rozgrywki', { detail: url });
+          return true;
+        }
+        this.debug?.warn('browser', 'Istniejący Chrome nie nadaje się — restart', { detail: url });
+        await this.disconnectCdpOnly();
+      } catch {
+        /* startujemy własny */
+      }
     }
+
+    killScoutingChromeProcesses();
+    await waitForCdpDown(port);
 
     prepareProfile();
     const child = spawn(
@@ -271,7 +360,7 @@ export class LaczyCrawler {
         '--disable-blink-features=AutomationControlled',
         '--no-first-run',
         '--no-default-browser-check',
-        this.rozgrywkiUrl || ROZGRYWKI_URL,
+        this.landingUrl,
       ],
       { stdio: 'ignore', detached: true }
     );
@@ -302,7 +391,7 @@ export class LaczyCrawler {
       /* ignore */
     }
     try {
-      execSync('pkill -f "user-data-dir=.*scouting-profile" 2>/dev/null || true', { stdio: 'ignore' });
+      killScoutingChromeProcesses();
     } catch {
       /* ignore */
     }
@@ -409,6 +498,7 @@ export class LaczyCrawler {
           this.bearer = body;
           this.tokenAt = Date.now();
           this.auth403Count = 0;
+          clearAuthCooldown();
           this.debug?.ok('token', 'Przechwycono token reCAPTCHA', { detail: `JWT ${body.slice(0, 24)}…` });
         }
       } catch {
@@ -425,6 +515,7 @@ export class LaczyCrawler {
 
   private finalizeAuthDead(): void {
     this.authDead = true;
+    markAuthCooldown();
     if (this.authDeadLogged) return;
     this.authDeadLogged = true;
     this.debug?.error('token', SCOUTING_AUTH_HELP, {
@@ -443,6 +534,7 @@ export class LaczyCrawler {
    * Max 1× na sesję sync — żeby nie kręcić się w nieskończoność przy blokadzie IP.
    */
   private async tryAutoResetProfile(): Promise<boolean> {
+    if (this.disableAutoReset) return false;
     if (this.profileResets >= MAX_AUTO_PROFILE_RESETS) return false;
     // Zewnętrzny CDP użytkownika — nie kasujemy mu profilu w tle.
     if (process.env.SCOUTING_CDP_URL?.trim()) return false;
@@ -467,13 +559,15 @@ export class LaczyCrawler {
     }
 
     try {
-      execSync('pkill -f "user-data-dir=.*scouting-profile" 2>/dev/null || true', { stdio: 'ignore' });
+      killScoutingChromeProcesses();
     } catch {
       /* ignore */
     }
     prepareProfile();
     fs.rmSync(PROFILE_DIR, { recursive: true, force: true });
-    await new Promise((r) => setTimeout(r, 2000));
+    const port = Number(process.env.SCOUTING_CDP_PORT || DEFAULT_CDP_PORT);
+    await waitForCdpDown(port);
+    await new Promise((r) => setTimeout(r, 500));
 
     try {
       await this.launchContext();
@@ -533,10 +627,8 @@ export class LaczyCrawler {
   private async waitForToken(maxMs: number): Promise<void> {
     for (let t = 0; t < maxMs && !this.bearer; t += 100) {
       if (this.isAuthDead()) return;
-      if (this.page && isSpa404Url(this.page.url())) {
-        this.markAuthDead(this.page.url());
-        return;
-      }
+      // /404 przerywa czekanie; caller decyduje, czy spalić sesję (kolejny kandydat vs authDead).
+      if (this.page && isSpa404Url(this.page.url())) return;
       await this.safeWait(100);
     }
   }
@@ -551,15 +643,11 @@ export class LaczyCrawler {
 
     this.clearToken();
 
-    if (isSpa404Url(this.page.url())) {
-      // Jedna szansa: wróć na goły /rozgrywki zamiast reloadować /404.
-      await this.page.goto(ROZGRYWKI_URL, { waitUntil: 'commit', timeout: 90000 }).catch(() => undefined);
-    } else if (/laczynaspilka\.pl\/rozgrywki/i.test(this.page.url())) {
-      await this.page.reload({ waitUntil: 'commit', timeout: 90000 }).catch(() => undefined);
+    if (isSpa404Url(this.page.url()) || !isRozgrywkiHomePath(this.page.url())) {
+      // Mint zawsze z gołego /rozgrywki — nie reloaduj deep-linku ani /404.
+      await this.page.goto(ROZGRYWKI_HOME_URL, { waitUntil: 'commit', timeout: 90000 }).catch(() => undefined);
     } else {
-      await this.page
-        .goto(this.rozgrywkiUrl || ROZGRYWKI_URL, { waitUntil: 'commit', timeout: 90000 })
-        .catch(() => undefined);
+      await this.page.reload({ waitUntil: 'commit', timeout: 90000 }).catch(() => undefined);
     }
 
     await this.waitForToken(SOFT_MINT_WAIT_MS);
@@ -579,37 +667,102 @@ export class LaczyCrawler {
     await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => undefined);
     await this.dismissConsentIfPresent();
     if (!this.bearer) await this.waitForToken(TOKEN_WAIT_MS);
-    if (isSpa404Url(this.page.url())) {
-      this.markAuthDead(this.page.url());
-      return false;
-    }
+    // SPA /404 na tym URL — wróć false, żeby navigate spróbował następnego kandydata.
     return this.bearer != null || !isSpa404Url(this.page.url());
   }
 
   private async navigate(): Promise<void> {
     if (!this.page) throw new Error('Crawler nie został otwarty');
 
-    if (
-      this.cdpMode &&
-      /laczynaspilka\.pl\/rozgrywki/i.test(this.page.url()) &&
-      !isSpa404Url(this.page.url())
-    ) {
+    if (this.cdpMode && isRozgrywkiHomePath(this.page.url()) && !isSpa404Url(this.page.url())) {
       this.debug?.info('navigate', 'Używam otwartej karty Rozgrywki', { detail: this.page.url() });
       await this.dismissConsentIfPresent();
-      this.rozgrywkiUrl = this.page.url();
+      this.rozgrywkiUrl = ROZGRYWKI_HOME_URL;
       return;
     }
 
-    for (const url of this.rozgrywkiUrlCandidates) {
+    const candidates = this.rozgrywkiUrlCandidates;
+    for (let i = 0; i < candidates.length; i++) {
       if (this.isAuthDead()) break;
+      const url = candidates[i];
       if (await this.loadRozgrywkiUrl(url)) {
-        this.rozgrywkiUrl = url;
+        this.rozgrywkiUrl = ROZGRYWKI_HOME_URL;
         this.debug?.info('navigate', 'Załadowano stronę', { detail: this.page.url() });
         this.clearToken();
         return;
       }
       this.debug?.info('navigate', 'URL → /404, próbuję następny…', { detail: this.page.url() });
+      const hasMore = i < candidates.length - 1;
+      if (isSpa404Url(this.page.url()) && shouldMarkAuthDeadOnSpa404(hasMore)) {
+        this.markAuthDead(this.page.url());
+        break;
+      }
     }
+    if (this.page && isSpa404Url(this.page.url())) {
+      this.markAuthDead(this.page.url());
+    }
+  }
+
+  private attachHarvestListener(page: Page): void {
+    if (this.harvestListening) return;
+    this.harvestListening = true;
+    page.on('response', async (res) => {
+      try {
+        const url = res.url();
+        if (!isLaczyCompetitionApiUrl(url)) return;
+        let data: unknown = null;
+        try {
+          const txt = await res.text();
+          data = txt ? JSON.parse(txt) : null;
+        } catch {
+          data = null;
+        }
+        this.harvestedHits.push({ url, status: res.status(), data });
+        this.debug?.logApi(url.replace(/^https:\/\/competition-api-pro\.laczynaspilka\.pl\/api\/bus\/competition\/v1\//, ''), res.status(), data);
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /**
+   * Otwiera stronę drużyny i zbiera JSON, który SPA sama woła po reCAPTCHA.
+   * Bez mintowania Bearer i bez auto-resetu profilu.
+   */
+  async openHarvest(targetUrl: string, teamId: string, timeoutMs = 28000): Promise<HarvestedApiHit[]> {
+    const cooldown = readAuthCooldownMessage();
+    if (cooldown) {
+      this.authDead = true;
+      this.lastAuthDeadDetail = cooldown;
+      throw new Error(cooldown);
+    }
+    this.harvestedHits = [];
+    this.harvestListening = false;
+    await this.launchContext();
+    if (!this.page) throw new Error('Crawler nie został otwarty');
+    this.attachHarvestListener(this.page);
+    this.debug?.info('navigate', 'Harvest strony drużyny', { detail: targetUrl });
+    await this.page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => undefined);
+    await this.dismissConsentIfPresent();
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      if (harvestHasCompleteMatchLists(this.harvestedHits, teamId)) break;
+      if (this.isAuthDead()) break;
+      if (isSpa404Url(this.page.url()) && !harvestHasMatchLists(this.harvestedHits, teamId)) {
+        this.markAuthDead(this.page.url());
+        break;
+      }
+      await this.safeWait(250);
+    }
+    this.debug?.info('api', `Harvest: ${this.harvestedHits.length} odpowiedzi API`, {
+      detail: this.page.url(),
+    });
+    if (harvestHasMatchLists(this.harvestedHits, teamId)) {
+      clearAuthCooldown();
+    } else if (this.isAuthDead()) {
+      markAuthCooldown();
+    }
+    return this.harvestedHits;
   }
 
   /**

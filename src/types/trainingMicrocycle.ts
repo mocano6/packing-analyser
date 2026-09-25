@@ -119,6 +119,8 @@ export interface MicrocycleTrainingBlock {
   playersPerSide: number | null;
   tags: MotorTagId[];
   notes: string;
+  /** Grafika ćwiczenia (data URL po kompresji), wklejana ze schowka. */
+  imageUrl?: string;
 }
 
 export interface TrainingMicrocycle {
@@ -203,6 +205,47 @@ export interface MicrocycleProceduralTask {
   coachId?: string | null;
 }
 
+/** Podzadanie protokołu meczowego — offset od godziny meczu. */
+export interface MatchProtocolSubtaskTemplate {
+  id: string;
+  title: string;
+  notes?: string;
+  /** Minuty względem kickoff: dodatnie = przed meczem (−), ujemne = po meczu (+), 0 = godzina meczu. */
+  minutesBeforeKickoff: number;
+  coachId?: string | null;
+}
+
+/** Szablon protokołu meczowego (jedno zadanie z podzadaniami) — biblioteka per użytkownik. */
+export interface MatchProtocolTemplate {
+  id: string;
+  title: string;
+  notes?: string;
+  subtasks: MatchProtocolSubtaskTemplate[];
+}
+
+export interface MicrocycleMatchProtocolSubtask {
+  id: string;
+  templateSubtaskId: string | null;
+  title: string;
+  notes?: string;
+  minutesBeforeKickoff: number;
+  done: boolean;
+  coachId?: string | null;
+}
+
+/** Instancja protokołu przy konkretnym meczu mikrocyklu. */
+export interface MicrocycleMatchProtocol {
+  id: string;
+  microcycleId: string;
+  /** 0 = Mecz 1, 1 = Mecz 2 */
+  matchIndex: number;
+  /** 0 = pn … 6 = nd — dzień tego meczu. */
+  dayIndex: number;
+  templateId: string | null;
+  title: string;
+  subtasks: MicrocycleMatchProtocolSubtask[];
+}
+
 export type TrainingExerciseKind = "gym" | "prevention";
 
 export const TRAINING_EXERCISE_KIND_LABELS: Record<TrainingExerciseKind, string> = {
@@ -264,6 +307,8 @@ export interface TrainingMicrocycleState {
   dayPlans: MicrocycleDayPlan[];
   /** Zadania procesowe wszystkich mikrocykli (filtrowane po microcycleId). */
   proceduralTasks?: MicrocycleProceduralTask[];
+  /** Protokoły meczowe (jedno na mecz, czasy od kickoff). */
+  matchProtocols?: MicrocycleMatchProtocol[];
   /** Bloki treningowe wszystkich mikrocykli (filtrowane po microcycleId). */
   trainingBlocks?: MicrocycleTrainingBlock[];
   /** Ćwiczenia siłowni/prewencji we wszystkich mikrocyklach. */
@@ -299,6 +344,8 @@ export interface TrainingDayTitleTemplatesState {
 /** Biblioteka szablonów zadań procesowych — wspólna per użytkownik. */
 export interface TrainingProceduralTaskTemplatesState {
   templates: TrainingProceduralTaskTemplate[];
+  /** Protokół meczowy (podzadania z czasem przed kickoff). Brak = nie dodany. */
+  matchProtocol?: MatchProtocolTemplate | null;
 }
 
 /** Blok w presecie dnia (bez id instancji — id nadaje się przy wstawianiu do mikrocyklu). */

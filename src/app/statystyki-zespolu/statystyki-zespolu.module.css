@@ -1374,7 +1374,7 @@
   display: grid;
   /* Na stronie zespołowej jest więcej zakładek – zmniejszamy min-width,
      żeby mieściły się w 1 rzędzie (spójnie z PlayerDetailsPage) */
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
   gap: 8px;
   width: 100%;
 }

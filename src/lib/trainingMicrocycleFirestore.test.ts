@@ -306,4 +306,70 @@ assert.equal(migratedLegacyMatch.microcycles[0].matches[0].weatherTempC, null);
 assert.equal(migratedLegacyMatch.microcycles[0].matches[0].departureTime, "");
 assert.deepEqual(migratedLegacyMatch.proceduralTasks, []);
 
+const TINY_PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const withBlockImage = {
+  ...sample,
+  trainingBlocks: [
+    {
+      id: "b-img",
+      microcycleId: sample.microcycles[0].id,
+      dayIndex: 1,
+      order: 0,
+      name: "Aktywacja",
+      minutes: 15,
+      formatId: null,
+      pitchLength: null,
+      pitchWidth: null,
+      playersPerSide: null,
+      tags: [],
+      notes: "",
+      imageUrl: TINY_PNG,
+    },
+  ],
+};
+const imgDoc = buildTrainingMicrocycleTaskDocument(withBlockImage, 1);
+const migratedImg = migrateTrainingMicrocycleFromFirestore({
+  stateJson: imgDoc.stateJson,
+  version: 11,
+});
+assert.equal(migratedImg.trainingBlocks?.[0].imageUrl, TINY_PNG);
+
+const withDupCele = {
+  ...sample,
+  assignments: [
+    {
+      id: "dup-a",
+      microcycleId: sample.microcycles[0].id,
+      dayIndex: 1,
+      templateId: "tpl-shared",
+      title: "Wysoki pressing",
+      level: 1 as const,
+    },
+    {
+      id: "dup-b",
+      microcycleId: sample.microcycles[0].id,
+      dayIndex: 1,
+      templateId: "tpl-shared",
+      title: "Wysoki pressing",
+      level: 1 as const,
+    },
+    {
+      id: "dup-c",
+      microcycleId: sample.microcycles[0].id,
+      dayIndex: 2,
+      templateId: "tpl-shared",
+      title: "Wysoki pressing",
+      level: 1 as const,
+    },
+  ],
+  trainingCounts: { "tpl-shared": 3 },
+};
+const sanitizedDup = buildSanitizedTrainingMicrocycleState(withDupCele);
+const cele = sanitizedDup.assignments as { id: string; dayIndex: number; templateId: string }[];
+assert.equal(cele.length, 2);
+assert.equal(cele.filter((a) => a.dayIndex === 1).length, 1);
+assert.equal(cele.filter((a) => a.dayIndex === 2).length, 1);
+assert.equal((sanitizedDup.trainingCounts as Record<string, number>)["tpl-shared"], 2);
+
 console.log("trainingMicrocycleFirestore.test.ts: OK");

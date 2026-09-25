@@ -27,22 +27,33 @@ export function matchDayLabelForColumn(dayIndex: number, matchDayIndex: number):
   return formatMatchDayLabel(periodizationOffset(dayIndex, matchDayIndex));
 }
 
-/** 1–2 unikalne dni 0–6, posortowane (wcześniejszy mecz pierwszy). */
+function isWeekDayIndex(x: unknown): x is number {
+  return typeof x === "number" && Number.isInteger(x) && x >= 0 && x <= 6;
+}
+
+/** 1–2 unikalne dni 0–6, posortowane (wcześniejszy mecz pierwszy). Do ról / „czy MD”. */
 export function normalizeMatchDaysArray(arr: number[]): number[] {
-  const u = [
-    ...new Set(
-      arr.filter(
-        (x) => typeof x === "number" && Number.isInteger(x) && x >= 0 && x <= 6
-      )
-    ),
-  ].sort((a, b) => a - b);
+  const u = [...new Set(arr.filter(isWeekDayIndex))].sort((a, b) => a - b);
   return u.length === 0 ? [5] : u.slice(0, 2);
 }
 
-/** Etykiety MD względem każdego zdefiniowanego dnia meczu (np. dwa mecze w tygodniu). */
+/**
+ * 1–2 unikalne dni 0–6 w kolejności wejścia (Mecz 1, Mecz 2).
+ * Nie sortuje — główny MD to pierwszy element, nie wcześniejszy dzień tygodnia.
+ */
+export function uniqueMatchDaysInOrder(arr: number[]): number[] {
+  const u: number[] = [];
+  for (const x of arr) {
+    if (!isWeekDayIndex(x) || u.includes(x)) continue;
+    u.push(x);
+    if (u.length === 2) break;
+  }
+  return u.length === 0 ? [5] : u;
+}
+
+/** Etykiety MD względem każdego meczu w kolejności M1, M2 (bez sortowania). */
 export function matchDayLabelsForColumn(dayIndex: number, matchDays: number[]): string[] {
-  const n = normalizeMatchDaysArray(matchDays);
-  return n.map((md) => matchDayLabelForColumn(dayIndex, md));
+  return uniqueMatchDaysInOrder(matchDays).map((md) => matchDayLabelForColumn(dayIndex, md));
 }
 
 const DAY_NAMES_PL = ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"] as const;

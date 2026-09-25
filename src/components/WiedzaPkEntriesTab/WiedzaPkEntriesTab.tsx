@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
+import MatchVideoFloatingPanel from '@/components/MatchVideoFloatingPanel/MatchVideoFloatingPanel';
 import PKEntriesPitch from '@/components/PKEntriesPitch/PKEntriesPitch';
 import ZoomablePitchViewport from '@/components/WiedzaShotsTab/ZoomablePitchViewport';
-import type { Player, TeamInfo } from '@/types';
+import type { PKEntry, Player, TeamInfo } from '@/types';
 import { collectMapPkEntriesFromMatches, TrendyMapSide } from '@/utils/trendyMapFilters';
 import {
   DEFAULT_WIEDZA_PK_ENTRIES_FILTERS,
@@ -15,6 +17,8 @@ import {
   WiedzaPkOutcomeFilter,
 } from '@/utils/wiedzaPkEntriesFilters';
 import { buildWiedzaPkEntriesSummary, type WiedzaPkBreakdownRow } from '@/utils/wiedzaPkEntriesSummary';
+import { getVideoTimestampSeconds } from '@/utils/actionVideoSeekSeconds';
+import { hasExternalVideoSource } from '@/utils/externalVideoMatchInfo';
 import wiedzaStyles from '@/app/admin/wiedza/wiedza.module.css';
 import styles from '../WiedzaShotsTab/WiedzaShotsTab.module.css';
 import {
@@ -131,6 +135,28 @@ export default function WiedzaPkEntriesTab({ matches, players, teams }: Props) {
   const [mapSide, setMapSide] = useState<TrendyMapSide>('attack');
   const [filters, setFilters] = useState<WiedzaPkEntriesFilterState>(DEFAULT_WIEDZA_PK_ENTRIES_FILTERS);
   const [selectedEntryId, setSelectedEntryId] = useState<string | undefined>();
+  const [videoMatch, setVideoMatch] = useState<TeamInfo | null>(null);
+  const [videoOpen, setVideoOpen] = useState(false);
+  const [videoSeekSeconds, setVideoSeekSeconds] = useState<number | null>(null);
+  const [videoSeekRequestId, setVideoSeekRequestId] = useState(0);
+
+  const openEntryVideo = useCallback((entry: PKEntry) => {
+    const match = matches.find((item) => item.matchId === entry.matchId);
+    const videoSec = getVideoTimestampSeconds(entry);
+    if (!match || !hasExternalVideoSource(match)) {
+      toast.error('Brak wideo dla meczu tego wejścia.');
+      return;
+    }
+    if (videoSec === null) {
+      toast.error('Brak znacznika czasu wideo dla tego wejścia.');
+      return;
+    }
+    setSelectedEntryId(entry.id);
+    setVideoMatch(match);
+    setVideoOpen(true);
+    setVideoSeekRequestId((id) => id + 1);
+    setVideoSeekSeconds(videoSec);
+  }, [matches]);
 
   const allEntries = useMemo(() => collectMapPkEntriesFromMatches(matches, 'both'), [matches]);
 
@@ -194,6 +220,20 @@ export default function WiedzaPkEntriesTab({ matches, players, teams }: Props) {
 
   return (
     <div className={wiedzaStyles.correlationMergedPanel}>
+      {videoMatch ? (
+        <MatchVideoFloatingPanel
+          matchInfo={videoMatch}
+          title={`${videoMatch.teamName || 'Zespół'} vs ${videoMatch.opponent || 'przeciwnik'}`}
+          isOpen={videoOpen}
+          seekTargetSeconds={videoSeekSeconds}
+          seekRequestId={videoSeekRequestId}
+          onSeekTargetConsumed={() => setVideoSeekSeconds(null)}
+          onClose={() => {
+            setVideoSeekSeconds(null);
+            setVideoOpen(false);
+          }}
+        />
+      ) : null}
       <h2 className={wiedzaStyles.correlationTabTitle}>Wejścia w pole karne</h2>
       <p className={wiedzaStyles.correlationTabLead}>
         Próba: <strong>{matchCount}</strong> meczów, <strong>{allEntries.length}</strong> wejść łącznie. POV (
@@ -312,7 +352,7 @@ export default function WiedzaPkEntriesTab({ matches, players, teams }: Props) {
                 pkEntries={filteredEntries}
                 players={players}
                 selectedEntryId={selectedEntryId}
-                onEntryClick={(entry) => setSelectedEntryId(entry.id)}
+                onEntryClick={openEntryVideo}
                 matchInfo={pitchMatchInfo}
                 allTeams={teams}
                 hideTeamLogos={true}

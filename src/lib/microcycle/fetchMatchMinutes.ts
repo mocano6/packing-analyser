@@ -1,9 +1,9 @@
 // Pobieranie składu i minut meczu z API ŁNP (TYLKO SERWER — wymaga Chrome/reCAPTCHA).
 
 import { LaczyCrawler, SCOUTING_AUTH_HELP } from "@/lib/scouting/crawler";
+import { withLaczyCrawlerLock } from "@/lib/scouting/crawlerLock";
 import { ScoutingDebugLogger } from "@/lib/scouting/debugLog";
 import { extractLnpMatchMinutes, type LnpMatchMinutesPayload } from "@/utils/lnpMatchMinutes";
-import { buildLaczyMatchPageUrl } from "@/utils/laczyTeamUrl";
 
 export interface FetchMatchMinutesResult {
   ok: boolean;
@@ -15,12 +15,14 @@ export interface FetchMatchMinutesResult {
 }
 
 export async function fetchMatchMinutesFromLaczy(matchId: string): Promise<FetchMatchMinutesResult> {
+  return withLaczyCrawlerLock(() => fetchMatchMinutesFromLaczyUnlocked(matchId));
+}
+
+async function fetchMatchMinutesFromLaczyUnlocked(matchId: string): Promise<FetchMatchMinutesResult> {
   const debug = new ScoutingDebugLogger("fetchMatchMinutes", { matchId });
   const errors: string[] = [];
-  const matchPage = buildLaczyMatchPageUrl(matchId);
   const crawler = new LaczyCrawler({
     debugLog: debug,
-    initialRozgrywkiUrlCandidates: [matchPage, "https://www.laczynaspilka.pl/rozgrywki"],
   });
 
   try {

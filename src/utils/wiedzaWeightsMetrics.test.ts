@@ -23,8 +23,15 @@ assert.equal(
   "Straty wł. pp. OPP",
 );
 assert.equal(full.find((x) => x.id === "w_match_win")?.axisSide, "outcome");
+assert.equal(full.find((x) => x.id === "w_match_points")?.label, "Punkty");
+assert.equal(full.find((x) => x.id === "w_match_points")?.axisSide, "outcome");
 assert.equal(full.find((x) => x.id === "w_goals_my")?.axisSide, "my");
 assert.equal(full.find((x) => x.id === "w_goals_opp")?.axisSide, "opp");
+assert.equal(
+  full.findIndex((x) => x.id === "w_match_points"),
+  3,
+  "Punkty musi być 4. kolumną, żeby 0 pkt (porażka) nie wypadało z korelacji",
+);
 
 // Uproszczone mecze: getTeamGoalsForMatch etc. wymagają shots — jeden mecz z danymi
 const matchWithStats = (goalsA: number, goalsD: number, xgSumA: number, xgSumD: number): TeamInfo => {
@@ -71,8 +78,18 @@ const three = [
   matchWithStats(0, 2, 0.3, 1.1),
 ];
 
+const pointsMetric = full.find((x) => x.id === "w_match_points");
+assert.ok(pointsMetric);
+assert.equal(pointsMetric.getValue(three[0]), 3);
+assert.equal(pointsMetric.getValue(three[1]), 3);
+assert.equal(pointsMetric.getValue(three[2]), 0);
+
 const res = buildWiedzaWeightsCorrelation(three, 3);
 assert.ok(res != null);
 assert.equal(res!.matrix.length, full.length);
+const pointsIdx = res!.metrics.findIndex((m) => m.id === "w_match_points");
+const winIdx = res!.metrics.findIndex((m) => m.id === "w_match_win");
+assert.ok(pointsIdx >= 0 && winIdx >= 0);
+assert.equal(typeof res!.matrix[pointsIdx][winIdx], "number");
 
 console.log("wiedzaWeightsMetrics tests: OK");

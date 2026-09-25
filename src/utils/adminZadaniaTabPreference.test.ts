@@ -8,6 +8,7 @@ import {
 
 assert.equal(parseAdminZadaniaTab("model"), "model");
 assert.equal(parseAdminZadaniaTab("microcycle"), "microcycle");
+assert.equal(parseAdminZadaniaTab("load"), "load");
 assert.equal(parseAdminZadaniaTab("planner"), "microcycle");
 assert.equal(parseAdminZadaniaTab("invalid"), null);
 

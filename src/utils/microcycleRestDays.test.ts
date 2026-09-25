@@ -1,5 +1,6 @@
 import assert from "assert";
 import {
+  isBlockedRestDay,
   isRestDay,
   moveRestDay,
   normalizeRestDays,
@@ -15,6 +16,11 @@ assert.deepEqual(normalizeRestDays([3, 3, 9, -1, "2", 2]), [2, 3]);
 assert.equal(isRestDay([2], 2), true);
 assert.equal(isRestDay([2], 3), false);
 assert.equal(isRestDay(undefined, 2), false);
+
+assert.equal(isBlockedRestDay([4, 6], 4, [5]), true);
+assert.equal(isBlockedRestDay([4, 6], 5, [5]), false);
+assert.equal(isBlockedRestDay([5], 5, [5]), false);
+assert.equal(isBlockedRestDay([], 2, [5]), false);
 
 assert.deepEqual(setRestDay([], 4, true), [4]);
 assert.deepEqual(setRestDay([1, 4], 4, true), [1, 4]);

@@ -14,6 +14,7 @@ import {
   type MotorPresetBlock,
 } from "@/lib/microcycle/motorModel";
 import { generateMicrocycleId } from "@/utils/trainingMicrocycle";
+import { normalizeBlockImageUrl } from "@/utils/microcycleBlockImage";
 import { normalizeMatchDaysArray } from "@/utils/matchDayLabels";
 import {
   assignSessionRolesToWeek,
@@ -199,6 +200,7 @@ export function normalizeTrainingBlocks(raw: unknown): MicrocycleTrainingBlock[]
     const rec = item as Record<string, unknown>;
     const microcycleId = String(rec.microcycleId ?? "");
     if (!microcycleId) continue;
+    const imageUrl = normalizeBlockImageUrl(rec.imageUrl);
     out.push({
       id: String(rec.id ?? "") || generateMicrocycleId(),
       microcycleId,
@@ -212,6 +214,7 @@ export function normalizeTrainingBlocks(raw: unknown): MicrocycleTrainingBlock[]
       playersPerSide: safePlayersPerSide(rec.playersPerSide),
       tags: safeTags(rec.tags),
       notes: String(rec.notes ?? ""),
+      ...(imageUrl ? { imageUrl } : {}),
     });
   }
   return out.sort(

@@ -311,6 +311,124 @@
   flex-wrap: wrap;
 }
 
+.recalcRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.recalcButton {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid #b45309;
+  background: #fffbeb;
+  color: #92400e;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.recalcButton:hover:not(:disabled) {
+  background: #fef3c7;
+}
+
+.recalcButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.previewOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.previewCard {
+  width: min(560px, 100%);
+  max-height: min(80vh, 720px);
+  overflow: auto;
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+  outline: none;
+}
+
+.previewCard h3 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  color: #1f2937;
+}
+
+.previewLead {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #4b5563;
+}
+
+.previewList {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 46vh;
+  overflow: auto;
+}
+
+.previewItem {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.9fr) minmax(140px, 1.2fr);
+  gap: 2px 12px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.previewKind {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.previewChange {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #111827;
+}
+
+.previewDetail {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.previewActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+@media (max-width: 640px) {
+  .previewItem {
+    grid-template-columns: 1fr;
+  }
+}
+
 .halfTimeRow {
   display: flex;
   align-items: center;
