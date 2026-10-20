@@ -48,4 +48,18 @@ function makeEntry(overrides: Partial<PKEntry> = {}): PKEntry {
     outcome: "regain",
   });
   assert.deepEqual(regainOnly.map((e) => e.id), ["c"]);
+
+  const accOnly = filterPkEntriesForWiedzaTab(
+    entries,
+    { entryType: "all", outcome: "acc8s" },
+    { acc8sEntryIds: new Set(["a", "c"]) },
+  );
+  assert.deepEqual(accOnly.map((e) => e.id), ["a", "c"]);
+
+  const accAndSfg = filterPkEntriesForWiedzaTab(
+    entries,
+    { entryType: "sfg", outcome: "acc8s" },
+    { acc8sEntryIds: new Set(["a", "c"]) },
+  );
+  assert.deepEqual(accAndSfg.map((e) => e.id), ["a"]);
 })();

@@ -48,6 +48,11 @@
   font-size: 12px;
 }
 
+.rootCompact .modelNote {
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -78,6 +83,13 @@
   line-height: 1.55;
   color: #64748b;
   margin: 0 0 16px 0;
+}
+
+.modelNote {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #64748b;
+  margin: 0 0 12px 0;
 }
 
 .empty {

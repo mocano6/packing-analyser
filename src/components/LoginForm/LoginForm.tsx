@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FirebaseError } from 'firebase/app';
@@ -14,6 +14,7 @@ import { authLoginErrorMessage } from '@/utils/authLoginErrorMessage';
 import { passwordLoginBlockedByGoogleOnlyProvider } from '@/utils/passwordLoginHintFromSignInMethods';
 import { readGoogleLinkDataFromAccountExistsError } from '@/utils/googleAccountLinkFromError';
 import { normalizeAuthEmail } from '@/utils/normalizeAuthEmail';
+import { buildPlayerRegistrationProfile } from '@/lib/userProfileBootstrap';
 import styles from './LoginForm.module.css';
 import type { AuthCredential } from 'firebase/auth';
 import toast from 'react-hot-toast';
@@ -41,9 +42,12 @@ export default function LoginForm() {
   const authService = AuthService.getInstance();
   const isClassicLoginView = searchParams.get('view') === 'login';
   const showClassicLogin = LANDING_VISIBLE ? isClassicLoginView : true;
+  /** Trwa zapis profilu rejestracji — nie przekierowuj, bo twarde przejście ucina setDoc. */
+  const registrationSaveActiveRef = useRef(false);
+  const [registrationSaveEpoch, setRegistrationSaveEpoch] = useState(0);
 
   useEffect(() => {
-    if (!isAuthenticated || authLoading) {
+    if (!isAuthenticated || authLoading || registrationSaveActiveRef.current) {
       return;
     }
     if (userRole === 'player' && userStatus !== 'approved') {
@@ -60,7 +64,7 @@ export default function LoginForm() {
       return;
     }
     router.push("/analyzer");
-  }, [isAuthenticated, authLoading, userRole, userStatus, router]);
+  }, [isAuthenticated, authLoading, userRole, userStatus, router, registrationSaveEpoch]);
 
   useEffect(() => {
     if (isRegistering) {
@@ -124,29 +128,30 @@ export default function LoginForm() {
         }
 
         const regEmail = normalizeAuthEmail(email);
-        const registeredUser = await authService.registerWithEmail(regEmail, password);
-        const db = getDB();
-        const userRef = doc(db, "users", registeredUser.uid);
-
-        await setDoc(userRef, {
-          email: regEmail,
-          role: 'player',
-          status: 'pending',
-          linkedPlayerId: null,
-          allowedTeams: [],
-          registrationData: {
+        registrationSaveActiveRef.current = true;
+        setRegistrationSaveEpoch((epoch) => epoch + 1);
+        try {
+          const registeredUser = await authService.registerWithEmail(regEmail, password);
+          await registeredUser.getIdToken(true);
+          const db = getDB();
+          const userRef = doc(db, "users", registeredUser.uid);
+          const registrationProfile = buildPlayerRegistrationProfile({
+            email: regEmail,
             firstName: trimmedFirstName,
             lastName: trimmedLastName,
-            birthYear: parsedBirthYear
-          },
-          createdAt: new Date(),
-          lastLogin: new Date()
-        }, { merge: true }).catch(error => {
-          handleFirestoreError(error, db);
-          throw error;
-        });
+            birthYear: parsedBirthYear,
+          });
 
-        await refreshUserData();
+          await setDoc(userRef, registrationProfile, { merge: true }).catch(error => {
+            handleFirestoreError(error, db);
+            throw error;
+          });
+
+          await refreshUserData();
+        } finally {
+          registrationSaveActiveRef.current = false;
+          setRegistrationSaveEpoch((epoch) => epoch + 1);
+        }
       } else {
         if (!email || !password) {
           throw new Error('Wprowadź email i hasło');

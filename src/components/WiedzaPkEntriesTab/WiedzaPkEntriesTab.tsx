@@ -17,6 +17,7 @@ import {
   WiedzaPkOutcomeFilter,
 } from '@/utils/wiedzaPkEntriesFilters';
 import { buildWiedzaPkEntriesSummary, type WiedzaPkBreakdownRow } from '@/utils/wiedzaPkEntriesSummary';
+import { collectAcc8sEntriesForSide, summarizePkEntriesAgainstAcc } from '@/utils/wiedzaPkAccWindow';
 import { getVideoTimestampSeconds } from '@/utils/actionVideoSeekSeconds';
 import { hasExternalVideoSource } from '@/utils/externalVideoMatchInfo';
 import wiedzaStyles from '@/app/admin/wiedza/wiedza.module.css';
@@ -39,6 +40,15 @@ const TEAM_STATS_GREEN = '#059669';
 const TEAM_STATS_RED = '#dc2626';
 
 const PIE_COLORS = ['#2563eb', '#059669', '#f97316', '#7c3aed', '#0891b2', '#dc2626', '#65a30d', '#94a3b8'];
+
+const PK_OUTCOME_OPTIONS: { value: WiedzaPkOutcomeFilter; label: string; title?: string }[] = [
+  ...WIEDZA_PK_OUTCOME_OPTIONS,
+  {
+    value: 'acc8s',
+    label: '8s ACC',
+    title: 'Wejścia w pole karne do 8 sekund od przekroczenia połowy (tag 8s ACC)',
+  },
+];
 
 type Props = {
   matches: TeamInfo[];
@@ -165,9 +175,14 @@ export default function WiedzaPkEntriesTab({ matches, players, teams }: Props) {
     [allEntries, mapSide],
   );
 
+  const accWindow = useMemo(() => {
+    const accEntries = collectAcc8sEntriesForSide(matches, mapSide);
+    return summarizePkEntriesAgainstAcc(sideEntries, accEntries);
+  }, [matches, mapSide, sideEntries]);
+
   const filteredEntries = useMemo(
-    () => filterPkEntriesForWiedzaTab(sideEntries, filters),
-    [sideEntries, filters],
+    () => filterPkEntriesForWiedzaTab(sideEntries, filters, { acc8sEntryIds: accWindow.idsWithin8s }),
+    [sideEntries, filters, accWindow.idsWithin8s],
   );
 
   const summary = useMemo(() => buildWiedzaPkEntriesSummary(filteredEntries), [filteredEntries]);
@@ -238,8 +253,9 @@ export default function WiedzaPkEntriesTab({ matches, players, teams }: Props) {
       <p className={wiedzaStyles.correlationTabLead}>
         Próba: <strong>{matchCount}</strong> meczów, <strong>{allEntries.length}</strong> wejść łącznie. POV (
         <code className={wiedzaStyles.inlineCode}>teamContext</code>) określa stronę boiska. <strong>Typ</strong> i{' '}
-        <strong>skutek</strong> filtrują niezależnie (np. SFG + Gol). Mapę można powiększać kółkiem myszy, pinch-em lub
-        przyciskami.
+        <strong>skutek</strong> filtrują niezależnie (np. SFG + Gol). <strong>8s ACC</strong> zostawia wejścia do 8 s od
+        tagu przekroczenia połowy. Karty „od połowy” liczą całą stronę POV: do 8 s oraz do 15 s (15 s obejmuje też te do
+        8 s).
       </p>
 
       <div className={wiedzaStyles.summaryCards}>
@@ -271,6 +287,18 @@ export default function WiedzaPkEntriesTab({ matches, players, teams }: Props) {
         <div className={wiedzaStyles.summaryCard}>
           <span className={wiedzaStyles.summaryCardLabel}>Śr. przeciwnicy w PK</span>
           <span className={wiedzaStyles.summaryCardValue}>{summary.avgOpponents.toFixed(2)}</span>
+        </div>
+        <div className={wiedzaStyles.summaryCard} title="Wejście w PK najpóźniej 8 s po tagu przekroczenia połowy (8s ACC), ta sama strona POV">
+          <span className={wiedzaStyles.summaryCardLabel}>PK do 8 s od połowy</span>
+          <span className={wiedzaStyles.summaryCardValue}>
+            {accWindow.within8s} ({accWindow.within8sPct.toFixed(1)}%)
+          </span>
+        </div>
+        <div className={wiedzaStyles.summaryCard} title="Wejście w PK najpóźniej 15 s po tagu przekroczenia połowy. Liczba obejmuje też wejścia do 8 s.">
+          <span className={wiedzaStyles.summaryCardLabel}>PK do 15 s od połowy</span>
+          <span className={wiedzaStyles.summaryCardValue}>
+            {accWindow.within15s} ({accWindow.within15sPct.toFixed(1)}%)
+          </span>
         </div>
       </div>
 
@@ -331,10 +359,11 @@ export default function WiedzaPkEntriesTab({ matches, players, teams }: Props) {
           </FilterSegment>
 
           <FilterSegment label="Skutek">
-            {WIEDZA_PK_OUTCOME_OPTIONS.map(({ value, label }) => (
+            {PK_OUTCOME_OPTIONS.map(({ value, label, title }) => (
               <FilterChip
                 key={value}
                 active={filters.outcome === value}
+                title={title}
                 onClick={() => setFilters((prev) => ({ ...prev, outcome: value as WiedzaPkOutcomeFilter }))}
               >
                 {label}

@@ -2,9 +2,13 @@ import { useState, useEffect } from "react";
 import type { User as FirebaseUser } from "firebase/auth";
 import { FirebaseError } from "firebase/app";
 import { getAuthClient, getDB } from "@/lib/firebase";
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "@/lib/firestoreWithMetrics";
+import { doc, getDoc, runTransaction, updateDoc, serverTimestamp } from "@/lib/firestoreWithMetrics";
 import { isAdminRoleFromFirestore } from "@/lib/firestoreAdminRole";
 import { normalizeUserRole, type UserRole } from "@/lib/userRoles";
+import {
+  buildBootstrapUserProfile,
+  shouldCreateDefaultUserProfile,
+} from "@/lib/userProfileBootstrap";
 import { AuthService, AuthState } from "@/utils/authService";
 import { toast } from "react-hot-toast";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
@@ -137,6 +141,9 @@ export function useAuth(): UseAuthReturnType {
         return null;
       }
 
+      // Tuż po createUser token bywa jeszcze niedostępny dla Firestore — bez tego pierwszy zapis profilu pada permission-denied.
+      await authUser.getIdToken().catch(() => undefined);
+
       let userDoc;
       try {
         userDoc = await getDoc(userRef);
@@ -154,33 +161,52 @@ export function useAuth(): UseAuthReturnType {
         throw error;
       }
 
-      if (!userDoc.exists()) {
-        const newUserData: UserData = {
-          email: userEmail || '',
-          allowedTeams: [],
-          role: 'user',
-          createdAt: new Date(),
-          lastLogin: new Date()
-        };
+      let userData: UserData;
+      let createdBootstrap = false;
+
+      if (userDoc.exists()) {
+        userData = userDoc.data() as UserData;
+      } else if (shouldCreateDefaultUserProfile(userDoc.exists())) {
         try {
-          await setDoc(userRef, newUserData);
+          const outcome = await runTransaction(db, async (transaction) => {
+            const snap = await transaction.get(userRef);
+            if (snap.exists()) {
+              return { created: false, data: snap.data() as UserData };
+            }
+            const draft = buildBootstrapUserProfile(userEmail || authUser.email || "");
+            transaction.set(userRef, draft);
+            return { created: true, data: draft };
+          });
+          userData = outcome.data;
+          createdBootstrap = outcome.created;
         } catch (error: unknown) {
           const code = error instanceof FirebaseError ? error.code : "";
           if (code === "permission-denied") {
             if (process.env.NODE_ENV === "development") {
-              console.warn("[useAuth] Pominięto setDoc users/{uid} (permission-denied).");
+              console.warn("[useAuth] Pominięto utworzenie users/{uid} (permission-denied).");
             }
             return null;
           }
           void handleFirestoreError(error, db);
           throw error;
         }
-        userDataCache.set(uid, { data: newUserData, timestamp: now });
-        lastLoginWriteAt.set(uid, now);
-        return newUserData;
+      } else {
+        return null;
       }
 
-      const userData = userDoc.data() as UserData;
+      if (createdBootstrap) {
+        const result: UserData = {
+          ...userData,
+          email: userData.email || userEmail || "",
+          allowedTeams: normalizeAllowedTeams(userData.allowedTeams),
+          role: normalizeUserRole(userData.role),
+          lastLogin: userData.lastLogin ?? new Date(),
+        };
+        userDataCache.set(uid, { data: result, timestamp: now });
+        lastLoginWriteAt.set(uid, now);
+        return result;
+      }
+
       const needsEmailUpdate = !userData.email && userEmail;
       const lastWrite = lastLoginWriteAt.get(uid) ?? 0;
       const shouldWriteLastLogin = now - lastWrite >= LAST_LOGIN_WRITE_INTERVAL_MS;
@@ -233,22 +259,26 @@ export function useAuth(): UseAuthReturnType {
     try {
       return await promise;
     } finally {
-      fetchUserDataInFlight.delete(uid);
+      if (fetchUserDataInFlight.get(uid) === promise) {
+        fetchUserDataInFlight.delete(uid);
+      }
     }
   };
 
   // Odświeża dane użytkownika (pomija cache)
   const refreshUserData = async (): Promise<void> => {
-    if (!authState.user?.uid || !authState.isAuthenticated) return;
-    userDataCache.delete(authState.user.uid);
-    lastLoginWriteAt.delete(authState.user.uid);
-    fetchUserDataInFlight.delete(authState.user.uid);
+    const firebaseUser = getAuthClient().currentUser ?? authState.user;
+    const uid = firebaseUser?.uid;
+    if (!uid) return;
+    userDataCache.delete(uid);
+    lastLoginWriteAt.delete(uid);
+    fetchUserDataInFlight.delete(uid);
 
     setIsUserDataLoading(true);
-    const userData = await fetchUserData(authState.user.uid, authState.user.email || undefined, authState.isAuthenticated, () => true);
+    const userData = await fetchUserData(uid, firebaseUser.email || undefined, true, () => true);
     if (userData) {
       setUserTeams(userData.allowedTeams);
-      const claimsAdmin = await resolveClaimsAdmin(authState.user);
+      const claimsAdmin = await resolveClaimsAdmin(getAuthClient().currentUser ?? authState.user);
       setIsAdmin(claimsAdmin || isAdminRoleFromFirestore(userData.role));
       setUserRole(userData.role);
       setUserStatus(userData.status ?? null);

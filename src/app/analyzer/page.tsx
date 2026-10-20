@@ -4036,7 +4036,8 @@ export default function Page() {
     );
   }
 
-  // Dla coach i player (zatwierdzonego) – tylko widok wyboru: Statystyki zespołu i Profil zawodnika (bez edycji, bez listy meczów)
+  // Coach: porównywarka, statystyki zespołu, trendy i profil (bez edycji meczów).
+  // Zatwierdzony player: statystyki zespołu i profil (AuthGuard i tak kieruje na profil).
   if (isAuthenticated && (userRole === 'coach' || (userRole === 'player' && userStatus === 'approved'))) {
     return (
       <div className={styles.container}>
@@ -4044,6 +4045,15 @@ export default function Page() {
           <h1>Witaj</h1>
           <p>Wybierz sekcję, którą chcesz przeglądać:</p>
           <div className={styles.coachLinks}>
+            {userRole === 'coach' && (
+              <Link href="/zawodnicy" className={styles.coachLink}>
+                <span className={styles.coachLinkIcon}>👥</span>
+                <div className={styles.coachLinkContent}>
+                  <h3>Porównywarka zawodników</h3>
+                  <p>Porównuj zawodników z przypisanych zespołów</p>
+                </div>
+              </Link>
+            )}
             <Link href="/statystyki-zespolu" className={styles.coachLink}>
               <span className={styles.coachLinkIcon}>📊</span>
               <div className={styles.coachLinkContent}>
@@ -4051,6 +4061,15 @@ export default function Page() {
                 <p>Analizuj statystyki zespołowe i KPI</p>
               </div>
             </Link>
+            {userRole === 'coach' && (
+              <Link href="/trendy" className={styles.coachLink}>
+                <span className={styles.coachLinkIcon}>📈</span>
+                <div className={styles.coachLinkContent}>
+                  <h3>Trendy</h3>
+                  <p>Śledź zmiany KPI w czasie</p>
+                </div>
+              </Link>
+            )}
             <Link href="/profile" className={styles.coachLink}>
               <span className={styles.coachLinkIcon}>👤</span>
               <div className={styles.coachLinkContent}>

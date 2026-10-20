@@ -237,6 +237,8 @@ export interface Shot {
   isControversial?: boolean;
   controversyNote?: string; // Notatka analityka dotycząca kontrowersyjnego strzału
   previousShotId?: string; // ID poprzedniego strzału (dla dobitki) - xG jest obliczane jako xG * (1 - xG_previous/100)
+  /** Bramkarz poza bramką — zapisane xG ma już doliczone 15 punktów procentowych. */
+  isGoalkeeperOut?: boolean;
   isFromPK?: boolean; // Czy strzał był z pola karnego
   isOwnGoal?: boolean; // Bramka samobójcza (w ataku lub obronie)
   isBlocked?: boolean; // Legacy/reporting compatibility

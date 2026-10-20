@@ -4,8 +4,8 @@ import { isPkDribbleEntry, isPkPassEntry, isPkSfgEntry } from "@/lib/pkEntryKpiB
 /** Typ wejścia — jeden wybór (jak „Akcja” przy strzałach). */
 export type WiedzaPkEntryTypeFilter = "all" | "pass" | "dribble" | "sfg" | "regain";
 
-/** Skutek po wejściu — osobna grupa (np. SFG + Gol). */
-export type WiedzaPkOutcomeFilter = "all" | "regain" | "shot" | "goal";
+/** Skutek po wejściu — osobna grupa (np. SFG + Gol). `acc8s` = wejście do 8 s od przekroczenia połowy. */
+export type WiedzaPkOutcomeFilter = "all" | "regain" | "shot" | "goal" | "acc8s";
 
 export type WiedzaPkEntriesFilterState = {
   entryType: WiedzaPkEntryTypeFilter;
@@ -41,11 +41,16 @@ function matchesEntryType(entry: PKEntry, entryType: WiedzaPkEntryTypeFilter): b
   return true;
 }
 
-function matchesOutcome(entry: PKEntry, outcome: WiedzaPkOutcomeFilter): boolean {
+function matchesOutcome(
+  entry: PKEntry,
+  outcome: WiedzaPkOutcomeFilter,
+  acc8sEntryIds?: ReadonlySet<string>,
+): boolean {
   if (outcome === "all") return true;
   if (outcome === "goal") return Boolean(entry.isGoal);
   if (outcome === "shot") return Boolean(entry.isShot);
   if (outcome === "regain") return Boolean(entry.isRegain);
+  if (outcome === "acc8s") return Boolean(acc8sEntryIds?.has(entry.id));
   return true;
 }
 
@@ -53,10 +58,11 @@ function matchesOutcome(entry: PKEntry, outcome: WiedzaPkOutcomeFilter): boolean
 export function filterPkEntriesForWiedzaTab(
   entries: PKEntry[],
   filters: WiedzaPkEntriesFilterState,
+  options?: { acc8sEntryIds?: ReadonlySet<string> },
 ): PKEntry[] {
   return entries.filter((entry) => {
     if (!matchesEntryType(entry, filters.entryType)) return false;
-    if (!matchesOutcome(entry, filters.outcome)) return false;
+    if (!matchesOutcome(entry, filters.outcome, options?.acc8sEntryIds)) return false;
     return true;
   });
 }

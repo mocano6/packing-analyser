@@ -77,7 +77,8 @@ import {
   assert.equal(googleUser!.hasFirestoreProfile, false);
   assert.equal(googleUser!.email, "player@gmail.com");
   assert.deepEqual(googleUser!.authProviders, ["google.com"]);
-  assert.equal(googleUser!.role, "user");
+  assert.equal(googleUser!.role, "player");
+  assert.equal(googleUser!.status, "pending");
 }
 
 console.log("adminAuthUserList.test: OK");

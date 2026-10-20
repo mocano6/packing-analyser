@@ -1684,11 +1684,11 @@ export default function WiedzaPage() {
             <div className={styles.correlationMergedPanel}>
               <h2 className={styles.correlationTabTitle}>Korelacje i Wagi</h2>
               <p className={styles.correlationTabLead}>
-                Jedna próba = jeden mecz. Wybierz dowolną metrykę referencyjną z listy. Tabela pokaże jej dodatnie i ujemne
-                korelacje Pearsona z metrykami z{" "}
-                <code className={styles.inlineCode}>wiedzaWeightsMetrics.ts</code>, posortowane od najsilniejszych. Kolory:
-                zielono <em>r</em> ≥ 0,4, czerwono <em>r</em> ≤ −0,4. Nagłówki: niebieski — MY, bursztynowy — OPP, fioletowy —
-                Punkty / W/R/P. {selectedTeams.length} klubów, {fetchedMatches.length} meczów.
+                Jedna próba = jeden mecz. Wybierz dowolną metrykę referencyjną z listy. Podgląd wartości przełącza tabelę między
+                korelacją Pearsona a <strong>mean(|SHAP value|)</strong> modelu liniowego, który tę metrykę przewiduje z pozostałych
+                metryk z <code className={styles.inlineCode}>wiedzaWeightsMetrics.ts</code>. Kolory korelacji: zielono <em>r</em> ≥
+                0,4, czerwono <em>r</em> ≤ −0,4. Nagłówki: niebieski — MY, bursztynowy — OPP, fioletowy — Punkty / W/R/P.{" "}
+                {selectedTeams.length} klubów, {fetchedMatches.length} meczów.
               </p>
               <WiedzaGoalsXgWeights matches={matchesForCorrelation} compact hideHint />
             </div>

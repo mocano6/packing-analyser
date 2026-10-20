@@ -13,6 +13,10 @@ import {
   zone1TContactFlagsFromShot,
 } from "@/utils/shotZone1TContacts";
 import { getTorvaneySimpleXGPercentRounded } from "@/lib/xg";
+import {
+  applyGoalkeeperOutXgBoost,
+  reverseGoalkeeperOutXgBoost,
+} from "@/utils/shotGoalkeeperOutXg";
 import { getModalPlayersForMatch } from "@/lib/modalMatchPlayersFilter";
 import { submitParentFormOnEnter } from "@/utils/submitParentFormOnEnter";
 import { useModalFormHotkeys } from "@/hooks/useModalFormHotkeys";
@@ -95,6 +99,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
     assistantId: "",
     isControversial: false,
     previousShotId: "",
+    isGoalkeeperOut: false,
     isFromPK: false,
     isOwnGoal: false, // Tylko w obronie: bramka samobójcza (bramkarz wybrany osobno)
     penaltyCausePlayerId: "", // Obrona + karny: nasz zawodnik, który spowodował karnego
@@ -458,6 +463,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         assistantId: (editingShot as any)?.assistantId || "",
         isControversial: editingShot.isControversial || false,
         previousShotId: editingShot.previousShotId || "",
+        isGoalkeeperOut: Boolean(editingShot.isGoalkeeperOut),
         isFromPK:
           (editingShot.teamContext === "defense"
             ? isInOpponentPenaltyAreaCanonical(editingShot)
@@ -502,6 +508,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
         assistantId: "",
         isControversial: false,
         previousShotId: "",
+        isGoalkeeperOut: false,
         isFromPK: isFromPKByPosition,
         isOwnGoal: false,
         penaltyCausePlayerId: "",
@@ -644,7 +651,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
   // Funkcja pomocnicza do budowania łańcucha dobitek dla wyświetlenia.
   // Funkcja odwracająca modyfikatory xG (używana przy ładowaniu edytowanego strzału)
   const reverseFinalXG = (finalXG: number, shot: Shot): number => {
-    let baseXG = finalXG;
+    let baseXG = reverseGoalkeeperOutXgBoost(finalXG, Boolean(shot.isGoalkeeperOut));
 
     // Odwróć modyfikację dla dobitki
     if (shot.previousShotId) {
@@ -755,68 +762,71 @@ const ShotModal: React.FC<ShotModalProps> = ({
   // Stała wartość xG dla karnego (zgodnie z literaturą)
   const PENALTY_XG_PERCENT = 76;
 
-  // Oblicz finalny xG z uwzględnieniem zawodników na linii, SFG bezpośredni, dobitki i części ciała.
+  // Oblicz finalny xG z uwzględnieniem zawodników na linii, SFG bezpośredni, dobitki, bramkarza poza bramką i części ciała.
   const calculateFinalXG = () => {
     if (isOwnGoalFormState(formData)) {
       return 0;
     }
-    // Karny ma zawsze stały xG 76%
-    if (formData.actionType === "penalty") {
-      return PENALTY_XG_PERCENT;
-    }
-    let finalXG = formData.xG;
+    const isPenalty = formData.actionType === "penalty";
+    // Karny ma zawsze stały xG 76% (przed modyfikatorem bramkarza poza bramką).
+    let finalXG = isPenalty ? PENALTY_XG_PERCENT : formData.xG;
 
-    // Każdy zawodnik na linii obniża xG o 1%
-    if (formData.teamContext === "defense") {
-      finalXG -= formData.linePlayers.length;
-    } else if (formData.teamContext === "attack") {
-      finalXG -= formData.linePlayersCount || 0;
-    }
-    
-    // Mnożenie przez 1.65 tylko dla bezpośredni wolny + bezpośredni SFG
-    if (formData.actionType === "direct_free_kick" && formData.sfgSubtype === "direct") {
-      finalXG *= 1.65;
-    }
+    if (!isPenalty) {
+      // Każdy zawodnik na linii obniża xG o 1%
+      if (formData.teamContext === "defense") {
+        finalXG -= formData.linePlayers.length;
+      } else if (formData.teamContext === "attack") {
+        finalXG -= formData.linePlayersCount || 0;
+      }
 
-    // Oblicz xG dla dobitki: p2 * (1-p1) gdzie p1 to poprzedni strzał
-    // Obsługujemy łańcuch dobitek: p3 * (1-p2) * (1-p1), itd.
-    if (formData.previousShotId) {
-      // Znajdź poprzedni strzał i wszystkie poprzedzające go w łańcuchu
-      const shotChain: Shot[] = [];
-      const visitedIds = new Set<string>(); // Zabezpieczenie przed cyklicznymi referencjami
-      let currentShotId: string | undefined = formData.previousShotId;
-      const maxDepth = 100; // Maksymalna głębokość łańcucha
-      
-      let depth = 0;
-      while (currentShotId && depth < maxDepth) {
-        // Sprawdź czy nie ma cyklicznej referencji
-        if (visitedIds.has(currentShotId)) {
-          console.warn(`Cyclic reference detected in calculateFinalXG: ${currentShotId}`);
-          break;
+      // Mnożenie przez 1.65 tylko dla bezpośredni wolny + bezpośredni SFG
+      if (formData.actionType === "direct_free_kick" && formData.sfgSubtype === "direct") {
+        finalXG *= 1.65;
+      }
+
+      // Oblicz xG dla dobitki: p2 * (1-p1) gdzie p1 to poprzedni strzał
+      // Obsługujemy łańcuch dobitek: p3 * (1-p2) * (1-p1), itd.
+      if (formData.previousShotId) {
+        // Znajdź poprzedni strzał i wszystkie poprzedzające go w łańcuchu
+        const shotChain: Shot[] = [];
+        const visitedIds = new Set<string>(); // Zabezpieczenie przed cyklicznymi referencjami
+        let currentShotId: string | undefined = formData.previousShotId;
+        const maxDepth = 100; // Maksymalna głębokość łańcucha
+
+        let depth = 0;
+        while (currentShotId && depth < maxDepth) {
+          // Sprawdź czy nie ma cyklicznej referencji
+          if (visitedIds.has(currentShotId)) {
+            console.warn(`Cyclic reference detected in calculateFinalXG: ${currentShotId}`);
+            break;
+          }
+
+          visitedIds.add(currentShotId);
+
+          const prevShot = shots.find(s => s.id === currentShotId);
+          if (!prevShot) break;
+          shotChain.push(prevShot);
+          currentShotId = prevShot.previousShotId;
+          depth++;
         }
-        
-        visitedIds.add(currentShotId);
-        
-        const prevShot = shots.find(s => s.id === currentShotId);
-        if (!prevShot) break;
-        shotChain.push(prevShot);
-        currentShotId = prevShot.previousShotId;
-        depth++;
+
+        if (depth >= maxDepth) {
+          console.warn(`Maximum chain depth reached in calculateFinalXG`);
+        }
+
+        // Oblicz xG dla dobitki: xG_dobitki = xG_current * (1 - xG_prev1/100) * (1 - xG_prev2/100) * ...
+        // gdzie xG jest w procentach
+        let remainingProbability = 1;
+        for (const chainShot of shotChain.reverse()) {
+          const chainXG = chainShot.xG * 100; // Konwersja z ułamka na procenty
+          remainingProbability *= (1 - chainXG / 100);
+        }
+        finalXG = finalXG * remainingProbability;
       }
-      
-      if (depth >= maxDepth) {
-        console.warn(`Maximum chain depth reached in calculateFinalXG`);
-      }
-      
-      // Oblicz xG dla dobitki: xG_dobitki = xG_current * (1 - xG_prev1/100) * (1 - xG_prev2/100) * ...
-      // gdzie xG jest w procentach
-      let remainingProbability = 1;
-      for (const chainShot of shotChain.reverse()) {
-        const chainXG = chainShot.xG * 100; // Konwersja z ułamka na procenty
-        remainingProbability *= (1 - chainXG / 100);
-      }
-      finalXG = finalXG * remainingProbability;
     }
+
+    // Bramkarz poza bramką dodaje 15 punktów procentowych do finalnego xG (także przy karnym).
+    finalXG = applyGoalkeeperOutXgBoost(finalXG, formData.isGoalkeeperOut);
 
     return Math.max(1, Math.round(finalXG)); // Minimum 1%, zaokrąglij do całej liczby
   };
@@ -1080,6 +1090,7 @@ const ShotModal: React.FC<ShotModalProps> = ({
       isControversial: formData.isControversial,
       controversyNote: formData.isControversial && controversyNote.trim() ? controversyNote.trim() : undefined,
       previousShotId: formData.previousShotId || undefined,
+      isGoalkeeperOut: formData.isGoalkeeperOut || undefined,
       isFromPK: formData.isFromPK || undefined,
       matchId,
       ...(formData.teamContext === "defense" &&
@@ -1949,6 +1960,34 @@ const ShotModal: React.FC<ShotModalProps> = ({
                   );
                 });
               })()}
+            </div>
+          </div>
+
+          <div className={styles.fieldGroup}>
+            <label>Bramkarz:</label>
+            <div className={styles.actionTypeSelector}>
+              <button
+                type="button"
+                className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
+                  !formData.isGoalkeeperOut ? styles.active : ""
+                }`}
+                onClick={() => setFormData((prev) => ({ ...prev, isGoalkeeperOut: false }))}
+                aria-pressed={!formData.isGoalkeeperOut}
+                data-tooltip="Bramkarz w bramce. xG pozostaje bez zmian."
+              >
+                W bramce
+              </button>
+              <button
+                type="button"
+                className={`${styles.actionTypeButton} ${styles.tooltipTrigger} ${
+                  formData.isGoalkeeperOut ? styles.active : ""
+                }`}
+                onClick={() => setFormData((prev) => ({ ...prev, isGoalkeeperOut: true }))}
+                aria-pressed={formData.isGoalkeeperOut}
+                data-tooltip="Bramkarz poza bramką dodaje 15 punktów procentowych do finalnego xG."
+              >
+                Bramkarz poza bramką
+              </button>
             </div>
           </div>
 

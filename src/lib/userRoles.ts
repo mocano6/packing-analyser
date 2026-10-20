@@ -3,6 +3,7 @@
  * Admin systemu: JWT claim admin LUB role === "admin".
  * Operator: jak zwykły user + odczyt weryfikacji meczów i bazy wiedzy (tylko assigned teams).
  * Scout: porównywarka, statystyki zespołu, profil, GPS + podgląd scoutingu (bez sync).
+ * Coach: porównywarka, statystyki zespołu, trendy, profil i GPS (bez edycji meczów i narzędzi).
  * User = analityk (zwykły dostęp do aplikacji).
  */
 export type UserRole = "user" | "admin" | "operator" | "coach" | "scout" | "player";

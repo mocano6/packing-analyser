@@ -105,6 +105,7 @@ const SHOT_KEYS = new Set<string>([
   "assistantId",
   "isControversial",
   "previousShotId",
+  "isGoalkeeperOut",
   "isFromPK",
   "isOwnGoal",
 ]);

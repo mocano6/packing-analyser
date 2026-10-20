@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { TeamInfo } from "@/types";
 import { buildWiedzaWeightsCorrelation } from "@/utils/wiedzaWeightsMetrics";
+import { buildWiedzaMeanAbsShapPreview } from "@/utils/wiedzaMeanAbsShap";
 import styles from "./WiedzaGoalsXgWeights.module.css";
 import { correlationAxisHeadClass } from "@/utils/correlationMatrixAxis";
 
@@ -25,6 +26,19 @@ function cellToneClass(r: number | null, s: typeof styles): string {
   return s.corrNeutral;
 }
 
+function shapToneClass(value: number, maxValue: number, positive: boolean, s: typeof styles): string {
+  if (maxValue <= 0 || value < maxValue * CORR_HIGHLIGHT_ABS) return s.corrNeutral;
+  return positive ? s.corrPosStrong : s.corrNegStrong;
+}
+
+function formatMeanAbsShap(value: number): string {
+  if (value >= 10) return value.toFixed(1);
+  if (value >= 0.1) return value.toFixed(2);
+  return value.toFixed(3);
+}
+
+type ValuePreviewMode = "pearson" | "meanAbsShap";
+
 export default function WiedzaGoalsXgWeights({
   matches,
   scopeHint,
@@ -32,7 +46,12 @@ export default function WiedzaGoalsXgWeights({
   hideHint = false,
 }: WiedzaGoalsXgWeightsProps) {
   const [referenceMetricId, setReferenceMetricId] = useState("w_match_points");
+  const [valuePreview, setValuePreview] = useState<ValuePreviewMode>("pearson");
   const data = useMemo(() => buildWiedzaWeightsCorrelation(matches, 3), [matches]);
+  const shapPreview = useMemo(() => {
+    if (valuePreview !== "meanAbsShap" || !data) return null;
+    return buildWiedzaMeanAbsShapPreview(matches, data.metrics, referenceMetricId);
+  }, [data, matches, referenceMetricId, valuePreview]);
 
   /** Stan synchronizowany z listą metryk po zmianie próby. */
   useEffect(() => {
@@ -47,19 +66,63 @@ export default function WiedzaGoalsXgWeights({
     if (!data || data.metrics.length === 0) return null;
     const referenceOptions = data.metrics;
     const selectedReference = referenceOptions.find((metric) => metric.id === referenceMetricId) ?? referenceOptions[0] ?? data.metrics[0];
+    if (valuePreview === "meanAbsShap") {
+      const byId = new Map((shapPreview?.rows ?? []).map((row) => [row.id, row]));
+      const maxValue = Math.max(0, ...[...byId.values()].map((row) => row.meanAbsShap));
+      const contributions = data.metrics.flatMap((metric) => {
+        const row = byId.get(metric.id);
+        if (!row) return [];
+        return [{
+          metric,
+          valueText: formatMeanAbsShap(row.meanAbsShap),
+          title: `${selectedReference.label} ← ${metric.label}: mean(|SHAP value|) = ${row.meanAbsShap.toFixed(3)}`,
+          tone: shapToneClass(row.meanAbsShap, maxValue, row.direction > 0, styles),
+          sortValue: row.direction > 0 ? row.meanAbsShap : -row.meanAbsShap,
+        }];
+      });
+      return {
+        referenceOptions,
+        selectedReference,
+        valueHeader: "mean(|SHAP|)",
+        emptyLabel: "Brak wkładu w tej grupie.",
+        positiveTitle: "Dodatni wkład SHAP",
+        negativeTitle: "Ujemny wkład SHAP",
+        positive: contributions.filter((row) => row.sortValue > 0).sort((a, b) => b.sortValue - a.sortValue),
+        negative: contributions.filter((row) => row.sortValue < 0).sort((a, b) => a.sortValue - b.sortValue),
+        model: shapPreview,
+      };
+    }
     const referenceIndex = data.metrics.findIndex((metric) => metric.id === selectedReference.id);
     const correlations = data.metrics.flatMap((metric, index) => {
       const r = data.matrix[referenceIndex]?.[index] ?? null;
       if (metric.id === selectedReference.id || r === null) return [];
-      return [{ metric, r }];
+      return [{
+        metric,
+        valueText: r.toFixed(2),
+        title: `${selectedReference.label} ↔ ${metric.label}: r = ${r.toFixed(3)}`,
+        tone: cellToneClass(r, styles),
+        sortValue: r,
+      }];
     });
-    const positive = correlations.filter((row) => row.r > 0).sort((a, b) => b.r - a.r);
-    const negative = correlations.filter((row) => row.r < 0).sort((a, b) => a.r - b.r);
-    return { referenceOptions, selectedReference, positive, negative };
-  }, [data, referenceMetricId]);
+    return {
+      referenceOptions,
+      selectedReference,
+      valueHeader: "r",
+      emptyLabel: "Brak korelacji w tej grupie.",
+      positiveTitle: "Korelacje dodatnie",
+      negativeTitle: "Korelacje ujemne",
+      positive: correlations.filter((row) => row.sortValue > 0).sort((a, b) => b.sortValue - a.sortValue),
+      negative: correlations.filter((row) => row.sortValue < 0).sort((a, b) => a.sortValue - b.sortValue),
+      model: null,
+    };
+  }, [data, referenceMetricId, shapPreview, valuePreview]);
 
   const onReferenceMetricChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     setReferenceMetricId(e.target.value);
+  }, []);
+
+  const onValuePreviewChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setValuePreview(e.target.value === "meanAbsShap" ? "meanAbsShap" : "pearson");
   }, []);
 
   const selectMetricAsReference = useCallback((metricId: string) => {
@@ -72,9 +135,9 @@ export default function WiedzaGoalsXgWeights({
     <div className={rootClass}>
       {!hideHint ? (
         <p className={styles.hint}>
-          Wybierz jedną metrykę referencyjną, a tabela pokaże wszystkie jej korelacje dodatnie i ujemne posortowane od najsilniejszych.
-          Kliknij wiersz korelacji, aby ustawić tę metrykę jako referencyjną.
-          <strong>Kolory:</strong> r ≥ 0,4 zielono, r ≤ −0,4 czerwono.{" "}
+          Wybierz jedną metrykę referencyjną. Podgląd wartości przełącza tabelę między korelacją Pearsona a mean(|SHAP value|) modelu liniowego.
+          Kliknij wiersz, aby ustawić tę metrykę jako referencyjną.
+          <strong>Kolory:</strong> przy korelacji r ≥ 0,4 zielono i r ≤ −0,4 czerwono; przy SHAP próg to 40% najsilniejszego wkładu.{" "}
           <strong>Nagłówki:</strong> niebieski — nasz zespół (MY), bursztynowy — przeciwnik (OPP), fioletowy — wynik (Punkty, W/R/P). Metryki źródłowe:{" "}
           <code style={{ fontSize: "12px" }}>wiedzaWeightsMetrics.ts</code>.
           {scopeHint ? ` ${scopeHint}` : ""}
@@ -102,11 +165,39 @@ export default function WiedzaGoalsXgWeights({
                 </option>
               ))}
             </select>
+            <label htmlFor="wiedza-weights-value-preview" className={styles.sortLabel}>
+              Podgląd wartości
+            </label>
+            <select
+              id="wiedza-weights-value-preview"
+              name="wiedzaWeightsValuePreview"
+              className={styles.select}
+              value={valuePreview}
+              onChange={onValuePreviewChange}
+              aria-label="Podgląd wartości korelacji albo mean SHAP"
+            >
+              <option value="pearson">Korelacja Pearsona (r)</option>
+              <option value="meanAbsShap">mean(|SHAP value|)</option>
+            </select>
           </div>
+          {valuePreview === "meanAbsShap" ? (
+            display.model ? (
+              <p className={styles.modelNote}>
+                Model liniowy (regresja grzbietowa) przewiduje <strong>{display.selectedReference.label}</strong> z{" "}
+                {display.model.featureCount} metryk o najsilniejszej korelacji (próba n = {display.model.n}, R² ={" "}
+                {display.model.r2.toFixed(2)}). mean(|SHAP value|) to średni moduł wkładu cechy w jednostkach metryki
+                referencyjnej, po uwzględnieniu pozostałych cech modelu. Dodatni wkład oznacza, że wyższa wartość metryki
+                podnosi prognozę.
+              </p>
+            ) : (
+              <p className={styles.empty}>Za mało zmienności w próbie, żeby policzyć mean(|SHAP value|).</p>
+            )
+          ) : null}
+          {valuePreview !== "meanAbsShap" || display.model ? (
           <div className={styles.correlationColumns}>
             {[
-              { title: "Korelacje dodatnie", rows: display.positive },
-              { title: "Korelacje ujemne", rows: display.negative },
+              { title: display.positiveTitle, rows: display.positive },
+              { title: display.negativeTitle, rows: display.negative },
             ].map((section) => (
               <div
                 key={section.title}
@@ -124,13 +215,13 @@ export default function WiedzaGoalsXgWeights({
                         Metryka
                       </th>
                       <th scope="col" className={styles.correlationValueHead}>
-                        r
+                        {display.valueHeader}
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {section.rows.length > 0 ? (
-                      section.rows.map(({ metric, r }) => (
+                      section.rows.map(({ metric, valueText, title, tone }) => (
                         <tr
                           key={`${display.selectedReference.id}-${metric.id}`}
                           className={styles.clickableCorrRow}
@@ -151,18 +242,15 @@ export default function WiedzaGoalsXgWeights({
                           >
                             {metric.label}
                           </th>
-                          <td
-                            className={`${styles.cell} ${cellToneClass(r, styles)}`}
-                            title={`${display.selectedReference.label} ↔ ${metric.label}: r = ${r.toFixed(3)}`}
-                          >
-                            {r.toFixed(2)}
+                          <td className={`${styles.cell} ${tone}`} title={title}>
+                            {valueText}
                           </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
                         <td colSpan={2} className={`${styles.cell} ${styles.corrNA}`}>
-                          Brak korelacji w tej grupie.
+                          {display.emptyLabel}
                         </td>
                       </tr>
                     )}
@@ -171,6 +259,7 @@ export default function WiedzaGoalsXgWeights({
               </div>
             ))}
           </div>
+          ) : null}
         </>
       ) : (
         <p className={styles.empty}>Brak danych do macierzy.</p>

@@ -58,7 +58,8 @@ function parseAuthTimestamp(value: string | null | undefined): Date | null {
 }
 
 /**
- * Łączy dokumenty Firestore users/* z kontami Firebase Authentication (np. Google bez profilu Firestore).
+ * Łączy dokumenty Firestore users/* z kontami Firebase Authentication.
+ * Konto samo w Auth (bez users/{uid}) trafia do kolejki akceptacji jako zawodnik oczekujący.
  */
 export function mergeFirestoreUsersWithAuthUsers(
   firestoreUsers: Array<UserData & { id: string }>,
@@ -100,7 +101,9 @@ export function mergeFirestoreUsersWithAuthUsers(
       id: authUser.uid,
       email: authUser.email || "",
       allowedTeams: [],
-      role: "user",
+      role: "player",
+      status: "pending",
+      linkedPlayerId: null,
       createdAt: parseAuthTimestamp(authUser.creationTime) ?? new Date(),
       lastLogin: parseAuthTimestamp(authUser.lastSignInTime),
       hasFirestoreProfile: false,

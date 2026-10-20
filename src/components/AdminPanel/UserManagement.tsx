@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { getDB } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc, setDoc } from "@/lib/firestoreWithMetrics";
+import { collection, doc, getDocs, getDocsFromServer, setDoc, updateDoc } from "@/lib/firestoreWithMetrics";
 import {
   authUserHasPasswordProvider,
   formatAuthProviderLabels,
@@ -28,6 +28,7 @@ import { toast } from "react-hot-toast";
 import { handleFirestoreError } from "@/utils/firestoreErrorHandler";
 import { normalizeAllowedTeams } from "@/utils/userAllowedTeams";
 import { formatLastLoginPl } from "@/utils/firestoreTimestamps";
+import { isPendingApprovalUser } from "@/lib/userProfileBootstrap";
 
 interface UserManagementProps {
   currentUserIsAdmin: boolean;
@@ -142,7 +143,13 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
     try {
       const db = getDB();
       const usersCollection = collection(db, "users");
-      const usersSnapshot = await getDocs(usersCollection);
+      let usersSnapshot;
+      try {
+        usersSnapshot = await getDocsFromServer(usersCollection);
+      } catch (serverError) {
+        console.warn("Lista użytkowników z serwera nie doszła, używam lokalnego odczytu.", serverError);
+        usersSnapshot = await getDocs(usersCollection);
+      }
 
       const firestoreUsers: Array<UserData & { id: string }> = [];
       usersSnapshot.forEach((userDoc) => {
@@ -553,7 +560,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserIsAdmin }) =
   };
 
   const pendingUsers = useMemo(() => {
-    return users.filter(user => user.role === 'player' && user.status === 'pending');
+    return users.filter((user) => isPendingApprovalUser(user));
   }, [users]);
 
   const sortedPlayers = useMemo(() => {
